@@ -1,20 +1,23 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
 
-import cudf
 from cudf.core.column import as_column
-from cudf.core.dtypes import CategoricalDtype
-from cudf.core.index import ensure_index
-from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
-    can_convert_to_column,
+from cudf.core.dtype.validators import (
     is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
+from cudf.core.dtypes import CategoricalDtype, ListDtype, StructDtype
+from cudf.core.index import ensure_index
+from cudf.core.series import Series
+from cudf.utils.dtypes import (
+    can_convert_to_column,
 )
 
 if TYPE_CHECKING:
@@ -24,8 +27,8 @@ if TYPE_CHECKING:
 
 def to_numeric(
     arg,
-    errors: Literal["raise", "coerce", "ignore"] = "raise",
-    downcast: Literal["integer", "signed", "unsigned", "float", None] = None,
+    errors: Literal["raise", "coerce"] = "raise",
+    downcast: Literal["integer", "signed", "unsigned", "float"] | None = None,
     dtype_backend=None,
 ):
     """
@@ -35,11 +38,10 @@ def to_numeric(
     ----------
     arg : column-convertible
         The object to convert to numeric types
-    errors : {'raise', 'ignore', 'coerce'}, defaults 'raise'
+    errors : {'raise', 'coerce'}, defaults 'raise'
         Policy to handle errors during parsing.
 
         * 'raise' will notify user all errors encountered.
-        * 'ignore' will skip error and returns ``arg``.
         * 'coerce' will leave invalid values as nulls.
     downcast : {'integer', 'signed', 'unsigned', 'float'}, defaults None
         If set, will try to down-convert the datatype of the
@@ -77,19 +79,18 @@ def to_numeric(
     1       2.0
     2    3000.0
     dtype: float32
-    >>> cudf.to_numeric(s, downcast='signed')
+    >>> import warnings
+    >>> with warnings.catch_warnings():
+    ...     warnings.simplefilter("ignore", UserWarning)
+    ...     ser = cudf.to_numeric(s, downcast='signed')
+    >>> ser
     0       1
     1       2
     2    3000
     dtype: int16
     >>> s = cudf.Series(['apple', '1.0', '3e3'])
-    >>> cudf.to_numeric(s, errors='ignore')
-    0    apple
-    1      1.0
-    2      3e3
-    dtype: object
     >>> cudf.to_numeric(s, errors='coerce')
-    0      <NA>
+    0       NaN
     1       1.0
     2    3000.0
     dtype: float64
@@ -106,15 +107,8 @@ def to_numeric(
         raise NotImplementedError(
             "dtype_backend is not currently implemented."
         )
-    if errors not in {"raise", "ignore", "coerce"}:
+    if errors not in {"raise", "coerce"}:
         raise ValueError("invalid error value specified")
-    elif errors == "ignore":
-        warnings.warn(
-            "errors='ignore' is deprecated and will raise in "
-            "a future version. Use to_numeric without passing `errors` "
-            "and catch exceptions explicitly instead",
-            FutureWarning,
-        )
 
     if downcast not in {None, "integer", "signed", "unsigned", "float"}:
         raise ValueError("invalid downcasting method provided")
@@ -130,30 +124,24 @@ def to_numeric(
     if dtype.kind in "mM":
         col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
-        cat_dtype = col.dtype.categories.dtype
+        cat_dtype = col.dtype.categories.dtype  # type: ignore[union-attr]
         if cat_dtype.kind in "iufb":
-            col = col.astype(cat_dtype)
-        else:
-            try:
-                col = _convert_str_col(
-                    col._get_decategorized_column(),  # type: ignore[attr-defined]
-                    errors,
-                    downcast,
-                )
-            except ValueError as e:
-                if errors == "ignore":
-                    return arg
-                else:
-                    raise e
-    elif dtype == CUDF_STRING_DTYPE:
-        try:
-            col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
-        except ValueError as e:
-            if errors == "ignore":
-                return arg
+            if cat_dtype.kind in "iub" and col.has_nulls():
+                # pandas promotes a null-containing categorical with
+                # integer/bool categories to float, since those categories
+                # cannot represent the missing value.
+                col = col.astype(np.dtype(np.float64))
             else:
-                raise e
-    elif isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)):
+                col = col.astype(cat_dtype)
+        else:
+            col = _convert_str_col(
+                col._get_decategorized_column(),  # type: ignore[attr-defined]
+                errors,
+                downcast,
+            )
+    elif is_dtype_obj_string(dtype):
+        col = _convert_str_col(col, errors, downcast)  # type: ignore[arg-type]
+    elif isinstance(dtype, (ListDtype, StructDtype)):
         raise ValueError("Input does not support nested datatypes")
     elif is_dtype_obj_numeric(dtype, include_decimal=False):
         pass
@@ -172,19 +160,19 @@ def to_numeric(
                 np.dtype(np.float64).char,
             ]
         elif downcast in ("integer", "signed"):
-            type_set = list(np.typecodes["Integer"])
+            type_set = list(np.typecodes["Integer"])  # type: ignore[arg-type]
         elif downcast == "unsigned":
-            type_set = list(np.typecodes["UnsignedInteger"])
+            type_set = list(np.typecodes["UnsignedInteger"])  # type: ignore[arg-type]
 
         for t in type_set:
-            downcast_dtype = np.dtype(t)
+            downcast_dtype: np.dtype = np.dtype(t)
             if downcast_dtype.itemsize <= col.dtype.itemsize:
                 if col.can_cast_safely(downcast_dtype):
                     col = col.cast(downcast_dtype)
                     break
 
-    if isinstance(arg, (cudf.Series, pd.Series)):
-        return cudf.Series._from_column(
+    if isinstance(arg, (Series, pd.Series)):
+        return Series._from_column(
             col, name=arg.name, index=ensure_index(arg.index)
         )
     else:
@@ -196,8 +184,8 @@ def to_numeric(
 
 def _convert_str_col(
     col: StringColumn,
-    errors: Literal["raise", "coerce", "ignore"],
-    _downcast: Literal["integer", "signed", "unsigned", "float", None] = None,
+    errors: Literal["raise", "coerce"],
+    downcast: Literal["integer", "signed", "unsigned", "float"] | None = None,
 ) -> NumericalColumn:
     """
     Converts a string column to numeric column
@@ -214,24 +202,25 @@ def _convert_str_col(
     Parameters
     ----------
     col : The string column to convert, must be string dtype
-    errors : {'raise', 'ignore', 'coerce'}, same as ``to_numeric``
-    _downcast : Same as ``to_numeric``, see description for use
+    errors : {'raise', 'coerce'}, same as ``to_numeric``
+    downcast : Same as ``to_numeric``, see description for use
 
     Returns
     -------
     Converted numeric column
     """
-    if col.dtype != CUDF_STRING_DTYPE:
+    if not is_dtype_obj_string(col.dtype):
         raise TypeError("col must be string dtype.")
 
-    if col.is_integer().all():
+    string_col = cast("StringColumn", col)
+    if string_col.is_all_integer():
         return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
     converted_col = (
         col.to_lower()
-        .find_and_replace(as_column([""]), as_column(["NaN"]))
+        .find_and_replace(as_column("", length=1), as_column("NaN", length=1))
         .replace_multiple(
             as_column(["+", "inf", "inity"]),  # type: ignore[arg-type]
             as_column(["", "Inf", ""]),  # type: ignore[arg-type]
@@ -240,7 +229,7 @@ def _convert_str_col(
 
     is_float = converted_col.is_float()
     if is_float.all():
-        if _downcast in {"unsigned", "signed", "integer"}:
+        if downcast in {"unsigned", "signed", "integer"}:
             warnings.warn(
                 UserWarning(
                     "Downcasting from float to int will be "

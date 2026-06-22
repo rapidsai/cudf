@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -66,7 +55,7 @@ struct wordpiece_vocabulary {
  * @param input Strings for the vocabulary
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Object to be used with nvtext::tokenize_with_vocabulary
+ * @return Object to be used with nvtext::wordpiece_tokenize
  */
 std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
   cudf::strings_column_view const& input,
@@ -102,6 +91,8 @@ std::unique_ptr<wordpiece_vocabulary> load_wordpiece_vocabulary(
  * @endcode
  *
  * Any null row entry results in a corresponding null entry in the output.
+ *
+ * @throw std::invalid_argument If `max_words_per_row` is less than 0.
  *
  * @param input Strings column to tokenize
  * @param vocabulary Used to lookup tokens within `input`

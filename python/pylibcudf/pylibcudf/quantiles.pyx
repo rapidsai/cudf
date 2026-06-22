@@ -1,4 +1,5 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -12,10 +13,14 @@ from pylibcudf.libcudf.quantiles cimport (
 )
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.types cimport null_order, order, sorted
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
 from .types cimport interpolation
+from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["quantile", "quantiles"]
 
@@ -24,7 +29,9 @@ cpdef Column quantile(
     vector[double] q,
     interpolation interp = interpolation.LINEAR,
     Column ordered_indices = None,
-    bool exact=True
+    bool exact=True,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes quantiles with interpolation.
 
@@ -49,6 +56,8 @@ cpdef Column quantile(
         Values not indexed by this column will be ignored.
     exact: bool, default True
         Returns doubles if True. Otherwise, returns same type as input
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     For details, see :cpp:func:`quantile`.
 
@@ -66,6 +75,10 @@ cpdef Column quantile(
     else:
         ordered_indices_view = ordered_indices.view()
 
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_quantile(
             input.view(),
@@ -73,9 +86,11 @@ cpdef Column quantile(
             interp,
             ordered_indices_view,
             exact,
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result))
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table quantiles(
@@ -85,6 +100,8 @@ cpdef Table quantiles(
     sorted is_input_sorted = sorted.NO,
     list column_order = None,
     list null_precedence = None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes row quantiles with interpolation.
 
@@ -121,6 +138,8 @@ cpdef Table quantiles(
         all other elements.
 
         Ignored if `is_input_sorted` is `Sorted.YES`
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
 
     For details, see :cpp:func:`quantiles`.
 
@@ -139,6 +158,10 @@ cpdef Table quantiles(
     if null_precedence is not None:
         null_precedence_vec = null_precedence
 
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
     with nogil:
         c_result = cpp_quantiles(
             input.view(),
@@ -147,6 +170,8 @@ cpdef Table quantiles(
             is_input_sorted,
             column_order_vec,
             null_precedence_vec,
+            _cs,
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result))
+    return Table.from_libcudf(move(c_result), _stream, mr)

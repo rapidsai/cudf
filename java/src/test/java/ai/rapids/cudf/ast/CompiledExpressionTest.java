@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package ai.rapids.cudf.ast;
@@ -412,7 +401,9 @@ public class CompiledExpressionTest extends CudfTestBase {
         Arguments.of(BinaryOperator.PYMOD, in1, in2, mapArray(in1, in2,
             (a, b) -> ((a % b) + b) % b)),
         Arguments.of(BinaryOperator.POW, in1, in2, mapArray(in1, in2,
-            (a, b) -> (float) Math.pow(a, b))));
+            (a, b) -> (float) Math.pow(a, b))),
+        Arguments.of(BinaryOperator.FLOOR_DIV, in1, in2, mapArray(in1, in2,
+            (a, b) -> (float) Math.floor(a / b))));
   }
 
   @ParameterizedTest
@@ -436,9 +427,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     Float[] in2 = new Float[] { 123f, -456f, null, 0f };
     return Stream.of(
         Arguments.of(BinaryOperator.TRUE_DIV, in1, in2, mapArray(in1, in2,
-            (a, b) -> (double) a / b)),
-        Arguments.of(BinaryOperator.FLOOR_DIV, in1, in2, mapArray(in1, in2,
-            (a, b) -> Math.floor(a / b))));
+            (a, b) -> (double) a / b)));
   }
 
   @ParameterizedTest

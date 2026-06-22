@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -91,7 +80,7 @@ class SingleSymbolSmemLUT {
    *
    * @param symbol_strings Array of strings, where the i-th string holds all symbols
    * (characters!) that correspond to the i-th symbol group index
-   * @param stream The stream that shall be used to cudaMemcpyAsync the lookup table
+   * @param pre_map_op Function object that transforms a symbol to a symbol group id
    * @return
    */
   template <typename SymbolGroupItT>
@@ -499,11 +488,11 @@ class dfa_device_view {
   static constexpr int32_t MAX_TRANSLATED_OUT = TranslationTableT::MAX_TRANSLATED_OUT;
 
   using SymbolGroupStorageT      = std::conditional_t<is_complex_op<SymbolGroupIdLookupT>::value,
-                                                 typename SymbolGroupIdLookupT::TempStorage,
-                                                 typename cub::NullType>;
+                                                      typename SymbolGroupIdLookupT::TempStorage,
+                                                      typename cub::NullType>;
   using TransitionTableStorageT  = std::conditional_t<is_complex_op<TransitionTableT>::value,
-                                                     typename TransitionTableT::TempStorage,
-                                                     typename cub::NullType>;
+                                                      typename TransitionTableT::TempStorage,
+                                                      typename cub::NullType>;
   using TranslationTableStorageT = std::conditional_t<is_complex_op<TranslationTableT>::value,
                                                       typename TranslationTableT::TempStorage,
                                                       typename cub::NullType>;
@@ -874,7 +863,7 @@ class Dfa {
    * output symbols is written
    * @tparam OffsetT A type large enough to index into either of both: (a) the input symbols and
    * (b) the output symbols
-   * @param d_chars Pointer to the input string of symbols
+   * @param d_chars_it Pointer to the input string of symbols
    * @param num_chars The total number of input symbols to process
    * @param d_out_it Random-access output iterator to which the transduced output is
    * written

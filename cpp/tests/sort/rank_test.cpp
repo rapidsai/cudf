@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -24,7 +13,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <tuple>
 #include <vector>
@@ -442,7 +431,7 @@ struct RankLarge : public cudf::test::BaseFixture {};
 TEST_F(RankLarge, average_large)
 {
   // testcase of https://github.com/rapidsai/cudf/issues/9703
-  auto iter = thrust::counting_iterator<int64_t>(0);
+  auto iter = cuda::counting_iterator<int64_t>{0};
   cudf::test::fixed_width_column_wrapper<int64_t> col1(iter, iter + 10558);
   auto result = cudf::rank(col1,
                            cudf::rank_method::AVERAGE,

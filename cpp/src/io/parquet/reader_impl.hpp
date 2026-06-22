@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -21,17 +10,19 @@
 
 #pragma once
 
+#include "expression_transform_helpers.hpp"
 #include "parquet_gpu.hpp"
 #include "reader_impl_chunking.hpp"
 #include "reader_impl_helpers.hpp"
 
+#include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <memory>
 #include <optional>
@@ -42,23 +33,30 @@ namespace cudf::io::parquet::detail {
 /**
  * @brief Implementation for Parquet reader
  */
-class reader::impl {
+class reader_impl {
  public:
   /**
-   * @brief Constructor from an array of dataset sources with reader options.
+   * @brief Default constructor for subclassing
+   */
+  reader_impl();
+
+  /**
+   * @brief Constructor from an array of dataset sources with reader options
    *
    * By using this constructor, each call to `read()` or `read_chunk()` will perform reading the
    * entire given file.
    *
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::vector<std::unique_ptr<datasource>>&& sources,
-                parquet_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr);
+  explicit reader_impl(std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr);
 
   /**
    * @brief Read an entire set or a subset of data and returns a set of columns
@@ -96,16 +94,23 @@ class reader::impl {
    * @param pass_read_limit Limit on memory usage for the purposes of decompression and processing
    * of input, or `0` if there is no limit.
    * @param sources Dataset sources
+   * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
    * @param options Settings for controlling reading behavior
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::size_t chunk_read_limit,
-                std::size_t pass_read_limit,
-                std::vector<std::unique_ptr<datasource>>&& sources,
-                parquet_reader_options const& options,
-                rmm::cuda_stream_view stream,
-                rmm::device_async_resource_ref mr);
+  explicit reader_impl(std::size_t chunk_read_limit,
+                       std::size_t pass_read_limit,
+                       std::vector<std::unique_ptr<datasource>>&& sources,
+                       std::vector<FileMetaData>&& parquet_metadatas,
+                       parquet_reader_options const& options,
+                       rmm::cuda_stream_view stream,
+                       rmm::device_async_resource_ref mr);
+
+  reader_impl(reader_impl const&)            = delete;
+  reader_impl& operator=(reader_impl const&) = delete;
+  reader_impl(reader_impl&&)                 = delete;
+  reader_impl& operator=(reader_impl&&)      = delete;
 
   /**
    * @copydoc cudf::io::chunked_parquet_reader::has_next
@@ -119,7 +124,7 @@ class reader::impl {
 
   // top level functions involved with ratcheting through the passes, subpasses
   // and output chunks of the read process
- private:
+ protected:
   /**
    * @brief The enum indicating whether the data sources are read all at once or chunk by chunk.
    */
@@ -128,7 +133,7 @@ class reader::impl {
   /**
    * @brief Perform the necessary data preprocessing for parsing file later on.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void prepare_data(read_mode mode);
 
@@ -138,14 +143,14 @@ class reader::impl {
    * Only ever called once. This function reads in rowgroup and associated chunk
    * information and computes the schedule of top level passes (see `pass_intermediate_data`).
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void preprocess_file(read_mode mode);
 
   /**
    * @brief Ratchet the pass/subpass/chunk process forward.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void handle_chunking(read_mode mode);
 
@@ -155,7 +160,7 @@ class reader::impl {
    * A 'pass' is defined as a subset of row groups read out of the globally
    * requested set of all row groups.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
   void setup_next_pass(read_mode mode);
 
@@ -166,23 +171,40 @@ class reader::impl {
    * decompressed and decoded as a batch. Subpasses may be further subdivided
    * into output chunks.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    *
    */
   void setup_next_subpass(read_mode mode);
+
+  /**
+   * @brief Preprocess string length and bounds information for the subpass.
+   *
+   * At the end of this process, the `str_bytes` field of the the PageInfo struct
+   * will be populated, and if applicable, the delta_temp_buf in the subpass struct will
+   * be allocated and the pages in the subpass will point into it properly.
+   *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param read_info The range of rows to be read in the subpass
+   */
+  void preprocess_chunk_strings(read_mode mode, row_range const& read_info);
+
+  /**
+   * @brief Copies over the relevant page mask information for the subpass
+   */
+  void set_subpass_page_mask();
 
   /**
    * @brief Read a chunk of data and return an output table.
    *
    * This function is called internally and expects all preprocessing steps have already been done.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @return The output table along with columns' metadata
    */
   table_with_metadata read_chunk_internal(read_mode mode);
 
   // utility functions
- private:
+ protected:
   /**
    * @brief Read the set of column chunks to be processed for this pass.
    *
@@ -212,7 +234,8 @@ class reader::impl {
    * more accurately, we would like to have a more accurate guess of the real number of rows per
    * page.
    */
-  void generate_list_column_row_count_estimates();
+  enum class is_estimate_row_counts : bool { NO = false, YES = true };
+  void generate_list_column_row_counts(is_estimate_row_counts is_estimate_row_counts);
 
   /**
    * @brief Perform some preprocessing for subpass page data and also compute the split locations
@@ -223,13 +246,25 @@ class reader::impl {
    * - The total sizes of all output columns at all nesting levels
    * - The starting output buffer offset for each page, for each nesting level
    *
-   * For flat schemas, these values are computed during header decoding (see gpuDecodePageHeaders).
+   * For flat schemas, these values are computed during header decoding (see decode_page_headers).
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param chunk_read_limit Limit on total number of bytes to be returned per read,
    *        or `0` if there is no limit
    */
   void preprocess_subpass_pages(read_mode mode, size_t chunk_read_limit);
+
+  /**
+   * @brief Set page string offset indices for non-dictionary, non-FLBA string columns.
+   *
+   * This function calculates the string offset index for each page of non-dictionary, non-FLBA
+   * string columns and populates the subpass.page_string_offset_indices member variable.
+   * The indices are used by decode kernels to access pre-computed string offsets.
+   *
+   * @param skip_rows The number of rows to skip in this subpass
+   * @param num_rows The number of rows to read in this subpass
+   */
+  void compute_page_string_offset_indices(size_t skip_rows, size_t num_rows);
 
   /**
    * @brief Allocate nesting information storage for all pages and set pointers to it.
@@ -261,7 +296,7 @@ class reader::impl {
    * @brief Finalize the output table by adding empty columns for the non-selected columns in
    * schema.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param out_metadata The output table metadata
    * @param out_columns The columns for building the output table
    * @return The output table along with columns' metadata
@@ -273,9 +308,9 @@ class reader::impl {
   /**
    * @brief Allocate data buffers for the output columns.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @param skip_rows Crop all rows below skip_rows
-   * @param num_rows Maximum number of rows to read
+   * @param num_rows Number of rows to read
    */
   void allocate_columns(read_mode mode, size_t skip_rows, size_t num_rows);
 
@@ -289,11 +324,22 @@ class reader::impl {
   /**
    * @brief Converts the page data and outputs to columns.
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
-   * @param skip_rows Minimum number of rows from start
-   * @param num_rows Number of rows to output
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param skip_rows Number of rows to skip from the start
+   * @param num_rows Number of rows to decode
    */
   void decode_page_data(read_mode mode, size_t skip_rows, size_t num_rows);
+
+  /**
+   * @brief Invalidate output buffer nullmask for rows spanned by the pruned pages
+   *
+   * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+   * @param skip_rows Offset of the first row in the table chunk
+   * @param num_rows Number of rows in the table chunk
+   */
+  void update_output_nullmasks_for_pruned_pages(cudf::host_span<bool const> page_mask,
+                                                size_t skip_rows,
+                                                size_t num_rows);
 
   /**
    * @brief Creates file-wide parquet chunk information.
@@ -304,9 +350,11 @@ class reader::impl {
   void create_global_chunk_info();
 
   /**
-   * @brief Computes all of the passes we will perform over the file.
+   * @brief Computes all of the passes we will perform over the file
+   *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    */
-  void compute_input_passes();
+  void compute_input_passes(read_mode mode);
 
   /**
    * @brief Given a set of pages that have had their sizes computed by nesting level and
@@ -321,17 +369,17 @@ class reader::impl {
            _file_itm_data._current_input_pass < _file_itm_data.num_passes();
   }
 
- private:
+ protected:
   /**
    * @brief Check if the user has specified custom row bounds
    *
-   * @param read_mode Value indicating if the data sources are read all at once or chunk by chunk
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @return True if the user has specified custom row bounds
    */
   [[nodiscard]] bool uses_custom_row_bounds(read_mode mode) const
   {
     // TODO: `read_mode` is hardcoded to `true` when `read_mode::CHUNKED_READ` to enforce
-    // `ComputePageSizes()` computation for all remaining chunks.
+    // `compute_page_sizes()` computation for all remaining chunks.
     return (mode == read_mode::READ_ALL)
              ? (_options.num_rows.has_value() or _options.skip_rows != 0)
              : true;
@@ -357,6 +405,11 @@ class reader::impl {
     return not _expr_conv.get_converted_expr().has_value();
   }
 
+  [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
+  {
+    return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
+  }
+
   /**
    * @brief Calculate the number of rows read from each source in the output chunk
    *
@@ -367,24 +420,54 @@ class reader::impl {
   [[nodiscard]] std::vector<size_t> calculate_output_num_rows_per_source(size_t chunk_start_row,
                                                                          size_t chunk_num_rows);
 
+  /**
+   * @brief Computes the names of columns to be read from the file, if specified.
+   *
+   * @param options The reader options
+   * @param ignore_missing_columns Whether to ignore non-existent projected columns
+   * @return Names of columns to be read from the file if specified, `nullopt` otherwise
+   */
+  [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
+    parquet_reader_options const& options, bool ignore_missing_columns) const;
+
+  /**
+   * @brief Cast any fixed-point output columns to the decimal width specified in options.
+   *
+   * @param out_columns Output columns to cast
+   */
+  void apply_decimal_width_cast(std::vector<std::unique_ptr<cudf::column>>& out_columns);
+
   rmm::cuda_stream_view _stream;
   rmm::device_async_resource_ref _mr{cudf::get_current_device_resource_ref()};
 
   // Reader configs.
   struct {
     // timestamp_type
-    data_type timestamp_type{type_id::EMPTY};
-    // User specified reading rows/stripes selection.
+    data_type timestamp_type;
+    // decimal_width
+    type_id decimal_width;
+    // Use specified row selection
     int64_t const skip_rows;
     std::optional<int64_t> num_rows;
+    // Use specified bytes selection
+    size_t skip_bytes;
+    std::optional<size_t> num_bytes;
+    // User specified row group selection
     std::vector<std::vector<size_type>> row_group_indices;
-  } const _options;
+    // Whether to use JIT for filtering
+    bool use_jit_filter = false;
+    // Whether to use case-sensitive matching for column names
+    bool case_sensitive_names = true;
+  } _options;
 
   // name to reference converter to extract AST output filter
-  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}};
+  named_to_reference_converter _expr_conv{std::nullopt, table_metadata{}, true};
 
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_reader_metadata> _metadata;
+
+  // Number of sources
+  size_t _num_sources{0};
 
   // input columns to be processed
   std::vector<input_column_info> _input_columns;
@@ -397,6 +480,12 @@ class reader::impl {
 
   // _output_buffers associated schema indices
   std::vector<int> _output_column_schemas;
+
+  // Page mask for filtering out pass data pages (Not copied to the device)
+  thrust::host_vector<bool> _pass_page_mask;
+
+  // Page mask for filtering out subpass data pages (Copied to the device)
+  std::unique_ptr<cudf::detail::hostdevice_vector<bool>> _subpass_page_mask;
 
   // _output_buffers associated metadata
   std::unique_ptr<table_metadata> _output_metadata;

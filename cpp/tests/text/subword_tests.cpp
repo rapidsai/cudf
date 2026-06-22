@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -169,5 +158,11 @@ TEST(TextSubwordTest, WordPieceErrors)
                std::invalid_argument);
   auto nulls = cudf::test::strings_column_wrapper({"", "", ""}, {false, false, false});
   EXPECT_THROW(nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(nulls)),
+               std::invalid_argument);
+
+  auto vocabulary = cudf::test::strings_column_wrapper({"x"});
+  auto vocab      = nvtext::load_wordpiece_vocabulary(cudf::strings_column_view(vocabulary));
+  auto input      = cudf::test::strings_column_wrapper({"  "});
+  EXPECT_THROW(nvtext::wordpiece_tokenize(cudf::strings_column_view(input), *vocab, -1),
                std::invalid_argument);
 }

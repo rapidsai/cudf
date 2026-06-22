@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "segmented_sort_impl.cuh"
@@ -25,8 +14,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace detail {
@@ -39,8 +28,8 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
 
   auto offset_begin  = offsets.begin<size_type>();
   auto offset_end    = offsets.end<size_type>();
-  auto counting_iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy(stream),
+  auto counting_iter = cuda::counting_iterator<size_type>{0};
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     counting_iter,
                     counting_iter + segment_ids.size(),
                     segment_ids.begin(),

@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Module used for global configuration of benchmarks.
 
@@ -61,10 +62,16 @@ def pytest_sessionfinish(session, exitstatus):
         del sys.path[0]
 
 
-# Constants used to define benchmarking standards.
+# Constants used to define benchmarking standards. We always generate all the fixtures,
+# but benchmarks can choose which ones to use.
+NUM_ROWS_FIXTURES = [100, 10_000, 1_000_000]
+NUM_COLS_FIXTURES = [1, 6, 20]
+
+# When in debug mode, limit the number of rows and columns to the lowest values. It must
+# be a subset of the values defined above to ensure that debug runs are actually
+# validating that non-debug runs will work.
+NUM_ROWS = NUM_ROWS_FIXTURES
+NUM_COLS = NUM_COLS_FIXTURES
 if "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ:
-    NUM_ROWS = [10, 20]
-    NUM_COLS = [1, 6]
-else:
-    NUM_ROWS = [100, 10_000, 1_000_000]
-    NUM_COLS = [1, 6]
+    NUM_ROWS = NUM_ROWS[:1]
+    NUM_COLS = NUM_COLS[:1]

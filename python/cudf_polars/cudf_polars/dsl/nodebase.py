@@ -1,21 +1,33 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Base class for IR nodes, and utilities."""
 
 from __future__ import annotations
 
+import hashlib
+import uuid
 from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar
 
-if TYPE_CHECKING:
-    from collections.abc import Hashable, Sequence
+from cudf_polars.dsl.traversal import traversal
 
-    from typing_extensions import Self
+if TYPE_CHECKING:
+    from collections.abc import Generator, Hashable, Sequence
+    from typing import Self
 
 
 __all__: list[str] = ["Node"]
 
 T = TypeVar("T", bound="Node[Any]")
+
+
+def _expand_hashable(obj: Any) -> Any:
+    """Expand nested Node instances to their hashable form."""
+    if isinstance(obj, Node):
+        return _expand_hashable(obj.get_hashable())
+    elif isinstance(obj, tuple):
+        return tuple(_expand_hashable(x) for x in obj)
+    return obj
 
 
 class Node(Generic[T]):
@@ -34,8 +46,16 @@ class Node(Generic[T]):
     *children).``
     """
 
-    __slots__ = ("_hash_value", "_repr_value", "children")
+    __slots__ = (
+        "_hash_value",
+        "_repr_value",
+        "_stable_hash_value",
+        "_stable_plan_id",
+        "children",
+    )
     _hash_value: int
+    _stable_hash_value: int
+    _stable_plan_id: uuid.UUID
     _repr_value: str
     children: tuple[T, ...]
     _non_child: ClassVar[tuple[str, ...]] = ()
@@ -82,6 +102,39 @@ class Node(Generic[T]):
         """
         return (type(self), self._ctor_arguments(self.children))
 
+    def get_stable_id(self) -> int:
+        """
+        Compute a stable identifier for Node.
+
+        Uses MD5 hash of the node's hashable representation for determinism
+        across process boundaries (Python's hash() uses PYTHONHASHSEED).
+
+        Parameters
+        ----------
+        ir_node
+            The IR node.
+
+        Returns
+        -------
+        int
+            A stable 32-bit identifier for this node.
+        """
+        try:
+            return self._stable_hash_value
+        except AttributeError:
+            content = repr(_expand_hashable(self)).encode("utf-8")
+            self._stable_hash_value = int(hashlib.md5(content).hexdigest()[:8], 16)
+            return self._stable_hash_value
+
+    def get_stable_plan_id(self) -> uuid.UUID:
+        """Return a stable ID for the full IR plan rooted at this node."""
+        try:
+            return self._stable_plan_id
+        except AttributeError:
+            ids = tuple(node.get_stable_id() for node in traversal([self]))
+            self._stable_plan_id = uuid.uuid5(uuid.NAMESPACE_URL, str(ids))
+            return self._stable_plan_id
+
     def __hash__(self) -> int:
         """
         Hash of an expression with caching.
@@ -102,8 +155,8 @@ class Node(Generic[T]):
 
         Override this in subclasses, rather than :meth:`__eq__`.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         other
             object of same type to compare to.
 
@@ -155,3 +208,10 @@ class Node(Generic[T]):
             args = ", ".join(f"{arg!r}" for arg in self._ctor_arguments(self.children))
             self._repr_value = f"{type(self).__name__}({args})"
             return self._repr_value
+
+    def __rich_repr__(self) -> Generator[Any, None, None]:
+        """Formatting for rich.pretty.pprint."""
+        for attr in self._non_child:
+            yield attr, getattr(self, attr)
+
+        yield from self.children

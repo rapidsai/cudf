@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/utilities/error.hpp>
@@ -141,7 +130,7 @@ uint16_t find_collision_proof_prime()
 void generate_special_mapping_hash_table()
 {
   uint16_t hash_prime = find_collision_proof_prime();
-  if (hash_prime == 0) { CUDF_FAIL("Could not find a usable prime number for hash table"); }
+  CUDF_EXPECTS(hash_prime != 0, "Could not find a usable prime number for hash table");
 
   // generate hash index table
   // size of the table is the prime #, since we're just doing (key % hash_prime)

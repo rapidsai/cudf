@@ -394,7 +394,7 @@ auto struct_col {wrapper.release()};
 cudf::test::fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
 cudf::test::string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
 
-cudf::test::struct_column_wrapper wrapper{
+cudf::test::structs_column_wrapper wrapper{
   {child_int_col_wrapper, child_string_col_wrapper}
   {1,0,1,0,1} // Validity
 };
@@ -405,7 +405,7 @@ auto struct_col {wrapper.release()};
 cudf::test::fixed_width_column_wrapper<int32_t> child_int_col_wrapper{ 1, 2, 3, 4, 5 };
 cudf::test::string_column_wrapper child_string_col_wrapper {"All", "the", "leaves", "are", "brown"};
 
-cudf::test::struct_column_wrapper wrapper{
+cudf::test::structs_column_wrapper wrapper{
   {child_int_col_wrapper, child_string_col_wrapper}
   cudf::detail::make_counting_transform_iterator(0, [](auto i){ return i % 2; }) // Validity
 };

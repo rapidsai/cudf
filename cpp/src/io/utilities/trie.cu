@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -94,7 +83,7 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(std::vector<std::st
           nodes[idx].children_offset = static_cast<uint16_t>(nodes.size() - idx);
         }
         // Add node to the trie
-        nodes.push_back(serial_trie_node(static_cast<char>(i), node->children[i]->is_end_of_word));
+        nodes.emplace_back(static_cast<char>(i), node->children[i]->is_end_of_word);
         // Add to the queue, with the index within the new trie
         to_visit.emplace_back(node->children[i].get(), static_cast<uint16_t>(nodes.size()) - 1);
 
@@ -102,10 +91,9 @@ rmm::device_uvector<serial_trie_node> create_serialized_trie(std::vector<std::st
       }
     }
     // Only add the terminating character if any nodes were added
-    if (has_children) { nodes.push_back(serial_trie_node(trie_terminating_character)); }
+    if (has_children) { nodes.emplace_back(trie_terminating_character); }
   }
-  return cudf::detail::make_device_uvector_sync(
-    nodes, stream, cudf::get_current_device_resource_ref());
+  return cudf::detail::make_device_uvector(nodes, stream, cudf::get_current_device_resource_ref());
 }
 
 }  // namespace detail

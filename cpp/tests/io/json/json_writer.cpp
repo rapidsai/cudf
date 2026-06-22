@@ -1,34 +1,23 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
-
-#include "io/comp/io_uncomp.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/default_stream.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
+
+#include <cuda/iterator>
 
 #include <string>
 #include <vector>
@@ -100,12 +89,8 @@ TEST_P(JsonCompressedWriterTest, EmptyLeaf)
 {
   cudf::test::strings_column_wrapper col1{""};
   cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0};
-  auto col2 = make_lists_column(1,
-                                offsets.release(),
-                                cudf::test::strings_column_wrapper{}.release(),
-                                0,
-                                rmm::device_buffer{},
-                                cudf::test::get_default_stream());
+  auto col2 = make_lists_column(
+    1, offsets.release(), cudf::test::strings_column_wrapper{}.release(), 0, rmm::device_buffer{});
   auto col3 = cudf::test::lists_column_wrapper<int>::make_one_empty_row_column();
   cudf::table_view tbl_view{{col1, *col2, col3}};
   cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"col3"}}};
@@ -197,7 +182,9 @@ TEST_P(JsonCompressedWriterTest, SimpleNested)
 {"a": 1, "b": 2, "c": {        "e": 4}, "f": 5.5,  "g": [2, null]}
 {"a": 6, "b": 7, "c": {        "e": 9}, "f": 10.5, "g": [3, 4, 5]} )";
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -229,7 +216,9 @@ TEST_P(JsonCompressedWriterTest, MixedNested)
 {"a": 1, "b": 2, "c": {        "e": 4}, "f": 5.5,  "g": [{"h": 2}, null]}
 {"a": 6, "b": 7, "c": {        "e": 9}, "f": 10.5, "g": [{"h": 3}, {"h": 4}, {"h": 5}]} )";
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -288,10 +277,12 @@ TEST_F(JsonWriterTest, WriteReadNested)
 
   // Read back the written JSON, and compare with the original table
   // Without type information
-  auto in_options = cudf::io::json_reader_options::builder(
-                      cudf::io::source_info{output_string.data(), output_string.size()})
-                      .lines(true)
-                      .build();
+  auto in_options =
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(output_string.data()), output_string.size()}})
+      .lines(true)
+      .build();
 
   auto result             = cudf::io::read_json(in_options);
   auto tbl_out            = result.tbl->view();
@@ -355,7 +346,8 @@ TEST_F(JsonWriterTest, WriteReadNested)
   cudf::io::write_json(out_options, cudf::test::get_default_stream());
 
   in_options = cudf::io::json_reader_options::builder(
-                 cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+                 cudf::io::source_info{cudf::host_span<std::byte const>{
+                   reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
                  .lines(true)
                  .build();
   result = cudf::io::read_json(in_options);
@@ -377,7 +369,8 @@ TEST_F(JsonWriterTest, WriteReadNested)
   out_buffer.clear();
   cudf::io::write_json(out_options, cudf::test::get_default_stream());
   in_options = cudf::io::json_reader_options::builder(
-                 cudf::io::source_info{out_buffer.data(), out_buffer.size()})
+                 cudf::io::source_info{cudf::host_span<std::byte const>{
+                   reinterpret_cast<std::byte const*>(out_buffer.data()), out_buffer.size()}})
                  .lines(true)
                  .build();
   result = cudf::io::read_json(in_options);
@@ -429,7 +422,9 @@ TEST_P(JsonCompressedWriterTest, NullList)
 {"a": [null, null, 4], "b": [[2, null], null]}
 {"a": [5, null, null], "b": [null, [3, 4, 5]]} )";
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -467,7 +462,9 @@ TEST_P(JsonCompressedWriterTest, ChunkedNested)
 {"a": 9, "b": -2, "c": {"d": 81}, "e": [{"f": 9}]}
 )";
   cudf::io::json_reader_options in_options =
-    cudf::io::json_reader_options::builder(cudf::io::source_info{data.data(), data.size()})
+    cudf::io::json_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(data.data()), data.size()}})
       .lines(true);
 
   cudf::io::table_with_metadata result = cudf::io::read_json(in_options);
@@ -500,7 +497,7 @@ TEST_P(JsonCompressedWriterTest, ChunkedNested)
 
 TEST_P(JsonCompressedWriterTest, StructAllNullCombinations)
 {
-  auto const_1_iter = thrust::make_constant_iterator(1);
+  auto const_1_iter = cuda::make_constant_iterator(1);
 
   auto col_a = cudf::test::fixed_width_column_wrapper<int>(
     const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {
@@ -609,6 +606,64 @@ TEST_P(JsonCompressedWriterTest, Unicode)
 {"col1":"C\ud835\udfb5\ud835\udcd3\ud835\udcbb","col2":"\ud883\udf91\ud885\udd08\ud888\udf49","int16":4}
 )";
   run_test(out_options, expected);
+}
+
+TEST_P(JsonCompressedWriterTest, UnicodeUnescaped)
+{
+  cudf::test::strings_column_wrapper col1{"\"\\/\b\f\n\r\t", "ராபிட்ஸ்", "$€𐐷𤭢", "C𝞵𝓓𝒻"};
+  cudf::test::strings_column_wrapper col2{"CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ",
+                                          "𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰",
+                                          "𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮",
+                                          "𰾑𱔈𲍉"};
+  cudf::test::fixed_width_column_wrapper<int16_t> col3{{1, 2, 3, 4},
+                                                       cudf::test::iterators::nulls_at({0, 2})};
+  cudf::table_view tbl_view{{col1, col2, col3}};
+  cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"int16"}}};
+
+  std::vector<char> out_buffer;
+  auto destination = cudf::io::sink_info(&out_buffer);
+  auto out_options = cudf::io::json_writer_options_builder(destination, tbl_view)
+                       .include_nulls(true)
+                       .metadata(mt)
+                       .lines(true)
+                       .na_rep("null")
+                       .utf8_escaped(false)
+                       .build();
+
+  cudf::io::write_json(out_options, cudf::test::get_default_stream());
+
+  std::string const expected =
+    R"({"col1":"\"\\\/\b\f\n\r\t","col2":"CႮ≪ㇳ䍏凹沦王辿龸ꁗ믜스폶ﴠ","int16":null}
+{"col1":"ராபிட்ஸ்","col2":"𐀀𑿪𒐦𓃰𔙆 𖦆𗿿𘳕𚿾[↳] 𜽆𝓚𞤁🄰","int16":2}
+{"col1":"$€𐐷𤭢","col2":"𠘨𡥌𢗉𣇊𤊩𥅽𦉱𧴱𨁲𩁹𪐢𫇭𬬭𭺷𮊦屮","int16":null}
+{"col1":"C𝞵𝓓𝒻","col2":"𰾑𱔈𲍉","int16":4}
+)";
+
+  std::string const output(out_buffer.data(), out_buffer.size());
+  EXPECT_EQ(expected, output);
+}
+
+struct JsonWriterTypeSupportTest : public cudf::test::BaseFixture {};
+
+TEST(JsonWriterTypeSupportTest, SupportedTypes)
+{
+  using cudf::io::is_supported_write_json;
+
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::INT32}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::FLOAT64}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::STRING}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::DECIMAL64}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS}));
+  EXPECT_TRUE(is_supported_write_json(cudf::data_type{cudf::type_id::DURATION_SECONDS}));
+}
+
+TEST(JsonWriterTypeSupportTest, UnsupportedTypes)
+{
+  using cudf::io::is_supported_write_json;
+
+  EXPECT_FALSE(is_supported_write_json(cudf::data_type{cudf::type_id::LIST}));
+  EXPECT_FALSE(is_supported_write_json(cudf::data_type{cudf::type_id::STRUCT}));
+  EXPECT_FALSE(is_supported_write_json(cudf::data_type{cudf::type_id::DICTIONARY32}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

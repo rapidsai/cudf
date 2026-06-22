@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/strings/string_view.hpp>
@@ -329,6 +318,18 @@ struct is_dictionary_impl {
  */
 bool is_dictionary(data_type type) { return cudf::type_dispatcher(type, is_dictionary_impl{}); }
 
+/**
+ * @brief Indicates whether `type` is a valid dictionary key type
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` can be a dictionary type
+ * @return false `type` cannot be a dictionary type
+ */
+bool is_dictionary_key(data_type type)
+{
+  return not is_dictionary(type) && is_relationally_comparable(type);
+}
+
 struct is_fixed_width_impl {
   template <typename T>
   constexpr bool operator()()
@@ -394,14 +395,16 @@ bool is_nested(data_type type) { return cudf::type_dispatcher(type, is_nested_im
 namespace {
 template <typename FromType>
 struct is_bit_castable_to_impl {
-  template <typename ToType, std::enable_if_t<is_compound<ToType>()>* = nullptr>
+  template <typename ToType>
   constexpr bool operator()()
+    requires(is_compound<ToType>())
   {
     return false;
   }
 
-  template <typename ToType, std::enable_if_t<not is_compound<ToType>()>* = nullptr>
+  template <typename ToType>
   constexpr bool operator()()
+    requires(not is_compound<ToType>())
   {
     if (not cuda::std::is_trivially_copyable_v<FromType> ||
         not cuda::std::is_trivially_copyable_v<ToType>) {
@@ -414,14 +417,16 @@ struct is_bit_castable_to_impl {
 };
 
 struct is_bit_castable_from_impl {
-  template <typename FromType, std::enable_if_t<is_compound<FromType>()>* = nullptr>
+  template <typename FromType>
   constexpr bool operator()(data_type)
+    requires(is_compound<FromType>())
   {
     return false;
   }
 
-  template <typename FromType, std::enable_if_t<not is_compound<FromType>()>* = nullptr>
+  template <typename FromType>
   constexpr bool operator()(data_type to)
+    requires(not is_compound<FromType>())
   {
     return cudf::type_dispatcher(to, is_bit_castable_to_impl<FromType>{});
   }

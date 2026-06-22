@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -27,10 +16,10 @@
 #include "statistics_type_identification.cuh"
 #include "temp_storage_wrapper.cuh"
 
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/functional>
 #include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <math_constants.h>
@@ -55,40 +44,43 @@ class union_member {
                        reference_type<U, T>>>;
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_unsigned_v<T>, type<T, U>>
-  get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_integral_v<T> and std::is_unsigned_v<T>)
   {
     return val.u_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_integral_v<T> and std::is_signed_v<T>, type<T, U>> get(
-    U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_integral_v<T> and std::is_signed_v<T>)
   {
     return val.i_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, __int128_t>, type<T, U>> get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_same_v<T, __int128_t>)
   {
     return val.d128_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_floating_point_v<T>, type<T, U>> get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_floating_point_v<T>)
   {
     return val.fp_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, string_view>, type<T, U>> get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_same_v<T, string_view>)
   {
     return val.str_val;
   }
 
   template <typename T, typename U>
-  __device__ static std::enable_if_t<std::is_same_v<T, statistics::byte_array_view>, type<T, U>>
-  get(U& val)
+  __device__ static type<T, U> get(U& val)
+    requires(std::is_same_v<T, statistics::byte_array_view>)
   {
     return val.byte_val;
   }
@@ -204,11 +196,11 @@ __inline__ __device__ typed_statistics_chunk<T, include_aggregate> block_reduce(
   using extrema_reduce = cub::BlockReduce<E, block_size>;
   using count_reduce   = cub::BlockReduce<uint32_t, block_size>;
 
-  output_chunk.minimum_value = extrema_reduce(storage.template get<E>())
-                                 .Reduce(output_chunk.minimum_value, cudf::detail::minimum{});
+  output_chunk.minimum_value =
+    extrema_reduce(storage.template get<E>()).Reduce(output_chunk.minimum_value, cuda::minimum{});
   __syncthreads();
-  output_chunk.maximum_value = extrema_reduce(storage.template get<E>())
-                                 .Reduce(output_chunk.maximum_value, cudf::detail::maximum{});
+  output_chunk.maximum_value =
+    extrema_reduce(storage.template get<E>()).Reduce(output_chunk.maximum_value, cuda::maximum{});
   __syncthreads();
   output_chunk.non_nulls =
     count_reduce(storage.template get<uint32_t>()).Sum(output_chunk.non_nulls);

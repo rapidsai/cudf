@@ -1,35 +1,27 @@
 # =============================================================================
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
-cmake_minimum_required(VERSION 3.30.4 FATAL_ERROR)
 
-include(../../../../rapids_config.cmake)
+cmake_minimum_required(VERSION 4.0 FATAL_ERROR)
+
+include(../../../../cmake/rapids_config.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
 include(rapids-cpm)
-rapids_cpm_init()
+rapids_cpm_init(
+  OVERRIDE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../cpp/cmake/thirdparty/patches/override.json"
+)
 
-# Use GPU_ARCHS if it is defined
-if(DEFINED GPU_ARCHS)
-  set(CMAKE_CUDA_ARCHITECTURES "${GPU_ARCHS}")
-endif()
 rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
   VERSION "${RAPIDS_VERSION}"
-  LANGUAGES C CXX CUDA
+  LANGUAGES CXX CUDA
 )
 
 # ##################################################################################################
@@ -39,7 +31,6 @@ option(USE_NVTX "Build with NVTX support" ON)
 option(BUILD_SHARED_LIBS "Build cuDF JNI shared libraries" ON)
 option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(CUDF_USE_PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
-option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 option(CUDF_JNI_ENABLE_PROFILING "Build with profiling support" ON)
@@ -51,64 +42,82 @@ message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
 message(VERBOSE
         "CUDF_JNI: Build with per-thread default stream: ${CUDF_USE_PER_THREAD_DEFAULT_STREAM}"
 )
-message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
-
-set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
-if(NOT DEFINED CUDF_CPP_BUILD_DIR OR CUDF_CPP_BUILD_DIR STREQUAL "")
-  if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
-    set(CUDF_CPP_BUILD_DIR "$ENV{CUDF_CPP_BUILD_DIR}")
-  else()
-    set(CUDF_CPP_BUILD_DIR "${CUDF_SOURCE_DIR}/build")
-  endif()
-endif()
-
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
-                      "${CUDF_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH}
-)
 
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
 
-set(CUDF_CXX_FLAGS "")
-set(CUDF_CUDA_FLAGS "")
-set(CUDF_CXX_DEFINITIONS "")
-set(CUDF_CUDA_DEFINITIONS "")
-
 rapids_find_package(CUDAToolkit REQUIRED)
-include(ConfigureCUDA) # set other CUDA compilation flags
 
 if(CUDF_USE_PER_THREAD_DEFAULT_STREAM)
   message(STATUS "Using per-thread default stream")
   add_compile_definitions(CUDA_API_PER_THREAD_DEFAULT_STREAM CUDF_USE_PER_THREAD_DEFAULT_STREAM)
 endif()
 
-# ##################################################################################################
-# * build type ------------------------------------------------------------------------------------
-#   Set a default build type if none was specified
+# Set a default build type if none was specified
 rapids_cmake_build_type("Release")
 
 # ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
 
-set(cudf_ROOT "${CUDF_CPP_BUILD_DIR}")
+set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
+
+# Search for libcudf in CUDF_INSTALL_DIR if it is specified. Otherwise, search in
+# CUDF_CPP_BUILD_DIR.
+if(DEFINED ENV{CUDF_INSTALL_DIR})
+  set(CUDF_INSTALL_DIR
+      "$ENV{CUDF_INSTALL_DIR}"
+      CACHE STRING "path to libcudf install root"
+  )
+  set(CMAKE_PREFIX_PATH ${CUDF_INSTALL_DIR} "${CUDF_INSTALL_DIR}/lib64/cmake")
+  message(STATUS "Using dependencies from libcudf installed path: ${CUDF_INSTALL_DIR}")
+else()
+  if(NOT DEFINED ENV{CUDF_CPP_BUILD_DIR})
+    message(FATAL_ERROR "Either CUDF_INSTALL_DIR or CUDF_CPP_BUILD_DIR must be defined.")
+  endif()
+
+  set(CUDF_CPP_BUILD_DIR
+      "$ENV{CUDF_CPP_BUILD_DIR}"
+      CACHE STRING "path to libcudf build root"
+  )
+  set(cudf_ROOT ${CUDF_CPP_BUILD_DIR})
+  message(STATUS "Using pre-configured libcudf from build path: ${CUDF_CPP_BUILD_DIR}")
+endif()
+
 rapids_find_package(cudf REQUIRED)
 
-# ##################################################################################################
-# * nvtx3-------------------------------------------------------------------------------------------
-include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_nvtx.cmake)
+get_target_property(CUDF_CXX_FLAGS cudf::cudf CUDF_CXX_FLAGS)
+get_target_property(CUDF_CUDA_FLAGS cudf::cudf CUDF_CUDA_FLAGS)
+get_target_property(CUDF_CXX_DEFINITIONS cudf::cudf CUDF_CXX_DEFINITIONS)
+get_target_property(CUDF_CUDA_DEFINITIONS cudf::cudf CUDF_CUDA_DEFINITIONS)
+
+# The Java/JNI build always triggers static builds of both libcudf itself and its dependencies, and
+# therefore needs all of them to be installed to link against later.
+set(CUDF_INSTALL_LIBRARY_DEPS ON)
 
 # ##################################################################################################
-# * nvcomp------------------------------------------------------------------------------------------
+# * nvtx3 and nvcomp-------------------------------------------------------------------------------
+#   Reuse any cached package that is already available after configuring/installing libcudf. Only
+#   fetch (and install) from source if the target does not exist to avoid name conflict when the
+#   same target is exported multiple times.
 
-if(NOT DEFINED nvcomp_DIR)
-  set(nvcomp_DIR "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-build")
+if(NOT TARGET nvtx3::nvtx3-cpp AND NOT DEFINED ENV{CUDF_INSTALL_DIR})
+  message(STATUS "Fetch package nvtx3 from source.")
+  include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_nvtx.cmake)
 endif()
-rapids_find_package(nvcomp REQUIRED)
+find_package(nvtx3 REQUIRED)
+
+if(NOT TARGET nvcomp
+   AND NOT TARGET nvcomp::nvcomp
+   AND NOT DEFINED ENV{CUDF_INSTALL_DIR}
+)
+  include(${CUDF_SOURCE_DIR}/cmake/thirdparty/get_nvcomp.cmake)
+endif()
+find_package(nvcomp REQUIRED)
 
 # ##################################################################################################
-# * find JNI -------------------------------------------------------------------------------------
+# * find JNI --------------------------------------------------------------------------------------
 find_package(JNI REQUIRED)
 if(JNI_FOUND)
   message(STATUS "JDK with JNI in ${JNI_INCLUDE_DIRS}")
@@ -129,6 +138,18 @@ if(USE_GDS)
   endif()
 endif()
 
+# Set RMM logging level
+set(RMM_LOGGING_LEVEL
+    "INFO"
+    CACHE STRING "Choose the logging level."
+)
+set_property(
+  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+)
+message(VERBOSE "CUDF_JNI: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
+
+add_compile_definitions("RMM_LOG_ACTIVE_LEVEL=RAPIDS_LOGGER_LOG_LEVEL_${RMM_LOGGING_LEVEL}")
+
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
 
@@ -146,8 +167,10 @@ add_library(
   src/CompiledExpression.cpp
   src/ContiguousTableJni.cpp
   src/DataSourceHelperJni.cpp
+  src/DeletionVectorJni.cpp
   src/HashJoinJni.cpp
   src/HostMemoryBufferNativeUtilsJni.cpp
+  src/KeyRemappingJni.cpp
   src/HostUDFWrapperJni.cpp
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp
@@ -201,9 +224,9 @@ set_target_properties(
   PROPERTIES BUILD_RPATH "\$ORIGIN"
              INSTALL_RPATH "\$ORIGIN"
              # set target compile options
-             CXX_STANDARD 17
+             CXX_STANDARD 20
              CXX_STANDARD_REQUIRED ON
-             CUDA_STANDARD 17
+             CUDA_STANDARD 20
              CUDA_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
              INTERFACE_POSITION_INDEPENDENT_CODE ON
@@ -231,12 +254,12 @@ if(USE_GDS)
     PROPERTIES BUILD_RPATH "\$ORIGIN"
                INSTALL_RPATH "\$ORIGIN"
                # set target compile options
-               CXX_STANDARD 17
+               CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                POSITION_INDEPENDENT_CODE ON
                INTERFACE_POSITION_INDEPENDENT_CODE ON
   )
-  target_link_libraries(cufilejni PRIVATE cudfjni CUDA::cuFile${_cufile_suffix})
+  target_link_libraries(cufilejni PRIVATE cudfjni CUDA::cuFile${_cufile_suffix} cudf::cudf)
 endif()
 
 # ##################################################################################################
@@ -245,7 +268,7 @@ endif()
 set(CUDF_LINK PUBLIC cudf::cudf)
 if(CUDF_JNI_LIBCUDF_STATIC)
   # Whole-link libcudf.a into the shared library but not its dependencies
-  set(CUDF_LINK PRIVATE -Wl,--whole-archive cudf::cudf -Wl,--no-whole-archive PUBLIC cudf::cudf)
+  set(CUDF_LINK PRIVATE -Wl,--whole-archive cudf::cudf -Wl,--no-whole-archive)
 endif()
 
 # When nvcomp is installed we need to use nvcomp::nvcomp but from the cudf build directory it will
@@ -260,13 +283,7 @@ target_link_libraries(
 #   cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic
 #   linking
 
-if(CUDA_STATIC_RUNTIME)
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Static)
-else()
-  # Tell CMake what CUDA language runtime to use
-  set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Shared)
-endif()
+set_target_properties(cudfjni PROPERTIES CUDA_RUNTIME_LIBRARY Static)
 
 # ##################################################################################################
 # * install shared libraries ----------------------------------------------------------------------

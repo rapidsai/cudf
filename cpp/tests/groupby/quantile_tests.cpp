@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
@@ -21,7 +10,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -36,7 +25,8 @@ TYPED_TEST_SUITE(groupby_quantile_test, supported_types);
 TYPED_TEST(groupby_quantile_test, basic)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -56,7 +46,8 @@ TYPED_TEST(groupby_quantile_test, basic)
 TYPED_TEST(groupby_quantile_test, empty_cols)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   cudf::test::fixed_width_column_wrapper<K> keys{};
   cudf::test::fixed_width_column_wrapper<V> vals{};
@@ -72,7 +63,8 @@ TYPED_TEST(groupby_quantile_test, empty_cols)
 TYPED_TEST(groupby_quantile_test, zero_valid_keys)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   cudf::test::fixed_width_column_wrapper<V> vals{3, 4, 5};
@@ -88,7 +80,8 @@ TYPED_TEST(groupby_quantile_test, zero_valid_keys)
 TYPED_TEST(groupby_quantile_test, zero_valid_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
@@ -104,7 +97,8 @@ TYPED_TEST(groupby_quantile_test, zero_valid_values)
 TYPED_TEST(groupby_quantile_test, null_keys_and_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   cudf::test::fixed_width_column_wrapper<K> keys(
     {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
@@ -125,7 +119,8 @@ TYPED_TEST(groupby_quantile_test, null_keys_and_values)
 TYPED_TEST(groupby_quantile_test, multiple_quantile)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -155,7 +150,8 @@ TYPED_TEST(groupby_quantile_test, multiple_quantile)
 TYPED_TEST(groupby_quantile_test, interpolation_types)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 2};
   cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 9};
@@ -194,7 +190,8 @@ TYPED_TEST(groupby_quantile_test, interpolation_types)
 TYPED_TEST(groupby_quantile_test, dictionary)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::QUANTILE>;
+  using R = double;
+  ;
 
   // clang-format off
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};

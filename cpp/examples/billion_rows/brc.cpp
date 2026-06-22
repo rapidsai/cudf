@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "common.hpp"
 #include "groupby_results.hpp"
@@ -24,7 +13,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <chrono>
 #include <iostream>
@@ -45,9 +34,8 @@ int main(int argc, char const** argv)
 
   auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
-  auto stats_mr =
-    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  auto stats_mr      = rmm::mr::statistics_resource_adaptor{resource};
+  rmm::mr::set_current_device_resource(stats_mr);
   auto stream = cudf::get_default_stream();
 
   auto start = std::chrono::steady_clock::now();

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -21,6 +10,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
+
+#include <cuda/functional>
 
 #include <memory>
 
@@ -106,6 +98,28 @@ std::unique_ptr<column> byte_cast(
   flip_endianness endian_configuration,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Copies a table into a contiguous column-major device array.
+ *
+ * This function copies a `table_view` with columns of the same fixed-width type
+ * into a 2D device array stored in column-major order.
+ *
+ * The output buffer must be preallocated and passed as a `device_span` using
+ * a `device_span<cuda::std::byte>`. It must be large enough to hold
+ * `num_rows * num_columns * sizeof(dtype)` bytes.
+ *
+ * @throws cudf::logic_error if columns do not all have the same type
+ * @throws cudf::logic_error if the dtype of the columns is not a fixed-width type
+ * @throws std::invalid_argument if the output span is too small
+ *
+ * @param input A table with fixed-width, non-nullable columns of the same type
+ * @param output A span representing preallocated device memory for the output
+ * @param stream CUDA stream used for memory operations
+ */
+void table_to_array(table_view const& input,
+                    device_span<cuda::std::byte> output,
+                    rmm::cuda_stream_view stream = cudf::get_default_stream());
 
 /** @} */  // end of group
 

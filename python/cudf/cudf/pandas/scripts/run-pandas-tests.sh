@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Run Pandas unit tests with cudf.pandas.
@@ -15,25 +14,25 @@
 #   run-pandas-tests.sh --tb=line --report-log=log.json
 #
 # This script creates a `pandas-testing` directory if it doesn't exist
+#
 
 set -euo pipefail
+
+EXITCODE=0
+trap "EXITCODE=1" ERR
+set +e
 
 # Grab the Pandas source corresponding to the version
 # of Pandas installed.
 PANDAS_VERSION=$(python -c "import pandas; print(pandas.__version__)")
 
-# tests/io/test_clipboard.py::TestClipboard crashes pytest workers (possibly due to fixture patching clipboard functionality)
-PYTEST_IGNORES="--ignore=tests/io/parser/common/test_read_errors.py \
---ignore=tests/io/test_clipboard.py"
-
+echo "Running Pandas tests for version ${PANDAS_VERSION}"
 mkdir -p pandas-testing
 cd pandas-testing
 
 if [ ! -d "pandas" ]; then
-    git clone https://github.com/pandas-dev/pandas
+    git clone https://github.com/pandas-dev/pandas --depth=1 -b "v${PANDAS_VERSION}" pandas
 fi
-cd pandas && git clean -fdx && git checkout v$PANDAS_VERSION && cd ../
-
 
 if [ ! -d "pandas-tests" ]; then
     # Copy just the tests out of the Pandas source tree.
@@ -41,6 +40,12 @@ if [ ! -d "pandas-tests" ]; then
     # imports fail if we don't do this:
     mkdir -p pandas-tests
     cp -r pandas/pandas/tests pandas-tests/
+    # Some tests navigate up from tests/ and reference data files in sibling
+    # directories (e.g. tests/io/formats/style/test_html.py looks for
+    # io/formats/templates/ five levels above the test file).  Copy those
+    # non-test data directories so that the expected relative paths resolve.
+    mkdir -p pandas-tests/io/formats
+    cp -r pandas/pandas/io/formats/templates pandas-tests/io/formats/templates
     # directory layout requirement
     # conftest.py
     # pyproject.toml
@@ -50,10 +55,6 @@ if [ ! -d "pandas-tests" ]; then
     cat > pandas-tests/pyproject.toml << \EOF
 [tool.pytest.ini_options]
 xfail_strict = true
-filterwarnings = [
-  # Will be fixed in numba 0.56: https://github.com/numba/numba/issues/7758
-  "ignore:`np.MachAr` is deprecated:DeprecationWarning:numba",
-]
 markers = [
   "single_cpu: tests that should run on a single cpu only",
   "slow: mark a test as slow",
@@ -62,86 +63,46 @@ markers = [
   "clipboard: mark a pd.read_clipboard test",
   "arm_slow: mark a test as slow for arm64 architecture",
   "skip_ubsan: Tests known to fail UBSAN check",
+  "fails_arm_wheels: Tests known to fail on arm64 wheels",
 ]
 EOF
 
     # Substitute `pandas.tests` with a relative import.
     # This will depend on the location of the test module relative to
     # the pandas-tests directory.
-    for hit in $(find . -iname '*.py' | xargs grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
+    for hit in $(find pandas-tests -iname '*.py' -print0 | xargs -0 grep "pandas.tests" | cut -d ":" -f 1 | sort | uniq); do
         # Get the relative path to the test module
-        test_module=$(echo $hit | cut -d "/" -f 2-)
-        # Get the number of directories to go up
-        num_dirs=$(echo $test_module | grep -o "/" | wc -l)
-        num_dots=$(($num_dirs - 2))
-        # Construct the relative import
-        relative_import=$(printf "%0.s." $(seq 1 $num_dots))
-        # Replace the import
-        sed -i "s/pandas.tests/${relative_import}/g" $hit
+        test_module=$(echo "$hit" | cut -d "/" -f 2-)
+        # Count directory separators to find how many levels to go up.
+        # The sed pattern replaces "pandas.tests." (including the trailing dot)
+        # with N dots, where N equals the number of path components in test_module.
+        # E.g. tests/test_col.py (1 slash) -> 1 dot, tests/frame/f.py (2 slashes) -> 2 dots.
+        num_dirs="${test_module//[^\/]/}"
+        num_dirs="${#num_dirs}"
+        # Build exactly num_dirs dots (0 dots is valid for num_dirs=0).
+        relative_import=""
+        for _i in $(seq 1 $num_dirs); do
+            relative_import="${relative_import}."
+        done
+        # Replace "pandas.tests." (including trailing dot) so the replacement
+        # dots are not combined with an extra dot left by the old pattern.
+        sed -i "s/pandas\.tests\./${relative_import}/g" "$hit"
     done
 fi
-
-# append the contents of patch-confest.py to conftest.py
-cat ../python/cudf/cudf/pandas/scripts/conftest-patch.py >> pandas-tests/conftest.py
 
 # Run the tests
 cd pandas-tests/
 
 
-# TODO: Needs motoserver/moto container running on http://localhost:5000
-TEST_THAT_NEED_MOTO_SERVER="not test_styler_to_s3 \
-and not test_with_s3_url[None] \
-and not test_with_s3_url[gzip] \
-and not test_with_s3_url[bz2] \
-and not test_with_s3_url[zip] \
-and not test_with_s3_url[xz] \
-and not test_with_s3_url[tar] \
-and not test_s3_permission_output[etree] \
-and not test_read_s3_jsonl \
-and not test_s3_parser_consistency \
-and not test_to_s3 \
-and not test_parse_public_s3a_bucket \
-and not test_parse_public_s3_bucket_nrows \
-and not test_parse_public_s3_bucket_chunked \
-and not test_parse_public_s3_bucket_chunked_python \
-and not test_parse_public_s3_bucket_python \
-and not test_infer_s3_compression \
-and not test_parse_public_s3_bucket_nrows_python \
-and not test_read_s3_fails_private \
-and not test_read_csv_handles_boto_s3_object \
-and not test_read_csv_chunked_download \
-and not test_read_s3_with_hash_in_key \
-and not test_read_feather_s3_file_path \
-and not test_parse_public_s3_bucket \
-and not test_parse_private_s3_bucket \
-and not test_parse_public_s3n_bucket \
-and not test_read_with_creds_from_pub_bucket \
-and not test_read_without_creds_from_pub_bucket \
-and not test_from_s3_csv \
-and not test_s3_protocols[s3] \
-and not test_s3_protocols[s3a] \
-and not test_s3_protocols[s3n] \
-and not test_s3_parquet \
-and not test_s3_roundtrip_explicit_fs \
-and not test_s3_roundtrip \
-and not test_s3_roundtrip_for_dir[partition_col0] \
-and not test_s3_roundtrip_for_dir[partition_col1] \
-and not test_s3_roundtrip"
-
-TEST_THAT_CRASH_PYTEST_WORKERS="not test_bitmasks_pyarrow \
-and not test_large_string_pyarrow \
-and not test_interchange_from_corrected_buffer_dtypes \
-and not test_eof_states \
-and not test_array_tz"
-
-# TODO: Remove "not db" once a postgres & mysql container is set up on the CI
-PANDAS_CI="1" timeout 90m python -m pytest -p cudf.pandas \
-    -v -m "not single_cpu and not db" \
-    -k "$TEST_THAT_NEED_MOTO_SERVER and $TEST_THAT_CRASH_PYTEST_WORKERS and not test_groupby_raises_category_on_category and not test_constructor_no_pandas_array and not test_is_monotonic_na and not test_index_contains and not test_index_contains and not test_frame_op_subclass_nonclass_constructor and not test_round_trip_current and not test_pickle_frame_v124_unpickle_130" \
+PANDAS_CI="1" python -m pytest \
+    -p cudf.pandas \
+    -p cudf.pandas.scripts.pandas-testing-plugin \
     --import-mode=importlib \
-    ${PYTEST_IGNORES} \
-    "$@" || [ $? = 1 ]  # Exit success if exit code was 1 (permit test failures but not other errors)
+    -m "not slow and not single_cpu and not db and not network" \
+    --disable-warnings \
+    "$@"
 
-mv *.json ..
+mv ./*.json ..
 cd ..
-rm -rf pandas-testing/pandas-tests/
+echo "Test script exiting with value: $EXITCODE"
+exit ${EXITCODE}

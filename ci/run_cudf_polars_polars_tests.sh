@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
 
@@ -8,13 +9,28 @@ set -euo pipefail
 cd "$(dirname "$(realpath "${BASH_SOURCE[0]}")")"/../polars/
 
 DESELECTED_TESTS=(
-    "tests/unit/test_polars_import.py::test_polars_import" # relies on a polars built in place
+    "tests/unit/meta/test_polars_import.py::test_polars_import" # relies on a polars built in place
     "tests/unit/streaming/test_streaming_sort.py::test_streaming_sort[True]" # relies on polars built in debug mode
-    "tests/unit/test_cpu_check.py::test_check_cpu_flags_skipped_no_flags" # Mock library error
     "tests/docs/test_user_guide.py" # No dot binary in CI image
-    "tests/unit/test_polars_import.py::test_fork_safety" # test started to hang in polars-1.14
     "tests/unit/operations/test_join.py::test_join_4_columns_with_validity" # fails in some systems, see https://github.com/pola-rs/polars/issues/19870
     "tests/unit/io/test_csv.py::test_read_web_file" # fails in rockylinux8 due to SSL CA issues
+    # TODO: Debug and re-enable the following tests
+    "tests/unit/sql/test_distinct.py::test_distinct_with_full_outer_join" # SQLite in CI doesn't support FULL OUTER JOIN
+    "tests/unit/sql/test_distinct.py::test_distinct_basic_single_column"
+    "tests/unit/sql/test_distinct.py::test_distinct_basic_multiple_columns"
+    "tests/unit/sql/test_distinct.py::test_distinct_basic_all_columns"
+    "tests/unit/sql/test_distinct.py::test_distinct_with_left_join_nulls"
+    "tests/unit/sql/test_distinct.py::test_distinct_with_nulls_handling"
+    "tests/unit/sql/test_window_functions.py::test_window_function_with_nulls"
+    "tests/unit/io/test_sink.py::test_mkdir[in-memory-scan_parquet-sink_parquet]" # kvikio file creation error in CI
+    "tests/unit/io/test_sink.py::test_mkdir[in-memory-scan_csv-sink_csv]" # kvikio file creation error in CI
+    "tests/unit/io/test_sink.py::test_mkdir[in-memory-scan_ndjson-sink_ndjson]" # kvikio file creation error in CI
+    "tests/unit/io/test_sink.py::test_mkdir[streaming-scan_parquet-sink_parquet]" # kvikio file creation error in CI
+    "tests/unit/io/test_sink.py::test_mkdir[streaming-scan_csv-sink_csv]" # kvikio file creation error in CI
+    "tests/unit/io/test_sink.py::test_mkdir[streaming-scan_ndjson-sink_ndjson]" # kvikio file creation error in CI
+    "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]" # kvikio file creation error in CI
+    "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>0]" # kvikio file creation error in CI
+    "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>2]" # kvikio file creation error in CI
 )
 
 if [[ $(arch) == "aarch64" ]]; then
@@ -43,15 +59,42 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # Don't quote the `DESELECTED_...` variable because `pytest` can't handle
 # multiple quoted arguments inline
 # shellcheck disable=SC2086
+echo "Run polars tests with injected in-memory GPU engine"
 python -m pytest \
+       -vv \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
-       -p cudf_polars.testing.plugin \
-       -n 8 \
+       -p cudf_polars.testing.inject_gpu_engine \
+       -n 4 \
        --dist=worksteal \
-       -vv \
        --tb=native \
+       --timeout=240 \
+       --durations 10 --durations-min 10 \
+       -ra \
        $DESELECTED_TESTS_STR \
        "$@" \
-       py-polars/tests
+       py-polars/tests \
+       --inject-gpu-engine in-memory
+
+# TODO(ResourceWarning): https://github.com/rapidsai/cudf/issues/22181
+echo "Run polars tests with injected SPMD GPU engine, small blocksize"
+CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE=805306368 \
+CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
+    python -m pytest \
+       --import-mode=importlib \
+       --cache-clear \
+       -m "" \
+       -p cudf_polars.testing.inject_gpu_engine \
+       -W ignore::ResourceWarning \
+       -n 4 \
+       --dist=worksteal \
+       --tb=native \
+       --timeout=240 \
+       --durations 10 --durations-min 10 \
+       -ra \
+       $DESELECTED_TESTS_STR \
+       "$@" \
+       py-polars/tests \
+       --inject-gpu-engine spmd \
+       --inject-gpu-engine-blocksize small

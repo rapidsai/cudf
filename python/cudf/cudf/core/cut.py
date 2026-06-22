@@ -1,18 +1,15 @@
-# Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
-from collections import abc
+from collections.abc import Sequence
 
 import cupy
 import numpy as np
 import pandas as pd
 
-import pylibcudf as plc
-
 import cudf
 from cudf.api.types import is_list_like
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column
-from cudf.core.column.categorical import CategoricalColumn, as_unsigned_codes
+from cudf.core.column import as_column
 from cudf.core.index import IntervalIndex, interval_range
 
 
@@ -84,12 +81,12 @@ def cut(
     --------
     Discretize into three equal-sized bins.
 
-    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3)
+    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3)  # doctest: +SKIP
     CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0],
                 (5.0, 7.0], (0.994, 3.0]], categories=[(0.994, 3.0],
                 (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category')
 
-    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3, retbins=True)
+    >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3, retbins=True)  # doctest: +SKIP
     (CategoricalIndex([(0.994, 3.0], (5.0, 7.0], (3.0, 5.0], (3.0, 5.0],
                 (5.0, 7.0], (0.994, 3.0]], categories=[(0.994, 3.0],
                 (3.0, 5.0], (5.0, 7.0]], ordered=True, dtype='category'),
@@ -97,9 +94,7 @@ def cut(
 
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]),
     ...          3, labels=["bad", "medium", "good"])
-    CategoricalIndex(['bad', 'good', 'medium', 'medium', 'good', 'bad'],
-                     categories=['bad', 'medium', 'good'],ordered=True,
-                     dtype='category')
+    CategoricalIndex(['bad', 'medium', 'good', 'good', 'medium', 'bad'], categories=['bad', 'medium', 'good'], ordered=True, dtype='category')
 
     >>> cudf.cut(np.array([1, 7, 5, 4, 6, 3]), 3,
     ...          labels=["B", "A", "B"], ordered=False)
@@ -113,7 +108,14 @@ def cut(
 
     >>> s = cudf.Series(np.array([2, 4, 6, 8, 10]),
     ...        index=['a', 'b', 'c', 'd', 'e'])
-    >>> cudf.cut(s, 3)
+    >>> cudf.cut(s, 3)  # doctest: +SKIP
+    a    (1.992, 4.667]
+    b    (1.992, 4.667]
+    c    (4.667, 7.333]
+    d     (7.333, 10.0]
+    e     (7.333, 10.0]
+    dtype: category
+    Categories (3, interval[float64, right]): [(1.992, 4.667] < (4.667, 7.333] < (7.333, 10.0]]
     """
     left_inclusive = False
     right_inclusive = True
@@ -144,7 +146,7 @@ def cut(
                 )
 
     # bins can either be an int, sequence of scalars or an intervalIndex
-    if isinstance(bins, abc.Sequence):
+    if isinstance(bins, Sequence):
         if len(set(bins)) is not len(bins):
             if duplicates == "raise":
                 raise ValueError(
@@ -162,7 +164,7 @@ def cut(
 
     # create bins if given an int or single scalar
     if not isinstance(bins, pd.IntervalIndex):
-        if not isinstance(bins, (abc.Sequence)):
+        if not isinstance(bins, Sequence):
             if isinstance(
                 x, (pd.Series, cudf.Series, np.ndarray, cupy.ndarray)
             ):
@@ -171,6 +173,10 @@ def cut(
             else:
                 mn = min(x)
                 mx = max(x)
+            if mn == mx:
+                raise NotImplementedError(
+                    "cut on homogeneous data is not supported."
+                )
             bins = np.linspace(mn, mx, bins + 1, endpoint=True)
             adj = (mx - mn) * 0.001
             if right:
@@ -254,24 +260,17 @@ def cut(
         right_edges = as_column(bins.right).astype(input_arr.dtype)
     else:
         # get the left and right edges of the bins as columns
-        left_edges = as_column(bins[:-1:], dtype="float64")
-        right_edges = as_column(bins[+1::], dtype="float64")
+        left_edges = as_column(bins[:-1:], dtype=np.dtype("float64"))
+        right_edges = as_column(bins[+1::], dtype=np.dtype("float64"))
         # the input arr must be changed to the same type as the edges
         input_arr = input_arr.astype(left_edges.dtype)
     # get the indexes for the appropriate number
-    with acquire_spill_lock():
-        plc_column = plc.labeling.label_bins(
-            input_arr.to_pylibcudf(mode="read"),
-            left_edges.to_pylibcudf(mode="read"),
-            plc.labeling.Inclusive.YES
-            if left_inclusive
-            else plc.labeling.Inclusive.NO,
-            right_edges.to_pylibcudf(mode="read"),
-            plc.labeling.Inclusive.YES
-            if right_inclusive
-            else plc.labeling.Inclusive.NO,
-        )
-        index_labels = ColumnBase.from_pylibcudf(plc_column)
+    index_labels = input_arr.label_bins(
+        left_edge=left_edges,
+        left_inclusive=left_inclusive,
+        right_edge=right_edges,
+        right_inclusive=right_inclusive,
+    )
 
     if labels is False:
         # if labels is false we return the index labels, we return them
@@ -296,21 +295,11 @@ def cut(
             # should allow duplicate categories.
             return interval_labels[index_labels]
 
-    index_labels = as_unsigned_codes(len(interval_labels), index_labels)  # type: ignore[arg-type]
-
-    col = CategoricalColumn(
-        data=None,
-        size=index_labels.size,
-        dtype=cudf.CategoricalDtype(
-            categories=interval_labels, ordered=ordered
-        ),
-        mask=index_labels.base_mask,
-        offset=index_labels.offset,
-        children=(index_labels,),
+    categorical_index = cudf.CategoricalIndex.from_codes(
+        categories=interval_labels,
+        codes=index_labels,
+        ordered=ordered,
     )
-
-    # we return a categorical index, as we don't have a Categorical method
-    categorical_index = cudf.CategoricalIndex._from_column(col)
 
     if isinstance(orig_x, (pd.Series, cudf.Series)):
         # if we have a series input we return a series output

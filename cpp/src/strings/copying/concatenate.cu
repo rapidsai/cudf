@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -21,6 +10,9 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/concatenate.hpp>
 #include <cudf/strings/detail/utilities.hpp>
@@ -31,10 +23,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/advance.h>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
@@ -76,7 +67,7 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   CUDF_FUNC_RANGE();
   // Assemble contiguous array of device views
   auto [device_view_owners, device_views_ptr] =
-    contiguous_copy_column_device_views<column_device_view>(views, stream);
+    create_column_device_views<column_device_view>(views, stream);
 
   // Compute the partition offsets and size of offset column
   // Note: Using 64-bit size_t so we can detect overflow of 32-bit size_type
@@ -96,12 +87,13 @@ auto create_strings_device_views(host_span<column_view const> views, rmm::cuda_s
   auto d_partition_offsets = rmm::device_uvector<size_t>(views.size() + 1, stream);
   d_partition_offsets.set_element_to_zero_async(0, stream);  // zero first element
 
-  thrust::transform_inclusive_scan(rmm::exec_policy(stream),
-                                   device_views_ptr,
-                                   device_views_ptr + views.size(),
-                                   std::next(d_partition_offsets.begin()),
-                                   chars_size_transform{},
-                                   thrust::plus{});
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    device_views_ptr,
+    device_views_ptr + views.size(),
+    std::next(d_partition_offsets.begin()),
+    chars_size_transform{},
+    cuda::std::plus{});
   auto const output_chars_size = d_partition_offsets.back_element(stream);
   stream.synchronize();  // ensure copy of output_chars_size is complete before returning
 
@@ -131,7 +123,7 @@ CUDF_KERNEL void fused_concatenate_string_offset_kernel(
   if (Nullable) { active_mask = __ballot_sync(0xFFFF'FFFFu, output_index < output_size); }
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
-    auto const offset_it            = thrust::prev(thrust::upper_bound(
+    auto const offset_it            = cuda::std::prev(thrust::upper_bound(
       thrust::seq, input_offsets, input_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - input_offsets;
 
@@ -183,7 +175,7 @@ CUDF_KERNEL void fused_concatenate_string_chars_kernel(column_device_view const*
 
   while (output_index < output_size) {
     // Lookup input index by searching for output index in offsets
-    auto const offset_it            = thrust::prev(thrust::upper_bound(
+    auto const offset_it            = cuda::std::prev(thrust::upper_bound(
       thrust::seq, partition_offsets, partition_offsets + num_input_views, output_index));
     size_type const partition_index = offset_it - partition_offsets;
 
@@ -243,7 +235,8 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   }
 
   {  // Copy offsets columns with single kernel launch
-    cudf::detail::device_scalar<size_type> d_valid_count(0, stream);
+    cudf::detail::device_scalar<size_type> d_valid_count(
+      0, stream, cudf::get_current_device_resource_ref());
 
     constexpr size_type block_size{256};
     cudf::detail::grid_1d config(offsets_count, block_size);
@@ -258,6 +251,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
       itr_new_offsets,
       reinterpret_cast<bitmask_type*>(null_mask.data()),
       d_valid_count.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     if (has_nulls) { null_count = strings_count - d_valid_count.value(stream); }
   }
@@ -275,6 +269,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                                                             static_cast<size_type>(columns.size()),
                                                             total_bytes,
                                                             d_new_chars);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       // Memcpy each input chars column (more efficient for very large strings)
       for (auto column = columns.begin(); column != columns.end(); ++column) {
@@ -290,8 +285,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
         auto d_chars     = column->head<char>() + bytes_offset;
         auto const bytes = bytes_end - bytes_offset;
 
-        CUDF_CUDA_TRY(
-          cudaMemcpyAsync(d_new_chars, d_chars, bytes, cudaMemcpyDefault, stream.value()));
+        CUDF_CUDA_TRY(cudf::detail::memcpy_async(d_new_chars, d_chars, bytes, stream));
 
         // get ready for the next column
         d_new_chars += bytes;

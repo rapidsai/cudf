@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -29,13 +18,12 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <cuda/std/optional>
-#include <thrust/advance.h>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/transform.h>
@@ -63,7 +51,7 @@ std::unique_ptr<table> build_table(
   rmm::device_async_resource_ref mr)
 {
   auto select_iter = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<cudf::size_type>{0},
     [explode_column_idx](size_type i) { return i >= explode_column_idx ? i + 1 : i; });
 
   auto gathered_table =
@@ -124,15 +112,15 @@ std::unique_ptr<table> explode(table_view const& input_table,
   auto offsets = explode_col.offsets_begin();
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+    cuda::std::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
       return (i - offsets[0]) - 1;
     }));
-  auto counting_iter = thrust::make_counting_iterator(0);
+  auto counting_iter = cuda::counting_iterator<cudf::size_type>{0};
 
   // This looks like an off-by-one bug, but what is going on here is that we need to reduce each
   // result from `lower_bound` by 1 to build the correct gather map. This can be accomplished by
   // skipping the first entry and using the result of `lower_bound` directly.
-  thrust::lower_bound(rmm::exec_policy(stream),
+  thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       offsets_minus_one,
                       offsets_minus_one + explode_col.size(),
                       counting_iter,
@@ -165,7 +153,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
     offsets + 1, cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
       return (i - offsets[0]) - 1;
     }));
-  auto counting_iter = thrust::make_counting_iterator(0);
+  auto counting_iter = cuda::counting_iterator<cudf::size_type>{0};
 
   rmm::device_uvector<size_type> pos(sliced_child.size(), stream, mr);
 
@@ -173,7 +161,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
   // result from `lower_bound` by 1 to build the correct gather map. This can be accomplished by
   // skipping the first entry and using the result of `lower_bound` directly.
   thrust::transform(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     counting_iter,
     counting_iter + gather_map.size(),
     gather_map.begin(),
@@ -182,7 +170,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
                                            offsets,
                                            offset_size =
                                              explode_col.size()] __device__(auto idx) -> size_type {
-      auto lb_idx = thrust::distance(
+      auto lb_idx = cuda::std::distance(
         offsets_minus_one,
         thrust::lower_bound(thrust::seq, offsets_minus_one, offsets_minus_one + offset_size, idx));
       position_array[idx] = idx - (offsets[lb_idx] - offsets[0]);
@@ -207,19 +195,19 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 {
   lists_column_view explode_col{input_table.column(explode_column_idx)};
   auto sliced_child  = explode_col.get_sliced_child(stream);
-  auto counting_iter = thrust::make_counting_iterator(0);
+  auto counting_iter = cuda::counting_iterator<cudf::size_type>{0};
   auto offsets       = explode_col.offsets_begin();
 
   // number of nulls or empty lists found so far in the explode column
   rmm::device_uvector<size_type> null_or_empty_offset(explode_col.size(), stream);
 
   auto null_or_empty = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<cudf::size_type>{0},
     cuda::proclaim_return_type<size_type>(
       [offsets, offsets_size = explode_col.size() - 1] __device__(int idx) {
         return (idx > offsets_size || (offsets[idx + 1] != offsets[idx])) ? 0 : 1;
       }));
-  thrust::inclusive_scan(rmm::exec_policy(stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          null_or_empty,
                          null_or_empty + explode_col.size(),
                          null_or_empty_offset.begin());
@@ -241,7 +229,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 
   // offsets + 1 here to skip the 0th offset, which removes a - 1 operation later.
   auto offsets_minus_one = thrust::make_transform_iterator(
-    thrust::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
+    cuda::std::next(offsets), cuda::proclaim_return_type<size_type>([offsets] __device__(auto i) {
       return (i - offsets[0]) - 1;
     }));
 
@@ -256,10 +244,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
                            null_or_empty,
                            offset_size = explode_col.offsets().size() - 1] __device__(auto idx) {
     if (idx < sliced_child_size) {
-      auto lb_idx =
-        thrust::distance(offsets_minus_one,
-                         thrust::lower_bound(
-                           thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
+      auto lb_idx = cuda::std::distance(
+        offsets_minus_one,
+        thrust::lower_bound(
+          thrust::seq, offsets_minus_one, offsets_minus_one + (offset_size), idx));
       auto index_to_write                      = null_or_empty_offset_p[lb_idx] + idx;
       gather_map_p[index_to_write]             = lb_idx;
       explode_col_gather_map_p[index_to_write] = idx;
@@ -283,8 +271,10 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
   auto loop_count = std::max(sliced_child.size(), explode_col.size());
 
   // Fill in gather map with all the child column's entries
-  thrust::for_each(
-    rmm::exec_policy(stream), counting_iter, counting_iter + loop_count, fill_gather_maps);
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   counting_iter,
+                   counting_iter + loop_count,
+                   fill_gather_maps);
 
   return build_table(
     input_table,

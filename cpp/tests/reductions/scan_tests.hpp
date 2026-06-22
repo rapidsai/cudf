@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -55,24 +44,22 @@ struct TypeParam_to_host_type<numeric::decimal128> {
 };
 
 template <typename TypeParam, typename T>
-std::enable_if_t<std::is_same_v<TypeParam, cudf::string_view>, thrust::host_vector<std::string>>
-make_vector(std::initializer_list<T> const& init)
+thrust::host_vector<std::string> make_vector(std::initializer_list<T> const& init)
+  requires(std::is_same_v<TypeParam, cudf::string_view>)
 {
   return cudf::test::make_type_param_vector<std::string, T>(init);
 }
 
 template <typename TypeParam, typename T>
-std::enable_if_t<cudf::is_fixed_point<TypeParam>(), thrust::host_vector<typename TypeParam::rep>>
-make_vector(std::initializer_list<T> const& init)
+thrust::host_vector<typename TypeParam::rep> make_vector(std::initializer_list<T> const& init)
+  requires(cudf::is_fixed_point<TypeParam>())
 {
   return cudf::test::make_type_param_vector<typename TypeParam::rep, T>(init);
 }
 
 template <typename TypeParam, typename T>
-std::enable_if_t<not(std::is_same_v<TypeParam, cudf::string_view> ||
-                     cudf::is_fixed_point<TypeParam>()),
-                 thrust::host_vector<TypeParam>>
-make_vector(std::initializer_list<T> const& init)
+thrust::host_vector<TypeParam> make_vector(std::initializer_list<T> const& init)
+  requires(not(std::is_same_v<TypeParam, cudf::string_view> || cudf::is_fixed_point<TypeParam>()))
 {
   return cudf::test::make_type_param_vector<TypeParam, T>(init);
 }

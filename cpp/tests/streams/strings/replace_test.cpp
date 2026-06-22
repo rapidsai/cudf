@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -36,17 +25,6 @@ TEST_F(StringsReplaceTest, Replace)
   cudf::strings::replace(view, target, repl, -1, cudf::test::get_default_stream());
   cudf::strings::replace_multiple(view, view, view, cudf::test::get_default_stream());
   cudf::strings::replace_slice(view, repl, 1, 2, cudf::test::get_default_stream());
-
-  auto const pattern = std::string("[a-z]");
-  auto const prog    = cudf::strings::regex_program::create(pattern);
-  cudf::strings::replace_re(view, *prog, repl, 1, cudf::test::get_default_stream());
-
-  cudf::test::strings_column_wrapper repls({"1", "a", " "});
-  cudf::strings::replace_re(view,
-                            {pattern, pattern, pattern},
-                            cudf::strings_column_view(repls),
-                            cudf::strings::regex_flags::DEFAULT,
-                            cudf::test::get_default_stream());
 }
 
 TEST_F(StringsReplaceTest, ReplaceRegex)
@@ -58,13 +36,6 @@ TEST_F(StringsReplaceTest, ReplaceRegex)
   auto const pattern = std::string("[a-z]");
   auto const prog    = cudf::strings::regex_program::create(pattern);
   cudf::strings::replace_re(view, *prog, repl, 1, cudf::test::get_default_stream());
-
-  cudf::test::strings_column_wrapper repls({"1", "a", " "});
-  cudf::strings::replace_re(view,
-                            {pattern, pattern, pattern},
-                            cudf::strings_column_view(repls),
-                            cudf::strings::regex_flags::DEFAULT,
-                            cudf::test::get_default_stream());
 }
 
 TEST_F(StringsReplaceTest, ReplaceRegexBackref)

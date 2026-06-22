@@ -1,10 +1,11 @@
-# Copyright (c) 2019-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import warnings
 
 import pandas as pd
 
-import cudf
+from cudf.core.dataframe import from_pandas
 from cudf.utils import ioutils
 
 
@@ -16,7 +17,7 @@ def read_hdf(path_or_buf, *args, **kwargs):
         "be GPU accelerated in the future"
     )
     pd_value = pd.read_hdf(path_or_buf, *args, **kwargs)
-    return cudf.from_pandas(pd_value)
+    return from_pandas(pd_value)
 
 
 @ioutils.doc_to_hdf()

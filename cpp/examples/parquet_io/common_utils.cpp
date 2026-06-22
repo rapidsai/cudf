@@ -1,29 +1,19 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "common_utils.hpp"
 
 #include <cudf/concatenate.hpp>
 #include <cudf/io/types.hpp>
-#include <cudf/join.hpp>
+#include <cudf/table/equality.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
 
 #include <chrono>
 #include <iomanip>
@@ -35,14 +25,13 @@
  *
  */
 
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(bool is_pool_used)
+cuda::mr::any_resource<cuda::mr::device_accessible> create_memory_resource(bool is_pool_used)
 {
-  auto cuda_mr = std::make_shared<rmm::mr::cuda_memory_resource>();
   if (is_pool_used) {
-    return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-      cuda_mr, rmm::percent_of_free_device_memory(50));
+    return rmm::mr::pool_memory_resource{rmm::mr::cuda_memory_resource{},
+                                         rmm::percent_of_free_device_memory(80)};
   }
-  return cuda_mr;
+  return rmm::mr::cuda_async_memory_resource{};
 }
 
 cudf::io::column_encoding get_encoding_type(std::string name)
@@ -94,21 +83,14 @@ bool get_boolean(std::string input)
   return input == "ON" or input == "TRUE" or input == "YES" or input == "Y" or input == "T";
 }
 
-void check_tables_equal(cudf::table_view const& lhs_table, cudf::table_view const& rhs_table)
+void check_tables_equal(cudf::table_view const& lhs_table,
+                        cudf::table_view const& rhs_table,
+                        rmm::cuda_stream_view stream)
 {
-  try {
-    // Left anti-join the original and transcoded tables
-    // identical tables should not throw an exception and
-    // return an empty indices vector
-    auto const indices = cudf::left_anti_join(lhs_table, rhs_table, cudf::null_equality::EQUAL);
-
-    // No exception thrown, check indices
-    auto const valid = indices->size() == 0;
-    std::cout << "Tables identical: " << valid << "\n\n";
-  } catch (std::exception& e) {
-    std::cerr << e.what() << std::endl << std::endl;
-    throw std::runtime_error("Tables identical: false\n\n");
-  }
+  auto const tables_equal =
+    cudf::tables_equal(lhs_table, rhs_table, cudf::null_equality::EQUAL, stream);
+  std::cout << "Tables identical: " << std::boolalpha << tables_equal << "\n\n";
+  if (not tables_equal) { throw std::logic_error("Table equality check failed"); }
 }
 
 std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>> tables,

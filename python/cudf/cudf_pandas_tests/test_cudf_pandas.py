@@ -1,9 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
-import contextlib
 import copy
 import cProfile
 import datetime
@@ -13,6 +11,7 @@ import pathlib
 import pickle
 import pstats
 import subprocess
+import sys
 import tempfile
 import time
 import types
@@ -27,16 +26,11 @@ import pyarrow as pa
 import pytest
 from nbconvert.preprocessors import ExecutePreprocessor
 from numba import (
-    NumbaDeprecationWarning,
-    __version__ as numba_version,
     vectorize,
 )
-from packaging import version
-from pytz import utc
 
 from rmm import RMMError
 
-from cudf.core._compat import PANDAS_GE_210, PANDAS_GE_220, PANDAS_VERSION
 from cudf.pandas import LOADED, Profiler
 from cudf.pandas.fast_slow_proxy import (
     AttributeFallbackError,
@@ -115,7 +109,7 @@ def array(series):
 
 @pytest.fixture(
     params=[
-        lambda group: group["a"].sum(),
+        lambda group: group["b"].sum(),
         lambda group: group.sum().apply(lambda val: [val]),
     ]
 )
@@ -211,6 +205,9 @@ def test_index_generator():
     tm.assert_equal(pi, xi)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:DataFrameGroupBy.apply operated on the grouping columns"
+)
 def test_groupby_apply_fallback(dataframe, groupby_udf):
     pdf, df = dataframe
     tm.assert_equal(
@@ -303,10 +300,12 @@ def test_df_from_series(series):
 
 
 def test_iloc_change_type(series):
+    # In pandas 3.0+, setting an item of incompatible dtype raises TypeError.
     psr, sr = series
-    psr.iloc[0] = "a"
-    sr.iloc[0] = "a"
-    tm.assert_series_equal(psr, sr)
+    with pytest.raises(TypeError):
+        psr.iloc[0] = "a"
+    with pytest.raises(TypeError):
+        sr.iloc[0] = "a"
 
 
 def test_rename_categories():
@@ -345,7 +344,7 @@ def test_copy_deepcopy_recursion(dataframe):
     # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
     import copy
 
-    pdf, df = dataframe
+    _pdf, df = dataframe
     copy.copy(df)
     copy.deepcopy(df)
 
@@ -441,7 +440,9 @@ def test_is_sparse():
     psa = pd.arrays.SparseArray([0, 0, 1, 0])
     xsa = xpd.arrays.SparseArray([0, 0, 1, 0])
 
-    assert pd.api.types.is_sparse(psa) == xpd.api.types.is_sparse(xsa)  # noqa: TID251
+    assert isinstance(psa.dtype, pd.SparseDtype) == isinstance(
+        xsa.dtype, xpd.SparseDtype
+    )
 
 
 def test_is_file_like():
@@ -479,6 +480,9 @@ def test_infer_freq():
     assert expected == got
 
 
+@pytest.mark.filterwarnings(
+    "ignore:DataFrameGroupBy.apply operated on the grouping columns"
+)
 def test_groupby_grouper_fallback(dataframe, groupby_udf):
     pdf, df = dataframe
     tm.assert_equal(
@@ -492,7 +496,7 @@ def test_groupby_grouper_fallback(dataframe, groupby_udf):
 
 
 def test_options_mode():
-    assert xpd.options.mode.copy_on_write == pd.options.mode.copy_on_write
+    assert xpd.options.mode.string_storage == pd.options.mode.string_storage
 
 
 # Codecov and Profiler interfere with each-other,
@@ -562,23 +566,21 @@ def test_array_ufunc(series):
 @pytest.mark.xfail(strict=False, reason="Fails in CI, passes locally.")
 def test_groupby_apply_func_returns_series(dataframe):
     pdf, df = dataframe
-    if PANDAS_GE_220:
-        kwargs = {"include_groups": False}
-    else:
-        kwargs = {}
-
     expect = pdf.groupby("a").apply(
-        lambda group: pd.Series({"x": 1}), **kwargs
+        lambda group: pd.Series({"x": 1}), include_groups=False
     )
-    got = df.groupby("a").apply(lambda group: xpd.Series({"x": 1}), **kwargs)
+    got = df.groupby("a").apply(
+        lambda group: xpd.Series({"x": 1}), include_groups=False
+    )
     tm.assert_equal(expect, got)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], ["a", None, "b"]])
 def test_pyarrow_array_construction(data):
     cudf_pandas_series = xpd.Series(data)
+    pandas_series = pd.Series(data)
     actual_pa_array = pa.array(cudf_pandas_series)
-    expected_pa_array = pa.array(data)
+    expected_pa_array = pa.array(pandas_series)
     assert actual_pa_array.equals(expected_pa_array)
 
 
@@ -708,15 +710,6 @@ def test_rolling_win_type():
     tm.assert_equal(result, expected)
 
 
-@pytest.mark.skipif(
-    version.parse(numba_version) < version.parse("0.59"),
-    reason="Requires Numba 0.59 to fix segfaults on ARM. See https://github.com/numba/llvmlite/pull/1009",
-)
-@pytest.mark.xfail(
-    version.parse(numba_version) >= version.parse("0.59")
-    and PANDAS_VERSION < version.parse("2.1"),
-    reason="numba.generated_jit removed in 0.59, requires pandas >= 2.1",
-)
 def test_rolling_apply_numba_engine():
     def weighted_mean(x):
         arr = np.ones((1, x.shape[1]))
@@ -726,15 +719,9 @@ def test_rolling_apply_numba_engine():
     pdf = pd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
     df = xpd.DataFrame([[1, 2, 0.6], [2, 3, 0.4], [3, 4, 0.2], [4, 5, 0.7]])
 
-    ctx = (
-        contextlib.nullcontext()
-        if PANDAS_GE_210
-        else pytest.warns(NumbaDeprecationWarning)
+    expect = pdf.rolling(2, method="table", min_periods=0).apply(
+        weighted_mean, raw=True, engine="numba"
     )
-    with ctx:
-        expect = pdf.rolling(2, method="table", min_periods=0).apply(
-            weighted_mean, raw=True, engine="numba"
-        )
     got = df.rolling(2, method="table", min_periods=0).apply(
         weighted_mean, raw=True, engine="numba"
     )
@@ -780,14 +767,14 @@ def test_chunked_json_reader(tmpdir, data):
         pd.read_json(file_path, lines=True, chunksize=1) as pd_reader,
         xpd.read_json(file_path, lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk)
 
 
@@ -807,14 +794,14 @@ def test_chunked_csv_reader(tmpdir, data):
         pd.read_csv(file_path, chunksize=1) as pd_reader,
         xpd.read_csv(file_path, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
     with (
         pd.read_json(StringIO(data), lines=True, chunksize=1) as pd_reader,
         xpd.read_json(StringIO(data), lines=True, chunksize=1) as xpd_reader,
     ):
-        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader):
+        for pd_chunk, xpd_chunk in zip(pd_reader, xpd_reader, strict=True):
             tm.assert_equal(pd_chunk, xpd_chunk, check_index_type=False)
 
 
@@ -928,7 +915,7 @@ def test_namedagg_namedtuple():
     result = df.groupby("kind").agg(
         min_height=pd.NamedAgg(column="height", aggfunc="min"),
         max_height=pd.NamedAgg(column="height", aggfunc="max"),
-        average_weight=pd.NamedAgg(column="weight", aggfunc=np.mean),
+        average_weight=pd.NamedAgg(column="weight", aggfunc="mean"),
     )
     expected = xpd.DataFrame(
         {
@@ -1048,6 +1035,38 @@ def test_string_array():
     xobj = xpd.arrays.StringArray(data)
     pobj = pd.arrays.StringArray(data)
     tm.assert_extension_array_equal(xobj, pobj)
+
+
+def test_string_array_is_numpy_extension_subclass():
+    assert issubclass(xpd.arrays.StringArray, xpd.arrays.NumpyExtensionArray)
+
+
+@pytest.mark.parametrize(
+    "comparison_op",
+    [
+        operator.eq,
+        operator.ne,
+        operator.lt,
+        operator.le,
+        operator.gt,
+        operator.ge,
+    ],
+)
+def test_string_array_object_array_comparison(comparison_op):
+    xa = xpd.array(["a", None, "c"], dtype=object)
+    xb = xpd.array([None, None, "c"], dtype="string[python]")
+    pa_ = pd.array(["a", None, "c"], dtype=object)
+    pb_ = pd.array([None, None, "c"], dtype="string[python]")
+
+    tm.assert_extension_array_equal(
+        comparison_op(xa, xb), comparison_op(pa_, pb_)
+    )
+    tm.assert_extension_array_equal(
+        comparison_op(xb, xa), comparison_op(pb_, pa_)
+    )
+    tm.assert_extension_array_equal(
+        comparison_op(xa, xb), comparison_op(xb, xa)
+    )
 
 
 def test_subclass_series():
@@ -1177,6 +1196,9 @@ def test_index_new():
     tm.assert_equal(expected, got)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:DataFrameGroupBy.apply operated on the grouping columns"
+)
 @pytest.mark.xfail(not LOADED, reason="Should not fail in accelerated mode")
 def test_groupby_apply_callable_referencing_pandas(dataframe):
     pdf, df = dataframe
@@ -1305,10 +1327,6 @@ def test_super_attribute_lookup():
     assert s.max_times_two() == 6
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < version.parse("2.1"),
-    reason="DatetimeArray.__floordiv__ missing in pandas-2.0.0",
-)
 def test_floordiv_array_vs_df():
     xarray = xpd.Series([1, 2, 3], dtype="datetime64[ns]").array
     parray = pd.Series([1, 2, 3], dtype="datetime64[ns]").array
@@ -1393,6 +1411,7 @@ def test_inplace_ops_series(op):
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timestamp(data):
     xtimestamp = xpd.Timestamp(data)
+    assert isinstance(xtimestamp, datetime.datetime)
     timestamp = pd.Timestamp(data)
     tm.assert_equal(xtimestamp, timestamp)
 
@@ -1400,6 +1419,9 @@ def test_timestamp(data):
 @pytest.mark.parametrize("data", [pd.NaT, 1234, "nat"])
 def test_timedelta(data):
     xtimedelta = xpd.Timedelta(data)
+    if not (data is pd.NaT or data == "nat"):
+        # pandas.NaT subclasses datetime.datetime
+        assert isinstance(xtimedelta, datetime.timedelta)
     timedelta = pd.Timedelta(data)
     tm.assert_equal(xtimedelta, timedelta)
 
@@ -1458,12 +1480,13 @@ def test_holidays_within_dates(holiday, start, expected):
     # Verify that timezone info is preserved.
     assert list(
         holiday.dates(
-            utc.localize(xpd.Timestamp(start)),
-            utc.localize(xpd.Timestamp(start)),
+            xpd.Timestamp(start, tz="UTC"),
+            xpd.Timestamp(start, tz="UTC"),
         )
-    ) == [utc.localize(dt) for dt in expected]
+    ) == [dt.tz_localize("UTC") for dt in expected]
 
 
+@pytest.mark.serial
 @pytest.mark.parametrize(
     "env_value",
     ["", "cuda", "pool", "async", "managed", "managed_pool", "abc"],
@@ -1580,28 +1603,29 @@ def test_numpy_cupy_flatiter(series):
     assert type(arr.flat._fsproxy_slow) is np.flatiter
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION < version.parse("2.1"),
-    reason="pyarrow_numpy storage type was not supported in pandas-2.0.0",
-)
 def test_arrow_string_arrays():
     cu_s = xpd.Series(["a", "b", "c"])
     pd_s = pd.Series(["a", "b", "c"])
 
     cu_arr = xpd.arrays.ArrowStringArray._from_sequence(
-        cu_s, dtype=xpd.StringDtype("pyarrow")
+        cu_s, dtype=xpd.StringDtype(storage="pyarrow")
     )
     pd_arr = pd.arrays.ArrowStringArray._from_sequence(
-        pd_s, dtype=pd.StringDtype("pyarrow")
+        pd_s, dtype=pd.StringDtype(storage="pyarrow")
     )
 
     tm.assert_equal(cu_arr, pd_arr)
 
+    # TODO: Should this use xpd.StringDtype?
+    xpd_pa_np_storage_type = pd.StringDtype(storage="pyarrow", na_value=np.nan)
+
+    pd_pa_np_storage_type = pd.StringDtype(storage="pyarrow", na_value=np.nan)
+
     cu_arr = xpd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
-        cu_s, dtype=xpd.StringDtype("pyarrow_numpy")
+        cu_s, dtype=xpd_pa_np_storage_type
     )
     pd_arr = pd.core.arrays.string_arrow.ArrowStringArray._from_sequence(
-        pd_s, dtype=pd.StringDtype("pyarrow_numpy")
+        pd_s, dtype=pd_pa_np_storage_type
     )
 
     tm.assert_equal(cu_arr, pd_arr)
@@ -1666,6 +1690,7 @@ def test_change_index_name(index):
         assert df.index.name == name
 
 
+@pytest.mark.flaky(reruns=5, delay=4)
 def test_notebook_slow_repr():
     notebook_filename = (
         os.path.dirname(os.path.abspath(__file__))
@@ -1735,6 +1760,12 @@ def test_numpy_ndarray_numba_ufunc(array):
     assert_eq(add_one_ufunc(arr1), add_one_ufunc(arr2))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Grid size:numba.core.errors.NumbaPerformanceWarning"
+)
+@pytest.mark.filterwarnings(
+    "ignore:Grid size:numba.cuda.core.errors.NumbaPerformanceWarning"
+)
 def test_numpy_ndarray_numba_cuda_ufunc(array):
     arr1, arr2 = array
 
@@ -1822,16 +1853,12 @@ def test_fallback_raises_specific_error(
         "_exceptions",
         "version",
         "_print_versions",
-        "capitalize_first_letter",
         "_validators",
         "_decorators",
     ],
 )
 def test_cudf_pandas_util_version(attrs):
-    if not PANDAS_GE_220 and attrs == "capitalize_first_letter":
-        assert not hasattr(pd.util, attrs)
-    else:
-        assert hasattr(pd.util, attrs)
+    assert hasattr(pd.util, attrs)
 
 
 def test_iteration_over_dataframe_dtypes_produces_proxy_objects(dataframe):
@@ -2096,3 +2123,19 @@ def test_pandas_objects_not_callable():
     assert isinstance(xpd.DataFrame, Callable)
     assert isinstance(xpd.Index, Callable)
     assert isinstance(xpd.RangeIndex, Callable)
+
+
+def test_memory_usage():
+    s = xpd.Series(range(10), index=[f"i-{i}" for i in range(10)], name="a")
+
+    res_deep = s.memory_usage(deep=True)
+    res = sys.getsizeof(s)
+
+    assert abs(res_deep - res) < 100
+
+
+def test_module_proxy_write_through_config(monkeypatch):
+    cf = xpd._config.config
+    cf.register_option("foo", 1)
+    monkeypatch.setattr(cf, "_registered_options", {})
+    cf.register_option("foo", 1)

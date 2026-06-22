@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -21,8 +10,8 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -412,7 +401,7 @@ TYPED_TEST(TypedSuperimposeTest, BasicStruct)
 
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = structs_input->mutable_view();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_view.null_mask(), 0, 1, false);
 
   // At this point, the STRUCT nulls aren't pushed down to members,
   // even though the parent null-mask was modified.
@@ -477,7 +466,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNonNullable)
 
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = outer_struct_members.back()->mutable_view();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_view.null_mask(), 0, 1, false);
 
   auto structs_of_structs =
     cudf::test::structs_column_wrapper{std::move(outer_struct_members)}.release();
@@ -516,7 +505,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
   // Reset STRUCTs' null-mask. Mark first STRUCT row as null.
   auto structs_view = outer_struct_members.back()->mutable_view();
   auto num_rows     = structs_view.size();
-  cudf::detail::set_null_mask(structs_view.null_mask(), 0, 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_view.null_mask(), 0, 1, false);
 
   auto structs_of_structs = cudf::test::structs_column_wrapper{std::move(outer_struct_members),
                                                                std::vector<bool>(num_rows, true)}
@@ -524,8 +513,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
 
   // Modify STRUCT-of-STRUCT's null-mask. Mark second STRUCT row as null.
   auto structs_of_structs_view = structs_of_structs->mutable_view();
-  cudf::detail::set_null_mask(
-    structs_of_structs_view.null_mask(), 1, 2, false, cudf::get_default_stream());
+  cudf::set_null_mask(structs_of_structs_view.null_mask(), 1, 2, false);
 
   auto [output, backing_data] =
     cudf::structs::detail::push_down_nulls(structs_of_structs->view(),
@@ -551,8 +539,7 @@ cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
 
 void mark_row_as_null(cudf::mutable_column_view const& col, cudf::size_type row_index)
 {
-  cudf::detail::set_null_mask(
-    col.null_mask(), row_index, row_index + 1, false, cudf::get_default_stream());
+  cudf::set_null_mask(col.null_mask(), row_index, row_index + 1, false);
 }
 
 TYPED_TEST(TypedSuperimposeTest, Struct_Sliced)

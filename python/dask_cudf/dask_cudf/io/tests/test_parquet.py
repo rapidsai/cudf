@@ -1,4 +1,5 @@
-# Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import glob
 import math
@@ -163,7 +164,7 @@ def test_strings(tmpdir):
 
 def test_dask_timeseries_from_pandas(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
-    ddf2 = dask.datasets.timeseries(freq="D")
+    ddf2 = dask.datasets.timeseries(freq="D", seed=1)
     pdf = ddf2.compute()
     pdf.to_parquet(fn, engine="pyarrow")
     read_df = dask_cudf.read_parquet(fn)
@@ -174,7 +175,7 @@ def test_dask_timeseries_from_pandas(tmpdir):
 @pytest.mark.parametrize("divisions", [False, True])
 def test_dask_timeseries_from_dask(tmpdir, index, divisions):
     fn = str(tmpdir)
-    ddf2 = dask.datasets.timeseries(freq="D")
+    ddf2 = dask.datasets.timeseries(freq="D", seed=1)
     ddf2.to_parquet(fn, engine="pyarrow", write_index=index)
     read_df = dask_cudf.read_parquet(
         fn, index=index, calculate_divisions=divisions
@@ -591,6 +592,8 @@ def test_null_partition(tmpdir):
         ddf[["x", "id"]],
         ddf_read[["x", "id"]],
         check_divisions=False,
+        # Int64 is cast to float64 in dask
+        check_dtype=False,
     )
 
 
@@ -653,10 +656,6 @@ def test_timezone_column(tmpdir):
     dd.assert_eq(got, expect)
 
 
-@pytest.mark.skipif(
-    not dask_cudf.backends.PYARROW_GE_15,
-    reason="Requires pyarrow 15",
-)
 @pytest.mark.parametrize("min_part_size", ["1B", "1GB"])
 def test_read_parquet_arrow_filesystem(tmpdir, min_part_size):
     tmp_path = str(tmpdir)

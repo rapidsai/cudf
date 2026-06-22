@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -21,6 +10,7 @@
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/utilities.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -32,8 +22,8 @@
 
 #include <cub/device/device_memcpy.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
 
@@ -81,7 +71,7 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets);
 
   auto const src_ptrs = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::counting_iterator<uint32_t>{0},
     cuda::proclaim_return_type<void*>([begin] __device__(uint32_t idx) {
       // Due to a bug in cub (https://github.com/NVIDIA/cccl/issues/586),
       // we have to use `const_cast` to remove `const` qualifier from the source pointer.
@@ -89,11 +79,11 @@ rmm::device_uvector<char> make_chars_buffer(column_view const& offsets,
       return reinterpret_cast<void*>(const_cast<char*>(begin[idx].first));
     }));
   auto const src_sizes = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::counting_iterator<uint32_t>{0},
     cuda::proclaim_return_type<size_type>(
       [begin] __device__(uint32_t idx) { return begin[idx].second; }));
   auto const dst_ptrs = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<uint32_t>(0),
+    cuda::counting_iterator<uint32_t>{0},
     cuda::proclaim_return_type<char*>([offsets = d_offsets, output = chars_data.data()] __device__(
                                         uint32_t idx) { return output + offsets[idx]; }));
 
@@ -259,7 +249,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   // Now build the chars column
   rmm::device_uvector<char> chars(bytes, stream, mr);
-  cudf::experimental::prefetch::detail::prefetch("gather", chars, stream);
+  cudf::prefetch::detail::prefetch(chars, stream);
   size_and_exec_fn.d_chars = chars.data();
 
   // Execute the function fn again to fill in the chars data.

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/json/nested_json.hpp"
@@ -22,7 +11,6 @@
 #include <cudf/hashing/detail/hashing.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -47,11 +35,13 @@ struct tree_meta_t2 {
 
 tree_meta_t2 to_cpu_tree(cuio_json::tree_meta_t const& d_value, rmm::cuda_stream_view stream)
 {
-  return {cudf::detail::make_std_vector_async(d_value.node_categories, stream),
-          cudf::detail::make_std_vector_async(d_value.parent_node_ids, stream),
-          cudf::detail::make_std_vector_async(d_value.node_levels, stream),
-          cudf::detail::make_std_vector_async(d_value.node_range_begin, stream),
-          cudf::detail::make_std_vector_async(d_value.node_range_end, stream)};
+  tree_meta_t2 result{cudf::detail::make_std_vector_async(d_value.node_categories, stream),
+                      cudf::detail::make_std_vector_async(d_value.parent_node_ids, stream),
+                      cudf::detail::make_std_vector_async(d_value.node_levels, stream),
+                      cudf::detail::make_std_vector_async(d_value.node_range_begin, stream),
+                      cudf::detail::make_std_vector_async(d_value.node_range_end, stream)};
+  stream.synchronize();
+  return result;
 }
 
 // change this to non-zero and recompile to dump debug info to stdout
@@ -156,7 +146,8 @@ bool compare_vector(std::vector<T> const& cpu_vec,
                     rmm::device_uvector<T> const& d_vec,
                     std::string const& name)
 {
-  auto gpu_vec = cudf::detail::make_std_vector_async(d_vec, cudf::get_default_stream());
+  auto stream  = cudf::get_default_stream();
+  auto gpu_vec = cudf::detail::make_std_vector(d_vec, stream);
   return compare_vector(cpu_vec, gpu_vec, name);
 }
 
@@ -894,7 +885,8 @@ TEST_P(JsonTreeTraversalTest, CPUvsGPUTraversal)
 #endif
 
   // convert to sequence because gpu col id might be have random id
-  auto gpu_col_id2 = translate_col_id(cudf::detail::make_std_vector_async(gpu_col_id, stream));
+  auto gpu_col_id_vec = cudf::detail::make_std_vector(gpu_col_id, stream);
+  auto gpu_col_id2    = translate_col_id(gpu_col_id_vec);
   EXPECT_FALSE(compare_vector(cpu_col_id, gpu_col_id2, "col_id"));
   EXPECT_FALSE(compare_vector(cpu_row_offsets, gpu_row_offsets, "row_offsets"));
 }

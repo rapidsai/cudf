@@ -1,22 +1,13 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/testing_main.hpp>
 
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/contains.hpp>
@@ -161,6 +152,14 @@ TEST_F(ListTest, ApplyBooleanMask)
   cudf::lists::apply_boolean_mask(list_col, boolean_mask, cudf::test::get_default_stream());
 }
 
+TEST_F(ListTest, ApplyDeletionMask)
+{
+  cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
+  cudf::test::lists_column_wrapper<bool> deletion_mask{
+    {false, true}, {true, true, true, false}, {false, true}};
+  cudf::lists::apply_deletion_mask(list_col, deletion_mask, cudf::test::get_default_stream());
+}
+
 TEST_F(ListTest, Distinct)
 {
   cudf::test::lists_column_wrapper<int> list_col{{0, 1}, {2, 3, 7, 8}, {4, 5}};
@@ -243,8 +242,7 @@ TEST_F(ListTest, ExplodePosition)
 TEST_F(ListTest, ExplodeOuter)
 {
   constexpr auto null = 0;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids         = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::lists_column_wrapper<int32_t> list_col_a{
     cudf::test::lists_column_wrapper<int32_t>({1, null, 7}, valids),
     cudf::test::lists_column_wrapper<int32_t>({5, null, 0, null}, valids),
@@ -258,8 +256,7 @@ TEST_F(ListTest, ExplodeOuter)
 TEST_F(ListTest, ExplodeOuterPosition)
 {
   constexpr auto null = 0;
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids         = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::lists_column_wrapper<int32_t> list_col_a{
     cudf::test::lists_column_wrapper<int32_t>({1, null, 7}, valids),
     cudf::test::lists_column_wrapper<int32_t>({5, null, 0, null}, valids),
@@ -269,3 +266,5 @@ TEST_F(ListTest, ExplodeOuterPosition)
   cudf::table_view lists_table({list_col_a, list_col_b});
   cudf::explode_outer_position(lists_table, 0, cudf::test::get_default_stream());
 }
+
+CUDF_TEST_PROGRAM_MAIN()

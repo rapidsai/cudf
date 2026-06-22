@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -27,8 +16,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 auto all_valid   = [](cudf::size_type row) { return true; };
 auto odd_valid   = [](cudf::size_type row) { return row % 2 != 0; };
@@ -51,8 +39,8 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
     cudf::size_type size{FillTypedTestFixture<T>::column_size};
 
     cudf::test::fixed_width_column_wrapper<T, int32_t> destination(
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + size,
+      cuda::counting_iterator<int32_t>{0},
+      cuda::counting_iterator<int32_t>{0} + size,
       cudf::detail::make_counting_transform_iterator(0, destination_validity));
 
     std::unique_ptr<cudf::scalar> p_val{nullptr};
@@ -287,7 +275,7 @@ TEST_F(FillErrorTestFixture, InvalidInplaceCall)
   static_cast<ScalarType*>(p_val_int.get())->set_valid_async(false);
 
   auto destination = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + 100);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + 100);
 
   auto destination_view = cudf::mutable_column_view{destination};
   EXPECT_THROW(cudf::fill_in_place(destination_view, 0, 100, *p_val_int), cudf::logic_error);
@@ -309,9 +297,9 @@ TEST_F(FillErrorTestFixture, InvalidRange)
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 
   auto destination =
-    cudf::test::fixed_width_column_wrapper<int32_t>(thrust::make_counting_iterator(0),
-                                                    thrust::make_counting_iterator(0) + 100,
-                                                    thrust::make_constant_iterator(true));
+    cudf::test::fixed_width_column_wrapper<int32_t>(cuda::counting_iterator<int32_t>{0},
+                                                    cuda::counting_iterator<int32_t>{0} + 100,
+                                                    cuda::make_constant_iterator(true));
 
   cudf::mutable_column_view destination_view{destination};
 
@@ -353,8 +341,9 @@ TEST_F(FillErrorTestFixture, DTypeMismatch)
   using ScalarType = cudf::scalar_type_t<T>;
   static_cast<ScalarType*>(p_val.get())->set_value(5);
 
-  auto destination = cudf::test::fixed_width_column_wrapper<float>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
+  auto float_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](int32_t i) { return static_cast<float>(i); });
+  auto destination = cudf::test::fixed_width_column_wrapper<float>(float_iter, float_iter + size);
 
   auto destination_view = cudf::mutable_column_view{destination};
 

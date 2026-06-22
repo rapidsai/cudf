@@ -1,10 +1,11 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import pylibcudf as plc
 
-import cudf
+from cudf.core.series import Series
 
 
 class BytePairEncoder:
@@ -22,12 +23,12 @@ class BytePairEncoder:
     BytePairEncoder
     """
 
-    def __init__(self, merges_pair: cudf.Series) -> None:
+    def __init__(self, merges_pair: Series) -> None:
         self.merge_pairs = plc.nvtext.byte_pair_encode.BPEMergePairs(
-            merges_pair._column.to_pylibcudf(mode="read")
+            merges_pair._column.plc_column
         )
 
-    def __call__(self, text: cudf.Series, separator: str = " ") -> cudf.Series:
+    def __call__(self, text: Series, separator: str = " ") -> Series:
         """
 
         Parameters
@@ -53,6 +54,6 @@ class BytePairEncoder:
         1             this is it
         dtype: object
         """
-        return cudf.Series._from_column(
+        return Series._from_column(
             text._column.byte_pair_encoding(self.merge_pairs, separator)
         )

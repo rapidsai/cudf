@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -29,21 +18,6 @@
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
-// @cond
-// Work around a bug in NVRTC that fails to compile assert() in constexpr
-// functions (fixed after CUDA 11.0)
-#if defined __GNUC__
-#define LIKELY(EXPR) __builtin_expect(!!(EXPR), 1)
-#else
-#define LIKELY(EXPR) (!!(EXPR))
-#endif
-
-#ifdef NDEBUG
-#define constexpr_assert(CHECK) static_cast<void>(0)
-#else
-#define constexpr_assert(CHECK) (LIKELY(CHECK) ? void(0) : [] { assert(!#CHECK); }())
-#endif
-// @endcond
 
 /**
  * @brief Returns the number of bits the given type can hold.
@@ -120,7 +94,7 @@ CUDF_HOST_DEVICE inline void clear_bit_unsafe(bitmask_type* bitmask, size_type b
 /**
  * @brief Indicates whether the specified bit is set to `1`
  *
- * @param bitmask The bitmask containing the bit to clear
+ * @param bitmask The bitmask containing the bit to test
  * @param bit_index Index of the bit to test
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
@@ -158,7 +132,7 @@ CUDF_HOST_DEVICE inline bool bit_value_or(bitmask_type const* bitmask,
  */
 constexpr CUDF_HOST_DEVICE inline bitmask_type set_least_significant_bits(size_type n)
 {
-  constexpr_assert(0 <= n && n < static_cast<size_type>(detail::size_in_bits<bitmask_type>()));
+  assert(0 <= n && n < static_cast<size_type>(detail::size_in_bits<bitmask_type>()));
   return ((bitmask_type{1} << n) - 1);
 }
 
@@ -173,7 +147,7 @@ constexpr CUDF_HOST_DEVICE inline bitmask_type set_least_significant_bits(size_t
 constexpr CUDF_HOST_DEVICE inline bitmask_type set_most_significant_bits(size_type n)
 {
   constexpr size_type word_size{detail::size_in_bits<bitmask_type>()};
-  constexpr_assert(0 <= n && n < word_size);
+  assert(0 <= n && n < word_size);
   return ~((bitmask_type{1} << (word_size - n)) - 1);
 }
 
@@ -208,6 +182,7 @@ __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index)
 
  * This function is thread-safe.
  *
+ * @param bitmask The bitmask to modify
  * @param bit_index  Index of the bit to clear
  */
 __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index)

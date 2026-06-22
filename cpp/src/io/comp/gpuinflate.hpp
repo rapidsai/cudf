@@ -1,23 +1,13 @@
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "common.hpp"
 
+#include <cudf/io/detail/codec.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/span.hpp>
@@ -45,7 +35,7 @@ enum class gzip_header_included { NO, YES };
 CUDF_EXPORT
 void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 gzip_header_included parse_hdr,
                 rmm::cuda_stream_view stream);
 
@@ -74,7 +64,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
 CUDF_EXPORT
 void gpu_unsnap(device_span<device_span<uint8_t const> const> inputs,
                 device_span<device_span<uint8_t> const> outputs,
-                device_span<compression_result> results,
+                device_span<codec_exec_result> results,
                 rmm::cuda_stream_view stream);
 
 /**
@@ -96,14 +86,12 @@ size_t get_gpu_debrotli_scratch_size(int max_num_inputs = 0);
  * @param[in] inputs List of input buffers
  * @param[out] outputs List of output buffers
  * @param[out] results List of output status structures
- * @param[in] scratch Temporary memory for intermediate work
- * @param[in] scratch_size Size in bytes of the temporary memory
  * @param[in] stream CUDA stream to use
  */
 CUDF_EXPORT
 void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
                   device_span<device_span<uint8_t> const> outputs,
-                  device_span<compression_result> results,
+                  device_span<codec_exec_result> results,
                   rmm::cuda_stream_view stream);
 
 /**
@@ -119,7 +107,7 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
  */
 void gpu_snap(device_span<device_span<uint8_t const> const> inputs,
               device_span<device_span<uint8_t> const> outputs,
-              device_span<compression_result> results,
+              device_span<codec_exec_result> results,
               rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::detail

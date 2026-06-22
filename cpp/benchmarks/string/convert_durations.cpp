@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/strings/convert/convert_durations.hpp>
@@ -53,16 +42,24 @@ void bench_convert_duration(nvbench::state& state, nvbench::type_list<DataType>)
   if (from_dur) {
     state.add_global_memory_reads<DataType>(num_rows);
     state.add_global_memory_writes<int8_t>(format.size() * num_rows);
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::from_durations(input, format); });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   } else {
     auto source = cudf::strings::from_durations(input, format);
     auto view   = cudf::strings_column_view(source->view());
-    state.add_global_memory_reads<int8_t>(view.chars_size(stream));
+    state.add_global_memory_reads<int8_t>(source->alloc_size());
     state.add_global_memory_writes<DataType>(num_rows);
+    auto const mem_stats_logger = cudf::memory_stats_logger();
+
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::to_durations(view, data_type, format);
     });
+
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   }
 }
 

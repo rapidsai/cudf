@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "special_chars.h"
@@ -226,10 +215,10 @@ TEST_F(StringsExtractTests, SpecialNewLines)
     cudf::test::strings_column_wrapper({"zzé", "zzé", "zzé", "", "zzé", "zzé"}, {1, 1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
 
-  prog = cudf::strings::regex_program::create("q(q.*l)l");
+  prog     = cudf::strings::regex_program::create("q(q.*l)l");
   expected = cudf::test::strings_column_wrapper({"", "qq" LINE_SEPARATOR "zzé\rll", "", "", "", ""},
                                                 {0, 1, 0, 0, 0, 0});
-  results = cudf::strings::extract(view, *prog);
+  results  = cudf::strings::extract(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view().column(0), expected);
   // expect no matches here since the newline(s) interrupts the pattern
   prog = cudf::strings::regex_program::create("q(q.*l)l", cudf::strings::regex_flags::EXT_NEWLINE);
@@ -303,6 +292,29 @@ TEST_F(StringsExtractTests, ExtractAllTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
+TEST_F(StringsExtractTests, ExtractSingle)
+{
+  auto input = cudf::test::strings_column_wrapper(
+    {"123 banana 7 eleven", "41 apple", "6 péar 0 pair", "", "", "bees", "4 paré"},
+    {1, 1, 1, 0, 1, 1, 1});
+  auto sv = cudf::strings_column_view(input);
+
+  auto pattern = std::string("(\\d+) (\\w+)");
+  auto prog    = cudf::strings::regex_program::create(pattern);
+
+  auto results  = cudf::strings::extract_single(sv, *prog, 1);
+  auto expected = cudf::test::strings_column_wrapper(
+    {"banana", "apple", "péar", "", "", "", "paré"}, {1, 1, 1, 0, 0, 0, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  results = cudf::strings::extract_single(sv, *prog, 0);
+  expected =
+    cudf::test::strings_column_wrapper({"123", "41", "6", "", "", "", "4"}, {1, 1, 1, 0, 0, 0, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
+
+  EXPECT_THROW(cudf::strings::extract_single(sv, *prog, 2), std::invalid_argument);
+}
+
 TEST_F(StringsExtractTests, Errors)
 {
   cudf::test::strings_column_wrapper input({"this column intentionally left blank"});
@@ -313,6 +325,24 @@ TEST_F(StringsExtractTests, Errors)
 
   EXPECT_THROW(cudf::strings::extract(sv, *prog), cudf::logic_error);
   EXPECT_THROW(cudf::strings::extract_all_record(sv, *prog), cudf::logic_error);
+}
+
+TEST_F(StringsExtractTests, EmptyInput)
+{
+  auto const input   = cudf::test::strings_column_wrapper();
+  auto const sv      = cudf::strings_column_view(input);
+  auto const pattern = std::string("(\\w+)");
+  auto const prog    = cudf::strings::regex_program::create(pattern);
+
+  auto rt = cudf::strings::extract(sv, *prog);
+  EXPECT_EQ(1, rt->num_columns());
+  EXPECT_EQ(0, rt->num_rows());
+
+  auto rl = cudf::strings::extract_all_record(sv, *prog);
+  EXPECT_EQ(0, rl->size());
+
+  auto rs = cudf::strings::extract_single(sv, *prog, 1);
+  EXPECT_EQ(0, rs->size());
 }
 
 TEST_F(StringsExtractTests, MediumRegex)
@@ -368,6 +398,50 @@ TEST_F(StringsExtractTests, LargeRegex)
   auto strings_view = cudf::strings_column_view(strings);
   auto results      = cudf::strings::extract(strings_view, *prog);
   std::vector<char const*> h_expected{"quick", nullptr, nullptr};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->get_column(0), expected);
+}
+
+TEST_F(StringsExtractTests, CrlfLineAnchorExtNewline)
+{
+  // extract group 1 of ([a-z]+)$ at \r\n line ends; null where no match.
+  // Verified vs OpenJDK 17 group(1) of first match.
+  auto input = cudf::test::strings_column_wrapper({"abc\r\n",
+                                                   "abc\n",
+                                                   "abc\r",
+                                                   "abc",
+                                                   "a\r\nb",
+                                                   "abc\r\n\r\n",
+                                                   "",
+                                                   "abc" NEXT_LINE,
+                                                   "a\nb\r\nc",
+                                                   "\r\n",
+                                                   "\r\nabc",
+                                                   "x\n\r",
+                                                   "a\r\rb",
+                                                   "a\n\nb"});
+  auto view  = cudf::strings_column_view(input);
+  auto prog =
+    cudf::strings::regex_program::create("([a-z]+)$", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto results = cudf::strings::extract(view, *prog);
+
+  std::vector<char const*> h_expected{"abc",
+                                      "abc",
+                                      "abc",
+                                      "abc",
+                                      "b",
+                                      nullptr,
+                                      nullptr,
+                                      "abc",
+                                      "c",
+                                      nullptr,
+                                      "abc",
+                                      nullptr,
+                                      "b",
+                                      "b"};
   cudf::test::strings_column_wrapper expected(
     h_expected.begin(),
     h_expected.end(),
