@@ -126,5 +126,13 @@ Environment variables follow these patterns:
 Lower-level streaming runtime knobs. Most users will not need to touch these directly. See the
 [streaming runtime configuration reference][rapidsmpf-config] for the full list of fields and defaults.
 
+## Developer Options
+
+These environment variables are intended for library developers and advanced users.
+
+| Environment variable        | Description                                                                                                    | Default |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------|---------|
+| `CUDF_POLARS_WARN_UNSTABLE` | Raises a `cudf_polars.UnstableWarning` whenever an unstable cudf-polars feature is used. Set to `1` to enable. | `0`     |
+
 <!-- Reference links -->
 [rapidsmpf-config]: https://docs.rapids.ai/api/rapidsmpf/nightly/configuration/

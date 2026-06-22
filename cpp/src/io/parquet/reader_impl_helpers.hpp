@@ -13,8 +13,12 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
+#include <cstddef>
+#include <functional>
+#include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -76,31 +80,6 @@ struct row_group_info {
    */
   [[nodiscard]] bool has_page_index() const { return column_chunks.has_value(); }
 };
-
-/**
- * @brief Returns a normalized (lowercased) column name or path when case-insensitive matching is
- * enabled
- *
- * @param col_path The column name or path to normalize
- * @param case_sensitive_names Whether to normalize the column path case-insensitively
- *
- * @return The normalized column path
- */
-[[nodiscard]] std::string normalize_column_path(std::string_view col_path,
-                                                bool case_sensitive_names);
-
-/**
- * @brief Compares two column paths with specified case sensitivity
- *
- * @param lhs The left-hand side column path
- * @param rhs The right-hand side column path
- * @param case_sensitive Whether to compare the column paths case-sensitively
- *
- * @return Boolean indicating if the column paths are equal
- */
-[[nodiscard]] bool are_column_paths_equal(std::string_view lhs,
-                                          std::string_view rhs,
-                                          bool case_sensitive);
 
 /**
  * @brief Translates Parquet datatype to cuDF type enum
@@ -431,6 +410,13 @@ class aggregate_reader_metadata {
    * @return Total number of row groups across all files
    */
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
+
+  /**
+   * @brief Get total number of sources
+   *
+   * @return Total number of sources
+   */
+  [[nodiscard]] auto get_num_sources() const { return per_file_metadata.size(); }
 
   /**
    * @brief Get the number of row groups per file

@@ -10,11 +10,7 @@ import pytest
 
 import cudf
 from cudf.core.column.column import _can_values_be_equal, as_column
-from cudf.core.column.decimal import (
-    Decimal32Column,
-    Decimal64Column,
-    Decimal128Column,
-)
+from cudf.core.column.decimal import DecimalColumn
 from cudf.testing import assert_eq
 
 
@@ -478,16 +474,16 @@ def test_datetime_can_cast_safely():
     ],
 )
 @pytest.mark.parametrize(
-    "col,typ_",
+    "typ_",
     [
-        (Decimal32Column, pa.decimal32(precision=4, scale=2)),
-        (Decimal64Column, pa.decimal64(precision=5, scale=3)),
-        (Decimal128Column, pa.decimal128(precision=6, scale=4)),
+        pa.decimal32(precision=4, scale=2),
+        pa.decimal64(precision=5, scale=3),
+        pa.decimal128(precision=6, scale=4),
     ],
 )
-def test_round_trip_decimal_column(data_, typ_, col):
+def test_round_trip_decimal_column(data_, typ_):
     pa_arr = pa.array(data_, type=typ_)
-    decimal_col = col.from_arrow(pa_arr)
+    decimal_col = DecimalColumn.from_arrow(pa_arr)
     result = decimal_col.to_arrow()
 
     # Round-trip should preserve the exact PyArrow decimal type
@@ -497,7 +493,7 @@ def test_round_trip_decimal_column(data_, typ_, col):
 def test_from_arrow_max_precision_decimal64():
     # Decimal64 max precision is 18, so 19 should raise ValueError
     with pytest.raises(ValueError):
-        Decimal64Column.from_arrow(
+        DecimalColumn.from_arrow(
             pa.array([1, 2, 3], type=pa.decimal64(scale=0, precision=19))
         )
 
@@ -505,6 +501,6 @@ def test_from_arrow_max_precision_decimal64():
 def test_from_arrow_max_precision_decimal32():
     # Decimal32 max precision is 9, so 10 should raise ValueError
     with pytest.raises(ValueError):
-        Decimal32Column.from_arrow(
+        DecimalColumn.from_arrow(
             pa.array([1, 2, 3], type=pa.decimal32(scale=0, precision=10))
         )

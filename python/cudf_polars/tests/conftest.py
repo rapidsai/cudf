@@ -17,6 +17,21 @@ from cudf_polars.testing.engine_utils import (
     create_streaming_options,
     merge_streaming_options,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_140, POLARS_VERSION_LT_141
+
+
+@pytest.fixture
+def xfail_decimal_sum_precision_polars_140(request: pytest.FixtureRequest) -> None:
+    """xfail decimal ``sum`` tests on polars 1.40."""
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(not POLARS_VERSION_LT_140) and POLARS_VERSION_LT_141,
+            reason="polars 1.40 reports narrow precision for decimal sum "
+            "(Decimal(9,2) vs (38,2)), fixed in 1.41. "
+            "See https://github.com/pola-rs/polars/issues/27269",
+        )
+    )
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -404,6 +419,7 @@ def pytest_collection_modifyitems(
 
 
 @pytest.fixture(scope="module")
-def parquet_stats_executor() -> concurrent.futures.ThreadPoolExecutor:
+def parquet_stats_executor() -> concurrent.futures.ThreadPoolExecutor:  # type: ignore[misc]
     """A thread pool to use for cudf-polars status collection."""
-    return concurrent.futures.ThreadPoolExecutor()
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        yield executor

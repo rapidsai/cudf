@@ -625,6 +625,7 @@ nitpick_ignore = [
     ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
     ("py:class", "ExecutorType"),
+    ("py:class", "ArrowIntervalType"),
     # cudf-polars: bare rapidsmpf type names appear in autodoc'd signatures
     # because they are imported under ``if TYPE_CHECKING:`` and rendered as
     # unqualified strings in type annotations. The ``rapidsmpf.*`` regex below
