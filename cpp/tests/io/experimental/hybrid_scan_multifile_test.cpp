@@ -120,7 +120,6 @@ void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
       stream,
       mr);
   tasks.get();
-  (void)column_chunk_buffers;
 
   auto column_chunk_data = std::vector<cudf::device_span<uint8_t const>>{};
   for (auto const& source_column_chunks : column_chunks_per_source) {

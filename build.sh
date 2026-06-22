@@ -378,3 +378,32 @@ if hasArg custreamz; then
     cd "${REPODIR}/python/custreamz"
     python -m pip install "${PYTHON_ARGS_FOR_INSTALL[@]}" .
 fi
+
+# Build libcudf_streaming library
+if hasArg libcudf_streaming; then
+    cmake -S "$REPODIR/cpp/libcudf_streaming" -B "${STREAMING_LIB_BUILD_DIR}" \
+          -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+          -DCMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES}" \
+          -DBUILD_TESTS=${BUILD_TESTS} \
+          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+          "${EXTRA_CMAKE_ARGS[@]}"
+
+
+    cd "${STREAMING_LIB_BUILD_DIR}"
+    cmake --build . -j"${PARALLEL_LEVEL}" ${VERBOSE_FLAG}
+
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        cmake --build . -j"${PARALLEL_LEVEL}" --target install ${VERBOSE_FLAG}
+    fi
+fi
+
+# build cudf_streaming Python package
+if hasArg cudf_streaming; then
+    cd "${REPODIR}/python/cudf_streaming"
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${STREAMING_LIB_BUILD_DIR};${EXTRA_CMAKE_ARGS[*]}" \
+        python -m pip install \
+            "${PYTHON_ARGS_FOR_INSTALL[@]}" \
+            "${PY_API_ARGS[@]}" \
+            .
+fi

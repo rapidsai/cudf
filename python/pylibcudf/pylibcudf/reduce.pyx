@@ -221,9 +221,11 @@ cpdef size_type unique_count(
     source : Column
         The input column to count the unique elements of.
     null_handling : null_policy
-        Flag to include or exclude nulls from the count.
+        Flag to include or exclude nulls from the count. If included, all
+        nulls compare equal.
     nan_handling : nan_policy
-        Flag to include or exclude NaNs from the count.
+        Whether to treat NaNs as null, or valid elements. If valid all NaNs
+        compare equal.
 
     Returns
     -------
@@ -237,9 +239,10 @@ cpdef size_type unique_count(
     """
     cdef Stream _stream = _get_stream(stream)
 
-    return cpp_unique_count.unique_count(
-        source.view(), null_handling, nan_handling, _stream.view().value()
-    )
+    with nogil:
+        return cpp_unique_count.unique_count(
+            source.view(), null_handling, nan_handling, _stream.view().value()
+        )
 
 
 cpdef size_type distinct_count(
@@ -257,9 +260,11 @@ cpdef size_type distinct_count(
     source : Column
         The input column to count the unique elements of.
     null_handling : null_policy
-        Flag to include or exclude nulls from the count.
+        Flag to include or exclude nulls from the count. If included, all
+        nulls compare equal.
     nan_handling : nan_policy
-        Flag to include or exclude NaNs from the count.
+        Whether to treat NaNs as null, or valid elements. If valid all NaNs
+        compare equal.
 
     Returns
     -------
@@ -268,9 +273,76 @@ cpdef size_type distinct_count(
     """
     cdef Stream _stream = _get_stream(stream)
 
-    return cpp_distinct_count.distinct_count(
-        source.view(), null_handling, nan_handling, _stream.view().value()
-    )
+    with nogil:
+        return cpp_distinct_count.distinct_count(
+            source.view(), null_handling, nan_handling, _stream.view().value()
+        )
+
+
+cpdef size_type unique_count_table(
+    Table source,
+    null_equality nulls_equal,
+    object stream=None
+):
+    """Returns the number of unique consecutive rows in the input table.
+
+    For details, see :cpp:func:`cudf::unique_count`.
+
+    Parameters
+    ----------
+    source : Table
+        The input table to count the unique elements of.
+    nulls_equal : null_equality
+        Whether nulls should compare equal.
+
+    Returns
+    -------
+    size_type
+        The number of unique consecutive rows.
+
+    Notes
+    -----
+    NaNs compare equal in this comparison.
+    """
+    cdef Stream _stream = _get_stream(stream)
+
+    with nogil:
+        return cpp_unique_count.unique_count(
+            source.view(), nulls_equal, _stream.view().value()
+        )
+
+
+cpdef size_type distinct_count_table(
+    Table source,
+    null_equality nulls_equal,
+    object stream=None
+):
+    """Returns the number of distinct rows in the input table.
+
+    For details, see :cpp:func:`cudf::distinct_count`.
+
+    Parameters
+    ----------
+    source : Table
+        The input table to count the unique rows of.
+    nulls_equal : null_equality
+        Whether nulls should compare equal.
+
+    Returns
+    -------
+    size_type
+        The number of distinct rows.
+
+    Notes
+    -----
+    NaNs compare equal in this comparison.
+    """
+    cdef Stream _stream = _get_stream(stream)
+
+    with nogil:
+        return cpp_distinct_count.distinct_count(
+            source.view(), nulls_equal, _stream.view().value()
+        )
 
 
 ScanType.__str__ = ScanType.__repr__

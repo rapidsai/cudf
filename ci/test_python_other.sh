@@ -45,7 +45,7 @@ rapids-logger "pytest cudf-polars"
 ./ci/run_cudf_polars_pytests.sh \
   -vv \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=8 \
+  --numprocesses=4 \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \

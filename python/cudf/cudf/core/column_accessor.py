@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -331,7 +331,7 @@ class ColumnAccessor(MutableMapping):
                     )
                 elif infer_dtype(self.names) == "integer":
                     if len(self.names) == 1:
-                        start = cast(int, self.names[0])
+                        start = cast("int", self.names[0])
                         return pd.RangeIndex(
                             start=start, stop=start + 1, step=1, name=self.name
                         )
@@ -339,8 +339,8 @@ class ColumnAccessor(MutableMapping):
                     if len(uniques) == 1 and uniques[0] != 0:
                         diff = uniques[0]
                         new_range = range(
-                            cast(int, self.names[0]),
-                            cast(int, self.names[-1]) + diff,
+                            cast("int", self.names[0]),
+                            cast("int", self.names[-1]) + diff,
                             diff,
                         )
                         return pd.RangeIndex(new_range, name=self.name)
@@ -414,8 +414,8 @@ class ColumnAccessor(MutableMapping):
         if loc == old_ncols:
             self._data[name] = value
         else:
-            new_keys = self.names[:loc] + (name,) + self.names[loc:]
-            new_values = self.columns[:loc] + (value,) + self.columns[loc:]
+            new_keys = (*self.names[:loc], name, *self.names[loc:])
+            new_values = (*self.columns[:loc], value, *self.columns[loc:])
             self._data = dict(zip(new_keys, new_values, strict=True))
         self._clear_cache(old_ncols, old_ncols + 1)
         # The type(name) may no longer match the prior label_dtype
@@ -676,11 +676,11 @@ class ColumnAccessor(MutableMapping):
         start = self._pad_key(start, slice(None))
         stop = self._pad_key(stop, slice(None))
         for idx, name in enumerate(self.names):
-            if _keys_equal(name, start):
+            if _keys_equal(name, start):  # type: ignore[arg-type]  # (padded key matches label shape)
                 start_idx = idx
                 break
         for idx, name in enumerate(reversed(self.names)):
-            if _keys_equal(name, stop):
+            if _keys_equal(name, stop):  # type: ignore[arg-type]  # (padded key matches label shape)
                 stop_idx = len(self) - idx
                 break
         keys = self.names[start_idx:stop_idx]
