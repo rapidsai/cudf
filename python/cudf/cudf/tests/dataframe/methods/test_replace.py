@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -204,3 +204,6 @@ def test_dataframe_replace_inf_does_not_remap_categorical_codes():
 
     assert_eq(result["cat_col"], before)
     assert_eq(result["cat_col"].cat.codes, before_codes)
+
+    expected_num = cudf.Series([1.0, np.nan, np.nan, 4.0, 5.0], name="num_col")
+    assert_eq(result["num_col"], expected_num)
