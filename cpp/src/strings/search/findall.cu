@@ -48,14 +48,14 @@ struct findall_fn {
     size_type output_idx = 0;
 
     auto itr = d_str.begin();
-    while (itr.position() < nchars) {
+    while (itr.position() <= nchars) {
       auto const match = prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
 
       auto const d_result    = string_from_match(*match, d_str, itr);
       d_output[output_idx++] = string_index_pair{d_result.data(), d_result.size_bytes()};
 
-      itr += (match->second - itr.position());
+      itr += (match->second - itr.position()) + (match->first == match->second);
     }
   }
 };
@@ -81,7 +81,7 @@ struct one_capture_fn {
     auto output_idx = size_type{0};
 
     auto itr = d_str.begin();
-    while (itr.byte_offset() < bytes) {
+    while (itr.byte_offset() <= bytes) {
       auto const match = d_prog.find(prog_idx, d_str, itr);
       if (!match) { break; }
       itr += (match->first - itr.position());  // position to beginning of the match
@@ -92,7 +92,8 @@ struct one_capture_fn {
       } else {
         d_output[output_idx] = string_index_pair{"", 0};  // empty string
       }
-      itr += (match->second - itr.position());  // increment for next match
+      if (itr.byte_offset() >= bytes) { break; }
+      itr += (match->second - itr.position()) + (match->first == match->second);
       ++output_idx;
     }
   }

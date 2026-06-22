@@ -20,12 +20,13 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/per_device_resource.hpp>
-
 #include <cudf_streaming/integrations/partition.hpp>
 #include <cudf_streaming/streaming/parquet.hpp>
 #include <cudf_streaming/streaming/table_chunk.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/per_device_resource.hpp>
+
 #include <rapidsmpf/coll/allgather.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
 #include <rapidsmpf/owning_wrapper.hpp>
