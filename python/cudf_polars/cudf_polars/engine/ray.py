@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming engine running on a Ray cluster."""
 
@@ -649,7 +649,7 @@ class RayEngine(StreamingEngine):
                     nranks=nranks,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
-                        int,
+                        "int",
                         executor_options.get("num_py_executors", 8),
                     ),
                     hardware_binding=hw_binding,
