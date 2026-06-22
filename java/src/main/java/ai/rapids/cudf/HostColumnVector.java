@@ -63,13 +63,14 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * NOTE: Buffers may still be receiving asynchronous device writes. This constructor
    * only stores references; callers must sync the relevant CUDA stream before reading.
    *
-   * @param type               the type of the vector; must not be LIST or STRING
+   * @param type               the type of the vector; must not be LIST, and must not be
+   *                           STRING unless rows count is 0
    * @param rows               the number of rows in the vector
    * @param nullCount          the number of nulls in the vector
    * @param hostDataBuffer     the host side data for the vector
    * @param hostValidityBuffer Arrow-like validity buffer, 1 bit per row with padding for
    *                           64-bit alignment; may be null if nullCount is 0
-   * @throws IllegalArgumentException if type is LIST or STRING
+   * @throws IllegalArgumentException if type is LIST, or if type is STRING with rows > 0
    * @throws IllegalStateException    if nullCount is greater than 0 but hostValidityBuffer is null
    */
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -119,10 +120,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
    * @param hostValidityBuffer Arrow-like validity buffer, 1 bit per row with padding for
    *                           64-bit alignment; may be null if nullCount is 0
    * @param offsetBuffer       for STRING, the offsets into hostDataBuffer indicating the
-   *                           start and end of each entry, must be (rows + 1) ints;
-   *                           must be null for all other non-LIST types
-   * @throws IllegalArgumentException if type is LIST; if offsetBuffer is null for STRING; or
-   *                                  if offsetBuffer is non-null for a non-STRING type
+   *                           start and end of each entry, must be (rows + 1) ints; may
+   *                           be null when rows count is 0; must be null for all other non-LIST
+   *                           types
+   * @throws IllegalArgumentException if type is LIST; if offsetBuffer is null for a STRING
+   *                                  column with rows &gt; 0; or if offsetBuffer is non-null
+   *                                  for a non-STRING type
    * @throws IllegalStateException    if nullCount is greater than 0 but hostValidityBuffer is null
    */
   public HostColumnVector(DType type, long rows, Optional<Long> nullCount,
@@ -135,8 +138,8 @@ public final class HostColumnVector extends HostColumnVectorCore {
       throw new IllegalArgumentException(
           "This constructor should not be used for LIST type. Use the nested constructor instead");
     }
-    if (type.equals(DType.STRING) && offsetBuffer == null) {
-      throw new IllegalArgumentException("offsetBuffer is required for STRING type");
+    if (type.equals(DType.STRING) && offsetBuffer == null && rows > 0) {
+      throw new IllegalArgumentException("offsetBuffer is required for non-empty STRING columns");
     }
     if (nullCount.isPresent() && nullCount.get() > 0 && hostValidityBuffer == null) {
       throw new IllegalStateException("Buffer cannot have a nullCount without a validity buffer");

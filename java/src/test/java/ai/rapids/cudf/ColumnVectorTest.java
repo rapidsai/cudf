@@ -947,9 +947,19 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
-  void testHostColumnVectorPublicCtorRejectsStringType() {
+  void testHostColumnVectorPublicCtorRequiresOffsetsForNonEmptyString() {
     assertThrows(IllegalArgumentException.class, () ->
-        new HostColumnVector(DType.STRING, 0, Optional.of(0L), null, null));
+        new HostColumnVector(DType.STRING, 1, Optional.of(0L), null, null, null));
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorAllowsEmptyStringWithoutOffsets() {
+    try (HostColumnVector hcv = new HostColumnVector(
+        DType.STRING, 0, Optional.of(0L), null, null, null)) {
+      assertEquals(0L, hcv.getRowCount());
+      assertEquals(0L, hcv.getNullCount());
+      assertEquals(DType.STRING, hcv.getType());
+    }
   }
 
   @Test
