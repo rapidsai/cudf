@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -21,11 +10,15 @@
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
+#ifndef __CUDACC_RTC__
 #include <algorithm>
 #include <string>
+#endif
 
 namespace CUDF_EXPORT numeric {
 namespace detail {
+
+#ifndef __CUDACC_RTC__
 
 template <typename T>
 auto to_string(T value) -> std::string
@@ -40,10 +33,10 @@ auto to_string(T value) -> std::string
         return "-170141183460469231731687303715884105728";
       value += 1;  // can add back the one, no need to avoid overflow anymore
     }
-    while (value) {
+    do {
       s.push_back("0123456789"[value % 10]);
       value /= 10;
-    }
+    } while (value);
     if (sign) s.push_back('-');
     std::reverse(s.begin(), s.end());
     return s;
@@ -52,6 +45,8 @@ auto to_string(T value) -> std::string
   }
   return std::string{};  // won't ever hit here, need to suppress warning though
 }
+
+#endif
 
 template <typename T>
 CUDF_HOST_DEVICE constexpr auto abs(T value)

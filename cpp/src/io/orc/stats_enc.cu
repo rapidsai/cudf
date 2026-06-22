@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "orc_gpu.hpp"
@@ -462,6 +451,7 @@ void orc_init_statistics_groups(statistics_group* groups,
   dim3 dim_block(init_threads_per_group, init_groups_per_block);
   gpu_init_statistics_groups<<<num_blocks, dim_block, 0, stream.value()>>>(
     groups, cols, rowgroup_bounds);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 /**
@@ -479,6 +469,7 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
 {
   gpu_init_statistics_buffersize<block_size>
     <<<1, block_size, 0, stream.value()>>>(groups, chunks, statistics_count);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 /**
@@ -488,6 +479,7 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
@@ -500,6 +492,7 @@ void orc_encode_statistics(uint8_t* blob_bfr,
   dim3 dim_block(encode_threads_per_chunk, encode_chunks_per_block);
   gpu_encode_statistics<<<num_blocks, dim_block, 0, stream.value()>>>(
     blob_bfr, groups, chunks, statistics_count);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::orc::detail

@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -78,6 +67,20 @@ public final class GroupByAggregation {
    */
   public static GroupByAggregation sum() {
     return new GroupByAggregation(Aggregation.sum());
+  }
+
+  /**
+   * Sum aggregation that also reports per-group overflow. The result column is a
+   * STRUCT with children {sum: input-type, overflow: BOOL8}. Supported input
+   * types are signed integers (INT8/16/32/64) and fixed-point decimal
+   * (DECIMAL32/64/128). The sum-child has the same type AND scale as the input
+   * column -- e.g. a DECIMAL64 input at scale -4 produces a DECIMAL64 sum-child
+   * at scale -4; cudf does not widen or rescale. On overflow the sum value is
+   * unspecified; the boolean flag is the source of truth. Only hash-based
+   * groupby is supported; sort-based groupby will throw.
+   */
+  public static GroupByAggregation sumWithOverflow() {
+    return new GroupByAggregation(Aggregation.sumWithOverflow());
   }
 
   /**
@@ -345,5 +348,26 @@ public final class GroupByAggregation {
    */
   public static GroupByAggregation mergeHistogram() {
     return new GroupByAggregation(Aggregation.mergeHistogram());
+  }
+
+  /**
+   * Bitwise AND aggregation, computing the bitwise AND of all non-null values in a group.
+   */
+  public static GroupByAggregation bitAnd() {
+    return new GroupByAggregation(Aggregation.bitAnd());
+  }
+
+  /**
+   * Bitwise OR aggregation, computing the bitwise OR of all non-null values in a group.
+   */
+  public static GroupByAggregation bitOr() {
+    return new GroupByAggregation(Aggregation.bitOr());
+  }
+
+  /**
+   * Bitwise XOR aggregation, computing the bitwise XOR of all non-null values in a group.
+   */
+  public static GroupByAggregation bitXor() {
+    return new GroupByAggregation(Aggregation.bitXor());
   }
 }

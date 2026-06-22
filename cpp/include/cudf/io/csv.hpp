@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/io/detail/utils.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -224,7 +214,7 @@ class csv_reader_options {
     }
 
     // Expand the size based on the number of columns, if available
-    return base_padding + num_columns * column_bytes;
+    return base_padding + static_cast<size_t>(num_columns) * column_bytes;
   }
 
   /**
@@ -484,6 +474,13 @@ class csv_reader_options {
    * @return timestamp_type to which all timestamp columns will be cast
    */
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
+
+  /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
 
   /**
    * @brief Sets compression format of the source.
@@ -798,9 +795,7 @@ class csv_reader_options {
    */
   void set_na_values(std::vector<std::string> vals)
   {
-    if ((!vals.empty()) and (!_na_filter)) {
-      CUDF_FAIL("Can't set na_values when na_filtering is disabled");
-    }
+    CUDF_EXPECTS(vals.empty() or _na_filter, "Can't set na_values when na_filtering is disabled");
 
     _na_values = std::move(vals);
   }
@@ -1757,6 +1752,27 @@ class csv_writer_options_builder {
  */
 void write_csv(csv_writer_options const& options,
                rmm::cuda_stream_view stream = cudf::get_default_stream());
+
+/// @cond
+struct is_supported_csv_write_type_fn {
+  template <typename T>
+  constexpr bool operator()() const
+  {
+    return cudf::io::detail::is_convertible_to_string_column<T>();
+  }
+};
+/// @endcond
+
+/**
+ * @brief Checks if a cudf::data_type is supported for CSV writing.
+ *
+ * @param type The data_type to check.
+ * @return true if the type is supported for CSV writing, false otherwise.
+ */
+constexpr bool is_supported_write_csv(data_type type)
+{
+  return cudf::type_dispatcher(type, is_supported_csv_write_type_fn{});
+}
 
 /** @} */  // end of group
 }  // namespace io

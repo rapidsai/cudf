@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/strings/convert/convert_floats.hpp>
 #include <cudf/strings/convert/convert_integers.hpp>
@@ -53,9 +42,11 @@ void bench_convert_number(nvbench::state& state, nvbench::type_list<NumericType>
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   if (from_num) {
     state.add_global_memory_reads<NumericType>(num_rows);
-    state.add_global_memory_writes<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_writes<int8_t>(strings_col->alloc_size());
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       if constexpr (std::is_floating_point_v<NumericType>) {
         cudf::strings::to_floats(sv, data_type);
@@ -64,7 +55,7 @@ void bench_convert_number(nvbench::state& state, nvbench::type_list<NumericType>
       }
     });
   } else {
-    state.add_global_memory_reads<int8_t>(sv.chars_size(stream));
+    state.add_global_memory_reads<int8_t>(strings_col->alloc_size());
     state.add_global_memory_writes<NumericType>(num_rows);
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       if constexpr (std::is_floating_point_v<NumericType>)
@@ -73,6 +64,9 @@ void bench_convert_number(nvbench::state& state, nvbench::type_list<NumericType>
         cudf::strings::from_integers(num_col->view());
     });
   }
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH_TYPES(bench_convert_number, NVBENCH_TYPE_AXES(Types))

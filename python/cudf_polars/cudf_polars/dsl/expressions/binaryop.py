@@ -8,17 +8,17 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from polars.polars import _expr_nodes as pl_expr
+from polars import polars  # type: ignore[attr-defined]
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
-from cudf_polars.dsl.expressions.base import AggInfo, ExecutionContext, Expr
+from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+
+pl_expr = polars._expr_nodes
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from cudf_polars.containers import DataFrame
+    from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["BinOp"]
 
@@ -29,13 +29,13 @@ class BinOp(Expr):
 
     def __init__(
         self,
-        dtype: plc.DataType,
+        dtype: DataType,
         op: plc.binaryop.BinaryOperator,
         left: Expr,
         right: Expr,
     ) -> None:
         self.dtype = dtype
-        if plc.traits.is_boolean(self.dtype):
+        if plc.traits.is_boolean(self.dtype.plc_type):
             # For boolean output types, bitand and bitor implement
             # boolean logic, so translate. bitxor also does, but the
             # default behaviour is correct.
@@ -44,7 +44,7 @@ class BinOp(Expr):
         self.children = (left, right)
         self.is_pointwise = True
         if not plc.binaryop.is_supported_operation(
-            self.dtype, left.dtype, right.dtype, op
+            self.dtype.plc_type, left.dtype.plc_type, right.dtype.plc_type, op
         ):
             raise NotImplementedError(
                 f"Operation {op.name} not supported "
@@ -61,7 +61,9 @@ class BinOp(Expr):
         plc.binaryop.BinaryOperator.LOGICAL_OR: plc.binaryop.BinaryOperator.NULL_LOGICAL_OR,
     }
 
-    _MAPPING: ClassVar[dict[pl_expr.Operator, plc.binaryop.BinaryOperator]] = {
+    _MAPPING: ClassVar[
+        dict[polars._expr_nodes.Operator, plc.binaryop.BinaryOperator]
+    ] = {
         pl_expr.Operator.Eq: plc.binaryop.BinaryOperator.EQUAL,
         pl_expr.Operator.EqValidity: plc.binaryop.BinaryOperator.NULL_EQUALS,
         pl_expr.Operator.NotEq: plc.binaryop.BinaryOperator.NOT_EQUAL,
@@ -85,51 +87,54 @@ class BinOp(Expr):
     }
 
     def do_evaluate(
-        self,
-        df: DataFrame,
-        *,
-        context: ExecutionContext = ExecutionContext.FRAME,
-        mapping: Mapping[Expr, Column] | None = None,
+        self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        left, right = (
-            child.evaluate(df, context=context, mapping=mapping)
-            for child in self.children
-        )
-        lop = left.obj
-        rop = right.obj
+        left, right = (child.evaluate(df, context=context) for child in self.children)
+        lop: plc.Column | plc.Scalar = left.obj
+        rop: plc.Column | plc.Scalar = right.obj
         if left.size != right.size:
             if left.is_scalar:
-                lop = left.obj_scalar
+                lop = left.obj_scalar(stream=df.stream)
             elif right.is_scalar:
-                rop = right.obj_scalar
-        return Column(
-            plc.binaryop.binary_operation(lop, rop, self.op, self.dtype),
-        )
-
-    def collect_agg(self, *, depth: int) -> AggInfo:
-        """Collect information about aggregations in groupbys."""
-        if depth == 1:
-            # inside aggregation, need to pre-evaluate,
-            # groupby construction has checked that we don't have
-            # nested aggs, so stop the recursion and return ourselves
-            # for pre-eval
-            return AggInfo([(self, plc.aggregation.collect_list(), self)])
-        else:
-            left_info, right_info = (
-                child.collect_agg(depth=depth) for child in self.children
-            )
-            requests = [*left_info.requests, *right_info.requests]
-            # TODO: Hack, if there were no reductions inside this
-            # binary expression then we want to pre-evaluate and
-            # collect ourselves. Otherwise we want to collect the
-            # aggregations inside and post-evaluate. This is a bad way
-            # of checking that we are in case 1.
-            if all(
-                agg.kind() == plc.aggregation.Kind.COLLECT_LIST
-                for _, agg, _ in requests
+                rop = right.obj_scalar(stream=df.stream)
+        if plc.traits.is_integral_not_bool(self.dtype.plc_type) and self.op in {
+            plc.binaryop.BinaryOperator.FLOOR_DIV,
+            plc.binaryop.BinaryOperator.PYMOD,
+        }:
+            if (
+                right.obj.size() == 1
+                and right.obj.to_scalar(stream=df.stream).to_py(stream=df.stream) == 0
             ):
-                return AggInfo([(self, plc.aggregation.collect_list(), self)])
-            return AggInfo(
-                [*left_info.requests, *right_info.requests],
-            )
+                return Column(
+                    plc.Column.all_null_like(
+                        left.obj, left.obj.size(), stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+
+            if right.obj.size() > 1:
+                rop = plc.replace.find_and_replace_all(
+                    right.obj,
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(
+                            0, dtype=self.dtype.plc_type, stream=df.stream
+                        ),
+                        1,
+                        stream=df.stream,
+                    ),
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(
+                            None, dtype=self.dtype.plc_type, stream=df.stream
+                        ),
+                        1,
+                        stream=df.stream,
+                    ),
+                    stream=df.stream,
+                )
+        return Column(
+            plc.binaryop.binary_operation(
+                lop, rop, self.op, self.dtype.plc_type, stream=df.stream
+            ),
+            dtype=self.dtype,
+        )

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -35,8 +24,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <algorithm>
@@ -149,8 +138,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   // create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings_count},
     [d_table = *d_table, d_narep] __device__(size_type idx) {
       if (d_narep.is_valid()) return true;
       return !thrust::any_of(
@@ -241,8 +230,8 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
 
   // Create resulting null mask
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(strings_count),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{strings_count},
     [d_table = *d_table, separator_col_view, separator_rep, col_rep] __device__(size_type idx) {
       if (!separator_col_view.is_valid(idx) && !separator_rep.is_valid()) return false;
       if (col_rep.is_valid()) return true;

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/fst/lookup_tables.cuh"
@@ -30,7 +19,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/iterator/discard_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -147,7 +136,7 @@ void BM_FST_JSON_no_outidx(nvbench::state& state)
     parser.Transduce(d_input.data(),
                      static_cast<SymbolOffsetT>(d_input.size()),
                      output_gpu.device_ptr(),
-                     thrust::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
                      output_gpu_size.device_ptr(),
                      start_state,
                      stream.value());
@@ -185,8 +174,8 @@ void BM_FST_JSON_no_out(nvbench::state& state)
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
                      static_cast<SymbolOffsetT>(d_input.size()),
-                     thrust::make_discard_iterator(),
-                     thrust::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
                      output_gpu_size.device_ptr(),
                      start_state,
                      stream.value());
@@ -225,7 +214,7 @@ void BM_FST_JSON_no_str(nvbench::state& state)
     // Allocate device-side temporary storage & run algorithm
     parser.Transduce(d_input.data(),
                      static_cast<SymbolOffsetT>(d_input.size()),
-                     thrust::make_discard_iterator(),
+                     cuda::make_discard_iterator(),
                      out_indexes_gpu.device_ptr(),
                      output_gpu_size.device_ptr(),
                      start_state,

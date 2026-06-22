@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
@@ -22,7 +11,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 
 using namespace cudf::test::iterators;
 
@@ -74,7 +63,7 @@ TYPED_TEST(groupby_structs_test, basic)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9};
@@ -98,7 +87,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_members)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,       1,    2,    3,    4,    5,    6,      7,    8,    9 };
@@ -126,7 +115,7 @@ TYPED_TEST(groupby_structs_test, structs_with_null_rows)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9};
@@ -138,7 +127,7 @@ TYPED_TEST(groupby_structs_test, structs_with_null_rows)
   auto expected_values   = fwcw<R> {    6,   19,   17,      3  };
   auto expected_member_0 = fwcw<M0>{ {  1,    2,    3,   null  }, null_at(3)};
   auto expected_member_1 = fwcw<M1>{ { 11,   22,   33,   null  }, null_at(3)};
-  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22", "33", "null" }, null_at(3)};
+  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22", "33", "" }, null_at(3)};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(3)};
   // clang-format on
 
@@ -152,7 +141,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9  };
@@ -168,7 +157,7 @@ TYPED_TEST(groupby_structs_test, structs_with_nulls_in_rows_and_members)
   auto expected_values   = fwcw<R> {    9,   14,    10,     7,     1,      4  };
   auto expected_member_0 = fwcw<M0>{{   1,    2,     3,     3,  null,   null  }, nulls_at({4,5})};
   auto expected_member_1 = fwcw<M1>{{  11,   22,    33,  null,    22,   null  }, nulls_at({3,5})};
-  auto expected_member_2 = cudf::test::strings_column_wrapper {{ "11", "22",  "33",  "33",  "22", "null" }, null_at(5)};
+  auto expected_member_2 = cudf::test::strings_column_wrapper {{ "11", "22",  "33",  "33",  "22", "" }, null_at(5)};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(5)};
   // clang-format on
 
@@ -184,7 +173,7 @@ TYPED_TEST(groupby_structs_test, null_members_differ_from_null_structs)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {    0,      1,    2,    3,    4,    5,    6,    7,    8,    9 };
@@ -203,7 +192,7 @@ TYPED_TEST(groupby_structs_test, null_members_differ_from_null_structs)
   auto expected_values   = fwcw<R> {    9,   14,    17,      1,      4  };
   auto expected_member_0 = fwcw<M0>{ {  1,    2,     3,   null,   null  }, nulls_at({3,4})};
   auto expected_member_1 = fwcw<M1>{ { 11,   22,    33,   null,   null  }, nulls_at({3,4})};
-  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22",  "33", "null", "null" }, nulls_at({3,4})};
+  auto expected_member_2 = cudf::test::strings_column_wrapper { {"11", "22",  "33", "", "" }, nulls_at({3,4})};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(4)};
   // clang-format on
 
@@ -215,13 +204,13 @@ TYPED_TEST(groupby_structs_test, structs_of_structs)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values            = fwcw<V> {    0,      1,    2,    3,    4,    5,    6,    7,    8,    9 };
   auto struct_0_member_0 = fwcw<M0>{{   1,   null,    3,    1,    2,    2,    1,    3,    3,    2 }, null_at(1)};
   auto struct_0_member_1 = fwcw<M1>{{  11,   null,   33,   11,   22,   22,   11,   33,   33,   22 }, null_at(1)};
-  auto struct_0_member_2 = cudf::test::strings_column_wrapper {{ "11", "null", "33", "11", "22", "22", "11", "33", "33", "22"}, null_at(1)};
+  auto struct_0_member_2 = cudf::test::strings_column_wrapper {{ "11", "", "33", "11", "22", "22", "11", "33", "33", "22"}, null_at(1)};
   // clang-format on
 
   auto struct_0 = cudf::test::structs_column_wrapper{
@@ -237,7 +226,7 @@ TYPED_TEST(groupby_structs_test, structs_of_structs)
   auto expected_values            = fwcw<R> {    9,   14,    17,      1,      4  };
   auto expected_member_0          = fwcw<M0>{ {  1,    2,     3,   null,   null  }, nulls_at({3,4})};
   auto expected_member_1          = fwcw<M1>{ { 11,   22,    33,   null,   null  }, nulls_at({3,4})};
-  auto expected_member_2          = cudf::test::strings_column_wrapper { {"11", "22",  "33", "null", "null" }, nulls_at({3,4})};
+  auto expected_member_2          = cudf::test::strings_column_wrapper { {"11", "22",  "33", "", "" }, nulls_at({3,4})};
   auto expected_structs           = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, null_at(4)};
   auto expected_struct_1_member_1 = fwcw<M1>{    8,    7,     6,      9,      0  };
   auto expected_keys              = cudf::test::structs_column_wrapper{{expected_structs, expected_struct_1_member_1}};
@@ -251,7 +240,7 @@ TYPED_TEST(groupby_structs_test, empty_input)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {};
@@ -275,7 +264,7 @@ TYPED_TEST(groupby_structs_test, all_null_input)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {  0,    1,    2,    3,    4,    5,    6,    7,    8,    9};
@@ -287,7 +276,7 @@ TYPED_TEST(groupby_structs_test, all_null_input)
   auto expected_values   = fwcw<R> {    45 };
   auto expected_member_0 = fwcw<M0>{ null };
   auto expected_member_1 = fwcw<M1>{ null };
-  auto expected_member_2 = cudf::test::strings_column_wrapper {"null"};
+  auto expected_member_2 = cudf::test::strings_column_wrapper {""};
   auto expected_keys     = cudf::test::structs_column_wrapper{{expected_member_0, expected_member_1, expected_member_2}, all_nulls()};
   // clang-format on
 
@@ -299,7 +288,7 @@ TYPED_TEST(groupby_structs_test, lists_as_keys)
   using V  = int32_t;    // Type of Aggregation Column.
   using M0 = int32_t;    // Type of STRUCT's first (i.e. 0th) member.
   using M1 = TypeParam;  // Type of STRUCT's second (i.e. 1th) member.
-  using R  = cudf::detail::target_type_t<V, cudf::aggregation::SUM>;
+  using R  = int64_t;
 
   // clang-format off
   auto values   = fwcw<V> {     0,      1,      2,      3,       4  };

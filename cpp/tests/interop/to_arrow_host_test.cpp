@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -29,7 +19,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <numeric>
 
@@ -37,12 +27,12 @@ using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 
 struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
   template <typename T>
-  std::enable_if_t<cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>, void> compare_subset(
-    ArrowArrayView const* expected,
-    int64_t start_offset_expected,
-    ArrowArrayView const* actual,
-    int64_t start_offset_actual,
-    int64_t length)
+  void compare_subset(ArrowArrayView const* expected,
+                      int64_t start_offset_expected,
+                      ArrowArrayView const* actual,
+                      int64_t start_offset_actual,
+                      int64_t length)
+    requires(cudf::is_fixed_width<T>() and !std::is_same_v<T, bool>)
   {
     for (int64_t i = 0; i < length; ++i) {
       const bool is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
@@ -57,12 +47,12 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
   }
 
   template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> compare_subset(
-    ArrowArrayView const* expected,
-    int64_t start_offset_expected,
-    ArrowArrayView const* actual,
-    int64_t start_offset_actual,
-    int64_t length)
+  void compare_subset(ArrowArrayView const* expected,
+                      int64_t start_offset_expected,
+                      ArrowArrayView const* actual,
+                      int64_t start_offset_actual,
+                      int64_t length)
+    requires(std::is_same_v<T, cudf::string_view>)
   {
     for (int64_t i = 0; i < length; ++i) {
       const bool is_null = ArrowArrayViewIsNull(expected, start_offset_expected + i);
@@ -203,10 +193,6 @@ struct BaseToArrowHostFixture : public cudf::test::BaseFixture {
 };
 
 struct ToArrowHostDeviceTest : public BaseToArrowHostFixture {};
-template <typename T>
-struct ToArrowHostDeviceTestDurationsTest : public BaseToArrowHostFixture {};
-
-TYPED_TEST_SUITE(ToArrowHostDeviceTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(ToArrowHostDeviceTest, EmptyTable)
 {
@@ -227,6 +213,19 @@ TEST_F(ToArrowHostDeviceTest, EmptyTable)
 
   ArrowArrayViewReset(&expected);
   ArrowArrayViewReset(&actual);
+}
+
+TEST_F(ToArrowHostDeviceTest, Nullable)
+{
+  auto const input = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, {1, 1, 1, 1});
+  auto const tv    = cudf::table_view{{input}};
+
+  auto schema       = cudf::to_arrow_schema(tv, cudf::interop::get_table_metadata(tv));
+  auto arrow        = cudf::to_arrow_host(tv);
+  auto roundtripped = cudf::from_arrow_host(schema.get(), arrow.get());
+  auto const after  = roundtripped->view().column(0);
+
+  EXPECT_TRUE(after.nullable());
 }
 
 TEST_F(ToArrowHostDeviceTest, EmptyDictionary)
@@ -285,6 +284,46 @@ TEST_F(ToArrowHostDeviceTest, DateTimeTable)
   ArrowArrayViewReset(&expected);
   ArrowArrayViewReset(&actual);
 }
+
+TEST_F(ToArrowHostDeviceTest, StringView)
+{
+  ArrowSchema schema;
+  NANOARROW_THROW_NOT_OK(ArrowSchemaInitFromType(&schema, NANOARROW_TYPE_STRING_VIEW));
+
+  auto data = cudf::test::strings_column_wrapper(
+    {"hello", "worldy", "much longer string", "", "another even longer string", "", "other string"},
+    {1, 1, 1, 0, 1, 1, 1});
+  auto result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  auto expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+
+  auto sliced = cudf::split(data, {3}).front();
+  result      = cudf::to_arrow_host_stringview(cudf::strings_column_view(sliced));
+  expected    = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), sliced);
+
+  data =
+    cudf::test::strings_column_wrapper({"all of", "these", "strings", "will", "fit", "inline"});
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+
+  data = cudf::test::strings_column_wrapper(
+    {"all of these strings", "are longer and will", "not fit as inline ones"});
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+
+  data     = cudf::test::strings_column_wrapper();  // empty column test
+  result   = cudf::to_arrow_host_stringview(cudf::strings_column_view(data));
+  expected = cudf::from_arrow_column(&schema, &result->array);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), data);
+}
+
+template <typename T>
+struct ToArrowHostDeviceTestDurationsTest : public BaseToArrowHostFixture {};
+
+TYPED_TEST_SUITE(ToArrowHostDeviceTestDurationsTest, cudf::test::DurationTypes);
 
 TYPED_TEST(ToArrowHostDeviceTestDurationsTest, DurationTable)
 {
@@ -348,9 +387,8 @@ TYPED_TEST(ToArrowHostDeviceTestDurationsTest, DurationTable)
 
 TEST_F(ToArrowHostDeviceTest, NestedList)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::iterators::nulls_at_multiples_of(3);
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view input_view({col});
 
@@ -603,7 +641,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint32Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL32,
-                                                     cudf::detail::max_precision<int32_t>(),
+                                                     get_decimal_precision<int32_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -656,7 +694,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL64,
-                                                     cudf::detail::max_precision<int64_t>(),
+                                                     get_decimal_precision<int64_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -710,7 +748,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint128Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     get_decimal_precision<__int128_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -754,7 +792,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint32TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota  = thrust::make_counting_iterator(1);
+    auto const iota  = cuda::counting_iterator<int32_t>{1};
     auto const col   = fp_wrapper<int32_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input = cudf::table_view({col});
 
@@ -767,7 +805,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint32TableLarge)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL32,
-                                                     cudf::detail::max_precision<int32_t>(),
+                                                     get_decimal_precision<int32_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -811,7 +849,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota  = thrust::make_counting_iterator(1);
+    auto const iota  = cuda::counting_iterator<int64_t>{1};
     auto const col   = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input = cudf::table_view({col});
 
@@ -824,7 +862,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64TableLarge)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL64,
-                                                     cudf::detail::max_precision<int64_t>(),
+                                                     get_decimal_precision<int64_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -868,7 +906,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint128TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota  = thrust::make_counting_iterator(1);
+    auto const iota  = cuda::counting_iterator<__int128_t>{1};
     auto const col   = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input = cudf::table_view({col});
 
@@ -881,7 +919,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint128TableLarge)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     get_decimal_precision<__int128_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -936,7 +974,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint32TableNullsSimple)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL32,
-                                                     cudf::detail::max_precision<int32_t>(),
+                                                     get_decimal_precision<int32_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -991,7 +1029,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint64TableNullsSimple)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL64,
-                                                     cudf::detail::max_precision<int64_t>(),
+                                                     get_decimal_precision<int64_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -1046,7 +1084,7 @@ TEST_F(ToArrowHostDeviceTest, FixedPoint128TableNullsSimple)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     get_decimal_precision<__int128_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;

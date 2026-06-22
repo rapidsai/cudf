@@ -1,23 +1,11 @@
 
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/trie.cuh"
 #include "nested_json.hpp"
-#include "tabulate_output_iterator.cuh"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -28,6 +16,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/utility>
+#include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf::io::json {
@@ -35,9 +26,9 @@ namespace detail {
 
 struct write_if {
   using token_t   = cudf::io::json::token_t;
-  using scan_type = thrust::pair<token_t, bool>;
+  using scan_type = cuda::std::pair<token_t, bool>;
   PdaTokenT* tokens;
-  size_t n;
+  std::size_t n;
   // Index, value
   __device__ void operator()(size_type i, scan_type x)
   {
@@ -122,7 +113,7 @@ void validate_token_stream(device_span<char const> d_input,
         if (is_nonnumeric) { return true; }
       }
       auto c = data[start];
-      if ('-' == c || c <= '9' && 'c' >= '0') {
+      if ('-' == c || (c <= '9' && c >= '0')) {
         // number
         auto num_state = number_state::START;
         for (auto at = start; at < end; at++) {
@@ -273,7 +264,7 @@ void validate_token_stream(device_span<char const> d_input,
     });
 
   auto num_tokens = tokens.size();
-  auto count_it   = thrust::make_counting_iterator(0);
+  auto count_it   = cuda::counting_iterator<std::size_t>{0};
   auto predicate  = cuda::proclaim_return_type<bool>([tokens        = tokens.begin(),
                                                      token_indices = token_indices.begin(),
                                                      validate_values,
@@ -287,19 +278,19 @@ void validate_token_stream(device_span<char const> d_input,
   });
 
   auto conditional_invalidout_it =
-    cudf::detail::make_tabulate_output_iterator(cuda::proclaim_return_type<void>(
+    thrust::tabulate_output_iterator(cuda::proclaim_return_type<void>(
       [d_invalid = d_invalid.begin()] __device__(size_type i, bool x) -> void {
         if (x) { d_invalid[i] = true; }
       }));
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     count_it,
                     count_it + num_tokens,
                     conditional_invalidout_it,
                     predicate);
 
   using scan_type            = write_if::scan_type;
-  auto conditional_write     = write_if{tokens.begin(), num_tokens};
-  auto conditional_output_it = cudf::detail::make_tabulate_output_iterator(conditional_write);
+  auto conditional_write     = write_if{tokens.data(), num_tokens};
+  auto conditional_output_it = thrust::tabulate_output_iterator(conditional_write);
   auto binary_op             = cuda::proclaim_return_type<scan_type>(
     [] __device__(scan_type prev, scan_type curr) -> scan_type {
       auto op_result = (prev.first == token_t::ErrorBegin ? prev.first : curr.first);
@@ -311,12 +302,13 @@ void validate_token_stream(device_span<char const> d_input,
       return {static_cast<token_t>(tokens[i]), tokens[i] == token_t::LineEnd};
     });
 
-  thrust::transform_inclusive_scan(rmm::exec_policy_nosync(stream),
-                                   count_it,
-                                   count_it + num_tokens,
-                                   conditional_output_it,
-                                   transform_op,
-                                   binary_op);  // in-place scan
+  thrust::transform_inclusive_scan(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    count_it,
+    count_it + num_tokens,
+    conditional_output_it,
+    transform_op,
+    binary_op);  // in-place scan
 }
 }  // namespace detail
 }  // namespace cudf::io::json

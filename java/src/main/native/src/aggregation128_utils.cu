@@ -1,29 +1,17 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "aggregation128_utils.hpp"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -98,12 +86,12 @@ std::unique_ptr<cudf::column> extract_chunk32(cudf::column_view const& in_col,
 
   // Build an iterator for every fourth 32-bit value, i.e.: one "chunk" of a __int128_t value
   thrust::transform_iterator transform_iter{
-    thrust::counting_iterator{0},
+    cuda::counting_iterator{cudf::size_type{0}},
     cuda::proclaim_return_type<cudf::size_type>([] __device__(auto i) { return i * 4; })};
   thrust::permutation_iterator stride_iter{in_begin + chunk_idx, transform_iter};
 
   thrust::copy(
-    rmm::exec_policy(stream), stride_iter, stride_iter + num_rows, out_view.data<int32_t>());
+    rmm::exec_policy_nosync(stream), stride_iter, stride_iter + num_rows, out_view.data<int32_t>());
   return out_col;
 }
 
@@ -129,9 +117,9 @@ std::unique_ptr<cudf::table> assemble128_from_sum(cudf::table_view const& chunks
     output_type, num_rows, copy_bitmask(chunks0), chunks0.null_count()));
   auto overflows_view = columns[0]->mutable_view();
   auto assembled_view = columns[1]->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(num_rows),
+  thrust::transform(rmm::exec_policy_nosync(stream),
+                    cuda::counting_iterator{cudf::size_type{0}},
+                    cuda::counting_iterator{cudf::size_type{num_rows}},
                     assembled_view.begin<__int128_t>(),
                     chunk_assembler(overflows_view.begin<bool>(),
                                     chunks0.begin<uint64_t>(),

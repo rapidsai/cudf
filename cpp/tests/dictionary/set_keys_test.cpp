@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -35,8 +24,10 @@ TEST_F(DictionarySetKeysTest, StringsKeys)
     "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
   auto dictionary = cudf::dictionary::encode(strings);
 
-  cudf::test::strings_column_wrapper new_keys{"aaa", "ccc", "eee", "fff"};
+  cudf::test::strings_column_wrapper new_keys{"fff", "eee", "ccc", "aaa"};
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
+  // ensure the keys match exactly (no sorting and deterministic)
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::dictionary_column_view(result->view()).keys(), new_keys);
 
   std::vector<char const*> h_expected{
     "eee", "aaa", nullptr, nullptr, "ccc", "ccc", "ccc", "eee", "aaa"};
@@ -55,6 +46,8 @@ TEST_F(DictionarySetKeysTest, FloatKeys)
 
   cudf::test::fixed_width_column_wrapper<float> new_keys{0.5, 1.0, 4.25, 7.125};
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
+  // ensure the keys match exactly (no sorting and deterministic)
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::dictionary_column_view(result->view()).keys(), new_keys);
 
   cudf::test::fixed_width_column_wrapper<float> expected{{4.25, 7.125, 0.5, 0., 7.125, 0.5},
                                                          {true, true, true, false, true, true}};
@@ -71,6 +64,8 @@ TEST_F(DictionarySetKeysTest, WithNulls)
 
   cudf::test::fixed_width_column_wrapper<int64_t> new_keys{0, 222, 333, 444};
   auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
+  // ensure the keys match exactly (no sorting and deterministic)
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(cudf::dictionary_column_view(result->view()).keys(), new_keys);
 
   cudf::test::fixed_width_column_wrapper<int64_t> expected{
     {444, 0, 333, 111, 222, 222, 222, 444, 0},
@@ -87,13 +82,13 @@ TEST_F(DictionarySetKeysTest, Errors)
   cudf::test::fixed_width_column_wrapper<float> new_keys{1.0, 2.0, 3.0};
   EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), new_keys), cudf::data_type_error);
   cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {true, false, true}};
-  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::set_keys(dictionary->view(), null_keys), std::invalid_argument);
 }
 
 TEST_F(DictionarySetKeysTest, MatchDictionaries)
 {
-  cudf::test::dictionary_column_wrapper<int32_t> col1{5, 0, 4, 1, 2, 2, 2, 5, 0};
-  cudf::test::dictionary_column_wrapper<int32_t> col2{1, 0, 3, 1, 4, 5, 6, 5, 0};
+  cudf::test::dictionary_column_wrapper<int32_t> col1{55, 0, 44, 11, 22, 22, 22, 55, 0};
+  cudf::test::dictionary_column_wrapper<int32_t> col2{11, 0, 33, 11, 44, 55, 66, 55, 0};
 
   auto input = std::vector<cudf::dictionary_column_view>(
     {cudf::dictionary_column_view(col1), cudf::dictionary_column_view(col2)});
@@ -103,12 +98,11 @@ TEST_F(DictionarySetKeysTest, MatchDictionaries)
   auto keys2   = cudf::dictionary_column_view(results[1]->view()).keys();
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(keys1, keys2);
 
-  auto result1 = cudf::dictionary::decode(cudf::dictionary_column_view(results[0]->view()));
-  auto result2 = cudf::dictionary::decode(cudf::dictionary_column_view(results[1]->view()));
-
+  auto result1   = cudf::dictionary::decode(cudf::dictionary_column_view(results[0]->view()));
   auto expected1 = cudf::dictionary::decode(cudf::dictionary_column_view(col1));
-  auto expected2 = cudf::dictionary::decode(cudf::dictionary_column_view(col2));
-
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result1->view(), expected1->view());
+
+  auto result2   = cudf::dictionary::decode(cudf::dictionary_column_view(results[1]->view()));
+  auto expected2 = cudf::dictionary::decode(cudf::dictionary_column_view(col2));
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result2->view(), expected2->view());
 }

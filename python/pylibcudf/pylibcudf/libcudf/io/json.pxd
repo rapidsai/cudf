@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 cimport pylibcudf.libcudf.io.types as cudf_io_types
 cimport pylibcudf.libcudf.table.table_view as cudf_table_view
 from libc.stdint cimport int32_t, uint8_t
@@ -10,11 +11,11 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.types cimport data_type, size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
-cdef extern from "cudf/io/json.hpp" \
-        namespace "cudf::io" nogil:
+cdef extern from "cudf/io/json.hpp" namespace "cudf::io" nogil:
 
     cdef struct schema_element:
         data_type type
@@ -52,6 +53,7 @@ cdef extern from "cudf/io/json.hpp" \
         vector[string] get_na_values() except +libcudf_exception_handler
 
         # setter
+        void set_source(cudf_io_types.source_info src) except +libcudf_exception_handler
         void set_dtypes(vector[data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, data_type] types) except +libcudf_exception_handler
         void set_dtypes(map[string, schema_element] types)\
@@ -155,12 +157,9 @@ cdef extern from "cudf/io/json.hpp" \
         json_reader_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata read_json(
-        json_reader_options &options
-    ) except +libcudf_exception_handler
-
-    cdef cudf_io_types.table_with_metadata read_json(
         json_reader_options &options,
-        cuda_stream_view stream,
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef cppclass json_writer_options:
@@ -233,14 +232,17 @@ cdef extern from "cudf/io/json.hpp" \
         json_writer_options_builder& compression(
             cudf_io_types.compression_type comptype
         ) except +libcudf_exception_handler
+        json_writer_options_builder& utf8_escaped(
+            bool val
+        ) except +libcudf_exception_handler
 
         json_writer_options build() except +libcudf_exception_handler
 
     cdef cudf_io_types.table_with_metadata write_json(
-        json_writer_options &options
+        json_writer_options &options,
+        cudaStream_t stream
     ) except +libcudf_exception_handler
 
-    cdef cudf_io_types.table_with_metadata write_json(
-        json_writer_options &options,
-        cuda_stream_view stream,
+    cdef bool is_supported_write_json(
+        data_type type
     ) except +libcudf_exception_handler

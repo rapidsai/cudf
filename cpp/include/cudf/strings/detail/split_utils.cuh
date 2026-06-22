@@ -1,28 +1,19 @@
 /*
- * Copyright (c) 2020-2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/strings/string_view.cuh>
 
+#include <cuda/std/limits>
+
 namespace cudf {
 namespace strings {
 namespace detail {
 
-constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
+__device__ constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
 
 /**
  * @brief Count tokens delimited by whitespace
@@ -32,7 +23,7 @@ constexpr bool is_whitespace(char_utf8 ch) { return ch <= ' '; }
  * @return Number of tokens delimited by whitespace
  */
 __device__ inline size_type count_tokens_whitespace(
-  string_view d_str, size_type const max_tokens = std::numeric_limits<size_type>::max())
+  string_view d_str, size_type const max_tokens = cuda::std::numeric_limits<size_type>::max())
 {
   auto token_count = size_type{0};
   auto spaces      = true;

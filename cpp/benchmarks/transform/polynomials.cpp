@@ -1,28 +1,18 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
+#include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -34,10 +24,12 @@ static void BM_transform_polynomials(nvbench::state& state)
 {
   auto const num_rows{static_cast<cudf::size_type>(state.get_int64("num_rows"))};
   auto const order{static_cast<cudf::size_type>(state.get_int64("order"))};
+  auto const null_probability = state.get_float64("null_probability");
 
   CUDF_EXPECTS(order > 0, "Polynomial order must be greater than 0");
 
   data_profile profile;
+  profile.set_null_probability(null_probability);
   profile.set_distribution_params(cudf::type_to_id<key_type>(),
                                   distribution_id::NORMAL,
                                   static_cast<key_type>(0),
@@ -47,8 +39,8 @@ static void BM_transform_polynomials(nvbench::state& state)
   std::vector<std::unique_ptr<cudf::column>> constants;
 
   std::transform(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(order + 1),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{order + 1},
     std::back_inserter(constants),
     [&](int) { return create_random_column(cudf::type_to_id<key_type>(), row_count{1}, profile); });
 
@@ -56,16 +48,18 @@ static void BM_transform_polynomials(nvbench::state& state)
   state.add_global_memory_reads<key_type>(num_rows);
   state.add_global_memory_writes<key_type>(num_rows);
 
-  std::vector<cudf::column_view> inputs{*column};
+  std::vector<cudf::transform_input> inputs{cudf::transform_input{*column}};
   std::transform(constants.begin(),
                  constants.end(),
                  std::back_inserter(inputs),
-                 [](auto& col) -> cudf::column_view { return *col; });
+                 [](auto& col) -> cudf::transform_input { return cudf::scalar_column_view(*col); });
+
+  auto const mem_stats_logger = cudf::memory_stats_logger();
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     // computes polynomials: (((ax + b)x + c)x + d)x + e... = ax**4 + bx**3 + cx**2 + dx + e....
 
-    cudf::scoped_range range{"benchmark_iteration"};
+    cudf::benchmark::scoped_range range{"benchmark_iteration"};
 
     std::string type = cudf::type_to_name(cudf::data_type{cudf::type_to_id<key_type>()});
 
@@ -88,12 +82,19 @@ static void BM_transform_polynomials(nvbench::state& state)
 
     // clang-format on
 
-    cudf::transform(inputs,
-                    udf,
-                    cudf::data_type{cudf::type_to_id<key_type>()},
-                    false,
-                    launch.get_stream().get_stream());
+    cudf::transform_extended(inputs,
+                             udf,
+                             cudf::data_type{cudf::type_to_id<key_type>()},
+                             cudf::udf_source_type::CUDA,
+                             std::nullopt,
+                             cudf::null_aware::NO,
+                             std::nullopt,
+                             cudf::output_nullability::PRESERVE,
+                             launch.get_stream().get_stream());
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 #define TRANSFORM_POLYNOMIALS_BENCHMARK_DEFINE(name, key_type)                         \
@@ -102,7 +103,8 @@ static void BM_transform_polynomials(nvbench::state& state)
   NVBENCH_BENCH(name)                                                                  \
     .set_name(#name)                                                                   \
     .add_int64_axis("num_rows", {100'000, 1'000'000, 10'000'000, 100'000'000})         \
-    .add_int64_axis("order", {1, 2, 4, 8, 16, 32})
+    .add_int64_axis("order", {1, 2, 4, 8, 16, 32})                                     \
+    .add_float64_axis("null_probability", {0.01})
 
 TRANSFORM_POLYNOMIALS_BENCHMARK_DEFINE(transform_polynomials_float32, float);
 

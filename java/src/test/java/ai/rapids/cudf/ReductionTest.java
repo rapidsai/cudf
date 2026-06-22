@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 package ai.rapids.cudf;
@@ -29,6 +18,9 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReductionTest extends CudfTestBase {
   public static final double DELTAD = 0.00001;
@@ -41,7 +33,7 @@ class ReductionTest extends CudfTestBase {
       Aggregation.Kind.VARIANCE,
       Aggregation.Kind.QUANTILE);
 
-  // reduction operations that produce a floating point value
+  // reduction operations that produce a bool value
   private static final EnumSet<Aggregation.Kind> BOOL_REDUCTIONS = EnumSet.of(
       Aggregation.Kind.ANY,
       Aggregation.Kind.ALL);
@@ -137,10 +129,13 @@ class ReductionTest extends CudfTestBase {
   private static Stream<Arguments> createBooleanParams() {
     Boolean[] vals = new Boolean[]{true, true, null, false, true, false, null};
     HostColumnVector.DataType bool = new HostColumnVector.BasicType(true, DType.BOOL8);
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     return Stream.of(
         Arguments.of(ReductionAggregation.sum(), new Boolean[0], bool, null, 0.),
         Arguments.of(ReductionAggregation.sum(), new Boolean[]{null, null, null}, bool, null, 0.),
         Arguments.of(ReductionAggregation.sum(), vals, bool, true, 0.),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 3, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 0, 0.),
         Arguments.of(ReductionAggregation.min(), vals, bool, false, 0.),
         Arguments.of(ReductionAggregation.max(), vals, bool, true, 0.),
         Arguments.of(ReductionAggregation.product(), vals, bool, false, 0.),
@@ -156,10 +151,13 @@ class ReductionTest extends CudfTestBase {
   private static Stream<Arguments> createByteParams() {
     Byte[] vals = new Byte[]{-1, 7, 123, null, 50, 60, 100};
     HostColumnVector.DataType int8 = new HostColumnVector.BasicType(true, DType.INT8);
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     return Stream.of(
         Arguments.of(ReductionAggregation.sum(), new Byte[0], int8, null, 0.),
         Arguments.of(ReductionAggregation.sum(), new Byte[]{null, null, null}, int8, null, 0.),
         Arguments.of(ReductionAggregation.sum(), vals, int8, (byte) 83, 0.),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.),
         Arguments.of(ReductionAggregation.min(), vals, int8, (byte) -1, 0.),
         Arguments.of(ReductionAggregation.max(), vals, int8, (byte) 123, 0.),
         Arguments.of(ReductionAggregation.product(), vals, int8, (byte) 160, 0.),
@@ -175,10 +173,13 @@ class ReductionTest extends CudfTestBase {
   private static Stream<Arguments> createShortParams() {
     Short[] vals = new Short[]{-1, 7, 123, null, 50, 60, 100};
     HostColumnVector.DataType int16 = new HostColumnVector.BasicType(true, DType.INT16);
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     return Stream.of(
         Arguments.of(ReductionAggregation.sum(), new Short[0], int16, null, 0.),
         Arguments.of(ReductionAggregation.sum(), new Short[]{null, null, null}, int16, null, 0.),
         Arguments.of(ReductionAggregation.sum(), vals, int16, (short) 339, 0.),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.),
         Arguments.of(ReductionAggregation.min(), vals, int16, (short) -1, 0.),
         Arguments.of(ReductionAggregation.max(), vals, int16, (short) 123, 0.),
         Arguments.of(ReductionAggregation.product(), vals, int16, (short) -22624, 0.),
@@ -198,6 +199,8 @@ class ReductionTest extends CudfTestBase {
         Arguments.of(ReductionAggregation.sum(), new Integer[0], int32, null, 0.),
         Arguments.of(ReductionAggregation.sum(), new Integer[]{null, null, null}, int32, null, 0.),
         Arguments.of(ReductionAggregation.sum(), vals, int32, 339, 0.),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.),
         Arguments.of(ReductionAggregation.min(), vals, int32, -1, 0.),
         Arguments.of(ReductionAggregation.max(), vals, int32, 123, 0.),
         Arguments.of(ReductionAggregation.product(), vals, int32, -258300000, 0.),
@@ -212,11 +215,14 @@ class ReductionTest extends CudfTestBase {
 
   private static Stream<Arguments> createLongParams() {
     Long[] vals = new Long[]{-1L, 7L, 123L, null, 50L, 60L, 100L};
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     HostColumnVector.BasicType int64 = new HostColumnVector.BasicType(true, DType.INT64);
     return Stream.of(
         Arguments.of(ReductionAggregation.sum(), new Long[0], int64, null, 0.),
         Arguments.of(ReductionAggregation.sum(), new Long[]{null, null, null}, int64, null, 0.),
         Arguments.of(ReductionAggregation.sum(), vals, int64, 339L, 0.),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.),
         Arguments.of(ReductionAggregation.min(), vals, int64, -1L, 0.),
         Arguments.of(ReductionAggregation.max(), vals, int64, 123L, 0.),
         Arguments.of(ReductionAggregation.product(), vals, int64, -258300000L, 0.),
@@ -236,12 +242,15 @@ class ReductionTest extends CudfTestBase {
     Float[] notNulls = new Float[]{-1f, 7f, 123f, 50f, 60f, 100f};
     Float[] repeats = new Float[]{Float.MIN_VALUE, 7f, 7f, null, null, Float.NaN, Float.NaN, 50f, 50f, 100f};
     HostColumnVector.BasicType fp32 = new HostColumnVector.BasicType(true, DType.FLOAT32);
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     HostColumnVector.DataType listOfFloat = new HostColumnVector.ListType(
         true, new HostColumnVector.BasicType(true, DType.FLOAT32));
     return Stream.of(
         Arguments.of(ReductionAggregation.sum(), new Float[0], fp32, null, 0f),
         Arguments.of(ReductionAggregation.sum(), new Float[]{null, null, null}, fp32, null, 0f),
         Arguments.of(ReductionAggregation.sum(), vals, fp32, 339f, 0f),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.f),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.f),
         Arguments.of(ReductionAggregation.min(), vals, fp32, -1f, 0f),
         Arguments.of(ReductionAggregation.max(), vals, fp32, 123f, 0f),
         Arguments.of(ReductionAggregation.product(), vals, fp32, -258300000f, 0f),
@@ -284,12 +293,15 @@ class ReductionTest extends CudfTestBase {
     Double[] notNulls = new Double[]{-1., 7., 123., 50., 60., 100.};
     Double[] repeats = new Double[]{Double.MIN_VALUE, 7., 7., null, null, Double.NaN, Double.NaN, 50., 50., 100.};
     HostColumnVector.BasicType fp64 = new HostColumnVector.BasicType(true, DType.FLOAT64);
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     HostColumnVector.DataType listOfDouble = new HostColumnVector.ListType(
         true, new HostColumnVector.BasicType(true, DType.FLOAT64));
     return Stream.of(
         Arguments.of(ReductionAggregation.sum(), new Double[0], fp64, null, 0.),
         Arguments.of(ReductionAggregation.sum(), new Double[]{null, null, null}, fp64, null, 0.),
         Arguments.of(ReductionAggregation.sum(), vals, fp64, 339., 0.),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.),
         Arguments.of(ReductionAggregation.min(), vals, fp64, -1., 0.),
         Arguments.of(ReductionAggregation.max(), vals, fp64, 123., 0.),
         Arguments.of(ReductionAggregation.product(), vals, fp64, -258300000., 0.),
@@ -332,21 +344,27 @@ class ReductionTest extends CudfTestBase {
   private static Stream<Arguments> createTimestampDaysParams() {
     Integer[] vals = new Integer[]{-1, 7, 123, null, 50, 60, 100};
     HostColumnVector.BasicType tsDay = new HostColumnVector.BasicType(true, DType.TIMESTAMP_DAYS);
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     return Stream.of(
         Arguments.of(ReductionAggregation.max(), new Integer[0], tsDay, null),
         Arguments.of(ReductionAggregation.max(), new Integer[]{null, null, null}, tsDay, null),
         Arguments.of(ReductionAggregation.max(), vals, tsDay, 123),
-        Arguments.of(ReductionAggregation.min(), vals, tsDay, -1)
+        Arguments.of(ReductionAggregation.min(), vals, tsDay, -1),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.)
     );
   }
 
   private static Stream<Arguments> createTimestampResolutionParams(HostColumnVector.BasicType type) {
     Long[] vals = new Long[]{-1L, 7L, 123L, null, 50L, 60L, 100L};
+    HostColumnVector.DataType int32 = new HostColumnVector.BasicType(true, DType.INT32);
     return Stream.of(
         Arguments.of(ReductionAggregation.max(), new Long[0], type, null),
         Arguments.of(ReductionAggregation.max(), new Long[]{null, null, null}, type, null),
         Arguments.of(ReductionAggregation.min(), vals, type, -1L),
-        Arguments.of(ReductionAggregation.max(), vals, type, 123L)
+        Arguments.of(ReductionAggregation.max(), vals, type, 123L),
+        Arguments.of(ReductionAggregation.argMin(), vals, int32, 0, 0.),
+        Arguments.of(ReductionAggregation.argMax(), vals, int32, 2, 0.)
     );
   }
 
@@ -622,6 +640,106 @@ class ReductionTest extends CudfTestBase {
          ColumnVector cv = ColumnVector.fromBytes(new byte[]{1, 2, 3, 4});
          Scalar result = cv.standardDeviation(DType.FLOAT32)) {
       assertEquals(expected, result);
+    }
+  }
+
+  // Decoded struct scalar produced by SUM_WITH_OVERFLOW reduction.
+  // sumValid=false models the cudf "no valid input" case (null sum child).
+  private static final class SumWithOverflowResult {
+    final boolean sumValid;
+    final long sumValue;
+    final boolean overflow;
+
+    SumWithOverflowResult(boolean sumValid, long sumValue, boolean overflow) {
+      this.sumValid = sumValid;
+      this.sumValue = sumValue;
+      this.overflow = overflow;
+    }
+  }
+
+  // SUM_WITH_OVERFLOW reduction returns a struct scalar with children
+  // {sum: INT64, overflow: BOOL8}. Helper closes the temporary children views.
+  private static SumWithOverflowResult readSumWithOverflow(Scalar result) {
+    assertEquals(DType.STRUCT, result.getType());
+    assertTrue(result.isValid());
+    ColumnView[] children = result.getChildrenFromStructScalar();
+    try {
+      assertEquals(2, children.length);
+      assertEquals(DType.INT64, children[0].getType());
+      assertEquals(DType.BOOL8, children[1].getType());
+      try (ColumnVector sumCol = children[0].copyToColumnVector();
+           ColumnVector ovfCol = children[1].copyToColumnVector();
+           HostColumnVector sumHost = sumCol.copyToHost();
+           HostColumnVector ovfHost = ovfCol.copyToHost()) {
+        boolean sumValid = !sumHost.isNull(0);
+        long sumValue = sumValid ? sumHost.getLong(0) : 0L;
+        boolean overflow = ovfHost.getBoolean(0);
+        return new SumWithOverflowResult(sumValid, sumValue, overflow);
+      }
+    } finally {
+      for (ColumnView c : children) c.close();
+    }
+  }
+
+  @Test
+  void testSumWithOverflowNoOverflow() {
+    try (ColumnVector cv = ColumnVector.fromLongs(1L, 2L, 3L, 4L, 5L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertEquals(15L, r.sumValue);  // 1+2+3+4+5
+      assertFalse(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowPositiveOverflow() {
+    // On overflow the sum value is unspecified; the overflow flag is the source of truth.
+    try (ColumnVector cv = ColumnVector.fromLongs(Long.MAX_VALUE, 1L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertTrue(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowNegativeOverflow() {
+    // On overflow the sum value is unspecified; the overflow flag is the source of truth.
+    try (ColumnVector cv = ColumnVector.fromLongs(Long.MIN_VALUE, -1L);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertTrue(r.sumValid);
+      assertTrue(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowEmptyColumn() {
+    try (ColumnVector cv = ColumnVector.fromLongs();
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertFalse(r.sumValid);  // empty input -> null sum
+      assertFalse(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowAllNullColumn() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(null, null, null);
+         Scalar result = cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT)) {
+      SumWithOverflowResult r = readSumWithOverflow(result);
+      assertFalse(r.sumValid);  // all-null input -> null sum
+      assertFalse(r.overflow);
+    }
+  }
+
+  @Test
+  void testSumWithOverflowRejectsUnsupportedTypes() {
+    // SUM_WITH_OVERFLOW supports signed integers and decimals; float remains unsupported.
+    try (ColumnVector cv = ColumnVector.fromFloats(1.0f, 2.0f, 3.0f)) {
+      assertThrows(CudfException.class, () ->
+          cv.reduce(ReductionAggregation.sumWithOverflow(), DType.STRUCT).close());
     }
   }
 }

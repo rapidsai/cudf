@@ -1,7 +1,5 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
-# TODO: remove need for this
-# ruff: noqa: D101
 """
 DSL nodes for the polars expression language.
 
@@ -17,7 +15,6 @@ from __future__ import annotations
 
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import (
-    AggInfo,
     Col,
     ColRef,
     ErrorExpr,
@@ -28,17 +25,17 @@ from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.dsl.expressions.boolean import BooleanFunction
 from cudf_polars.dsl.expressions.datetime import TemporalFunction
 from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
-from cudf_polars.dsl.expressions.rolling import GroupedRollingWindow, RollingWindow
+from cudf_polars.dsl.expressions.rolling import GroupedWindow, RollingWindow
 from cudf_polars.dsl.expressions.selection import Filter, Gather
 from cudf_polars.dsl.expressions.slicing import Slice
 from cudf_polars.dsl.expressions.sorting import Sort, SortBy
 from cudf_polars.dsl.expressions.string import StringFunction
+from cudf_polars.dsl.expressions.struct import StructFunction
 from cudf_polars.dsl.expressions.ternary import Ternary
 from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 
 __all__ = [
     "Agg",
-    "AggInfo",
     "BinOp",
     "BooleanFunction",
     "Cast",
@@ -48,7 +45,7 @@ __all__ = [
     "Expr",
     "Filter",
     "Gather",
-    "GroupedRollingWindow",
+    "GroupedWindow",
     "Len",
     "Literal",
     "LiteralColumn",
@@ -58,6 +55,7 @@ __all__ = [
     "Sort",
     "SortBy",
     "StringFunction",
+    "StructFunction",
     "TemporalFunction",
     "Ternary",
     "UnaryFunction",

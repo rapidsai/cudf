@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -25,8 +14,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/dictionary/encode.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <stdexcept>
@@ -76,8 +64,8 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
   auto row_diff   = source_begin - target_begin;
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> target(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + size,
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator<int32_t>{0} + size,
     cudf::detail::make_counting_transform_iterator(0, all_valid));
 
   auto source_elements =
@@ -116,7 +104,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyNoNulls)
   auto row_diff   = source_begin - target_begin;
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> target(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + size);
 
   auto source_elements =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i * 2; });
@@ -148,8 +136,8 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
   auto row_diff   = (source_offset + source_begin) - (target_offset + target_begin);
 
   cudf::test::fixed_width_column_wrapper<T, int32_t> target(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + size,
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator<int32_t>{0} + size,
     cudf::detail::make_counting_transform_iterator(0, all_valid));
 
   cudf::mutable_column_view tmp = target;
@@ -351,11 +339,11 @@ TEST_F(CopyRangeTestFixture, CopyDictionary)
   }
 
   auto source_validity = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 3; });
+    cuda::counting_iterator<cudf::size_type>{0}, [](auto i) { return i != 3; });
   auto target_validity = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 3 && i != 9; });
+    cuda::counting_iterator<cudf::size_type>{0}, [](auto i) { return i != 3 && i != 9; });
   auto expected_validity = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<cudf::size_type>(0), [](auto i) { return i != 5 && i != 9; });
+    cuda::counting_iterator<cudf::size_type>{0}, [](auto i) { return i != 5 && i != 9; });
   {
     auto source = cudf::dictionary::encode(cudf::test::strings_column_wrapper(
       source_elements.begin(), source_elements.end(), source_validity));
@@ -380,11 +368,11 @@ TEST_F(CopyRangeErrorTestFixture, InvalidInplaceCall)
   cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + size);
 
   auto source = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + size,
+    cuda::counting_iterator<int32_t>{0},
+    cuda::counting_iterator<int32_t>{0} + size,
     cudf::detail::make_counting_transform_iterator(0, even_valid));
 
   cudf::mutable_column_view target_view{target};
@@ -405,10 +393,10 @@ TEST_F(CopyRangeErrorTestFixture, InvalidRange)
   cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + size);
 
   auto source = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + size);
 
   cudf::mutable_column_view target_view{target};
   cudf::column_view source_view{source};
@@ -461,10 +449,11 @@ TEST_F(CopyRangeErrorTestFixture, DTypeMismatch)
   cudf::size_type size{100};
 
   auto target = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + size);
 
-  auto source = cudf::test::fixed_width_column_wrapper<float>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + size);
+  auto float_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](int32_t i) { return static_cast<float>(i); });
+  auto source = cudf::test::fixed_width_column_wrapper<float>(float_iter, float_iter + size);
 
   cudf::mutable_column_view target_view{target};
 
@@ -504,8 +493,8 @@ TYPED_TEST(FixedPointTypesCopyRange, FixedPointLarge)
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
-  auto s = thrust::make_counting_iterator(-1000);
-  auto t = thrust::make_constant_iterator(0);
+  auto s = cuda::counting_iterator{-1000};
+  auto t = cuda::make_constant_iterator(0);
   auto e =
     cudf::detail::make_counting_transform_iterator(500, [](int i) { return i < 1000 ? i : 0; });
 

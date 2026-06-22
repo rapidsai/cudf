@@ -1,10 +1,11 @@
-# Copyright (c) 2020-2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import warnings
 
-from pandas.core.accessor import CachedAccessor
-
-import cudf
+from cudf.core.dataframe import DataFrame
+from cudf.core.index import Index
+from cudf.core.series import Series
 from cudf.utils.docutils import docfmt_partial
 
 _docstring_register_accessor = """
@@ -22,8 +23,8 @@ _docstring_register_accessor = """
 
     Notes
     -----
-    The `{klass}` object will be passed to your custom accessor upon first
-    invocation. And will be cached for future calls.
+    The `{klass}` object will be passed to your custom accessor upon each
+    invocation.
 
     If the data passed to your accessor is of wrong datatype, you should
     raise an `AttributeError` in consistent with other cudf methods.
@@ -129,12 +130,25 @@ doc_register_series_accessor = docfmt_partial(
 )
 
 
+class _Accessor:
+    """Custom property-like object. A descriptor for accessors."""
+
+    def __init__(self, name, accessor):
+        self._name = name
+        self._accessor = accessor
+
+    def __get__(self, obj, cls):
+        if obj is None:
+            return self._accessor
+        return self._accessor(obj)
+
+
 def _register_accessor(name, cls):
     def decorator(accessor):
         if hasattr(cls, name):
             msg = f"Attribute {name} will be overridden in {cls.__name__}"
             warnings.warn(msg)
-        cached_accessor = CachedAccessor(name, accessor)
+        cached_accessor = _Accessor(name, accessor)
         cls._accessors.add(name)
         setattr(cls, name, cached_accessor)
 
@@ -146,16 +160,16 @@ def _register_accessor(name, cls):
 @doc_register_dataframe_accessor()
 def register_dataframe_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.DataFrame)
+    return _register_accessor(name, DataFrame)
 
 
 @doc_register_index_accessor()
 def register_index_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.BaseIndex)
+    return _register_accessor(name, Index)
 
 
 @doc_register_series_accessor()
 def register_series_accessor(name):
     """{docstring}"""
-    return _register_accessor(name, cudf.Series)
+    return _register_accessor(name, Series)

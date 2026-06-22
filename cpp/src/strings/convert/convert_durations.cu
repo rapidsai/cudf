@@ -1,18 +1,9 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
+#include "utilities/time_utils.cuh"
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -27,9 +18,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/algorithm>
+#include <cuda/std/cmath>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_reduce.h>
 
@@ -153,8 +145,8 @@ struct format_compiler {
     }
 
     // create program in device memory
-    d_items = cudf::detail::make_device_uvector_sync(
-      items, stream, cudf::get_current_device_resource_ref());
+    d_items =
+      cudf::detail::make_device_uvector(items, stream, cudf::get_current_device_resource_ref());
   }
 
   format_item const* compiled_format_items() { return d_items.data(); }
@@ -226,11 +218,11 @@ struct from_durations_fn {
     int digits_idx          = 0;
     while (value != 0) {
       assert(digits_idx < MAX_DIGITS);
-      digits[digits_idx++] = '0' + std::abs(value % 10);
+      digits[digits_idx++] = '0' + cuda::std::abs(value % 10);
       // next digit
       value = value / 10;
     }
-    digits_idx = std::max(digits_idx, min_digits);
+    digits_idx = cuda::std::max(digits_idx, min_digits);
     // digits are backwards, reverse the string into the output
     while (digits_idx-- > 0)
       *str++ = digits[digits_idx];
@@ -240,7 +232,7 @@ struct from_durations_fn {
   __device__ char* int_to_2digitstr(char* str, int8_t value)
   {
     assert(value >= -99 && value <= 99);
-    value  = std::abs(value);
+    value  = cuda::std::abs(value);
     str[0] = '0' + value / 10;
     str[1] = '0' + value % 10;
     return str + 2;
@@ -281,7 +273,7 @@ struct from_durations_fn {
     *ptr             = '.';
     auto value       = timeparts->subsecond;
     for (int idx = digits; idx > 0; idx--) {
-      *(ptr + idx) = '0' + std::abs(value % 10);
+      *(ptr + idx) = '0' + cuda::std::abs(value % 10);
       value /= 10;
     }
     return ptr + digits + 1;
@@ -360,7 +352,7 @@ struct from_durations_fn {
         return (item.length != -1) ? item.length : format_length(item.value, &timeparts);
       },
       size_type{0},
-      thrust::plus<size_type>());
+      cuda::std::plus<size_type>());
   }
 
   __device__ void set_chars(size_type idx)
@@ -394,11 +386,12 @@ struct from_durations_fn {
  * The template function declaration ensures only duration types are used.
  */
 struct dispatch_from_durations_fn {
-  template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+  template <typename T>
   std::unique_ptr<column> operator()(column_view const& durations,
                                      std::string_view format,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr) const
+    requires(cudf::is_duration<T>())
   {
     CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
 
@@ -427,14 +420,12 @@ struct dispatch_from_durations_fn {
 
   // non-duration types throw an exception
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_duration<T>(), std::unique_ptr<column>> operator()(Args&&...) const
+  std::unique_ptr<column> operator()(Args&&...) const
+    requires(not cudf::is_duration<T>())
   {
     CUDF_FAIL("Values for from_durations function must be a duration type.");
   }
 };
-
-static const __device__ __constant__ int32_t powers_of_ten[10] = {
-  1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
 
 // this parses duration string into a duration integer
 template <typename T>  // duration type
@@ -479,7 +470,8 @@ struct parse_duration {
     }
     auto parsed_length = ptr - str;
     // compensate for missing trailing zeros
-    if (parsed_length < fixed_width) value *= powers_of_ten[fixed_width - parsed_length];
+    if (parsed_length < fixed_width)
+      value *= cudf::detail::powers_of_ten[fixed_width - parsed_length];
     actual_length += parsed_length;
     return value;
   }
@@ -648,27 +640,29 @@ struct parse_duration {
  * The template function declaration ensures only duration types are used.
  */
 struct dispatch_to_durations_fn {
-  template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+  template <typename T>
   void operator()(column_device_view const& d_strings,
                   std::string_view format,
                   mutable_column_view& results_view,
                   rmm::cuda_stream_view stream) const
+    requires(cudf::is_duration<T>())
   {
     format_compiler compiler(format, stream);
     auto d_items   = compiler.compiled_format_items();
     auto d_results = results_view.data<T>();
     parse_duration<T> pfn{d_strings, d_items, compiler.items_count()};
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(results_view.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{results_view.size()},
                       d_results,
                       pfn);
   }
-  template <typename T, std::enable_if_t<not cudf::is_duration<T>()>* = nullptr>
+  template <typename T>
   void operator()(column_device_view const&,
                   std::string_view,
                   mutable_column_view&,
                   rmm::cuda_stream_view) const
+    requires(not cudf::is_duration<T>())
   {
     CUDF_FAIL("Only durations type are expected for to_durations function");
   }
@@ -696,7 +690,7 @@ std::unique_ptr<column> to_durations(strings_column_view const& input,
 {
   size_type strings_count = input.size();
   if (strings_count == 0) {
-    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream);
+    return make_duration_column(duration_type, 0, mask_state::UNALLOCATED, stream, mr);
   }
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");

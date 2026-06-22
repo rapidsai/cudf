@@ -1,26 +1,14 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/strings/strings_column_view.hpp>
@@ -35,7 +23,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/copy.h>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
+#include <cuda/std/tuple>
 #include <thrust/for_each.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
@@ -71,7 +61,7 @@ rmm::device_uvector<NodeIndexT> get_values_column_indices(TreeDepthT const row_a
     row_array_children_level, d_tree.node_levels, d_tree.parent_node_ids, stream);
   auto col_id_location = thrust::make_permutation_iterator(col_ids.begin(), level2_nodes.begin());
   rmm::device_uvector<NodeIndexT> values_column_indices(num_columns, stream);
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   level2_indices.begin(),
                   level2_indices.end(),
                   col_id_location,
@@ -98,16 +88,17 @@ std::vector<std::string> copy_strings_to_host_sync(
   rmm::device_uvector<size_type> string_offsets(num_strings, stream);
   rmm::device_uvector<size_type> string_lengths(num_strings, stream);
   auto d_offset_pairs = thrust::make_zip_iterator(node_range_begin.begin(), node_range_end.begin());
-  thrust::transform(rmm::exec_policy_nosync(stream),
-                    d_offset_pairs,
-                    d_offset_pairs + num_strings,
-                    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
-                    [] __device__(auto const& offsets) {
-                      // Note: first character for non-field columns
-                      return thrust::make_tuple(
-                        static_cast<size_type>(thrust::get<0>(offsets)),
-                        static_cast<size_type>(thrust::get<1>(offsets) - thrust::get<0>(offsets)));
-                    });
+  thrust::transform(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    d_offset_pairs,
+    d_offset_pairs + num_strings,
+    thrust::make_zip_iterator(string_offsets.begin(), string_lengths.begin()),
+    [] __device__(auto const& offsets) {
+      // Note: first character for non-field columns
+      return cuda::std::make_tuple(
+        static_cast<size_type>(cuda::std::get<0>(offsets)),
+        static_cast<size_type>(cuda::std::get<1>(offsets) - cuda::std::get<0>(offsets)));
+    });
 
   cudf::io::parse_options_view options_view{};
   options_view.quotechar  = '\0';  // no quotes
@@ -172,12 +163,15 @@ rmm::device_uvector<uint8_t> is_all_nulls_each_column(device_span<SymbolT const>
   auto const num_nodes = col_ids.size();
   auto const num_cols  = d_column_tree.node_categories.size();
   rmm::device_uvector<uint8_t> is_all_nulls(num_cols, stream);
-  thrust::fill(rmm::exec_policy_nosync(stream), is_all_nulls.begin(), is_all_nulls.end(), true);
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+               is_all_nulls.begin(),
+               is_all_nulls.end(),
+               true);
 
   auto parse_opt = parsing_options(options, stream);
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     num_nodes,
     [options           = parse_opt.view(),
      data              = input.data(),
@@ -204,7 +198,8 @@ NodeIndexT get_row_array_parent_col_id(device_span<NodeIndexT const> col_ids,
   if (col_ids.empty()) { return parent_node_sentinel; }
 
   auto const list_node_index = is_enabled_lines ? 0 : 1;
-  auto const value           = cudf::detail::make_host_vector_sync(
+  if (std::cmp_greater_equal(list_node_index, col_ids.size())) { return parent_node_sentinel; }
+  auto const value = cudf::detail::make_host_vector(
     device_span<NodeIndexT const>{col_ids.data() + list_node_index, 1}, stream);
 
   return value[0];
@@ -255,8 +250,8 @@ std::map<std::string, schema_element> unified_schema(cudf::io::json_reader_optio
     cudf::detail::visitor_overload{
       [](std::vector<data_type> const& user_dtypes) {
         std::map<std::string, schema_element> dnew;
-        std::transform(thrust::counting_iterator<size_t>(0),
-                       thrust::counting_iterator<size_t>(user_dtypes.size()),
+        std::transform(cuda::counting_iterator<size_t>{0},
+                       cuda::counting_iterator<size_t>{user_dtypes.size()},
                        std::inserter(dnew, dnew.end()),
                        [&user_dtypes](auto i) {
                          return std::pair(std::to_string(i), schema_element{user_dtypes[i]});
@@ -315,11 +310,14 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   // sort by {col_id} on {node_ids} stable
   rmm::device_uvector<NodeIndexT> node_ids(col_ids.size(), stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream), node_ids.begin(), node_ids.end());
-  thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
-                             sorted_col_ids.begin(),
-                             sorted_col_ids.end(),
-                             node_ids.begin());
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   node_ids.begin(),
+                   node_ids.end());
+  thrust::stable_sort_by_key(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    sorted_col_ids.begin(),
+    sorted_col_ids.end(),
+    node_ids.begin());
 
   NodeIndexT const row_array_parent_col_id =
     get_row_array_parent_col_id(col_ids, is_enabled_lines, stream);
@@ -346,8 +344,7 @@ void make_device_json_column(device_span<SymbolT const> input,
     TreeDepthT const row_array_children_level = is_enabled_lines ? 1 : 2;
     auto values_column_indices =
       get_values_column_indices(row_array_children_level, tree, col_ids, num_columns, stream);
-    auto h_values_column_indices =
-      cudf::detail::make_host_vector_sync(values_column_indices, stream);
+    auto h_values_column_indices = cudf::detail::make_host_vector(values_column_indices, stream);
     std::transform(unique_col_ids.begin(),
                    unique_col_ids.end(),
                    column_names.cbegin(),
@@ -362,7 +359,7 @@ void make_device_json_column(device_span<SymbolT const> input,
 
   auto const is_str_column_all_nulls = [&, &column_tree = d_column_tree]() {
     if (is_enabled_mixed_types_as_string) {
-      return cudf::detail::make_std_vector_sync(
+      return cudf::detail::make_std_vector(
         is_all_nulls_each_column(input, column_tree, tree, col_ids, options, stream), stream);
     }
     return std::vector<uint8_t>();
@@ -437,14 +434,17 @@ std::
       col.string_offsets.resize(max_row_offsets[i] + 1, stream);
       col.string_lengths.resize(max_row_offsets[i] + 1, stream);
       thrust::fill(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         thrust::make_zip_iterator(col.string_offsets.begin(), col.string_lengths.begin()),
         thrust::make_zip_iterator(col.string_offsets.end(), col.string_lengths.end()),
-        thrust::make_tuple(0, 0));
+        cuda::std::make_tuple(0, 0));
     } else if (column_category == NC_LIST) {
       col.child_offsets.resize(max_row_offsets[i] + 2, stream);
       thrust::uninitialized_fill(
-        rmm::exec_policy_nosync(stream), col.child_offsets.begin(), col.child_offsets.end(), 0);
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        col.child_offsets.begin(),
+        col.child_offsets.end(),
+        0);
     }
     col.num_rows = max_row_offsets[i] + 1;
     col.validity =
@@ -457,7 +457,7 @@ std::
   auto h_range_col_id_it =
     thrust::make_zip_iterator(column_range_beg.begin(), unique_col_ids.begin());
   std::sort(h_range_col_id_it, h_range_col_id_it + num_columns, [](auto const& a, auto const& b) {
-    return thrust::get<0>(a) < thrust::get<0>(b);
+    return cuda::std::get<0>(a) < cuda::std::get<0>(b);
   });
   // adjacency list construction
   std::map<NodeIndexT, std::vector<NodeIndexT>> adj;
@@ -507,6 +507,14 @@ std::
     }
     return -1;
   };
+  // Collected during mark_is_pruned: each col_id whose JSON-tree category did not match the
+  // requested schema type (and was therefore pruned). After `construct_tree` returns we walk each
+  // entry up to its top-level ancestor and add that ancestor's name to
+  // `root.schema_mismatch_column_names`, which (when the caller invoked
+  // `device_parse_nested_json_with_diagnostics`) feeds
+  // `json_reader_diagnostics::top_level_columns_with_schema_mismatch`.
+  auto mismatched_col_ids = std::vector<NodeIndexT>{};
+
   // recursive lambda on schema to mark columns as pruned.
   std::function<void(NodeIndexT root, schema_element const& schema)> mark_is_pruned;
   mark_is_pruned = [&is_pruned,
@@ -515,7 +523,8 @@ std::
                     &lookup_names,
                     &column_categories,
                     &expected_types,
-                    &ignore_all_children](NodeIndexT root, schema_element const& schema) -> void {
+                    &ignore_all_children,
+                    &mismatched_col_ids](NodeIndexT root, schema_element const& schema) -> void {
     if (root == -1) return;
     bool pass =
       (schema.type == data_type{type_id::STRUCT} and column_categories[root] == NC_STRUCT) or
@@ -523,6 +532,11 @@ std::
       (schema.type != data_type{type_id::STRUCT} and schema.type != data_type{type_id::LIST} and
        column_categories[root] != NC_FN);
     if (!pass) {
+      // The JSON tree's actual category for this node disagrees with the requested schema type
+      // (e.g. JSON has a scalar where schema expects a struct). Record the col_id so that after
+      // `construct_tree` builds the device tree we can walk up to the top-level ancestor and
+      // record the diagnostic on `device_json_column::schema_mismatch_column_names`.
+      mismatched_col_ids.push_back(root);
       // ignore all children of this column and prune this column.
       is_pruned[root] = true;
       ignore_all_children(root);
@@ -590,27 +604,24 @@ std::
                  },
                  [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
                    std::map<std::string, data_type> const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
-                     auto const first_child_id = adj[root_list_col_id][i];
-                     auto const& name          = column_names[first_child_id];
+                   for (int first_child_id : adj[root_list_col_id]) {
+                     auto const& name = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, schema_element{user_dtypes.at(name)});
                    }
                  },
                  [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
                    std::map<std::string, schema_element> const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
-                     auto const first_child_id = adj[root_list_col_id][i];
-                     auto const& name          = column_names[first_child_id];
+                   for (int first_child_id : adj[root_list_col_id]) {
+                     auto const& name = column_names[first_child_id];
                      if (user_dtypes.count(name))
                        mark_is_pruned(first_child_id, user_dtypes.at(name));
                    }
                  },
                  [&root_list_col_id, &adj, &mark_is_pruned, &column_names](
                    schema_element const& user_dtypes) -> void {
-                   for (size_t i = 0; i < adj[root_list_col_id].size(); i++) {
-                     auto const first_child_id = adj[root_list_col_id][i];
-                     auto const& name          = column_names[first_child_id];
+                   for (int first_child_id : adj[root_list_col_id]) {
+                     auto const& name = column_names[first_child_id];
                      if (user_dtypes.child_types.count(name) != 0)
                        mark_is_pruned(first_child_id, user_dtypes.child_types.at(name));
                    }
@@ -657,6 +668,15 @@ std::
     is_enabled_lines
       ? adj[parent_node_sentinel][0]
       : (adj[adj[parent_node_sentinel][0]].empty() ? -1 : adj[adj[parent_node_sentinel][0]][0]);
+  auto add_top_level_schema_mismatch = [&](NodeIndexT col_id) {
+    while (col_id != parent_node_sentinel and col_id != -1) {
+      if (column_parent_ids[col_id] == named_level) {
+        root.schema_mismatch_column_names.insert(column_names[col_id]);
+        return;
+      }
+      col_id = column_parent_ids[col_id];
+    }
+  };
 
   // List children which are pruned mixed types, nullify parent list row.
   auto is_mixed_pruned = cudf::detail::make_host_vector<bool>(num_columns, stream);
@@ -845,12 +865,20 @@ std::
       if (columns.count(i)) { columns.at(i).get().forced_as_string_column = true; }
     }
   }
+
+  // For each schema-mismatched col_id (collected in `mark_is_pruned` above), record the name of
+  // its top-level output column on `root.schema_mismatch_column_names`. The diagnostic is only
+  // surfaced per top-level output column, so we do not need to mark intermediate ancestors'
+  // `device_json_column`s.
+  for (auto const mismatched_id : mismatched_col_ids) {
+    add_top_level_schema_mismatch(mismatched_id);
+  }
   std::transform(expected_types.cbegin(),
                  expected_types.cend(),
                  column_categories.cbegin(),
                  expected_types.begin(),
                  [](auto exp, auto cat) { return exp == NUM_NODE_CLASSES ? cat : exp; });
-  cudf::detail::cuda_memcpy_async<NodeT>(d_column_tree.node_categories, expected_types, stream);
+  cudf::detail::cuda_memcpy<NodeT>(d_column_tree.node_categories, expected_types, stream);
 
   return {is_pruned, is_mixed_pruned, columns};
 }
@@ -888,8 +916,8 @@ void scatter_offsets(tree_meta_t const& tree,
 
   // 3. scatter string offsets to respective columns, set validity bits
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     num_nodes,
     [column_categories = d_column_tree.node_categories.begin(),
      col_ids           = col_ids.begin(),
@@ -901,12 +929,19 @@ void scatter_offsets(tree_meta_t const& tree,
       if (d_ignore_vals[col_ids[i]]) return;
       auto const node_category = column_categories[col_ids[i]];
       switch (node_category) {
-        case NC_STRUCT: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
-        case NC_LIST: set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]); break;
+        case NC_STRUCT:
+          if (d_columns_data[col_ids[i]].validity)
+            set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+          break;
+        case NC_LIST:
+          if (d_columns_data[col_ids[i]].validity)
+            set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+          break;
         case NC_STR: [[fallthrough]];
         case NC_VAL:
           if (d_ignore_vals[col_ids[i]]) break;
-          set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
+          if (d_columns_data[col_ids[i]].validity)
+            set_bit(d_columns_data[col_ids[i]].validity, row_offsets[i]);
           d_columns_data[col_ids[i]].string_offsets[row_offsets[i]] = range_begin[i];
           d_columns_data[col_ids[i]].string_lengths[row_offsets[i]] = range_end[i] - range_begin[i];
           break;
@@ -924,19 +959,17 @@ void scatter_offsets(tree_meta_t const& tree,
 
   auto& parent_col_ids = sorted_col_ids;  // reuse sorted_col_ids
   auto parent_col_id   = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
+    cuda::counting_iterator<size_type>{0},
     cuda::proclaim_return_type<NodeIndexT>(
       [col_ids         = col_ids.begin(),
        parent_node_ids = tree.parent_node_ids.begin()] __device__(size_type node_id) {
         return parent_node_ids[node_id] == parent_node_sentinel ? parent_node_sentinel
                                                                   : col_ids[parent_node_ids[node_id]];
       }));
-  auto const list_children_end = thrust::copy_if(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id),
-    thrust::make_zip_iterator(thrust::make_counting_iterator<size_type>(0), parent_col_id) +
-      num_nodes,
-    thrust::make_counting_iterator<size_type>(0),
+  auto const list_children_end = cudf::detail::copy_if(
+    thrust::make_zip_iterator(cuda::counting_iterator<size_type>{0}, parent_col_id),
+    thrust::make_zip_iterator(cuda::counting_iterator<size_type>{0}, parent_col_id) + num_nodes,
+    cuda::counting_iterator<size_type>{0},
     thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()),
     [d_ignore_vals     = d_ignore_vals.begin(),
      parent_node_ids   = tree.parent_node_ids.begin(),
@@ -946,14 +979,15 @@ void scatter_offsets(tree_meta_t const& tree,
       return parent_node_id != parent_node_sentinel and
              column_categories[col_ids[parent_node_id]] == NC_LIST and
              (!d_ignore_vals[col_ids[parent_node_id]]);
-    });
+    },
+    stream);
   // For children of list and in ignore_vals, find it's parent node id, and set corresponding
   // parent's null mask to null. Setting mixed type list rows to null.
-  auto const num_list_children = thrust::distance(
+  auto const num_list_children = cuda::std::distance(
     thrust::make_zip_iterator(node_ids.begin(), parent_col_ids.begin()), list_children_end);
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     num_list_children,
     [node_ids          = node_ids.begin(),
      parent_node_ids   = tree.parent_node_ids.begin(),
@@ -972,13 +1006,14 @@ void scatter_offsets(tree_meta_t const& tree,
       }
     });
 
-  thrust::stable_sort_by_key(rmm::exec_policy_nosync(stream),
-                             parent_col_ids.begin(),
-                             parent_col_ids.begin() + num_list_children,
-                             node_ids.begin());
+  thrust::stable_sort_by_key(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    parent_col_ids.begin(),
+    parent_col_ids.begin() + num_list_children,
+    node_ids.begin());
   thrust::for_each_n(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     num_list_children,
     [node_ids        = node_ids.begin(),
      parent_node_ids = tree.parent_node_ids.begin(),
@@ -1004,17 +1039,19 @@ void scatter_offsets(tree_meta_t const& tree,
   for (auto& [id, col_ref] : columns) {
     auto& col = col_ref.get();
     if (col.type == json_col_t::StringColumn) {
-      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                             col.string_offsets.begin(),
-                             col.string_offsets.end(),
-                             col.string_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+      thrust::inclusive_scan(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        col.string_offsets.begin(),
+        col.string_offsets.end(),
+        col.string_offsets.begin(),
+        cuda::maximum<json_column::row_offset_t>{});
     } else if (col.type == json_col_t::ListColumn) {
-      thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                             col.child_offsets.begin(),
-                             col.child_offsets.end(),
-                             col.child_offsets.begin(),
-                             cudf::detail::maximum<json_column::row_offset_t>{});
+      thrust::inclusive_scan(
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+        col.child_offsets.begin(),
+        col.child_offsets.end(),
+        col.child_offsets.begin(),
+        cuda::maximum<json_column::row_offset_t>{});
     }
   }
   stream.synchronize();

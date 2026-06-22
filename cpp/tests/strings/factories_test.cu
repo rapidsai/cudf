@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -34,9 +23,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
@@ -45,7 +34,7 @@
 
 struct StringsFactoriesTest : public cudf::test::BaseFixture {};
 
-using string_pair = thrust::pair<char const*, cudf::size_type>;
+using string_pair = cuda::std::pair<char const*, cudf::size_type>;
 
 TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 {
@@ -82,7 +71,7 @@ TEST_F(StringsFactoriesTest, CreateColumnFromPair)
     }
     h_offsets[idx + 1] = offset;
   }
-  auto d_strings = cudf::detail::make_device_uvector_sync(
+  auto d_strings = cudf::detail::make_device_uvector(
     strings, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   CUDF_CUDA_TRY(cudaMemcpy(d_buffer.data(), h_buffer.data(), memsize, cudaMemcpyDefault));
   auto column = cudf::make_strings_column(d_strings);
@@ -143,14 +132,14 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   }
 
   std::vector<cudf::bitmask_type> h_nulls{h_null_mask};
-  auto d_buffer = cudf::detail::make_device_uvector_sync(
+  auto d_buffer = cudf::detail::make_device_uvector(
     h_buffer, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto d_offsets = std::make_unique<cudf::column>(
-    cudf::detail::make_device_uvector_sync(
+    cudf::detail::make_device_uvector(
       h_offsets, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
-  auto d_nulls = cudf::detail::make_device_uvector_sync(
+  auto d_nulls = cudf::detail::make_device_uvector(
     h_nulls, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
   auto column = cudf::make_strings_column(
     count, std::move(d_offsets), d_buffer.release(), null_count, d_nulls.release());
@@ -165,11 +154,11 @@ TEST_F(StringsFactoriesTest, CreateColumnFromOffsets)
   EXPECT_EQ(strings_view.chars_size(cudf::get_default_stream()), memsize);
 
   // check string data
-  auto h_chars_data = cudf::detail::make_std_vector_sync(
+  auto h_chars_data = cudf::detail::make_std_vector(
     cudf::device_span<char const>(strings_view.chars_begin(cudf::get_default_stream()),
                                   strings_view.chars_size(cudf::get_default_stream())),
     cudf::get_default_stream());
-  auto h_offsets_data = cudf::detail::make_std_vector_sync(
+  auto h_offsets_data = cudf::detail::make_std_vector(
     cudf::device_span<cudf::size_type const>(
       strings_view.offsets().data<cudf::size_type>() + strings_view.offset(),
       strings_view.size() + 1),
@@ -194,7 +183,7 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 {
   auto d_chars   = rmm::device_uvector<char>(0, cudf::get_default_stream());
   auto d_offsets = std::make_unique<cudf::column>(
-    cudf::detail::make_zeroed_device_uvector_sync<cudf::size_type>(
+    cudf::detail::make_zeroed_device_uvector<cudf::size_type>(
       1, cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
     rmm::device_buffer{},
     0);
@@ -212,7 +201,7 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 namespace {
 
 struct string_view_to_pair {
-  __device__ string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
+  __device__ string_pair operator()(cuda::std::pair<cudf::string_view, bool> const& p)
   {
     return (p.second) ? string_pair{p.first.data(), p.first.size_bytes()} : string_pair{nullptr, 0};
   }
@@ -227,7 +216,7 @@ TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
 
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
                     pairs.data(),
@@ -262,7 +251,7 @@ TEST_F(StringsBatchConstructionTest, AllNullsColumns)
   auto const stream          = cudf::get_default_stream();
 
   auto d_string_pairs = rmm::device_uvector<string_pair>{num_rows, stream};
-  thrust::uninitialized_fill_n(rmm::exec_policy(stream),
+  thrust::uninitialized_fill_n(rmm::exec_policy_nosync(stream),
                                d_string_pairs.data(),
                                d_string_pairs.size(),
                                string_pair{nullptr, 0});

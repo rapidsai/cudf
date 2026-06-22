@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 package ai.rapids.cudf.nvcomp;
@@ -29,9 +18,10 @@ class NvcompJni {
    * Get the temporary workspace size required to perform compression of entire LZ4 batch.
    * @param batchSize number of chunks in the batch
    * @param maxChunkSize maximum size of an uncompressed chunk in bytes
+   * @param maxTotalSize Upper bound on the total uncompressed size of all chunks
    * @return The size of required temporary workspace in bytes to compress the batch.
    */
-  static native long batchedLZ4CompressGetTempSize(long batchSize, long maxChunkSize);
+  static native long batchedLZ4CompressGetTempSize(long batchSize, long maxChunkSize, long maxTotalSize);
 
   /**
    * Get the maximum size any chunk could compress to in a LZ4 batch. This is the minimum amount of
@@ -74,11 +64,13 @@ class NvcompJni {
    * Computes the temporary storage size in bytes needed to decompress a LZ4-compressed batch.
    * @param numChunks number of chunks in the batch
    * @param maxUncompressedChunkBytes maximum uncompressed size of any chunk in bytes
+   * @param maxTotalSize Upper bound on the total uncompressed size of all chunks
    * @return number of temporary storage bytes needed to decompress the batch
    */
   static native long batchedLZ4DecompressGetTempSize(
       long numChunks,
-      long maxUncompressedChunkBytes);
+      long maxUncompressedChunkBytes,
+      long maxTotalSize);
 
   /**
    * Asynchronously decompress a batch of LZ4-compressed data buffers.
@@ -121,9 +113,10 @@ class NvcompJni {
    * Get the temporary workspace size required to perform compression of entire zstd batch.
    * @param batchSize number of chunks in the batch
    * @param maxChunkSize maximum size of an uncompressed chunk in bytes
+   * @param maxTotalSize Upper bound on the total uncompressed size of all chunks
    * @return The size of required temporary workspace in bytes to compress the batch.
    */
-  static native long batchedZstdCompressGetTempSize(long batchSize, long maxChunkSize);
+  static native long batchedZstdCompressGetTempSize(long batchSize, long maxChunkSize, long maxTotalSize);
 
   /**
    * Get the maximum size any chunk could compress to in a ZSTD batch. This is the minimum
@@ -167,11 +160,13 @@ class NvcompJni {
    * ZSTD-compressed batch.
    * @param numChunks number of chunks in the batch
    * @param maxUncompressedChunkBytes maximum uncompressed size of any chunk in bytes
+   * @param maxTotalSize Upper bound on the total uncompressed size of all chunks
    * @return number of temporary storage bytes needed to decompress the batch
    */
   static native long batchedZstdDecompressGetTempSize(
       long numChunks,
-      long maxUncompressedChunkBytes);
+      long maxUncompressedChunkBytes,
+      long maxTotalSize);
 
   /**
    * Asynchronously decompress a batch of ZSTD-compressed data buffers.

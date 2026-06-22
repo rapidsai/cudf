@@ -1,23 +1,17 @@
+// clang-format off
+/*
+ * SPDX-FileCopyrightText: Copyright 2018 BlazingDB, Inc.
+ * SPDX-FileCopyrightText: Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+// clang-format on
 /*
  * Copyright 2018 BlazingDB, Inc.
 
  *     Copyright 2018 Cristhian Alberto Gonzales Castillo <cristhian@blazingdb.com>
  *     Copyright 2018 Alexander Ocsa <alexander@blazingdb.com>
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-/*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +36,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -55,10 +50,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/distance.h>
+#include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/find.h>
-#include <thrust/pair.h>
+#include <thrust/tuple.h>
 
 namespace {  // anonymous
 
@@ -79,13 +75,13 @@ __device__ auto get_new_value(cudf::size_type idx,
   bool output_is_valid{true};
 
   if (found_ptr != values_to_replace_end) {
-    auto d    = thrust::distance(values_to_replace_begin, found_ptr);
+    auto d    = cuda::std::distance(values_to_replace_begin, found_ptr);
     new_value = d_replacement_values[d];
     if (replacement_has_nulls) { output_is_valid = cudf::bit_is_set(replacement_valid, d); }
   } else {
     new_value = input_data[idx];
   }
-  return thrust::make_pair(new_value, output_is_valid);
+  return cuda::std::make_pair(new_value, output_is_valid);
 }
 
 /**
@@ -99,18 +95,12 @@ __device__ auto get_new_value(cudf::size_type idx,
  * specialize this kernel for the different scenario for performance without writing different
  * kernel.
  *
- * @param[in] input_data Device array with the data to be modified
- * @param[in] input_valid Valid mask associated with input_data
- * @param[out] output_data Device array to store the data from input_data
- * @param[out] output_valid Valid mask associated with output_data
- * @param[out] output_valid_count #valid in output column
- * @param[in] nrows # rows in `output_data`
- * @param[in] values_to_replace_begin Device pointer to the beginning of the sequence
- * of old values to be replaced
- * @param[in] values_to_replace_end  Device pointer to the end of the sequence
- * of old values to be replaced
- * @param[in] d_replacement_values Device array with the new values
- * @param[in] replacement_valid Valid mask associated with d_replacement_values
+ * @param[in] input Input column to read data from
+ * @param[out] output Output column to store replaced data
+ * @param[out] output_valid_count Number of valid entries in the output column
+ * @param[in] nrows Number of rows in the input/output columns
+ * @param[in] values_to_replace Column containing the old values to search for
+ * @param[in] replacement Column containing the new values to substitute
  */
 template <class T, bool input_has_nulls, bool replacement_has_nulls>
 CUDF_KERNEL void replace_kernel(cudf::column_device_view input,
@@ -182,7 +172,8 @@ struct replace_kernel_forwarder {
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
   {
-    cudf::detail::device_scalar<cudf::size_type> valid_counter(0, stream);
+    cudf::detail::device_scalar<cudf::size_type> valid_counter(
+      0, stream, cudf::get_current_device_resource_ref());
     cudf::size_type* valid_count = valid_counter.data();
 
     auto replace = [&] {
@@ -216,6 +207,7 @@ struct replace_kernel_forwarder {
                                                                 output_view.size(),
                                                                 *device_values_to_replace,
                                                                 *device_replacement_values);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     if (output_view.nullable()) {
       output->set_null_count(output->size() - valid_counter.value(stream));
@@ -280,15 +272,10 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::diction
     cudf::dictionary_column_view(matched_replacements->view()).get_indices_annotated(),
     stream,
     mr);
-  auto null_count     = new_indices->null_count();
-  auto contents       = new_indices->release();
-  auto indices_column = std::make_unique<cudf::column>(
-    indices_type, input.size(), std::move(*(contents.data.release())), rmm::device_buffer{}, 0);
+
   std::unique_ptr<cudf::column> keys_column(std::move(matched_input->release().children.back()));
-  return cudf::make_dictionary_column(std::move(keys_column),
-                                      std::move(indices_column),
-                                      std::move(*(contents.null_mask.release())),
-                                      null_count);
+
+  return cudf::make_dictionary_column(std::move(keys_column), std::move(new_indices), stream, mr);
 }
 
 }  // end anonymous namespace
@@ -333,6 +320,8 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
  * @param[in] input_col column_view of the data to be modified
  * @param[in] values_to_replace column_view of the old values to be replaced
  * @param[in] replacement_values column_view of the new values
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  *
  * @returns output cudf::column with the modified data
  */

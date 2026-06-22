@@ -1,21 +1,9 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -24,7 +12,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -38,8 +25,10 @@
 
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
+#include <cuda/std/utility>
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/transform_reduce.h>
 
 #include <memory>
@@ -176,12 +165,12 @@ process_string(in_iterator_t in_begin,
                cudf::io::parse_options_view const& options)
 {
   int32_t bytes           = 0;
-  auto const num_in_chars = thrust::distance(in_begin, in_end);
+  auto const num_in_chars = cuda::std::distance(in_begin, in_end);
   // String values are indicated by keeping the quote character
   bool const is_string_value =
     num_in_chars >= 2LL &&
     (options.quotechar == '\0' ||
-     (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
+     (*in_begin == options.quotechar) && (*cuda::std::prev(in_end) == options.quotechar));
 
   // Copy literal/numeric value
   if (not is_string_value) {
@@ -238,7 +227,7 @@ process_string(in_iterator_t in_begin,
 
     // Make sure that there's at least 4 characters left from the
     // input, which are expected to be hex digits
-    if (thrust::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
+    if (cuda::std::distance(in_begin, in_end) < UNICODE_HEX_DIGIT_COUNT) {
       return {bytes, data_casting_result::PARSING_FAILURE};
     }
 
@@ -248,24 +237,24 @@ process_string(in_iterator_t in_begin,
     if (hex_val < 0) { return {bytes, data_casting_result::PARSING_FAILURE}; }
 
     // Skip over the four hex digits
-    thrust::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
+    cuda::std::advance(in_begin, UNICODE_HEX_DIGIT_COUNT);
 
     // If this may be a UTF-16 encoded surrogate pair:
     // we expect another \uXXXX sequence
     int32_t hex_low_val = 0;
     if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
-        thrust::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
-        *in_begin == backslash_char && *thrust::next(in_begin) == 'u') {
+        cuda::std::distance(in_begin, in_end) >= NUM_UNICODE_ESC_SEQ_CHARS &&
+        *in_begin == backslash_char && *cuda::std::next(in_begin) == 'u') {
       // Try to parse hex value following the '\' and 'u' characters from what may be a UTF16 low
       // surrogate
-      hex_low_val = parse_unicode_hex(thrust::next(in_begin, 2));
+      hex_low_val = parse_unicode_hex(cuda::std::next(in_begin, 2));
     }
 
     // This is indeed a UTF16 surrogate pair
     if (hex_val >= UTF16_HIGH_SURROGATE_BEGIN && hex_val < UTF16_HIGH_SURROGATE_END &&
         hex_low_val >= UTF16_LOW_SURROGATE_BEGIN && hex_low_val < UTF16_LOW_SURROGATE_END) {
       // Skip over the second \uXXXX sequence
-      thrust::advance(in_begin, NUM_UNICODE_ESC_SEQ_CHARS);
+      cuda::std::advance(in_begin, NUM_UNICODE_ESC_SEQ_CHARS);
 
       // Compute UTF16-encoded code point
       uint32_t unicode_code_point = 0x10000 + ((hex_val - UTF16_HIGH_SURROGATE_BEGIN) << 10) +
@@ -490,7 +479,7 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
     bool const is_string_value =
       num_in_chars >= 2LL &&
       (options.quotechar == '\0' ||
-       (*in_begin == options.quotechar) && (*thrust::prev(in_end) == options.quotechar));
+       (*in_begin == options.quotechar) && (*cuda::std::prev(in_end) == options.quotechar));
     char* d_buffer = d_chars ? d_chars + d_offsets[istring] : nullptr;
 
     // Copy literal/numeric value
@@ -614,8 +603,9 @@ CUDF_KERNEL void parse_fn_string_parallel(str_tuple_it str_tuples,
         using ErrorReduce = cub::BlockReduce<bool, BLOCK_SIZE>;
         __shared__ typename ErrorReduce::TempStorage temp_storage_error;
         __shared__ bool error_reduced;
-        error_reduced = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
+        auto berr = ErrorReduce(temp_storage_error).Sum(error);  // TODO use cub::LogicalOR.
         // only valid in thread0, so shared memory is used for broadcast.
+        if (lane == 0) error_reduced = berr;
         __syncthreads();
         error = error_reduced;
       }
@@ -790,11 +780,11 @@ template <typename SymbolT>
 struct to_string_view_pair {
   SymbolT const* data;
   to_string_view_pair(SymbolT const* _data) : data(_data) {}
-  __device__ thrust::pair<char const*, std::size_t> operator()(
-    thrust::tuple<size_type, size_type> ip)
+  __device__ cuda::std::pair<char const*, std::size_t> operator()(
+    cuda::std::tuple<size_type, size_type> ip)
   {
-    return thrust::pair<char const*, std::size_t>{data + thrust::get<0>(ip),
-                                                  static_cast<std::size_t>(thrust::get<1>(ip))};
+    return cuda::std::pair<char const*, std::size_t>{
+      data + cuda::std::get<0>(ip), static_cast<std::size_t>(cuda::std::get<1>(ip))};
   }
 };
 
@@ -810,12 +800,12 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   //  CUDF_FUNC_RANGE();
 
   auto const max_length = thrust::transform_reduce(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     str_tuples,
     str_tuples + col_size,
     cuda::proclaim_return_type<std::size_t>([] __device__(auto t) { return t.second; }),
     size_type{0},
-    cudf::detail::maximum<size_type>{});
+    cuda::maximum<size_type>{});
 
   auto sizes           = rmm::device_uvector<size_type>(col_size, stream);
   auto d_sizes         = sizes.data();
@@ -823,15 +813,16 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
   auto single_thread_fn = string_parse<decltype(str_tuples)>{
     str_tuples, static_cast<bitmask_type*>(null_mask.data()), null_count_data, options, d_sizes};
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      col_size,
                      single_thread_fn);
 
   constexpr auto warps_per_block  = 8;
   constexpr int threads_per_block = cudf::detail::warp_size * warps_per_block;
   auto num_blocks                 = cudf::util::div_rounding_up_safe(col_size, warps_per_block);
-  auto str_counter                = cudf::numeric_scalar(size_type{0}, true, stream);
+  auto str_counter =
+    cudf::numeric_scalar(size_type{0}, true, stream, cudf::get_current_device_resource_ref());
 
   // TODO run these independent kernels in parallel streams.
   if (max_length > SINGLE_THREAD_THRESHOLD) {
@@ -846,6 +837,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         cudf::detail::input_offsetalator{},
         nullptr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   if (max_length > WARP_THRESHOLD) {
@@ -862,6 +854,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         cudf::detail::input_offsetalator{},
         nullptr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   auto [offsets, bytes] =
@@ -875,8 +868,8 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
   single_thread_fn.d_chars   = d_chars;
   single_thread_fn.d_offsets = d_offsets;
 
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      col_size,
                      single_thread_fn);
 
@@ -893,6 +886,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         d_offsets,
         d_chars);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   if (max_length > WARP_THRESHOLD) {
@@ -909,6 +903,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
         d_sizes,
         d_offsets,
         d_chars);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return make_strings_column(col_size,
@@ -920,7 +915,7 @@ static std::unique_ptr<column> parse_string(string_view_pair_it str_tuples,
 
 std::unique_ptr<column> parse_data(
   char const* data,
-  thrust::zip_iterator<thrust::tuple<size_type const*, size_type const*>> offset_length_begin,
+  thrust::zip_iterator<cuda::std::tuple<size_type const*, size_type const*>> offset_length_begin,
   size_type col_size,
   data_type col_type,
   rmm::device_buffer&& null_mask,
@@ -932,7 +927,8 @@ std::unique_ptr<column> parse_data(
   CUDF_FUNC_RANGE();
 
   if (col_size == 0) { return make_empty_column(col_type); }
-  auto d_null_count    = cudf::detail::device_scalar<size_type>(null_count, stream);
+  auto d_null_count = cudf::detail::device_scalar<size_type>(
+    null_count, stream, cudf::get_current_device_resource_ref());
   auto null_count_data = d_null_count.data();
   if (null_mask.is_empty()) {
     null_mask = cudf::create_null_mask(col_size, mask_state::ALL_VALID, stream, mr);
@@ -952,8 +948,8 @@ std::unique_ptr<column> parse_data(
 
   // use `ConvertFunctor` to convert non-string values
   thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     col_size,
     [str_tuples, col = *output_dv_ptr, options, col_type, null_count_data] __device__(
       size_type row) {

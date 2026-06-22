@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
@@ -43,15 +32,15 @@ static void bench_find_string(nvbench::state& state)
   auto const targets = cudf::strings_column_view(targets_col->view());
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto const chars_size = input.chars_size(stream);
-  state.add_element_count(chars_size, "chars_size");
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  auto const data_size = col->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
   if (api == "find") {
     state.add_global_memory_writes<nvbench::int32_t>(input.size());
   } else {
     state.add_global_memory_writes<nvbench::int8_t>(input.size());
   }
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   if (api == "find") {
     if (tgt_type == "scalar") {
       state.exec(nvbench::exec_tag::sync,
@@ -85,6 +74,8 @@ static void bench_find_string(nvbench::state& state)
                  [&](nvbench::launch& launch) { cudf::strings::ends_with(input, targets); });
     }
   }
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bench_find_string)

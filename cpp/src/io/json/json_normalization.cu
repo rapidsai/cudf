@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/fst/lookup_tables.cuh"
@@ -30,12 +19,12 @@
 
 #include <cub/device/device_copy.cuh>
 #include <cuda/atomic>
+#include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/functional>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
-#include <thrust/distance.h>
 #include <thrust/gather.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
 #include <thrust/remove.h>
 
@@ -324,7 +313,7 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
   parser.Transduce(reinterpret_cast<SymbolT const*>(indata.data()),
                    static_cast<SymbolOffsetT>(indata.size()),
                    static_cast<SymbolT*>(outbuf.data()),
-                   thrust::make_discard_iterator(),
+                   cuda::make_discard_iterator(),
                    outbuf_size.data(),
                    normalize_quotes::start_state,
                    stream);
@@ -354,31 +343,33 @@ std::
    */
   auto inbuf_lengths = cudf::detail::make_device_uvector_async(
     col_lengths, stream, cudf::get_current_device_resource_ref());
-  size_t inbuf_lengths_size = inbuf_lengths.size();
+  std::size_t inbuf_lengths_size = inbuf_lengths.size();
   size_type inbuf_size =
-    thrust::reduce(rmm::exec_policy_nosync(stream), inbuf_lengths.begin(), inbuf_lengths.end());
+    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   inbuf_lengths.begin(),
+                   inbuf_lengths.end());
   rmm::device_uvector<char> inbuf(inbuf_size, stream);
   rmm::device_uvector<size_type> inbuf_offsets(inbuf_lengths_size, stream);
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          inbuf_lengths.begin(),
                          inbuf_lengths.end(),
                          inbuf_offsets.begin(),
                          0);
 
   auto input_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<char const*>(
       [d_input = d_input.begin(), col_offsets = col_offsets.begin()] __device__(
-        size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
+        std::size_t i) -> char const* { return &d_input[col_offsets[i]]; }));
   auto output_it = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<std::size_t>{0},
     cuda::proclaim_return_type<char*>(
       [inbuf = inbuf.begin(), inbuf_offsets = inbuf_offsets.cbegin()] __device__(
-        size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));
+        std::size_t i) -> char* { return &inbuf[inbuf_offsets[i]]; }));
 
   {
     // cub device batched copy
-    size_t temp_storage_bytes = 0;
+    std::size_t temp_storage_bytes = 0;
     cub::DeviceCopy::Batched(nullptr,
                              temp_storage_bytes,
                              input_it,
@@ -408,7 +399,7 @@ std::
   cudf::detail::device_scalar<SymbolOffsetT> outbuf_indices_size(stream, mr);
   parser.Transduce(inbuf.data(),
                    static_cast<SymbolOffsetT>(inbuf.size()),
-                   thrust::make_discard_iterator(),
+                   cuda::make_discard_iterator(),
                    outbuf_indices.data(),
                    outbuf_indices_size.data(),
                    normalize_whitespace::start_state,
@@ -420,33 +411,33 @@ std::
   // now these indices need to be removed
   // TODO: is there a better way to do this?
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     outbuf_indices.begin(),
     outbuf_indices.end(),
     [inbuf_offsets_begin = inbuf_offsets.begin(),
      inbuf_offsets_end   = inbuf_offsets.end(),
      inbuf_lengths       = inbuf_lengths.begin()] __device__(size_type idx) {
       auto it  = thrust::upper_bound(thrust::seq, inbuf_offsets_begin, inbuf_offsets_end, idx);
-      auto pos = thrust::distance(inbuf_offsets_begin, it) - 1;
+      auto pos = cuda::std::distance(inbuf_offsets_begin, it) - 1;
       cuda::atomic_ref<size_type, cuda::thread_scope_device> ref{*(inbuf_lengths + pos)};
       ref.fetch_add(-1, cuda::std::memory_order_relaxed);
     });
 
   auto stencil = cudf::detail::make_zeroed_device_uvector_async<bool>(
     static_cast<std::size_t>(inbuf_size), stream, cudf::get_current_device_resource_ref());
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_constant_iterator(true),
-                  thrust::make_constant_iterator(true) + num_deletions,
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                  cuda::make_constant_iterator(true),
+                  cuda::make_constant_iterator(true) + num_deletions,
                   outbuf_indices.begin(),
                   stencil.begin());
-  thrust::remove_if(rmm::exec_policy_nosync(stream),
+  thrust::remove_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     inbuf.begin(),
                     inbuf.end(),
                     stencil.begin(),
                     cuda::std::identity{});
   inbuf.resize(inbuf_size - num_deletions, stream);
 
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          inbuf_lengths.begin(),
                          inbuf_lengths.end(),
                          inbuf_offsets.begin(),

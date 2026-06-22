@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -27,7 +16,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf::strings::detail {
@@ -119,9 +108,9 @@ std::unique_ptr<column> shift(strings_column_view const& input,
   auto d_chars = chars.data();
 
   // run kernel to shift all the characters
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::counting_iterator<int64_t>(0),
-                    thrust::counting_iterator<int64_t>(total_bytes),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<int64_t>{0},
+                    cuda::counting_iterator<int64_t>{total_bytes},
                     d_chars,
                     shift_chars_fn{*d_input, d_fill_str, shift_offset});
 

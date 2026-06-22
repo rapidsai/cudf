@@ -1,5 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
-# All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import subprocess
@@ -11,11 +10,9 @@ def _run_python(*, cudf_pandas, command):
     executable = "python "
     if cudf_pandas:
         executable += "-m cudf.pandas "
-    return subprocess.run(
+    return subprocess.check_output(
         executable + command,
         shell=True,
-        capture_output=True,
-        check=True,
         text=True,
     )
 
@@ -35,8 +32,8 @@ def test_run_cudf_pandas_with_script():
         res = _run_python(cudf_pandas=True, command=f.name)
         expect = _run_python(cudf_pandas=False, command=f.name)
 
-    assert res.stdout != ""
-    assert res.stdout == expect.stdout
+    assert res != ""
+    assert res == expect
 
 
 def test_run_cudf_pandas_with_script_with_cmd_args():
@@ -45,8 +42,8 @@ def test_run_cudf_pandas_with_script_with_cmd_args():
     res = _run_python(cudf_pandas=True, command=input_args_and_code)
     expect = _run_python(cudf_pandas=False, command=input_args_and_code)
 
-    assert res.stdout != ""
-    assert res.stdout == expect.stdout
+    assert res != ""
+    assert res == expect
 
 
 def test_run_cudf_pandas_with_script_with_cmd_args_check_cudf():
@@ -56,8 +53,8 @@ def test_run_cudf_pandas_with_script_with_cmd_args_check_cudf():
     res = _run_python(cudf_pandas=True, command=input_args_and_code)
     expect = _run_python(cudf_pandas=False, command=input_args_and_code)
 
-    assert "cudf" in res.stdout
-    assert "<module 'pandas' from" in expect.stdout
+    assert "cudf" in res
+    assert "<module 'pandas' from" in expect
 
 
 def test_cudf_pandas_script_repl():
@@ -82,7 +79,7 @@ def test_cudf_pandas_script_repl():
         "print(pd.Series(range(2)).sum())\n",
         "print(pd.Series(range(5)).sum())\n",
         "import sys\n",
-        "print(pd.Series(list('abcd')), out=sys.stderr)\n",
+        "print(pd.Series(list('abcd')), file=sys.stderr)\n",
     ]
 
     res = get_repl_output(p1, commands)

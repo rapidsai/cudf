@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2024, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -44,7 +33,8 @@ public class ORCChunkedReader implements AutoCloseable {
     handle = createReader(chunkReadLimit, passReadLimit,
         opts.getIncludeColumnNames(), buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns());
+        opts.getDecimal128Columns(),
+        opts.ignoreTimezoneInStripeFooter());
     if (handle == 0) {
       throw new IllegalStateException("Cannot create native chunked ORC reader object.");
     }
@@ -68,7 +58,7 @@ public class ORCChunkedReader implements AutoCloseable {
     handle = createReaderWithOutputGranularity(chunkReadLimit, passReadLimit, outputRowSizingGranularity,
         opts.getIncludeColumnNames(), buffer.getAddress() + offset, len,
         opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
-        opts.getDecimal128Columns());
+        opts.getDecimal128Columns(), opts.ignoreTimezoneInStripeFooter());
     if (handle == 0) {
       throw new IllegalStateException("Cannot create native chunked ORC reader object.");
     }
@@ -146,7 +136,8 @@ public class ORCChunkedReader implements AutoCloseable {
    */
   private static native long createReader(long chunkReadLimit, long passReadLimit,
       String[] filterColumnNames, long bufferAddrs, long length,
-      boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns);
+      boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns,
+      boolean ignoreTimezoneInStripeFooter);
 
   /**
    * Create a native chunked ORC reader object, similar to
@@ -159,7 +150,8 @@ public class ORCChunkedReader implements AutoCloseable {
   private static native long createReaderWithOutputGranularity(
       long chunkReadLimit, long passReadLimit, long outputRowSizingGranularity,
       String[] filterColumnNames, long bufferAddrs, long length,
-      boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns);
+      boolean usingNumPyTypes, int timeUnit, String[] decimal128Columns,
+      boolean ignoreTimezoneInStripeFooter);
 
   private static native boolean hasNext(long handle);
 

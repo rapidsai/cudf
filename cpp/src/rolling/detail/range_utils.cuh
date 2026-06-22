@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -26,6 +15,7 @@
 #include <cudf/rolling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -35,16 +25,16 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
+#include <cuda/std/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <thrust/binary_search.h>
 #include <thrust/copy.h>
-#include <thrust/distance.h>
 #include <thrust/execution_policy.h>
 
 #include <optional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace detail {
 namespace rolling {
 
@@ -313,12 +303,12 @@ struct current_row_distance_functor {
     }
     if (direction == direction::PRECEDING) {
       return 1 +
-             thrust::distance(
+             cuda::std::distance(
                thrust::lower_bound(
                  thrust::seq, begin + row_info.non_null_start(), begin + i, begin[i], Comp{order}),
                begin + i);
     } else {
-      return thrust::distance(
+      return cuda::std::distance(
                begin + i,
                thrust::upper_bound(
                  thrust::seq, begin + i, begin + row_info.non_null_end(), begin[i], Comp{order})) -
@@ -407,12 +397,12 @@ struct bounded_distance_functor {
                            offset_value = offset_value](auto&& cmp) {
       if (preceding) {
         // Search for first slot we can place the offset value
-        return 1 + thrust::distance(thrust::lower_bound(thrust::seq, start, end, offset_value, cmp),
-                                    current);
+        return 1 + cuda::std::distance(
+                     thrust::lower_bound(thrust::seq, start, end, offset_value, cmp), current);
       } else {
         // Search for last slot we can place the offset value
-        return thrust::distance(current,
-                                thrust::upper_bound(thrust::seq, start, end, offset_value, cmp)) -
+        return cuda::std::distance(
+                 current, thrust::upper_bound(thrust::seq, start, end, offset_value, cmp)) -
                1;
       }
     };
@@ -466,7 +456,7 @@ struct range_window_clamper {
                         mutable_column_view& result,
                         rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream),
+    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cudf::detail::make_counting_transform_iterator(
                      0, unbounded_distance_functor{grouping, direction}),
                    size,
@@ -482,7 +472,7 @@ struct range_window_clamper {
                           mutable_column_view& result,
                           rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream),
+    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cudf::detail::make_counting_transform_iterator(
                      0, current_row_distance_functor{grouping, direction, order, begin}),
                    size,
@@ -499,7 +489,7 @@ struct range_window_clamper {
                       mutable_column_view& result,
                       rmm::cuda_stream_view stream) const
   {
-    thrust::copy_n(rmm::exec_policy_nosync(stream),
+    thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cudf::detail::make_counting_transform_iterator(
                      0,
                      bounded_distance_functor<Grouping, OrderbyT, DeltaT, WindowType>{
@@ -514,6 +504,8 @@ struct range_window_clamper {
    * @tparam OrderbyT element type of the orderby column (dispatched on)
    * @tparam ScalarT Concrete scalar type of the scalar row delta
    * @param orderby Column used to define windows.
+   * @param direction The window direction
+   * @param order The sort order of the orderby column
    * @param grouping optional pre-processed group information.
    * @param nulls_at_start If the orderby column contains nulls, are they are the start or the end?
    * @param row_delta the delta applied to each row, will be null if the window is of type
@@ -632,7 +624,10 @@ struct range_window_clamper {
       auto const value =
         static_cast<fixed_point_scalar<OrderbyT> const*>(row_delta)->fixed_point_value(stream);
       auto const new_scalar = cudf::fixed_point_scalar<OrderbyT>{
-        value.rescaled(numeric::scale_type{orderby.type().scale()}), true, stream};
+        value.rescaled(numeric::scale_type{orderby.type().scale()}),
+        true,
+        stream,
+        cudf::get_current_device_resource_ref()};
       return window_bounds<OrderbyT>(
         orderby, direction, order, grouping, nulls_at_start, &new_scalar, stream, mr);
     }
@@ -693,4 +688,4 @@ struct range_window_clamper {
 };
 }  // namespace rolling
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

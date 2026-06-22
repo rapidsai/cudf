@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -782,6 +771,25 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a new column containing the Sha1 hash of each row in the table.
+   *
+   * @param columns columns to hash
+   * @return the new ColumnVector of 40 character hex strings representing each row's hash value.
+   */
+  public static ColumnVector sha1Hash(ColumnView... columns) {
+    if (columns.length < 1) {
+      throw new IllegalArgumentException("Sha1 hashing requires at least 1 column of input");
+    }
+    long[] columnViews = new long[columns.length];
+
+    for(int i = 0; i < columns.length; i++) {
+      assert columns[i] != null : "Column vectors passed may not be null";
+      columnViews[i] = columns[i].getNativeView();
+    }
+    return new ColumnVector(sha1(columnViews));
+  }
+
+  /**
    * Generic method to cast ColumnVector
    * When casting from a Date, Timestamp, or Boolean to a numerical type the underlying numerical
    * representation of the data will be used for the cast.
@@ -891,6 +899,14 @@ public final class ColumnVector extends ColumnView {
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
   private static native long md5(long[] viewHandles) throws CudfException;
+
+  /**
+   * Native method to sha1 hash each row of the given table
+   *
+   * @param viewHandles array of native handles to the columns being operated on.
+   * @return native handle of the resulting cudf column containing the hex-string hashing results.
+   */
+  private static native long sha1(long[] viewHandles) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -23,12 +12,14 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/table/experimental/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
+#include <cudf/detail/row_operator/lexicographic.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/tabulate.h>
+#include <cuda/iterator>
+#include <thrust/transform.h>
 
 namespace cudf::binops::compiled::detail {
 template <class T, class... Ts>
@@ -52,8 +43,8 @@ struct device_comparison_functor {
   bool __device__ operator()(size_type i)
   {
     return _optional_iter[i].has_value() &&
-           _comparator(cudf::experimental::row::lhs_index_type{_is_lhs_scalar ? 0 : i},
-                       cudf::experimental::row::rhs_index_type{_is_rhs_scalar ? 0 : i});
+           _comparator(cudf::detail::row::lhs_index_type{_is_lhs_scalar ? 0 : i},
+                       cudf::detail::row::rhs_index_type{_is_rhs_scalar ? 0 : i});
   }
 
   OptionalIterator const _optional_iter;
@@ -64,7 +55,7 @@ struct device_comparison_functor {
 
 template <class BinaryOperator,
           typename PhysicalElementComparator =
-            cudf::experimental::row::lexicographic::sorting_physical_element_comparator>
+            cudf::detail::row::lexicographic::sorting_physical_element_comparator>
 void apply_struct_binary_op(mutable_column_view& out,
                             column_view const& lhs,
                             column_view const& rhs,
@@ -77,20 +68,21 @@ void apply_struct_binary_op(mutable_column_view& out,
     lhs.size(),
     is_any_v<BinaryOperator, ops::Greater, ops::GreaterEqual> ? order::DESCENDING
                                                               : order::ASCENDING);
-  auto const tlhs             = table_view{{lhs}};
-  auto const trhs             = table_view{{rhs}};
-  auto const table_comparator = cudf::experimental::row::lexicographic::two_table_comparator{
-    tlhs, trhs, compare_orders, {}, stream};
+  auto const tlhs = table_view{{lhs}};
+  auto const trhs = table_view{{rhs}};
+  auto const table_comparator =
+    cudf::detail::row::lexicographic::two_table_comparator{tlhs, trhs, compare_orders, {}, stream};
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
   auto const comparator_nulls = nullate::DYNAMIC{has_nested_nulls(tlhs) || has_nested_nulls(trhs)};
 
   auto tabulate_device_operator = [&](auto device_comparator) {
-    thrust::tabulate(
-      rmm::exec_policy(stream),
+    thrust::transform(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<size_type>(0),
+      cuda::counting_iterator<size_type>(out.size()),
       out.begin<bool>(),
-      out.end<bool>(),
       device_comparison_functor{optional_iter, is_lhs_scalar, is_rhs_scalar, device_comparator});
   };
   if (cudf::detail::has_nested_columns(tlhs) || cudf::detail::has_nested_columns(trhs)) {
@@ -123,8 +115,8 @@ struct struct_equality_functor {
 
   auto __device__ operator()(size_type i) const noexcept
   {
-    auto const lhs = cudf::experimental::row::lhs_index_type{_is_lhs_scalar ? 0 : i};
-    auto const rhs = cudf::experimental::row::rhs_index_type{_is_rhs_scalar ? 0 : i};
+    auto const lhs = cudf::detail::row::lhs_index_type{_is_lhs_scalar ? 0 : i};
+    auto const rhs = cudf::detail::row::rhs_index_type{_is_rhs_scalar ? 0 : i};
     return _optional_iter[i].has_value() and (_device_comparator(lhs, rhs) == _preserve_output);
   }
 
@@ -136,8 +128,8 @@ struct struct_equality_functor {
   bool _preserve_output;
 };
 
-template <typename PhysicalEqualityComparator =
-            cudf::experimental::row::equality::physical_equality_comparator>
+template <
+  typename PhysicalEqualityComparator = cudf::detail::row::equality::physical_equality_comparator>
 void apply_struct_equality_op(mutable_column_view& out,
                               column_view const& lhs,
                               column_view const& rhs,
@@ -152,25 +144,25 @@ void apply_struct_equality_op(mutable_column_view& out,
                "Unsupported operator for these types",
                cudf::data_type_error);
 
-  auto tlhs = table_view{{lhs}};
-  auto trhs = table_view{{rhs}};
-  auto table_comparator =
-    cudf::experimental::row::equality::two_table_comparator{tlhs, trhs, stream};
+  auto tlhs             = table_view{{lhs}};
+  auto trhs             = table_view{{rhs}};
+  auto table_comparator = cudf::detail::row::equality::two_table_comparator{tlhs, trhs, stream};
 
   auto outd = column_device_view::create(out, stream);
   auto optional_iter =
     cudf::detail::make_optional_iterator<bool>(*outd, nullate::DYNAMIC{out.has_nulls()});
 
   auto const comparator_helper = [&](auto const device_comparator) {
-    thrust::tabulate(rmm::exec_policy(stream),
-                     out.begin<bool>(),
-                     out.end<bool>(),
-                     struct_equality_functor<decltype(optional_iter), decltype(device_comparator)>(
-                       optional_iter,
-                       device_comparator,
-                       is_lhs_scalar,
-                       is_rhs_scalar,
-                       op != binary_operator::NOT_EQUAL));
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>(0),
+                      cuda::counting_iterator<size_type>(out.size()),
+                      out.begin<bool>(),
+                      struct_equality_functor<decltype(optional_iter), decltype(device_comparator)>(
+                        optional_iter,
+                        device_comparator,
+                        is_lhs_scalar,
+                        is_rhs_scalar,
+                        op != binary_operator::NOT_EQUAL));
   };
 
   if (cudf::detail::has_nested_columns(tlhs) or cudf::detail::has_nested_columns(trhs)) {

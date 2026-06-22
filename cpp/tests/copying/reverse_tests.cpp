@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -24,8 +13,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <cuda/iterator>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
 #include <numeric>
@@ -42,7 +31,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + num_values);
 
   auto expected_elements = cudf::detail::make_counting_transform_iterator(
     0, [num_values] __device__(auto i) { return num_values - i - 1; });
@@ -64,7 +53,7 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseColumn)
   constexpr cudf::size_type num_values{10};
 
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0) + num_values);
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{0} + num_values);
 
   auto expected_elements = cudf::detail::make_counting_transform_iterator(
     0, [num_values] __device__(auto i) { return num_values - i - 1; });
@@ -115,11 +104,11 @@ TYPED_TEST(ReverseTypedTestFixture, ReverseNullable)
 TYPED_TEST(ReverseTypedTestFixture, ZeroSizeInput)
 {
   using T = TypeParam;
-  cudf::test::fixed_width_column_wrapper<T, int32_t> input(thrust::make_counting_iterator(0),
-                                                           thrust::make_counting_iterator(0));
+  cudf::test::fixed_width_column_wrapper<T, int32_t> input(cuda::counting_iterator<int32_t>{0},
+                                                           cuda::counting_iterator<int32_t>{0});
 
-  cudf::test::fixed_width_column_wrapper<T, int32_t> expected(thrust::make_counting_iterator(0),
-                                                              thrust::make_counting_iterator(0));
+  cudf::test::fixed_width_column_wrapper<T, int32_t> expected(cuda::counting_iterator<int32_t>{0},
+                                                              cuda::counting_iterator<int32_t>{0});
 
   cudf::table_view input_table{{input}};
   auto p_ret = cudf::reverse(input_table);
@@ -168,7 +157,7 @@ TEST_F(ReverseStringTestFixture, ZeroSizeInput)
   auto input = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
 
   auto count = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-    thrust::make_counting_iterator(0), thrust::make_counting_iterator(0));
+    cuda::counting_iterator<cudf::size_type>{0}, cuda::counting_iterator<cudf::size_type>{0});
 
   auto expected = cudf::test::strings_column_wrapper(input_values.begin(), input_values.end());
 

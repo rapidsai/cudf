@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/regex/regex_program_impl.h"
@@ -78,9 +67,9 @@ struct replace_regex_fn {
                                      in_ptr + last_pos.byte_offset(),      // o:bbbb
                                      start_pos - last_pos.byte_offset());  //       ^
         out_ptr = copy_string(out_ptr, d_repl);                            // o:bbbbrrrrrr
-      }                                                                    //  out_ptr ---^
-      last_pos += (match->second - last_pos.position());                   // i:bbbbsssseeee
-                                                                           //  in_ptr --^
+      }  //  out_ptr ---^
+      last_pos += (match->second - last_pos.position());  // i:bbbbsssseeee
+                                                          //  in_ptr --^
 
       itr = last_pos + (match->first == match->second);
     }

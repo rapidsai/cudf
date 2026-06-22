@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2023, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <tests/groupby/groupby_test_util.hpp>
@@ -21,7 +10,7 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 
 template <typename V>
 struct groupby_lists_test : public cudf::test::BaseFixture {};
@@ -31,7 +20,7 @@ TYPED_TEST_SUITE(groupby_lists_test, cudf::test::FixedWidthTypes);
 using namespace cudf::test::iterators;
 
 // Type of aggregation result.
-using agg_result_t = cudf::detail::target_type_t<int32_t, cudf::aggregation::SUM>;
+using agg_result_t = int64_t;
 
 template <typename T>
 using fwcw = cudf::test::fixed_width_column_wrapper<T>;

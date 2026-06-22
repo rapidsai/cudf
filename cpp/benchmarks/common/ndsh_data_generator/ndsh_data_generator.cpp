@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "ndsh_data_generator.hpp"
@@ -19,15 +8,14 @@
 #include "random_column_generator.hpp"
 #include "table_helpers.hpp"
 
+#include <benchmarks/common/nvtx_ranges.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
 
-#include <cudf/ast/detail/operators.hpp>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
-#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/round.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/strings/combine.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -157,7 +145,7 @@ std::unique_ptr<cudf::table> generate_orders_independent(double scale_factor,
                                                          rmm::cuda_stream_view stream,
                                                          rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   cudf::size_type const o_num_rows = scale_factor * 1'500'000;
 
   // Generate the `o_orderkey` column
@@ -281,7 +269,7 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const o_num_rows = orders_independent.num_rows();
   // Generate the `lineitem` table. For each row in the `orders` table,
   // we have a random number (between 1 and 7) of rows in the `lineitem` table
@@ -321,16 +309,10 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
   auto l_quantity = generate_random_numeric_column<int8_t>(1, 50, l_num_rows, stream, mr);
 
   // Generate the `l_discount` column
-  auto l_discount = [&]() {
-    auto const col = generate_random_numeric_column<double>(0.00, 0.10, l_num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto l_discount = generate_random_numeric_column<double>(0.00, 0.10, l_num_rows, stream, mr);
 
   // Generate the `l_tax` column
-  auto l_tax = [&]() {
-    auto const col = generate_random_numeric_column<double>(0.00, 0.08, l_num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto l_tax = generate_random_numeric_column<double>(0.00, 0.08, l_num_rows, stream, mr);
 
   // Get the orderdate column from the `l_base` table
   auto const ol_orderdate_ts = std::move(l_base_columns[1]);
@@ -397,7 +379,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const pred =
       cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref, current_date_literal);
     auto mask = cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), pred, stream, mr);
-    auto mask_index_type      = cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8});
+    auto mask_index_type =
+      cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8}, stream, mr);
     auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1}).release();
     auto const keys           = cudf::test::strings_column_wrapper({"O", "F"}).release();
     auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
@@ -457,7 +440,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
                                                        rmm::cuda_stream_view stream,
                                                        rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   auto const l_linestatus_mask = lineitem_partial.column(0);
   auto const l_orderkey        = lineitem_partial.column(1);
   auto const l_extendedprice   = lineitem_partial.column(6);
@@ -483,7 +466,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     requests[1].values = l_linestatus_mask;
 
     // Perform the aggregations
-    auto agg_result = gb.aggregate(requests);
+    auto agg_result = gb.aggregate(requests, stream, mr);
 
     // Create a `table_view` out of the `l_orderkey`, `count`, and `sum` columns
     auto const count = std::move(agg_result.second[0].results[0]);
@@ -502,9 +485,9 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     auto const count_ref = cudf::ast::column_reference(1);
     auto const sum_ref   = cudf::ast::column_reference(2);
     auto const expr_a    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, sum_ref, count_ref);
-    auto const mask_a    = cudf::compute_column(table, expr_a);
-    auto const o_orderstatus_intermediate =
-      cudf::copy_if_else(cudf::string_scalar("O"), cudf::string_scalar("F"), mask_a->view());
+    auto const mask_a    = cudf::compute_column(table, expr_a, stream, mr);
+    auto const o_orderstatus_intermediate = cudf::copy_if_else(
+      cudf::string_scalar("O"), cudf::string_scalar("F"), mask_a->view(), stream, mr);
 
     // Then, we evaluate an expression `sum == 0` and generate a boolean mask
     auto zero_scalar        = cudf::numeric_scalar<cudf::size_type>(0);
@@ -515,9 +498,9 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, zero_literal);
     auto const expr_b =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_b_left, expr_b_right);
-    auto const mask_b = cudf::compute_column(table, expr_b);
+    auto const mask_b = cudf::compute_column(table, expr_b, stream, mr);
     return cudf::copy_if_else(
-      cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view());
+      cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view(), stream, mr);
   }();
   orders_dependent_columns.push_back(std::move(o_orderstatus));
 
@@ -532,8 +515,8 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     requests.push_back(cudf::groupby::aggregation_request());
     requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     requests[0].values = l_charge->view();
-    auto agg_result    = gb.aggregate(requests);
-    return cudf::round(agg_result.second[0].results[0]->view(), 2);
+    auto agg_result    = gb.aggregate(requests, stream, mr);
+    return std::move(agg_result.second[0].results[0]);
   }();
   orders_dependent_columns.push_back(std::move(o_totalprice));
   return std::make_unique<cudf::table>(std::move(orders_dependent_columns));
@@ -550,7 +533,7 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Define the number of rows in the `part` and `partsupp` tables
   cudf::size_type const p_num_rows  = scale_factor * 200'000;
   cudf::size_type const ps_num_rows = scale_factor * 800'000;
@@ -570,10 +553,8 @@ std::unique_ptr<cudf::table> generate_partsupp(double scale_factor,
   auto ps_availqty = generate_random_numeric_column<int16_t>(1, 9999, ps_num_rows, stream, mr);
 
   // Generate the `ps_supplycost` column
-  auto ps_supplycost = [&]() {
-    auto const col = generate_random_numeric_column<double>(1.00, 1000.00, ps_num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto ps_supplycost =
+    generate_random_numeric_column<double>(1.00, 1000.00, ps_num_rows, stream, mr);
 
   // Generate the `ps_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
@@ -600,7 +581,7 @@ std::unique_ptr<cudf::table> generate_part(double scale_factor,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   cudf::size_type const num_rows = scale_factor * 200'000;
 
   // Generate the `p_partkey` column
@@ -726,7 +707,7 @@ generate_orders_lineitem_part(double scale_factor,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Generate a table with the independent columns of the `orders` table
   auto orders_independent = generate_orders_independent(scale_factor, stream, mr);
 
@@ -746,15 +727,14 @@ generate_orders_lineitem_part(double scale_factor,
     auto joined_table_columns = joined_table->release();
     auto const l_quantity     = std::move(joined_table_columns[1]);
     auto const l_quantity_fp =
-      cudf::cast(l_quantity->view(), cudf::data_type{cudf::type_id::FLOAT64});
+      cudf::cast(l_quantity->view(), cudf::data_type{cudf::type_id::FLOAT64}, stream, mr);
     auto const p_retailprice = std::move(joined_table_columns[3]);
-    auto const col           = cudf::binary_operation(l_quantity_fp->view(),
-                                            p_retailprice->view(),
-                                            cudf::binary_operator::MUL,
-                                            cudf::data_type{cudf::type_id::FLOAT64},
-                                            stream,
-                                            mr);
-    return cudf::round(col->view(), 2);
+    return cudf::binary_operation(l_quantity_fp->view(),
+                                  p_retailprice->view(),
+                                  cudf::binary_operator::MUL,
+                                  cudf::data_type{cudf::type_id::FLOAT64},
+                                  stream,
+                                  mr);
   }();
 
   // Insert the `l_extendedprice` column into the partial columns of the `lineitem` table
@@ -794,7 +774,7 @@ std::unique_ptr<cudf::table> generate_supplier(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 10'000;
 
@@ -826,10 +806,7 @@ std::unique_ptr<cudf::table> generate_supplier(double scale_factor,
   auto s_phone = generate_phone_column(num_rows, stream, mr);
 
   // Generate the `s_acctbal` column
-  auto s_acctbal = [&]() {
-    auto const col = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto s_acctbal = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
 
   // Generate the `s_comment` column
   // NOTE: This column is not compliant with clause 4.2.2.10 of the TPC-H specification
@@ -858,7 +835,7 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Calculate the number of rows based on the scale factor
   cudf::size_type const num_rows = scale_factor * 150'000;
 
@@ -890,10 +867,7 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
   auto c_phone = generate_phone_column(num_rows, stream, mr);
 
   // Generate the `c_acctbal` column
-  auto c_acctbal = [&]() {
-    auto const col = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
-    return cudf::round(col->view(), 2);
-  }();
+  auto c_acctbal = generate_random_numeric_column<double>(-999.99, 9999.99, num_rows, stream, mr);
 
   // Generate the `c_mktsegment` column
   auto c_mktsegment = generate_random_string_column_from_set(
@@ -928,7 +902,7 @@ std::unique_ptr<cudf::table> generate_customer(double scale_factor,
 std::unique_ptr<cudf::table> generate_nation(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Define the number of rows
   constexpr cudf::size_type num_rows = 25;
 
@@ -968,7 +942,7 @@ std::unique_ptr<cudf::table> generate_nation(rmm::cuda_stream_view stream,
 std::unique_ptr<cudf::table> generate_region(rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
 {
-  CUDF_FUNC_RANGE();
+  CUDF_BENCHMARK_RANGE();
   // Define the number of rows
   constexpr cudf::size_type num_rows = 5;
 

@@ -1,4 +1,5 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stddef cimport size_t
 from libc.stdint cimport int32_t
 from libcpp cimport bool
@@ -15,6 +16,7 @@ from pylibcudf.libcudf.types cimport (
     null_policy,
     order,
     size_type,
+    udf_source_type,
 )
 
 
@@ -61,6 +63,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         MERGE_TDIGEST
         HISTOGRAM
         MERGE_HISTOGRAM
+        BITWISE_AGG
 
     cdef cppclass aggregation:
         Kind kind
@@ -83,10 +86,6 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef cppclass scan_aggregation(aggregation):
         pass
 
-    cpdef enum class udf_type(bool):
-        CUDA
-        PTX
-
     cpdef enum class correlation_type(int32_t):
         PEARSON
         KENDALL
@@ -107,6 +106,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         NONE
         ZERO_NORMALIZED
         ONE_NORMALIZED
+
+    cpdef enum class bitwise_op(int32_t):
+        AND
+        OR
+        XOR
 
     cdef unique_ptr[T] make_sum_aggregation[T]() except +libcudf_exception_handler
 
@@ -163,7 +167,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     ) except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_udf_aggregation[T](
-        udf_type type,
+        udf_source_type type,
         string user_defined_aggregator,
         data_type output_type) except +libcudf_exception_handler
 
@@ -208,3 +212,22 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     cdef unique_ptr[T] make_merge_m2_aggregation[T]() except +libcudf_exception_handler
 
     cdef unique_ptr[T] make_m2_aggregation[T]() except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_bitwise_aggregation[T](
+        bitwise_op op
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_lag_aggregation[T](
+        size_type offset
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_lead_aggregation[T](
+        size_type offset
+    ) except +libcudf_exception_handler
+
+    cdef unique_ptr[T] make_row_number_aggregation[T](
+    ) except +libcudf_exception_handler
+
+    bool is_valid_aggregation(
+        data_type source, Kind kind
+    ) noexcept

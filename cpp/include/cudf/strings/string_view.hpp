@@ -1,25 +1,16 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/types.hpp>
 
-#include <cuda_runtime.h>
+#include <cuda/std/iterator>
 
-#include <iterator>
+#ifndef __CUDACC_RTC__
+#include <cuda_runtime.h>
+#endif
 
 /**
  * @file
@@ -79,7 +70,7 @@ class string_view {
     using value_type        = char_utf8;
     using reference         = char_utf8&;
     using pointer           = char_utf8*;
-    using iterator_category = std::input_iterator_tag;
+    using iterator_category = cuda::std::input_iterator_tag;
     __device__ inline const_iterator(string_view const& str, size_type pos);
     const_iterator(const_iterator const& mit)        = default;
     const_iterator(const_iterator&& mit)             = default;

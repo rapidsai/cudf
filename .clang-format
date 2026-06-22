@@ -56,7 +56,7 @@ BreakConstructorInitializers: BeforeColon
 BreakInheritanceList: BeforeColon
 BreakStringLiterals: true
 ColumnLimit: 100
-CommentPragmas: '^ IWYU pragma:'
+CommentPragmas: '(IWYU pragma:|SPDX-)'
 CompactNamespaces: false
 ConstructorInitializerAllOnOneLineOrOnePerLine: true
 # Kept the below 2 to be the same as `IndentWidth` to keep everything uniform
@@ -81,9 +81,9 @@ IncludeCategories:
     Priority:        3
   - Regex:           '^<cudf/' # cuDF includes
     Priority:        4
-  - Regex:           '^<(nvtext|cudf_kafka)' # other libcudf includes
+  - Regex:           '^<(nvtext|cudf_kafka|cudf_streaming)' # other libcudf includes
     Priority:        5
-  - Regex:           '^<(cugraph|cuml|cuspatial|raft|kvikio)' # Other RAPIDS includes
+  - Regex:           '^<(cugraph|cuml|raft|kvikio)' # Other RAPIDS includes
     Priority:        6
   - Regex:           '^<rmm/' # RMM includes
     Priority:        7
@@ -168,7 +168,7 @@ SpacesInContainerLiterals: true
 SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
 SpacesInSquareBrackets: false
-Standard: c++17
+Standard: c++20
 StatementMacros:
   - Q_UNUSED
   - QT_REQUIRE_VERSION

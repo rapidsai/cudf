@@ -1,37 +1,31 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "io/comp/common.hpp"
 #include "io/orc/reader_impl.hpp"
 #include "io/orc/reader_impl_chunking.hpp"
 #include "io/orc/reader_impl_helpers.hpp"
 #include "io/utilities/hostdevice_span.hpp"
 
 #include <cudf/detail/timezone.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/logger.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
 
 #include <algorithm>
+#include <numeric>
 #include <tuple>
 
 namespace cudf::io::orc::detail {
@@ -156,8 +150,8 @@ std::vector<range> find_splits(host_span<T const> cumulative_sizes,
   auto const end = start + cumulative_sizes.size();
 
   while (cur_count < total_count) {
-    int64_t split_pos = static_cast<int64_t>(
-      thrust::distance(start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit)));
+    int64_t split_pos = static_cast<int64_t>(cuda::std::distance(
+      start, thrust::lower_bound(thrust::seq, start + cur_pos, end, size_limit)));
 
     // If we're past the end, or if the returned range has size exceeds the given size limit,
     // move back one position.
@@ -257,9 +251,13 @@ void reader_impl::preprocess_file(read_mode mode)
         });
       });
 
-    return has_timestamp_column ? cudf::detail::make_timezone_transition_table(
-                                    {}, selected_stripes[0].stripe_footer->writerTimezone, _stream)
-                                : std::make_unique<cudf::table>();
+    return (has_timestamp_column && !_options.ignore_timezone_in_stripe_footer)
+             ? cudf::detail::make_timezone_transition_table(
+                 {},
+                 selected_stripes[0].stripe_footer->writerTimezone,
+                 _stream,
+                 cudf::get_current_device_resource_ref())
+             : std::make_unique<cudf::table>();
   }();
 
   //
@@ -434,12 +432,12 @@ void reader_impl::preprocess_file(read_mode mode)
 
   // Compute the prefix sum of stripes' data sizes.
   total_stripe_sizes.host_to_device_async(_stream);
-  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                          total_stripe_sizes.d_begin(),
                          total_stripe_sizes.d_end(),
                          total_stripe_sizes.d_begin(),
                          cumulative_size_plus{});
-  total_stripe_sizes.device_to_host_sync(_stream);
+  total_stripe_sizes.device_to_host(_stream);
 
   auto const load_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *
@@ -527,9 +525,10 @@ void reader_impl::load_next_stripe_data(read_mode mode)
     host_read_buffers.emplace_back(fut.get());
     auto* host_buffer = host_read_buffers.back().get();
     CUDF_EXPECTS(host_buffer->size() == expected_size, "Unexpected discrepancy in bytes read.");
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      dev_dst, host_buffer->data(), host_buffer->size(), cudaMemcpyDefault, _stream.value()));
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(dev_dst, host_buffer->data(), host_buffer->size(), _stream));
   }
+  _stream.synchronize();
 
   for (auto& task : device_read_tasks) {  // if there were device reads
     CUDF_EXPECTS(task.first.get() == task.second, "Unexpected discrepancy in bytes read.");
@@ -679,7 +678,7 @@ void reader_impl::load_next_stripe_data(read_mode mode)
                                    decompressor.GetBlockSize(),
                                    decompressor.GetLog2MaxCompressionRatio(),
                                    _stream);
-      compinfo.device_to_host_sync(_stream);
+      compinfo.device_to_host(_stream);
 
       for (auto stream_idx = stream_range.begin; stream_idx < stream_range.end; ++stream_idx) {
         auto const& info           = stream_info[stream_idx];
@@ -688,7 +687,8 @@ void reader_impl::load_next_stripe_data(read_mode mode)
         // Cache these parsed numbers so they can be reused in the decompression/decoding step.
         compinfo_map[info.source] = {stream_compinfo.num_compressed_blocks,
                                      stream_compinfo.num_uncompressed_blocks,
-                                     stream_compinfo.max_uncompressed_size};
+                                     stream_compinfo.max_uncompressed_size,
+                                     stream_compinfo.max_uncompressed_block_size};
         stripe_decomp_sizes[info.source.stripe_idx - stripe_start].size_bytes +=
           stream_compinfo.max_uncompressed_size;
       }
@@ -704,12 +704,12 @@ void reader_impl::load_next_stripe_data(read_mode mode)
 
   // Compute the prefix sum of stripe data sizes and rows.
   stripe_decomp_sizes.host_to_device_async(_stream);
-  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(_stream, cudf::get_current_device_resource_ref()),
                          stripe_decomp_sizes.d_begin(),
                          stripe_decomp_sizes.d_end(),
                          stripe_decomp_sizes.d_begin(),
                          cumulative_size_plus{});
-  stripe_decomp_sizes.device_to_host_sync(_stream);
+  stripe_decomp_sizes.device_to_host(_stream);
 
   auto const decode_limit = [&] {
     auto const tmp = static_cast<std::size_t>(_chunk_read_data.pass_read_limit *

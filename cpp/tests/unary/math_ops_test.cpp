@@ -1,28 +1,19 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/unary.hpp>
 
+#include <bitset>
 #include <numeric>
 #include <vector>
 
@@ -87,6 +78,76 @@ TEST_F(UnaryNegateComplexTypesErrorTests, NegateListsColumnFail)
 {
   cudf::test::lists_column_wrapper<int32_t> input{{1, 2}, {3, 4}};
   EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::NEGATE), cudf::logic_error);
+}
+
+struct UnaryBitwiseOpsBoolTest : public cudf::test::BaseFixture {};
+
+template <typename T>
+struct UnaryBitwiseOpsTypedTest : public cudf::test::BaseFixture {};
+TYPED_TEST_SUITE(UnaryBitwiseOpsTypedTest, cudf::test::IntegralTypesNotBool);
+
+TEST_F(UnaryBitwiseOpsBoolTest, BitCountBool)
+{
+  using T          = bool;
+  auto const data  = std::vector<T>{true, false, true, true, false, true, false, false};
+  auto const input = cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end());
+
+  std::vector<int32_t> expected_data(data.size());
+  std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) {
+    return static_cast<int32_t>(val);
+  });
+  auto const expected =
+    cudf::test::fixed_width_column_wrapper<int32_t>(expected_data.begin(), expected_data.end());
+  auto const output = cudf::unary_operation(input, cudf::unary_operator::BIT_COUNT);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+}
+
+TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCount)
+{
+  using T         = TypeParam;
+  auto const data = [] {
+    std::vector<T> data(15);
+    std::iota(data.begin(), data.end(), 1);
+    return data;
+  }();
+  auto const input = cudf::test::fixed_width_column_wrapper<T>(data.begin(), data.end());
+
+  std::vector<int32_t> expected_data(data.size());
+  std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) {
+    using UnsignedT      = std::conditional_t<std::is_same_v<T, bool>, T, std::make_unsigned_t<T>>;
+    auto constexpr nbits = CHAR_BIT * sizeof(T);
+    auto const b         = std::bitset<nbits>(static_cast<UnsignedT>(val));
+    return b.count();
+  });
+  auto const expected =
+    cudf::test::fixed_width_column_wrapper<int32_t>(expected_data.begin(), expected_data.end());
+  auto const output = cudf::unary_operation(input, cudf::unary_operator::BIT_COUNT);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
+}
+
+TYPED_TEST(UnaryBitwiseOpsTypedTest, BitCountWithNulls)
+{
+  using T         = TypeParam;
+  auto const data = [] {
+    std::vector<T> data(15);
+    std::iota(data.begin(), data.end(), 1);
+    return data;
+  }();
+  auto const validity = cudf::test::iterators::nulls_at({2, 5, 9, 12});
+  auto const input =
+    cudf::test::fixed_width_column_wrapper<TypeParam>(data.begin(), data.end(), validity);
+
+  std::vector<int32_t> expected_data(data.size());
+  std::transform(data.begin(), data.end(), expected_data.begin(), [](T val) {
+    using UnsignedT      = std::conditional_t<std::is_same_v<T, bool>, T, std::make_unsigned_t<T>>;
+    auto constexpr nbits = CHAR_BIT * sizeof(T);
+    auto const b         = std::bitset<nbits>(static_cast<UnsignedT>(val));
+    return b.count();
+  });
+  auto const expected = cudf::test::fixed_width_column_wrapper<int32_t>(
+    expected_data.begin(), expected_data.end(), validity);
+  auto const output = cudf::unary_operation(input, cudf::unary_operator::BIT_COUNT);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, output->view());
 }
 
 template <typename T>
@@ -466,11 +527,14 @@ TYPED_TEST(UnaryMathFloatOpsTest, RINTNonFloatingFail)
 
 TYPED_TEST(UnaryMathFloatOpsTest, IntegralTypeFail)
 {
-  cudf::test::fixed_width_column_wrapper<TypeParam> input{1.0};
-  EXPECT_THROW(cudf::unary_operation(input, cudf::unary_operator::BIT_INVERT), cudf::logic_error);
-  auto d = cudf::dictionary::encode(input);
-  EXPECT_THROW(cudf::unary_operation(d->view(), cudf::unary_operator::BIT_INVERT),
-               cudf::logic_error);
+  auto const test = [](auto const op_type) {
+    cudf::test::fixed_width_column_wrapper<TypeParam> input{1.0};
+    EXPECT_THROW(cudf::unary_operation(input, op_type), cudf::logic_error);
+    auto d = cudf::dictionary::encode(input);
+    EXPECT_THROW(cudf::unary_operation(d->view(), op_type), cudf::logic_error);
+  };
+  test(cudf::unary_operator::BIT_INVERT);
+  test(cudf::unary_operator::BIT_COUNT);
 }
 
 TYPED_TEST(UnaryMathFloatOpsTest, SimpleCBRT)

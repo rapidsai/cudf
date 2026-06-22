@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -19,6 +8,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find_multiple.hpp>
@@ -34,10 +24,11 @@
 #include <cooperative_groups.h>
 #include <cub/cub.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/equal.h>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
@@ -149,7 +140,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
     // if not found, continue to next byte
     if ((byte_ptr == last_ptr) || (*byte_ptr != chr)) { continue; }
     // compute index of matched byte
-    auto const offset_idx = static_cast<size_type>(thrust::distance(d_first_bytes, byte_ptr));
+    auto const offset_idx = static_cast<size_type>(cuda::std::distance(d_first_bytes, byte_ptr));
     auto map_idx          = d_offsets[offset_idx];
     auto const last_idx = (offset_idx + 1) < unique_count ? d_offsets[offset_idx + 1] : num_targets;
     // check for targets that begin with chr
@@ -190,7 +181,7 @@ CUDF_KERNEL void multi_contains_kernel(column_device_view const d_strings,
 std::unique_ptr<table> contains_multiple(strings_column_view const& input,
                                          strings_column_view const& targets,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(
     not targets.is_empty(), "Must specify at least one target string.", std::invalid_argument);
@@ -208,11 +199,11 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       cuda::proclaim_return_type<u_char>([] __device__(auto const& d_tgt) -> u_char {
         return d_tgt.empty() ? u_char{0} : static_cast<u_char>(d_tgt.data()[0]);
       }));
-    auto count_itr = thrust::make_counting_iterator<size_type>(0);
+    auto count_itr = cuda::counting_iterator<size_type>{0};
     auto keys_out  = first_bytes.begin();
     auto vals_out  = indices.begin();
     auto num_items = targets.size();
-    auto cmp_op    = thrust::less();
+    auto cmp_op    = cuda::std::less();
     auto sv        = stream.value();
 
     std::size_t tmp_bytes = 0;
@@ -225,11 +216,16 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
 
   // remove duplicates to help speed up lower_bound
   auto offsets = rmm::device_uvector<size_type>(targets.size(), stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream), offsets.begin(), offsets.end());
-  auto const end = thrust::unique_by_key(
-    rmm::exec_policy_nosync(stream), first_bytes.begin(), first_bytes.end(), offsets.begin());
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   offsets.begin(),
+                   offsets.end());
+  auto const end =
+    thrust::unique_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          first_bytes.begin(),
+                          first_bytes.end(),
+                          offsets.begin());
   auto const unique_count =
-    static_cast<size_type>(thrust::distance(first_bytes.begin(), end.first));
+    static_cast<size_type>(cuda::std::distance(first_bytes.begin(), end.first));
 
   // create output columns
   auto const results_iter = cudf::detail::make_counting_transform_iterator(0, [&](int i) {
@@ -248,7 +244,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
       });
     auto host_results_pointers =
       std::vector<bool*>(host_results_pointer_iter, host_results_pointer_iter + results.size());
-    return cudf::detail::make_device_uvector_async(host_results_pointers, stream, mr);
+    return cudf::detail::make_device_uvector(host_results_pointers, stream, mr);
   }();
 
   constexpr cudf::thread_index_type block_size = 256;
@@ -275,6 +271,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
                                                                            unique_count,
                                                                            nullptr,
                                                                            d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     constexpr cudf::thread_index_type tile_size = cudf::detail::warp_size;
 
@@ -296,6 +293,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
         unique_count,
         working_memory.data(),
         d_results);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return std::make_unique<table>(std::move(results));
@@ -306,7 +304,7 @@ std::unique_ptr<table> contains_multiple(strings_column_view const& input,
 std::unique_ptr<table> contains_multiple(strings_column_view const& strings,
                                          strings_column_view const& targets,
                                          rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+                                         rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::contains_multiple(strings, targets, stream, mr);

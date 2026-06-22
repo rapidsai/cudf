@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
@@ -22,21 +11,38 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
-
 #include <functional>
 #include <numeric>
 
 namespace cudf {
+
+template <typename A, typename B>
+inline constexpr bool layout_compatible = (sizeof(A) == sizeof(B)) && (alignof(A) == alignof(B));
+
+static_assert(
+  layout_compatible<detail::column_device_view_base, column_device_view_core>,
+  "detail::column_device_view_base and column_device_view_core must be layout-compatible");
+static_assert(layout_compatible<column_device_view_core, column_device_view>,
+              "column_device_view_core and column_device_view must be layout-compatible");
+
+static_assert(
+  layout_compatible<detail::column_device_view_base, mutable_column_device_view_core>,
+  "detail::column_device_view_base and mutable_column_device_view_core must be layout-compatible");
+static_assert(
+  layout_compatible<mutable_column_device_view_core, mutable_column_device_view>,
+  "mutable_column_device_view_core and mutable_column_device_view must be layout-compatible");
+
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
-  : detail::column_device_view_base{source.type(),
-                                    source.size(),
-                                    source.head(),
-                                    source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+  : column_device_view_core{source.type(),
+                            source.size(),
+                            source.head(),
+                            source.null_count(),
+                            source.null_mask(),
+                            source.offset(),
+                            nullptr,
+                            source.num_children()}
+
 {
 }
 
@@ -62,7 +68,7 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
   // A buffer of CPU memory is allocated to hold the ColumnDeviceView
   // objects. Once filled, the CPU memory is copied to device memory
   // and then set into the d_children member pointer.
-  auto staging_buffer = detail::make_host_vector<char>(descendant_storage_bytes, stream);
+  auto staging_buffer = detail::make_pinned_vector_async<char>(descendant_storage_bytes, stream);
 
   // Each ColumnDeviceView instance may have child objects that
   // require setting some internal device pointers before being copied
@@ -79,7 +85,6 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
 
   // copy the CPU memory with all the children into device memory
   detail::cuda_memcpy<char>(*descendant_storage, staging_buffer, stream);
-
   return result;
 }
 
@@ -88,14 +93,16 @@ create_device_view_from_view(ColumnView const& source, rmm::cuda_stream_view str
 // Place any child objects in host memory (h_ptr) and use the device
 // memory ptr (d_ptr) to set any child object pointers.
 column_device_view::column_device_view(column_view source, void* h_ptr, void* d_ptr)
-  : detail::column_device_view_base{source.type(),
-                                    source.size(),
-                                    source.head(),
-                                    source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+  : column_device_view_core{source.type(),
+                            source.size(),
+                            source.head(),
+                            source.null_count(),
+                            source.null_mask(),
+                            source.offset(),
+                            nullptr,
+                            source.num_children()}
 {
-  d_children = detail::child_columns_to_device_array<column_device_view>(
+  _children = detail::child_columns_to_device_array<column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 
@@ -114,8 +121,8 @@ column_device_view::create(column_view source, rmm::cuda_stream_view stream)
 
 std::size_t column_device_view::extent(column_view const& source)
 {
-  auto get_extent = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [&source](auto i) { return extent(source.child(i)); });
+  auto get_extent = cudf::detail::make_counting_transform_iterator(
+    cudf::size_type{0}, [&source](auto i) { return extent(source.child(i)); });
 
   return std::accumulate(
     get_extent, get_extent + source.num_children(), sizeof(column_device_view));
@@ -123,26 +130,28 @@ std::size_t column_device_view::extent(column_view const& source)
 
 // For use with inplace-new to pre-fill memory to be copied to device
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source)
-  : detail::column_device_view_base{source.type(),
+  : mutable_column_device_view_core{source.type(),
                                     source.size(),
                                     source.head(),
                                     source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+                                    source.offset(),
+                                    nullptr,
+                                    source.num_children()}
 {
 }
 
 mutable_column_device_view::mutable_column_device_view(mutable_column_view source,
                                                        void* h_ptr,
                                                        void* d_ptr)
-  : detail::column_device_view_base{source.type(),
+  : mutable_column_device_view_core{source.type(),
                                     source.size(),
                                     source.head(),
                                     source.null_mask(),
-                                    source.offset()},
-    _num_children{source.num_children()}
+                                    source.offset(),
+                                    nullptr,
+                                    source.num_children()}
 {
-  d_children = detail::child_columns_to_device_array<mutable_column_device_view>(
+  _children = detail::child_columns_to_device_array<mutable_column_device_view>(
     source.child_begin(), source.child_end(), h_ptr, d_ptr);
 }
 
@@ -161,8 +170,8 @@ mutable_column_device_view::create(mutable_column_view source, rmm::cuda_stream_
 
 std::size_t mutable_column_device_view::extent(mutable_column_view source)
 {
-  auto get_extent = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), [&source](auto i) { return extent(source.child(i)); });
+  auto get_extent = cudf::detail::make_counting_transform_iterator(
+    cudf::size_type{0}, [&source](auto i) { return extent(source.child(i)); });
 
   return std::accumulate(
     get_extent, get_extent + source.num_children(), sizeof(mutable_column_device_view));

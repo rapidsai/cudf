@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -21,13 +10,13 @@
 
 #pragma once
 
-#include "parquet.hpp"
 #include "parquet_gpu.hpp"
 
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/parquet.hpp>
 #include <cudf/io/parquet.hpp>
+#include <cudf/io/parquet_schema.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -54,7 +43,7 @@ class writer::impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param sink data_sink's for storing dataset
+   * @param sinks data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -67,7 +56,7 @@ class writer::impl {
   /**
    * @brief Constructor with chunked writer options.
    *
-   * @param sink data_sink's for storing dataset
+   * @param sinks data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -81,6 +70,11 @@ class writer::impl {
    * @brief Destructor to complete any incomplete write and release resources.
    */
   ~impl();
+
+  impl(impl const&)            = delete;
+  impl& operator=(impl const&) = delete;
+  impl(impl&&)                 = delete;
+  impl& operator=(impl&&)      = delete;
 
   /**
    * @brief Initializes the states before writing.
@@ -110,9 +104,11 @@ class writer::impl {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
-   * `column_chunks_file_path` is provided, else null.
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output
+   * metadata
+   * @return A parquet-compatible blob that contains the file header and footer metadata. If
+   * `column_chunks_file_path` is non-empty, the output metadata blob will also have row group file
+   * paths set.
    */
   std::unique_ptr<std::vector<uint8_t>> close(
     std::vector<std::string> const& column_chunks_file_path = {});
@@ -156,6 +152,7 @@ class writer::impl {
   bool const _int96_timestamps;
   bool const _utc_timestamps;
   bool const _write_v2_headers;
+  bool const _page_level_compression;
   bool const _write_arrow_schema;
   std::optional<std::vector<sorting_column>> _sorting_columns;
   int32_t const _column_index_truncate_length;

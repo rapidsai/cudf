@@ -1,11 +1,42 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
-def to_integers(input: Column, output_type: DataType) -> Column: ...
-def from_integers(integers: Column) -> Column: ...
-def is_integer(input: Column, int_type: DataType | None = None) -> Column: ...
-def hex_to_integers(input: Column, output_type: DataType) -> Column: ...
-def is_hex(input: Column) -> Column: ...
-def integers_to_hex(input: Column) -> Column: ...
+def to_integers(
+    input: Column,
+    output_type: DataType,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def from_integers(
+    integers: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_integer(
+    input: Column,
+    int_type: DataType | None = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def hex_to_integers(
+    input: Column,
+    output_type: DataType,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_hex(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def integers_to_hex(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...

@@ -1,38 +1,28 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/detail/stream_compaction.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/stream_compaction.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/mr/device/device_memory_resource.hpp>
-
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace lists::detail {
 
 /**
  * @copydoc cudf::lists::apply_boolean_mask
+ *
+ * @param mask_kind Specifies how the boolean mask is treated (retentions or deletions)
  */
-std::unique_ptr<column> apply_boolean_mask(lists_column_view const& input,
-                                           lists_column_view const& boolean_mask,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr);
+std::unique_ptr<column> apply_mask(lists_column_view const& input,
+                                   lists_column_view const& boolean_mask,
+                                   cudf::detail::mask_type mask_kind,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::device_async_resource_ref mr);
 
 /**
  * @copydoc cudf::lists::distinct(lists_column_view const&, null_equality, nan_equality,
@@ -45,15 +35,5 @@ std::unique_ptr<column> distinct(lists_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr);
 
-/**
- * @copydoc cudf::lists::distinct(lists_column_view const&, null_equality, nan_equality,
- * rmm::cuda_stream_view stream, rmm::device_async_resource_ref)
- */
-[[deprecated]] std::unique_ptr<column> distinct(lists_column_view const& input,
-                                                null_equality nulls_equal,
-                                                nan_equality nans_equal,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
-
 }  // namespace lists::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

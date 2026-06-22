@@ -1,29 +1,18 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/block_utils.cuh"
 #include "io/utilities/column_buffer.hpp"
 #include "orc_gpu.hpp"
 
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/io/orc_types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cub/cub.cuh>
+#include <cuda/functional>
 
 namespace cudf::io::orc::detail {
 
@@ -389,7 +378,6 @@ inline __device__ uint32_t bytestream_readu32(orc_bytestream_s* bs, int pos)
  *
  * @param[in] bs Byte stream input
  * @param[in] pos Position in byte stream
- * @param[in] numbits number of bits
  * @return bits
  */
 inline __device__ uint64_t bytestream_readu64(orc_bytestream_s* bs, int pos)
@@ -1176,10 +1164,12 @@ static const __device__ __constant__ int64_t kPow5i[28] = {1,
  * @brief ORC Decimal decoding (unbounded base-128 varints)
  *
  * @param[in] bs Input byte stream
+ * @param[in] scratch Scratch buffer for intermediate results
  * @param[in,out] vals on input: scale from secondary stream, on output: value
  * @param[in] val_scale Scale of each value
- * @param[in] col_scale Scale from schema to which value will be adjusted
  * @param[in] numvals Number of values to decode
+ * @param[in] dtype_id Data type identifier for the decimal column
+ * @param[in] col_scale Scale from schema to which value will be adjusted
  * @param[in] t thread id
  *
  * @return number of values decoded
@@ -1213,10 +1203,14 @@ static __device__ int decode_decimals(orc_bytestream_s* bs,
     }
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
+
+    __int128_t v = 0;
     if (t >= num_vals_read and t < num_vals_to_read) {
       auto const pos = static_cast<int>(vals.i64[2 * t]);
-      __int128_t v   = decode_varint128(bs, pos);
-
+      v              = decode_varint128(bs, pos);
+    }
+    __syncthreads();
+    if (t >= num_vals_read and t < num_vals_to_read) {
       auto const scaled_value = [&]() {
         // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
         // val_scale. So the difference of them will be used to add 0s or remove digits.
@@ -1229,6 +1223,7 @@ static __device__ int decode_decimals(orc_bytestream_s* bs,
           return (v / kPow5i[abs_scale]) >> abs_scale;
         }
       }();
+
       if (dtype_id == type_id::DECIMAL32) {
         vals.i32[t] = scaled_value;
       } else if (dtype_id == type_id::DECIMAL64) {
@@ -1510,17 +1505,17 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
       } else {
         row_plus1 = 0;
       }
+      __syncthreads();
       if (t == nrows - 1) { s->u.rowdec.nz_count = min(nz_count, s->top.data.max_vals); }
       __syncthreads();
 
       // TBD: Brute-forcing this, there might be a more efficient way to find the thread with the
       // last row
       last_row = (nz_count == s->u.rowdec.nz_count) ? row_plus1 : 0;
-      last_row = block_reduce(temp_storage).Reduce(last_row, cudf::detail::maximum{});
+      last_row = block_reduce(temp_storage).Reduce(last_row, cuda::maximum{});
       nz_pos   = (valid) ? nz_count : 0;
       if (t == 0) { s->top.data.nrows = last_row; }
       if (valid && nz_pos - 1 < s->u.rowdec.nz_count) { s->u.rowdec.row[nz_pos - 1] = row_plus1; }
-      __syncthreads();
     } else {
       // All values are valid
       nrows = min(nrows, s->top.data.max_vals - s->u.rowdec.nz_count);
@@ -1530,8 +1525,8 @@ static __device__ void DecodeRowPositions(orcdec_state_s* s,
         s->top.data.nrows += nrows;
         s->u.rowdec.nz_count += nrows;
       }
-      __syncthreads();
     }
+    __syncthreads();
   }
 }
 
@@ -1597,6 +1592,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   size_t const max_num_rows = s->chunk.column_num_rows;
   __shared__ run_cache_manager run_cache_manager_inst;
   cache_helper cache_helper_inst(run_cache_manager_inst);
+
+  __syncthreads();
   if (t == 0 and is_valid) {
     // If we have an index, seek to the initial run and update row positions
     if (num_rowgroups > 0) {
@@ -1650,17 +1647,17 @@ CUDF_KERNEL void __launch_bounds__(block_size)
     bytestream_fill(&s->bs, t);
     bytestream_fill(&s->bs2, t);
     __syncthreads();
+    uint32_t num_remaining_rows = s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row;
+    if (num_rowgroups > 0 && (s->is_string || s->chunk.type_kind == TIMESTAMP)) {
+      num_remaining_rows +=
+        s->top.data.index.run_pos[is_dictionary(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2];
+    }
     if (t == 0) {
-      uint32_t max_vals = s->chunk.start_row + s->chunk.num_rows - s->top.data.cur_row;
-      if (num_rowgroups > 0 && (s->is_string || s->chunk.type_kind == TIMESTAMP)) {
-        max_vals +=
-          s->top.data.index.run_pos[is_dictionary(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2];
-      }
       s->bs.fill_count  = 0;
       s->bs2.fill_count = 0;
       s->top.data.nrows = 0;
       s->top.data.max_vals =
-        min(max_vals, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
+        min(num_remaining_rows, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
     }
     __syncthreads();
     // Decode data streams
@@ -1733,7 +1730,8 @@ CUDF_KERNEL void __launch_bounds__(block_size)
         if (numvals == 0 && vals_skipped == 0) {
           numvals = s->top.data.max_vals;  // Just so that we don't hang if the stream is corrupted
         }
-        if (t == 0 && numvals < s->top.data.max_vals) { s->top.data.max_vals = numvals; }
+        __syncthreads();
+        if (t == 0) { s->top.data.max_vals = cuda::std::min(s->top.data.max_vals, numvals); }
       }
       __syncthreads();
       // Account for skipped values
@@ -1744,6 +1742,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
+        num_remaining_rows += run_pos;
       }
       // Decode the primary data stream
       if (s->chunk.type_kind == INT || s->chunk.type_kind == DATE || s->chunk.type_kind == SHORT) {
@@ -1767,10 +1766,14 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       } else if (s->chunk.type_kind == BOOLEAN) {
         int n = ((numvals + 7) >> 3);
         if (n > s->top.data.buffered_count) {
+          // we can buffer for extraction up to blockDim.x BYTES at a time,
+          // since that's the max we can save for the next iteration in secondary_val
+          int max_bytes_buffered =
+            min(blockDim.x, (num_remaining_rows + 7) / 8);  // guard against stream end
           numvals = byte_rle(&s->bs,
                              &s->u.rle8,
                              &s->vals.u8[s->top.data.buffered_count],
-                             n - s->top.data.buffered_count,
+                             max_bytes_buffered - s->top.data.buffered_count,
                              t) +
                     s->top.data.buffered_count;
         } else {
@@ -1914,7 +1917,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
               cudf_assert(
-                (s->vals.u64[t + vals_skipped] <= std::numeric_limits<size_type>::max()) and
+                (s->vals.u64[t + vals_skipped] <= cuda::std::numeric_limits<size_type>::max()) and
                 "Number of elements is more than what size_type can handle");
               list_child_elements                   = s->vals.u64[t + vals_skipped];
               static_cast<uint32_t*>(data_out)[row] = list_child_elements;
@@ -1968,17 +1971,24 @@ CUDF_KERNEL void __launch_bounds__(block_size)
             }
             case TIMESTAMP: {
               auto seconds = s->top.data.tz_epoch + duration_s{s->vals.i64[t + vals_skipped]};
-              // Convert to UTC
-              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               duration_ns nanos = duration_ns{(static_cast<int64_t>(secondary_val) >> 3) *
                                               kTimestampNanoScale[secondary_val & 7]};
 
-              // Adjust seconds only for negative timestamps with positive nanoseconds.
-              // Alternative way to represent negative timestamps is with negative nanoseconds
-              // in which case the adjustment in not needed.
-              // Comparing with 999999 instead of zero to match the apache writer.
-              if (seconds.count() < 0 and nanos.count() > 999999) { seconds -= duration_s{1}; }
+              // ORC stores timestamps as a (seconds, nanos) pair where `nanos` is always
+              // non-negative. For a negative timestamp with a fractional part, the Apache writer
+              // rounds `seconds` toward zero and puts the leftover positive remainder into `nanos`.
+              // To recover the true value we subtract one second whenever `seconds < 0` and `nanos`
+              // contributes a non-zero fractional part.
+              //
+              // The threshold is 1 ms (not 1 ns) to match the Apache writer's nanos encoding:
+              // sub-millisecond values round to zero on write, so on read they must not trigger the
+              // borrow.
+              if (seconds.count() < 0 and nanos.count() >= 1'000'000) { seconds -= duration_s{1}; }
+
+              // Convert to UTC after the adjustment above, because the adjustment must run in the
+              // writer's (stored seconds + writer epoch) frame
+              seconds += get_ut_offset(tz_table, timestamp_s{seconds});
 
               static_cast<int64_t*>(data_out)[row] = [&]() {
                 using cuda::std::chrono::duration_cast;
@@ -2062,6 +2072,7 @@ void __host__ decode_nulls_and_string_dictionaries(column_desc* chunks,
   decode_nulls_and_string_dictionaries_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(
       chunks, global_dictionary, num_columns, num_stripes, first_row);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 /**
@@ -2069,14 +2080,15 @@ void __host__ decode_nulls_and_string_dictionaries(column_desc* chunks,
  *
  * @param[in] chunks column_desc device array [stripe][column]
  * @param[in] global_dictionary Global dictionary device array
+ * @param[in] row_groups Optional row index data [row_group][column]
  * @param[in] num_columns Number of columns
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
- * @param[in] row_groups Optional row index data [row_group][column]
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride
  * @param[in] level nesting level being processed
+ * @param[in] error_count Pointer to error count output
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void __host__ decode_column_data(column_desc* chunks,
@@ -2095,6 +2107,7 @@ void __host__ decode_column_data(column_desc* chunks,
   auto const num_blocks = num_columns * (num_rowgroups > 0 ? num_rowgroups : num_stripes);
   decode_column_data_kernel<block_size><<<num_blocks, block_size, 0, stream.value()>>>(
     chunks, global_dictionary, tz_table, row_groups, first_row, rowidx_stride, level, error_count);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::orc::detail

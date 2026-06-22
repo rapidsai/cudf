@@ -1,28 +1,17 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/fst/logical_stack.cuh"
 #include "io/fst/lookup_tables.cuh"
 #include "io/utilities/parsing_utils.cuh"
-#include "io/utilities/string_parsing.hpp"
 #include "nested_json.hpp"
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/utilities/visitor_overload.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -38,12 +27,11 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/device_vector.h>
-#include <thrust/iterator/discard_iterator.h>
+#include <cuda/iterator>
+#include <cuda/std/tuple>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
-#include <thrust/tuple.h>
 
 #include <limits>
 #include <stack>
@@ -131,10 +119,10 @@ constexpr auto NUM_SYMBOL_GROUPS = static_cast<uint32_t>(dfa_symbol_group_id::NU
  */
 struct SymbolPairToSymbolGroupId {
   SymbolT delimiter = '\n';
-  CUDF_HOST_DEVICE SymbolGroupT operator()(thrust::tuple<SymbolT, StackSymbolT> symbol) const
+  CUDF_HOST_DEVICE SymbolGroupT operator()(cuda::std::tuple<SymbolT, StackSymbolT> symbol) const
   {
-    auto const input_symbol = thrust::get<0>(symbol);
-    auto const stack_symbol = thrust::get<1>(symbol);
+    auto const input_symbol = cuda::std::get<0>(symbol);
+    auto const stack_symbol = cuda::std::get<1>(symbol);
     return static_cast<SymbolGroupT>(
       input_symbol == delimiter
         ? dfa_symbol_group_id::DELIMITER
@@ -154,7 +142,7 @@ struct TransduceInputOp {
                                                      SymbolT const read_symbol) const
   {
     if (state_id == static_cast<StateT>(dfa_states::EXCESS)) { return '_'; }
-    return thrust::get<1>(read_symbol);
+    return cuda::std::get<1>(read_symbol);
   }
 
   template <typename SymbolT>
@@ -226,9 +214,9 @@ std::array<std::vector<PdaTokenT>, NUM_SYMBOL_GROUPS - 1> const symbol_groups{{
 struct UnwrapTokenFromSymbolOp {
   template <typename SymbolGroupLookupTableT>
   CUDF_HOST_DEVICE SymbolGroupT operator()(SymbolGroupLookupTableT const& sgid_lut,
-                                           thrust::tuple<PdaTokenT, SymbolOffsetT> symbol) const
+                                           cuda::std::tuple<PdaTokenT, SymbolOffsetT> symbol) const
   {
-    PdaTokenT const token_type = thrust::get<0>(symbol);
+    PdaTokenT const token_type = cuda::std::get<0>(symbol);
     return sgid_lut.lookup(token_type);
   }
 };
@@ -597,14 +585,14 @@ struct PdaSymbolToSymbolGroupId {
   SymbolT delimiter = '\n';
   template <typename SymbolT, typename StackSymbolT>
   __device__ __forceinline__ PdaSymbolGroupIdT
-  operator()(thrust::tuple<SymbolT, StackSymbolT> symbol_pair) const
+  operator()(cuda::std::tuple<SymbolT, StackSymbolT> symbol_pair) const
   {
     // The symbol read from the input
-    auto symbol = thrust::get<0>(symbol_pair);
+    auto symbol = cuda::std::get<0>(symbol_pair);
 
     // The stack symbol (i.e., what is on top of the stack at the time the input symbol was read)
     // I.e., whether we're reading in something within a struct, a list, or the JSON root
-    auto stack_symbol = thrust::get<1>(symbol_pair);
+    auto stack_symbol = cuda::std::get<1>(symbol_pair);
 
     // The stack symbol offset: '_' is the root group (0), '[' is the list group (1), '{' is the
     // struct group (2)
@@ -621,10 +609,13 @@ struct PdaSymbolToSymbolGroupId {
     // escape, comma, colon or whitespace characters.
     auto constexpr newline    = '\n';
     auto constexpr whitespace = ' ';
+    // Cast to unsigned char first so high-bit bytes (>= 0x80) are not sign-extended to negative
+    // int32_t values, which would underflow the min() clamp used as the lookup index.
     auto const symbol_position =
       symbol == delimiter
         ? static_cast<int32_t>(newline)
-        : (symbol == newline ? static_cast<int32_t>(whitespace) : static_cast<int32_t>(symbol));
+        : (symbol == newline ? static_cast<int32_t>(whitespace)
+                             : static_cast<int32_t>(static_cast<unsigned char>(symbol)));
     PdaSymbolGroupIdT symbol_gid =
       tos_sg_to_pda_sgid[min(symbol_position, pda_sgid_lookup_size - 1)];
     return stack_idx * static_cast<PdaSymbolGroupIdT>(symbol_group_id::NUM_PDA_INPUT_SGS) +
@@ -1355,8 +1346,8 @@ void json_column::level_child_cols_recursively(row_offset_t min_row_count)
 
   // If this is a struct column, we need to level all its child columns
   if (type == json_col_t::StructColumn) {
-    for (auto it = std::begin(child_columns); it != std::end(child_columns); it++) {
-      it->second.level_child_cols_recursively(min_row_count);
+    for (auto& child_column : child_columns) {
+      child_column.second.level_child_cols_recursively(min_row_count);
     }
   }
   // If this is a list column, we need to make sure that its child column levels its children
@@ -1446,7 +1437,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
   constexpr StackSymbolT read_symbol = 'x';
 
   // Number of stack operations in the input (i.e., number of '{', '}', '[', ']' outside of quotes)
-  cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(stream);
+  cudf::detail::device_scalar<SymbolOffsetT> d_num_stack_ops(
+    stream, cudf::get_current_device_resource_ref());
 
   // Prepare finite-state transducer that only selects '{', '}', '[', ']' outside of quotes
   constexpr auto max_translation_table_size =
@@ -1467,8 +1459,8 @@ void get_stack_context(device_span<SymbolT const> json_in,
   // Run FST to estimate the sizes of translated buffers
   json_to_stack_ops_fst.Transduce(json_in.begin(),
                                   static_cast<SymbolOffsetT>(json_in.size()),
-                                  thrust::make_discard_iterator(),
-                                  thrust::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
                                   d_num_stack_ops.data(),
                                   to_stack_op::start_state,
                                   stream);
@@ -1484,7 +1476,7 @@ void get_stack_context(device_span<SymbolT const> json_in,
                                   static_cast<SymbolOffsetT>(json_in.size()),
                                   stack_ops.data(),
                                   stack_op_indices.data(),
-                                  thrust::make_discard_iterator(),
+                                  cuda::make_discard_iterator(),
                                   to_stack_op::start_state,
                                   stream);
 
@@ -1521,7 +1513,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   // Instantiate FST for post-processing the token stream to remove all tokens that belong to an
   // invalid JSON line
   token_filter::UnwrapTokenFromSymbolOp sgid_op{};
-  using symbol_t  = thrust::tuple<PdaTokenT, SymbolOffsetT>;
+  using symbol_t  = cuda::std::tuple<PdaTokenT, SymbolOffsetT>;
   auto filter_fst = fst::detail::make_fst(
     fst::detail::make_symbol_group_lut(token_filter::symbol_groups, sgid_op),
     fst::detail::make_transition_table(token_filter::transition_table),
@@ -1540,13 +1532,13 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   // StructBegin, StructEnd. Also, all LineEnd are removed as well, as these are not relevant after
   // this stage anymore
   filter_fst.Transduce(
-    thrust::make_reverse_iterator(thrust::make_zip_iterator(tokens.data(), token_indices.data()) +
-                                  tokens.size()),
+    cuda::std::make_reverse_iterator(
+      thrust::make_zip_iterator(tokens.data(), token_indices.data()) + tokens.size()),
     static_cast<SymbolOffsetT>(tokens.size()),
-    thrust::make_reverse_iterator(
+    cuda::std::make_reverse_iterator(
       thrust::make_zip_iterator(filtered_tokens_out.data(), filtered_token_indices_out.data()) +
       tokens.size()),
-    thrust::make_discard_iterator(),
+    cuda::make_discard_iterator(),
     d_num_selected_tokens.data(),
     token_filter::start_state,
     stream);
@@ -1554,11 +1546,11 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> pr
   auto const num_total_tokens = d_num_selected_tokens.value(stream);
   rmm::device_uvector<PdaTokenT> tokens_out{num_total_tokens, stream, mr};
   rmm::device_uvector<SymbolOffsetT> token_indices_out{num_total_tokens, stream, mr};
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                filtered_tokens_out.end() - num_total_tokens,
                filtered_tokens_out.end(),
                tokens_out.data());
-  thrust::copy(rmm::exec_policy(stream),
+  thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                filtered_token_indices_out.end() - num_total_tokens,
                filtered_token_indices_out.end(),
                token_indices_out.data());
@@ -1619,8 +1611,8 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     fix_stack_of_excess_chars.Transduce(zip_in,
                                         static_cast<SymbolOffsetT>(json_in.size()),
                                         stack_symbols.data(),
-                                        thrust::make_discard_iterator(),
-                                        thrust::make_discard_iterator(),
+                                        cuda::make_discard_iterator(),
+                                        cuda::make_discard_iterator(),
                                         fix_stack_of_excess_chars::start_state,
                                         stream);
 
@@ -1639,26 +1631,20 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
       tokenizer_pda::get_translation_table(recover_from_error)),
     stream);
 
-  // Perform a PDA-transducer pass
-  // Compute the maximum amount of tokens that can possibly be emitted for a given input size
-  // Worst case ratio of tokens per input char is given for a struct with an empty field name, that
-  // may be arbitrarily deeply nested: {"":_}, where '_' is a placeholder for any JSON value,
-  // possibly another such struct. That is, 6 tokens for 5 chars (plus chars and tokens of '_')
-  std::size_t constexpr min_chars_per_struct  = 5;
-  std::size_t constexpr max_tokens_per_struct = 6;
-  auto const max_token_out_count =
-    cudf::util::div_rounding_up_safe(json_in.size(), min_chars_per_struct) * max_tokens_per_struct;
-  cudf::detail::device_scalar<std::size_t> num_written_tokens{stream};
   // In case we're recovering on invalid JSON lines, post-processing the token stream requires to
   // see a JSON-line delimiter as the very first item
   SymbolOffsetT const delimiter_offset =
     (format == tokenizer_pda::json_format_cfg_t::JSON_LINES_RECOVER ? 1 : 0);
 
+  // Perform a PDA-transducer pass
+  cudf::detail::device_scalar<std::size_t> num_written_tokens{
+    stream, cudf::get_current_device_resource_ref()};
+
   // Run FST to estimate the size of output buffers
   json_to_tokens_fst.Transduce(zip_in,
                                static_cast<SymbolOffsetT>(json_in.size()),
-                               thrust::make_discard_iterator(),
-                               thrust::make_discard_iterator(),
+                               cuda::make_discard_iterator(),
+                               cuda::make_discard_iterator(),
                                num_written_tokens.data(),
                                tokenizer_pda::start_state,
                                stream);
@@ -1672,7 +1658,7 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
                                static_cast<SymbolOffsetT>(json_in.size()),
                                tokens.data() + delimiter_offset,
                                tokens_indices.data() + delimiter_offset,
-                               thrust::make_discard_iterator(),
+                               cuda::make_discard_iterator(),
                                tokenizer_pda::start_state,
                                stream);
 
@@ -1684,9 +1670,6 @@ std::pair<rmm::device_uvector<PdaTokenT>, rmm::device_uvector<SymbolOffsetT>> ge
     tokens         = std::move(filtered_tokens);
     tokens_indices = std::move(filtered_tokens_indices);
   }
-
-  CUDF_EXPECTS(num_total_tokens <= max_token_out_count,
-               "Generated token count exceeds the expected token count");
 
   return std::make_pair(std::move(tokens), std::move(tokens_indices));
 }
@@ -1851,7 +1834,7 @@ void make_json_column(json_column& root_column,
         if (current_data_path.top().column->child_columns.empty()) {
           current_data_path.top().column->child_columns.emplace(std::string{list_child_name},
                                                                 json_column{json_col_t::Unknown});
-          current_data_path.top().column->column_order.push_back(list_child_name);
+          current_data_path.top().column->column_order.emplace_back(list_child_name);
         }
         current_data_path.top().current_selected_col =
           &current_data_path.top().column->child_columns.begin()->second;
@@ -2258,9 +2241,7 @@ std::pair<std::unique_ptr<column>, std::vector<column_name_info>> json_column_to
                                 std::move(offsets_column),
                                 std::move(child_column),
                                 null_count,
-                                std::move(result_bitmask),
-                                stream,
-                                mr),
+                                std::move(result_bitmask)),
               std::move(column_names)};
       break;
     }

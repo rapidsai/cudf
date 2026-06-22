@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import warnings
 from functools import cached_property
@@ -189,13 +190,13 @@ class Index(DXIndex, CudfFrameBase):
 # dask.dataframe dispatch
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)
-get_parallel_type.register(cudf.BaseIndex, lambda _: Index)
+get_parallel_type.register(cudf.Index, lambda _: Index)
 
 
 # dask_expr dispatch (might go away?)
 get_collection_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_collection_type.register(cudf.Series, lambda _: Series)
-get_collection_type.register(cudf.BaseIndex, lambda _: Index)
+get_collection_type.register(cudf.Index, lambda _: Index)
 
 
 ##

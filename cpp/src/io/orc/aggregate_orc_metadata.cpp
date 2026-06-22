@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/orc/aggregate_orc_metadata.hpp"
@@ -21,6 +10,7 @@
 #include <algorithm>
 #include <functional>
 #include <numeric>
+#include <utility>
 
 namespace cudf::io::orc::detail {
 
@@ -28,7 +18,7 @@ column_hierarchy::column_hierarchy(nesting_map child_map) : children{std::move(c
 {
   // Sort columns by nesting levels
   std::function<void(size_type, int32_t)> levelize = [&](size_type id, int32_t level) {
-    if (static_cast<int32_t>(levels.size()) == level) levels.emplace_back();
+    if (std::cmp_equal(levels.size(), level)) levels.emplace_back();
 
     levels[level].push_back({id, static_cast<int32_t>(children[id].size())});
 
@@ -99,6 +89,7 @@ auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sour
                             rmm::cuda_stream_view stream)
 {
   std::vector<metadata> metadatas;
+  metadatas.reserve(sources.size());
   std::transform(
     sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [stream](auto const& source) {
       return metadata(source.get(), stream);
@@ -251,18 +242,36 @@ aggregate_orc_metadata::select_stripes(
     per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
 
     for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
-      auto const stripe         = mapping.stripe_info[i].stripe_info;
+      auto const stripe    = mapping.stripe_info[i].stripe_info;
+      auto const file_size = per_file_metadata[mapping.source_idx].source->size();
+      CUDF_EXPECTS(stripe->offset <= file_size,
+                   "Invalid stripe information: offset exceeds file size",
+                   std::out_of_range);
+      auto remaining = file_size - stripe->offset;
+      CUDF_EXPECTS(stripe->indexLength <= remaining,
+                   "Invalid stripe information: indexLength exceeds file size",
+                   std::out_of_range);
+      remaining -= stripe->indexLength;
+      CUDF_EXPECTS(stripe->dataLength <= remaining,
+                   "Invalid stripe information: dataLength exceeds file size",
+                   std::out_of_range);
+      remaining -= stripe->dataLength;
+      CUDF_EXPECTS(stripe->footerLength <= remaining,
+                   "Invalid stripe information: footerLength exceeds file size",
+                   std::out_of_range);
       auto const sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
       auto const sf_comp_length = stripe->footerLength;
-      CUDF_EXPECTS(
-        sf_comp_offset + sf_comp_length < per_file_metadata[mapping.source_idx].source->size(),
-        "Invalid stripe information");
       auto const buffer =
         per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
       auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
         {buffer->data(), buffer->size()});
       protobuf_reader(sf_data.data(), sf_data.size())
         .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
+      auto const& stripe_footer = per_file_metadata[mapping.source_idx].stripefooters[i];
+      auto const num_types      = per_file_metadata[mapping.source_idx].ff.types.size();
+      CUDF_EXPECTS(stripe_footer.columns.size() >= num_types,
+                   "Invalid ColumnEncoding field in a stripe footer.",
+                   std::out_of_range);
       mapping.stripe_info[i].stripe_footer =
         &per_file_metadata[mapping.source_idx].stripefooters[i];
       if (stripe->indexLength == 0) { row_grp_idx_present = false; }

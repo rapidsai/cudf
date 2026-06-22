@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -19,18 +8,20 @@
  * @brief cuDF-IO ORC writer class implementation
  */
 
+#include "io/comp/compression.hpp"
 #include "io/orc/orc_gpu.hpp"
 #include "io/statistics/column_statistics.cuh"
 #include "writer_impl.hpp"
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/logger.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -40,21 +31,21 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cooperative_groups.h>
 #include <cooperative_groups/memcpy_async.h>
+#include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/climits>
 #include <cuda/std/limits>
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/extrema.h>
 #include <thrust/for_each.h>
-#include <thrust/functional.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/reverse_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 #include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -314,10 +305,33 @@ class orc_column_view {
   std::optional<uint32_t> _parent_index;
 };
 
-size_type orc_table_view::num_rows() const noexcept
-{
-  return columns.empty() ? 0 : columns.front().size();
-}
+/**
+ * Non-owning view of a cuDF table that includes ORC-related information.
+ *
+ * Columns hierarchy is flattened and stored in pre-order.
+ */
+struct orc_table_view {
+  std::vector<orc_column_view> columns;
+  rmm::device_uvector<orc_column_device_view> d_columns;
+  std::vector<uint32_t> string_column_indices;
+  rmm::device_uvector<uint32_t> d_string_column_indices;
+
+  [[nodiscard]] auto num_columns() const noexcept { return columns.size(); }
+  [[nodiscard]] size_type num_rows() const noexcept
+  {
+    return columns.empty() ? 0 : columns.front().size();
+  }
+  [[nodiscard]] auto num_string_columns() const noexcept { return string_column_indices.size(); }
+
+  auto& column(uint32_t idx) { return columns.at(idx); }
+  [[nodiscard]] auto const& column(uint32_t idx) const { return columns.at(idx); }
+
+  auto& string_column(uint32_t idx) { return columns.at(string_column_indices.at(idx)); }
+  [[nodiscard]] auto const& string_column(uint32_t idx) const
+  {
+    return columns.at(string_column_indices.at(idx));
+  }
+};
 
 namespace {
 struct string_length_functor {
@@ -395,7 +409,10 @@ void persisted_statistics::persist(int num_table_rows,
       string_length_functor{num_chunks,
                             intermediate_stats.stripe_stat_chunks.data(),
                             intermediate_stats.stripe_stat_merge.device_ptr()});
-    thrust::exclusive_scan(rmm::exec_policy(stream), iter, iter + offsets.size(), offsets.begin());
+    thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                           iter,
+                           iter + offsets.size(),
+                           offsets.begin());
 
     // pull size back to host
     auto const total_string_pool_size = offsets.element(num_chunks * 2, stream);
@@ -411,6 +428,7 @@ void persisted_statistics::persist(int num_table_rows,
         offsets.data(),
         intermediate_stats.stripe_stat_chunks.data(),
         intermediate_stats.stripe_stat_merge.device_ptr());
+      CUDF_CUDA_TRY(cudaGetLastError());
       string_pools.emplace_back(std::move(string_pool));
     }
   }
@@ -426,6 +444,7 @@ namespace {
  * @param columns List of columns
  * @param rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
  * @param max_stripe_size Maximum size of each stripe, both in bytes and in rows
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return List of stripe descriptors
  */
 file_segmentation calculate_segmentation(host_span<orc_column_view const> columns,
@@ -520,6 +539,9 @@ size_t rle_stream_size(TypeKind kind, size_t count)
  * @param[in,out] columns List of columns
  * @param[in] segmentation stripe and rowgroup ranges
  * @param[in] decimal_column_sizes Sizes of encoded decimal columns
+ * @param[in] enable_dictionary Whether dictionary encoding is enabled
+ * @param[in] compression Compression type to use
+ * @param[in] write_mode The write mode (single or chunked)
  * @return List of stream descriptors
  */
 orc_streams create_streams(host_span<orc_column_view> columns,
@@ -557,8 +579,8 @@ orc_streams create_streams(host_span<orc_column_view> columns,
 
     auto RLE_column_size = [&](TypeKind type_kind) {
       return std::accumulate(
-        thrust::make_counting_iterator(0ul),
-        thrust::make_counting_iterator(segmentation.num_rowgroups()),
+        cuda::counting_iterator<size_t>{0},
+        cuda::counting_iterator{segmentation.num_rowgroups()},
         0ul,
         [&](auto data_size, auto rg_idx) {
           return data_size +
@@ -685,18 +707,17 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
 
   auto aligned_rgs = hostdevice_2dvector<rowgroup_rows>(
     segmentation.num_rowgroups(), orc_table.num_columns(), stream);
-  CUDF_CUDA_TRY(cudaMemcpyAsync(aligned_rgs.base_device_ptr(),
-                                segmentation.rowgroups.base_device_ptr(),
-                                aligned_rgs.count() * sizeof(rowgroup_rows),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(aligned_rgs.base_device_ptr(),
+                                           segmentation.rowgroups.base_device_ptr(),
+                                           aligned_rgs.count() * sizeof(rowgroup_rows),
+                                           stream));
   auto const d_stripes = cudf::detail::make_device_uvector_async(
     segmentation.stripes, stream, cudf::get_current_device_resource_ref());
 
   // One thread per column, per stripe
   thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_t>{0},
     orc_table.num_columns() * segmentation.num_stripes(),
     [columns = device_span<orc_column_device_view const>{orc_table.d_columns},
      stripes = device_span<stripe_rowgroups const>{d_stripes},
@@ -809,12 +830,12 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
       }
     });
 
-  aligned_rgs.device_to_host_sync(stream);
+  aligned_rgs.device_to_host(stream);
 
   std::vector<std::vector<rowgroup_rows>> h_aligned_rgs;
   h_aligned_rgs.reserve(segmentation.num_rowgroups());
-  std::transform(thrust::make_counting_iterator(0ul),
-                 thrust::make_counting_iterator(segmentation.num_rowgroups()),
+  std::transform(cuda::counting_iterator<size_t>{0},
+                 cuda::counting_iterator{segmentation.num_rowgroups()},
                  std::back_inserter(h_aligned_rgs),
                  [&](auto idx) -> std::vector<rowgroup_rows> {
                    return {aligned_rgs[idx].begin(), aligned_rgs[idx].end()};
@@ -870,8 +891,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
   // TODO (future): pass columns separately from chunks (to skip this step)
   // and remove info from chunks that is common for the entire column
   thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0ul),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_t>{0},
     chunks.count(),
     [chunks = chunks.device_view(),
      cols = device_span<orc_column_device_view const>{orc_table.d_columns}] __device__(auto& idx) {
@@ -884,7 +905,14 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     std::vector<size_type> indices;
     for (auto const& stripe : segmentation.stripes) {
       for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend() - 1; ++rg_idx_it) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
         auto const& chunk = chunks[col_idx][*rg_idx_it];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         indices.push_back(chunk.start_row);
         indices.push_back(chunk.start_row + chunk.num_rows);
       }
@@ -933,8 +961,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         if (strm_id >= 0) {
           size_t stripe_size = 0;
           std::for_each(stripe.cbegin(), stripe.cend(), [&](auto rg_idx) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
             auto const& ck = chunks[col_idx][rg_idx];
-            auto& strm     = col_streams[rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+            auto& strm = col_streams[rg_idx];
 
             if ((strm_type == CI_DICTIONARY) ||
                 (strm_type == CI_DATA2 && ck.encoding_kind == DICTIONARY_V2)) {
@@ -969,8 +1004,15 @@ encoded_data encode_columns(orc_table_view const& orc_table,
         // Set offsets
         for (auto rg_idx_it = stripe.cbegin(); rg_idx_it < stripe.cend(); ++rg_idx_it) {
           auto const rg_idx = *rg_idx_it;
-          auto const& ck    = chunks[col_idx][rg_idx];
-          auto& strm        = col_streams[rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+          auto const& ck = chunks[col_idx][rg_idx];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+          auto& strm = col_streams[rg_idx];
 
           if (strm_id < 0 or (strm_type == CI_DATA && streams[strm_id].length == 0 &&
                               (ck.type_kind == DOUBLE || ck.type_kind == FLOAT))) {
@@ -1012,7 +1054,7 @@ encoded_data encode_columns(orc_table_view const& orc_table,
 
     encode_orc_column_data(chunks, chunk_streams, stream);
   }
-  chunk_streams.device_to_host_sync(stream);
+  chunk_streams.device_to_host(stream);
 
   return {std::move(encoded_data), std::move(chunk_streams)};
 }
@@ -1091,7 +1133,7 @@ std::vector<StripeInformation> gather_stripes(size_t num_index_streams,
   // TODO: use cub::DeviceMemcpy::Batched
   compact_orc_data_streams(*strm_desc, enc_data->streams, stream);
   strm_desc->device_to_host_async(stream);
-  enc_data->streams.device_to_host_sync(stream);
+  enc_data->streams.device_to_host(stream);
 
   // move the gathered stripes to encoded_data.data for lifetime management
   for (auto stripe_id = 0ul; stripe_id < enc_data->data.size(); ++stripe_id) {
@@ -1108,9 +1150,9 @@ void set_stat_desc_leaf_cols(device_span<orc_column_device_view const> columns,
                              device_span<stats_column_desc> stat_desc,
                              rmm::cuda_stream_view stream)
 {
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator(0ul),
-                   thrust::make_counting_iterator(stat_desc.size()),
+  thrust::for_each(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   cuda::counting_iterator<size_t>{0},
+                   cuda::counting_iterator{stat_desc.size()},
                    [=] __device__(auto idx) { stat_desc[idx].leaf_column = &columns[idx]; });
 }
 
@@ -1123,7 +1165,15 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
   // figure out the buffer size needed for protobuf format
   orc_init_statistics_buffersize(
     stats_merge_groups.device_ptr(), stat_chunks.data(), num_stat_blobs, stream);
-  auto max_blobs = stats_merge_groups.element(num_stat_blobs - 1, stream);
+
+  // get stats_merge_groups[num_stat_blobs - 1] via a host pinned bounce buffer
+  auto const max_blobs = [&]() {
+    auto max_blobs_element = cudf::detail::make_pinned_vector<statistics_merge_group>(
+      cudf::device_span<statistics_merge_group>{stats_merge_groups.device_ptr(num_stat_blobs - 1),
+                                                1},
+      stream);
+    return max_blobs_element.front();
+  }();
 
   cudf::detail::hostdevice_vector<uint8_t> blobs(max_blobs.start_chunk + max_blobs.num_chunks,
                                                  stream);
@@ -1133,7 +1183,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
                         num_stat_blobs,
                         stream);
   stats_merge_groups.device_to_host_async(stream);
-  blobs.device_to_host_sync(stream);
+  blobs.device_to_host(stream);
   return blobs;
 }
 
@@ -1158,7 +1208,7 @@ cudf::detail::hostdevice_vector<uint8_t> allocate_and_encode_blobs(
 /**
  * @brief Returns column statistics in an intermediate format.
  *
- * @param statistics_freq Frequency of statistics to be included in the output file
+ * @param stats_freq Frequency of statistics to be included in the output file
  * @param orc_table Table information to be written
  * @param segmentation stripe and rowgroup ranges
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -1282,8 +1332,8 @@ intermediate_statistics gather_statistic_blobs(statistics_freq const stats_freq,
 /**
  * @brief Returns column statistics encoded in ORC protobuf format stored in the footer.
  *
- * @param num_stripes number of stripes in the data
- * @param incoming_stats intermediate statistics returned from `gather_statistic_blobs`
+ * @param footer ORC footer containing stripe and type information
+ * @param per_chunk_stats Persisted per-chunk statistics from `gather_statistic_blobs`
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The encoded statistic blobs
  */
@@ -1440,7 +1490,7 @@ void write_index_stream(int32_t stripe_id,
                         file_segmentation const& segmentation,
                         host_2dspan<encoder_chunk_streams const> enc_streams,
                         host_2dspan<stripe_stream const> strm_desc,
-                        host_span<compression_result const> comp_res,
+                        host_span<codec_exec_result const> comp_res,
                         host_span<col_stats_blob const> rg_stats,
                         StripeInformation* stripe,
                         orc_streams* streams,
@@ -1458,7 +1508,14 @@ void write_index_stream(int32_t stripe_id,
     if (stream.ids[type] > 0) {
       record.pos = 0;
       if (compression != compression_type::NONE) {
-        auto const& ss   = strm_desc[stripe_id][stream.ids[type] - (columns.size() + 1)];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
+        auto const& ss = strm_desc[stripe_id][stream.ids[type] - (columns.size() + 1)];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
         record.blk_pos   = ss.first_block;
         record.comp_pos  = 0;
         record.comp_size = ss.stream_size;
@@ -1485,10 +1542,17 @@ void write_index_stream(int32_t stripe_id,
   auto kind = TypeKind::STRUCT;
   // TBD: Not sure we need an empty index stream for column 0
   if (stream_id != 0) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
     auto const& strm = enc_streams[column_id][0];
-    present          = find_record(strm, CI_PRESENT);
-    data             = find_record(strm, CI_DATA);
-    data2            = find_record(strm, CI_DATA2);
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
+    present = find_record(strm, CI_PRESENT);
+    data    = find_record(strm, CI_DATA);
+    data2   = find_record(strm, CI_DATA2);
 
     // Change string dictionary to int from index point of view
     kind = columns[column_id].orc_kind();
@@ -1514,7 +1578,14 @@ void write_index_stream(int32_t stripe_id,
                               : (&rg_stats[column_id * segmentation.num_rowgroups() + rowgroup]));
 
     if (stream_id != 0) {
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdangling-reference"
+#endif
       const auto& strm = enc_streams[column_id][rowgroup];
+#if defined(__GNUC__) && (__GNUC__ >= 14)
+#pragma GCC diagnostic pop
+#endif
       scan_record(strm, CI_PRESENT, present);
       scan_record(strm, CI_DATA, data);
       scan_record(strm, CI_DATA2, data2);
@@ -1624,8 +1695,8 @@ void pushdown_lists_null_mask(orc_column_view const& col,
 
   // Reset bits where a null list element has rows in the child column
   thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0u),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<uint32_t>{0},
     col.size(),
     [d_columns, col_idx = col.index(), parent_pd_mask, out_mask] __device__(auto& idx) {
       auto const d_col        = d_columns[col_idx];
@@ -1685,12 +1756,12 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
         pd_masks.emplace_back(num_bitmask_words(col.size()), stream);
         mask_ptrs.push_back({pd_masks.back().data()});
 
-        thrust::transform(rmm::exec_policy(stream),
+        thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                           null_mask,
                           null_mask + pd_masks.back().size(),
                           parent_pd_mask,
                           pd_masks.back().data(),
-                          thrust::bit_and<bitmask_type>());
+                          cuda::std::bit_and<bitmask_type>());
       }
     }
     if (col.orc_kind() == LIST or col.orc_kind() == MAP) {
@@ -1707,8 +1778,8 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
   auto const d_mask_ptrs = cudf::detail::make_device_uvector_async(
     mask_ptrs, stream, cudf::get_current_device_resource_ref());
   thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0ul),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_t>{0},
     orc_table.num_columns(),
     [cols = device_span<orc_column_device_view>{orc_table.d_columns},
      ptrs = device_span<bitmask_type const* const>{d_mask_ptrs}] __device__(auto& idx) {
@@ -1720,8 +1791,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
 
 template <typename T>
 struct device_stack {
-  __device__ device_stack(T* stack_storage, int capacity)
-    : stack(stack_storage), capacity(capacity), size(0)
+  __device__ device_stack(T* stack_storage, int capacity) : stack(stack_storage), capacity(capacity)
   {
   }
   __device__ void push(T const& val)
@@ -1739,7 +1809,7 @@ struct device_stack {
  private:
   T* stack;
   int capacity;
-  int size;
+  int size{0};
 };
 
 orc_table_view make_orc_table_view(table_view const& table,
@@ -1798,7 +1868,8 @@ orc_table_view make_orc_table_view(table_view const& table,
     type_kinds, stream, cudf::get_current_device_resource_ref());
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
-  using stack_value_type = thrust::pair<column_device_view const*, cuda::std::optional<uint32_t>>;
+  using stack_value_type =
+    cuda::std::pair<column_device_view const*, cuda::std::optional<uint32_t>>;
   rmm::device_uvector<stack_value_type> stack_storage(orc_columns.size(), stream);
 
   // pre-order append ORC device columns
@@ -1810,12 +1881,11 @@ orc_table_view make_orc_table_view(table_view const& table,
      stack_storage_size = stack_storage.size()] __device__() {
       device_stack stack(stack_storage, stack_storage_size);
 
-      thrust::for_each(thrust::seq,
-                       thrust::make_reverse_iterator(d_table.end()),
-                       thrust::make_reverse_iterator(d_table.begin()),
-                       [&stack](column_device_view const& c) {
-                         stack.push({&c, cuda::std::nullopt});
-                       });
+      thrust::for_each(
+        thrust::seq,
+        cuda::std::make_reverse_iterator(d_table.end()),
+        cuda::std::make_reverse_iterator(d_table.begin()),
+        [&stack](column_device_view const& c) { stack.push({&c, cuda::std::nullopt}); });
 
       uint32_t idx = 0;
       while (not stack.empty()) {
@@ -1831,11 +1901,9 @@ orc_table_view make_orc_table_view(table_view const& table,
           stack.push({&col->children()[lists_column_view::child_column_index], idx});
         } else if (col->type().id() == type_id::STRUCT) {
           thrust::for_each(thrust::seq,
-                           thrust::make_reverse_iterator(col->children().end()),
-                           thrust::make_reverse_iterator(col->children().begin()),
-                           [&stack, idx](column_device_view const& c) {
-                             stack.push({&c, idx});
-                           });
+                           cuda::std::make_reverse_iterator(col->children().end()),
+                           cuda::std::make_reverse_iterator(col->children().begin()),
+                           [&stack, idx](column_device_view const& c) { stack.push({&c, idx}); });
         }
         ++idx;
       }
@@ -1845,7 +1913,7 @@ orc_table_view make_orc_table_view(table_view const& table,
   return {std::move(orc_columns),
           std::move(d_orc_columns),
           str_col_indexes,
-          cudf::detail::make_device_uvector_sync(
+          cudf::detail::make_device_uvector(
             str_col_indexes, stream, cudf::get_current_device_resource_ref())};
 }
 
@@ -1859,8 +1927,8 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
   hostdevice_2dvector<rowgroup_rows> rowgroup_bounds(
     num_rowgroups, orc_table.num_columns(), stream);
   thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator(0ul),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_t>{0},
     num_rowgroups,
     [cols      = device_span<orc_column_device_view const>{orc_table.d_columns},
      rg_bounds = rowgroup_bounds.device_view(),
@@ -1870,7 +1938,8 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           // Root column
           if (!col.parent_index.has_value()) {
             size_type const rows_begin = rg_idx * rowgroup_size;
-            auto const rows_end = thrust::min<size_type>((rg_idx + 1) * rowgroup_size, col.size());
+            auto const rows_end        = static_cast<size_type>(cuda::std::min(
+              static_cast<int64_t>(rows_begin) + rowgroup_size, static_cast<int64_t>(col.size())));
             return rowgroup_rows{rows_begin, rows_end};
           } else {
             // Child column
@@ -1892,7 +1961,7 @@ hostdevice_2dvector<rowgroup_rows> calculate_rowgroup_bounds(orc_table_view cons
           }
         });
     });
-  rowgroup_bounds.device_to_host_sync(stream);
+  rowgroup_bounds.device_to_host(stream);
 
   return rowgroup_bounds;
 }
@@ -1909,7 +1978,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
       auto& current_sizes =
         elem_sizes.insert({orc_col.index(), rmm::device_uvector<uint32_t>(orc_col.size(), stream)})
           .first->second;
-      thrust::tabulate(rmm::exec_policy_nosync(stream),
+      thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        current_sizes.begin(),
                        current_sizes.end(),
                        [d_cols  = device_span<orc_column_device_view const>{orc_table.d_columns},
@@ -1948,7 +2017,7 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
   std::map<uint32_t, cudf::detail::host_vector<uint32_t>> rg_sizes;
   for (auto const& [col_idx, esizes] : elem_sizes) {
     // Copy last elem in each row group - equal to row group size
-    thrust::tabulate(rmm::exec_policy(stream),
+    thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      d_tmp_rowgroup_sizes.begin(),
                      d_tmp_rowgroup_sizes.end(),
                      [src       = esizes.data(),
@@ -2014,7 +2083,7 @@ auto set_rowgroup_char_counts(orc_table_view& orc_table,
                        orc_table.d_string_column_indices,
                        stream);
 
-  auto const h_counts = cudf::detail::make_host_vector_sync(counts, stream);
+  auto const h_counts = cudf::detail::make_host_vector(counts, stream);
 
   for (auto col_idx : orc_table.string_column_indices) {
     auto& str_column = orc_table.column(col_idx);
@@ -2090,8 +2159,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
   // Create a single bulk storage to use for all sub-dictionaries
   auto map_storage = std::make_unique<storage_type>(
-    total_map_storage_size,
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream});
+    total_map_storage_size, rmm::mr::polymorphic_allocator<char>{}, stream.value());
 
   // Initialize stripe dictionaries
   for (auto col_idx : orc_table.string_column_indices) {
@@ -2121,7 +2189,7 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
   map_storage->initialize_async({KEY_SENTINEL, VALUE_SENTINEL}, {stream.value()});
   populate_dictionary_hash_maps(stripe_dicts, orc_table.d_columns, stream);
   // Copy the entry counts and char counts from the device to the host
-  stripe_dicts.device_to_host_sync(stream);
+  stripe_dicts.device_to_host(stream);
 
   // Data owners; can be cleared after encode
   std::vector<rmm::device_uvector<uint32_t>> dict_data_owner;
@@ -2136,8 +2204,8 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       auto const str_col_idx       = str_column.str_index();
       auto& sd                     = stripe_dicts[str_col_idx][stripe_idx];
       auto const direct_char_count = std::accumulate(
-        thrust::make_counting_iterator(stripe.first),
-        thrust::make_counting_iterator(stripe.first + stripe.size),
+        cuda::counting_iterator{stripe.first},
+        cuda::counting_iterator{stripe.first + stripe.size},
         0,
         [&](auto total, auto const& rg) { return total + str_column.rowgroup_char_count(rg); });
       // Enable dictionary encoding if the dictionary size is smaller than the direct encode size
@@ -2163,11 +2231,13 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
       }
     }
   }
-  // Synchronize to ensure the copy is complete before we clear `map_slots`
-  stripe_dicts.host_to_device_sync(stream);
+  stripe_dicts.host_to_device_async(stream);
 
   collect_map_entries(stripe_dicts, stream);
   get_dictionary_indices(stripe_dicts, orc_table.d_columns, stream);
+
+  // synchronize to ensure the copy is complete before we clear `map_slots`
+  stream.synchronize();
 
   // deallocate hash map storage, unused after this point
   map_storage.reset();
@@ -2198,21 +2268,25 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
 
       // Sort the dictionary data and create a mapping from the sorted order to the original
       thrust::sequence(
-        rmm::exec_policy_nosync(current_stream), sd.data_order.begin(), sd.data_order.end());
-      thrust::sort_by_key(rmm::exec_policy_nosync(current_stream),
-                          sd.data.begin(),
-                          sd.data.end(),
-                          sd.data_order.begin(),
-                          string_rows_less{orc_table.d_columns, sd.column_idx});
+        rmm::exec_policy_nosync(current_stream, cudf::get_current_device_resource_ref()),
+        sd.data_order.begin(),
+        sd.data_order.end());
+      thrust::sort_by_key(
+        rmm::exec_policy_nosync(current_stream, cudf::get_current_device_resource_ref()),
+        sd.data.begin(),
+        sd.data.end(),
+        sd.data_order.begin(),
+        string_rows_less{orc_table.d_columns, sd.column_idx});
 
       // Create the inverse permutation - i.e. the mapping from the original order to the sorted
       auto order_copy = cudf::detail::make_device_uvector_async<uint32_t>(
         sd.data_order, current_stream, cudf::get_current_device_resource_ref());
-      thrust::scatter(rmm::exec_policy_nosync(current_stream),
-                      thrust::counting_iterator<uint32_t>(0),
-                      thrust::counting_iterator<uint32_t>(sd.data_order.size()),
-                      order_copy.begin(),
-                      sd.data_order.begin());
+      thrust::scatter(
+        rmm::exec_policy_nosync(current_stream, cudf::get_current_device_resource_ref()),
+        cuda::counting_iterator<uint32_t>{0},
+        cuda::counting_iterator{static_cast<uint32_t>(sd.data_order.size())},
+        order_copy.begin(),
+        sd.data_order.begin());
 
       stream_idx = (stream_idx + 1) % streams.size();
     }
@@ -2226,19 +2300,24 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
           std::move(dict_order_owner)};
 }
 
+struct stripe_stream_size_less {
+  __device__ bool operator()(stripe_stream const& lhs, stripe_stream const& rhs) const
+  {
+    return lhs.stream_size < rhs.stream_size;
+  }
+};
+
 [[nodiscard]] uint32_t find_largest_stream_size(device_2dspan<stripe_stream const> ss,
                                                 rmm::cuda_stream_view stream)
 {
-  auto const longest_stream = thrust::max_element(
-    rmm::exec_policy(stream),
-    ss.data(),
-    ss.data() + ss.count(),
-    cuda::proclaim_return_type<bool>([] __device__(auto const& lhs, auto const& rhs) {
-      return lhs.stream_size < rhs.stream_size;
-    }));
+  auto const longest_stream =
+    thrust::max_element(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                        ss.data(),
+                        ss.data() + ss.count(),
+                        stripe_stream_size_less{});
 
-  auto const h_longest_stream = cudf::detail::make_host_vector_sync(
-    device_span<stripe_stream const>{longest_stream, 1}, stream);
+  auto const h_longest_stream =
+    cudf::detail::make_host_vector(device_span<stripe_stream const>{longest_stream, 1}, stream);
   return h_longest_stream[0].stream_size;
 }
 
@@ -2320,8 +2399,8 @@ auto convert_table_to_orc_data(table_view const& input,
     return std::tuple{std::move(enc_data),
                       std::move(segmentation),
                       std::move(orc_table),
-                      rmm::device_uvector<uint8_t>{0, stream},                // compressed_data
-                      cudf::detail::hostdevice_vector<compression_result>{},  // comp_results
+                      rmm::device_uvector<uint8_t>{0, stream},               // compressed_data
+                      cudf::detail::hostdevice_vector<codec_exec_result>{},  // comp_results
                       std::move(strm_descs),
                       intermediate_statistics{orc_table, stream},
                       std::optional<writer_compression_statistics>{},
@@ -2360,12 +2439,12 @@ auto convert_table_to_orc_data(table_view const& input,
 
   // Compress the data streams
   rmm::device_uvector<uint8_t> compressed_data(compressed_bfr_size, stream);
-  cudf::detail::hostdevice_vector<compression_result> comp_results(num_compressed_blocks, stream);
+  cudf::detail::hostdevice_vector<codec_exec_result> comp_results(num_compressed_blocks, stream);
   std::optional<writer_compression_statistics> compression_stats;
-  thrust::fill(rmm::exec_policy(stream),
+  thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                comp_results.d_begin(),
                comp_results.d_end(),
-               compression_result{0, compression_status::FAILURE});
+               codec_exec_result{0, codec_status::FAILURE});
   if (compression != compression_type::NONE) {
     strm_descs.host_to_device_async(stream);
     compression_stats = compress_orc_data_streams(compressed_data,
@@ -2384,7 +2463,7 @@ auto convert_table_to_orc_data(table_view const& input,
     enc_data.data.clear();
 
     strm_descs.device_to_host_async(stream);
-    comp_results.device_to_host_sync(stream);
+    comp_results.device_to_host(stream);
   }
 
   auto const max_out_stream_size = [&]() {
@@ -2436,6 +2515,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
+  CUDF_EXPECTS(is_supported_write_orc(_compression),
+               "Compression type not supported for ORC writer");
 }
 
 writer::impl::impl(std::unique_ptr<data_sink> sink,
@@ -2457,6 +2538,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   if (options.get_metadata()) {
     _table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
+  CUDF_EXPECTS(is_supported_write_orc(_compression),
+               "Compression type not supported for ORC writer");
 }
 
 writer::impl::~impl() { close(); }
@@ -2483,28 +2566,20 @@ void writer::impl::write(table_view const& input)
                          streams,
                          stripes,
                          stripe_dicts, /* unused, but its data will be accessed via pointer later */
-                         bounce_buffer] = [&] {
-    try {
-      return convert_table_to_orc_data(input,
-                                       *_table_meta,
-                                       _max_stripe_size,
-                                       _row_index_stride,
-                                       _enable_dictionary,
-                                       _sort_dictionaries,
-                                       _compression,
-                                       _compression_blocksize,
-                                       _stats_freq,
-                                       _compression_statistics != nullptr,
-                                       _single_write_mode,
-                                       *_out_sink,
-                                       _stream);
-    } catch (...) {  // catch any exception type
-      CUDF_LOG_ERROR(
-        "ORC writer encountered exception during processing. "
-        "No data has been written to the sink.");
-      throw;  // this throws the same exception
-    }
-  }();
+                         bounce_buffer] =
+    convert_table_to_orc_data(input,
+                              *_table_meta,
+                              _max_stripe_size,
+                              _row_index_stride,
+                              _enable_dictionary,
+                              _sort_dictionaries,
+                              _compression,
+                              _compression_blocksize,
+                              _stats_freq,
+                              _compression_statistics != nullptr,
+                              _single_write_mode,
+                              *_out_sink,
+                              _stream);
 
   if (_state == writer_state::NO_DATA_WRITTEN) {
     // Write the ORC file header if this is the first write
@@ -2549,7 +2624,7 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
                                           file_segmentation const& segmentation,
                                           orc_table_view const& orc_table,
                                           device_span<uint8_t const> compressed_data,
-                                          host_span<compression_result const> comp_results,
+                                          host_span<codec_exec_result const> comp_results,
                                           host_2dspan<stripe_stream const> strm_descs,
                                           host_span<col_stats_blob const> rg_stats,
                                           orc_streams& streams,
@@ -2635,8 +2710,8 @@ void writer::impl::write_orc_data_to_sink(encoded_data const& enc_data,
       stripe.footerLength = bytes_written;
     }
   }
-  for (auto const& task : write_tasks) {
-    task.wait();
+  for (auto& task : write_tasks) {
+    task.get();
   }
 }
 

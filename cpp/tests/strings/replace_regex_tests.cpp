@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "special_chars.h"
@@ -27,6 +16,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <ranges>
+#include <span>
 #include <vector>
 
 struct StringsReplaceRegexTest : public cudf::test::BaseFixture {};
@@ -62,38 +53,6 @@ TEST_F(StringsReplaceRegexTest, ReplaceRegexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
-TEST_F(StringsReplaceRegexTest, ReplaceMultiRegexTest)
-{
-  std::vector<char const*> h_strings{"the quick brown fox jumps over the lazy dog",
-                                     "the fat cat lays next to the other accénted cat",
-                                     "a slow moving turtlé cannot catch the bird",
-                                     "which can be composéd together to form a more complete",
-                                     "thé result does not include the value in the sum in",
-                                     "",
-                                     nullptr};
-
-  cudf::test::strings_column_wrapper strings(
-    h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
-  auto strings_view = cudf::strings_column_view(strings);
-
-  std::vector<char const*> h_expected{" quick brown fox jumps over  lazy dog",
-                                      " fat cat lays next to  other accénted cat",
-                                      "** slow moving turtlé cannot catch  bird",
-                                      "which can be composéd together to form ** more complete",
-                                      "thé result does not include  value N  sum N",
-                                      "",
-                                      nullptr};
-
-  std::vector<std::string> patterns{"\\bthe\\b", "\\bin\\b", "\\ba\\b"};
-  std::vector<std::string> h_repls{"", "N", "**"};
-  cudf::test::strings_column_wrapper repls(h_repls.begin(), h_repls.end());
-  auto repls_view = cudf::strings_column_view(repls);
-  auto results    = cudf::strings::replace_re(strings_view, patterns, repls_view);
-  cudf::test::strings_column_wrapper expected(
-    h_expected.begin(), h_expected.end(), cudf::test::iterators::nulls_from_nullptrs(h_expected));
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-}
-
 TEST_F(StringsReplaceRegexTest, InvalidRegex)
 {
   // these are quantifiers that do not have a preceding character/class
@@ -114,13 +73,8 @@ TEST_F(StringsReplaceRegexTest, WithEmptyPattern)
 
   auto empty_pattern = std::string("");
   auto repl          = cudf::string_scalar("bbb");
-  std::vector<std::string> patterns({empty_pattern});
-  cudf::test::strings_column_wrapper repls({"bbb"});
-  auto repls_view = cudf::strings_column_view(repls);
-  auto results    = cudf::strings::replace_re(strings_view, patterns, repls_view);
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, strings);
-  auto prog = cudf::strings::regex_program::create(empty_pattern);
-  results   = cudf::strings::replace_re(strings_view, *prog, repl);
+  auto prog          = cudf::strings::regex_program::create(empty_pattern);
+  auto results       = cudf::strings::replace_re(strings_view, *prog, repl);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, strings);
 }
 
@@ -247,17 +201,6 @@ TEST_F(StringsReplaceRegexTest, Multiline)
   prog    = cudf::strings::regex_program::create(pattern);
   results = cudf::strings::replace_re(sv, *prog, repl);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-
-  // multi-replace
-  std::vector<std::string> patterns({"aba$", "^aba"});
-  cudf::test::strings_column_wrapper repls({">", "<"});
-  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls), multiline);
-  cudf::test::strings_column_wrapper multi_expected_ml({"bcd\n>\nefg", ">\n< abab\n>", ">"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected_ml);
-
-  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls));
-  cudf::test::strings_column_wrapper multi_expected({"bcd\naba\nefg", "<\naba abab\n>", ">"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected);
 
   // backref-replace
   auto repl_template = std::string("[\\1]");
@@ -431,18 +374,25 @@ TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexZeroIndexTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
-// https://github.com/rapidsai/cudf/issues/13404
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsWithEmptyCapture)
 {
   cudf::test::strings_column_wrapper input({"one\ntwo", "three\n\n", "four\r\n"});
   auto sv = cudf::strings_column_view(input);
 
+  // https://github.com/rapidsai/cudf/issues/13404
   auto pattern       = std::string("(\r\n|\r)?$");
   auto repl_template = std::string("[\\1]");
-
-  cudf::test::strings_column_wrapper expected({"one\ntwo[]", "three\n[]\n[]", "four[\r\n][]"});
+  auto expected =
+    cudf::test::strings_column_wrapper({"one\ntwo[]", "three\n[]\n[]", "four[\r\n][]"});
   auto prog    = cudf::strings::regex_program::create(pattern);
   auto results = cudf::strings::replace_with_backrefs(sv, *prog, repl_template);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  // https://github.com/rapidsai/cudf/issues/22707
+  pattern  = std::string("^(a?)");
+  expected = cudf::test::strings_column_wrapper({"[]one\ntwo", "[]three\n\n", "[]four\r\n"});
+  prog     = cudf::strings::regex_program::create(pattern);
+  results  = cudf::strings::replace_with_backrefs(sv, *prog, repl_template);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
@@ -516,4 +466,72 @@ TEST_F(StringsReplaceRegexTest, LargeReplaceRegex)
     h_expected.end(),
     thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsReplaceRegexTest, CrlfLineAnchorExtNewline)
+{
+  // \r\n is a single terminator: regexp_replace("abc\r\n","abc$","[X]") -> "[X]\r\n".
+  // Expected values verified against OpenJDK 17 java.util.regex replaceAll (default flags).
+  auto input = cudf::test::strings_column_wrapper(
+    {"abc\r\n", "abc\n", "abc\r", "abc", "a\r\nb", "abc\r\n\r\n", "", "abc" NEXT_LINE});
+  auto view = cudf::strings_column_view(input);
+  auto prog = cudf::strings::regex_program::create("abc$", cudf::strings::regex_flags::EXT_NEWLINE);
+  auto repl = cudf::string_scalar("[X]");
+
+  auto results  = cudf::strings::replace_re(view, *prog, repl);
+  auto expected = cudf::test::strings_column_wrapper(
+    {"[X]\r\n", "[X]\n", "[X]\r", "[X]", "a\r\nb", "abc\r\n\r\n", "", "[X]" NEXT_LINE});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsReplaceRegexTest, CrlfEdgeCasesExtNewline)
+{
+  // Full edge column; expecteds verified vs OpenJDK 17 replaceAll (default flags).
+  // Each row bundles every replacement output for one input, so adding an input or
+  // a new replace pattern touches a single row or column.
+  struct edge_case {
+    char const* s;
+    char const* exp_abc_dollar_X;  // replace_re             "abc$"   -> "[X]"   EXT
+    char const* exp_abc_backref;   // replace_with_backrefs  "(abc)$" -> "[\\1]" EXT
+  };
+  // clang-format off
+  constexpr static edge_case cases[] = {
+    {"abc\r\n",       "[X]\r\n",       "[abc]\r\n"},
+    {"abc\n",         "[X]\n",         "[abc]\n"},
+    {"abc\r",         "[X]\r",         "[abc]\r"},
+    {"abc",           "[X]",           "[abc]"},
+    {"a\r\nb",        "a\r\nb",        "a\r\nb"},
+    {"abc\r\n\r\n",   "abc\r\n\r\n",   "abc\r\n\r\n"},
+    {"",              "",              ""},
+    {"abc" NEXT_LINE, "[X]" NEXT_LINE, "[abc]" NEXT_LINE},
+    {"a\nb\r\nc",     "a\nb\r\nc",     "a\nb\r\nc"},
+    {"\r\n",          "\r\n",          "\r\n"},
+    {"\r\nabc",       "\r\n[X]",       "\r\n[abc]"},
+    {"x\n\r",         "x\n\r",         "x\n\r"},
+    {"a\r\rb",        "a\r\rb",        "a\r\rb"},
+    {"a\n\nb",        "a\n\nb",        "a\n\nb"},
+  };
+  // clang-format on
+
+  auto strings_view = std::span(cases) | std::views::transform(&edge_case::s);
+  auto input        = cudf::test::strings_column_wrapper(strings_view.begin(), strings_view.end());
+  auto view         = cudf::strings_column_view(input);
+  auto const EXT    = cudf::strings::regex_flags::EXT_NEWLINE;
+
+  auto str_col = [](char const* edge_case::* m) {
+    auto v = std::span(cases) | std::views::transform([m](auto const& c) { return c.*m; });
+    return cudf::test::strings_column_wrapper(v.begin(), v.end());
+  };
+
+  {  // replace_re  abc$ -> [X]   (\r\n preserved as a unit)
+    auto p = cudf::strings::regex_program::create("abc$", EXT);
+    auto r = cudf::string_scalar("[X]");
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::replace_re(view, *p, r),
+                                   str_col(&edge_case::exp_abc_dollar_X));
+  }
+  {  // replace_with_backrefs  (abc)$ -> [\1]   (the spark-rapids scenario, native pattern)
+    auto p = cudf::strings::regex_program::create("(abc)$", EXT);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::replace_with_backrefs(view, *p, "[\\1]"),
+                                   str_col(&edge_case::exp_abc_backref));
+  }
 }

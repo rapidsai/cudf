@@ -1,11 +1,9 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import errno
 import itertools
-import os
-import warnings
-from collections import abc
+from collections.abc import Collection, Mapping
 from io import BytesIO, StringIO
 from typing import TYPE_CHECKING, cast
 
@@ -14,9 +12,18 @@ import pandas as pd
 
 import pylibcudf as plc
 
-import cudf
 from cudf.api.types import is_scalar
-from cudf.core.buffer import acquire_spill_lock
+from cudf.core.column import access_columns
+from cudf.core.dataframe import DataFrame
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    ListDtype,
+    StructDtype,
+    _BaseDtype,
+    dtype as cudf_dtype,
+)
+from cudf.core.index import CategoricalIndex
+from cudf.options import get_option
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
     _maybe_convert_to_default_type,
@@ -28,7 +35,7 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
 
 
-_CSV_HEX_TYPE_MAP = {
+_CSV_HEX_TYPE_MAP: dict[str, np.dtype] = {
     "hex": np.dtype("int64"),
     "hex64": np.dtype("int64"),
     "hex32": np.dtype("int32"),
@@ -68,19 +75,11 @@ def read_csv(
     quoting: int = 0,
     doublequote: bool = True,
     comment: str | None = None,
-    delim_whitespace: bool = False,
     byte_range: list[int] | tuple[int, int] | None = None,
     storage_options=None,
     bytes_per_thread: int | None = None,
-) -> cudf.DataFrame:
+) -> DataFrame:
     """{docstring}"""
-
-    if delim_whitespace is not False:
-        warnings.warn(
-            "The 'delim_whitespace' keyword in pd.read_csv is deprecated and "
-            "will be removed in a future version. Use ``sep='\\s+'`` instead",
-            FutureWarning,
-        )
 
     if bytes_per_thread is None:
         bytes_per_thread = ioutils._BYTES_PER_THREAD_DEFAULT
@@ -98,23 +97,9 @@ def read_csv(
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
 
-    if not isinstance(filepath_or_buffer, (BytesIO, StringIO, bytes)):
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-
-    if isinstance(filepath_or_buffer, StringIO):
-        filepath_or_buffer = filepath_or_buffer.read().encode()
-    elif isinstance(filepath_or_buffer, str) and not os.path.isfile(
-        filepath_or_buffer
-    ):
-        filepath_or_buffer = filepath_or_buffer.encode()
-
     _validate_args(
         delimiter,
         sep,
-        delim_whitespace,
         decimal,
         thousands,
         nrows,
@@ -159,28 +144,29 @@ def read_csv(
         elif header == "infer":
             header = 0
 
-    hex_cols: list[abc.Hashable] = []
-    cudf_dtypes: list[DtypeObj] | dict[abc.Hashable, DtypeObj] | DtypeObj = []
-    plc_dtypes: list[plc.DataType] | dict[abc.Hashable, plc.DataType] = []
+    hex_cols: list[int | str] = []
+    cudf_dtypes: list[DtypeObj] | dict[str, DtypeObj] | DtypeObj = []
+    plc_dtypes: list[plc.DataType] | dict[str, plc.DataType] = []
     if dtype is not None:
-        if isinstance(dtype, abc.Mapping):
+        if isinstance(dtype, Mapping):
             plc_dtypes = {}
             cudf_dtypes = {}
             for k, col_type in dtype.items():
+                k_str = str(k)
                 if isinstance(col_type, str) and col_type in _CSV_HEX_TYPE_MAP:
                     col_type = _CSV_HEX_TYPE_MAP[col_type]
-                    hex_cols.append(str(k))
+                    hex_cols.append(k_str)
 
-                cudf_dtype = cudf.dtype(col_type)
-                cudf_dtypes[k] = cudf_dtype
-                plc_dtypes[k] = _get_plc_data_type_from_dtype(cudf_dtype)
+                typ = cudf_dtype(col_type)
+                cudf_dtypes[k_str] = typ
+                plc_dtypes[k_str] = _get_plc_data_type_from_dtype(typ)
         elif isinstance(
             dtype,
             (
                 str,
                 np.dtype,
                 pd.api.extensions.ExtensionDtype,
-                cudf.core.dtypes._BaseDtype,
+                _BaseDtype,
                 type,
             ),
         ):
@@ -188,10 +174,12 @@ def read_csv(
                 dtype = _CSV_HEX_TYPE_MAP[dtype]
                 hex_cols.append(0)
             else:
-                dtype = cudf.dtype(dtype)
+                dtype = cudf_dtype(dtype)
             cudf_dtypes = dtype
-            cast(list, plc_dtypes).append(_get_plc_data_type_from_dtype(dtype))
-        elif isinstance(dtype, abc.Collection):
+            cast("list", plc_dtypes).append(
+                _get_plc_data_type_from_dtype(dtype)
+            )
+        elif isinstance(dtype, Collection):
             for index, col_dtype in enumerate(dtype):
                 if (
                     isinstance(col_dtype, str)
@@ -200,13 +188,24 @@ def read_csv(
                     col_dtype = _CSV_HEX_TYPE_MAP[col_dtype]
                     hex_cols.append(index)
                 else:
-                    col_dtype = cudf.dtype(col_dtype)
-                cudf_dtypes.append(col_dtype)
-                plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))
+                    col_dtype = cudf_dtype(col_dtype)
+                cudf_dtypes.append(col_dtype)  # type: ignore[union-attr]  # (collection branch keeps dtype accumulators as lists)
+                plc_dtypes.append(_get_plc_data_type_from_dtype(col_dtype))  # type: ignore[union-attr]  # (collection branch keeps dtype accumulators as lists)
         else:
             raise ValueError(
                 "dtype should be a scalar/str/list-like/dict-like"
             )
+    # Map int quoting value to QuoteStyle enum
+    quoting_map = {
+        0: plc.io.types.QuoteStyle.MINIMAL,
+        1: plc.io.types.QuoteStyle.ALL,
+        2: plc.io.types.QuoteStyle.NONNUMERIC,
+        3: plc.io.types.QuoteStyle.NONE,
+    }
+    quote_style: plc.io.types.QuoteStyle = quoting_map.get(
+        quoting, plc.io.types.QuoteStyle.MINIMAL
+    )
+
     options = (
         plc.io.csv.CsvReaderOptions.builder(
             plc.io.SourceInfo([filepath_or_buffer])
@@ -218,11 +217,10 @@ def read_csv(
         .nrows(nrows if nrows is not None else -1)
         .skiprows(skiprows)
         .skipfooter(skipfooter)
-        .quoting(quoting)
+        .quoting(quote_style)
         .lineterminator(str(lineterminator))
         .quotechar(quotechar)
         .decimal(decimal)
-        .delim_whitespace(delim_whitespace)
         .skipinitialspace(skipinitialspace)
         .skip_blank_lines(skip_blank_lines)
         .doublequote(doublequote)
@@ -273,7 +271,10 @@ def read_csv(
         options.set_na_values([str(val) for val in na_values])
 
     table_w_meta = plc.io.csv.read_csv(options)
-    df = cudf.DataFrame.from_pylibcudf(table_w_meta)
+    df = DataFrame.from_pylibcudf(table_w_meta)
+
+    if get_option("mode.pandas_compatible") and df.empty:
+        raise pd.errors.EmptyDataError("No columns to parse from file")
 
     # Cast result to categorical if specified in dtype=
     # since categorical is not handled in pylibcudf
@@ -281,24 +282,22 @@ def read_csv(
         to_category = {
             k: v
             for k, v in cudf_dtypes.items()
-            if isinstance(v, cudf.CategoricalDtype)
+            if isinstance(v, CategoricalDtype)
         }
         if to_category:
             df = df.astype(to_category)
-    elif isinstance(cudf_dtypes, cudf.CategoricalDtype):
+    elif isinstance(cudf_dtypes, CategoricalDtype):
         df = df.astype(dtype)
     elif isinstance(cudf_dtypes, list):
         for index, col_dtype in enumerate(cudf_dtypes):
-            if isinstance(col_dtype, cudf.CategoricalDtype):
+            if isinstance(col_dtype, CategoricalDtype):
                 col_name = df._column_names[index]
                 df._data[col_name] = df._data[col_name].astype(col_dtype)
 
     if names is not None and len(names) and isinstance(names[0], int):
         df.columns = [int(x) for x in df._data]
     elif (
-        names is None
-        and header == -1
-        and cudf.get_option("mode.pandas_compatible")
+        names is None and header == -1 and get_option("mode.pandas_compatible")
     ):
         df.columns = [int(x) for x in df._column_names]
 
@@ -321,7 +320,7 @@ def read_csv(
         else:
             df = df.set_index(index_col)
 
-    if dtype is None or isinstance(dtype, abc.Mapping):
+    if dtype is None or isinstance(dtype, Mapping):
         # There exists some dtypes in the result columns that is inferred.
         # Find them and map them to the default dtypes.
         specified_dtypes = {} if dtype is None else dtype
@@ -345,7 +344,7 @@ def read_csv(
 @_performance_tracking
 @ioutils.doc_to_csv()
 def to_csv(
-    df: cudf.DataFrame,
+    df: DataFrame,
     path_or_buf=None,
     sep: str = ",",
     na_rep: str = "",
@@ -394,7 +393,7 @@ def to_csv(
             )
 
     for _, dtype in df._dtypes:
-        if isinstance(dtype, (cudf.ListDtype, cudf.StructDtype)):
+        if isinstance(dtype, (ListDtype, StructDtype)):
             raise NotImplementedError(
                 "Writing to csv format is not yet supported with "
                 f"{dtype} columns."
@@ -405,14 +404,14 @@ def to_csv(
     # workaround once following issue is fixed:
     # https://github.com/rapidsai/cudf/issues/6661
     if any(
-        isinstance(dtype, cudf.CategoricalDtype) for _, dtype in df._dtypes
-    ) or isinstance(df.index, cudf.CategoricalIndex):
+        isinstance(dtype, CategoricalDtype) for _, dtype in df._dtypes
+    ) or isinstance(df.index, CategoricalIndex):
         df = df.copy(deep=False)
         for col_name, col in df._column_labels_and_values:
-            if isinstance(col.dtype, cudf.CategoricalDtype):
+            if isinstance(col.dtype, CategoricalDtype):
                 df._data[col_name] = col.astype(col.dtype.categories.dtype)
 
-        if isinstance(df.index, cudf.CategoricalIndex):
+        if isinstance(df.index, CategoricalIndex):
             df.index = df.index.astype(df.index.categories.dtype)
 
     rows_per_chunk = chunksize if chunksize else len(df)
@@ -447,9 +446,8 @@ def to_csv(
         return path_or_buf.read()
 
 
-@acquire_spill_lock()
 def _plc_write_csv(
-    table: cudf.DataFrame,
+    table: DataFrame,
     path_or_buf=None,
     sep: str = ",",
     na_rep: str = "",
@@ -463,53 +461,56 @@ def _plc_write_csv(
         if index
         else table._columns
     )
-    columns = [col.to_pylibcudf(mode="read") for col in iter_columns]
-    col_names = []
-    if header:
-        table_names = (
-            na_rep if name is None or pd.isnull(name) else name
-            for name in table._column_names
-        )
-        iter_names = (
-            itertools.chain(table.index.names, table_names)
-            if index
-            else table_names
-        )
-        all_names = list(iter_names)
-        col_names = [
-            '""'
-            if (name in (None, "") and len(all_names) == 1)
-            else (str(name) if name not in (None, "") else "")
-            for name in all_names
-        ]
-    try:
-        plc.io.csv.write_csv(
-            (
-                plc.io.csv.CsvWriterOptions.builder(
-                    plc.io.SinkInfo([path_or_buf]), plc.Table(columns)
-                )
-                .names(col_names)
-                .na_rep(na_rep)
-                .include_header(header)
-                .rows_per_chunk(rows_per_chunk)
-                .line_terminator(str(lineterminator))
-                .inter_column_delimiter(str(sep))
-                .true_value("True")
-                .false_value("False")
-                .build()
+    # Materialize iterator to avoid consuming it during access context setup
+    columns_list = list(iter_columns)
+
+    with access_columns(*columns_list, mode="read", scope="internal"):
+        columns = [col.plc_column for col in columns_list]
+        col_names = []
+        if header:
+            table_names = (
+                na_rep if name is None or pd.isnull(name) else name
+                for name in table._column_names
             )
-        )
-    except OverflowError as err:
-        raise OverflowError(
-            f"Writing CSV file with chunksize={rows_per_chunk} failed. "
-            "Consider providing a smaller chunksize argument."
-        ) from err
+            iter_names = (
+                itertools.chain(table.index.names, table_names)
+                if index
+                else table_names
+            )
+            all_names = list(iter_names)
+            col_names = [
+                '""'
+                if (name in (None, "") and len(all_names) == 1)
+                else (str(name) if name not in (None, "") else "")
+                for name in all_names
+            ]
+        try:
+            plc.io.csv.write_csv(
+                (
+                    plc.io.csv.CsvWriterOptions.builder(
+                        plc.io.SinkInfo([path_or_buf]), plc.Table(columns)
+                    )
+                    .names(col_names)
+                    .na_rep(na_rep)
+                    .include_header(header)
+                    .rows_per_chunk(rows_per_chunk)
+                    .line_terminator(str(lineterminator))
+                    .inter_column_delimiter(str(sep))
+                    .true_value("True")
+                    .false_value("False")
+                    .build()
+                )
+            )
+        except OverflowError as err:
+            raise OverflowError(
+                f"Writing CSV file with chunksize={rows_per_chunk} failed. "
+                "Consider providing a smaller chunksize argument."
+            ) from err
 
 
 def _validate_args(
     delimiter: str | None,
     sep: str,
-    delim_whitespace: bool,
     decimal: str,
     thousands: str | None,
     nrows: int | None,
@@ -517,12 +518,6 @@ def _validate_args(
     byte_range: list[int] | tuple[int, int] | None,
     skiprows: int,
 ) -> None:
-    if delim_whitespace:
-        if delimiter is not None:
-            raise ValueError("cannot set both delimiter and delim_whitespace")
-        if sep != ",":
-            raise ValueError("cannot set both sep and delim_whitespace")
-
     # Alias sep -> delimiter.
     actual_delimiter = delimiter if delimiter else sep
 
@@ -546,7 +541,7 @@ def _get_plc_data_type_from_dtype(dtype: DtypeObj) -> plc.DataType:
     # TODO: Remove this work-around Dictionary types
     # in libcudf are fully mapped to categorical columns:
     # https://github.com/rapidsai/cudf/issues/3960
-    if isinstance(dtype, cudf.CategoricalDtype):
+    if isinstance(dtype, CategoricalDtype):
         # TODO: should we do this generally in dtype_to_pylibcudf_type?
         dtype = dtype.categories.dtype
     return dtype_to_pylibcudf_type(dtype)

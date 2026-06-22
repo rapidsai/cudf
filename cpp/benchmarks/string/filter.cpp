@@ -1,20 +1,10 @@
 /*
- * Copyright (c) 2021-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/char_types/char_types.hpp>
@@ -41,34 +31,41 @@ static void bench_filter(nvbench::state& state)
 
   auto stream = cudf::get_default_stream();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto chars_size = input.chars_size(stream);
-  state.add_global_memory_reads<nvbench::int8_t>(chars_size);
+  auto data_size = column->alloc_size();
+  state.add_global_memory_reads<nvbench::int8_t>(data_size);
 
   if (api == "filter") {
     auto const types = cudf::strings::string_character_types::SPACE;
     {
       auto result = cudf::strings::filter_characters_of_type(input, types);
-      auto sv     = cudf::strings_column_view(result->view());
-      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
+      state.add_global_memory_writes<nvbench::int8_t>(result->alloc_size());
     }
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::filter_characters_of_type(input, types);
     });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   } else if (api == "chars") {
-    state.add_global_memory_writes<nvbench::int8_t>(chars_size);
+    state.add_global_memory_writes<nvbench::int8_t>(data_size);
     std::vector<std::pair<cudf::char_utf8, cudf::char_utf8>> filter_table{
       {cudf::char_utf8{'a'}, cudf::char_utf8{'c'}}};
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       cudf::strings::filter_characters(input, filter_table);
     });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   } else if (api == "strip") {
     {
       auto result = cudf::strings::strip(input);
-      auto sv     = cudf::strings_column_view(result->view());
-      state.add_global_memory_writes<nvbench::int8_t>(sv.chars_size(stream));
+      state.add_global_memory_writes<nvbench::int8_t>(result->alloc_size());
     }
+    auto const mem_stats_logger = cudf::memory_stats_logger();
     state.exec(nvbench::exec_tag::sync,
                [&](nvbench::launch& launch) { cudf::strings::strip(input); });
+    state.add_buffer_size(
+      mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   }
 }
 

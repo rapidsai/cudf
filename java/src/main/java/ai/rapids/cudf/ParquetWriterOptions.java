@@ -1,22 +1,13 @@
 /*
  *
- *  Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
 package ai.rapids.cudf;
+
+import java.util.Objects;
 
 /**
  * This class represents settings for writing Parquet files. It includes meta data information
@@ -26,11 +17,15 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
   private final StatisticsFrequency statsGranularity;
   private int rowGroupSizeRows;
   private long rowGroupSizeBytes;
+  private long maxDictionarySize;
+  private DictionaryPolicy dictionaryPolicy;
 
   private ParquetWriterOptions(Builder builder) {
     super(builder);
     this.rowGroupSizeRows = builder.rowGroupSizeRows;
     this.rowGroupSizeBytes = builder.rowGroupSizeBytes;
+    this.maxDictionarySize = builder.maxDictionarySize;
+    this.dictionaryPolicy = builder.dictionaryPolicy;
     this.statsGranularity = builder.statsGranularity;
   }
 
@@ -51,6 +46,33 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
     }
   }
 
+  /**
+   * Mirror of cudf::io::dictionary_policy. Controls when the Parquet writer is allowed
+   * to use dictionary encoding.
+   */
+  public enum DictionaryPolicy {
+    /** Never use dictionary encoding. */
+    NEVER(0),
+
+    /**
+     * Use dictionary encoding when it does not impact compression. The writer disables
+     * dictionary encoding for any column chunk whose dictionary would exceed
+     * {@link Builder#withMaxDictionarySize(long)}.
+     */
+    ADAPTIVE(1),
+
+    /**
+     * Use dictionary encoding even if it disables compression for affected columns.
+     */
+    ALWAYS(2);
+
+    final int nativeId;
+
+    DictionaryPolicy(int nativeId) {
+      this.nativeId = nativeId;
+    }
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -63,6 +85,21 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
     return rowGroupSizeBytes;
   }
 
+  /**
+   * @return the maximum per-column-chunk dictionary size in bytes. Only used when the
+   * dictionary policy is {@link DictionaryPolicy#ADAPTIVE}.
+   */
+  public long getMaxDictionarySize() {
+    return maxDictionarySize;
+  }
+
+  /**
+   * @return the dictionary policy in effect for the Parquet writer.
+   */
+  public DictionaryPolicy getDictionaryPolicy() {
+    return dictionaryPolicy;
+  }
+
   public StatisticsFrequency getStatisticsFrequency() {
     return statsGranularity;
   }
@@ -71,6 +108,10 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
         <Builder, ParquetWriterOptions> {
     private int rowGroupSizeRows = 1000000; //Max of 1 million rows per row group
     private long rowGroupSizeBytes = 128 * 1024 * 1024; //Max of 128MB per row group
+    // Matches cudf::io::default_max_dictionary_size (1 MiB).
+    private long maxDictionarySize = 1024 * 1024;
+    // Matches the cudf::io::parquet_writer_options default.
+    private DictionaryPolicy dictionaryPolicy = DictionaryPolicy.ADAPTIVE;
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
 
     public Builder() {
@@ -84,6 +125,27 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
 
     public Builder withRowGroupSizeBytes(long rowGroupSizeBytes) {
       this.rowGroupSizeBytes = rowGroupSizeBytes;
+      return this;
+    }
+
+    /**
+     * Sets the maximum dictionary size, in bytes. Only used when the dictionary policy is
+     * {@link DictionaryPolicy#ADAPTIVE}. Must be in [0, Integer.MAX_VALUE].
+     */
+    public Builder withMaxDictionarySize(long maxDictionarySize) {
+      if (maxDictionarySize < 0 || maxDictionarySize > Integer.MAX_VALUE) {
+        throw new IllegalArgumentException(
+            "maxDictionarySize must be in [0, " + Integer.MAX_VALUE + "], got " + maxDictionarySize);
+      }
+      this.maxDictionarySize = maxDictionarySize;
+      return this;
+    }
+
+    /**
+     * Sets the dictionary policy. Must not be null.
+     */
+    public Builder withDictionaryPolicy(DictionaryPolicy dictionaryPolicy) {
+      this.dictionaryPolicy = Objects.requireNonNull(dictionaryPolicy, "dictionaryPolicy");
       return this;
     }
 

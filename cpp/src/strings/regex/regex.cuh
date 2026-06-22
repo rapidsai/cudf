@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -24,8 +13,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <cuda_runtime.h>
-#include <thrust/pair.h>
 
 #include <functional>
 #include <memory>
@@ -34,9 +23,18 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
-struct relist;
+/**
+ * @brief Template type used on `find` to specify desired position values in returned match_result
+ */
+enum class positional : int8_t {
+  BEGIN_END = 0,  /// both begin and end positions are returned
+  END_ONLY  = 1,  /// only the end position is returned
+};
 
-using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
+template <positional P>
+struct reljunk;
+
+using match_pair   = cuda::std::pair<cudf::size_type, cudf::size_type>;
 using match_result = cuda::std::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
@@ -113,6 +111,14 @@ class reprog_device {
   [[nodiscard]] __device__ inline bool is_empty() const;
 
   /**
+   * @brief Returns true if the instructions in this program can match an empty string
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE bool is_empty_match_possible() const
+  {
+    return _empty_match_possible;
+  }
+
+  /**
    * @brief Returns the size needed for working memory for the given thread count.
    *
    * @param num_threads Number of threads to be executed in parallel
@@ -180,6 +186,7 @@ class reprog_device {
   /**
    * @brief Does a find evaluation using the compiled expression on the given string.
    *
+   * @tparam P Desired positional values. Default includes valid begin and end match positions.
    * @param thread_idx The index used for mapping the state memory for this string in global memory.
    * @param d_str The string to search.
    * @param begin Position to begin the search within `d_str`.
@@ -187,6 +194,7 @@ class reprog_device {
    *            Specify -1 to match any virtual positions past the end of the string.
    * @return If match found, returns character positions of the matches.
    */
+  template <positional P = positional::BEGIN_END>
   [[nodiscard]] __device__ inline match_result find(int32_t const thread_idx,
                                                     string_view const d_str,
                                                     string_view::const_iterator begin,
@@ -213,16 +221,6 @@ class reprog_device {
                                                        cudf::size_type const group_id) const;
 
  private:
-  struct reljunk {
-    relist* __restrict__ list1;
-    relist* __restrict__ list2;
-    int32_t starttype{};
-    char32_t startchar{};
-
-    __device__ inline reljunk(relist* list1, relist* list2, reinst const inst);
-    __device__ inline void swaplist();
-  };
-
   /**
    * @brief Returns the regex instruction object for a given id.
    */
@@ -236,8 +234,9 @@ class reprog_device {
   /**
    * @brief Executes the regex pattern on the given string.
    */
+  template <positional P>
   [[nodiscard]] __device__ inline match_result regexec(string_view const d_str,
-                                                       reljunk jnk,
+                                                       reljunk<P>& jnk,
                                                        string_view::const_iterator begin,
                                                        cudf::size_type end,
                                                        cudf::size_type const group_id = 0) const;
@@ -245,6 +244,7 @@ class reprog_device {
   /**
    * @brief Utility wrapper to setup state memory structures for calling regexec
    */
+  template <positional P = positional::BEGIN_END>
   [[nodiscard]] __device__ inline match_result call_regexec(
     int32_t const thread_idx,
     string_view const d_str,
@@ -266,9 +266,10 @@ class reprog_device {
   int32_t const* _startinst_ids{};    // array of start instruction ids
   reclass_device const* _classes{};   // array of regex classes
 
-  std::size_t _prog_size{};  // total size of this instance
-  void* _buffer{};           // working memory buffer
-  int32_t _thread_count{};   // threads available in working memory
+  std::size_t _prog_size{};      // total size of this instance
+  void* _buffer{};               // working memory buffer
+  int32_t _thread_count{};       // threads available in working memory
+  bool _empty_match_possible{};  // true if the regex can match an empty string
 };
 
 /**
