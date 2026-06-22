@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -129,7 +129,7 @@ def test_bloom_filter_roundtrip(context: Context, comm: Communicator) -> None:
     if comm.nranks != 1:
         pytest.skip("Only support single-rank runs")
 
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     values = np.arange(10, dtype=np.int32)
     build_table = make_table(values, stream=stream, br=context.br())
     probe_table = make_table(values, stream=stream, br=context.br())
@@ -150,7 +150,7 @@ def test_bloom_filter_empty_build_filters_all(
     if comm.nranks != 1:
         pytest.skip("Only support single-rank runs")
 
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     build_table = make_table(
         np.array([], dtype=np.int32), stream=stream, br=context.br()
     )
