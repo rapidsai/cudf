@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compute_shared_memory_aggs.hpp"
@@ -37,7 +26,7 @@
 namespace cudf::groupby::detail::hash {
 namespace {
 /// Shared memory data alignment
-CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
+CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 16;
 
 // Allocates shared memory required for output columns. Exits if there is insufficient memory to
 // perform shared memory aggregation for the current output column.
@@ -102,17 +91,17 @@ __device__ void initialize_shmem_aggregations(cooperative_groups::thread_block c
   }
 }
 
-__device__ void compute_pre_aggregrations(cudf::size_type col_start,
-                                          cudf::size_type col_end,
-                                          bitmask_type const* row_bitmask,
-                                          cudf::table_device_view source,
-                                          cudf::size_type num_input_rows,
-                                          cudf::size_type* local_mapping_index,
-                                          cuda::std::byte* shmem_agg_storage,
-                                          cudf::size_type* shmem_agg_res_offsets,
-                                          cudf::size_type* shmem_agg_mask_offsets,
-                                          cudf::aggregation::Kind const* d_agg_kinds,
-                                          cudf::size_type agg_location_offset)
+__device__ void compute_pre_aggregations(cudf::size_type col_start,
+                                         cudf::size_type col_end,
+                                         bitmask_type const* row_bitmask,
+                                         cudf::table_device_view source,
+                                         cudf::size_type num_input_rows,
+                                         cudf::size_type* local_mapping_index,
+                                         cuda::std::byte* shmem_agg_storage,
+                                         cudf::size_type* shmem_agg_res_offsets,
+                                         cudf::size_type* shmem_agg_mask_offsets,
+                                         cudf::aggregation::Kind const* d_agg_kinds,
+                                         cudf::size_type agg_location_offset)
 {
   // Aggregates global memory sources to shared memory targets
   for (auto source_idx = cudf::detail::grid_1d::global_thread_id(); source_idx < num_input_rows;
@@ -156,7 +145,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
     auto const target_idx =
-      global_mapping_index[(block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS) +
+      global_mapping_index[(block.group_index().x * GROUPBY_CARDINALITY_THRESHOLD) +
                            (idx % cardinality)];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto target_col = target.column(col_idx);
@@ -193,7 +182,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 {
   auto const block       = cooperative_groups::this_thread_block();
   auto const cardinality = block_cardinality[block.group_index().x];
-  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
+  if (cardinality > GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
 
   auto constexpr min_shmem_agg_locations = 32;
   auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
@@ -216,10 +205,14 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
     col_start = 0;
     col_end   = 0;
   }
-  block.sync();
+  // Workaround: use __syncthreads() instead of block.sync() throughout this
+  // kernel. cooperative_groups::thread_block::sync() does not properly fence
+  // shared memory on sm_120 with CUDA 13.2, causing init stores to be
+  // invisible to subsequent phases.
+  __syncthreads();
 
   while (col_end < num_cols) {
-    block.sync();
+    __syncthreads();
     if (block.thread_rank() == 0) {
       calculate_columns_to_aggregate(col_start,
                                      col_end,
@@ -230,7 +223,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                      num_agg_locations,
                                      total_agg_size);
     }
-    block.sync();
+    __syncthreads();
 
     initialize_shmem_aggregations(block,
                                   col_start,
@@ -241,20 +234,20 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   shmem_agg_mask_offsets,
                                   num_agg_locations,
                                   d_agg_kinds);
-    block.sync();
+    __syncthreads();
 
-    compute_pre_aggregrations(col_start,
-                              col_end,
-                              row_bitmask,
-                              input_values,
-                              num_rows,
-                              local_mapping_index,
-                              shmem_agg_storage,
-                              shmem_agg_res_offsets,
-                              shmem_agg_mask_offsets,
-                              d_agg_kinds,
-                              agg_location_offset);
-    block.sync();
+    compute_pre_aggregations(col_start,
+                             col_end,
+                             row_bitmask,
+                             input_values,
+                             num_rows,
+                             local_mapping_index,
+                             shmem_agg_storage,
+                             shmem_agg_res_offsets,
+                             shmem_agg_mask_offsets,
+                             d_agg_kinds,
+                             agg_location_offset);
+    __syncthreads();
 
     compute_final_aggregations(block,
                                col_start,
@@ -322,5 +315,6 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
     d_agg_kinds,
     shmem_agg_size,
     offsets_size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 }  // namespace cudf::groupby::detail::hash

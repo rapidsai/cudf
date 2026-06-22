@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -27,6 +16,8 @@
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
+
+#include <cuda/iterator>
 
 #include <string>
 #include <vector>
@@ -98,12 +89,8 @@ TEST_P(JsonCompressedWriterTest, EmptyLeaf)
 {
   cudf::test::strings_column_wrapper col1{""};
   cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0};
-  auto col2 = make_lists_column(1,
-                                offsets.release(),
-                                cudf::test::strings_column_wrapper{}.release(),
-                                0,
-                                rmm::device_buffer{},
-                                cudf::test::get_default_stream());
+  auto col2 = make_lists_column(
+    1, offsets.release(), cudf::test::strings_column_wrapper{}.release(), 0, rmm::device_buffer{});
   auto col3 = cudf::test::lists_column_wrapper<int>::make_one_empty_row_column();
   cudf::table_view tbl_view{{col1, *col2, col3}};
   cudf::io::table_metadata mt{{{"col1"}, {"col2"}, {"col3"}}};
@@ -510,7 +497,7 @@ TEST_P(JsonCompressedWriterTest, ChunkedNested)
 
 TEST_P(JsonCompressedWriterTest, StructAllNullCombinations)
 {
-  auto const_1_iter = thrust::make_constant_iterator(1);
+  auto const_1_iter = cuda::make_constant_iterator(1);
 
   auto col_a = cudf::test::fixed_width_column_wrapper<int>(
     const_1_iter, const_1_iter + 32, cudf::detail::make_counting_transform_iterator(0, [](auto i) {

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 from functools import partial, reduce, singledispatch
-from typing import TYPE_CHECKING, TypeAlias, TypedDict
+from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
+
+import polars as pl  # noqa: TC002 (used at runtime for pl.datatypes, pl.Series etc.)
 
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
@@ -18,6 +20,8 @@ from cudf_polars.typing import GenericTransformer
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from rmm.pylibrmm.stream import Stream
 
 
 # Can't merge these op-mapping dictionaries because scoped enum values
@@ -72,23 +76,7 @@ UOP_TO_ASTOP = {
     plc.unary.UnaryOperator.NOT: plc_expr.ASTOperator.NOT,
 }
 
-SUPPORTED_STATISTICS_BINOPS = {
-    plc.binaryop.BinaryOperator.EQUAL,
-    plc.binaryop.BinaryOperator.NOT_EQUAL,
-    plc.binaryop.BinaryOperator.LESS,
-    plc.binaryop.BinaryOperator.LESS_EQUAL,
-    plc.binaryop.BinaryOperator.GREATER,
-    plc.binaryop.BinaryOperator.GREATER_EQUAL,
-}
-
-REVERSED_COMPARISON = {
-    plc.binaryop.BinaryOperator.EQUAL: plc.binaryop.BinaryOperator.EQUAL,
-    plc.binaryop.BinaryOperator.NOT_EQUAL: plc.binaryop.BinaryOperator.NOT_EQUAL,
-    plc.binaryop.BinaryOperator.LESS: plc.binaryop.BinaryOperator.GREATER,
-    plc.binaryop.BinaryOperator.LESS_EQUAL: plc.binaryop.BinaryOperator.GREATER_EQUAL,
-    plc.binaryop.BinaryOperator.GREATER: plc.binaryop.BinaryOperator.LESS,
-    plc.binaryop.BinaryOperator.GREATER_EQUAL: plc.binaryop.BinaryOperator.LESS_EQUAL,
-}
+_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
 
 
 class ASTState(TypedDict):
@@ -103,6 +91,7 @@ class ASTState(TypedDict):
     """
 
     for_parquet: bool
+    stream: Stream
 
 
 class ExprTransformerState(TypedDict):
@@ -170,7 +159,9 @@ def _(node: expr.ColRef, self: Transformer) -> plc_expr.Expression:
 
 @_to_ast.register
 def _(node: expr.Literal, self: Transformer) -> plc_expr.Expression:
-    return plc_expr.Literal(plc.Scalar.from_py(node.value, node.dtype.plc_type))
+    return plc_expr.Literal(
+        plc.Scalar.from_py(node.value, node.dtype.plc_type, stream=self.state["stream"])
+    )
 
 
 @_to_ast.register
@@ -187,28 +178,26 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
                 )
             ),
         )
-    if self.state["for_parquet"]:
-        op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
-        if op1_col ^ op2_col:
-            op = node.op
-            if op not in SUPPORTED_STATISTICS_BINOPS:
-                raise NotImplementedError(
-                    f"Parquet filter binop with column doesn't support {node.op!r}"
-                )
-            op1, op2 = node.children
-            if op2_col:
-                (op1, op2) = (op2, op1)
-                op = REVERSED_COMPARISON[op]
-            if not isinstance(op2, expr.Literal):
-                raise NotImplementedError(
-                    "Parquet filter binops must have form 'col binop literal'"
-                )
-            return plc_expr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
-        elif op1_col and op2_col:
+    c1, c2 = node.children
+    if c1.dtype != c2.dtype:
+        if isinstance(c1, expr.Literal):  # pragma: no cover
+            c1 = c1.astype(c2.dtype)
+        elif isinstance(c2, expr.Literal):
+            c2 = c2.astype(c1.dtype)
+        elif (
+            isinstance(c1, (expr.Col, expr.ColRef)) and c1.dtype.id() in _DECIMAL_IDS
+        ) or (
+            isinstance(c2, (expr.Col, expr.ColRef)) and c2.dtype.id() in _DECIMAL_IDS
+        ):
+            # Allow mixed-precision decimal, or mixed decimal-float operations through
+            # unchanged.
+            pass
+        else:
             raise NotImplementedError(
-                "Parquet filter binops must have one column reference not two"
-            )
-    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
+                "BinOp with mismatching dtypes"
+            )  # pragma: no cover
+    children = (c1, c2)
+    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, children))
 
 
 @_to_ast.register
@@ -221,14 +210,18 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
             if haystack.dtype.id() == plc.TypeId.LIST:
                 # Because we originally translated pl_expr.Literal with a list scalar
                 # to a expr.LiteralColumn, so the actual type is in the inner type
-                #
-                # the type-ignore is safe because the for plc.TypeID.LIST, we know
-                # we have a polars.List type, which has an inner attribute.
-                plc_dtype = DataType(haystack.dtype.polars_type.inner).plc_type  # type: ignore[attr-defined]
+                # .inner returns DataTypeClass | DataType, need to cast to DataType
+                plc_dtype = DataType(
+                    cast(
+                        "pl.DataType", cast("pl.List", haystack.dtype.polars_type).inner
+                    )
+                ).plc_type
             else:
                 plc_dtype = haystack.dtype.plc_type  # pragma: no cover
             values = (
-                plc_expr.Literal(plc.Scalar.from_py(val, plc_dtype))
+                plc_expr.Literal(
+                    plc.Scalar.from_py(val, plc_dtype, stream=self.state["stream"])
+                )
                 for val in haystack.value
             )
             return reduce(
@@ -265,7 +258,7 @@ def _(node: expr.UnaryFunction, self: Transformer) -> plc_expr.Expression:
     )
 
 
-def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
+def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for parquet filtering.
 
@@ -273,19 +266,34 @@ def to_parquet_filter(node: expr.Expr) -> plc_expr.Expression | None:
     ----------
     node
         Expression to convert.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
 
     Returns
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": True})
+    # Converts a boolean column reference (e.g., filter(pl.col("foo")))
+    # to an explicit comparison for parquet filters (e.g., filter(pl.col("foo") == True)).
+    # TODO: Have polars pass us the comparison instead
+    if isinstance(node, expr.Col) and node.dtype.id() == plc.TypeId.BOOL8:
+        node = expr.BinOp(
+            node.dtype,
+            plc.binaryop.BinaryOperator.EQUAL,
+            node,
+            expr.Literal(node.dtype, value=True),
+        )
+
+    mapper: Transformer = CachingVisitor(
+        _to_ast, state={"for_parquet": True, "stream": stream}
+    )
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):
         return None
 
 
-def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
+def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
     """
     Convert an expression to libcudf AST nodes suitable for compute_column.
 
@@ -293,6 +301,8 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     ----------
     node
         Expression to convert.
+    stream
+        CUDA stream used for device memory operations and kernel launches.
 
     Notes
     -----
@@ -304,7 +314,9 @@ def to_ast(node: expr.Expr) -> plc_expr.Expression | None:
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
-    mapper: Transformer = CachingVisitor(_to_ast, state={"for_parquet": False})
+    mapper: Transformer = CachingVisitor(
+        _to_ast, state={"for_parquet": False, "stream": stream}
+    )
     try:
         return mapper(node)
     except (KeyError, NotImplementedError):

@@ -1,10 +1,10 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 """Benchmarks of DataFrame methods."""
 
 import string
 
-import numba.cuda
 import numpy
 import pandas as pd
 import pyarrow as pa
@@ -176,12 +176,6 @@ def bench_construction(benchmark, N):
     benchmark(cudf.DataFrame, {None: cupy.random.rand(N)})
 
 
-@pytest.mark.parametrize("N", NUM_ROWS)
-@pytest.mark.pandas_incompatible
-def bench_construction_numba_device_array(benchmark, N):
-    benchmark(cudf.DataFrame, numba.cuda.to_device(numpy.ones((100, N))))
-
-
 @benchmark_with_object(cls="dataframe", dtype="float", cols=6)
 @pytest.mark.parametrize(
     "expr", ["a+b", "a+b+c+d+e", "a / (sin(a) + cos(b)) * tanh(d*e*f)"]
@@ -328,6 +322,14 @@ def bench_groupby_sample(
     benchmark(grouper.sample, **kwargs)
 
 
+@benchmark_with_object(cls="dataframe", dtype="float", nulls=False, cols=6)
+@pytest.mark.parametrize("num_key_cols", [1, 2])
+@pytest.mark.parametrize("q", [0.5, [0.25, 0.5, 0.75]])
+def bench_groupby_quantile(benchmark, dataframe, num_key_cols, q):
+    grouper = dataframe.groupby(by=list(dataframe.columns[:num_key_cols]))
+    benchmark(grouper.quantile, q)
+
+
 @benchmark_with_object(cls="dataframe", dtype="int")
 @pytest.mark.parametrize("num_cols_to_sort", [1])
 def bench_sort_values(benchmark, dataframe, num_cols_to_sort):
@@ -352,7 +354,7 @@ def bench_where(benchmark, dataframe, cond, other):
 
 
 @benchmark_with_object(
-    cls="dataframe", dtype="float", nulls=False, cols=20, rows=20
+    cls="dataframe", dtype="float", nulls=False, cols=20, rows=100
 )
 @pytest.mark.pandas_incompatible
 def bench_to_cupy(benchmark, dataframe):

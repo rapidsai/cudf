@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -42,6 +31,21 @@ table_with_metadata read_json(host_span<std::unique_ptr<datasource>> sources,
                               rmm::device_async_resource_ref mr);
 
 /**
+ * @brief Reads and returns the entire data set along with reader-specific diagnostics.
+ *
+ * @param sources Input `datasource` objects to read the dataset from
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
+ *
+ * @return Parsed table, metadata, and JSON reader diagnostics
+ */
+json_reader_result read_json_with_diagnostics(host_span<std::unique_ptr<datasource>> sources,
+                                              json_reader_options const& options,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr);
+
+/**
  * @brief Write an entire dataset to JSON format.
  *
  * @param sink Output sink
@@ -70,7 +74,7 @@ void normalize_single_quotes(datasource::owning_buffer<rmm::device_buffer>& inda
 /**
  * @brief Normalize unquoted whitespace (space and tab characters) using FST
  *
- * @param indata Input device buffer
+ * @param d_input Input device buffer
  * @param col_offsets Offsets to column contents in input buffer
  * @param col_lengths Length of contents of each row in column
  * @param stream CUDA stream used for device memory operations and kernel launches

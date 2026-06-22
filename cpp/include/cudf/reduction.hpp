@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -44,8 +33,9 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * `int64_t` or `double` for computing aggregations and then cast to `output_type` before returning.
  *
  * The `SUM_WITH_OVERFLOW` aggregation is a special case that detects integer
- * overflow during summation of `int64_t` values and returns a struct containing
- * both the sum result and an overflow flag.
+ * overflow during summation of signed integer or decimal values and returns a struct
+ * containing both the sum result and an overflow flag. On overflow the sum value
+ * is unspecified; the boolean flag is the source of truth.
  *
  * Only `min` and `max` ops are supported for reduction of non-arithmetic
  * types (e.g. timestamp or string).
@@ -64,7 +54,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * | Aggregation | Output Type | Init Value | Empty Input | Comments |
  * | :---------: | ----------- | :--------: | ----------- | -------- |
  * | SUM/PRODUCT | output_type | yes | NA | Input accumulated into output_type variable |
- * | SUM_WITH_OVERFLOW | STRUCT{INT64,BOOL8} | yes | {null,false} | {sum, overflow_flag}, input must be INT64 |
+ * | SUM_WITH_OVERFLOW | STRUCT{col.type,BOOL8} | yes | {null,false} | {sum, overflow_flag}, input must be signed integer or decimal |
  * | SUM_OF_SQUARES | output_type | no | NA | Input accumulated into output_type variable |
  * | MIN/MAX | col.type | yes | NA | Supports arithmetic, timestamp, duration, string types only |
  * | ANY/ALL | BOOL8 | yes | True for ALL only | Checks for non-zero elements |
@@ -89,7 +79,7 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * @throw std::invalid_argument if `mean`, `var`, or `std` reduction is called and
  * the `output_type` is not floating point.
  * @throw std::invalid_argument if `sum_with_overflow` reduction is called and the
- * input column type is not `INT64` or the `output_dtype` is not `STRUCT`.
+ * input column type is not a signed integer or decimal, or the `output_type` is not `STRUCT`.
  *
  * @param col Input column view
  * @param agg Aggregation operator applied by the reduction
@@ -254,6 +244,20 @@ std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> minmax(
   column_view const& col,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Reduction namespace
+ */
+namespace reduction {
+/**
+ * @brief Indicate if a reduction is supported for a source datatype.
+ *
+ * @param source The source data type.
+ * @param kind The reduction aggregation.
+ * @returns true if the reduction is supported.
+ */
+bool is_valid_aggregation(data_type source, aggregation::Kind kind);
+}  // namespace reduction
 
 /** @} */  // end of group
 

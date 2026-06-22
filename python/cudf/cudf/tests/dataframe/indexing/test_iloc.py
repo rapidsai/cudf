@@ -1,7 +1,7 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pytest
@@ -81,9 +81,8 @@ def test_multiindex_iloc_scalar():
     arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
     tuples = list(zip(*arrays, strict=True))
     idx = cudf.MultiIndex.from_tuples(tuples)
-    gdf = cudf.DataFrame(
-        {"first": cp.random.rand(4), "second": cp.random.rand(4)}
-    )
+    rng = np.random.default_rng(0)
+    gdf = cudf.DataFrame({"first": rng.random(4), "second": rng.random(4)})
     gdf.index = idx
 
     pdf = gdf.to_pandas()
@@ -377,16 +376,19 @@ def test_iloc_single_row_with_nullable_column():
     assert_eq(pdf.iloc[0], df.iloc[0])
 
 
+@pytest.mark.xfail(
+    raises=NotImplementedError,
+    reason="cuDF needs to implement boolean mask along columns",
+)
 def test_boolean_mask_columns_iloc_series():
     df = pd.DataFrame(np.zeros((3, 3)))
     cdf = cudf.from_pandas(df)
 
     mask = pd.Series([True, False, True], dtype=bool)
-    with pytest.raises(NotImplementedError):
-        df.iloc[:, mask]
+    df.iloc[:, mask] = 1
 
-    with pytest.raises(NotImplementedError):
-        cdf.iloc[:, mask]
+    cdf.iloc[:, mask] = 1
+    assert_eq(df, cdf)
 
 
 def test_iloc_column_boolean_mask_issue_13265():

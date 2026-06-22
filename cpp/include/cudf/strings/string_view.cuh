@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -24,9 +13,8 @@
 #include <cudf/utilities/error.hpp>
 #endif
 
-// This is defined when including this header in a https://github.com/NVIDIA/jitify
-// or jitify2 source file. The jitify cannot include thrust headers at this time.
-#ifndef CUDF_RUNTIME_JIT
+// This is defined when compiling with NVRTC. NVRTC cannot include thrust headers at this time.
+#ifndef __CUDACC_RTC__
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
 #endif
@@ -52,7 +40,7 @@ __device__ inline size_type characters_in_string(char const* str, size_type byte
 {
   if ((str == nullptr) || (bytes == 0)) return 0;
   auto ptr = reinterpret_cast<uint8_t const*>(str);
-#ifndef CUDF_RUNTIME_JIT
+#ifndef __CUDACC_RTC__
   return thrust::count_if(
     thrust::seq, ptr, ptr + bytes, [](uint8_t chr) { return is_begin_utf8_char(chr); });
 #else

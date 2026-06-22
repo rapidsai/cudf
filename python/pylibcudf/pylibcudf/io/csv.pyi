@@ -1,8 +1,9 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
-from typing_extensions import Self
+from typing import Self
 
-from rmm.pylibrmm.stream import Stream
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.io.types import (
     CompressionType,
@@ -13,6 +14,7 @@ from pylibcudf.io.types import (
 )
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 class CsvReaderOptions:
     def __init__(self): ...
@@ -30,6 +32,7 @@ class CsvReaderOptions:
     def set_true_values(self, true_values: list[str]): ...
     def set_false_values(self, false_values: list[str]): ...
     def set_na_values(self, na_values: list[str]): ...
+    def set_source(self, src: SourceInfo) -> None: ...
     @staticmethod
     def builder(source: SourceInfo) -> CsvReaderOptionsBuilder: ...
 
@@ -58,9 +61,12 @@ class CsvReaderOptionsBuilder:
 
 def read_csv(
     options: CsvReaderOptions,
-    stream: Stream = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
-def write_csv(options: CsvWriterOptionsBuilder, stream: Stream = None): ...
+def write_csv(
+    options: CsvWriterOptions, stream: CudaStreamLike | None = None
+): ...
 
 class CsvWriterOptions:
     def __init__(self): ...

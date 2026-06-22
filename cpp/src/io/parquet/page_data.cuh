@@ -1,22 +1,12 @@
 
 /*
- * Copyright (c) 2018-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include "page_decode.cuh"
+#include "timestamp_utils.cuh"
 
 #include <cudf/hashing/detail/murmurhash3_x86_32.cuh>
 
@@ -75,20 +65,11 @@ inline __device__ void gpuStoreOutput(uint32_t* dst,
                                       uint32_t dict_pos,
                                       uint32_t dict_size)
 {
-  uint32_t bytebuf;
-  unsigned int ofs = 3 & reinterpret_cast<size_t>(src8);
-  src8 -= ofs;  // align to 32-bit boundary
-  ofs <<= 3;    // bytes -> bits
   if (dict_pos < dict_size) {
-    bytebuf = *reinterpret_cast<uint32_t const*>(src8 + dict_pos);
-    if (ofs) {
-      uint32_t bytebufnext = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
-      bytebuf              = __funnelshift_r(bytebuf, bytebufnext, ofs);
-    }
+    *dst = cudf::io::unaligned_load<uint32_t>(src8 + dict_pos);
   } else {
-    bytebuf = 0;
+    *dst = 0;
   }
-  *dst = bytebuf;
 }
 
 /**
@@ -232,7 +213,6 @@ inline __device__ void read_int64_timestamp(page_state_s* s,
   if (dict_pos + 4 < dict_size) {
     uint2 v;
     int64_t val;
-    int32_t ts_scale;
     v.x = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 0);
     v.y = *reinterpret_cast<uint32_t const*>(src8 + dict_pos + 4);
     if (ofs) {
@@ -244,14 +224,7 @@ inline __device__ void read_int64_timestamp(page_state_s* s,
     val <<= 32;
     val |= v.x;
     // Output to desired clock rate
-    ts_scale = s->ts_scale;
-    if (ts_scale < 0) {
-      // round towards negative infinity
-      int sign = (val < 0);
-      ts       = ((val + sign) / -ts_scale) + sign;
-    } else {
-      ts = val * ts_scale;
-    }
+    ts = apply_ts_scale(val, s->ts_scale);
   } else {
     ts = 0;
   }
@@ -438,13 +411,7 @@ inline __device__ void gpuOutputSplitInt64Timestamp(int64_t* dst,
                                                     int32_t ts_scale)
 {
   gpuOutputByteStreamSplit<int64_t>(reinterpret_cast<uint8_t*>(dst), src, stride);
-  if (ts_scale < 0) {
-    // round towards negative infinity
-    int sign = (*dst < 0);
-    *dst     = ((*dst + sign) / -ts_scale) + sign;
-  } else {
-    *dst = *dst * ts_scale;
-  }
+  *dst = apply_ts_scale(*dst, ts_scale);
 }
 
 /**

@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -41,9 +30,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/functional.h>
+#include <cuda/iterator>
 #include <thrust/gather.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <algorithm>
@@ -128,7 +116,7 @@ void gather_helper(InputItr source_itr,
 {
   using map_type = typename std::iterator_traits<MapIterator>::value_type;
   if (nullify_out_of_bounds) {
-    thrust::gather_if(rmm::exec_policy_nosync(stream),
+    thrust::gather_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       gather_map_begin,
                       gather_map_end,
                       gather_map_begin,
@@ -136,8 +124,11 @@ void gather_helper(InputItr source_itr,
                       target_itr,
                       bounds_checker<map_type>{0, source_size});
   } else {
-    thrust::gather(
-      rmm::exec_policy_nosync(stream), gather_map_begin, gather_map_end, source_itr, target_itr);
+    thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   gather_map_begin,
+                   gather_map_end,
+                   source_itr,
+                   target_itr);
   }
 }
 
@@ -423,21 +414,7 @@ struct column_gatherer_impl<dictionary32> {
       gather_map_end,
       nullify_out_of_bounds,
       stream);
-    // dissect the column's contents
-    auto indices_type = new_indices->type();
-    auto null_count   = new_indices->null_count();  // get this before calling release()
-    auto contents     = new_indices->release();     // new_indices will now be empty
-    // build the output indices column from the contents' data component
-    auto indices_column = std::make_unique<column>(indices_type,
-                                                   static_cast<size_type>(output_count),
-                                                   std::move(*(contents.data.release())),
-                                                   rmm::device_buffer{0, stream, mr},
-                                                   0);  // set null count to 0
-    // finally, build the dictionary with the null_mask component and the keys and indices
-    return make_dictionary_column(std::move(keys_copy),
-                                  std::move(indices_column),
-                                  std::move(*(contents.null_mask.release())),
-                                  null_count);
+    return make_dictionary_column(std::move(keys_copy), std::move(new_indices), stream, mr);
   }
 };
 
@@ -457,8 +434,8 @@ struct column_gatherer_impl<struct_view> {
     // Gathering needs to operate on the sliced children since they need to take into account the
     // offset of the parent structs column.
     std::vector<cudf::column_view> sliced_children;
-    std::transform(thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(column.num_children()),
+    std::transform(cuda::counting_iterator<cudf::size_type>{0},
+                   cuda::counting_iterator{column.num_children()},
                    std::back_inserter(sliced_children),
                    [&stream, structs_view = structs_column_view{column}](auto const idx) {
                      return structs_view.get_sliced_child(idx, stream);
@@ -540,7 +517,7 @@ void gather_bitmask(table_device_view input,
   constexpr size_type block_size = 256;
   using Selector                 = gather_bitmask_functor<Op, decltype(gather_map_begin)>;
   auto selector                  = Selector{input, masks, gather_map_begin};
-  auto counting_it               = thrust::make_counting_iterator(0);
+  auto counting_it               = cuda::counting_iterator<cudf::size_type>{0};
   auto kernel =
     valid_if_n_kernel<decltype(counting_it), decltype(counting_it), Selector, block_size>;
 
@@ -672,11 +649,12 @@ std::unique_ptr<table> gather(table_view const& source_table,
                                                    mr));
   }
 
-  auto needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
-                           cudf::has_nested_nullable_columns(source_table);
+  auto const needs_new_bitmask = bounds_policy == out_of_bounds_policy::NULLIFY ||
+                                 cudf::has_nested_nullable_columns(source_table);
   if (needs_new_bitmask) {
-    needs_new_bitmask = needs_new_bitmask || cudf::has_nested_nulls(source_table);
-    if (needs_new_bitmask) {
+    auto const has_possible_nulls =
+      bounds_policy == out_of_bounds_policy::NULLIFY || cudf::has_nested_nulls(source_table);
+    if (has_possible_nulls) {
       auto const op = bounds_policy == out_of_bounds_policy::NULLIFY
                         ? gather_bitmask_op::NULLIFY
                         : gather_bitmask_op::DONT_CHECK;

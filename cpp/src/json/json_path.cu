@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/parsing_utils.cuh"
@@ -43,7 +32,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/optional>
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 #include <thrust/scan.h>
 #include <thrust/tuple.h>
 
@@ -671,9 +660,9 @@ std::pair<cuda::std::optional<rmm::device_uvector<path_operator>>, int> build_co
   int max_stack_depth = 1;
   do {
     op = p_state.get_next_operator();
-    if (op.type == path_operator_type::ERROR) {
-      CUDF_FAIL("Encountered invalid JSONPath input string", std::invalid_argument);
-    }
+    CUDF_EXPECTS(op.type != path_operator_type::ERROR,
+                 "Encountered invalid JSONPath input string",
+                 std::invalid_argument);
     if (op.type == path_operator_type::CHILD_WILDCARD) { max_stack_depth++; }
     // convert pointer to device pointer
     if (op.name.size_bytes() > 0) {
@@ -886,7 +875,7 @@ constexpr int max_command_stack_depth = 8;
  * @param options Options controlling behavior
  * @returns A pair containing the result code the output buffer.
  */
-__device__ thrust::pair<parse_result, json_output> get_json_object_single(
+__device__ cuda::std::pair<parse_result, json_output> get_json_object_single(
   char const* input,
   size_t input_len,
   path_operator const* const commands,
@@ -992,12 +981,19 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
 
   // if the query is empty, return a string column containing all nulls
   if (!std::get<0>(preprocess).has_value()) {
-    return std::make_unique<column>(
-      data_type{type_id::STRING},
+    // Create a proper all-null strings column with valid structure (offsets + chars children)
+    auto offsets = cudf::make_column_from_scalar(
+      cudf::numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref()),
+      col.size() + 1,
+      stream,
+      mr);
+
+    return make_strings_column(
       col.size(),
-      rmm::device_buffer{0, stream, mr},  // no data
-      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr),
-      col.size());  // null count
+      std::move(offsets),
+      rmm::device_buffer{0, stream, mr},  // empty chars
+      col.size(),                         // null_count
+      cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr));
   }
 
   // compute output sizes
@@ -1019,6 +1015,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       cuda::std::nullopt,
       cuda::std::nullopt,
       options);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // convert sizes to offsets
   auto [offsets, output_size] =
@@ -1034,7 +1031,8 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
     cudf::detail::create_null_mask(col.size(), mask_state::UNINITIALIZED, stream, mr);
 
   // compute results
-  cudf::detail::device_scalar<size_type> d_valid_count{0, stream};
+  cudf::detail::device_scalar<size_type> d_valid_count{
+    0, stream, cudf::get_current_device_resource_ref()};
 
   get_json_object_kernel<block_size>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
@@ -1046,6 +1044,7 @@ std::unique_ptr<cudf::column> get_json_object(cudf::strings_column_view const& c
       static_cast<bitmask_type*>(validity.data()),
       d_valid_count.data(),
       options);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   auto result = make_strings_column(col.size(),
                                     std::move(offsets),

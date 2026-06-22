@@ -1,27 +1,16 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.cuh>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/count.h>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 namespace cudf {
 namespace detail {
@@ -54,9 +43,9 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
     return d_input.is_null_nocheck(row_idx) && (offsets[row_idx] != offsets[row_idx + 1]);
   };
 
-  auto const row_begin = thrust::counting_iterator<cudf::size_type>(0);
+  auto const row_begin = cuda::counting_iterator<cudf::size_type>{0};
   auto const row_end   = row_begin + input.size();
-  return thrust::count_if(rmm::exec_policy(stream), row_begin, row_end, is_dirty_row) > 0;
+  return cudf::detail::count_if(row_begin, row_end, is_dirty_row, stream) > 0;
 }
 
 }  // namespace
@@ -96,8 +85,8 @@ std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
 
   // Implement via identity gather.
   auto gathered_table = cudf::detail::gather(table_view{{input}},
-                                             thrust::make_counting_iterator(0),
-                                             thrust::make_counting_iterator(input.size()),
+                                             cuda::counting_iterator<cudf::size_type>{0},
+                                             cuda::counting_iterator{input.size()},
                                              out_of_bounds_policy::DONT_CHECK,
                                              stream,
                                              mr);

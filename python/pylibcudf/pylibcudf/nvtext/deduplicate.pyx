@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator import dereference
 
@@ -13,10 +14,11 @@ from pylibcudf.libcudf.nvtext.deduplicate cimport (
     resolve_duplicates_pair as cpp_resolve_duplicates_pair,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.utils cimport _get_stream
-
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.librmm.device_buffer cimport device_buffer
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "build_suffix_array",
@@ -25,7 +27,7 @@ __all__ = [
 ]
 
 cdef Column _column_from_suffix_array(
-    cpp_suffix_array_type suffix_array, Stream stream
+    cpp_suffix_array_type suffix_array, Stream stream, DeviceMemoryResource mr
 ):
     # helper to convert a suffix array to a Column
     return Column.from_libcudf(
@@ -35,12 +37,13 @@ cdef Column _column_from_suffix_array(
                 device_buffer(),
                 0
             )
-        ),
-        stream
+        ), stream, mr
     )
 
 
-cpdef Column build_suffix_array(Column input, size_type min_width, Stream stream=None):
+cpdef Column build_suffix_array(
+    Column input, size_type min_width, object stream=None, DeviceMemoryResource mr=None
+):
     """
     Builds a suffix array for the input strings column.
     A suffix array is the indices of the sorted set of substrings
@@ -64,16 +67,24 @@ cpdef Column build_suffix_array(Column input, size_type min_width, Stream stream
         New column of suffix array
     """
     cdef cpp_suffix_array_type c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_build_suffix_array(input.view(), min_width, stream.view())
+        c_result = cpp_build_suffix_array(
+            input.view(), min_width, _cs, mr.get_mr()
+        )
 
-    return _column_from_suffix_array(move(c_result), stream)
+    return _column_from_suffix_array(move(c_result), _stream, mr)
 
 
 cpdef Column resolve_duplicates(
-    Column input, Column indices, size_type min_width, Stream stream=None
+    Column input,
+    Column indices,
+    size_type min_width,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns duplicate strings found in the input column
@@ -100,14 +111,16 @@ cpdef Column resolve_duplicates(
         New column of duplicate strings
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_resolve_duplicates(
-            input.view(), indices.view(), min_width, stream.view()
+            input.view(), indices.view(), min_width, _cs, mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column resolve_duplicates_pair(
@@ -116,7 +129,8 @@ cpdef Column resolve_duplicates_pair(
     Column input2,
     Column indices2,
     size_type min_width,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns duplicate strings in input1 found in input2
@@ -148,7 +162,9 @@ cpdef Column resolve_duplicates_pair(
 
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_resolve_duplicates_pair(
@@ -157,7 +173,8 @@ cpdef Column resolve_duplicates_pair(
             input2.view(),
             indices2.view(),
             min_width,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)

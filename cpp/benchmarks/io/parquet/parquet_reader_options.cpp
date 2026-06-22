@@ -1,21 +1,10 @@
 /*
- * Copyright (c) 2022-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
@@ -63,6 +52,9 @@ void BM_parquet_read_options(nvbench::state& state,
 
   auto const ts_type = cudf::data_type{Timestamp};
 
+  auto const rg_size_bytes = state.get_int64("row_group_size_bytes");
+  auto const rg_size_rows  = state.get_int64("row_group_size_rows");
+
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({static_cast<int32_t>(data_type::INTEGRAL),
                                                    static_cast<int32_t>(data_type::FLOAT),
@@ -80,6 +72,9 @@ void BM_parquet_read_options(nvbench::state& state,
   cuio_source_sink_pair source_sink(io_type::HOST_BUFFER);
   cudf::io::parquet_writer_options options =
     cudf::io::parquet_writer_options::builder(source_sink.make_sink_info(), view);
+  // Sentinel 0 == use cuDF default (parquet bytes default is size_t::max).
+  if (rg_size_bytes > 0) options.set_row_group_size_bytes(rg_size_bytes);
+  if (rg_size_rows > 0) options.set_row_group_size_rows(rg_size_rows);
   cudf::io::write_parquet(options);
 
   auto const cols_to_read =
@@ -87,19 +82,22 @@ void BM_parquet_read_options(nvbench::state& state,
   cudf::size_type const expected_num_cols = cols_to_read.size();
   cudf::io::parquet_reader_options read_options =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
-      .columns(cols_to_read)
+      .column_names(cols_to_read)
       .convert_strings_to_categories(str_to_categories)
       .use_pandas_metadata(uses_pd_metadata)
       .timestamp_type(ts_type);
 
   auto const num_row_groups = read_parquet_metadata(source_sink.make_source_info()).num_rowgroups();
-  auto const chunk_row_cnt  = cudf::util::div_rounding_up_unsafe(view.num_rows(), num_chunks);
+  CUDF_EXPECTS(RowSelection != row_selection::ROW_GROUPS || num_row_groups >= num_chunks,
+               "ROW_GROUPS option requires at least one row group per read chunk");
+
+  auto const chunk_row_cnt = cudf::util::div_rounding_up_unsafe(view.num_rows(), num_chunks);
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      try_drop_l3_cache();
+      drop_page_cache_if_enabled(read_options.get_source().filepaths());
       cudf::size_type num_rows_read = 0;
       timer.start();
       for (int32_t chunk = 0; chunk < num_chunks; ++chunk) {
@@ -148,7 +146,11 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  // NOTE: row_selection::ROW_GROUPS reads a fraction of row groups; non-zero
+  // RG sizing values here change what each chunk reads.
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 using col_selections = nvbench::enum_type_list<column_selection::ALL,
                                                column_selection::ALTERNATE,
@@ -166,7 +168,9 @@ NVBENCH_BENCH_TYPES(BM_parquet_read_options,
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});
 
 NVBENCH_BENCH_TYPES(
   BM_parquet_read_options,
@@ -181,4 +185,6 @@ NVBENCH_BENCH_TYPES(
                         "str_to_categories",
                         "uses_pandas_metadata",
                         "timestamp_type"})
-  .set_min_samples(4);
+  .set_min_samples(4)
+  .add_int64_axis("row_group_size_bytes", {0})
+  .add_int64_axis("row_group_size_rows", {0});

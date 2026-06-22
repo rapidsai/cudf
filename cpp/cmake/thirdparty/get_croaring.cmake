@@ -1,19 +1,13 @@
 # =============================================================================
-# Copyright (c) 2025, NVIDIA CORPORATION.
-#
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License. You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software distributed under the License
-# is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
-# or implied. See the License for the specific language governing permissions and limitations under
-# the License.
+# cmake-format: off
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
+# cmake-format: on
 # =============================================================================
 
 # Use CPM to clone CRoaring and set up the necessary targets and include directories.
-function(find_and_configure_roaring VERSION)
+function(find_and_configure_roaring VERSION EXCLUDE_FROM_ALL)
+
   rapids_cpm_find(
     roaring ${VERSION}
     GLOBAL_TARGETS roaring
@@ -21,6 +15,7 @@ function(find_and_configure_roaring VERSION)
     GIT_REPOSITORY https://github.com/RoaringBitmap/CRoaring.git
     GIT_TAG v${VERSION}
     GIT_SHALLOW TRUE
+    EXCLUDE_FROM_ALL ${EXCLUDE_FROM_ALL}
     OPTIONS "ROARING_BUILD_STATIC ON"
             "BUILD_SHARED_LIBS OFF"
             "ENABLE_ROARING_TESTS OFF"
@@ -44,4 +39,4 @@ function(find_and_configure_roaring VERSION)
 endfunction()
 
 set(roaring_VERSION_cudf "4.3.11")
-find_and_configure_roaring(${roaring_VERSION_cudf})
+find_and_configure_roaring(${roaring_VERSION_cudf} ${CUDF_EXCLUDE_DEPS_FROM_ALL})

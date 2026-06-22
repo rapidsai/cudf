@@ -1,22 +1,23 @@
-# Copyright (c) 2020-2023, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 unmasked_input_initializer_template = """\
         d_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], True)
+        masked_{idx} = Masked(d_{idx}[i + offset_{idx}], True)
 """
 
 masked_input_initializer_template = """\
         d_{idx}, m_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], _mask_get(m_{idx}, i + offset_{idx}))
+        masked_{idx} = Masked(d_{idx}[i + offset_{idx}], _mask_get(m_{idx}, i + offset_{idx}))
 """
 
 row_initializer_template = """\
-        row["{name}"] = masked_{idx}
+        row[_col_names[{idx}]] = masked_{idx}
 """
 
 group_initializer_template = """\
         arr_{idx} = input_col_{idx}[offset[block_id]:offset[block_id+1]]
-        dataframe_group["{name}"] = Group(arr_{idx}, size, arr_index)
+        dataframe_group[_col_names[{idx}]] = Group(arr_{idx}, size, arr_index)
 """
 
 row_kernel_template = """\

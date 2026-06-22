@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "io/utilities/block_utils.cuh"
@@ -566,6 +555,7 @@ void __host__ parse_compressed_stripe_data(compressed_stream_info* strm_info,
   if (num_blocks > 0) {
     parse_compressed_stripe_data_kernel<<<num_blocks, 128, 0, stream.value()>>>(
       strm_info, num_streams, compression_block_size, log2maxcr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -577,6 +567,7 @@ void __host__ post_decompression_reassemble(compressed_stream_info* strm_info,
   if (num_blocks > 0) {
     post_decompression_reassemble_kernel<<<num_blocks, 128, 0, stream.value()>>>(strm_info,
                                                                                  num_streams);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -592,6 +583,7 @@ void __host__ parse_row_group_index(row_group* row_groups,
   auto const num_blocks = num_columns * num_stripes;
   parse_row_group_index_kernel<<<num_blocks, 128, 0, stream.value()>>>(
     row_groups, strm_info, chunks, num_columns, num_stripes, rowidx_stride, use_base_stride);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> columns,
@@ -603,6 +595,7 @@ void __host__ reduce_pushdown_masks(device_span<orc_column_device_view const> co
   constexpr int block_size = 128;
   reduce_pushdown_masks_kernel<block_size>
     <<<num_blocks, block_size, 0, stream.value()>>>(columns, rowgroups, valid_counts);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::orc::detail

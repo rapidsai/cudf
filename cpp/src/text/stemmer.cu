@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
@@ -32,9 +21,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace nvtext {
@@ -114,9 +102,9 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& strings
                                   mr);
   // set values into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(strings.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{strings.size()},
                     results->mutable_view().data<bool>(),
                     is_letter_fn<PositionIterator>{*strings_column, ltype, position_itr});
   results->set_null_count(strings.null_count());
@@ -230,9 +218,9 @@ std::unique_ptr<cudf::column> porter_stemmer_measure(cudf::strings_column_view c
                                   mr);
   // compute measures into output column
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<cudf::size_type>(0),
-                    thrust::make_counting_iterator<cudf::size_type>(strings.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<cudf::size_type>{0},
+                    cuda::counting_iterator<cudf::size_type>{strings.size()},
                     results->mutable_view().data<cudf::size_type>(),
                     porter_stemmer_measure_fn{*strings_column});
   results->set_null_count(strings.null_count());
@@ -261,7 +249,7 @@ std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::is_letter(
-    input, ltype, thrust::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
+    input, ltype, cuda::make_constant_iterator<cudf::size_type>(character_index), stream, mr);
 }
 
 std::unique_ptr<cudf::column> is_letter(cudf::strings_column_view const& input,

@@ -1,4 +1,5 @@
-# Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import datetime
@@ -41,7 +42,7 @@ def test_query_parser(text, expect_args):
 @pytest.mark.parametrize("nulls", [True, False])
 def test_query(fn, nulls):
     n = 5
-    expect_fn, query_expr = fn
+    _expect_fn, query_expr = fn
     rng = np.random.default_rng(seed=0)
     pdf = pd.DataFrame(
         {

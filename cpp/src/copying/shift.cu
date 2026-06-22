@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -33,8 +22,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <algorithm>
@@ -61,8 +50,8 @@ std::pair<rmm::device_buffer, size_type> create_null_mask(column_device_view con
       auto src_idx = idx - offset;
       return out_of_bounds(size, src_idx) ? *fill : input.is_valid(src_idx);
     };
-  return detail::valid_if(thrust::make_counting_iterator<size_type>(0),
-                          thrust::make_counting_iterator<size_type>(size),
+  return detail::valid_if(cuda::counting_iterator<size_type>{0},
+                          cuda::counting_iterator<size_type>{size},
                           func_validity,
                           stream,
                           mr);
@@ -121,18 +110,18 @@ struct shift_functor {
     }
 
     auto const size  = input.size();
-    auto index_begin = thrust::make_counting_iterator<size_type>(0);
-    auto index_end   = thrust::make_counting_iterator<size_type>(size);
+    auto index_begin = cuda::counting_iterator<size_type>{0};
+    auto index_end   = cuda::counting_iterator<size_type>{size};
     auto data        = device_output->data<T>();
 
     // avoid assigning elements we know to be invalid.
     if (not scalar_is_valid) {
       if (std::abs(offset) > size) { return output; }
       if (offset > 0) {
-        index_begin = thrust::make_counting_iterator<size_type>(offset);
+        index_begin = cuda::counting_iterator<size_type>{offset};
         data        = data + offset;
       } else if (offset < 0) {
-        index_end = thrust::make_counting_iterator<size_type>(size + offset);
+        index_end = cuda::counting_iterator<size_type>{size + offset};
       }
     }
 
@@ -142,7 +131,11 @@ struct shift_functor {
         return out_of_bounds(size, src_idx) ? *fill : input.element<T>(src_idx);
       };
 
-    thrust::transform(rmm::exec_policy(stream), index_begin, index_end, data, func_value);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      index_begin,
+                      index_end,
+                      data,
+                      func_value);
 
     return output;
   }

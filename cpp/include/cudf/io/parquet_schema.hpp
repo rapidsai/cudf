@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 /**
@@ -266,7 +255,8 @@ struct LogicalType {
     INTEGER = 10,
     UNKNOWN,
     JSON,
-    BSON
+    BSON,
+    VARIANT = 16,
   };
 
   /// Logical type
@@ -449,7 +439,7 @@ struct SchemaElement {
   /// 9: save field_id from original schema
   std::optional<int32_t> field_id;
   /// 10: replaces converted type
-  std::optional<LogicalType> logical_type;
+  cuda::std::optional<LogicalType> logical_type;
 
   /// extra cudf specific fields
   bool output_as_byte_array = false;
@@ -508,11 +498,40 @@ struct SchemaElement {
   /**
    * @brief Check if the schema element is a stub
    *
+   * A LIST- or MAP-annotated REPEATED group is NOT a stub: in the legacy 2-level Parquet
+   * encoding the REPEATED group is the list/map itself (its single child is the element type),
+   * not a wrapper that should be collapsed. Treating it as a stub would change
+   * `list<list<primitive>>` into `list<primitive>` (and analogously for maps), diverging from
+   * parquet-mr / Spark CPU.
+   *
+   * No file-version or writer gate is needed because the annotation pattern is itself the
+   * encoding signal:
+   *  - 3-level encoding: only the outer (non-REPEATED) group carries LIST/MAP; the inner
+   *    REPEATED group is unannotated, so this test correctly returns true and the wrapper is
+   *    collapsed.
+   *  - 2-level encoding (Thrift, parquet-avro 1.7, and other legacy writers): the REPEATED
+   *    group itself carries LIST/MAP, so this test correctly returns false and the group is
+   *    preserved as a nesting level.
+   *
+   * The check covers both annotation sources -- the deprecated `converted_type` and the newer
+   * `logical_type` -- since a Parquet file may carry only one.
+   *
+   * References:
+   *  - Parquet backward-compatibility rules:
+   *    https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#backward-compatibility-rules
+   *  - cuDF context: https://github.com/NVIDIA/spark-rapids/issues/11589
+   *  - parquet-avro variant: https://github.com/NVIDIA/spark-rapids/issues/11592
+   *
    * @return True if the schema element is a stub, false otherwise
    */
   [[nodiscard]] bool is_stub() const
   {
-    return repetition_type == FieldRepetitionType::REPEATED && num_children == 1;
+    auto const is_list_or_map_logical_type =
+      logical_type.has_value() &&
+      (logical_type->type == LogicalType::LIST || logical_type->type == LogicalType::MAP);
+    return repetition_type == FieldRepetitionType::REPEATED && num_children == 1 &&
+           converted_type != ConvertedType::LIST && converted_type != ConvertedType::MAP &&
+           !is_list_or_map_logical_type;
   }
 
   /**

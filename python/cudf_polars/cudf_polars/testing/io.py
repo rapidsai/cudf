@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """IO testing utilities."""
@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from typing import Literal
 
 __all__: list[str] = ["make_partitioned_source"]
@@ -53,9 +54,10 @@ def make_partitioned_source(
             case "ndjson":
                 part.write_ndjson(file_path, **write_kwargs)
             case "parquet" | "chunked_parquet":
+                part_row_group_size = max(row_group_size or (len(part) // 2), 1)
                 part.write_parquet(
                     file_path,
-                    row_group_size=row_group_size or (len(part) // 2),
+                    row_group_size=part_row_group_size,
                     **write_kwargs,
                 )
             case _:
@@ -98,7 +100,7 @@ def make_lazy_frame(
     n_rows : optional, int
         Slice to apply to the final LazyFrame before returning.
     """
-    from cudf_polars.experimental.io import _clear_source_info_cache
+    from cudf_polars.streaming.io import _clear_source_info_cache
 
     _clear_source_info_cache()
 
@@ -110,7 +112,7 @@ def make_lazy_frame(
         assert path is not None, f"path is required for fmt={fmt}."
         row_group_size: int | None = None
         if fmt == "parquet":
-            read = pl.scan_parquet
+            read: Callable[..., pl.LazyFrame] = pl.scan_parquet
             row_group_size = 10
         elif fmt == "csv":
             read = pl.scan_csv

@@ -1,20 +1,10 @@
 /*
- * Copyright (c) 2020-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/stream_compaction/stream_compaction_common.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -55,10 +45,15 @@ void nvbench_distinct(nvbench::state& state, nvbench::type_list<Type>)
   auto input_table  = cudf::table_view({input_column, input_column, input_column, input_column});
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result = cudf::distinct(
       input_table, {0}, keep, cudf::null_equality::EQUAL, cudf::nan_equality::ALL_EQUAL);
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 using data_type = nvbench::type_list<int32_t, int64_t>;
@@ -96,10 +91,15 @@ void nvbench_distinct_list(nvbench::state& state, nvbench::type_list<Type>)
     {dtype}, table_size_bytes{static_cast<size_t>(size)}, data_profile{builder}, 0);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto result =
       cudf::distinct(*table, {0}, keep, cudf::null_equality::EQUAL, cudf::nan_equality::ALL_EQUAL);
   });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH_TYPES(nvbench_distinct_list,

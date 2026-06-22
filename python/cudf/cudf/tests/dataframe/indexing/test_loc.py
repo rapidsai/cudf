@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import re
 import weakref
 from contextlib import contextmanager
@@ -9,7 +10,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
@@ -626,12 +626,6 @@ def test_dataframe_loc(scalar):
     # Full slice
     assert_eq(df.loc[:, "c"], pdf.loc[:, "c"])
 
-    # Repeat with at[]
-    assert_eq(df.loc[:, ["a"]], df.at[:, ["a"]])
-    assert_eq(df.loc[:, "d"], df.at[:, "d"])
-    assert_eq(df.loc[scalar], df.at[scalar])
-    assert_eq(df.loc[:, "c"], df.at[:, "c"])
-
 
 @pytest.mark.parametrize("step", [1, 5])
 def test_dataframe_loc_slice(step):
@@ -670,16 +664,6 @@ def test_dataframe_loc_slice(step):
     assert_eq(
         df.loc[begin, "a":"a"], pdf.loc[begin, "a":"a"], check_dtype=False
     )
-
-    # Repeat with at[]
-    assert_eq(
-        df.loc[begin:end:step, ["c", "d", "a"]],
-        df.at[begin:end:step, ["c", "d", "a"]],
-    )
-    assert_eq(df.loc[begin:end, ["c", "d"]], df.at[begin:end, ["c", "d"]])
-    assert_eq(df.loc[begin:end:step, "a":"c"], df.at[begin:end:step, "a":"c"])
-    assert_eq(df.loc[begin:begin, "a"], df.at[begin:begin, "a"])
-    assert_eq(df.loc[begin, "a":"a"], df.at[begin, "a":"a"], check_dtype=False)
 
 
 def test_dataframe_loc_arraylike():
@@ -806,7 +790,13 @@ def test_sliced_indexing():
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
-    sli = slice(pd.to_datetime(sli.start), pd.to_datetime(sli.stop))
+    # Preserve None as None (not NaT) so pandas treats it as an open bound.
+    # pd.to_datetime(None) returns NaT, which pandas rejects as a slice
+    # bound on a non-monotonic datetime index.
+    sli = slice(
+        pd.to_datetime(sli.start) if sli.start is not None else None,
+        pd.to_datetime(sli.stop) if sli.stop is not None else None,
+    )
 
     if is_dataframe is True:
         pd_data = pd.DataFrame(
@@ -823,6 +813,28 @@ def test_loc_datetime_index(sli, is_dataframe):
     expect = pd_data.loc[sli]
     got = gd_data.loc[sli]
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "sli",
+    [
+        slice("2001", "2009"),
+        slice("2001", "2006"),
+        slice(None, "2009"),
+    ],
+)
+def test_loc_datetime_index_string_slice_non_monotonic(sli):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3]},
+        index=pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    with pytest.raises(KeyError, match="non-monotonic DatetimeIndexes"):
+        pdf.loc[sli]
+
+    with pytest.raises(KeyError, match="non-monotonic DatetimeIndexes"):
+        gdf.loc[sli]
 
 
 @pytest.mark.parametrize(
@@ -883,23 +895,18 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe():
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="No warning in older versions of pandas",
-)
 def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
-    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    # Use float columns so both cudf and pandas can hold NaN when aligning
+    # RHS columns that don't match the loc selection (int64 can't hold NaN).
+    gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]})
     pdf = gdf.to_pandas()
 
     actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
         {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
     )
-    with pytest.warns(FutureWarning):
-        # Seems to be a false warning from pandas,
-        # but nevertheless catching it.
-        expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
-            {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
-        )
+    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+    )
 
     assert_eq(expected, actual)
 

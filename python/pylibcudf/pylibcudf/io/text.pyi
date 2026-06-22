@@ -1,8 +1,17 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
-from rmm.pylibrmm.stream import Stream
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
+from pylibcudf.utils import CudaStreamLike
+
+class ByteRangeInfo:
+    def __init__(self, offset: int, size: int) -> None: ...
+    @property
+    def offset(self) -> int: ...
+    @property
+    def size(self) -> int: ...
 
 class ParseOptions:
     def __init__(
@@ -26,5 +35,6 @@ def multibyte_split(
     source: DataChunkSource,
     delimiter: str,
     options: ParseOptions | None = None,
-    stream: Stream | None = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...

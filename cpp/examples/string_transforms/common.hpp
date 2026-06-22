@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -26,16 +15,13 @@
 #include <cudf/table/table_view.hpp>
 
 #include <rmm/cuda_device.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <chrono>
 #include <iostream>
-#include <memory>
 #include <numeric>
 #include <string>
 #include <vector>
@@ -48,37 +34,6 @@
  */
 std::tuple<std::unique_ptr<cudf::column>, std::vector<int32_t>> transform(
   cudf::table_view const& table);
-
-/**
- * @brief Create CUDA memory resource
- */
-auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-
-/**
- * @brief Create a pool device memory resource
- */
-auto make_pool_mr()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda_mr(), rmm::percent_of_free_device_memory(50));
-}
-
-auto make_async_mr() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
-
-/**
- * @brief Create memory resource for libcudf functions
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
-{
-  if (name == "pool" || name == "pool-stats") {
-    return make_pool_mr();
-  } else if (name == "async" || name == "async-stats") {
-    return make_async_mr();
-  } else if (name == "cuda" || name == "cuda-stats") {
-    return make_cuda_mr();
-  }
-  CUDF_FAIL("Unrecognized memory resource name: " + name, std::invalid_argument);
-}
 
 void write_csv(cudf::table_view const& tbl_view,
                std::string const& file_path,
@@ -116,17 +71,28 @@ int main(int argc, char const** argv)
     std::string{argc > 4 ? std::string(argv[4]) : std::string("cuda")};
   auto const enable_stats = memory_resource_name.ends_with("-stats");
 
-  auto resource = create_memory_resource(memory_resource_name);
-  auto stream   = cudf::get_default_stream();
+  auto stream = cudf::get_default_stream();
 
-  rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource> stats_adaptor{
-    resource.get()};
+  rmm::mr::cuda_memory_resource cuda_mr{};
+  rmm::mr::pool_memory_resource pool_mr{cuda_mr, rmm::percent_of_free_device_memory(50)};
+  rmm::mr::cuda_async_memory_resource async_mr{};
 
-  if (enable_stats) {
-    cudf::set_current_device_resource(&stats_adaptor);
+  auto const base_name = enable_stats
+                           ? memory_resource_name.substr(0, memory_resource_name.size() - 6)
+                           : memory_resource_name;
+  if (base_name == "pool") {
+    cudf::set_current_device_resource(pool_mr);
+  } else if (base_name == "async") {
+    cudf::set_current_device_resource(async_mr);
+  } else if (base_name == "cuda") {
+    cudf::set_current_device_resource(cuda_mr);
   } else {
-    cudf::set_current_device_resource(resource.get());
+    CUDF_FAIL("Unrecognized memory resource name: " + memory_resource_name, std::invalid_argument);
   }
+
+  rmm::mr::statistics_resource_adaptor stats_adaptor{cudf::get_current_device_resource_ref()};
+
+  if (enable_stats) { cudf::set_current_device_resource(stats_adaptor); }
 
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{in_csv}).header(0);

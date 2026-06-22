@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2019-2023, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -196,10 +185,10 @@ public class WindowOptions implements AutoCloseable {
      * Set the size of the window, one entry per row. This does not take ownership of the
      * columns passed in so you have to be sure that the lifetime of the column outlives
      * this operation.
-     * @param precedingCol the number of rows preceding the current row and
+     * @param precedingCol the number of rows in the window before and including the current row.
      *                     precedingCol will be live outside of WindowOptions.
-     * @param followingCol the number of rows following the current row and
-     *                     following will be live outside of WindowOptions.
+     * @param followingCol the number of rows in the window after the current row.
+     *                     followingCol will be live outside of WindowOptions.
      */
     public Builder window(ColumnVector precedingCol, ColumnVector followingCol) {
       if (precedingCol == null || precedingCol.hasNulls()) {
@@ -220,11 +209,13 @@ public class WindowOptions implements AutoCloseable {
     }
 
     /**
-     * Set the size of the range window.
-     * @param precedingScalar the relative number preceding the current row and
-     *                        the precedingScalar will be live outside of WindowOptions.
-     * @param followingScalar the relative number following the current row and
-     *                        the followingScalar will be live outside of WindowOptions
+     * Set the size of the range window. This does not take ownership of the
+     * scalars passed in so you have to be sure that the lifetime of the scalars outlives
+     * this operation.
+     * @param precedingScalar the number of rows in the window before and including the current row.
+     *                        precedingScalar will be live outside of WindowOptions.
+     * @param followingScalar the number of rows in the window after the current row.
+     *                        followingScalar will be live outside of WindowOptions.
      */
     public Builder window(Scalar precedingScalar, Scalar followingScalar) {
       return preceding(precedingScalar).following(followingScalar);

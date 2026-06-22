@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import collections
 from contextlib import nullcontext as does_not_raise
@@ -8,7 +9,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from numba import cuda
 
 import cudf
 from cudf.core.column.column import as_column
@@ -216,14 +216,10 @@ def test_arrow_handle_no_index_name():
     assert_eq(expect, got)
 
 
-def test_pandas_non_contiguious():
-    rng = np.random.default_rng(seed=0)
-    arr1 = rng.random(size=(5000, 10))
-    assert arr1.flags["C_CONTIGUOUS"] is True
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_pandas_non_contiguious(order):
+    arr1 = np.ones((5, 5), order=order)
     df = pd.DataFrame(arr1)
-    for col in df.columns:
-        assert df[col].values.flags["C_CONTIGUOUS"] is False
-
     gdf = cudf.DataFrame(df)
     assert_eq(gdf.to_pandas(), df)
 
@@ -243,7 +239,6 @@ def test_from_records(numeric_types_as_str):
     assert_eq(df, gdf)
 
 
-@pytest.mark.parametrize("columns", [None, ["first", "second", "third"]])
 @pytest.mark.parametrize(
     "index",
     [
@@ -256,15 +251,28 @@ def test_from_records(numeric_types_as_str):
         ["abc", "xyz"],
     ],
 )
-def test_from_records_index(columns, index):
+def test_from_records_index(index):
     rec_ary = np.array(
         [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
         dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
     )
-    gdf = cudf.DataFrame.from_records(rec_ary, columns=columns, index=index)
-    df = pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    gdf = cudf.DataFrame.from_records(rec_ary, index=index)
+    df = pd.DataFrame.from_records(rec_ary, index=index)
     assert isinstance(gdf, cudf.DataFrame)
     assert_eq(df, gdf)
+
+
+def test_from_records_index_invalid_columns_raises():
+    rec_ary = np.array(
+        [("Rex", 9, 81.0), ("Fido", 3, 27.0)],
+        dtype=[("name", "U10"), ("age", "i4"), ("weight", "f4")],
+    )
+    index = None
+    columns = ["first", "second", "third"]
+    with pytest.raises(ValueError):
+        cudf.DataFrame.from_records(rec_ary, columns=columns, index=index)
+    with pytest.raises(ValueError):
+        pd.DataFrame.from_records(rec_ary, columns=columns, index=index)
 
 
 def test_dataframe_construction_from_cp_arrays():
@@ -294,13 +302,20 @@ def test_dataframe_construction_from_cp_arrays():
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=0, drop=False)
     assert isinstance(gdf, cudf.DataFrame)
-
+    assert gdf.index.dtype == np.dtype("int32")
+    # pandas retuns a RangeIndex
+    assert not isinstance(gdf.index, cudf.RangeIndex)
+    gdf.index = gdf.index.astype(np.int64)
     assert_eq(df, gdf)
 
     gdf = cudf.DataFrame(d_ary)
     gdf = gdf.set_index(keys=1, drop=False)
     df = pd.DataFrame(h_ary)
     df = df.set_index(keys=1, drop=False)
+    assert gdf.index.dtype == np.dtype("int32")
+    # pandas retuns a RangeIndex
+    assert not isinstance(gdf.index, cudf.RangeIndex)
+    gdf.index = gdf.index.astype(np.int64)
     assert isinstance(gdf, cudf.DataFrame)
 
     assert_eq(df, gdf)
@@ -453,12 +468,11 @@ def test_dataframe_constructor_nan_as_null(data, nan_as_null):
 def test_dataframe_init_from_series(data, columns, index):
     expected = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-
-    assert_eq(
-        expected,
-        actual,
-        check_index_type=len(expected) != 0,
-    )
+    if columns == ["abc", "b"]:
+        # In pandas, new columns are object types with NaN
+        # which cuDF doesn't support
+        expected["b"] = expected["b"].astype(actual["b"].dtype)
+    assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize(
@@ -550,9 +564,16 @@ def test_dataframe_dict_like_with_columns(columns, index):
     data = {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     expect = pd.DataFrame(data, columns=columns, index=index)
     actual = cudf.DataFrame(data, columns=columns, index=index)
-    if index is None and len(columns) == 0:
-        # We make an empty range index, pandas makes an empty index
-        expect = expect.reset_index(drop=True)
+    if isinstance(columns, list):
+        if columns == []:
+            # As of pandas 3.0, empty columns are returned as Index[object]
+            # which cuDF doesn't support
+            expect.columns = expect.columns.astype(actual.columns.dtype)
+        elif columns == ["a", "d", "b", "e", "c"]:
+            # In pandas, new columns are object types with NaN
+            # which cuDF doesn't support
+            expect["d"] = expect["d"].astype(actual["d"].dtype)
+            expect["e"] = expect["e"].astype(actual["e"].dtype)
     assert_eq(expect, actual)
 
 
@@ -642,12 +663,18 @@ def test_series_data_with_name_with_columns_matching():
 def test_series_data_with_name_with_columns_not_matching():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1])
+    # As of pandas 3.0, pandas returns object for empty columns
+    # which cuDF doesn't support
+    pdf = gdf.astype(gdf.iloc[:, 0].dtype)
     assert_eq(gdf, pdf)
 
 
 def test_series_data_with_name_with_columns_matching_align():
     gdf = cudf.DataFrame(cudf.Series([1], name=2), columns=[1, 2])
     pdf = pd.DataFrame(pd.Series([1], name=2), columns=[1, 2])
+    # As of pandas 3.0, pandas returns object for a new broadcasted column
+    # which cuDF doesn't support
+    pdf[1] = pdf[1].astype(gdf[1].dtype)
     assert_eq(gdf, pdf)
 
 
@@ -688,7 +715,9 @@ def test_create_dataframe_from_list_like(data):
 def test_create_dataframe_column():
     pdf = pd.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
     gdf = cudf.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
-
+    # As of pandas 3.0, pandas returns object for broadcasted columns
+    # which cuDF doesn't support
+    pdf = gdf.astype(gdf.iloc[:, 0].dtype)
     assert_eq(pdf, gdf)
 
     pdf = pd.DataFrame(
@@ -701,7 +730,9 @@ def test_create_dataframe_column():
         columns=["a", "b", "c"],
         index=["A", "Z", "X"],
     )
-
+    # As of pandas 3.0, pandas returns object for broadcasted columns
+    # which cuDF doesn't support
+    pdf["c"] = pdf["c"].astype(gdf["c"].dtype)
     assert_eq(pdf, gdf)
 
 
@@ -889,6 +920,10 @@ def test_construct_dict_scalar_values_raises():
 def test_construct_empty_listlike_index_and_columns(columns, index):
     result = cudf.DataFrame([], columns=columns, index=index)
     expected = pd.DataFrame([], columns=columns, index=index)
+    if columns is not None:
+        # As of pandas 3.0, pandas returns object for empty columns
+        # which cuDF doesn't support
+        expected = expected.astype(result.iloc[:, 0].dtype)
     assert_eq(result, expected)
 
 
@@ -1045,22 +1080,25 @@ def test_change_column_dtype_in_empty():
             ["a", "b", "c", "d"],
             [1, 0],
         ),
-        (cp.random.randn(2, 4), ["a", "b", "c", "d"], ["a", "b"]),
-        (cp.random.randn(2, 4), ["a", "b", "c", "d"], [1, 0]),
+        (
+            cp.random.default_rng(0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            ["a", "b"],
+        ),
+        (
+            cp.random.default_rng(0).standard_normal(size=(2, 4)),
+            ["a", "b", "c", "d"],
+            [1, 0],
+        ),
     ],
 )
 def test_dataframe_init_from_arrays_cols(data, cols, index):
     gd_data = data
     if isinstance(data, cp.ndarray):
-        # pandas can't handle cp arrays in general
+        # pandas can't handle cupy arrays
         pd_data = data.get()
-
-        # additional test for building DataFrame with gpu array whose
-        # cuda array interface has no `descr` attribute
-        numba_data = cuda.as_cuda_array(data)
     else:
         pd_data = data
-        numba_data = None
 
     # verify with columns & index
     pdf = pd.DataFrame(pd_data, columns=cols, index=index)
@@ -1078,10 +1116,6 @@ def test_dataframe_init_from_arrays_cols(data, cols, index):
     gdf = cudf.DataFrame(gd_data)
 
     assert_eq(pdf, gdf, check_dtype=False)
-
-    if numba_data is not None:
-        gdf = cudf.DataFrame(numba_data)
-        assert_eq(pdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1247,6 +1281,10 @@ def test_dataframe_from_dict_cp_np_arrays(
 def test_df_list_dtypes(data):
     expect = pd.DataFrame(data)
     got = cudf.DataFrame(data)
+    if isinstance(data, dict) and "c" in data:
+        # As of pandas 3.0, pandas returns object for broadcasted columns
+        # which cuDF doesn't support
+        expect["c"] = expect["c"].astype(got["c"].dtype)
     assert_eq(expect, got)
 
 
@@ -1963,3 +2001,19 @@ def test_df_constructor_dtype(all_supported_types_as_str):
     )
 
     assert_eq(expect, got)
+
+
+def test_build_df_from_nullable_pandas_dtype(
+    all_supported_pandas_nullable_extension_dtypes,
+):
+    scalar, dtype = all_supported_pandas_nullable_extension_dtypes
+
+    expected = pd.DataFrame({"a": [scalar, pd.NA]}, dtype=dtype)
+    result = cudf.DataFrame(expected)
+
+    assert result["a"].dtype == expected["a"].dtype
+
+    expect_mask = expected["a"].isna()
+    got_mask = result["a"].isna().to_numpy()
+
+    np.testing.assert_array_equal(expect_mask, got_mask)

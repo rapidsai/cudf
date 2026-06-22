@@ -1,9 +1,10 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import contextvars
 from contextlib import contextmanager
 
-from numba import config as numba_config
+from numba.cuda import config as numba_config
 
 _current_nrt_context: contextvars.ContextVar = contextvars.ContextVar(
     "current_nrt_context"

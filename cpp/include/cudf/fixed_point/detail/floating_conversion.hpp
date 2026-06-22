@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -25,9 +14,7 @@
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
-#include <cstring>
-
-namespace CUDF_EXPORT numeric {
+namespace numeric {
 namespace detail {
 
 /**
@@ -130,9 +117,7 @@ struct floating_converter {
   CUDF_HOST_DEVICE inline static IntegralType bit_cast_to_integer(FloatingType floating)
   {
     // Convert floating to integer
-    IntegralType integer_rep;
-    memcpy(&integer_rep, &floating, sizeof(floating));
-    return integer_rep;
+    return cuda::std::bit_cast<IntegralType>(floating);
   }
 
   /**
@@ -144,9 +129,7 @@ struct floating_converter {
   CUDF_HOST_DEVICE inline static FloatingType bit_cast_to_floating(IntegralType integer)
   {
     // Convert back to float
-    FloatingType floating;
-    memcpy(&floating, &integer, sizeof(floating));
-    return floating;
+    return cuda::std::bit_cast<FloatingType>(integer);
   }
 
   /**
@@ -1132,4 +1115,4 @@ CUDF_HOST_DEVICE inline FloatingType convert_integral_to_floating(Rep const& val
 }
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT numeric
+}  // namespace numeric

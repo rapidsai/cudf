@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "csv_common.hpp"
@@ -38,6 +27,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/atomic>
+#include <cuda/std/algorithm>
 #include <thrust/count.h>
 #include <thrust/detail/copy.h>
 #include <thrust/remove.h>
@@ -196,6 +187,10 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
 
   // Going through all the columns of a given record
   while (col < column_flags.size() && field_start < row_end) {
+    // In delim_whitespace mode, collapse leading delimiter runs so leading whitespace does
+    // not produce empty fields (matches pandas behavior).
+    field_start = cudf::io::gpu::skip_leading_delimiter_run(field_start, row_end, opts);
+    if (field_start >= row_end) break;
     auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, opts);
 
     // Checking if this is a column that the user wants --- user can filter columns
@@ -225,64 +220,70 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto const trimmed_field_range = trim_whitespaces_quotes(field_start, next_delimiter);
         auto const trimmed_field_len   = trimmed_field_range.second - trimmed_field_range.first;
 
-        for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
-          if (is_digit(*cur)) {
-            count_number++;
-            continue;
+        if (trimmed_field_len == 0) {
+          cuda::atomic_ref<cudf::size_type, cuda::thread_scope_device> ref{
+            d_column_data[actual_col].string_count};
+          ref.fetch_add(1, cuda::memory_order_relaxed);
+        } else {
+          for (auto cur = trimmed_field_range.first; cur < trimmed_field_range.second; ++cur) {
+            if (is_digit(*cur)) {
+              count_number++;
+              continue;
+            }
+            if (*cur == opts.decimal) {
+              count_decimal++;
+              continue;
+            }
+            if (*cur == opts.thousands) {
+              count_thousands++;
+              continue;
+            }
+            // Looking for unique characters that will help identify column types.
+            switch (*cur) {
+              case '-': count_dash++; break;
+              case '+': count_plus++; break;
+              case '/': count_slash++; break;
+              case ':': count_colon++; break;
+              case 'e':
+              case 'E':
+                if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
+                  count_exponent++;
+                break;
+              default: count_string++; break;
+            }
           }
-          if (*cur == opts.decimal) {
-            count_decimal++;
-            continue;
-          }
-          if (*cur == opts.thousands) {
-            count_thousands++;
-            continue;
-          }
-          // Looking for unique characters that will help identify column types.
-          switch (*cur) {
-            case '-': count_dash++; break;
-            case '+': count_plus++; break;
-            case '/': count_slash++; break;
-            case ':': count_colon++; break;
-            case 'e':
-            case 'E':
-              if (cur > trimmed_field_range.first && cur < trimmed_field_range.second - 1)
-                count_exponent++;
-              break;
-            default: count_string++; break;
-          }
-        }
 
-        // Integers have to have the length of the string
-        // Off by one if they start with a minus sign
-        auto const int_req_number_cnt =
-          trimmed_field_len - count_thousands -
-          ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
-           trimmed_field_len > 1);
+          // Integers have to have the length of the string
+          // Off by one if they start with a minus sign
+          auto const int_req_number_cnt =
+            trimmed_field_len - count_thousands -
+            ((*trimmed_field_range.first == '-' || *trimmed_field_range.first == '+') &&
+             trimmed_field_len > 1);
 
-        if (column_flags[col] & column_parse::as_datetime) {
-          // PANDAS uses `object` dtype if the date is unparseable
-          if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
-            atomicAdd(&d_column_data[actual_col].datetime_count, 1);
+          if (column_flags[col] & column_parse::as_datetime) {
+            // PANDAS uses `object` dtype if the date is unparseable
+            if (is_datetime(count_string, count_decimal, count_colon, count_dash, count_slash)) {
+              atomicAdd(&d_column_data[actual_col].datetime_count, 1);
+            } else {
+              atomicAdd(&d_column_data[actual_col].string_count, 1);
+            }
+          } else if (count_number == int_req_number_cnt) {
+            auto const is_negative = (*trimmed_field_range.first == '-');
+            auto const data_begin =
+              trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
+            cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
+              data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
+            atomicAdd(ptr, 1);
+          } else if (is_floatingpoint(trimmed_field_len,
+                                      count_number,
+                                      count_decimal,
+                                      count_thousands,
+                                      count_dash + count_plus,
+                                      count_exponent)) {
+            atomicAdd(&d_column_data[actual_col].float_count, 1);
           } else {
             atomicAdd(&d_column_data[actual_col].string_count, 1);
           }
-        } else if (count_number == int_req_number_cnt) {
-          auto const is_negative = (*trimmed_field_range.first == '-');
-          auto const data_begin =
-            trimmed_field_range.first + (is_negative || (*trimmed_field_range.first == '+'));
-          cudf::size_type* ptr = cudf::io::gpu::infer_integral_field_counter(
-            data_begin, data_begin + count_number, is_negative, d_column_data[actual_col]);
-          atomicAdd(ptr, 1);
-        } else if (is_floatingpoint(trimmed_field_len,
-                                    count_number,
-                                    count_decimal,
-                                    count_thousands,
-                                    count_dash + count_plus,
-                                    count_exponent)) {
-          atomicAdd(&d_column_data[actual_col].float_count, 1);
-        } else {
-          atomicAdd(&d_column_data[actual_col].string_count, 1);
         }
       }
       actual_col++;
@@ -306,6 +307,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
  * @param[out] columns The output column data
  * @param[out] valids The bitmaps indicating whether column fields are valid
  * @param[out] valid_counts The number of valid fields in each column
+ * @param[out] is_quoted_flags Per-column boolean arrays tracking which rows were quoted fields
  */
 CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
@@ -315,7 +317,8 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
-                      device_span<size_type> valid_counts)
+                      device_span<size_type> valid_counts,
+                      device_span<bool* const> is_quoted_flags)
 {
   auto const raw_csv = data.data();
   // thread IDs range per block, so also need the block id.
@@ -334,7 +337,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
   int actual_col  = 0;
 
   while (col < column_flags.size() && field_start < row_end) {
-    auto next_delimiter = cudf::io::gpu::seek_field_end(next_field, row_end, options);
+    // In delim_whitespace mode, collapse leading delimiter runs so leading whitespace does
+    // not produce empty fields (matches pandas behavior).
+    field_start = cudf::io::gpu::skip_leading_delimiter_run(field_start, row_end, options);
+    if (field_start >= row_end) break;
+    next_field          = field_start;
+    auto next_delimiter = cudf::io::gpu::seek_field_end(field_start, row_end, options);
 
     if (column_flags[col] & column_parse::enabled) {
       // check if the entire field is a NaN string - consistent with pandas
@@ -349,15 +357,19 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         field_start = trimmed_field.first;
         field_end   = trimmed_field.second;
       }
+      bool* const is_quoted_output =
+        is_quoted_flags.empty() ? nullptr : is_quoted_flags[actual_col];
       if (is_valid) {
         // Type dispatcher does not handle STRING
         if (dtypes[actual_col].id() == cudf::type_id::STRING) {
-          auto end = next_delimiter;
+          auto end        = next_delimiter;
+          bool was_quoted = false;
           if (not options.keepquotes) {
             if (not options.detect_whitespace_around_quotes) {
               if ((*field_start == options.quotechar) && (*(end - 1) == options.quotechar)) {
                 ++field_start;
                 --end;
+                was_quoted = true;
               }
             } else {
               // If the string is quoted, whitespace around the quotes get removed as well
@@ -366,9 +378,12 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                   (*(trimmed_field.second - 1) == options.quotechar)) {
                 field_start = trimmed_field.first + 1;
                 end         = trimmed_field.second - 1;
+                was_quoted  = true;
               }
             }
           }
+          // Track whether this field was quoted (for doublequote unescaping)
+          if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = was_quoted; }
           auto str_list = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
           str_list[rec_id].first  = field_start;
           str_list[rec_id].second = end - field_start;
@@ -391,6 +406,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
         auto str_list           = static_cast<std::pair<char const*, size_t>*>(columns[actual_col]);
         str_list[rec_id].first  = nullptr;
         str_list[rec_id].second = 0;
+        if (is_quoted_output != nullptr) { is_quoted_output[rec_id] = false; }
       }
       ++actual_col;
     }
@@ -654,14 +670,23 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
                          int escapechar,
                          int commentchar)
 {
-  auto start            = data.begin();
+  auto start            = data.data();
   auto const bk_ctxtree = ctxtree.subspan(blockIdx.x * bk_ctxtree_size, bk_ctxtree_size);
 
-  char const* end = start + (min(parse_pos + chunk_size, data_size) - start_offset);
-  uint32_t t      = threadIdx.x;
-  size_t block_pos =
-    (parse_pos - start_offset) + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
-  char const* cur = start + block_pos;
+  // file-level end position for this scan, clamped to the file size
+  size_t const end_in_file = (parse_pos >= data_size || chunk_size > data_size - parse_pos)
+                               ? data_size
+                               : parse_pos + chunk_size;
+  // offset into the local `data` window (which begins at `start_offset`), clamped to the buffer
+  size_t const end_off      = end_in_file > start_offset ? end_in_file - start_offset : 0;
+  size_t const data_end_off = data_size > start_offset ? data_size - start_offset : 0;
+  auto const end            = start + cuda::std::min(end_off, data.size());
+  auto const data_end       = start + cuda::std::min(data_end_off, data.size());
+  // Offset of `parse_pos` inside the local `data` window, clamped to avoid underflow
+  auto const parse_off = parse_pos > start_offset ? parse_pos - start_offset : 0;
+  uint32_t const t     = threadIdx.x;
+  size_t block_pos     = parse_off + blockIdx.x * static_cast<size_t>(rowofs_block_bytes) + t * 32;
+  auto cur             = start + block_pos;
 
   // Initial state is neutral context (no state transitions), zero rows
   uint4 ctx_map = {
@@ -687,20 +712,32 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
           ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE, 1, 0, 1);
         }
       } else if (c == quotechar) {
-        if (c_prev == delimiter || c_prev == quotechar) {
-          // Quoted string after delimiter, quoted string ending in delimiter, or double-quote
-          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_NONE);
+        // Quote handling uses ROW_CTX_COMMENT as a "pending exit" state to correctly handle
+        // escaped quotes (""). When in QUOTE state and we see a quote, we can't immediately
+        // exit because it might be the first quote of a "" escape sequence. We transition to
+        // COMMENT (pending exit) and wait for the next character:
+        //   - If next char is quote: it's a "" escape, return to QUOTE
+        //   - If next char is anything else: exit confirmed, go to NONE
+        // This doesn't conflict with actual comment handling because comments are only
+        // detected at row boundaries (after newline), where COMMENT state is set with row
+        // counting. Mid-row, COMMENT is purely used for this pending exit mechanism.
+        if (c_prev == delimiter) {
+          // Quote after delimiter: start field or pending exit
+          ctx = make_char_context(ROW_CTX_QUOTE, ROW_CTX_COMMENT);
+        } else if (c_prev == quotechar) {
+          // Quote after quote: "" escape or stay NONE (Spark compatibility)
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT, ROW_CTX_QUOTE);
         } else {
-          // Closing or ignored quote
-          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_NONE);
+          // Quote after regular char: pending exit or stay NONE
+          ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_COMMENT);
         }
       } else {
-        // Neutral character
-        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE);
+        // Non-quote char: stay in current state, or exit from pending
+        ctx = make_char_context(ROW_CTX_NONE, ROW_CTX_QUOTE, ROW_CTX_NONE);
       }
     } else {
-      char const* data_end = start + data_size - start_offset;
-      if (cur <= end && cur == data_end) {
+      bool const is_last_chunk = data_end_off <= data.size();
+      if (is_last_chunk && cur <= end && cur == data_end) {
         // Add a newline at data end (need the extra row offset to infer length of previous row)
         ctx = make_char_context(ROW_CTX_EOF, ROW_CTX_EOF, ROW_CTX_EOF, 1, 1, 1);
       } else {
@@ -714,8 +751,9 @@ CUDF_KERNEL void __launch_bounds__(rowofs_block_dim)
 
   // Eliminate rows that start before byte_range_start
   if (start_offset + block_pos < byte_range_start) {
-    uint32_t dist_minus1 = min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
-    uint32_t mask        = 0xffff'fffe << dist_minus1;
+    uint32_t dist_minus1 =
+      cuda::std::min(byte_range_start - (start_offset + block_pos) - 1, UINT64_C(31));
+    uint32_t mask = 0xffff'fffe << dist_minus1;
     ctx_map.x &= mask;
     ctx_map.y &= mask;
     ctx_map.z &= mask;
@@ -770,7 +808,7 @@ size_t __host__ count_blank_rows(cudf::io::parse_options_view const& opts,
   auto const comment  = opts.comment != '\0' ? opts.comment : newline;
   auto const carriage = (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
   return thrust::count_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, newline, comment, carriage] __device__(uint64_t const pos) {
@@ -789,7 +827,7 @@ device_span<uint64_t> __host__ remove_blank_rows(cudf::io::parse_options_view co
   auto const comment  = options.comment != '\0' ? options.comment : newline;
   auto const carriage = (options.skipblanklines && options.terminator == '\n') ? '\r' : comment;
   auto new_end        = thrust::remove_if(
-    rmm::exec_policy(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     row_offsets.begin(),
     row_offsets.end(),
     [data = data, d_size, newline, comment, carriage] __device__(uint64_t const pos) {
@@ -811,13 +849,14 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
   int const block_size = csvparse_block_dim;
   int const grid_size  = (row_starts.size() + block_size - 1) / block_size;
 
-  auto d_stats = detail::make_zeroed_device_uvector_async<column_type_histogram>(
+  auto d_stats = cudf::detail::make_zeroed_device_uvector_async<column_type_histogram>(
     num_active_columns, stream, cudf::get_current_device_resource_ref());
 
   data_type_detection<<<grid_size, block_size, 0, stream.value()>>>(
     options, data, column_flags, row_starts, d_stats);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
-  return detail::make_host_vector(d_stats, stream);
+  return cudf::detail::make_host_vector(d_stats, stream);
 }
 
 void decode_row_column_data(cudf::io::parse_options_view const& options,
@@ -828,6 +867,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
+                            device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
   // Calculate actual block count to use based on records count
@@ -835,8 +875,16 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
 
-  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(
-    options, data, column_flags, row_offsets, dtypes, columns, valids, valid_counts);
+  convert_csv_to_cudf<<<grid_size, block_size, 0, stream.value()>>>(options,
+                                                                    data,
+                                                                    column_flags,
+                                                                    row_offsets,
+                                                                    dtypes,
+                                                                    columns,
+                                                                    valids,
+                                                                    valid_counts,
+                                                                    is_quoted_flags);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 uint32_t __host__ gather_row_offsets(parse_options_view const& options,
@@ -872,6 +920,7 @@ uint32_t __host__ gather_row_offsets(parse_options_view const& options,
     (options.quotechar) ? options.quotechar : 0x100,
     /*(options.escapechar) ? options.escapechar :*/ 0x100,
     (options.comment) ? options.comment : 0x100);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return dim_grid;
 }

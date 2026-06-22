@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -27,9 +16,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/tuple.h>
 
 #include <iterator>
 #include <numeric>
@@ -48,18 +36,18 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Buffer lengths (in number of elements)
-  std::vector<size_t> const h_lens{
+  std::vector<std::size_t> const h_lens{
     50000, 4, 1000, 0, 250000, 1, 100, 8000, 0, 1, 100, 1000, 10000, 100000, 0, 1, 100000};
 
   // Total number of buffers
   auto const num_buffs = h_lens.size();
 
   // Exclusive sum of buffer lengths for pointers
-  std::vector<size_t> h_lens_excl_sum(num_buffs);
+  std::vector<std::size_t> h_lens_excl_sum(num_buffs);
   std::exclusive_scan(h_lens.begin(), h_lens.end(), h_lens_excl_sum.begin(), 0);
 
   // Corresponding buffer sizes (in bytes)
-  std::vector<size_t> h_sizes_bytes;
+  std::vector<std::size_t> h_sizes_bytes;
   h_sizes_bytes.reserve(num_buffs);
   std::transform(
     h_lens.cbegin(), h_lens.cend(), std::back_inserter(h_sizes_bytes), [&](auto& size) {
@@ -109,8 +97,8 @@ TEST(BatchedMemcpyTest, BasicTest)
   auto d_dst_data = cudf::detail::make_zeroed_device_uvector_async<T1>(total_buff_len, stream, mr);
   // Pointers to destination buffers within the giant destination buffer
   std::vector<T1*> h_dst_ptrs(num_buffs);
-  std::for_each(thrust::make_counting_iterator(static_cast<size_t>(0)),
-                thrust::make_counting_iterator(num_buffs),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{num_buffs},
                 [&](auto i) { return h_dst_ptrs[i] = d_dst_data.data() + h_lens_excl_sum[i]; });
   // Copy destination data pointers to device
   auto d_dst_ptrs = cudf::detail::make_device_uvector_async(h_dst_ptrs, stream, mr);

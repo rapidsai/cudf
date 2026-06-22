@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
 import pytest
@@ -43,13 +44,13 @@ def test_index_rename_inplace():
     # inplace=False should yield a shallow copy
     gds_renamed_deep = gds.rename("new_name", inplace=False)
 
-    assert gds_renamed_deep._column.data_ptr == gds._column.data_ptr
+    assert gds_renamed_deep._column.data.ptr == gds._column.data.ptr
 
     # inplace=True returns none
-    expected_ptr = gds._column.data_ptr
+    expected_ptr = gds._column.data.ptr
     gds.rename("new_name", inplace=True)
 
-    assert expected_ptr == gds._column.data_ptr
+    assert expected_ptr == gds._column.data.ptr
 
 
 def test_index_rename_preserves_arg():

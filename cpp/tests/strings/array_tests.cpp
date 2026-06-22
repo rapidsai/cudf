@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -26,7 +15,7 @@
 #include <cudf/strings/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
@@ -163,7 +152,7 @@ TEST_F(StringsColumnTest, GatherTooBig)
                                  0,
                                  0,
                                  {offsets});
-  auto map   = thrust::constant_iterator<int8_t>(0);
+  auto map   = cuda::constant_iterator<int8_t>(0);
   cudf::test::fixed_width_column_wrapper<int8_t> gather_map(map, map + 1000);
   EXPECT_THROW(cudf::gather(cudf::table_view{{input}}, gather_map), std::overflow_error);
 }

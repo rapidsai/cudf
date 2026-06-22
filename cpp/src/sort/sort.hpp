@@ -1,19 +1,14 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
+
+#include <cudf/column/column_view.hpp>
+#include <cudf/sorting.hpp>
+#include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
@@ -22,6 +17,27 @@ namespace detail {
  * @brief The enum specifying which sorting method to use (stable or unstable).
  */
 enum class sort_method : bool { STABLE, UNSTABLE };
+
+/**
+ * @brief Sort indices of a single column.
+ *
+ * This API offers fast sorting for primitive types. It cannot handle nested types and will not
+ * consider `NaN` as equivalent to other `NaN`.
+ *
+ * @tparam method Whether to use stable sort
+ * @param input Column to sort. The column data is not modified.
+ * @param column_order Ascending or descending sort order
+ * @param null_precedence How null rows are to be ordered
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Sorted indices for the input column.
+ */
+template <sort_method method>
+std::unique_ptr<column> sorted_order(column_view const& input,
+                                     order column_order,
+                                     null_order null_precedence,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
 }  // namespace detail
 }  // namespace cudf

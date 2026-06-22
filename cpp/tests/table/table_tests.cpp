@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -21,15 +10,22 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/table/equality.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <rmm/device_buffer.hpp>
+
+#include <limits>
 #include <memory>
+#include <stdexcept>
 
 template <typename T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T>;
 
-using s_col_wrapper = cudf::test::strings_column_wrapper;
+using s_col_wrapper       = cudf::test::strings_column_wrapper;
+using lists_col_wrapper   = cudf::test::lists_column_wrapper<int32_t>;
+using structs_col_wrapper = cudf::test::structs_column_wrapper;
 
 using CVector     = std::vector<std::unique_ptr<cudf::column>>;
 using column      = cudf::column;
@@ -172,6 +168,132 @@ TEST_F(TableTest, AllocSizeWithNulls)
 
   Table t(std::move(cols));
   EXPECT_EQ(t.alloc_size(), 152);  // bitmask has padding
+}
+
+TEST_F(TableTest, TablesEqual)
+{
+  column_wrapper<int32_t> left_col0{{1, 2, 3}};
+  column_wrapper<double> left_col1{{4.0, 5.0, 6.0}};
+  column_wrapper<int32_t> right_col0{{1, 2, 3}};
+  column_wrapper<double> right_col1{{4.0, 5.0, 6.0}};
+
+  EXPECT_TRUE(cudf::tables_equal(cudf::table_view{{left_col0, left_col1}},
+                                 cudf::table_view{{right_col0, right_col1}}));
+}
+
+TEST_F(TableTest, TablesEqualValueMismatch)
+{
+  column_wrapper<int32_t> left{{1, 2, 3}};
+  column_wrapper<int32_t> right{{1, 4, 3}};
+
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}));
+}
+
+TEST_F(TableTest, TablesEqualShapeAndTypeMismatch)
+{
+  column_wrapper<int32_t> left{{1, 2, 3}};
+  column_wrapper<int32_t> shorter{{1, 2}};
+  column_wrapper<int32_t> extra{{1, 2, 3}};
+  column_wrapper<int64_t> different_type{{1, 2, 3}};
+
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{shorter}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{left, extra}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{different_type}}));
+}
+
+TEST_F(TableTest, TablesEqualNullEquality)
+{
+  column_wrapper<int32_t> left{{1, 2, 3}, {1, 0, 1}};
+  column_wrapper<int32_t> right{{1, 4, 3}, {1, 0, 1}};
+
+  EXPECT_TRUE(cudf::tables_equal(
+    cudf::table_view{{left}}, cudf::table_view{{right}}, cudf::null_equality::EQUAL));
+  EXPECT_FALSE(cudf::tables_equal(
+    cudf::table_view{{left}}, cudf::table_view{{right}}, cudf::null_equality::UNEQUAL));
+}
+
+TEST_F(TableTest, TablesEqualNaNsCompareEqual)
+{
+  column_wrapper<double> left{{std::numeric_limits<double>::quiet_NaN(), 1.0}};
+  column_wrapper<double> right{{std::numeric_limits<double>::quiet_NaN(), 1.0}};
+
+  EXPECT_TRUE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}));
+}
+
+TEST_F(TableTest, TablesEqualStructColumns)
+{
+  column_wrapper<int32_t> left_id{{1, 2, 3}};
+  column_wrapper<int16_t> left_inner_value{{10, 20, 30}};
+  column_wrapper<double> left_deep_leaf{{1.25, 2.5, 3.75}};
+  structs_col_wrapper left_inner{{left_inner_value, left_deep_leaf}};
+  structs_col_wrapper left_outer{{left_id, left_inner}};
+
+  column_wrapper<int32_t> right_id{{1, 2, 3}};
+  column_wrapper<int16_t> right_inner_value{{10, 20, 30}};
+  column_wrapper<double> right_deep_leaf{{1.25, 2.5, 3.75}};
+  structs_col_wrapper right_inner{{right_inner_value, right_deep_leaf}};
+  structs_col_wrapper right_outer{{right_id, right_inner}};
+
+  EXPECT_TRUE(cudf::tables_equal(cudf::table_view{{left_outer}}, cudf::table_view{{right_outer}}));
+}
+
+TEST_F(TableTest, TablesEqualStructColumnsDeepLeafMismatch)
+{
+  column_wrapper<int32_t> left_id{{1, 2, 3}};
+  column_wrapper<int16_t> left_inner_value{{10, 20, 30}};
+  column_wrapper<double> left_deep_leaf{{1.25, 2.5, 3.75}};
+  structs_col_wrapper left_inner{{left_inner_value, left_deep_leaf}};
+  structs_col_wrapper left_outer{{left_id, left_inner}};
+
+  column_wrapper<int32_t> right_id{{1, 2, 3}};
+  column_wrapper<int16_t> right_inner_value{{10, 20, 30}};
+  column_wrapper<double> right_deep_leaf{{1.25, 2.5, 99.0}};
+  structs_col_wrapper right_inner{{right_inner_value, right_deep_leaf}};
+  structs_col_wrapper right_outer{{right_id, right_inner}};
+
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left_outer}}, cudf::table_view{{right_outer}}));
+}
+
+TEST_F(TableTest, TablesEqualThrowsForNonEqualityComparableTypes)
+{
+  auto left =
+    column{cudf::data_type{cudf::type_id::EMPTY}, 3, rmm::device_buffer{}, rmm::device_buffer{}, 0};
+  auto right =
+    column{cudf::data_type{cudf::type_id::EMPTY}, 3, rmm::device_buffer{}, rmm::device_buffer{}, 0};
+
+  EXPECT_THROW(
+    std::ignore = cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}),
+    cudf::logic_error);
+}
+
+TEST_F(TableTest, TablesEqualListColumns)
+{
+  lists_col_wrapper left{{1, 2}, {3}, {}};
+  lists_col_wrapper right{{1, 2}, {3}, {}};
+  lists_col_wrapper different_values{{1, 2}, {4}, {}};
+  lists_col_wrapper different_offsets{{1}, {2, 3}, {}};
+
+  EXPECT_TRUE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{different_values}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{different_offsets}}));
+}
+
+TEST_F(TableTest, TablesEqualStructColumnsWithLists)
+{
+  column_wrapper<int32_t> left_id{{1, 2, 3}};
+  lists_col_wrapper left_list{{1, 2}, {3}, {}};
+  structs_col_wrapper left{{left_id, left_list}};
+
+  column_wrapper<int32_t> right_id{{1, 2, 3}};
+  lists_col_wrapper right_list{{1, 2}, {3}, {}};
+  structs_col_wrapper right{{right_id, right_list}};
+
+  column_wrapper<int32_t> different_id{{1, 2, 3}};
+  lists_col_wrapper different_list{{1, 2}, {4}, {}};
+  structs_col_wrapper different{{different_id, different_list}};
+
+  EXPECT_TRUE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{right}}));
+  EXPECT_FALSE(cudf::tables_equal(cudf::table_view{{left}}, cudf::table_view{{different}}));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

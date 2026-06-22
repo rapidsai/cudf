@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "ndsh_data_generator.hpp"
@@ -23,7 +12,6 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <cudf/ast/detail/operators.cuh>
 #include <cudf/ast/expressions.hpp>
 #include <cudf/binaryop.hpp>
 #include <cudf/filling.hpp>
@@ -391,7 +379,8 @@ std::unique_ptr<cudf::table> generate_lineitem_partial(cudf::table_view const& o
     auto const pred =
       cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref, current_date_literal);
     auto mask = cudf::compute_column(cudf::table_view({l_shipdate_ts->view()}), pred, stream, mr);
-    auto mask_index_type      = cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8});
+    auto mask_index_type =
+      cudf::cast(mask->view(), cudf::data_type{cudf::type_id::INT8}, stream, mr);
     auto const indices        = cudf::test::fixed_width_column_wrapper<int8_t>({0, 1}).release();
     auto const keys           = cudf::test::strings_column_wrapper({"O", "F"}).release();
     auto const gather_map     = cudf::table_view({indices->view(), keys->view()});
@@ -477,7 +466,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     requests[1].values = l_linestatus_mask;
 
     // Perform the aggregations
-    auto agg_result = gb.aggregate(requests);
+    auto agg_result = gb.aggregate(requests, stream, mr);
 
     // Create a `table_view` out of the `l_orderkey`, `count`, and `sum` columns
     auto const count = std::move(agg_result.second[0].results[0]);
@@ -496,9 +485,9 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     auto const count_ref = cudf::ast::column_reference(1);
     auto const sum_ref   = cudf::ast::column_reference(2);
     auto const expr_a    = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, sum_ref, count_ref);
-    auto const mask_a    = cudf::compute_column(table, expr_a);
-    auto const o_orderstatus_intermediate =
-      cudf::copy_if_else(cudf::string_scalar("O"), cudf::string_scalar("F"), mask_a->view());
+    auto const mask_a    = cudf::compute_column(table, expr_a, stream, mr);
+    auto const o_orderstatus_intermediate = cudf::copy_if_else(
+      cudf::string_scalar("O"), cudf::string_scalar("F"), mask_a->view(), stream, mr);
 
     // Then, we evaluate an expression `sum == 0` and generate a boolean mask
     auto zero_scalar        = cudf::numeric_scalar<cudf::size_type>(0);
@@ -509,9 +498,9 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, sum_ref, zero_literal);
     auto const expr_b =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, expr_b_left, expr_b_right);
-    auto const mask_b = cudf::compute_column(table, expr_b);
+    auto const mask_b = cudf::compute_column(table, expr_b, stream, mr);
     return cudf::copy_if_else(
-      cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view());
+      cudf::string_scalar("P"), o_orderstatus_intermediate->view(), mask_b->view(), stream, mr);
   }();
   orders_dependent_columns.push_back(std::move(o_orderstatus));
 
@@ -526,7 +515,7 @@ std::unique_ptr<cudf::table> generate_orders_dependent(cudf::table_view const& l
     requests.push_back(cudf::groupby::aggregation_request());
     requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
     requests[0].values = l_charge->view();
-    auto agg_result    = gb.aggregate(requests);
+    auto agg_result    = gb.aggregate(requests, stream, mr);
     return std::move(agg_result.second[0].results[0]);
   }();
   orders_dependent_columns.push_back(std::move(o_totalprice));
@@ -738,7 +727,7 @@ generate_orders_lineitem_part(double scale_factor,
     auto joined_table_columns = joined_table->release();
     auto const l_quantity     = std::move(joined_table_columns[1]);
     auto const l_quantity_fp =
-      cudf::cast(l_quantity->view(), cudf::data_type{cudf::type_id::FLOAT64});
+      cudf::cast(l_quantity->view(), cudf::data_type{cudf::type_id::FLOAT64}, stream, mr);
     auto const p_retailprice = std::move(joined_table_columns[3]);
     return cudf::binary_operation(l_quantity_fp->view(),
                                   p_retailprice->view(),

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -27,24 +27,35 @@ import functools
 import importlib.util
 import json
 import os
-import warnings
-from typing import TYPE_CHECKING, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
+
+from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from concurrent.futures import ThreadPoolExecutor
 
-    from typing_extensions import Self
+    import distributed
+    from ray.actor import ActorHandle
 
     import polars.lazyframe.engine_config
 
+    import rmm.mr
+    from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.core.context import Context
+
+    from cudf_polars.engine.ray import RankActor
+
 
 __all__ = [
+    "Cluster",
     "ConfigOptions",
+    "DaskContext",
+    "DynamicPlanningOptions",
     "InMemoryExecutor",
     "ParquetOptions",
-    "Scheduler",
-    "ShuffleMethod",
-    "StatsPlanningOptions",
+    "RayContext",
+    "SPMDContext",
     "StreamingExecutor",
     "StreamingFallbackMode",
 ]
@@ -57,8 +68,9 @@ def _env_get_int(name: str, default: int) -> int:
         return default  # pragma: no cover
 
 
-def get_total_device_memory() -> int | None:
-    """Return the total memory of the current device."""
+@functools.cache
+def get_device_handle() -> Any:
+    # Gets called for each IR.do_evaluate node, so we'll cache it.
     import pynvml
 
     try:
@@ -74,36 +86,31 @@ def get_total_device_memory() -> int | None:
                 handle = pynvml.nvmlDeviceGetDeviceHandleFromMigDeviceHandle(handle)
         else:
             handle = pynvml.nvmlDeviceGetHandleByIndex(int(index))
-
-        return pynvml.nvmlDeviceGetMemoryInfo(handle).total
-
     except pynvml.NVMLError_NotSupported:  # pragma: no cover
         # System doesn't have proper "GPU memory".
         return None
+    else:
+        return handle
 
 
 @functools.cache
-def rapidsmpf_single_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a single-process shuffle method."""
-    try:
-        return importlib.util.find_spec("rapidsmpf.integrations.single") is not None
-    except (ImportError, ValueError):
-        return False
+def get_total_device_memory() -> int | None:
+    """Return the total memory of the current device."""
+    import pynvml
+
+    maybe_handle = get_device_handle()
+
+    if maybe_handle is not None:
+        try:
+            return pynvml.nvmlDeviceGetMemoryInfo(maybe_handle).total
+        except pynvml.NVMLError_NotSupported:  # pragma: no cover
+            # System doesn't have proper "GPU memory".
+            return None
+    else:  # pragma: no cover
+        return None
 
 
-@functools.cache
-def rapidsmpf_distributed_available() -> bool:  # pragma: no cover
-    """Query whether rapidsmpf is available as a distributed shuffle method."""
-    try:
-        return importlib.util.find_spec("rapidsmpf.integrations.dask") is not None
-    except (ImportError, ValueError):
-        return False
-
-
-# TODO: Use enum.StrEnum when we drop Python 3.10
-
-
-class StreamingFallbackMode(str, enum.Enum):
+class StreamingFallbackMode(enum.StrEnum):
     """
     How the streaming executor handles operations that don't support multiple partitions.
 
@@ -120,40 +127,20 @@ class StreamingFallbackMode(str, enum.Enum):
     SILENT = "silent"
 
 
-class Scheduler(str, enum.Enum):
+class Cluster(enum.StrEnum):
     """
-    The scheduler to use for the streaming executor.
+    The cluster configuration for the streaming executor.
 
-    * ``Scheduler.SYNCHRONOUS`` : A zero-dependency, synchronous,
-      single-threaded scheduler.
-    * ``Scheduler.DISTRIBUTED`` : A Dask-based distributed scheduler.
-      Using this scheduler requires an active Dask cluster.
-    """
-
-    SYNCHRONOUS = "synchronous"
-    DISTRIBUTED = "distributed"
-
-
-class ShuffleMethod(str, enum.Enum):
-    """
-    The method to use for shuffling data between workers with the streaming executor.
-
-    * ``ShuffleMethod.TASKS`` : Use the task-based shuffler.
-    * ``ShuffleMethod.RAPIDSMPF`` : Use the rapidsmpf shuffler.
-    * ``ShuffleMethod._RAPIDSMPF_SINGLE`` : Use the single-process rapidsmpf shuffler.
-
-    With :class:`cudf_polars.utils.config.StreamingExecutor`, the default of ``None``
-    will attempt to use ``ShuffleMethod.RAPIDSMPF`` for the distributed scheduler,
-    but will fall back to ``ShuffleMethod.TASKS`` if rapidsmpf is not installed.
-
-    The user should **not** specify ``ShuffleMethod._RAPIDSMPF_SINGLE`` directly.
-    A setting of ``ShuffleMethod.RAPIDSMPF`` will be converted to the single-process
-    shuffler automatically when the 'synchronous' scheduler is active.
+    * ``Cluster.DEFAULT_SINGLETON`` : Single-GPU execution via the DefaultSingletonEngine.
+    * ``Cluster.SPMD`` : Multi-GPU SPMD execution via the SPMDEngine.
+    * ``Cluster.RAY`` : Multi-GPU execution via the RayEngine.
+    * ``Cluster.DASK`` : Multi-GPU execution via the DaskEngine.
     """
 
-    TASKS = "tasks"
-    RAPIDSMPF = "rapidsmpf"
-    _RAPIDSMPF_SINGLE = "rapidsmpf-single"
+    DEFAULT_SINGLETON = "default_singleton"
+    SPMD = "spmd"
+    RAY = "ray"
+    DASK = "dask"
 
 
 T = TypeVar("T")
@@ -215,6 +202,10 @@ class ParquetOptions:
 
         Set to 0 to avoid row-group sampling. Note that row-group sampling
         will also be skipped if ``max_footer_samples`` is 0.
+    use_rapidsmpf_native
+        Whether to use the native rapidsmpf node for parquet reading.
+        This option is only used by the streaming executor.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -249,6 +240,13 @@ class ParquetOptions:
             f"{_env_prefix}__MAX_ROW_GROUP_SAMPLES", int, default=1
         )
     )
+    use_rapidsmpf_native: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_RAPIDSMPF_NATIVE",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -263,111 +261,279 @@ class ParquetOptions:
             raise TypeError("max_footer_samples must be an int")
         if not isinstance(self.max_row_group_samples, int):
             raise TypeError("max_row_group_samples must be an int")
+        if not isinstance(self.use_rapidsmpf_native, bool):
+            raise TypeError("use_rapidsmpf_native must be a bool")
 
 
-def default_blocksize(scheduler: str) -> int:
-    """Return the default blocksize."""
-    device_size = get_total_device_memory()
-    if device_size is None:  # pragma: no cover
-        # System doesn't have proper "GPU memory".
-        # Fall back to a conservative 1GB default.
-        return 1_000_000_000
+def default_target_partition_size(min_device_size: int | None) -> int:
+    """Return the default target partition size."""
+    _DEFAULT_TARGET_PARTITION_SIZE = 1_500_000_000
+    if min_device_size is None:  # pragma: no cover
+        return _DEFAULT_TARGET_PARTITION_SIZE
+    # Limit to 2.5% of the minimum device memory across all ranks.
+    return min(max(int(min_device_size * 0.025), 1), _DEFAULT_TARGET_PARTITION_SIZE)
 
-    if (
-        scheduler == "distributed"
-        or _env_get_int("POLARS_GPU_ENABLE_CUDA_MANAGED_MEMORY", default=1) == 0
-    ):
-        # Distributed execution requires a conservative
-        # blocksize for now. We are also more conservative
-        # when UVM is disabled.
-        blocksize = int(device_size * 0.025)
-    else:
-        # Single-GPU execution can lean on UVM to
-        # support a much larger blocksize.
-        blocksize = int(device_size * 0.0625)
 
-    # Use lower and upper bounds of 1GB and 10GB
-    return min(max(blocksize, 1_000_000_000), 10_000_000_000)
+def default_broadcast_limit(min_device_size: int | None) -> int:
+    """Return the default broadcast limit."""
+    # TODO: Need empirical data to determine the optimal value.
+    _DEFAULT_BROADCAST_LIMIT = 16_000_000_000
+    if min_device_size is None:  # pragma: no cover
+        return _DEFAULT_BROADCAST_LIMIT
+    # Limit to 15% of the minimum device memory across all ranks.
+    return min(max(int(min_device_size * 0.15), 1), _DEFAULT_BROADCAST_LIMIT)
 
 
 @dataclasses.dataclass(frozen=True)
-class StatsPlanningOptions:
+class DynamicPlanningOptions:
     """
-    Configuration for statistics-based query planning.
+    Configuration for dynamic shuffle planning.
+
+    When enabled, shuffle decisions for GroupBy/Join/Unique operations
+    are made at runtime by sampling real chunks.
+
+    To enable dynamic planning, pass a ``DynamicPlanningOptions`` instance
+    to ``StreamingExecutor(dynamic_planning=...)``. To disable it, pass
+    ``None`` (the default).
 
     These options can be configured via environment variables
-    with the prefix ``CUDF_POLARS__EXECUTOR__STATS_PLANNING__``.
+    with the prefix ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__``.
 
     Parameters
     ----------
-    use_io_partitioning
-        Whether to use estimated file-size statistics to calculate
-        the ideal input-partition count for IO operations.
-        This option currently applies to Parquet data only.
-        Default is True.
-    use_reduction_planning
-        Whether to use estimated column statistics to calculate
-        the output-partition count for reduction operations
-        like `Distinct`, `GroupBy`, and `Select(unique)`.
-        Default is False.
-    use_join_heuristics
-        Whether to use join heuristics to estimate row-count
-        and unique-count statistics. Default is True.
-        These statistics may only be collected when they are
-        actually needed for query planning and when row-count
-        statistics are available for the underlying datasource
-        (e.g. Parquet and in-memory LazyFrame data).
-    use_sampling
-        Whether to sample real data to estimate unique-value
-        statistics. Default is True.
-        These statistics may only be collected when they are
-        actually needed for query planning, and when the
-        underlying datasource supports sampling (e.g. Parquet
-        and in-memory LazyFrame data).
-    default_selectivity
-        The default selectivity of a predicate.
-        Default is 0.8.
+    sample_chunk_count
+        The maximum number of chunks to sample before deciding whether
+        to shuffle. Default is 2.
+    bloom_filter_threshold
+        Row-count ratio (small / large) below which a bloom filter is applied
+        to pre-filter the large side of an inner or semi shuffle join.
+        Set to 0 to disable bloom filtering. Default is 0.5.
     """
 
-    _env_prefix = "CUDF_POLARS__EXECUTOR__STATS_PLANNING"
+    _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
 
-    use_io_partitioning: bool = dataclasses.field(
+    sample_chunk_count: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_IO_PARTITIONING", _bool_converter, default=True
+            f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
         )
     )
-    use_reduction_planning: bool = dataclasses.field(
+    bloom_filter_threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_REDUCTION_PLANNING", _bool_converter, default=False
-        )
-    )
-    use_join_heuristics: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_JOIN_HEURISTICS", _bool_converter, default=True
-        )
-    )
-    use_sampling: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__USE_SAMPLING", _bool_converter, default=True
-        )
-    )
-    default_selectivity: float = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__DEFAULT_SELECTIVITY", float, default=0.8
+            f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
         )
     )
 
     def __post_init__(self) -> None:  # noqa: D105
-        if not isinstance(self.use_io_partitioning, bool):
-            raise TypeError("use_io_partitioning must be a bool")
-        if not isinstance(self.use_reduction_planning, bool):
-            raise TypeError("use_reduction_planning must be a bool")
-        if not isinstance(self.use_join_heuristics, bool):
-            raise TypeError("use_join_heuristics must be a bool")
-        if not isinstance(self.use_sampling, bool):
-            raise TypeError("use_sampling must be a bool")
-        if not isinstance(self.default_selectivity, float):
-            raise TypeError("default_selectivity must be a float")
+        if not isinstance(self.sample_chunk_count, int):
+            raise TypeError("sample_chunk_count must be an int")
+        if self.sample_chunk_count < 1:
+            raise ValueError("sample_chunk_count must be at least 1")
+        if not isinstance(self.bloom_filter_threshold, float):
+            raise TypeError("bloom_filter_threshold must be a float")
+        if not 0.0 <= self.bloom_filter_threshold <= 1.0:
+            raise ValueError("bloom_filter_threshold must be between 0 and 1")
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class MemoryResourceConfig:
+    """
+    Configuration for the default memory resource.
+
+    Parameters
+    ----------
+    qualname
+        The fully qualified name of the memory resource class to use.
+    options
+        This can be either a dictionary representing the options to pass
+        to the memory resource class, or, a dictionary representing a
+        nested memory resource configuration. The presence of "qualname"
+        field indicates a nested memory resource configuration.
+
+    Examples
+    --------
+    Create a memory resource config for a single memory resource:
+
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.CudaAsyncMemoryResource",
+    ...     options={"initial_pool_size": 100},
+    ... )
+
+    Create a memory resource config for a nested memory resource configuration:
+
+    >>> MemoryResourceConfig(
+    ...     qualname="rmm.mr.PrefetchResourceAdaptor",
+    ...     options={
+    ...         "upstream_mr": {
+    ...             "qualname": "rmm.mr.PoolMemoryResource",
+    ...             "options": {
+    ...                 "upstream_mr": {
+    ...                     "qualname": "rmm.mr.ManagedMemoryResource",
+    ...                 },
+    ...                 "initial_pool_size": 256,
+    ...             },
+    ...         }
+    ...     },
+    ... )
+    """
+
+    _env_prefix = "CUDF_POLARS__MEMORY_RESOURCE_CONFIG"
+    qualname: str = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__QUALNAME",
+            str,
+            # We shouldn't reach here if qualname isn't set in the environment.
+            default=None,  # type: ignore[assignment]
+        )
+    )
+    options: dict[str, Any] | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__OPTIONS",
+            json.loads,
+            default=None,
+        )
+    )
+
+    def __post_init__(self) -> None:
+        if self.qualname.count(".") < 1:
+            raise ValueError(
+                f"MemoryResourceConfig.qualname '{self.qualname}' must be a fully qualified name to a class, including the module name."
+            )
+
+    def create_memory_resource(self) -> rmm.mr.DeviceMemoryResource:
+        """Create a memory resource from the configuration."""
+
+        def create_mr(
+            qualname: str, options: dict[str, Any] | None
+        ) -> rmm.mr.DeviceMemoryResource:
+            module_name, class_name = qualname.rsplit(".", 1)
+            module = importlib.import_module(module_name)
+            cls = getattr(module, class_name)
+            return cls(**options or {})
+
+        def process_options(opts: dict[str, Any] | None) -> dict[str, Any]:
+            if opts is None:
+                return {}
+
+            processed = {}
+            for key, value in opts.items():
+                if isinstance(value, dict) and "qualname" in value:
+                    # This is a nested memory resource config
+                    nested_qualname = value["qualname"]
+                    nested_options = process_options(value.get("options"))
+                    processed[key] = create_mr(nested_qualname, nested_options)
+                else:
+                    processed[key] = value
+            return processed
+
+        # Create the top-level memory resource
+        return create_mr(self.qualname, process_options(self.options))
+
+    def __hash__(self) -> int:
+        return hash((self.qualname, json.dumps(self.options, sort_keys=True)))
+
+    @classmethod
+    def default(cls) -> MemoryResourceConfig:
+        """
+        The default memory resource config.
+
+        This defaults to a CUDA Async Memory Resource with
+
+        - No initial pool size
+        - A release threshold equal to 90% of the size of the device's memory.
+        """
+        if (device_size := get_total_device_memory()) is None:  # pragma: no cover
+            # System doesn't have proper "GPU memory".
+            # We probably want to use the default async memory resource.
+            release_threshold = None
+        else:
+            release_threshold = int(0.9 * device_size)
+        return cls(
+            qualname="rmm.mr.CudaAsyncMemoryResource",
+            options={
+                "release_threshold": release_threshold,
+            },
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class SPMDContext:
+    """
+    Configuration for SPMD (Single Program Multiple Data) execution.
+
+    .. note::
+        This dataclass is **not picklable** because :class:`Communicator`,
+        :class:`Context`, and :class:`~concurrent.futures.ThreadPoolExecutor`
+        cannot be serialized. In SPMD mode each rank constructs its own
+        ``SPMDContext`` locally inside :class:`~cudf_polars.engine.spmd.SPMDEngine`,
+        so pickling is never required. Do not use this class with Dask or any other
+        framework that serializes executor configuration across process boundaries.
+
+    Parameters
+    ----------
+    comm
+        The active RapidsMPF communicator.
+    context
+        The active RapidsMPF context.
+    py_executor
+        Thread-pool executor used to drive the actor network on each rank.
+    """
+
+    comm: Communicator
+    context: Context
+    py_executor: ThreadPoolExecutor
+
+
+@dataclasses.dataclass(frozen=True)
+class RayContext:
+    """
+    Configuration for Ray cluster execution.
+
+    .. note::
+        This dataclass holds Ray actor handles, which are only valid within the
+        Ray session that created them. It is stripped from ``config_options``
+        before pickling for remote actor calls in :func:`~cudf_polars.engine.ray.evaluate_pipeline_ray_mode`
+        by :class:`~cudf_polars.engine.ray.RayEngine`. Do not persist or transfer
+        this object across Ray sessions.
+
+    Parameters
+    ----------
+    rank_actors
+        List of :class:`~cudf_polars.engine.ray.RankActor` handles, one per GPU
+        in the cluster.
+    """
+
+    rank_actors: list[ActorHandle[RankActor]]
+
+
+@dataclasses.dataclass(frozen=True)
+class DaskContext:
+    """
+    Configuration for Dask cluster execution.
+
+    .. note::
+        This dataclass holds a :class:`~distributed.Client` handle, which is
+        only valid within the Dask session that created it. It is stripped from
+        ``config_options`` before pickling for remote worker calls in
+        :func:`~cudf_polars.engine.dask.evaluate_pipeline_dask_mode`.
+        Do not persist or transfer this object across Dask sessions.
+
+    Parameters
+    ----------
+    client
+        Active :class:`~distributed.Client` connected to the cluster.
+    rapidsmpf_id
+        Unique identifier for this RapidsMPF bootstrap session.
+    owned_client
+        Client to close on shutdown, if created internally by
+        :class:`~cudf_polars.engine.dask.DaskEngine`.
+    owned_cluster
+        Cluster to close on shutdown, if created internally.
+    """
+
+    client: distributed.Client
+    rapidsmpf_id: str
+    owned_client: distributed.Client | None = None
+    owned_cluster: Any | None = None
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -380,11 +546,15 @@ class StreamingExecutor:
 
     Parameters
     ----------
-    scheduler
-        The scheduler to use for the streaming executor. ``Scheduler.SYNCHRONOUS``
-        by default.
+    cluster
+        The cluster configuration for the streaming executor.
+        ``Cluster.DEFAULT_SINGLETON`` by default.
 
-        Note ``scheduler="distributed"`` requires a Dask cluster to be running.
+        * ``Cluster.DEFAULT_SINGLETON``: Single-GPU execution
+        * ``Cluster.SPMD``: Multi-GPU SPMD execution
+        * ``Cluster.RAY``: Multi-GPU Ray execution
+        * ``Cluster.DASK``: Multi-GPU Dask execution
+
     fallback_mode
         How to handle errors when the GPU engine fails to execute a query.
         ``StreamingFallbackMode.WARN`` by default.
@@ -395,13 +565,6 @@ class StreamingExecutor:
         The maximum number of rows to process per partition. 1_000_000 by default.
         When the number of rows exceeds this value, the query will be split into
         multiple partitions and executed in parallel.
-    unique_fraction
-        A dictionary mapping column names to floats between 0 and 1 (inclusive
-        on the right).
-
-        Each factor estimates the fractional number of unique values in the
-        column. By default, ``1.0`` is used for any column not included in
-        ``unique_fraction``.
     target_partition_size
         Target partition size, in bytes, for IO tasks. This configuration currently
         controls how large parquet files are split into multiple partitions.
@@ -413,57 +576,50 @@ class StreamingExecutor:
         - keyword argument to ``polars.GPUEngine``
         - the ``CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE`` environment variable
 
-        By default, cudf-polars uses a target partition size that's a fraction
-        of the device memory, where the fraction depends on the scheduler:
-
-        - distributed: 1/40th of the device memory
-        - synchronous: 1/16th of the device memory
-
-        The optional pynvml dependency is used to query the device memory size. If
-        pynvml is not available, a warning is emitted and the device size is assumed
-        to be 12 GiB.
-
-    groupby_n_ary
-        The factor by which the number of partitions is decreased when performing
-        a groupby on a partitioned column. For example, if a column has 64 partitions,
-        it will first be reduced to ``ceil(64 / 32) = 2`` partitions.
-
-        This is useful when the absolute number of partitions is large.
-    broadcast_join_limit
-        The maximum number of partitions to allow for the smaller table in
-        a broadcast join.
-    shuffle_method
-        The method to use for shuffling data between workers. Defaults to
-        'rapidsmpf' for distributed scheduler if available (otherwise 'tasks'),
-        and 'tasks' for synchronous scheduler.
-    rapidsmpf_spill
-        Whether to wrap task arguments and output in objects that are
-        spillable by 'rapidsmpf'.
+        By default, cudf-polars uses the minimum of 1.5GB or 2.5% of the minimum
+        device size in the cluster. If pynvml cannot query the the device size(s),
+        the default ``target_partition_size`` will be 1.5GB.
+    broadcast_limit
+        The maximum number of bytes to broadcast in a single operation.
+        By default, cudf-polars uses the minimum of 16GB or 15% of the minimum
+        device size in the cluster. If pynvml cannot query the the device size(s),
+        the default ``broadcast_limit`` will be 16GB.
+    client_device_threshold
+        Threshold for spilling data from device memory.
+        Default is 50% of device memory on the client process.
     sink_to_directory
-        Whether multi-partition sink operations should write to a directory
-        rather than a single file. By default, this will be set to True for
-        the 'distributed' scheduler and False otherwise. The 'distrubuted'
-        scheduler does not currently support ``sink_to_directory=False``.
-    stats_planning
-        Options controlling statistics-based query planning. See
-        :class:`~cudf_polars.utils.config.StatsPlanningOptions` for more.
+        Whether multi-partition sink operations write to a directory rather
+        than a single file. For the spmd, ray, and dask clusters this is
+        always True; setting it to False raises a ValueError.
+    dynamic_planning
+        Options controlling dynamic shuffle planning. See
+        :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
+    max_io_threads
+        Maximum number of IO threads. Default is 4.
+        This controls the parallelism of IO operations when reading data.
+    spill_to_pinned_memory
+        Whether RapidsMPF should spill to pinned host memory when available,
+        or use regular pageable host memory. Pinned host memory offers higher
+        bandwidth and lower latency for device to host transfers compared to
+        regular pageable host memory.
+    num_py_executors
+        Maximum number of workers for the Python ThreadPoolExecutor.
+        Default is 8.
 
     Notes
     -----
     The streaming executor does not currently support profiling a query via
-    the ``.profile()`` method. We recommend using nsys to profile queries
-    with the 'synchronous' scheduler and Dask's built-in profiling tools
-    with the 'distributed' scheduler.
+    the ``.profile()`` method. We recommend using nsys to profile queries.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR"
 
     name: Literal["streaming"] = dataclasses.field(default="streaming", init=False)
-    scheduler: Scheduler = dataclasses.field(
+    cluster: Cluster | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__SCHEDULER",
-            Scheduler.__call__,
-            default=Scheduler.SYNCHRONOUS,
+            f"{_env_prefix}__CLUSTER",
+            Cluster.__call__,
+            default=None,
         )
     )
     fallback_mode: StreamingFallbackMode = dataclasses.field(
@@ -478,36 +634,19 @@ class StreamingExecutor:
             f"{_env_prefix}__MAX_ROWS_PER_PARTITION", int, default=1_000_000
         )
     )
-    unique_fraction: dict[str, float] = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__UNIQUE_FRACTION", json.loads, default={}
-        )
-    )
     target_partition_size: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__TARGET_PARTITION_SIZE", int, default=0
         )
     )
-    groupby_n_ary: int = dataclasses.field(
+    broadcast_limit: int = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__GROUPBY_N_ARY", int, default=32
+            f"{_env_prefix}__BROADCAST_LIMIT", int, default=0
         )
     )
-    broadcast_join_limit: int = dataclasses.field(
+    client_device_threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__BROADCAST_JOIN_LIMIT", int, default=0
-        )
-    )
-    shuffle_method: ShuffleMethod = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__SHUFFLE_METHOD",
-            ShuffleMethod.__call__,
-            default=ShuffleMethod.TASKS,
-        )
-    )
-    rapidsmpf_spill: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__RAPIDSMPF_SPILL", _bool_converter, default=False
+            f"{_env_prefix}__CLIENT_DEVICE_THRESHOLD", float, default=0.5
         )
     )
     sink_to_directory: bool | None = dataclasses.field(
@@ -515,70 +654,68 @@ class StreamingExecutor:
             f"{_env_prefix}__SINK_TO_DIRECTORY", _bool_converter, default=None
         )
     )
-    stats_planning: StatsPlanningOptions = dataclasses.field(
-        default_factory=StatsPlanningOptions
+    dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
+        default_factory=DynamicPlanningOptions
     )
+    max_io_threads: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__MAX_IO_THREADS", int, default=4
+        )
+    )
+    spill_to_pinned_memory: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__SPILL_TO_PINNED_MEMORY", bool, default=False
+        )
+    )
+    num_py_executors: int = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
+        )
+    )
+    min_device_size: int | None = None
+    spmd_context: SPMDContext | None = None
+    ray_context: RayContext | None = None
+    dask_context: DaskContext | None = None
 
     def __post_init__(self) -> None:  # noqa: D105
-        # Handle shuffle_method defaults for streaming executor
-        if self.shuffle_method is None:
-            if self.scheduler == "distributed" and rapidsmpf_distributed_available():
-                # For distributed scheduler, prefer rapidsmpf if available
-                object.__setattr__(self, "shuffle_method", "rapidsmpf")
-            else:
-                # Otherwise, use task-based shuffle for now.
-                # TODO: Evaluate single-process shuffle by default.
-                object.__setattr__(self, "shuffle_method", "tasks")
-        elif self.shuffle_method == "rapidsmpf-single":
-            # The user should NOT specify "rapidsmpf-single" directly.
-            raise ValueError("rapidsmpf-single is not a supported shuffle method.")
-        elif self.shuffle_method == "rapidsmpf":
-            # Check that we have rapidsmpf installed
-            if (
-                self.scheduler == "distributed"
-                and not rapidsmpf_distributed_available()
-            ):
-                raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf.integrations.dask is not installed."
-                )
-            elif self.scheduler == "synchronous" and not rapidsmpf_single_available():
-                raise ValueError(
-                    "rapidsmpf shuffle method requested, but rapidsmpf is not installed."
-                )
-            # Select "rapidsmpf-single" for the synchronous
-            if self.scheduler == "synchronous":
-                object.__setattr__(self, "shuffle_method", "rapidsmpf-single")
+        if self.cluster is None:
+            object.__setattr__(self, "cluster", Cluster.DEFAULT_SINGLETON)
+        assert self.cluster is not None, "Expected cluster to be set."
 
         # frozen dataclass, so use object.__setattr__
         object.__setattr__(
             self, "fallback_mode", StreamingFallbackMode(self.fallback_mode)
         )
-        if self.target_partition_size == 0:
-            object.__setattr__(
-                self, "target_partition_size", default_blocksize(self.scheduler)
-            )
-        if self.broadcast_join_limit == 0:
-            object.__setattr__(
-                self,
-                "broadcast_join_limit",
-                # Usually better to avoid shuffling for single gpu
-                2 if self.scheduler == "distributed" else 32,
-            )
-        object.__setattr__(self, "scheduler", Scheduler(self.scheduler))
-        object.__setattr__(self, "shuffle_method", ShuffleMethod(self.shuffle_method))
-
-        # Make sure stats_planning is a dataclass
-        if isinstance(self.stats_planning, dict):
+        if (
+            isinstance(self.target_partition_size, int)
+            and self.target_partition_size < 1
+        ):
             object.__setattr__(
                 self,
-                "stats_planning",
-                StatsPlanningOptions(**self.stats_planning),
+                "target_partition_size",
+                default_target_partition_size(self.min_device_size),
+            )
+        if isinstance(self.broadcast_limit, int) and self.broadcast_limit < 1:
+            object.__setattr__(
+                self,
+                "broadcast_limit",
+                default_broadcast_limit(self.min_device_size),
+            )
+        object.__setattr__(self, "cluster", Cluster(self.cluster))
+
+        # Handle dynamic_planning.
+        # Can be None, dict, or DynamicPlanningOptions
+        if isinstance(self.dynamic_planning, dict):
+            object.__setattr__(
+                self,
+                "dynamic_planning",
+                DynamicPlanningOptions(**self.dynamic_planning),
             )
 
-        if self.scheduler == "distributed":
+        if self.cluster in ("spmd", "ray", "dask"):
             if self.sink_to_directory is False:
                 raise ValueError(
-                    "The distributed scheduler requires sink_to_directory=True"
+                    f"The {self.cluster} cluster requires sink_to_directory=True"
                 )
             object.__setattr__(self, "sink_to_directory", True)
         elif self.sink_to_directory is None:
@@ -587,33 +724,26 @@ class StreamingExecutor:
         # Type / value check everything else
         if not isinstance(self.max_rows_per_partition, int):
             raise TypeError("max_rows_per_partition must be an int")
-        if not isinstance(self.unique_fraction, dict):
-            raise TypeError("unique_fraction must be a dict of column name to float")
         if not isinstance(self.target_partition_size, int):
             raise TypeError("target_partition_size must be an int")
-        if not isinstance(self.groupby_n_ary, int):
-            raise TypeError("groupby_n_ary must be an int")
-        if not isinstance(self.broadcast_join_limit, int):
-            raise TypeError("broadcast_join_limit must be an int")
-        if not isinstance(self.rapidsmpf_spill, bool):
-            raise TypeError("rapidsmpf_spill must be bool")
+        if not isinstance(self.broadcast_limit, int):
+            raise TypeError("broadcast_limit must be an int")
         if not isinstance(self.sink_to_directory, bool):
             raise TypeError("sink_to_directory must be bool")
-
-        # RapidsMPF spill is only supported for the distributed scheduler for now.
-        # This is because the spilling API is still within the RMPF-Dask integration.
-        # (See https://github.com/rapidsai/rapidsmpf/issues/439)
-        if self.scheduler == "synchronous" and self.rapidsmpf_spill:  # pragma: no cover
-            raise ValueError(
-                "rapidsmpf_spill is not supported for the synchronous scheduler."
-            )
+        if not isinstance(self.client_device_threshold, float):
+            raise TypeError("client_device_threshold must be a float")
+        if not isinstance(self.max_io_threads, int):
+            raise TypeError("max_io_threads must be an int")
+        if not isinstance(self.spill_to_pinned_memory, bool):
+            raise TypeError("spill_to_pinned_memory must be bool")
+        if not isinstance(self.num_py_executors, int):
+            raise TypeError("num_py_executors must be an int")
 
     def __hash__(self) -> int:  # noqa: D105
-        # cardinality factory, a dict, isn't natively hashable. We'll dump it
+        # dynamic_planning factory, a dataclass, isn't natively hashable. We'll dump it
         # to json and hash that.
         d = dataclasses.asdict(self)
-        d["unique_fraction"] = json.dumps(d["unique_fraction"])
-        d["stats_planning"] = json.dumps(d["stats_planning"])
+        d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
         return hash(tuple(sorted(d.items())))
 
 
@@ -622,18 +752,85 @@ class InMemoryExecutor:
     """
     Configuration for the cudf-polars in-memory executor.
 
-    Parameters
-    ----------
-    scheduler:
-        The scheduler to use for the in-memory executor. Currently
-        only ``Scheduler.SYNCHRONOUS`` is supported for the in-memory executor.
+    The in-memory executor only supports single-GPU execution.
     """
 
     name: Literal["in-memory"] = dataclasses.field(default="in-memory", init=False)
 
 
+ExecutorType = TypeVar("ExecutorType", StreamingExecutor, InMemoryExecutor)
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
-class ConfigOptions:
+class CUDAStreamPoolConfig:
+    """
+    Configuration for the CUDA stream pool.
+
+    Parameters
+    ----------
+    pool_size
+        The size of the CUDA stream pool.
+    flags
+        The flags to use for the CUDA stream pool.
+    """
+
+    pool_size: int = 16
+    flags: CudaStreamFlags = CudaStreamFlags.NON_BLOCKING
+
+    def build(self) -> CudaStreamPool:
+        return CudaStreamPool(
+            pool_size=self.pool_size,
+            flags=self.flags,
+        )
+
+
+def _convert_cuda_stream_policy(
+    user_cuda_stream_policy: dict | str,
+) -> CUDAStreamPoolConfig | None:
+    match user_cuda_stream_policy:
+        case "default":
+            return None
+        case "pool":
+            return CUDAStreamPoolConfig()
+        case dict():
+            return CUDAStreamPoolConfig(**user_cuda_stream_policy)
+        case str():
+            # assume it's a JSON encoded CUDAStreamPoolConfig
+            try:
+                d = json.loads(user_cuda_stream_policy)
+            except json.JSONDecodeError:
+                raise ValueError(
+                    f"Invalid CUDA stream policy: '{user_cuda_stream_policy}'"
+                ) from None
+            match d:
+                case {"pool_size": int(), "flags": int()}:
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"], flags=CudaStreamFlags(d["flags"])
+                    )
+                case {"pool_size": int(), "flags": str()}:
+                    # convert the string names to enums
+                    return CUDAStreamPoolConfig(
+                        pool_size=d["pool_size"],
+                        flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
+                    )
+                case _:
+                    try:
+                        return CUDAStreamPoolConfig(**d)
+                    except TypeError:
+                        raise ValueError(
+                            f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
+                        ) from None
+
+
+def _default_cuda_stream_policy() -> CUDAStreamPoolConfig | None:
+    v = os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY")
+    if v is None:
+        return None
+    return _convert_cuda_stream_policy(v)
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class ConfigOptions(Generic[ExecutorType]):
     """
     Configuration for the polars GPUEngine.
 
@@ -651,19 +848,29 @@ class ConfigOptions:
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
+    cuda_stream_policy
+        The policy to use for CUDA streams. ``None`` (the default) uses the
+        default CUDA stream. A :class:`~cudf_polars.utils.config.CUDAStreamPoolConfig`
+        can be used to configure a stream pool.
     """
 
     raise_on_fail: bool = False
     parquet_options: ParquetOptions = dataclasses.field(default_factory=ParquetOptions)
-    executor: StreamingExecutor | InMemoryExecutor = dataclasses.field(
-        default_factory=StreamingExecutor
+    # We need the type-ignore to pass type checking. Because StreamingExecutor
+    # is in ExecutorType, this is safe.
+    executor: ExecutorType = dataclasses.field(
+        default_factory=StreamingExecutor  # type: ignore[assignment]
     )
     device: int | None = None
+    memory_resource_config: MemoryResourceConfig | None = None
+    cuda_stream_policy: CUDAStreamPoolConfig | None = dataclasses.field(
+        default_factory=_default_cuda_stream_policy
+    )
 
     @classmethod
     def from_polars_engine(
         cls, engine: polars.lazyframe.engine_config.GPUEngine
-    ) -> Self:
+    ) -> ConfigOptions[ExecutorType]:
         """Create a :class:`ConfigOptions` from a :class:`~polars.lazyframe.engine_config.GPUEngine`."""
         # these are the valid top-level keys in the engine.config that
         # the user passes as **kwargs to GPUEngine.
@@ -672,6 +879,9 @@ class ConfigOptions:
             "executor_options",
             "parquet_options",
             "raise_on_fail",
+            "memory_resource_config",
+            "cuda_stream_policy",
+            "hardware_binding",
         }
 
         extra_options = set(engine.config.keys()) - valid_options
@@ -684,21 +894,20 @@ class ConfigOptions:
             user_executor = os.environ.get(f"{env_prefix}__EXECUTOR", "streaming")
         user_executor_options = engine.config.get("executor_options", {})
         user_parquet_options = engine.config.get("parquet_options", {})
+        if user_parquet_options is None:
+            user_parquet_options = {}
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
-
-        # Backward compatibility for "cardinality_factor"
-        # TODO: Remove this in 25.10
-        if "cardinality_factor" in user_executor_options:
-            warnings.warn(
-                "The 'cardinality_factor' configuration is deprecated. "
-                "Please use 'unique_fraction' instead.",
-                FutureWarning,
-                stacklevel=2,
+        user_memory_resource_config = engine.config.get("memory_resource_config", None)
+        if user_memory_resource_config is None and (
+            os.environ.get(f"{MemoryResourceConfig._env_prefix}__QUALNAME", "") != ""
+        ):
+            # We'll pick up the qualname / options from the environment.
+            user_memory_resource_config = MemoryResourceConfig()
+        elif isinstance(user_memory_resource_config, dict):
+            user_memory_resource_config = MemoryResourceConfig(
+                **user_memory_resource_config
             )
-            cardinality_factor = user_executor_options.pop("cardinality_factor")
-            if "unique_fraction" not in user_executor_options:
-                user_executor_options["unique_fraction"] = cardinality_factor
 
         # These are user-provided options, so we need to actually validate
         # them.
@@ -716,26 +925,55 @@ class ConfigOptions:
                 executor = InMemoryExecutor(**user_executor_options)
             case "streaming":
                 user_executor_options = user_executor_options.copy()
-                # Handle the interaction between the default shuffle method, the
-                # scheduler, and whether rapidsmpf is available.
-                env_shuffle_method = os.environ.get(
-                    "CUDF_POLARS__EXECUTOR__SHUFFLE_METHOD", None
-                )
-                if env_shuffle_method is not None:
-                    shuffle_method_default = ShuffleMethod(env_shuffle_method)
-                else:
-                    shuffle_method_default = None
+                if "min_device_size" not in user_executor_options:
+                    user_executor_options["min_device_size"] = get_total_device_memory()
 
-                user_executor_options.setdefault(
-                    "shuffle_method", shuffle_method_default
+                # Handle dynamic_planning: check user config, then env var
+                user_dynamic_planning = user_executor_options.get(
+                    "dynamic_planning", None
                 )
+                if user_dynamic_planning is None:
+                    env_dynamic_planning = os.environ.get(
+                        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING", "1"
+                    )
+                    if not _bool_converter(env_dynamic_planning):
+                        user_executor_options["dynamic_planning"] = None
+
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable
                 raise ValueError(f"Unsupported executor: {user_executor}")
 
-        return cls(
-            raise_on_fail=user_raise_on_fail,
-            parquet_options=ParquetOptions(**user_parquet_options),
-            executor=executor,
-            device=engine.device,
-        )
+        kwargs = {
+            "raise_on_fail": user_raise_on_fail,
+            "parquet_options": ParquetOptions(**user_parquet_options),
+            "executor": executor,
+            "device": engine.device,
+            "memory_resource_config": user_memory_resource_config,
+        }
+
+        # Handle "cuda-stream-policy".
+        # The default will depend on the executor.
+        user_cuda_stream_policy = engine.config.get(
+            "cuda_stream_policy", None
+        ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
+
+        cuda_stream_policy: CUDAStreamPoolConfig | None
+
+        if user_cuda_stream_policy is None:
+            if executor.name == "streaming":
+                cuda_stream_policy = CUDAStreamPoolConfig()
+            else:
+                cuda_stream_policy = None
+        else:
+            cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
+
+        if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
+            executor.name != "streaming"
+        ):
+            raise ValueError(
+                "A stream pool is only supported by the streaming executor."
+            )
+
+        kwargs["cuda_stream_policy"] = cuda_stream_policy
+
+        return cls(**kwargs)

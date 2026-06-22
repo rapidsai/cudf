@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -20,7 +9,7 @@
 #include <cuda/std/limits>
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 
 namespace cudf {
 namespace strings {
@@ -37,11 +26,12 @@ namespace detail {
  *                             unsigned type from the storage type.
  *
  * @param[in,out] iter Start of characters to parse
- * @param[in] end End of characters to parse
+ * @param[in] iter_end End of characters to parse
+ * @param[in] decimal_pt_char The character used as the decimal point
  * @return Integer component and exponent offset.
  */
 template <typename UnsignedDecimalType>
-__device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
+__device__ inline cuda::std::pair<UnsignedDecimalType, int32_t> parse_integer(
   char const*& iter, char const* iter_end, char const decimal_pt_char = '.')
 {
   // highest value where another decimal digit cannot be appended without an overflow;
@@ -85,7 +75,7 @@ __device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
  *         exponent value in the decimal string does not overflow int32
  * @param[in,out] iter Start of characters to parse
  *                     (points to the character after the 'E' or 'e')
- * @param[in] end End of characters to parse
+ * @param[in] iter_end End of characters to parse
  * @return Integer value of the exponent
  */
 template <bool check_only = false>

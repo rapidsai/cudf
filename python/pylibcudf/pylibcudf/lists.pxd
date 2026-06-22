@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp cimport bool
 from pylibcudf.libcudf.types cimport (
@@ -7,7 +8,7 @@ from pylibcudf.libcudf.types cimport (
 from pylibcudf.libcudf.copying cimport out_of_bounds_policy
 from pylibcudf.libcudf.lists.combine cimport concatenate_null_policy
 from pylibcudf.libcudf.lists.contains cimport duplicate_find_option
-from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from .column cimport Column
 from .scalar cimport Scalar
@@ -21,38 +22,89 @@ ctypedef fused ColumnOrSizeType:
     Column
     size_type
 
-cpdef Table explode_outer(Table, size_type explode_column_idx, Stream stream=*)
+cpdef Table explode_outer(
+    Table,
+    size_type explode_column_idx,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
-cpdef Column concatenate_rows(Table, Stream stream=*)
+cpdef Column concatenate_rows(
+    Table,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
 cpdef Column concatenate_list_elements(
-    Column, concatenate_null_policy null_policy, Stream stream=*
+    Column,
+    concatenate_null_policy null_policy,
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
-cpdef Column contains(Column, ColumnOrScalar, Stream stream=*)
+cpdef Column contains(
+    Column,
+    ColumnOrScalar,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
-cpdef Column contains_nulls(Column, Stream stream=*)
+cpdef Column contains_nulls(
+    Column,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
 cpdef Column index_of(
-    Column, ColumnOrScalar, duplicate_find_option, Stream stream=*
+    Column,
+    ColumnOrScalar,
+    duplicate_find_option,
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
-cpdef Column reverse(Column, Stream stream=*)
+cpdef Column reverse(
+    Column,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
 cpdef Column segmented_gather(
-    Column, Column, out_of_bounds_policy bounds_policy=*, Stream stream=*
+    Column,
+    Column,
+    out_of_bounds_policy bounds_policy=*,
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
-cpdef Column extract_list_element(Column, ColumnOrSizeType, Stream stream=*)
+cpdef Column extract_list_element(
+    Column,
+    ColumnOrSizeType,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
-cpdef Column count_elements(Column, Stream stream=*)
+cpdef Column count_elements(
+    Column,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
 cpdef Column sequences(
-    Column, Column, Column steps = *, Stream stream=*
+    Column,
+    Column,
+    Column steps = *,
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column sort_lists(
-    Column, order, null_order, bool stable = *, Stream stream=*
+    Column,
+    order,
+    null_order,
+    bool stable = *,
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column difference_distinct(
@@ -60,7 +112,8 @@ cpdef Column difference_distinct(
     Column,
     null_equality nulls_equal=*,
     nan_equality nans_equal=*,
-    Stream stream=*
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column have_overlap(
@@ -68,7 +121,8 @@ cpdef Column have_overlap(
     Column,
     null_equality nulls_equal=*,
     nan_equality nans_equal=*,
-    Stream stream=*
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column intersect_distinct(
@@ -76,7 +130,8 @@ cpdef Column intersect_distinct(
     Column,
     null_equality nulls_equal=*,
     nan_equality nans_equal=*,
-    Stream stream=*
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
 cpdef Column union_distinct(
@@ -84,9 +139,28 @@ cpdef Column union_distinct(
     Column,
     null_equality nulls_equal=*,
     nan_equality nans_equal=*,
-    Stream stream=*
+    object stream = *,
+    DeviceMemoryResource mr=*,
 )
 
-cpdef Column apply_boolean_mask(Column, Column, Stream stream=*)
+cpdef Column apply_boolean_mask(
+    Column,
+    Column,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)
 
-cpdef Column distinct(Column, null_equality, nan_equality, Stream stream=*)
+cpdef Column apply_deletion_mask(
+    Column,
+    Column,
+    object stream=*,
+    DeviceMemoryResource mr=*,
+)
+
+cpdef Column distinct(
+    Column,
+    null_equality,
+    nan_equality,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+)

@@ -1,39 +1,30 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "compute_aggregations.hpp"
 #include "compute_groupby.hpp"
+#include "compute_single_pass_aggs.hpp"
+#include "groupby/common/utils.hpp"
+#include "hash_compound_agg_finalizer.hpp"
 #include "helpers.cuh"
-#include "sparse_to_dense_results.hpp"
+#include "output_utils.hpp"
 
 #include <cudf/detail/aggregation/aggregation.cuh>
-#include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/cuco_helpers.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/groupby.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/tabulate.h>
-
-#include <memory>
 
 namespace cudf::groupby::detail::hash {
 
@@ -66,30 +57,13 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
                                        rmm::cuda_stream_view stream,
                                        rmm::device_async_resource_ref mr)
 {
-  // convert to int64_t to avoid potential overflow with large `keys`
-  auto const num_keys = static_cast<int64_t>(keys.num_rows());
+  auto const num_keys = keys.num_rows();
 
-  [[maybe_unused]] auto const [row_bitmask_data, row_bitmask] =
-    [&]() -> std::pair<rmm::device_buffer, bitmask_type const*> {
-    if (!skip_rows_with_nulls) { return {rmm::device_buffer{0, stream}, nullptr}; }
-
-    if (keys.num_columns() == 1) {
-      auto const& keys_col = keys.column(0);
-      // Only use the input null mask directly if the keys table was not sliced.
-      if (keys_col.offset() == 0) { return {rmm::device_buffer{0, stream}, keys_col.null_mask()}; }
-      // If the keys table was sliced, we need to copy the null mask to ensure its first bit aligns
-      // with the first row of the keys table.
-      auto null_mask_data  = cudf::copy_bitmask(keys_col, stream);
-      auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
-      return {std::move(null_mask_data), null_mask};
-    }
-
-    auto [null_mask_data, null_count] = cudf::bitmask_and(keys, stream);
-    if (null_count == 0) { return {rmm::device_buffer{0, stream}, nullptr}; }
-
-    auto const null_mask = static_cast<bitmask_type const*>(null_mask_data.data());
-    return {std::move(null_mask_data), null_mask};
-  }();
+  [[maybe_unused]] auto [row_bitmask_data, row_bitmask] =
+    skip_rows_with_nulls
+      ? cudf::groupby::detail::compute_row_bitmask(keys, stream)
+      : std::pair<rmm::device_buffer, bitmask_type const*>{
+          rmm::device_buffer{0, stream, cudf::get_current_device_resource_ref()}, nullptr};
 
   auto const cached_hashes = [&]() -> rmm::device_uvector<hash_value_type> {
     auto const num_columns =
@@ -98,11 +72,13 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
       });
 
     if (num_columns <= HASH_CACHING_THRESHOLD) {
-      return rmm::device_uvector<hash_value_type>{0, stream};
+      return rmm::device_uvector<hash_value_type>{
+        0, stream, cudf::get_current_device_resource_ref()};
     }
 
-    rmm::device_uvector<hash_value_type> hashes(num_keys, stream);
-    thrust::tabulate(rmm::exec_policy_nosync(stream),
+    rmm::device_uvector<hash_value_type> hashes(
+      num_keys, stream, cudf::get_current_device_resource_ref());
+    thrust::tabulate(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      hashes.begin(),
                      hashes.end(),
                      [d_row_hash, row_bitmask] __device__(size_type const idx) {
@@ -114,35 +90,68 @@ std::unique_ptr<table> compute_groupby(table_view const& keys,
     return hashes;
   }();
 
-  // Cache of sparse results where the location of aggregate value in each
-  // column is indexed by the hash set
-  cudf::detail::result_cache sparse_results(requests.size());
+  auto set =
+    cuco::static_set{cuco::extent<int64_t>{static_cast<int64_t>(num_keys)},
+                     cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
+                     cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
+                     d_row_equal,
+                     probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
+                     cuco::thread_scope_device,
+                     cuco::storage<GROUPBY_BUCKET_SIZE>{},
+                     rmm::mr::polymorphic_allocator<char>{},
+                     stream.value()};
 
-  auto set = cuco::static_set{
-    cuco::extent<int64_t>{num_keys},
-    cudf::detail::CUCO_DESIRED_LOAD_FACTOR,  // 50% load factor
-    cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL},
-    d_row_equal,
-    probing_scheme_t{row_hasher_with_cache_t{d_row_hash, cached_hashes.data()}},
-    cuco::thread_scope_device,
-    cuco::storage<GROUPBY_BUCKET_SIZE>{},
-    cudf::detail::cuco_allocator<char>{rmm::mr::polymorphic_allocator<char>{}, stream},
-    stream.value()};
+  auto const gather_keys = [&](auto const& gather_map) {
+    return cudf::detail::gather(keys,
+                                gather_map,
+                                out_of_bounds_policy::DONT_CHECK,
+                                cudf::negative_index_policy::NOT_ALLOWED,
+                                stream,
+                                mr);
+  };
 
-  // Compute all single pass aggs first
-  auto gather_map =
-    compute_aggregations(num_keys, row_bitmask, set, requests, &sparse_results, stream);
+  // In case of no requests, we still need to generate a set of unique keys.
+  if (requests.empty()) {
+    thrust::for_each_n(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<cudf::size_type>{0},
+      num_keys,
+      [set_ref = set.ref(cuco::op::insert), row_bitmask] __device__(size_type const idx) mutable {
+        if (!row_bitmask || cudf::bit_is_set(row_bitmask, idx)) { set_ref.insert(idx); }
+      });
 
-  // Compact all results from sparse_results and insert into cache
-  sparse_to_dense_results(
-    requests, &sparse_results, cache, gather_map, set.ref(cuco::find), row_bitmask, stream, mr);
+    rmm::device_uvector<size_type> unique_key_indices(
+      num_keys, stream, cudf::get_current_device_resource_ref());
+    auto const keys_end       = set.retrieve_all(unique_key_indices.begin(), stream.value());
+    auto const key_gather_map = device_span<size_type const>{
+      unique_key_indices.data(),
+      static_cast<std::size_t>(cuda::std::distance(unique_key_indices.begin(), keys_end))};
+    return gather_keys(key_gather_map);
+  }
 
-  return cudf::detail::gather(keys,
-                              gather_map,
-                              out_of_bounds_policy::DONT_CHECK,
-                              cudf::detail::negative_index_policy::NOT_ALLOWED,
-                              stream,
-                              mr);
+  // Compute all single pass aggs first.
+  auto const [key_gather_map, has_compound_aggs] =
+    compute_single_pass_aggs(set, row_bitmask, requests, cache, stream, mr);
+
+  if (has_compound_aggs) {
+    for (auto const& request : requests) {
+      auto const& agg_v = request.aggregations;
+      auto const& col   = request.values;
+
+      // The map to find the target output index for each input row is not always available due to
+      // minimizing overhead. As such, there is no way for the finalizers to perform additional
+      // aggregation operations. They can only compute their output using the previously computed
+      // single-pass aggregations with linear transformations such as addition/multiplication (e.g.
+      // for variance/stddev). In the future, if there are more compound aggregations that require
+      // additional aggregation steps, we can revisit this design.
+      auto const finalizer = hash_compound_agg_finalizer(col, cache, row_bitmask, stream, mr);
+      for (auto&& agg : agg_v) {
+        cudf::detail::aggregation_dispatcher(agg->kind, finalizer, *agg);
+      }
+    }
+  }
+
+  return gather_keys(key_gather_map);
 }
 
 template std::unique_ptr<table> compute_groupby<row_comparator_t, row_hash_t>(

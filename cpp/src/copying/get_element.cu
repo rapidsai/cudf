@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_device_view.cuh>
@@ -95,7 +84,8 @@ struct get_element_functor {
   {
     auto dict_view    = dictionary_column_view(input);
     auto indices_iter = detail::indexalator_factory::make_input_iterator(dict_view.indices());
-    numeric_scalar<size_type> key_index_scalar{index, true, stream};
+    numeric_scalar<size_type> key_index_scalar{
+      index, true, stream, cudf::get_current_device_resource_ref()};
     auto d_key_index = get_scalar_device_view(key_index_scalar);
     auto d_col       = column_device_view::create(input, stream);
 

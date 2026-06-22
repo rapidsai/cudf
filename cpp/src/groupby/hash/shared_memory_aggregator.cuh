@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -37,15 +26,17 @@ struct update_target_element_shmem {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>())
+  requires(cudf::is_fixed_width<Source>() &&
+           cudf::has_atomic_support<device_storage_type_t<Source>>())
 struct update_target_element_shmem<Source, cudf::aggregation::MIN> {
   __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::MIN>;
-    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::MIN>;
+    using DeviceTarget =
+      cudf::device_storage_type_t<cudf::detail::target_type_t<Source, cudf::aggregation::MIN>>;
+    using DeviceSource = cudf::device_storage_type_t<Source>;
 
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_min(&target_casted[target_index],
@@ -54,15 +45,17 @@ struct update_target_element_shmem<Source, cudf::aggregation::MIN> {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>())
+  requires(cudf::is_fixed_width<Source>() &&
+           cudf::has_atomic_support<device_storage_type_t<Source>>())
 struct update_target_element_shmem<Source, cudf::aggregation::MAX> {
   __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::MAX>;
-    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::MAX>;
+    using DeviceTarget =
+      cudf::device_storage_type_t<cudf::detail::target_type_t<Source, cudf::aggregation::MAX>>;
+    using DeviceSource = cudf::device_storage_type_t<Source>;
 
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_max(&target_casted[target_index],
@@ -71,16 +64,16 @@ struct update_target_element_shmem<Source, cudf::aggregation::MAX> {
 };
 
 template <typename Source>
-  requires(cudf::is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
-           !cudf::is_timestamp<Source>())
+  requires(cudf::is_fixed_width<Source>() && !cudf::is_timestamp<Source>())
 struct update_target_element_shmem<Source, cudf::aggregation::SUM> {
   __device__ void operator()(cuda::std::byte* target,
                              cudf::size_type target_index,
                              cudf::column_device_view source,
                              cudf::size_type source_index) const noexcept
   {
-    using DeviceTarget = cudf::detail::underlying_target_t<Source, aggregation::SUM>;
-    using DeviceSource = cudf::detail::underlying_source_t<Source, aggregation::SUM>;
+    using DeviceTarget =
+      cudf::device_storage_type_t<cudf::detail::target_type_t<Source, cudf::aggregation::SUM>>;
+    using DeviceSource = cudf::device_storage_type_t<Source>;
 
     DeviceTarget* target_casted = reinterpret_cast<DeviceTarget*>(target);
     cudf::detail::atomic_add(&target_casted[target_index],

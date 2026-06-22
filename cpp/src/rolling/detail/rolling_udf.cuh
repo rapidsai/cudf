@@ -1,26 +1,16 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include "jit/cache.hpp"
+#include "jit/helpers.hpp"
 #include "jit/parser.hpp"
 #include "jit/util.hpp"
 #include "rolling.hpp"
-#include "rolling_jit.hpp"
+#include "rolling_jit.cuh"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -31,24 +21,36 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <jit_preprocessed_files/rolling/jit/kernel.cu.jit.hpp>
-
 #include <memory>
 
 namespace cudf {
 namespace detail {
 
-// Applies a user-defined rolling window function to the values in a column.
-template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
-std::unique_ptr<column> rolling_window_udf(column_view const& input,
-                                           PrecedingWindowIterator preceding_window,
-                                           std::string const& preceding_window_str,
-                                           FollowingWindowIterator following_window,
-                                           std::string const& following_window_str,
-                                           size_type min_periods,
-                                           rolling_aggregation const& agg,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::device_async_resource_ref mr)
+template <typename T>
+std::string reflect_window_wrapper()
+{
+  if constexpr (std::is_same_v<T, fixed_window_wrapper>) {
+    return "cudf::detail::fixed_window_wrapper";
+  } else if constexpr (std::is_same_v<T, variable_window_wrapper>) {
+    return "cudf::detail::variable_window_wrapper";
+  } else if constexpr (std::is_same_v<T, preceding_window_wrapper>) {
+    return "cudf::detail::preceding_window_wrapper";
+  } else {
+    static_assert(std::is_same_v<T, following_window_wrapper>, "Unsupported window wrapper type");
+    return "cudf::detail::following_window_wrapper";
+  }
+}
+
+inline std::unique_ptr<column> rolling_window_udf_impl(
+  column_view const& input,
+  std::string const& preceding_window_str,
+  cudf::detail::window_wrapper_base const& preceding_window,
+  std::string const& following_window_str,
+  cudf::detail::window_wrapper_base const& following_window,
+  size_type min_periods,
+  rolling_aggregation const& agg,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
 {
   static_assert(warp_size == cudf::detail::size_in_bits<cudf::bitmask_type>(),
                 "bitmask_type size does not match CUDA warp size");
@@ -82,29 +84,33 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
     udf_agg._output_type, input.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
 
   auto output_view = output->mutable_view();
-  cudf::detail::device_scalar<size_type> device_valid_count{0, stream};
+  cudf::detail::device_scalar<size_type> device_valid_count{
+    0, stream, cudf::get_current_device_resource_ref()};
 
-  std::string kernel_name =
-    jitify2::reflection::Template("cudf::rolling::jit::gpu_rolling_new")  //
-      .instantiate(cudf::type_to_name(input.type()),  // list of template arguments
-                   cudf::type_to_name(output->type()),
-                   udf_agg._operator_name,
-                   preceding_window_str.c_str(),
-                   following_window_str.c_str());
+  std::string kernel_reflection =
+    rtcx::reflect_template("cudf::rolling::jit::rolling_window_kernel",
+                           cudf::type_to_name(input.type()),  // list of template arguments
+                           cudf::type_to_name(output->type()),
+                           udf_agg._operator_name,
+                           preceding_window_str,
+                           following_window_str);
 
-  cudf::jit::get_program_cache(*rolling_jit_kernel_cu_jit)
-    .get_kernel(
-      kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, nullptr, stream.value())                           //
-    ->launch(input.size(),
-             cudf::jit::get_data_ptr(input),
-             input.null_mask(),
-             cudf::jit::get_data_ptr(output_view),
-             output_view.null_mask(),
-             device_valid_count.data(),
-             preceding_window,
-             following_window,
-             min_periods);
+  auto kernel =
+    cudf::jit::get_udf_kernel("cudf/cpp/src/rolling/jit/kernel.cu", kernel_reflection, cuda_source);
+  auto cfg = kernel.max_occupancy_config(0, 0);
+  kernel.launch_with({cfg.min_grid_size},
+                     {cfg.block_size},
+                     0,
+                     stream,
+                     input.size(),
+                     cudf::jit::get_data_ptr(input),
+                     input.null_mask(),
+                     cudf::jit::get_data_ptr(output->mutable_view()),
+                     output_view.null_mask(),
+                     device_valid_count.data(),
+                     preceding_window,
+                     following_window,
+                     min_periods);
 
   output->set_null_count(output->size() - device_valid_count.value(stream));
 
@@ -112,6 +118,27 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
   CUDF_CHECK_CUDA(stream.value());
 
   return output;
+}
+
+// Applies a user-defined rolling window function to the values in a column.
+template <typename PrecedingWindowIterator, typename FollowingWindowIterator>
+std::unique_ptr<column> rolling_window_udf(column_view const& input,
+                                           PrecedingWindowIterator preceding_window,
+                                           FollowingWindowIterator following_window,
+                                           size_type min_periods,
+                                           rolling_aggregation const& agg,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
+{
+  return rolling_window_udf_impl(input,
+                                 reflect_window_wrapper<PrecedingWindowIterator>(),
+                                 preceding_window,
+                                 reflect_window_wrapper<FollowingWindowIterator>(),
+                                 following_window,
+                                 min_periods,
+                                 agg,
+                                 stream,
+                                 mr);
 }
 
 }  // namespace detail

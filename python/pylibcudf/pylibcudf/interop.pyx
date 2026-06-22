@@ -1,4 +1,5 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cpython.pycapsule cimport (
     PyCapsule_GetPointer,
@@ -8,8 +9,6 @@ from cpython.pycapsule cimport (
 )
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
-
-from functools import singledispatch
 
 from pylibcudf.libcudf.interop cimport (
     DLManagedTensor,
@@ -21,129 +20,26 @@ from pylibcudf.libcudf.table.table cimport table
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
-from .column cimport Column
-from .scalar cimport Scalar
 from .table cimport Table
-from .types cimport DataType
 from .utils cimport _get_stream, _get_memory_resource
 from ._interop_helpers import ColumnMetadata
-
-try:
-    import pyarrow as pa
-    pa_err = None
-except ImportError as e:
-    pa = None
-    pa_err = e
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
     "ColumnMetadata",
-    "from_arrow",
     "from_dlpack",
-    "to_arrow",
     "to_dlpack",
 ]
 
 
-@singledispatch
-def from_arrow(pyarrow_object, *, DataType data_type=None):
-    """Create a cudf object from a pyarrow object.
-
-    Parameters
-    ----------
-    pyarrow_object : Union[pyarrow.Array, pyarrow.Table, pyarrow.Scalar]
-        The PyArrow object to convert.
-
-    Returns
-    -------
-    Union[Table, Scalar]
-        The converted object of type corresponding to the input type in cudf.
-    """
-    if pa_err is not None:
-        raise RuntimeError(
-            "pyarrow was not found on your system. Please "
-            "pip install pylibcudf with the [pyarrow] extra for a "
-            "compatible pyarrow version."
-        ) from pa_err
-    raise TypeError(
-        f"Unsupported type {type(pyarrow_object)} for conversion from arrow"
-    )
-
-
-@singledispatch
-def to_arrow(plc_object, **kwargs):
-    """Convert to a PyArrow object.
-
-    Parameters
-    ----------
-    plc_object : Union[Column, Table, Scalar]
-        The cudf object to convert.
-    metadata : list
-        The metadata to attach to the columns of the table.
-
-    Returns
-    -------
-    Union[pyarrow.Array, pyarrow.Table, pyarrow.Scalar]
-        The converted object of type corresponding to the input type in PyArrow.
-    """
-    if pa_err is not None:
-        raise RuntimeError(
-            "pyarrow was not found on your system. Please "
-            "pip install pylibcudf with the [pyarrow] extra for a "
-            "compatible pyarrow version."
-        ) from pa_err
-    raise TypeError(f"Unsupported type {type(plc_object)} for conversion to arrow")
-
-
-if pa is not None:
-    @from_arrow.register(pa.DataType)
-    def _from_arrow_datatype(pyarrow_object):
-        return DataType.from_arrow(pyarrow_object)
-
-    @from_arrow.register(pa.Table)
-    def _from_arrow_table(pyarrow_object, *, DataType data_type=None):
-        return Table.from_arrow(pyarrow_object, dtype=data_type)
-
-    @from_arrow.register(pa.Scalar)
-    def _from_arrow_scalar(
-        pyarrow_object,
-        *,
-        DataType data_type=None,
-        Stream stream = None
-    ):
-        return Scalar.from_arrow(pyarrow_object, dtype=data_type, stream=stream)
-
-    @from_arrow.register(pa.Array)
-    def _from_arrow_column(pyarrow_object, *, DataType data_type=None):
-        return Column.from_arrow(pyarrow_object, dtype=data_type)
-
-    @to_arrow.register(DataType)
-    def _to_arrow_datatype(plc_object, **kwargs):
-        """Convert a datatype to arrow."""
-        return plc_object.to_arrow(**kwargs)
-
-    @to_arrow.register(Table)
-    def _to_arrow_table(plc_object, metadata=None):
-        """Create a PyArrow table from a pylibcudf table."""
-        return plc_object.to_arrow(metadata=metadata)
-
-    @to_arrow.register(Column)
-    def _to_arrow_array(plc_object, metadata=None):
-        """Create a PyArrow array from a pylibcudf column."""
-        return plc_object.to_arrow(metadata=metadata)
-
-    @to_arrow.register(Scalar)
-    def _to_arrow_scalar(plc_object, metadata=None):
-        return plc_object.to_arrow(metadata=metadata)
-
-
 cpdef Table from_dlpack(
-    object managed_tensor, Stream stream=None, DeviceMemoryResource mr=None
+    object managed_tensor, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Convert a DLPack DLTensor into a cudf table.
 
-    For details, see :cpp:func:`cudf::from_dlpack`
+    For details, see :cpp:func:`from_dlpack`
 
     Parameters
     ----------
@@ -168,7 +64,8 @@ cpdef Table from_dlpack(
     if dlpack_tensor is NULL:
         raise ValueError("PyCapsule object contained a NULL pointer")
     PyCapsule_SetName(managed_tensor, "used_dltensor")
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     # Note: A copy is always performed when converting the dlpack
@@ -177,18 +74,18 @@ cpdef Table from_dlpack(
     # TODO: https://github.com/rapidsai/cudf/issues/10874
     # TODO: https://github.com/rapidsai/cudf/issues/10849
     with nogil:
-        c_result = cpp_from_dlpack(dlpack_tensor, stream.view(), mr.get_mr())
+        c_result = cpp_from_dlpack(dlpack_tensor, _cs, mr.get_mr())
 
-    cdef Table result = Table.from_libcudf(move(c_result), stream, mr)
+    cdef Table result = Table.from_libcudf(move(c_result), _stream, mr)
     dlpack_tensor.deleter(dlpack_tensor)
     return result
 
 
-cpdef object to_dlpack(Table input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef object to_dlpack(Table input, object stream=None, DeviceMemoryResource mr=None):
     """
     Convert a cudf table into a DLPack DLTensor.
 
-    For details, see :cpp:func:`cudf::to_dlpack`
+    For details, see :cpp:func:`to_dlpack`
 
     Parameters
     ----------
@@ -212,11 +109,12 @@ cpdef object to_dlpack(Table input, Stream stream=None, DeviceMemoryResource mr=
                 "Input is required to have null count as zero."
             )
     cdef DLManagedTensor *dlpack_tensor
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        dlpack_tensor = cpp_to_dlpack(input.view(), stream.view(), mr.get_mr())
+        dlpack_tensor = cpp_to_dlpack(input.view(), _cs, mr.get_mr())
 
     return PyCapsule_New(
         dlpack_tensor,

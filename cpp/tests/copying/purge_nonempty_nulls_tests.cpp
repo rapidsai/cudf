@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -20,8 +9,8 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -51,8 +40,7 @@ TEST_F(HasNonEmptyNullsTest, TrivialTest)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
-    input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  cudf::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
@@ -102,8 +90,7 @@ TEST_F(PurgeNonEmptyNullsTest, SingleLevelList)
                        .release();
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
-    input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  cudf::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
   input->set_null_count(1);
 
   test_purge(*input);
@@ -184,8 +171,7 @@ TEST_F(PurgeNonEmptyNullsTest, TwoLevelList)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
-    input->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
+  cudf::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
@@ -240,8 +226,7 @@ TEST_F(PurgeNonEmptyNullsTest, ThreeLevelList)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
-    input->mutable_view().null_mask(), 3, 4, false, cudf::get_default_stream());
+  cudf::set_null_mask(input->mutable_view().null_mask(), 3, 4, false);
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
@@ -295,8 +280,7 @@ TEST_F(PurgeNonEmptyNullsTest, ListOfStrings)
   EXPECT_FALSE(cudf::has_nonempty_nulls(*input));
 
   // Set nullmask, post construction.
-  cudf::detail::set_null_mask(
-    input->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  cudf::set_null_mask(input->mutable_view().null_mask(), 2, 3, false);
   input->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*input));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*input));
@@ -385,8 +369,7 @@ TEST_F(PurgeNonEmptyNullsTest, UnsanitizedListOfUnsanitizedStrings)
   EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));
 
   // Set lists nullmask, post construction.
-  cudf::detail::set_null_mask(
-    lists->mutable_view().null_mask(), 2, 3, false, cudf::get_default_stream());
+  cudf::set_null_mask(lists->mutable_view().null_mask(), 2, 3, false);
   lists->set_null_count(1);
   EXPECT_TRUE(cudf::may_have_nonempty_nulls(*lists));
   EXPECT_TRUE(cudf::has_nonempty_nulls(*lists));

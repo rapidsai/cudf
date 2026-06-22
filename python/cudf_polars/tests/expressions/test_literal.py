@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import polars as pl
 import pylibcudf as plc
 
 from cudf_polars.containers import DataType
+from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -39,12 +40,12 @@ def float(request):
     return pl.lit(1.0, dtype=request.param)
 
 
-def test_numeric_literal(integer, float):
+def test_numeric_literal(engine: pl.GPUEngine, integer, float):
     df = pl.LazyFrame({})
 
     q = df.select(integer=integer, float_=float, sum_=integer + float)
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.fixture(
@@ -59,7 +60,7 @@ def timedelta(request):
     return pl.lit(9_000, dtype=request.param)
 
 
-def test_timelike_literal(timestamp, timedelta):
+def test_timelike_literal(engine: pl.GPUEngine, timestamp, timedelta):
     df = pl.LazyFrame({})
 
     q = df.select(
@@ -80,12 +81,12 @@ def test_timelike_literal(timestamp, timedelta):
         schema["delta"],
         plc.binaryop.BinaryOperator.ADD,
     ):
-        assert_gpu_result_equal(q)
+        assert_gpu_result_equal(q, engine=engine)
     else:
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_select_literal_series():
+def test_select_literal_series(engine: pl.GPUEngine):
     df = pl.LazyFrame({})
 
     q = df.select(
@@ -94,15 +95,46 @@ def test_select_literal_series():
         c=pl.Series([[[1]], [], [[1, 2, 3, 4]]], dtype=pl.List(pl.List(pl.Float32()))),
     )
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
     "expr", [pl.lit(None), pl.lit(datetime.time(12, 0), dtype=pl.Time())]
 )
-def test_unsupported_literal_raises(expr):
+def test_unsupported_literal_raises(engine: pl.GPUEngine, expr):
     df = pl.LazyFrame({})
 
     q = df.select(expr)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "dtype,val",
+    [
+        (pl.Int64(), 42),
+        (pl.Struct({"a": pl.Int64()}), {"a": 1}),
+        (pl.List(pl.Int64()), [1, 2, 3]),
+    ],
+    ids=["int", "dict", "list"],
+)
+def test_literal_hash(dtype, val):
+    assert isinstance(hash(Literal(DataType(dtype), val)), int)
+
+
+def test_struct_literal_not_supported(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = df.select(pl.lit({"x": 1, "y": "foo"}))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_coalesce_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [None, 2, None], "b": [1, None, 3]})
+    q = df.select(pl.coalesce("a", "b"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_concat_list_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [[1, 2], [3]], "b": [[4], [5, 6]]})
+    q = df.select(pl.concat_list("a", "b"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)

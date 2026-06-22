@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from textwrap import dedent
 
@@ -32,7 +33,9 @@ def test_categorical_basic():
 
 
 def test_categorical_integer():
-    cat = pd.Categorical(["a", "_", "_", "c", "a"], categories=["a", "b", "c"])
+    cat = pd.Categorical.from_codes(
+        [0, -1, -1, 2, 0], categories=["a", "b", "c"]
+    )
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
     np.testing.assert_array_equal(
@@ -53,7 +56,7 @@ def test_categorical_integer():
         3       c
         4       a
         dtype: category
-        Categories (3, object): ['a', 'b', 'c']"""
+        Categories (3, str): ['a', 'b', 'c']"""
     )
     assert str(sr) == expect_str
 
@@ -77,7 +80,11 @@ def test_categorical_empty():
     np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_numpy())
 
     # Test attributes
-    assert_eq(pdsr.cat.categories, sr.cat.categories)
+    assert sr.cat.categories.dtype == np.dtype(object)
+    assert pdsr.cat.categories.dtype == np.dtype(object)
+    assert_eq(
+        pdsr.cat.categories.astype(sr.cat.categories.dtype), sr.cat.categories
+    )
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
@@ -248,6 +255,13 @@ def test_categorical_set_categories_categoricals(data, new_categories):
     expected = pd_data.cat.set_categories(new_categories=new_categories)
     actual = gd_data.cat.set_categories(new_categories=new_categories)
 
+    if isinstance(new_categories, list) and len(new_categories) == 0:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        expected = expected.cat.set_categories(
+            pd.Index([], dtype=actual.cat.categories.dtype)
+        )
     assert_eq(expected, actual)
 
     expected = pd_data.cat.set_categories(
@@ -256,6 +270,13 @@ def test_categorical_set_categories_categoricals(data, new_categories):
     actual = gd_data.cat.set_categories(
         new_categories=cudf.Series(new_categories, dtype="category")
     )
+    if isinstance(new_categories, list) and len(new_categories) == 0:
+        # As of pandas 3.0, empty default type of object isn't
+        # necessarily equivalent to cuDF's empty default type of
+        # pandas.StringDtype
+        expected = expected.cat.set_categories(
+            pd.Index([], dtype=actual.cat.categories.dtype)
+        )
 
     assert_eq(expected, actual)
 
@@ -330,10 +351,10 @@ def test_add_categories_mixed_error():
 def test_categorical_allow_nan():
     gs = cudf.Series([1, 2, np.nan, 10, np.nan, None], nan_as_null=False)
     gs = gs.astype("category")
-    expected_codes = cudf.Series([0, 1, 3, 2, 3, None], dtype="uint8")
+    expected_codes = cudf.Series([0, 1, None, 2, None, None], dtype="uint8")
     assert_eq(expected_codes, gs.cat.codes)
 
-    expected_categories = cudf.Index([1.0, 2.0, 10.0, np.nan], dtype="float64")
+    expected_categories = cudf.Index([1.0, 2.0, 10.0], dtype="float64")
     assert_eq(expected_categories, gs.cat.categories)
 
     actual_ps = gs.to_pandas()

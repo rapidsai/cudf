@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
 #include <cudf/ast/ast_operator.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
@@ -69,7 +59,7 @@ class expression_transformer;
  * This class is a part of a "visitor" pattern with the `expression_parser` class.
  * Expressions inheriting from this class can accept parsers as visitors.
  */
-struct expression {
+struct [[nodiscard]] expression {
   /**
    * @brief Accepts a visitor class.
    *
@@ -151,6 +141,12 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
     if constexpr (std::is_same_v<T, cudf::string_view>) {
       return string_view(static_cast<char const*>(_data), _size);
     }
+    if constexpr (cudf::is_fixed_point<T>()) {
+      using rep_type   = typename T::rep;
+      auto const rep   = *static_cast<rep_type const*>(_data);
+      auto const scale = numeric::scale_type{type().scale()};
+      return T{numeric::scaled_integer<rep_type>{rep, scale}};
+    }
     return *static_cast<T const*>(_data);
   }
 
@@ -190,6 +186,16 @@ class generic_scalar_device_view : public cudf::detail::scalar_device_view_base 
    */
   generic_scalar_device_view(string_scalar& s)
     : generic_scalar_device_view(s.type(), s.data(), s.validity_data(), s.size())
+  {
+  }
+
+  /** @brief Construct a new generic scalar device view object from a fixed-point scalar
+   *
+   * @param s The fixed-point scalar to construct from
+   */
+  template <typename T>
+  generic_scalar_device_view(cudf::fixed_point_scalar<T>& s)
+    : generic_scalar_device_view{s.type(), s.data(), s.validity_data()}
   {
   }
 
@@ -268,6 +274,16 @@ class literal : public expression {
    * @param value A string scalar value
    */
   literal(cudf::string_scalar& value) : scalar(value), value(value) {}
+
+  /**
+   * @brief Construct a new literal object.
+   *
+   * @param value A fixed-point scalar value
+   */
+  template <typename T>
+  literal(cudf::fixed_point_scalar<T>& value) : scalar(value), value(value)
+  {
+  }
 
   /**
    * @brief Get the data type.
@@ -495,6 +511,53 @@ class operation : public expression {
   ast_operator op;
   std::vector<std::reference_wrapper<expression const>> operands;
 };
+
+namespace detail {
+
+/// @brief An expression that represents a predicate.
+///
+/// This is an internal expression used in filter operations. It is not intended to be used by
+/// external code and is not a part of the public API.
+class predicate : public expression {
+ public:
+  /**
+   * @brief Construct a new filter predicate object
+   * @param source The source expression from which the predicate value is taken
+   */
+  predicate(expression const& source) : source_{source} {}
+
+  /**
+   * @copydoc expression::accept
+   */
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
+  /**
+   * @brief Get the operand expression.
+   * @return The operand expression
+   */
+  [[nodiscard]] expression const& get_operand() const { return source_; }
+
+ private:
+  std::reference_wrapper<expression const> source_;
+};
+
+}  // namespace detail
 
 /**
  * @brief A expression referring to data from a column in a table.

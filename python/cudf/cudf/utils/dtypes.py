@@ -1,18 +1,19 @@
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, TypeGuard
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api import types as pd_types  # noqa: TID251
+from pandas.core.arrays.arrow.extension_types import ArrowIntervalType
 from pandas.core.computation.common import result_type_many
 
 import pylibcudf as plc
 
 import cudf
+from cudf.core._internals.timezones import get_compatible_timezone
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -20,7 +21,10 @@ if TYPE_CHECKING:
     from cudf._typing import DtypeObj
     from cudf.core.dtypes import DecimalDtype
 
-np_dtypes_to_pandas_dtypes = {
+DEFAULT_STRING_DTYPE = pd.StringDtype(na_value=np.nan)
+np_dtypes_to_pandas_dtypes: dict[
+    np.dtype[Any], pd.core.dtypes.base.ExtensionDtype
+] = {
     np.dtype("uint8"): pd.UInt8Dtype(),
     np.dtype("uint16"): pd.UInt16Dtype(),
     np.dtype("uint32"): pd.UInt32Dtype(),
@@ -30,8 +34,8 @@ np_dtypes_to_pandas_dtypes = {
     np.dtype("int32"): pd.Int32Dtype(),
     np.dtype("int64"): pd.Int64Dtype(),
     np.dtype("bool_"): pd.BooleanDtype(),
-    np.dtype("object"): pd.StringDtype(),
-    np.dtype("str"): pd.StringDtype(),
+    np.dtype("object"): DEFAULT_STRING_DTYPE,
+    np.dtype("str"): DEFAULT_STRING_DTYPE,
     np.dtype("float32"): pd.Float32Dtype(),
     np.dtype("float64"): pd.Float64Dtype(),
 }
@@ -74,7 +78,7 @@ TIMEDELTA_TYPES = {
     "timedelta64[ns]",
 }
 OTHER_TYPES = {"bool", "category", "str"}
-STRING_TYPES = {"object"}
+STRING_TYPES = {"object", "str", "string"}
 BOOL_TYPES = {"bool"}
 ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
@@ -106,6 +110,8 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
     """Given a cudf pandas dtype, converts it into the equivalent cuDF
     Python dtype.
     """
+    from cudf.core.dtype.validators import is_dtype_obj_string
+
     dtype = getattr(dtype, "numpy_dtype", dtype)
     if isinstance(dtype, cudf.CategoricalDtype):
         raise NotImplementedError(
@@ -118,26 +124,52 @@ def cudf_dtype_to_pa_type(dtype: DtypeObj) -> pa.DataType:
         return dtype.to_arrow()
     elif isinstance(dtype, pd.DatetimeTZDtype):
         return pa.timestamp(dtype.unit, str(dtype.tz))
-    elif dtype == CUDF_STRING_DTYPE or isinstance(dtype, pd.StringDtype):
+    elif is_dtype_obj_string(dtype):
         return pa.string()
     else:
         return pa.from_numpy_dtype(dtype)
 
 
 def cudf_dtype_from_pa_type(typ: pa.DataType) -> DtypeObj:
-    """Given a cuDF pyarrow dtype, converts it into the equivalent
-    cudf pandas dtype.
-    """
+    """Given a pyarrow dtype, converts it into the equivalent cudf dtype."""
     if pa.types.is_list(typ):
-        return cudf.core.dtypes.ListDtype.from_arrow(typ)
+        return cudf.ListDtype.from_arrow(typ)
     elif pa.types.is_struct(typ):
-        return cudf.core.dtypes.StructDtype.from_arrow(typ)
+        return cudf.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
-        return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
-    elif pa.types.is_large_string(typ) or pa.types.is_string(typ):
-        return CUDF_STRING_DTYPE
+        if isinstance(typ, pa.Decimal256Type):
+            raise NotImplementedError("cudf does not support Decimal256Type")
+        if isinstance(typ, pa.Decimal32Type):
+            return cudf.Decimal32Dtype.from_arrow(typ)
+        if isinstance(typ, pa.Decimal64Type):
+            return cudf.Decimal64Dtype.from_arrow(typ)
+        return cudf.Decimal128Dtype.from_arrow(typ)
+    elif pa.types.is_timestamp(typ) and typ.tz is not None:
+        return get_compatible_timezone(pd.DatetimeTZDtype(typ.unit, typ.tz))
+    elif (
+        pa.types.is_large_string(typ)
+        or pa.types.is_string(typ)
+        or pa.types.is_string_view(typ)
+    ):
+        return DEFAULT_STRING_DTYPE
+    elif pa.types.is_date(typ):
+        # typ.to_pandas_dtype() produces np.dtype("datetime64[ms]").
+        # Conversely pylibcudf will produce TIMESTAMP_DAYS for date types - the most
+        # correct answer - and to match pandas cudf will cast to TIMESTAMP_SECONDS
+        # (see ColumnBase._wrap_buffers). Therefore we should return a seconds
+        # resolution datetime type here. The pyarrow may be changed
+        # https://github.com/apache/arrow/issues/49168.
+        return np.dtype("datetime64[s]")
+    elif pa.types.is_null(typ):
+        # Similar to PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY]
+        return np.dtype("object")
+    elif isinstance(typ, ArrowIntervalType):
+        return cudf.IntervalDtype.from_arrow(typ)
     else:
-        return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
+        try:
+            return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
+        except NotImplementedError as err:
+            raise TypeError(f"Unsupported type: {typ}") from err
 
 
 def is_column_like(obj):
@@ -200,7 +232,7 @@ def min_signed_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.int8, np.int16, np.int32, np.int64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return dtype
@@ -214,7 +246,7 @@ def min_unsigned_type(x: int, min_size: int = 8) -> np.dtype:
     that can represent the integer ``x``
     """
     for int_dtype in (np.uint8, np.uint16, np.uint32, np.uint64):
-        dtype = np.dtype(int_dtype)
+        dtype: np.dtype[Any] = np.dtype(int_dtype)
         if (dtype.itemsize * 8) >= min_size:
             if 0 <= x <= np.iinfo(int_dtype).max:
                 return dtype
@@ -228,11 +260,6 @@ def is_mixed_with_object_dtype(lhs, rhs):
     elif isinstance(rhs.dtype, cudf.CategoricalDtype):
         return is_mixed_with_object_dtype(lhs, rhs.dtype.categories)
 
-    res = (lhs.dtype == "object" and rhs.dtype != "object") or (
-        rhs.dtype == "object" and lhs.dtype != "object"
-    )
-    if res:
-        return res
     return (
         cudf.api.types.is_string_dtype(lhs.dtype)
         and not cudf.api.types.is_string_dtype(rhs.dtype)
@@ -242,7 +269,12 @@ def is_mixed_with_object_dtype(lhs, rhs):
     )
 
 
-def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
+def _get_nan_for_dtype(dtype: DtypeObj) -> np.generic:
+    """Return the appropriate NaN/NaT value for the given dtype.
+
+    Returns a numpy scalar (np.generic subclass) representing the
+    null value for the dtype (e.g., np.float64('nan'), np.datetime64('NaT')).
+    """
     if dtype.kind in "mM":
         time_unit, _ = np.datetime_data(dtype)
         return dtype.type("nat", time_unit)
@@ -259,7 +291,7 @@ def _get_nan_for_dtype(dtype: DtypeObj) -> DtypeObj:
         return np.float64("nan")
 
 
-def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
+def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj:
     """
     Wrapper over np.result_type to handle cudf specific types.
 
@@ -270,12 +302,18 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
 
     Returns
     -------
-    dtype : np.dtype or None
-        None if input is empty
-        DtypeObj otherwise
+    dtype : DtypeObj
+
+    Raises
+    ------
+    ValueError
+        If ``dtypes`` is empty (matches ``pandas.core.dtypes.cast.find_common_type``).
     """
     if len(dtypes) == 0:  # type: ignore[arg-type]
-        return None
+        # Match pandas.core.dtypes.cast.find_common_type, which raises.
+        raise ValueError("no types given")
+
+    pandas_compatible = cudf.get_option("mode.pandas_compatible")
 
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
@@ -287,10 +325,10 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             )
             for dtype in dtypes
         ):
-            if len({dtype._categories.dtype for dtype in dtypes}) == 1:
+            if len({dtype._categories.dtype for dtype in dtypes}) == 1:  # type: ignore[union-attr]
                 return cudf.CategoricalDtype(
                     cudf.core.column.concat_columns(
-                        [dtype._categories for dtype in dtypes]
+                        [dtype._categories for dtype in dtypes]  # type: ignore[union-attr]
                     ).unique()
                 )
             else:
@@ -316,6 +354,8 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
     if any(
         isinstance(dtype, cudf.core.dtypes.DecimalDtype) for dtype in dtypes
     ):
+        from cudf.core.dtype.validators import is_dtype_obj_numeric
+
         if all(
             is_dtype_obj_numeric(dtype, include_decimal=True)
             for dtype in dtypes
@@ -328,9 +368,11 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
                 ]
             )
         else:
-            return CUDF_STRING_DTYPE
+            return DEFAULT_STRING_DTYPE
     elif any(
-        isinstance(dtype, (cudf.ListDtype, cudf.StructDtype))
+        isinstance(
+            dtype, (cudf.ListDtype, cudf.StructDtype, cudf.IntervalDtype)
+        )
         for dtype in dtypes
     ):
         # TODO: As list dtypes allow casting
@@ -342,6 +384,25 @@ def find_common_type(dtypes: Iterable[DtypeObj]) -> DtypeObj | None:
             "Finding a common type for `ListDtype` or `StructDtype` is currently "
             "not supported"
         )
+
+    if pandas_compatible:
+        # cudf follows NumPy promotion: bool+int->int, bool+float->float,
+        # datetime64+timedelta64->datetime64. Pandas returns `object` for
+        # these mixes. Raise so that, when used as the cudf.pandas fast path
+        # for `pandas.core.dtypes.cast.find_common_type`, we fall back to
+        # pandas' implementation rather than silently producing a different
+        # answer.
+        kinds = {dtype.kind for dtype in dtypes if isinstance(dtype, np.dtype)}
+        if "b" in kinds and kinds & set("iuf"):
+            raise NotImplementedError(
+                "Common type of bool with numeric dtypes is not supported "
+                "in pandas-compatible mode."
+            )
+        if "M" in kinds and "m" in kinds:
+            raise NotImplementedError(
+                "Common type of datetime64 with timedelta64 is not supported "
+                "in pandas-compatible mode."
+            )
 
     try:
         common_dtype = np.result_type(*dtypes)  # noqa: TID251
@@ -368,63 +429,21 @@ def _maybe_convert_to_default_type(dtype: DtypeObj) -> DtypeObj:
     return dtype
 
 
-def _get_base_dtype(dtype: pd.DatetimeTZDtype) -> np.dtype:
-    # TODO: replace the use of this function with just `dtype.base`
-    # when Pandas 2.1.0 is the minimum version we support:
-    # https://github.com/pandas-dev/pandas/pull/52706
+def _get_base_dtype(dtype: pd.DatetimeTZDtype | pd.ArrowDtype) -> np.dtype:
     if isinstance(dtype, pd.DatetimeTZDtype):
+        # TODO: replace below with dtype.base when Pandas 2.1.0 is the minimum version we support:
+        # https://github.com/pandas-dev/pandas/pull/52706
         return np.dtype(f"<M8[{dtype.unit}]")
     else:
-        return dtype.base
+        return dtype.numpy_dtype
 
 
-def is_dtype_obj_numeric(
-    dtype: DtypeObj, include_decimal: bool = True
-) -> bool:
-    """Like is_numeric_dtype but does not introspect argument."""
-    is_non_decimal = dtype.kind in set("iufb")
-    if include_decimal:
-        return is_non_decimal or isinstance(
-            dtype,
-            (cudf.Decimal32Dtype, cudf.Decimal64Dtype, cudf.Decimal128Dtype),
-        )
+def pyarrow_dtype_to_cudf_dtype(dtype: pd.ArrowDtype) -> DtypeObj:
+    """Convert a pandas.ArrowDtype to a default cuDF dtype."""
+    if pa.types.is_date(dtype.pyarrow_dtype):
+        raise TypeError(f"Unsupported type: {dtype.pyarrow_dtype}")
     else:
-        return is_non_decimal
-
-
-pa_decimal32type = getattr(pa, "Decimal32Type", None)
-
-pa_decimal64type = getattr(pa, "Decimal64Type", None)
-
-
-def pyarrow_dtype_to_cudf_dtype(dtype: pa.DataType) -> DtypeObj:
-    """Given a pyarrow dtype, converts it into the equivalent cudf pandas
-    dtype.
-    """
-
-    pyarrow_dtype = dtype.pyarrow_dtype
-    if isinstance(pyarrow_dtype, pa.Decimal128Type):
-        return cudf.Decimal128Dtype.from_arrow(pyarrow_dtype)
-    elif pa_decimal64type is not None and isinstance(
-        pyarrow_dtype, pa_decimal64type
-    ):
-        return cudf.Decimal64Dtype.from_arrow(pyarrow_dtype)
-    elif pa_decimal32type is not None and isinstance(
-        pyarrow_dtype, pa_decimal32type
-    ):
-        return cudf.Decimal32Dtype.from_arrow(pyarrow_dtype)
-    elif isinstance(pyarrow_dtype, pa.ListType):
-        return cudf.ListDtype.from_arrow(pyarrow_dtype)
-    elif isinstance(pyarrow_dtype, pa.StructType):
-        return cudf.StructDtype.from_arrow(pyarrow_dtype)
-    elif str(pyarrow_dtype) == "large_string":
-        return CUDF_STRING_DTYPE
-    elif pyarrow_dtype is pa.date32():
-        raise TypeError("Unsupported type")
-    elif isinstance(pyarrow_dtype, pa.DataType):
-        return pyarrow_dtype.to_pandas_dtype()
-    else:
-        raise TypeError(f"Unsupported Arrow type: {pyarrow_dtype}")
+        return cudf_dtype_from_pa_type(dtype.pyarrow_dtype)
 
 
 def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:
@@ -447,7 +466,9 @@ def is_pandas_nullable_numpy_dtype(dtype_to_check) -> bool:
     )
 
 
-def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
+def is_pandas_nullable_extension_dtype(
+    dtype_to_check: Any,
+) -> TypeGuard[pd.core.dtypes.base.ExtensionDtype]:
     if is_pandas_nullable_numpy_dtype(dtype_to_check) or isinstance(
         dtype_to_check, pd.ArrowDtype
     ):
@@ -463,11 +484,13 @@ def is_pandas_nullable_extension_dtype(dtype_to_check) -> bool:
     return False
 
 
-def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
+def dtype_to_pylibcudf_type(dtype: DtypeObj) -> plc.DataType:
     if isinstance(dtype, pd.ArrowDtype):
         dtype = pyarrow_dtype_to_cudf_dtype(dtype)
     if isinstance(dtype, cudf.ListDtype):
         return plc.DataType(plc.TypeId.LIST)
+    elif isinstance(dtype, cudf.IntervalDtype):
+        return plc.DataType(plc.TypeId.STRUCT)
     elif isinstance(dtype, cudf.StructDtype):
         return plc.DataType(plc.TypeId.STRUCT)
     elif isinstance(dtype, cudf.Decimal128Dtype):
@@ -479,38 +502,37 @@ def dtype_to_pylibcudf_type(dtype) -> plc.DataType:
     elif isinstance(dtype, cudf.Decimal32Dtype):
         tid = plc.TypeId.DECIMAL32
         return plc.DataType(tid, -dtype.scale)
+    elif isinstance(dtype, cudf.CategoricalDtype):
+        dtype = dtype._codes_dtype
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
         dtype = _get_base_dtype(dtype)
     elif isinstance(dtype, pd.StringDtype):
-        dtype = CUDF_STRING_DTYPE
-    else:
-        dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
-        try:
-            dtype = np.dtype(dtype)
-        except TypeError:
-            dtype = cudf.dtype(dtype)
+        dtype = np.dtype("object")
+    elif is_pandas_nullable_numpy_dtype(dtype):
+        dtype = dtype.numpy_dtype  # type: ignore[union-attr]
     return plc.DataType(SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES[dtype])
 
 
-def dtype_to_pandas_arrowdtype(dtype) -> pd.ArrowDtype:
+def dtype_to_pandas_arrowdtype(dtype: DtypeObj) -> pd.ArrowDtype:
     if isinstance(dtype, pd.ArrowDtype):
         return dtype
-    if isinstance(
+    elif isinstance(
         dtype,
         (cudf.ListDtype, cudf.StructDtype, cudf.core.dtypes.DecimalDtype),
     ):
         return pd.ArrowDtype(dtype.to_arrow())
+    elif isinstance(dtype, pd.StringDtype):
+        return pd.ArrowDtype(pa.large_string())
     # libcudf types don't support timezones so convert to the base type
     elif isinstance(dtype, pd.DatetimeTZDtype):
-        dtype = _get_base_dtype(dtype)
-    else:
-        dtype = pandas_dtypes_to_np_dtypes.get(dtype, dtype)
-        try:
-            dtype = np.dtype(dtype)
-        except TypeError:
-            dtype = cudf.dtype(dtype)
-    if dtype is CUDF_STRING_DTYPE:
+        return pd.ArrowDtype(pa.timestamp(dtype.unit, str(dtype.tz)))
+    elif isinstance(dtype, pd.StringDtype):
+        return pd.ArrowDtype(pa.string())
+    elif is_pandas_nullable_numpy_dtype(dtype):
+        dtype = dtype.numpy_dtype  # type: ignore[union-attr]
+    elif dtype == np.dtype("object"):
+        # pa.from_numpy_dtype doesn't map object to string
         dtype = np.dtype("str")
     return pd.ArrowDtype(pa.from_numpy_dtype(dtype))
 
@@ -530,8 +552,36 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
     If no such dtype exists, return the default dtype.
     """
     if isinstance(source_dtype, pd.ArrowDtype):
+        # Preserve the source Arrow string variant (string vs large_string)
+        # when the target is a string-like dtype.
+        if pa.types.is_string(
+            source_dtype.pyarrow_dtype
+        ) or pa.types.is_large_string(source_dtype.pyarrow_dtype):
+            if isinstance(target_dtype, pd.StringDtype) or (
+                isinstance(target_dtype, pd.ArrowDtype)
+                and (
+                    pa.types.is_string(target_dtype.pyarrow_dtype)
+                    or pa.types.is_large_string(target_dtype.pyarrow_dtype)
+                )
+            ):
+                return source_dtype
         return dtype_to_pandas_arrowdtype(target_dtype)
     elif is_pandas_nullable_extension_dtype(source_dtype):
+        # Preserve StringDtype storage/na_value when target is also a StringDtype.
+        if isinstance(source_dtype, pd.StringDtype) and isinstance(
+            target_dtype, pd.StringDtype
+        ):
+            return source_dtype
+        if (
+            isinstance(source_dtype, pd.StringDtype)
+            and source_dtype.na_value is np.nan
+        ):
+            return target_dtype
+        elif (
+            isinstance(source_dtype, pd.StringDtype)
+            and source_dtype.storage == "pyarrow"
+        ):
+            return dtype_to_pandas_arrowdtype(target_dtype)
         return dtype_to_pandas_nullable_extension_type(target_dtype)
     else:
         return target_dtype
@@ -576,189 +626,20 @@ def dtype_from_pylibcudf_column(col: plc.Column) -> DtypeObj:
         return cudf.Decimal128Dtype(
             precision=cudf.Decimal128Dtype.MAX_PRECISION, scale=-type_.scale()
         )
+    elif tid == plc.TypeId.STRING:
+        return DEFAULT_STRING_DTYPE
     else:
         return PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[tid]
 
 
-def is_dtype_obj_categorical(obj):
-    if obj is None:
-        return False
-
-    if isinstance(
-        obj,
-        (
-            pd.CategoricalDtype,
-            cudf.CategoricalDtype,
-        ),
-    ):
-        return True
-
-    if any(
-        obj is t
-        for t in (
-            cudf.CategoricalDtype,
-            pd.CategoricalDtype,
-            pd.CategoricalDtype.type,
-        )
-    ):
-        return True
-    if isinstance(obj, str) and obj == "category":
-        return True
-
-    # TODO: A lot of the above checks are probably redundant and should be
-    # farmed out to this function here instead.
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return pd_types.is_categorical_dtype(obj)
-
-
-def is_dtype_obj_string(obj):
-    """Check whether the provided array or dtype is of the string dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array or dtype is of the string dtype.
-    """
-    return (
-        obj is CUDF_STRING_DTYPE
-        or obj is np.dtype("str")
-        or (isinstance(obj, pd.StringDtype))
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and (
-                pa.types.is_string(obj.pyarrow_dtype)
-                or pa.types.is_large_string(obj.pyarrow_dtype)
-            )
-        )
+def is_arrow_null_dtype(dtype: DtypeObj) -> bool:
+    """Check if dtype is a pandas ArrowDtype wrapping pa.null()."""
+    return isinstance(dtype, pd.ArrowDtype) and pa.types.is_null(
+        dtype.pyarrow_dtype
     )
 
 
-def is_dtype_obj_list(obj):
-    """Check whether an array-like or dtype is of the list dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the list dtype.
-    """
-    return (
-        type(obj) is cudf.ListDtype
-        or obj is cudf.ListDtype
-        or (isinstance(obj, str) and obj == cudf.ListDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_list(obj.pyarrow_dtype)
-        )
-    )
-
-
-def is_dtype_obj_struct(obj):
-    """Check whether an array-like or dtype is of the struct dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the struct dtype.
-    """
-    # TODO: This behavior is currently inconsistent for interval types. the
-    # actual class IntervalDtype will return False, but instances (e.g.
-    # IntervalDtype(int)) will return True. For now this is not being changed
-    # since the interval dtype is being modified as part of the array refactor,
-    # but this behavior should be made consistent afterwards.
-    return (
-        isinstance(obj, cudf.StructDtype)
-        or obj is cudf.StructDtype
-        or (isinstance(obj, str) and obj == cudf.StructDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_struct(obj.pyarrow_dtype)
-        )
-    )
-
-
-def is_dtype_obj_interval(obj):
-    return (
-        isinstance(
-            obj,
-            (
-                cudf.IntervalDtype,
-                pd.IntervalDtype,
-            ),
-        )
-        or obj is cudf.IntervalDtype
-        or (isinstance(obj, str) and obj == cudf.IntervalDtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_interval(obj.pyarrow_dtype)
-        )
-    )
-
-
-def is_dtype_obj_decimal(obj):
-    """Check whether an array-like or dtype is of the decimal dtype.
-
-    Parameters
-    ----------
-    obj : array-like or dtype
-        The array-like or dtype to check.
-
-    Returns
-    -------
-    bool
-        Whether or not the array-like or dtype is of the decimal dtype.
-    """
-    return (
-        is_dtype_obj_decimal32(obj)
-        or is_dtype_obj_decimal64(obj)
-        or is_dtype_obj_decimal128(obj)
-    )
-
-
-def is_dtype_obj_decimal32(obj):
-    return (
-        type(obj) is cudf.Decimal32Dtype
-        or obj is cudf.Decimal32Dtype
-        or (isinstance(obj, str) and obj == cudf.Decimal32Dtype.name)
-    )
-
-
-def is_dtype_obj_decimal64(obj):
-    return (
-        type(obj) is cudf.Decimal64Dtype
-        or obj is cudf.Decimal64Dtype
-        or (isinstance(obj, str) and obj == cudf.Decimal64Dtype.name)
-    )
-
-
-def is_dtype_obj_decimal128(obj):
-    return (
-        type(obj) is cudf.Decimal128Dtype
-        or obj is cudf.Decimal128Dtype
-        or (isinstance(obj, str) and obj == cudf.Decimal128Dtype.name)
-        or (
-            isinstance(obj, pd.ArrowDtype)
-            and pa.types.is_decimal128(obj.pyarrow_dtype)
-        )
-    )
-
-
-SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES = {
+SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES: dict[np.dtype[Any], plc.types.TypeId] = {
     np.dtype("int8"): plc.types.TypeId.INT8,
     np.dtype("int16"): plc.types.TypeId.INT16,
     np.dtype("int32"): plc.types.TypeId.INT32,
@@ -786,9 +667,14 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES = {
     for np_type, plc_type in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES.items()
 }
 # There's no equivalent to EMPTY in cudf.  We translate EMPTY
-# columns from libcudf to ``int8`` columns of all nulls in Python.
-# ``int8`` is chosen because it uses the least amount of memory.
-PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("int8")
+# columns from libcudf to ``object`` columns of all nulls in Python.
+# ``object`` is chosen to match pandas behavior.
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.EMPTY] = np.dtype("object")
+# TIMESTAMP_DAYS is converted to TIMESTAMP_SECONDS to match the default resolution
+# choice used by pandas for datetime.date objects.
+PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.TIMESTAMP_DAYS] = np.dtype(
+    "datetime64[s]"
+)
 PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRUCT] = np.dtype(
     "object"
 )
@@ -798,4 +684,3 @@ PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING] = np.dtype(
 )
 
 SIZE_TYPE_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.SIZE_TYPE_ID]
-CUDF_STRING_DTYPE = PYLIBCUDF_TO_SUPPORTED_NUMPY_TYPES[plc.types.TypeId.STRING]

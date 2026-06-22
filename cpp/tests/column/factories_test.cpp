@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -29,7 +18,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 class ColumnFactoryTest : public cudf::test::BaseFixture {
   cudf::size_type _size{1000};
@@ -752,7 +741,7 @@ void struct_from_scalar(bool is_valid)
 
   // generate a column of size num_rows
   std::vector<cudf::column_view> cols;
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<int>{0};
   std::transform(iter, iter + num_rows, std::back_inserter(cols), [&](int i) {
     return static_cast<cudf::column_view>(struct_col);
   });

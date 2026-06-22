@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/regex/regex_program_impl.h"
@@ -32,19 +21,16 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
 namespace {
-
-using string_index_pair = thrust::pair<char const*, size_type>;
 
 /**
  * @brief This functor handles extracting strings by applying the compiled regex pattern
@@ -121,8 +107,8 @@ std::unique_ptr<table> extract(strings_column_view const& input,
     return make_strings_column(indices_itr, indices_itr + input.size(), stream, mr);
   };
 
-  std::transform(thrust::make_counting_iterator<size_type>(0),
-                 thrust::make_counting_iterator<size_type>(groups),
+  std::transform(cuda::counting_iterator<size_type>{0},
+                 cuda::counting_iterator<size_type>{groups},
                  results.begin(),
                  make_strings_lambda);
 

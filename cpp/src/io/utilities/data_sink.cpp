@@ -1,19 +1,9 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/logger.hpp>
@@ -22,6 +12,8 @@
 #include <kvikio/file_handle.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda_runtime_api.h>
 
 namespace cudf {
 namespace io {
@@ -106,6 +98,32 @@ class host_buffer_sink : public data_sink {
   {
     auto char_array = static_cast<char const*>(data);
     buffer_->insert(buffer_->end(), char_array, char_array + size);
+  }
+
+  [[nodiscard]] bool supports_device_write() const override { return true; }
+
+  [[nodiscard]] bool is_device_write_preferred(size_t size) const override { return true; }
+
+  void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
+  {
+    device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    auto const current_size = buffer_->size();
+    buffer_->resize(current_size + size);
+    // TODO: https://github.com/rapidsai/cudf/issues/21680
+    // We need to replace this with memcpy_batch_async after fixing stream
+    // ordering. The issue is that buffer_->resize() can reallocate,
+    // invalidating pointers from previous async copies that are still
+    // in-flight when using cudaMemcpySrcAccessOrderStream. Need to ensure
+    // stream ordering or pre-reserve buffer to avoid reallocation.
+    CUDF_CUDA_TRY(cudaMemcpyAsync(
+      buffer_->data() + current_size, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+    return std::async(std::launch::deferred, [stream]() -> void { stream.synchronize(); });
   }
 
   void flush() override {}

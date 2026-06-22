@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport uint32_t, uint64_t
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -17,11 +18,13 @@ from pylibcudf.libcudf.hash cimport (
     xxhash_64 as cpp_xxhash_64,
 )
 from pylibcudf.libcudf.table.table cimport table
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .column cimport Column
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "LIBCUDF_DEFAULT_HASH_SEED",
@@ -42,7 +45,8 @@ LIBCUDF_DEFAULT_HASH_SEED = DEFAULT_HASH_SEED
 cpdef Column murmurhash3_x86_32(
     Table input,
     uint32_t seed=DEFAULT_HASH_SEED,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes the MurmurHash3 32-bit hash value of each row in the given table.
 
@@ -62,22 +66,26 @@ cpdef Column murmurhash3_x86_32(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_murmurhash3_x86_32(
             input.view(),
             seed,
-            stream.view()
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table murmurhash3_x64_128(
     Table input,
     uint64_t seed=DEFAULT_HASH_SEED,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes the MurmurHash3 64-bit hash value of each row in the given table.
 
@@ -97,22 +105,26 @@ cpdef Table murmurhash3_x64_128(
     """
     cdef unique_ptr[table] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_murmurhash3_x64_128(
             input.view(),
             seed,
-            stream.view()
+            _cs,
+            mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column xxhash_32(
     Table input,
     uint32_t seed=DEFAULT_HASH_SEED,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes the xxHash 32-bit hash value of each row in the given table.
 
@@ -133,22 +145,26 @@ cpdef Column xxhash_32(
 
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_xxhash_32(
             input.view(),
             seed,
-            stream.view()
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column xxhash_64(
     Table input,
     uint64_t seed=DEFAULT_HASH_SEED,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Computes the xxHash 64-bit hash value of each row in the given table.
 
@@ -169,19 +185,26 @@ cpdef Column xxhash_64(
 
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_xxhash_64(
             input.view(),
             seed,
-            stream.view()
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column md5(Table input, Stream stream=None):
+cpdef Column md5(
+    Table input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Computes the MD5 hash value of each row in the given table.
 
     For details, see :cpp:func:`md5`.
@@ -202,13 +225,19 @@ cpdef Column md5(Table input, Stream stream=None):
 
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_md5(input.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_md5(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
-cpdef Column sha1(Table input, Stream stream=None):
+cpdef Column sha1(
+    Table input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Computes the SHA-1 hash value of each row in the given table.
 
     For details, see :cpp:func:`sha1`.
@@ -227,14 +256,20 @@ cpdef Column sha1(Table input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha1(input.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_sha1(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column sha224(Table input, Stream stream=None):
+cpdef Column sha224(
+    Table input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Computes the SHA-224 hash value of each row in the given table.
 
     For details, see :cpp:func:`sha224`.
@@ -253,14 +288,20 @@ cpdef Column sha224(Table input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha224(input.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_sha224(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column sha256(Table input, Stream stream=None):
+cpdef Column sha256(
+    Table input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Computes the SHA-256 hash value of each row in the given table.
 
     For details, see :cpp:func:`sha256`.
@@ -279,14 +320,20 @@ cpdef Column sha256(Table input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha256(input.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_sha256(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column sha384(Table input, Stream stream=None):
+cpdef Column sha384(
+    Table input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Computes the SHA-384 hash value of each row in the given table.
 
     For details, see :cpp:func:`sha384`.
@@ -305,14 +352,20 @@ cpdef Column sha384(Table input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha384(input.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_sha384(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column sha512(Table input, Stream stream=None):
+cpdef Column sha512(
+    Table input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Computes the SHA-512 hash value of each row in the given table.
 
     For details, see :cpp:func:`sha512`.
@@ -331,8 +384,10 @@ cpdef Column sha512(Table input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_sha512(input.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_sha512(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(c_result), _stream, mr)

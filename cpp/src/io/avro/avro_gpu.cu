@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "avro_gpu.hpp"
 #include "io/utilities/block_utils.cuh"
@@ -63,7 +52,7 @@ static inline int64_t __device__ avro_decode_zigzag_varint(uint8_t const*& cur, 
  *                       destination data.
  * @param[in] cur Current input data pointer
  * @param[in] end End of input data
- * @param[in] global_Dictionary Global dictionary entries
+ * @param[in] global_dictionary Global dictionary entries
  * @param[out] skipped_row Whether the row was skipped; set to false
  *                         if the row was saved (caller should ensure
  *                         this is initialized to true)
@@ -193,7 +182,7 @@ avro_decode_row(schemadesc_s const* schema,
         if (dataptr != nullptr && dst_row >= 0) {
           uint32_t v;
           if (cur + 3 < end) {
-            v = unaligned_load32(cur);
+            v = unaligned_load<uint32_t>(cur);
             cur += 4;
           } else {
             v = 0;
@@ -209,7 +198,7 @@ avro_decode_row(schemadesc_s const* schema,
         if (dataptr != nullptr && dst_row >= 0) {
           uint64_t v;
           if (cur + 7 < end) {
-            v = unaligned_load64(cur);
+            v = unaligned_load<uint64_t>(cur);
             cur += 8;
           } else {
             v = 0;
@@ -316,8 +305,8 @@ avro_decode_row(schemadesc_s const* schema,
  * @brief Decode column data
  *
  * @param[in] blocks Data block descriptions
- * @param[in] schema Schema description
- * @param[in] global_Dictionary Global dictionary entries
+ * @param[in] schema_g Schema description
+ * @param[in] global_dictionary Global dictionary entries
  * @param[in] avro_data Raw block data
  * @param[in] schema_len Number of entries in schema
  * @param[in] min_row_size Minimum size in bytes of a row
@@ -435,6 +424,7 @@ void DecodeAvroColumnData(device_span<block_desc_s const> blocks,
 
   gpuDecodeAvroColumnData<<<dim_grid, dim_block, 0, stream.value()>>>(
     blocks, schema, global_dictionary, avro_data, schema_len, min_row_size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace gpu

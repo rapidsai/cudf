@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -80,7 +81,7 @@ def test_like():
     arr = pa.array(["1a2aa3aaa"])
     got = plc.strings.contains.like(
         plc.Column.from_arrow(arr),
-        plc.Column.from_arrow(pa.array([pattern])),
+        pattern,
     )
     expect = pc.match_like(arr, pattern)
     assert_column_eq(expect, got)

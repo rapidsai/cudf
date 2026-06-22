@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -7,10 +7,9 @@ import polars as pl
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_130
 
 
-def test_union():
+def test_union(engine: pl.GPUEngine):
     ldf = pl.DataFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -19,10 +18,10 @@ def test_union():
     ).lazy()
     ldf2 = ldf.select((pl.col("a") + pl.col("b")).alias("c"), pl.col("a"))
     query = pl.concat([ldf, ldf2], how="diagonal")
-    assert_gpu_result_equal(query)
+    assert_gpu_result_equal(query, engine=engine)
 
 
-def test_concat_vertical():
+def test_concat_vertical(engine: pl.GPUEngine):
     ldf = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -32,10 +31,10 @@ def test_concat_vertical():
     ldf2 = ldf.select(pl.col("a"), pl.col("b") * 2 + pl.col("a"))
     q = pl.concat([ldf, ldf2], how="vertical")
 
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
 
 
-def test_concat_diagonal_empty():
+def test_concat_diagonal_empty(engine: pl.GPUEngine):
     df1 = pl.LazyFrame()
     df2 = pl.LazyFrame({"a": [1, 2]})
 
@@ -43,7 +42,6 @@ def test_concat_diagonal_empty():
 
     assert_gpu_result_equal(
         q,
-        collect_kwargs={"no_optimization": True}
-        if POLARS_VERSION_LT_130
-        else {"optimizations": pl.QueryOptFlags()},
+        engine=engine,
+        collect_kwargs={"optimizations": pl.QueryOptFlags()},
     )

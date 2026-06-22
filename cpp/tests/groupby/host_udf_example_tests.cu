@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
@@ -27,8 +16,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
@@ -111,9 +101,9 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
       rmm::device_uvector<cudf::size_type> valid_idx(num_groups, stream);
 
       thrust::transform(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(num_groups),
+        rmm::exec_policy_nosync(stream),
+        cuda::counting_iterator<cudf::size_type>{0},
+        cuda::counting_iterator{num_groups},
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
         transform_fn{*values_dv_ptr,
                      offsets,
@@ -139,7 +129,7 @@ struct host_udf_groupby_example : cudf::groupby_host_udf {
       InputType const* group_max;
       InputType const* group_sum;
 
-      thrust::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
+      cuda::std::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
       {
         auto const start = offsets[idx];
         auto const end   = offsets[idx + 1];

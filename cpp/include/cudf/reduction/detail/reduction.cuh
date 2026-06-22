@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -123,7 +112,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
 {
   auto const binary_op     = cudf::detail::cast_functor<OutputType>(op.get_binary_op());
   auto const initial_value = init.value_or(op.template get_identity<OutputType>());
-  auto dev_result          = cudf::detail::device_scalar<OutputType>{initial_value, stream};
+  auto dev_result          = cudf::detail::device_scalar<OutputType>{
+    initial_value, stream, cudf::get_current_device_resource_ref()};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -136,7 +126,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             initial_value,
                             stream.value());
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  d_temp_storage =
+    rmm::device_buffer{temp_storage_bytes, stream, cudf::get_current_device_resource_ref()};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -186,7 +177,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   auto const binary_op     = cudf::detail::cast_functor<IntermediateType>(op.get_binary_op());
   auto const initial_value = op.template get_identity<IntermediateType>();
 
-  cudf::detail::device_scalar<IntermediateType> intermediate_result{initial_value, stream};
+  cudf::detail::device_scalar<IntermediateType> intermediate_result{
+    initial_value, stream, cudf::get_current_device_resource_ref()};
 
   // Allocate temporary storage
   rmm::device_buffer d_temp_storage;
@@ -199,7 +191,8 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                             binary_op,
                             initial_value,
                             stream.value());
-  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+  d_temp_storage =
+    rmm::device_buffer{temp_storage_bytes, stream, cudf::get_current_device_resource_ref()};
 
   // Run reduction
   cub::DeviceReduce::Reduce(d_temp_storage.data(),
@@ -214,7 +207,7 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
   // compute the result value from intermediate value in device
   using ScalarType = cudf::scalar_type_t<OutputType>;
   auto result      = std::make_unique<ScalarType>(OutputType{0}, true, stream, mr);
-  thrust::for_each_n(rmm::exec_policy(stream),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      intermediate_result.data(),
                      1,
                      [dres = result->data(), op, valid_count, ddof] __device__(auto i) {

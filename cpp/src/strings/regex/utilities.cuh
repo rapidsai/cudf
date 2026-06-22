@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2022-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -72,6 +61,7 @@ void launch_for_each_kernel(ForEachFunction fn,
   cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
     fn, d_prog, size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 template <typename TransformFunction, typename OutputType>
@@ -110,6 +100,7 @@ void launch_transform_kernel(TransformFunction fn,
   cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   transform_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
     fn, d_prog, d_output, size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 template <typename SizeAndExecuteFunction>
@@ -133,6 +124,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   if (strings_count > 0) {
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
       size_and_exec_fn, d_prog, strings_count);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   // Convert the sizes to offsets
   auto [offsets, char_bytes] = cudf::strings::detail::make_offsets_child_column(
@@ -146,6 +138,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
     size_and_exec_fn.d_chars = chars.data();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
       size_and_exec_fn, d_prog, strings_count);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   return std::make_pair(std::move(offsets), std::move(chars));

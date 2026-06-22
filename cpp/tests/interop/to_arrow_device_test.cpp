@@ -1,21 +1,11 @@
 /*
- * Copyright (c) 2024-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -27,8 +17,6 @@
 #include <cudf/interop.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
 
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, generated_test_data>
 get_nanoarrow_cudf_table(cudf::size_type length)
@@ -259,17 +247,10 @@ struct BaseArrowFixture : public cudf::test::BaseFixture {
                               ArrowArray const* expected,
                               ArrowArray const* actual)
   {
-    std::vector<uint8_t> actual_bytes;
-    std::vector<uint8_t> expected_bytes;
-    expected_bytes.resize(nbytes);
-    actual_bytes.resize(nbytes);
-
-    // synchronous copies so we don't have to worry about async weirdness
-    cudaMemcpy(
-      expected_bytes.data(), expected->buffers[buffer_idx], nbytes, cudaMemcpyDeviceToHost);
-    cudaMemcpy(actual_bytes.data(), actual->buffers[buffer_idx], nbytes, cudaMemcpyDeviceToHost);
-
-    ASSERT_EQ(expected_bytes, actual_bytes);
+    auto const dt       = cudf::data_type{cudf::type_id::UINT8};
+    auto actual_bytes   = cudf::column_view(dt, nbytes, actual->buffers[buffer_idx], nullptr, 0);
+    auto expected_bytes = cudf::column_view(dt, nbytes, expected->buffers[buffer_idx], nullptr, 0);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(actual_bytes, expected_bytes);
   }
 
   void compare_arrays(ArrowSchema const* schema,
@@ -509,9 +490,8 @@ TYPED_TEST(ToArrowDeviceTestDurationsTest, DurationTable)
 
 TEST_F(ToArrowDeviceTest, NestedList)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::iterators::nulls_at_multiples_of(3);
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
 
   std::vector<std::unique_ptr<cudf::column>> cols;
@@ -737,7 +717,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint32Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL32,
-                                                     cudf::detail::max_precision<int32_t>(),
+                                                     get_decimal_precision<int32_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;
@@ -837,7 +817,7 @@ TEST_F(ToArrowDeviceTest, FixedPoint128Table)
     ArrowSchemaInit(expected_schema->children[0]);
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeDecimal(expected_schema->children[0],
                                                      NANOARROW_TYPE_DECIMAL128,
-                                                     cudf::detail::max_precision<__int128_t>(),
+                                                     get_decimal_precision<__int128_t>(),
                                                      -scale));
     NANOARROW_THROW_NOT_OK(ArrowSchemaSetName(expected_schema->children[0], "a"));
     expected_schema->children[0]->flags = 0;

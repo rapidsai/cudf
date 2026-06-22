@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/column_utilities.hpp>
@@ -25,7 +14,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/row_operator/row_operators.cuh>
+#include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/list_view.hpp>
 #include <cudf/structs/struct_view.hpp>
@@ -37,6 +26,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/cmath>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
@@ -44,7 +34,6 @@
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
 #include <thrust/generate.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/reduce.h>
@@ -67,7 +56,7 @@ std::unique_ptr<column> generate_all_row_indices(size_type num_rows)
 {
   auto indices = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, cudf::test::get_default_stream());
-  thrust::sequence(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::sequence(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                    indices->mutable_view().begin<size_type>(),
                    indices->mutable_view().end<size_type>(),
                    0);
@@ -133,7 +122,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                ? (offsets[true_index + 1] - offsets[true_index])
                : 0;
     }));
-  auto const output_size = thrust::reduce(rmm::exec_policy(cudf::test::get_default_stream()),
+  auto const output_size = thrust::reduce(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                                           row_size_iter,
                                           row_size_iter + row_indices.size());
   // no output. done.
@@ -148,7 +137,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto output_row_start = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, row_indices.size(), mask_state::UNALLOCATED);
-  thrust::exclusive_scan(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                          row_size_iter,
                          row_size_iter + row_indices.size(),
                          output_row_start->mutable_view().begin<size_type>());
@@ -157,7 +146,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [1, 1, 1, 1, 1]
   //
-  thrust::generate(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::generate(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                    result->mutable_view().begin<size_type>(),
                    result->mutable_view().end<size_type>(),
                    cuda::proclaim_return_type<size_type>([] __device__() { return 1; }));
@@ -177,7 +166,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
         auto const true_index = row_indices[index] + offset;
         return offsets[true_index] - first_offset;
       }));
-  thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::scatter_if(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                      output_row_iter,
                      output_row_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
@@ -191,18 +180,18 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   auto keys =
     cudf::make_fixed_width_column(data_type{type_id::INT32}, output_size, mask_state::UNALLOCATED);
-  thrust::generate(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::generate(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                    keys->mutable_view().begin<size_type>(),
                    keys->mutable_view().end<size_type>(),
                    cuda::proclaim_return_type<size_type>([] __device__() { return 0; }));
-  thrust::scatter_if(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::scatter_if(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                      row_size_iter,
                      row_size_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
                      row_size_iter,
                      keys->mutable_view().begin<size_type>(),
                      [] __device__(auto row_size) { return row_size != 0; });
-  thrust::inclusive_scan(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                          keys->view().begin<size_type>(),
                          keys->view().end<size_type>(),
                          keys->mutable_view().begin<size_type>());
@@ -215,7 +204,7 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   // output
   //    result = [6, 7, 11, 12, 13]
   //
-  thrust::inclusive_scan_by_key(rmm::exec_policy(cudf::test::get_default_stream()),
+  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                                 keys->view().begin<size_type>(),
                                 keys->view().end<size_type>(),
                                 result->view().begin<size_type>(),
@@ -538,20 +527,20 @@ struct column_comparator_impl {
     auto differences = rmm::device_uvector<int>(
       lhs_row_indices.size(),
       cudf::test::get_default_stream());  // worst case: everything different
-    auto input_iter = thrust::make_counting_iterator(0);
+    auto input_iter = cuda::counting_iterator<cudf::size_type>{0};
 
     auto diff_map =
       rmm::device_uvector<bool>(lhs_row_indices.size(), cudf::test::get_default_stream());
 
     thrust::transform(
-      rmm::exec_policy(cudf::test::get_default_stream()),
+      rmm::exec_policy_nosync(cudf::test::get_default_stream()),
       input_iter,
       input_iter + lhs_row_indices.size(),
       diff_map.begin(),
       ComparatorType(
         *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps, device_comparator, *d_lhs, *d_rhs));
 
-    auto diff_iter = thrust::copy_if(rmm::exec_policy(cudf::test::get_default_stream()),
+    auto diff_iter = thrust::copy_if(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                                      input_iter,
                                      input_iter + lhs_row_indices.size(),
                                      diff_map.begin(),
@@ -609,7 +598,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       cuda::proclaim_return_type<size_type>(
         [lhs_shift] __device__(size_type offset) { return offset - lhs_shift; }));
     auto lhs_valids = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
+      cuda::counting_iterator<cudf::size_type>{0},
       cuda::proclaim_return_type<bool>(
         [mask = lhs_l.null_mask(), offset = lhs_l.offset()] __device__(size_type index) {
           return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
@@ -623,7 +612,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
       cuda::proclaim_return_type<size_type>(
         [rhs_shift] __device__(size_type offset) { return offset - rhs_shift; }));
     auto rhs_valids = thrust::make_transform_iterator(
-      thrust::make_counting_iterator(0),
+      cuda::counting_iterator<cudf::size_type>{0},
       cuda::proclaim_return_type<bool>(
         [mask = rhs_l.null_mask(), offset = rhs_l.offset()] __device__(size_type index) {
           return mask == nullptr ? true : cudf::bit_is_set(mask, index + offset);
@@ -645,9 +634,9 @@ struct column_comparator_impl<list_view, check_exact_equality> {
     // B does not.  So the offsets for the remaining valid rows are fundamentally different even
     // though the row lengths are the same.
     //
-    auto input_iter = thrust::make_counting_iterator(0);
+    auto input_iter = cuda::counting_iterator<cudf::size_type>{0};
     auto diff_iter  = thrust::copy_if(
-      rmm::exec_policy(cudf::test::get_default_stream()),
+      rmm::exec_policy_nosync(cudf::test::get_default_stream()),
       input_iter,
       input_iter + lhs_row_indices.size(),
       differences.begin(),
@@ -886,7 +875,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
   }
   auto typed_lhs = static_cast<char const*>(lhs);
   auto typed_rhs = static_cast<char const*>(rhs);
-  EXPECT_TRUE(thrust::equal(rmm::exec_policy(cudf::test::get_default_stream()),
+  EXPECT_TRUE(thrust::equal(rmm::exec_policy_nosync(cudf::test::get_default_stream()),
                             typed_lhs,
                             typed_lhs + size_bytes,
                             typed_rhs));
@@ -932,8 +921,8 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
                          std::vector<bitmask_type> const& got_mask,
                          size_type number_of_elements)
 {
-  return std::all_of(thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(number_of_elements),
+  return std::all_of(cuda::counting_iterator<cudf::size_type>{0},
+                     cuda::counting_iterator{number_of_elements},
                      [&expected_mask, &got_mask](auto index) {
                        return cudf::bit_is_set(expected_mask.data(), index) ==
                               cudf::bit_is_set(got_mask.data(), index);

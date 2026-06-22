@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2024, NVIDIA CORPORATION.  All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/regex/regcomp.h"
@@ -40,8 +29,7 @@ reprog_device::reprog_device(reprog const& prog)
     _insts_count{prog.insts_count()},
     _starts_count{prog.starts_count()},
     _classes_count{prog.classes_count()},
-    _max_insts{prog.insts_count()},
-    _codepoint_flags{get_character_flags_table()}
+    _max_insts{prog.insts_count()}
 {
 }
 
@@ -76,6 +64,8 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
 
   // create our device object; this is managed separately and returned to the caller
   auto* d_prog = new reprog_device(h_prog);
+
+  d_prog->_codepoint_flags = get_character_flags_table(stream);
 
   // copy the instructions array first (fixed-sized structs)
   memcpy(h_ptr, h_prog.insts_data(), insts_size);
@@ -114,9 +104,11 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   // initialize the rest of the elements
   d_prog->_max_insts = insts_count;
   d_prog->_prog_size = memsize + sizeof(reprog_device);
+  d_prog->_empty_match_possible =
+    (h_prog.compute_match_flags() == cudf::strings::detail::match_flags::EMPTY_MATCH);
 
   // copy flat prog to device memory
-  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
+  cudf::detail::cuda_memcpy<u_char>(*d_buffer, h_buffer, stream);
 
   // build deleter to cleanup device memory
   auto deleter = [d_buffer](reprog_device* t) {
@@ -155,7 +147,7 @@ void reprog_device::set_working_memory(void* buffer, int32_t thread_count, int32
 {
   _buffer       = buffer;
   _thread_count = thread_count;
-  _max_insts    = _max_insts > 0 ? _max_insts : _insts_count;
+  _max_insts    = max_insts > 0 ? max_insts : _insts_count;
 }
 
 int32_t reprog_device::compute_shared_memory_size() const

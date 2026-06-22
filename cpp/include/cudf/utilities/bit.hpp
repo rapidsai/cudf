@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2019-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -105,7 +94,7 @@ CUDF_HOST_DEVICE inline void clear_bit_unsafe(bitmask_type* bitmask, size_type b
 /**
  * @brief Indicates whether the specified bit is set to `1`
  *
- * @param bitmask The bitmask containing the bit to clear
+ * @param bitmask The bitmask containing the bit to test
  * @param bit_index Index of the bit to test
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
@@ -193,6 +182,7 @@ __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index)
 
  * This function is thread-safe.
  *
+ * @param bitmask The bitmask to modify
  * @param bit_index  Index of the bit to clear
  */
 __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index)

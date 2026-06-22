@@ -1,8 +1,9 @@
-# Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import numba
-from numba import config as numba_config
+from numba.cuda import config as numba_config
 from packaging import version
 
 

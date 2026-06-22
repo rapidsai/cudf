@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 
@@ -23,12 +24,15 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .expressions cimport Expression
 from .gpumemoryview cimport gpumemoryview
-from .types cimport DataType, null_aware
+from .types cimport DataType, null_aware, output_nullability
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "bools_to_mask",
+    "column_nans_to_nulls",
     "compute_column",
+    "compute_column_jit",
     "encode",
     "mask_to_bools",
     "nans_to_nulls",
@@ -38,7 +42,8 @@ __all__ = [
 
 cpdef tuple[gpumemoryview, int] nans_to_nulls(
     Column input,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a null mask preserving existing nulls and converting nans to null.
 
@@ -50,6 +55,8 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
         Column to produce new mask from.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned mask's device memory.
 
     Returns
     -------
@@ -57,19 +64,62 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
     """
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.nans_to_nulls(input.view(), stream.view())
+        c_result = cpp_transform.nans_to_nulls(
+            input.view(), _cs, mr.get_mr()
+        )
 
     return (
-        gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream)),
+        gpumemoryview(
+            DeviceBuffer.c_from_unique_ptr(move(c_result.first), _stream, mr)
+        ),
         c_result.second
     )
 
 
+cpdef Column column_nans_to_nulls(
+    Column input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Create a column with nans converted to nulls.
+
+    For details, see :cpp:func:`column_nans_to_nulls`.
+
+    Parameters
+    ----------
+    input : Column
+        Column to convert nans to nulls.
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
+
+    Returns
+    -------
+    Column
+        New column with nans converted to nulls.
+    """
+    cdef unique_ptr[column] c_result
+
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_transform.column_nans_to_nulls(
+            input.view(), _cs, mr.get_mr()
+        )
+
+    return Column.from_libcudf(move(c_result), _stream, mr)
+
+
 cpdef Column compute_column(
-    Table input, Expression expr, Stream stream=None, DeviceMemoryResource mr=None
+    Table input, Expression expr, object stream=None, DeviceMemoryResource mr=None
 ):
     """Create a column by evaluating an expression on a table.
 
@@ -92,20 +142,60 @@ cpdef Column compute_column(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.compute_column(
-            input.view(), dereference(expr.c_obj.get()), stream.view(), mr.get_mr()
+            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
+
+
+cpdef Column compute_column_jit(
+    Table input, Expression expr, object stream=None, DeviceMemoryResource mr=None
+):
+    """
+    Create a column by evaluating an expression on a table
+    using a JIT-compiled kernel.
+
+    For details see :cpp:func:`compute_column_jit`.
+
+    Parameters
+    ----------
+    input : Table
+        Table used for expression evaluation
+    expr : Expression
+        Expression to evaluate
+    stream : Stream | None
+        CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned column's device memory.
+
+    Returns
+    -------
+    Column of the evaluated expression
+    """
+    cdef unique_ptr[column] c_result
+
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_transform.compute_column_jit(
+            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
+        )
+
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef tuple[gpumemoryview, int] bools_to_mask(
     Column input,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a bitmask from a column of boolean elements
 
@@ -115,6 +205,8 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
         Column to produce new mask from.
     stream : Stream | None
         CUDA stream on which to perform the operation.
+    mr : DeviceMemoryResource | None
+        Device memory resource used to allocate the returned mask's device memory.
 
     Returns
     -------
@@ -123,13 +215,19 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
     """
     cdef pair[unique_ptr[device_buffer], size_type] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.bools_to_mask(input.view(), stream.view())
+        c_result = cpp_transform.bools_to_mask(
+            input.view(), _cs, mr.get_mr()
+        )
 
     return (
-        gpumemoryview(DeviceBuffer.c_from_unique_ptr(move(c_result.first), stream)),
+        gpumemoryview(
+            DeviceBuffer.c_from_unique_ptr(move(c_result.first), _stream, mr)
+        ),
         c_result.second
     )
 
@@ -138,7 +236,7 @@ cpdef Column mask_to_bools(
     Py_ssize_t bitmask,
     int begin_bit,
     int end_bit,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Creates a boolean column from given bitmask.
@@ -164,7 +262,8 @@ cpdef Column mask_to_bools(
     cdef unique_ptr[column] c_result
     cdef bitmask_type * bitmask_ptr = <bitmask_type*>bitmask
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -172,11 +271,11 @@ cpdef Column mask_to_bools(
             bitmask_ptr,
             begin_bit,
             end_bit,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column transform(
@@ -185,7 +284,8 @@ cpdef Column transform(
     DataType output_type,
     bool is_ptx,
     null_aware is_null_aware,
-    Stream stream=None,
+    output_nullability null_policy,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Create a new column by applying a transform function against
@@ -205,6 +305,10 @@ cpdef Column transform(
     is_null_aware: NullAware
         If `NO`, the UDF gets non-nullable parameters
         If `YES`, the UDF gets nullable parameters
+    null_policy: OutputNullability
+        If `PRESERVE`, null-masks are produced if necessary.
+        If `ALL_VALID`, null-masks are not produced.
+        `ALL_VALID` has undefined behavior if the UDF can produce nulls.
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -220,9 +324,11 @@ cpdef Column transform(
     cdef string c_transform_udf = transform_udf.encode()
     cdef bool c_is_ptx = is_ptx
     cdef null_aware c_is_null_aware = is_null_aware
+    cdef output_nullability c_null_policy = null_policy
     cdef optional[void *] user_data
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     for input in inputs:
@@ -236,14 +342,15 @@ cpdef Column transform(
             c_is_ptx,
             user_data,
             c_is_null_aware,
-            stream.view(),
+            c_null_policy,
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef tuple[Table, Column] encode(
-    Table input, Stream stream=None, DeviceMemoryResource mr=None
+    Table input, object stream=None, DeviceMemoryResource mr=None
 ):
     """Encode the rows of the given table as integers.
 
@@ -264,21 +371,22 @@ cpdef tuple[Table, Column] encode(
     """
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_transform.encode(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_transform.encode(input.view(), _cs, mr.get_mr())
 
     return (
-        Table.from_libcudf(move(c_result.first), stream, mr),
-        Column.from_libcudf(move(c_result.second), stream, mr)
+        Table.from_libcudf(move(c_result.first), _stream, mr),
+        Column.from_libcudf(move(c_result.second), _stream, mr)
     )
 
 cpdef Table one_hot_encode(
     Column input,
     Column categories,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Encodes `input` by generating a new column
@@ -304,19 +412,20 @@ cpdef Table one_hot_encode(
     cdef pair[unique_ptr[column], table_view] c_result
     cdef Table owner_table
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_transform.one_hot_encode(
             input.view(),
             categories.view(),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
     owner_table = Table(
-        [Column.from_libcudf(move(c_result.first), stream, mr)]
+        [Column.from_libcudf(move(c_result.first), _stream, mr)]
         * c_result.second.num_columns()
     )
 

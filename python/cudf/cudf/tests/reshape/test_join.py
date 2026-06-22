@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import numpy as np
@@ -6,7 +7,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
@@ -134,10 +134,6 @@ def test_dataframe_join_how(aa, bb, how):
                 assert direct_equal or nanfilled_equal, msg
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="bug in older version of pandas",
-)
 def test_dataframe_join_suffix():
     rng = np.random.default_rng(seed=0)
 
@@ -201,8 +197,8 @@ def test_dataframe_join_combine_cats():
     lhs_pd = lhs.to_pandas()
     rhs_pd = rhs.to_pandas()
 
-    lhs_pd.index = lhs_pd.index.astype("object")
-    rhs_pd.index = rhs_pd.index.astype("object")
+    lhs_pd.index = lhs_pd.index.astype(pd.StringDtype(na_value=np.nan))
+    rhs_pd.index = rhs_pd.index.astype(pd.StringDtype(na_value=np.nan))
 
     expect = lhs_pd.join(rhs_pd, how="outer")
     expect.index = expect.index.astype("category")
@@ -325,11 +321,6 @@ def test_join_multi(how, column_a, column_b, column_c):
 
     gdf_result = gdf1.join(gdf2, how=how, sort=True)
     pdf_result = df1.join(df2, how=how, sort=True)
-
-    # Make sure columns are in the same order
-    columns = pdf_result.columns.values
-    gdf_result = gdf_result[columns]
-    pdf_result = pdf_result[columns]
 
     assert_join_results_equal(pdf_result, gdf_result, how="inner")
 

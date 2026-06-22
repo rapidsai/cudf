@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import io
 
 import pandas as pd
@@ -8,6 +9,7 @@ from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
+    synchronize_stream,
     write_source_str,
 )
 
@@ -21,10 +23,7 @@ from pylibcudf.io.types import CompressionType
 _COMMON_JSON_SOURCE_KWARGS = {"format": "json", "orient": "records"}
 
 
-# TODO: Reenable testing on non-default stream once we can resolve
-# https://github.com/rapidsai/cudf/issues/19900
-# @pytest.mark.parametrize("stream", [None, Stream()])
-@pytest.mark.parametrize("stream", [None])
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("rows_per_chunk", [8, 100])
 @pytest.mark.parametrize("lines", [True, False])
 def test_write_json_basic(
@@ -45,6 +44,8 @@ def test_write_json_basic(
     options.set_rows_per_chunk(rows_per_chunk)
 
     plc.io.json.write_json(options, stream)
+
+    synchronize_stream(stream)
 
     exp = pa_table.to_pandas()
 
@@ -83,6 +84,8 @@ def test_write_json_nulls(na_rep, include_nulls):
     )
 
     plc.io.json.write_json(options)
+
+    synchronize_stream()
 
     exp = pa_tbl.to_pandas()
 
@@ -135,6 +138,8 @@ def test_write_json_bool_opts(true_value, false_value):
 
     plc.io.json.write_json(options)
 
+    synchronize_stream()
+
     exp = pa_tbl.to_pandas()
 
     # Convert everything to string to make
@@ -154,8 +159,14 @@ def test_write_json_bool_opts(true_value, false_value):
 
 @pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("lines", [True, False])
+@pytest.mark.parametrize("source_strategy", ["inline", "set_source"])
 def test_read_json_basic(
-    table_data, source_or_sink, lines, text_compression_type, stream
+    table_data,
+    source_or_sink,
+    lines,
+    text_compression_type,
+    stream,
+    source_strategy,
 ):
     compression_type = text_compression_type
 
@@ -176,15 +187,22 @@ def test_read_json_basic(
     if isinstance(source, io.IOBase):
         source.seek(0)
 
-    res = plc.io.json.read_json(
-        (
-            plc.io.json.JsonReaderOptions.builder(plc.io.SourceInfo([source]))
-            .compression(compression_type)
-            .lines(lines)
-            .build()
-        ),
-        stream,
+    source_info = plc.io.SourceInfo([source])
+    options = (
+        plc.io.json.JsonReaderOptions.builder(
+            source_info
+            if source_strategy == "inline"
+            else plc.io.SourceInfo([])
+        )
+        .compression(compression_type)
+        .lines(lines)
+        .build()
     )
+
+    if source_strategy == "set_source":
+        options.set_source(source_info)
+
+    res = plc.io.json.read_json(options, stream)
 
     # Adjustments to correct for the fact orient=records is lossy
     #  and doesn't
@@ -413,7 +431,11 @@ def test_read_json_from_device_buffers(table_data, num_buffers, stream):
     _, pa_table = table_data
 
     json_str = pa_table.to_pandas().to_json(orient="records", lines=True)
-    buf = DeviceBuffer.to_device(json_str.encode("utf-8"))
+    buf = DeviceBuffer.to_device(
+        json_str.encode("utf-8"), plc.utils._get_stream(stream)
+    )
+
+    synchronize_stream(stream)
 
     options = (
         plc.io.json.JsonReaderOptions.builder(
@@ -457,6 +479,8 @@ def test_utf8_escaped_json_writer(tmp_path):
         .build()
     )
     plc.io.json.write_json(options)
+
+    synchronize_stream()
 
     output_string = path.read_text(encoding="utf-8").strip()
 

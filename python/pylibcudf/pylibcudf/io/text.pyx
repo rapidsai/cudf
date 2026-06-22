@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libc.stdint cimport uint64_t
@@ -7,12 +8,15 @@ from libcpp.string cimport string
 from libcpp.utility cimport move
 
 from pylibcudf.column cimport Column
-from pylibcudf.utils cimport _get_stream
-from pylibcudf.io.types cimport Stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from rmm.pylibrmm.stream cimport Stream
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.io cimport text as cpp_text
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
+    "ByteRangeInfo",
     "DataChunkSource",
     "ParseOptions",
     "make_source",
@@ -20,6 +24,34 @@ __all__ = [
     "make_source_from_file",
     "multibyte_split",
 ]
+
+
+cdef class ByteRangeInfo:
+    """Information about a byte range in a file.
+
+    For details, see :cpp:class:`cudf::io::text::byte_range_info`
+
+    Parameters
+    ----------
+    offset : int
+        Offset in bytes from the start of the file
+    size : int
+        Size of the range in bytes
+    """
+
+    def __init__(self, size_t offset, size_t size):
+        self.c_obj = byte_range_info(offset, size)
+
+    @property
+    def offset(self):
+        """Get the offset in bytes."""
+        return self.c_obj.offset()
+
+    @property
+    def size(self):
+        """Get the size in bytes."""
+        return self.c_obj.size()
+
 
 cdef class ParseOptions:
     """
@@ -162,12 +194,13 @@ cpdef Column multibyte_split(
     DataChunkSource source,
     str delimiter,
     ParseOptions options=None,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Splits the source text into a strings column using a multiple byte delimiter.
 
-    For details, see :cpp:func:`cudf::io::text::multibyte_split`
+    For details, see :cpp:func:`multibyte_split`
 
     Parameters
     ----------
@@ -192,7 +225,9 @@ cpdef Column multibyte_split(
     cdef unique_ptr[column] c_result
     cdef unique_ptr[data_chunk_source] c_source = move(source.c_source)
     cdef string c_delimiter = delimiter.encode()
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     if options is None:
         options = ParseOptions()
@@ -204,7 +239,8 @@ cpdef Column multibyte_split(
             dereference(c_source),
             c_delimiter,
             c_options,
-            stream.view()
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)

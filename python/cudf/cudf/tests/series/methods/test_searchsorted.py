@@ -1,13 +1,13 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 import cupy
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.column.column import as_column
 from cudf.testing import assert_eq
-from cudf.testing._utils import gen_rand, random_bitmask
+from cudf.testing._utils import gen_rand
 
 
 @pytest.mark.parametrize("side", ["left", "right"])
@@ -16,15 +16,16 @@ from cudf.testing._utils import gen_rand, random_bitmask
 def test_searchsorted(side, obj_class, vals_class):
     nelem = 1000
     column_data = gen_rand("float64", nelem)
-    column_mask = random_bitmask(nelem)
+    rng = np.random.default_rng(0)
+    column_mask = rng.choice([True, False], size=nelem)
 
     values_data = gen_rand("float64", nelem)
-    values_mask = random_bitmask(nelem)
+    values_mask = rng.choice([True, False], size=nelem)
 
-    sr = cudf.Series._from_column(as_column(column_data).set_mask(column_mask))
-    vals = cudf.Series._from_column(
-        as_column(values_data).set_mask(values_mask)
-    )
+    sr = cudf.Series(column_data)
+    sr.loc[column_mask] = None
+    vals = cudf.Series(values_data)
+    vals.loc[values_mask] = None
 
     sr = sr.sort_values()
 

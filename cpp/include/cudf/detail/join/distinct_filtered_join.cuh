@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
@@ -24,6 +13,10 @@
 #include <rmm/resource_ref.hpp>
 
 namespace cudf {
+
+// Forward declaration
+enum class join_kind : int32_t;
+
 namespace detail {
 
 /**
@@ -39,14 +32,14 @@ class distinct_filtered_join : public filtered_join {
   /**
    * @brief Performs either a semi or anti join based on the specified kind
    *
-   * @param probe The table to probe the hash table with
+   * @param left The left table to probe the hash table with
    * @param kind The kind of join to perform (SEMI or ANTI)
    * @param stream CUDA stream on which to perform operations
    * @param mr Memory resource for allocations
    * @return Device vector of indices representing the join result
    */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
-    cudf::table_view const& probe,
+    cudf::table_view const& left,
     join_kind kind,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
@@ -59,8 +52,8 @@ class distinct_filtered_join : public filtered_join {
    *
    * @tparam CGSize CUDA cooperative group size
    * @tparam Ref Reference type for the hash table
-   * @param probe The table to probe the hash table with
-   * @param preprocessed_probe Preprocessed probe table for row operators
+   * @param left The left table to probe the hash table with
+   * @param preprocessed_left Preprocessed left table for row operators
    * @param kind The kind of join to perform
    * @param query_ref Reference to the hash table for querying
    * @param stream CUDA stream on which to perform operations
@@ -68,9 +61,9 @@ class distinct_filtered_join : public filtered_join {
    * @return Device vector of indices representing the join result
    */
   template <int32_t CGSize, typename Ref>
-  std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_build_table(
-    cudf::table_view const& probe,
-    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
+  std::unique_ptr<rmm::device_uvector<cudf::size_type>> query_right_table(
+    cudf::table_view const& left,
+    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_left,
     join_kind kind,
     Ref query_ref,
     rmm::cuda_stream_view stream,
@@ -80,12 +73,12 @@ class distinct_filtered_join : public filtered_join {
   /**
    * @brief Constructor for filtered join with set
    *
-   * @param build The table to build the hash table from
+   * @param right The right table used to build the hash table
    * @param compare_nulls How null values should be compared
    * @param load_factor Target load factor for the hash table
    * @param stream CUDA stream on which to perform operations
    */
-  distinct_filtered_join(cudf::table_view const& build,
+  distinct_filtered_join(cudf::table_view const& right,
                          cudf::null_equality compare_nulls,
                          double load_factor,
                          rmm::cuda_stream_view stream);
@@ -93,30 +86,30 @@ class distinct_filtered_join : public filtered_join {
   /**
    * @brief Implementation of semi join for set
    *
-   * Returns indices of probe table rows that have matching keys in the build table.
+   * Returns indices of left table rows that have matching keys in the right table.
    *
-   * @param probe The table to probe the hash table with
+   * @param left The left table to probe the hash table with
    * @param stream CUDA stream on which to perform operations
    * @param mr Memory resource for allocations
    * @return Device vector of indices representing the join result
    */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe,
+    cudf::table_view const& left,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) override;
 
   /**
    * @brief Implementation of anti join for set
    *
-   * Returns indices of probe table rows that do not have matching keys in the build table.
+   * Returns indices of left table rows that do not have matching keys in the right table.
    *
-   * @param probe The table to probe the hash table with
+   * @param left The left table to probe the hash table with
    * @param stream CUDA stream on which to perform operations
    * @param mr Memory resource for allocations
    * @return Device vector of indices representing the join result
    */
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe,
+    cudf::table_view const& left,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) override;
 };

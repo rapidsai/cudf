@@ -1,85 +1,170 @@
+(cudf-polars-usage)=
 # Usage
 
-`cudf-polars` enables GPU acceleration for Polars' LazyFrame API by executing logical plans with cuDF and pylibcudf. It requires minimal code changes and works by specifying a GPU engine during execution.
+`cudf-polars` runs your Polars `LazyFrame` queries on GPU. You select GPU execution by passing
+an `engine=` argument to `.collect()` or `.sink_*()`. See {doc}`engines` for the conceptual
+picture, this page walks through running your first query.
 
-For a high-level overview of GPU support in Polars, see the [Polars GPU support guide](https://docs.pola.rs/user-guide/gpu-support/).
+We always recommend constructing an engine object and using it in a context manager to ensure proper
+resource cleanup. The engine constructor is where you specify {class}`~cudf_polars.engine.options.StreamingOptions`
+such as `spill_to_pinned_memory` or `fallback_mode`. Ray is the showcased example below, see also
+{doc}`other_engines`.
 
-## Getting Started
-
-Use `cudf-polars` by calling `.collect(engine="gpu")` or `.sink_<method>(engine="gpu")` on a LazyFrame:
-
-```python
-import polars as pl
-
-q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
-result = q.collect(engine="gpu")
-```
-
-Alternatively, you can create a `GPUEngine` instance with custom configuration:
+## Your first GPU query
 
 ```python
 import polars as pl
+from cudf_polars.engine.ray import RayEngine
 
-engine = pl.GPUEngine(raise_on_fail=True)
+query = (
+    pl.scan_parquet("/data/dataset/*.parquet")
+    .filter(pl.col("amount") > 100)
+    .group_by("customer_id")
+    .agg(pl.col("amount").sum())
+)
 
-q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
-result = q.collect(engine=engine)
+with RayEngine() as engine:
+    result = query.collect(engine=engine)
+print(result)
 ```
 
-With `raise_on_fail=True`, the query will raise an exception if it cannot be run on the GPU instead of transparently falling back to polars CPU. See more [engine options](engine_options.md).
+{class}`~cudf_polars.engine.ray.RayEngine` with no arguments uses every
+GPU visible to the process, so the example above runs on one GPU if that's all that's available
+and scales automatically to every GPU on the node otherwise. It also attaches to an existing
+Ray cluster if one is already running (see [Attaching to an existing Ray cluster](#attaching-to-an-existing-ray-cluster)).
 
-## GPU Profiling
+```{note}
+The examples on this page use {class}`~cudf_polars.engine.ray.RayEngine`. `cudf-polars` supports
+multiple engines for GPU execution. See {doc}`other_engines` for alternatives, or {doc}`engines` for a conceptual overview of when to pick which.
+```
 
-The `streaming` executor does not support profiling query execution through the `LazyFrame.profile` method. With the default `synchronous` scheduler for the `streaming` executor, we recommend using [NVIDIA NSight Systems](https://developer.nvidia.com/nsight-systems) to profile your queries.
-cudf-polars includes [nvtx](https://nvidia.github.io/NVTX/) annotations to help you understand where time is being spent.
+```{note}
+`.collect()` pulls the full result back to the client process. For large distributed outputs,
+prefer `.sink_*()` or aggregate/sample inside the query before `.collect()`. See
+[Result collection](engines.md#result-collection).
+```
 
-With the `distributed` scheduler for the `streaming` executor, we recommend using Dask's [built-in diagnostics](https://docs.dask.org/en/stable/diagnostics-distributed.html).
+## Configuring `RayEngine`
 
-Finally, the `"in-memory"` *does* support [`LazyFrame.profile`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.profile.html).
+{class}`~cudf_polars.engine.ray.RayEngine` with no arguments starts a
+local [Ray][ray-docs] cluster and creates one GPU worker per visible GPU.
+
+For custom configuration, build a
+{class}`~cudf_polars.engine.options.StreamingOptions` and use
+`RayEngine.from_options()`:
 
 ```python
 import polars as pl
-q = pl.scan_parquet("ny-taxi/2024/*.parquet").filter(pl.col("total_amount") > 15.0)
-profile = q.profile(engine=pl.GPUEngine(executor="in-memory"))
+from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.engine.ray import RayEngine
+
+opts = StreamingOptions(num_streaming_threads=8, fallback_mode="silent")
+
+with RayEngine.from_options(opts) as engine:
+    result = pl.scan_parquet("/data/dataset/*.parquet").collect(engine=engine)
 ```
 
-The result is a tuple containing 2 materialized DataFrames - the first with the query result and the second with profiling information of each node that is executed.
+See {doc}`options` for the available fields.
+
+```{note}
+`RayEngine` is an object you create and pass to `.collect(engine=engine)`. Prefer the
+context-manager form so the Ray cluster and GPU workers are torn down automatically.
+```
+
+The same `from_options()` / `StreamingOptions` pattern shown here works for every streaming
+engine. See {doc}`other_engines` for the DaskEngine and SPMDEngine variants.
+
+## Attaching to an existing Ray cluster
+
+For multi-node runs, start a Ray cluster separately (for example with `ray start` on each
+node) and attach to it from your client script. When Ray is already initialized,
+{class}`~cudf_polars.engine.ray.RayEngine` connects to the running
+cluster and leaves it untouched on exit:
+
 ```python
-print(profile[0])
+import ray
+import polars as pl
+from cudf_polars.engine.ray import RayEngine
+
+ray.init(address="auto")  # attach to a running cluster
+with RayEngine() as engine:
+    result = (
+        pl.scan_parquet("s3://bucket/*.parquet")
+            .group_by("customer_id")
+            .agg(pl.col("amount").sum())
+            .collect(engine=engine)
+    )
 ```
-```
-shape: (32_439_327, 19)
-┌──────────┬──────────────────────┬───────────────────────┬─────────────────┬───┬───────────────────────┬──────────────┬──────────────────────┬─────────────┐
-│ VendorID ┆ tpep_pickup_datetime ┆ tpep_dropoff_datetime ┆ passenger_count ┆ … ┆ improvement_surcharge ┆ total_amount ┆ congestion_surcharge ┆ Airport_fee │
-│ ---      ┆ ---                  ┆ ---                   ┆ ---             ┆   ┆ ---                   ┆ ---          ┆ ---                  ┆ ---         │
-│ i32      ┆ datetime[μs]         ┆ datetime[μs]          ┆ i64             ┆   ┆ f64                   ┆ f64          ┆ f64                  ┆ f64         │
-╞══════════╪══════════════════════╪═══════════════════════╪═════════════════╪═══╪═══════════════════════╪══════════════╪══════════════════════╪═════════════╡
-│ 2        ┆ 2024-01-01 00:57:55  ┆ 2024-01-01 01:17:43   ┆ 1               ┆ … ┆ 1.0                   ┆ 22.7         ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:03:00  ┆ 2024-01-01 00:09:36   ┆ 1               ┆ … ┆ 1.0                   ┆ 18.75        ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:17:06  ┆ 2024-01-01 00:35:01   ┆ 1               ┆ … ┆ 1.0                   ┆ 31.3         ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:36:38  ┆ 2024-01-01 00:44:56   ┆ 1               ┆ … ┆ 1.0                   ┆ 17.0         ┆ 2.5                  ┆ 0.0         │
-│ 1        ┆ 2024-01-01 00:46:51  ┆ 2024-01-01 00:52:57   ┆ 1               ┆ … ┆ 1.0                   ┆ 16.1         ┆ 2.5                  ┆ 0.0         │
-│ …        ┆ …                    ┆ …                     ┆ …               ┆ … ┆ …                     ┆ …            ┆ …                    ┆ …           │
-│ 2        ┆ 2024-12-31 23:05:43  ┆ 2024-12-31 23:18:15   ┆ null            ┆ … ┆ 1.0                   ┆ 24.67        ┆ null                 ┆ null        │
-│ 2        ┆ 2024-12-31 23:02:00  ┆ 2024-12-31 23:22:14   ┆ null            ┆ … ┆ 1.0                   ┆ 15.25        ┆ null                 ┆ null        │
-│ 2        ┆ 2024-12-31 23:17:15  ┆ 2024-12-31 23:17:34   ┆ null            ┆ … ┆ 1.0                   ┆ 24.46        ┆ null                 ┆ null        │
-│ 1        ┆ 2024-12-31 23:14:53  ┆ 2024-12-31 23:35:13   ┆ null            ┆ … ┆ 1.0                   ┆ 32.88        ┆ null                 ┆ null        │
-│ 1        ┆ 2024-12-31 23:15:33  ┆ 2024-12-31 23:36:29   ┆ null            ┆ … ┆ 1.0                   ┆ 28.57        ┆ null                 ┆ null        │
-└──────────┴──────────────────────┴───────────────────────┴─────────────────┴───┴───────────────────────┴──────────────┴──────────────────────┴─────────────┘
+
+{class}`~cudf_polars.engine.ray.RayEngine` creates one rank per GPU in the Ray cluster.
+It raises `RuntimeError` if no GPUs are available.
+
+## Manual Engine Lifetime Control
+
+When you need to control the engine lifetime explicitly, for example in a Jupyter notebook
+where a `with` block cannot span multiple cells, construct a `RayEngine` once and reuse it,
+then call `engine.shutdown()` when you are done:
+
+```python
+# Cell 1: start the engine
+from cudf_polars.engine.ray import RayEngine
+
+engine = RayEngine()
 ```
 
 ```python
-print(profile[1])
+# Cell 2: run a query
+import polars as pl
+
+result = (
+    pl.scan_parquet("/data/*.parquet")
+      .group_by("customer_id")
+      .agg(pl.col("amount").sum())
+      .collect(engine=engine)
+)
+result
 ```
+
+```python
+# Cell 3: run another query reusing the same engine
+other = pl.scan_parquet("/data/other/*.parquet").collect(engine=engine)
 ```
-shape: (3, 3)
-┌────────────────────┬───────┬────────┐
-│ node               ┆ start ┆ end    │
-│ ---                ┆ ---   ┆ ---    │
-│ str                ┆ u64   ┆ u64    │
-╞════════════════════╪═══════╪════════╡
-│ optimization       ┆ 0     ┆ 416    │
-│ gpu-ir-translation ┆ 416   ┆ 741    │
-│ Scan               ┆ 813   ┆ 233993 │
-└────────────────────┴───────┴────────┘
+
+```python
+# Final cell: tear everything down
+engine.shutdown()
 ```
+
+`engine.shutdown()` stops the GPU worker processes (rank actors) and, if the engine started Ray itself,
+also calls `ray.shutdown()`. It is idempotent, so calling it twice is safe.
+
+## Sink behavior
+
+When a streaming engine is used, sink operations such as `df.sink_parquet("my_path")` always produce
+a directory containing one or more files. It is not currently possible to disable this behavior, and
+setting `sink_to_directory=False` raises a `ValueError`.
+
+The in-memory engine, by contrast, follows standard Polars semantics and writes to a single file at
+the specified path.
+
+
+## Cluster diagnostics
+
+{meth}`~cudf_polars.engine.ray.RayEngine.gather_cluster_info` returns
+a list of {class}`~cudf_polars.engine.core.ClusterInfo`, one per rank
+actor, with fields `hostname`, `pid`, `cuda_visible_devices`, and `gpu_uuid`:
+
+```python
+with RayEngine() as engine:
+    print(f"cluster has {engine.nranks} ranks")
+    for i, info in enumerate(engine.gather_cluster_info()):
+        print(
+            f"rank {i}: hostname={info.hostname}, pid={info.pid}, "
+            f"cuda_visible_devices={info.cuda_visible_devices}, "
+            f"gpu_uuid={info.gpu_uuid}"
+        )
+# rank 0: hostname=node-0, pid=12345, cuda_visible_devices=0, gpu_uuid=GPU-abc123...
+# rank 1: hostname=node-0, pid=12346, cuda_visible_devices=1, gpu_uuid=GPU-def456...
+```
+
+[ray-docs]: https://docs.ray.io/

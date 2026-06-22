@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "check_nvcomp_output_sizes.hpp"
@@ -65,7 +54,8 @@ extern "C" {
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressGetTempSize(
   JNIEnv* env, jclass, jlong j_batch_size, jlong j_max_chunk_size, jlong j_max_total_size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto batch_size       = static_cast<std::size_t>(j_batch_size);
     auto max_chunk_size   = static_cast<std::size_t>(j_max_chunk_size);
@@ -76,7 +66,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressG
     check_nvcomp_status(env, status);
     return static_cast<jlong>(temp_size);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL
@@ -84,7 +74,8 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressGetMaxOutputChunkSize(JNI
                                                                              jclass,
                                                                              jlong j_max_chunk_size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto max_chunk_size         = static_cast<std::size_t>(j_max_chunk_size);
     std::size_t max_output_size = 0;
@@ -93,7 +84,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressGetMaxOutputChunkSize(JNI
     check_nvcomp_status(env, status);
     return static_cast<jlong>(max_output_size);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL
@@ -109,7 +100,8 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressAsync(JNIEnv* env,
                                                              jlong j_compressed_sizes_out_ptr,
                                                              jlong j_stream)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto in_ptrs              = reinterpret_cast<void const* const*>(j_in_ptrs);
     auto in_sizes             = reinterpret_cast<std::size_t const*>(j_in_sizes);
@@ -136,13 +128,14 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4CompressAsync(JNIEnv* env,
                                                 stream);
     check_nvcomp_status(env, status);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressGetTempSize(
   JNIEnv* env, jclass, jlong j_batch_size, jlong j_chunk_size, jlong j_max_total_size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto batch_size       = static_cast<std::size_t>(j_batch_size);
     auto chunk_size       = static_cast<std::size_t>(j_chunk_size);
@@ -153,7 +146,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4Decompres
     check_nvcomp_status(env, status);
     return static_cast<jlong>(temp_size);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL
@@ -168,7 +161,8 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressAsync(JNIEnv* env,
                                                                jlong j_out_ptrs,
                                                                jlong j_stream)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto compressed_ptrs           = reinterpret_cast<void const* const*>(j_in_ptrs);
     auto compressed_sizes          = reinterpret_cast<std::size_t const*>(j_in_sizes);
@@ -198,7 +192,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4DecompressAsync(JNIEnv* env,
         env, cudf::jni::NVCOMP_EXCEPTION_CLASS, "nvcomp decompress output size mismatch");
     }
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL
@@ -210,7 +204,8 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4GetDecompressSizeAsync(JNIEnv* en
                                                                       jlong j_batch_size,
                                                                       jlong j_stream)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto compressed_ptrs    = reinterpret_cast<void const* const*>(j_in_ptrs);
     auto compressed_sizes   = reinterpret_cast<std::size_t const*>(j_in_sizes);
@@ -221,14 +216,15 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedLZ4GetDecompressSizeAsync(JNIEnv* en
       compressed_ptrs, compressed_sizes, uncompressed_sizes, batch_size, stream);
     check_nvcomp_status(env, status);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 // methods for zstd
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdCompressGetTempSize(
   JNIEnv* env, jclass, jlong j_batch_size, jlong j_max_chunk_size, jlong j_max_total_size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto batch_size       = static_cast<std::size_t>(j_batch_size);
     auto max_chunk_size   = static_cast<std::size_t>(j_max_chunk_size);
@@ -239,14 +235,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdCompress
     check_nvcomp_status(env, status);
     return static_cast<jlong>(temp_size);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT jlong JNICALL
 Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdCompressGetMaxOutputChunkSize(
   JNIEnv* env, jclass, jlong j_max_chunk_size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto max_chunk_size         = static_cast<std::size_t>(j_max_chunk_size);
     std::size_t max_output_size = 0;
@@ -255,7 +252,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdCompressGetMaxOutputChunkSize(
     check_nvcomp_status(env, status);
     return static_cast<jlong>(max_output_size);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL
@@ -271,7 +268,8 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdCompressAsync(JNIEnv* env,
                                                               jlong j_compressed_sizes_out_ptr,
                                                               jlong j_stream)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto in_ptrs              = reinterpret_cast<void const* const*>(j_in_ptrs);
     auto in_sizes             = reinterpret_cast<std::size_t const*>(j_in_sizes);
@@ -298,13 +296,14 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdCompressAsync(JNIEnv* env,
                                                  stream);
     check_nvcomp_status(env, status);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdDecompressGetTempSize(
   JNIEnv* env, jclass, jlong j_batch_size, jlong j_chunk_size, jlong j_max_total_size)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto batch_size       = static_cast<std::size_t>(j_batch_size);
     auto chunk_size       = static_cast<std::size_t>(j_chunk_size);
@@ -315,7 +314,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdDecompre
     check_nvcomp_status(env, status);
     return static_cast<jlong>(temp_size);
   }
-  CATCH_STD(env, 0);
+  JNI_CATCH(env, 0);
 }
 
 JNIEXPORT void JNICALL
@@ -330,7 +329,8 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdDecompressAsync(JNIEnv* env,
                                                                 jlong j_out_ptrs,
                                                                 jlong j_stream)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto compressed_ptrs           = reinterpret_cast<void const* const*>(j_in_ptrs);
     auto compressed_sizes          = reinterpret_cast<std::size_t const*>(j_in_sizes);
@@ -360,7 +360,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdDecompressAsync(JNIEnv* env,
         env, cudf::jni::NVCOMP_EXCEPTION_CLASS, "nvcomp decompress output size mismatch");
     }
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL
@@ -372,7 +372,8 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdGetDecompressSizeAsync(JNIEnv* e
                                                                        jlong j_batch_size,
                                                                        jlong j_stream)
 {
-  try {
+  JNI_TRY
+  {
     cudf::jni::auto_set_device(env);
     auto compressed_ptrs    = reinterpret_cast<void const* const*>(j_in_ptrs);
     auto compressed_sizes   = reinterpret_cast<std::size_t const*>(j_in_sizes);
@@ -383,7 +384,7 @@ Java_ai_rapids_cudf_nvcomp_NvcompJni_batchedZstdGetDecompressSizeAsync(JNIEnv* e
       compressed_ptrs, compressed_sizes, uncompressed_sizes, batch_size, stream);
     check_nvcomp_status(env, status);
   }
-  CATCH_STD(env, );
+  JNI_CATCH(env, );
 }
 
 }  // extern "C"

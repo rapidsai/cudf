@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2021-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include "jit/row_ir.hpp"
 
@@ -91,6 +80,28 @@ bool operation::may_evaluate_null(table_view const& left,
                      });
 };
 
+cudf::size_type detail::predicate::accept(detail::expression_parser& visitor) const
+{
+  CUDF_FAIL("predicate is an internal expression and should not be visited by expression_parser",
+            std::invalid_argument);
+}
+
+std::reference_wrapper<expression const> detail::predicate::accept(
+  detail::expression_transformer& visitor) const
+{
+  CUDF_FAIL(
+    "predicate is an internal expression and should not be visited by "
+    "expression_transformer",
+    std::invalid_argument);
+}
+
+bool detail::predicate::may_evaluate_null(table_view const& left,
+                                          table_view const& right,
+                                          rmm::cuda_stream_view stream) const
+{
+  return false;
+}
+
 auto column_name_reference::accept(detail::expression_transformer& visitor) const
   -> decltype(visitor.visit(*this))
 {
@@ -121,6 +132,12 @@ std::unique_ptr<cudf::detail::row_ir::node> column_name_reference::accept(
   CUDF_FAIL(
     "column_name_reference is not supported in row_ir. row_ir only supports resolved expressions",
     std::invalid_argument);
+}
+
+std::unique_ptr<cudf::detail::row_ir::node> detail::predicate::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
+{
+  return converter.add_ir_node(*this);
 }
 
 }  // namespace ast

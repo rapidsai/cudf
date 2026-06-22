@@ -1,5 +1,7 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -7,8 +9,8 @@ import cudf
 from cudf.testing import assert_eq
 
 
-@pytest.mark.parametrize("data", [[1, 2, 3, 4], []])
-@pytest.mark.parametrize("categories", [[1, 2], None])
+@pytest.mark.parametrize("data", [[1, 2, 3], []])
+@pytest.mark.parametrize("categories", [[1, 2, 3], None])
 @pytest.mark.parametrize(
     "dtype",
     [
@@ -24,6 +26,9 @@ def test_categorical_index_basic(data, categories, dtype, ordered, name):
     if dtype is not None:
         categories = None
         ordered = None
+    if data == [] and categories is None and dtype is None:
+        # pandas otherwise returns Index[object] which cuDF does not support
+        categories = pd.Index([], dtype=pd.StringDtype(na_value=np.nan))
     pindex = pd.CategoricalIndex(
         data=data,
         categories=categories,

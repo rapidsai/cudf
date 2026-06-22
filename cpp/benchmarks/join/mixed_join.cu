@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2023-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/join/join_common.hpp>
@@ -19,30 +8,6 @@
 #include <cudf/join/mixed_join.hpp>
 
 auto const num_keys = 2;
-
-void create_complex_ast_expression(cudf::ast::tree& tree, cudf::size_type ast_levels)
-{
-  CUDF_EXPECTS(ast_levels > 0, "Number of AST levels must be greater than 0");
-
-  // For mixed joins, the conditional tables only have 1 column each (column 0)
-  // So we'll create multiple comparisons of the same column to stress the AST evaluation
-  tree.push(cudf::ast::column_reference(0));
-  tree.push(cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT));
-
-  tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
-
-  if (ast_levels == 1) { return; }
-
-  // For multiple levels, create additional comparisons of the same columns
-  // This will create expressions like: (col0_L == col0_R) && (col0_L == col0_R) && ...
-  // Total operators created: (2 * ast_levels - 1) = ast_levels EQUAL + (ast_levels-1) LOGICAL_AND
-  for (cudf::size_type i = 1; i < ast_levels; i++) {
-    tree.push(cudf::ast::operation(cudf::ast::ast_operator::EQUAL, tree.at(0), tree.at(1)));
-
-    tree.push(cudf::ast::operation(
-      cudf::ast::ast_operator::LOGICAL_AND, tree.at(tree.size() - 2), tree.back()));
-  }
-}
 
 template <bool Nullable, cudf::null_equality NullEquality, data_type DataType>
 void nvbench_mixed_inner_join(nvbench::state& state,
@@ -201,7 +166,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join,
   .set_name("mixed_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join_complex_ast,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -211,7 +177,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_inner_join_complex_ast,
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
   .add_int64_axis("right_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("ast_levels", {1, 5, 10});
+  .add_int64_axis("ast_levels", {1, 5, 10})
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -220,7 +187,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_left_join,
   .set_name("mixed_left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -229,7 +197,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_full_join,
   .set_name("mixed_full_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -238,7 +207,8 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_left_semi_join,
   .set_name("mixed_left_semi_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -247,4 +217,5 @@ NVBENCH_BENCH_TYPES(nvbench_mixed_left_anti_join,
   .set_name("mixed_left_anti_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});

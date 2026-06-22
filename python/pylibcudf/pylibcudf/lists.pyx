@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 from libcpp cimport bool
@@ -31,6 +32,7 @@ from pylibcudf.libcudf.lists.sorting cimport (
 )
 from pylibcudf.libcudf.lists.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask,
+    apply_deletion_mask as cpp_apply_deletion_mask,
     distinct as cpp_distinct,
 )
 from pylibcudf.libcudf.stream_compaction cimport duplicate_keep_option
@@ -47,17 +49,20 @@ from pylibcudf.lists cimport ColumnOrScalar, ColumnOrSizeType
 from pylibcudf.libcudf.lists.combine import concatenate_null_policy as ConcatenateNullPolicy # no-cython-lint
 from pylibcudf.libcudf.lists.contains import duplicate_find_option as DuplicateFindOption # no-cython-lint
 
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
-from .column cimport Column, ListColumnView
+from .column cimport Column, ListsColumnView
 from .scalar cimport Scalar
 from .table cimport Table
-from .utils cimport _get_stream
+from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ConcatenateNullPolicy",
     "DuplicateFindOption",
     "apply_boolean_mask",
+    "apply_deletion_mask",
     "concatenate_list_elements",
     "concatenate_rows",
     "contains",
@@ -78,7 +83,10 @@ __all__ = [
 ]
 
 cpdef Table explode_outer(
-    Table input, size_type explode_column_idx, Stream stream=None
+    Table input,
+    size_type explode_column_idx,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Explode a column of lists into rows.
 
@@ -100,17 +108,23 @@ cpdef Table explode_outer(
     """
     cdef unique_ptr[table] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_explode.explode_outer(
-            input.view(), explode_column_idx, stream.view()
+            input.view(), explode_column_idx, _cs, mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result), stream)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column concatenate_rows(Table input, Stream stream=None):
+cpdef Column concatenate_rows(
+    Table input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Concatenate multiple lists columns into a single lists column row-wise.
 
     For details, see :cpp:func:`concatenate_list_elements`.
@@ -129,18 +143,23 @@ cpdef Column concatenate_rows(Table input, Stream stream=None):
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_concatenate_rows(
-            input.view(), concatenate_null_policy.IGNORE, stream.view()
+            input.view(), concatenate_null_policy.IGNORE, _cs, mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column concatenate_list_elements(
-    Column input, concatenate_null_policy null_policy, Stream stream=None
+    Column input,
+    concatenate_null_policy null_policy,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Concatenate multiple lists on the same row into a single list.
 
@@ -160,17 +179,24 @@ cpdef Column concatenate_list_elements(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_concatenate_list_elements(
-            input.view(), null_policy, stream.view()
+            input.view(), null_policy, _cs, mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column contains(Column input, ColumnOrScalar search_key, Stream stream=None):
+cpdef Column contains(
+    Column input,
+    ColumnOrScalar search_key,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Create a column of bool values indicating whether
     the search_key is contained in the input.
 
@@ -196,9 +222,11 @@ cpdef Column contains(Column input, ColumnOrScalar search_key, Stream stream=Non
         found in the list column.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     if not isinstance(search_key, (Column, Scalar)):
         raise TypeError("Must pass a Column or Scalar")
@@ -209,12 +237,17 @@ cpdef Column contains(Column input, ColumnOrScalar search_key, Stream stream=Non
             search_key.view() if ColumnOrScalar is Column else dereference(
                 search_key.get()
             ),
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column contains_nulls(Column input, Stream stream=None):
+cpdef Column contains_nulls(
+    Column input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Create a column of bool values indicating whether
     each row in the lists column contains a null value.
 
@@ -234,20 +267,25 @@ cpdef Column contains_nulls(Column input, Stream stream=None):
         contains a null value.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_contains.contains_nulls(list_view.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_contains.contains_nulls(
+            list_view.view(), _cs, mr.get_mr()
+        )
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column index_of(
     Column input,
     ColumnOrScalar search_key,
     duplicate_find_option find_option,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
@@ -275,9 +313,11 @@ cpdef Column index_of(
         of -1 indicates that the search_key was not found.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_contains.index_of(
@@ -286,12 +326,17 @@ cpdef Column index_of(
                 search_key.get()
             ),
             find_option,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column reverse(Column input, Stream stream=None):
+cpdef Column reverse(
+    Column input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Reverse the element order within each list of the input column.
 
     For details, see :cpp:func:`reverse`.
@@ -309,20 +354,23 @@ cpdef Column reverse(Column input, Stream stream=None):
         A new Column with reversed lists.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_reverse.reverse(list_view.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+        c_result = cpp_reverse.reverse(list_view.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column segmented_gather(
     Column input,
     Column gather_map_list,
     out_of_bounds_policy bounds_policy=out_of_bounds_policy.DONT_CHECK,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a column with elements gathered based on the indices in gather_map_list
 
@@ -353,23 +401,29 @@ cpdef Column segmented_gather(
     """
 
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view1 = input.list_view()
-    cdef ListColumnView list_view2 = gather_map_list.list_view()
+    cdef ListsColumnView list_view1 = input.list_view()
+    cdef ListsColumnView list_view2 = gather_map_list.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_gather.segmented_gather(
             list_view1.view(),
             list_view2.view(),
             bounds_policy,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column extract_list_element(
-    Column input, ColumnOrSizeType index, Stream stream=None
+    Column input,
+    ColumnOrSizeType index,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a column of extracted list elements.
 
@@ -388,20 +442,27 @@ cpdef Column extract_list_element(
         A new Column with elements extracted.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_extract_list_element(
             list_view.view(),
             index.view() if ColumnOrSizeType is Column else index,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column count_elements(Column input, Stream stream=None):
+cpdef Column count_elements(
+    Column input,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Count the number of rows in each
     list element in the given lists column.
     For details, see :cpp:func:`count_elements`.
@@ -420,19 +481,25 @@ cpdef Column count_elements(Column input, Stream stream=None):
     Column
         A new Column of the lengths of each list element
     """
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
-        c_result = cpp_count_elements(list_view.view(), stream.view())
+        c_result = cpp_count_elements(list_view.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column sequences(
-    Column starts, Column sizes, Column steps = None, Stream stream=None
+    Column starts,
+    Column sizes,
+    Column steps = None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a lists column in which each row contains a sequence of
     values specified by a tuple of (start, step, size) parameters.
@@ -455,7 +522,9 @@ cpdef Column sequences(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     if steps is not None:
         with nogil:
@@ -463,19 +532,23 @@ cpdef Column sequences(
                 starts.view(),
                 steps.view(),
                 sizes.view(),
-                stream.view(),
+                _cs,
+                mr.get_mr(),
             )
     else:
         with nogil:
-            c_result = cpp_filling.sequences(starts.view(), sizes.view(), stream.view())
-    return Column.from_libcudf(move(c_result), stream)
+            c_result = cpp_filling.sequences(
+                starts.view(), sizes.view(), _cs, mr.get_mr()
+            )
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column sort_lists(
     Column input,
     order sort_order,
     null_order na_position,
     bool stable = False,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Sort the elements within a list in each row of a list column.
 
@@ -500,9 +573,11 @@ cpdef Column sort_lists(
         A new Column with elements in each list sorted.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         if stable:
@@ -510,16 +585,18 @@ cpdef Column sort_lists(
                     list_view.view(),
                     sort_order,
                     na_position,
-                    stream.view(),
+                    _cs,
+                    mr.get_mr(),
             )
         else:
             c_result = cpp_sort_lists(
                     list_view.view(),
                     sort_order,
                     na_position,
-                    stream.view(),
+                    _cs,
+                    mr.get_mr(),
             )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column difference_distinct(
@@ -527,7 +604,8 @@ cpdef Column difference_distinct(
     Column rhs,
     null_equality nulls_equal=null_equality.EQUAL,
     nan_equality nans_equal=nan_equality.ALL_EQUAL,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a column of index values indicating the position of a search
     key row within the corresponding list row in the lists column.
@@ -551,10 +629,12 @@ cpdef Column difference_distinct(
         A lists column containing the difference results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_set_operations.difference_distinct(
@@ -562,9 +642,10 @@ cpdef Column difference_distinct(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column have_overlap(
@@ -572,7 +653,8 @@ cpdef Column have_overlap(
     Column rhs,
     null_equality nulls_equal=null_equality.EQUAL,
     nan_equality nans_equal=nan_equality.ALL_EQUAL,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Check if lists at each row of the given lists columns overlap.
 
@@ -595,10 +677,12 @@ cpdef Column have_overlap(
         A column containing the check results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_set_operations.have_overlap(
@@ -606,9 +690,10 @@ cpdef Column have_overlap(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column intersect_distinct(
@@ -616,7 +701,8 @@ cpdef Column intersect_distinct(
     Column rhs,
     null_equality nulls_equal=null_equality.EQUAL,
     nan_equality nans_equal=nan_equality.ALL_EQUAL,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a lists column of distinct elements common to two input lists columns.
 
@@ -639,10 +725,12 @@ cpdef Column intersect_distinct(
         A lists column containing the intersection results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_set_operations.intersect_distinct(
@@ -650,9 +738,10 @@ cpdef Column intersect_distinct(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column union_distinct(
@@ -660,7 +749,8 @@ cpdef Column union_distinct(
     Column rhs,
     null_equality nulls_equal=null_equality.EQUAL,
     nan_equality nans_equal=nan_equality.ALL_EQUAL,
-    Stream stream=None,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a lists column of distinct elements found in
     either of two input lists columns.
@@ -684,10 +774,12 @@ cpdef Column union_distinct(
         A lists column containing the union results.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView lhs_view = lhs.list_view()
-    cdef ListColumnView rhs_view = rhs.list_view()
+    cdef ListsColumnView lhs_view = lhs.list_view()
+    cdef ListsColumnView rhs_view = rhs.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_set_operations.union_distinct(
@@ -695,12 +787,18 @@ cpdef Column union_distinct(
             rhs_view.view(),
             nulls_equal,
             nans_equal,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
-cpdef Column apply_boolean_mask(Column input, Column boolean_mask, Stream stream=None):
+cpdef Column apply_boolean_mask(
+    Column input,
+    Column boolean_mask,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
     """Filters elements in each row of the input lists column using a boolean mask
 
     For details, see :cpp:func:`apply_boolean_mask`.
@@ -720,25 +818,69 @@ cpdef Column apply_boolean_mask(Column input, Column boolean_mask, Stream stream
         A Column of filtered elements based upon the boolean mask.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
-    cdef ListColumnView mask_view = boolean_mask.list_view()
+    cdef ListsColumnView list_view = input.list_view()
+    cdef ListsColumnView mask_view = boolean_mask.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_apply_boolean_mask(
             list_view.view(),
             mask_view.view(),
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
+
+
+cpdef Column apply_deletion_mask(
+    Column input,
+    Column deletion_mask,
+    object stream=None,
+    DeviceMemoryResource mr=None,
+):
+    """Filters elements in each row of the input lists column using a deletion mask.
+
+    For details, see :cpp:func:`apply_deletion_mask`.
+
+    Parameters
+    ----------
+    input : Column
+        The input lists column.
+    deletion_mask : Column
+        A lists-of-bools column used as a deletion mask.
+
+    Returns
+    -------
+    Column
+        Lists column with elements removed where deletion_mask is true.
+    """
+    cdef unique_ptr[column] c_result
+    cdef ListsColumnView list_view = input.list_view()
+    cdef ListsColumnView mask_view = deletion_mask.list_view()
+
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
+
+    with nogil:
+        c_result = cpp_apply_deletion_mask(
+            list_view.view(),
+            mask_view.view(),
+            _cs,
+            mr.get_mr(),
+        )
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column distinct(
     Column input,
     null_equality nulls_equal,
     nan_equality nans_equal,
-    Stream stream=None
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """Create a new list column without duplicate elements in each list.
 
@@ -759,9 +901,11 @@ cpdef Column distinct(
         A new list column without duplicate elements in each list.
     """
     cdef unique_ptr[column] c_result
-    cdef ListColumnView list_view = input.list_view()
+    cdef ListsColumnView list_view = input.list_view()
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_distinct(
@@ -769,9 +913,10 @@ cpdef Column distinct(
             nulls_equal,
             nans_equal,
             duplicate_keep_option.KEEP_ANY,
-            stream.view(),
+            _cs,
+            mr.get_mr(),
         )
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 ConcatenateNullPolicy.__str__ = ConcatenateNullPolicy.__repr__
 DuplicateFindOption.__str__ = DuplicateFindOption.__repr__

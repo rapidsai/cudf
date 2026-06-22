@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -7,6 +8,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize(
@@ -42,7 +44,7 @@ def test_tz_aware_attributes_local():
     ]
     dti = cudf.DatetimeIndex(data).tz_localize("UTC").tz_convert("US/Eastern")
     result = dti.hour
-    expected = cudf.Index([9, 9, 9], dtype="int16")
+    expected = cudf.Index([9, 9, 9], dtype="int32")
     assert_eq(result, expected)
 
 
@@ -122,6 +124,82 @@ def test_dti_properties(attr):
     assert result == expected
 
 
+@pytest.mark.parametrize(
+    "data,freq",
+    [
+        (["2020-01-31"], "ME"),
+        (["2020-01-01", "2020-01-02", "2020-01-03"], "D"),
+        (["2020-01-01", "2020-01-02"], "D"),
+        (["2020-01-01", "2020-01-08", "2020-01-15"], "7D"),
+        ([], "D"),
+    ],
+)
+def test_dti_freq_setter(data, freq):
+    pd_dti = pd.DatetimeIndex(data)
+    cudf_dti = cudf.DatetimeIndex(data)
+    pd_dti.freq = freq
+    cudf_dti.freq = freq
+    assert_eq(cudf_dti, pd_dti)
+    assert cudf_dti.freq == pd_dti.freq
+
+
+def test_dti_freq_setter_none_clears():
+    pd_dti = pd.date_range("2020-01-01", periods=3, freq="D")
+    cudf_dti = cudf.from_pandas(pd_dti)
+    assert cudf_dti.freq is not None
+    pd_dti.freq = None
+    cudf_dti.freq = None
+    assert cudf_dti.freq is None
+    assert pd_dti.freq is None
+    assert_eq(cudf_dti, pd_dti)
+
+
+def test_dti_freq_setter_via_cudf_dateoffset():
+    data = ["2020-01-01", "2020-01-02", "2020-01-03"]
+    cudf_dti = cudf.DatetimeIndex(data)
+    cudf_dti.freq = cudf.DateOffset(days=1)
+    pd_dti = pd.DatetimeIndex(data)
+    pd_dti.freq = "D"
+    assert_eq(cudf_dti, pd_dti)
+
+
+@pytest.mark.parametrize(
+    "data,freq",
+    [
+        (["2020-01-01", "2020-01-02", "2020-01-03"], "ME"),
+        (["2020-01-01", "2020-01-02"], "2D"),
+        (["2020-01-01", "2020-01-03", "2020-01-05"], "D"),
+    ],
+)
+def test_dti_freq_setter_invalid_raises(data, freq):
+    def _set(idx_cls, freq_val):
+        idx = idx_cls(data)
+        idx.freq = freq_val
+
+    assert_exceptions_equal(
+        lfunc=_set,
+        rfunc=_set,
+        lfunc_args_and_kwargs=([pd.DatetimeIndex, freq], {}),
+        rfunc_args_and_kwargs=([cudf.DatetimeIndex, freq], {}),
+    )
+
+
+@pytest.mark.parametrize("freq", ["asdfgh", "not_a_freq"])
+def test_dti_freq_setter_unparseable_raises(freq):
+    data = ["2020-01-01", "2020-01-02"]
+
+    def _set(idx_cls, freq_val):
+        idx = idx_cls(data)
+        idx.freq = freq_val
+
+    assert_exceptions_equal(
+        lfunc=_set,
+        rfunc=_set,
+        lfunc_args_and_kwargs=([pd.DatetimeIndex, freq], {}),
+        rfunc_args_and_kwargs=([cudf.DatetimeIndex, freq], {}),
+    )
+
+
 def test_writable_numpy_array():
     gi = cudf.Index([1, 2, 3], dtype="datetime64[ns]")
     expected_flags = pd.Index(
@@ -182,3 +260,22 @@ def test_datetime_index_is_unique_monotonic(testlist):
     assert index.is_unique == index_pd.is_unique
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
+
+
+def test_datetimeindex_constructor():
+    gidx = cudf.DatetimeIndex(["2020-01-01", "2020-01-02"])
+
+    assert gidx._constructor is cudf.DatetimeIndex
+
+
+@pytest.mark.parametrize(
+    "dates",
+    [
+        pd.date_range("2020-01-01", periods=5),
+        pd.date_range("2020-01-01", periods=5, freq="h"),
+    ],
+)
+def test_datetimeindex_inferred_type(dates):
+    gidx = cudf.DatetimeIndex(dates)
+    pidx = pd.DatetimeIndex(dates)
+    assert_eq(gidx.inferred_type, pidx.inferred_type)

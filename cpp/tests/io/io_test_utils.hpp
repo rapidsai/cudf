@@ -1,25 +1,18 @@
 /*
- * Copyright (c) 2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/logger.hpp>
+
+#include <rapids_logger/logger.hpp>
 
 #include <future>
+#include <sstream>
 #include <vector>
 
 namespace cudf::test {
@@ -116,4 +109,50 @@ class ThrowingDeviceWriteDataSink : public cudf::io::data_sink {
   size_t bytes_written() override { return buffer_size_; }
 };
 
+/**
+ * @brief RAII helper that captures log messages and suppresses terminal output.
+ *
+ * On construction, saves the logger's current sinks, replaces them with an ostream sink that
+ * writes to an internal stringstream. On destruction, restores the original sinks.
+ */
+class log_capture {
+ public:
+  log_capture()
+  {
+    auto& logger = cudf::default_logger();
+    for (auto& s : logger.sinks()) {
+      saved_sinks_.push_back(std::move(s));
+    }
+    logger.sinks().clear();
+    logger.sinks().push_back(std::make_shared<rapids_logger::ostream_sink_mt>(oss_));
+  }
+
+  ~log_capture()
+  {
+    auto& logger = cudf::default_logger();
+    logger.sinks().clear();
+    for (auto& s : saved_sinks_) {
+      logger.sinks().push_back(std::move(s));
+    }
+  }
+
+  log_capture(log_capture const&)            = delete;
+  log_capture& operator=(log_capture const&) = delete;
+  log_capture(log_capture&&)                 = delete;
+  log_capture& operator=(log_capture&&)      = delete;
+
+  [[nodiscard]] bool has_messages() const { return !oss_.str().empty(); }
+
+ private:
+  std::ostringstream oss_;
+  std::vector<rapids_logger::sink_ptr> saved_sinks_;
+};
+
 }  // namespace cudf::test
+
+#define EXPECT_CUDF_LOG_WARN(statement)         \
+  do {                                          \
+    cudf::test::log_capture _cudf_log_cap_{};   \
+    statement;                                  \
+    EXPECT_TRUE(_cudf_log_cap_.has_messages()); \
+  } while (0)

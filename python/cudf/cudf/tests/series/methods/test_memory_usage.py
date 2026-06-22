@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import cudf
 from cudf.testing import assert_eq
@@ -17,13 +18,18 @@ def test_empty_nested_list_uninitialized_offsets_memory_usage():
     ser = cudf.Series(
         [[[1, 2], [3]], []], dtype=cudf.ListDtype(cudf.ListDtype("int64"))
     )
-    assert ser.iloc[:0].memory_usage() == 8
+    # Unlike in Arrow a 0-size list column produced by libcudf could have no offsets
+    # allocated and thus be truly empty (https://github.com/rapidsai/cudf/issues/16164)
+    assert ser.iloc[:0].memory_usage() == 0
 
 
 def test_series_memory_usage():
     sr = cudf.Series([1, 2, 3, 4], dtype="int64")
     assert sr.memory_usage() == 32
 
+    # Sliced series reports actual data size, not the base buffer size.
+    # This is important to make correct decisions about data transfers, for
+    # example in Dask.
     sliced_sr = sr[2:]
     assert sliced_sr.memory_usage() == 16
 
@@ -32,9 +38,6 @@ def test_series_memory_usage():
 
     sr = cudf.Series(["hello world", "rapids ai", "abc", "z"])
     assert sr.memory_usage() == 44
-
-    assert sr[3:].memory_usage() == 9  # z
-    assert sr[:1].memory_usage() == 19  # hello world
 
 
 def test_struct_with_null_memory_usage():

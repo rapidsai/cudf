@@ -1,17 +1,6 @@
 /*
- * Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
@@ -202,6 +191,13 @@ class orc_reader_options {
   }
 
   // Setters
+
+  /**
+   * @brief Sets source info.
+   *
+   * @param src The source info.
+   */
+  void set_source(source_info src) { _source = std::move(src); }
 
   /**
    * @brief Sets names of the column to read.
@@ -1059,6 +1055,8 @@ class orc_writer_options_builder {
  *  cudf::io::write_orc(options);
  * @endcode
  *
+ * @note If an exception is thrown during encoding or compression, no data is written to the sink.
+ *
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
@@ -1501,6 +1499,9 @@ class orc_chunked_writer {
 
   /**
    * @brief Writes table to output.
+   *
+   * @note If an exception is thrown during encoding or compression, the data from the failing call
+   * is not written to the sink. Data from previous successful calls is unaffected.
    *
    * @param[in] table Table that needs to be written
    * @return returns reference of the class object

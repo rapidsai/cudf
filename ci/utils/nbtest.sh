@@ -1,5 +1,6 @@
 #!/bin/bash
-# Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 MAGIC_OVERRIDE_CODE="
 def my_run_line_magic(*args, **kwargs):

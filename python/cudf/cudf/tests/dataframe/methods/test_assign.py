@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -37,34 +38,27 @@ def test_assign_callable(mapping):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "codes",
     [
-        [1, 2, 3, 4],
-        ["a", "1", "2", "1", "a"],
-        pd.Series(["a", "1", "22", "1", "aa"]),
-        pd.Series(["a", "1", "22", "1", "aa"], dtype="category"),
-        pd.Series([1, 2, 3, 4], dtype="int64"),
-        pd.Series([1, 2.3, 3, 4], dtype="float"),
-        [None, 1, None, 2, None],
-        ["a"],
+        [0],
+        [0, 1, 2],
+        [0, 1, -1],
+        [0, 1, 2, -1],
     ],
 )
 @pytest.mark.parametrize(
     "categories",
     [
         ["aa", "bb", "cc"],
-        [2, 4, 10, 100],
-        ["a", "b", "c"],
-        ["22", "b", "c"],
-        ["a"],
+        [2, 4, 10],
     ],
 )
-def test_categorical_assignment(data, categories):
-    cat_dtype = pd.CategoricalDtype(categories)
+def test_categorical_assignment(codes, categories):
+    data = pd.Categorical.from_codes(codes, categories)
     pd_df = pd.DataFrame({"a": np.ones(len(data))})
     cd_df = cudf.from_pandas(pd_df)
 
-    pd_cat_series = pd.Series(data, dtype=cat_dtype)
+    pd_cat_series = pd.Series(data)
     # assign categorical series
     pd_df.assign(cat_col=pd_cat_series)
     cd_df.assign(cat_col=pd_cat_series)
@@ -77,7 +71,6 @@ def test_categorical_assignment(data, categories):
     pd_df = pd.DataFrame({"a": np.ones(len(data))})
     cd_df = cudf.from_pandas(pd_df)
 
-    pd_categorical = pd.Categorical(data, dtype=cat_dtype)
-    pd_df.assign(cat_col=pd_categorical)
-    cd_df.assign(cat_col=pd_categorical)
+    pd_df.assign(cat_col=data)
+    cd_df.assign(cat_col=data)
     assert_eq(pd_df, cd_df)

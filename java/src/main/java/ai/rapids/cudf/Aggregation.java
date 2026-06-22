@@ -1,18 +1,7 @@
 /*
  *
- *  Copyright (c) 2020-2025, NVIDIA CORPORATION.
- *
- *  Licensed under the Apache License, Version 2.0 (the "License");
- *  you may not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS,
- *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ *  SPDX-License-Identifier: Apache-2.0
  *
  */
 
@@ -72,7 +61,8 @@ abstract class Aggregation {
         MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
         HISTOGRAM(34),
         MERGE_HISTOGRAM(35),
-        BITWISE_AGG(36);
+        BITWISE_AGG(36),
+        SUM_WITH_OVERFLOW(37);
 
         final int nativeId;
 
@@ -544,6 +534,25 @@ abstract class Aggregation {
         return new SumAggregation();
     }
 
+    static final class SumWithOverflowAggregation extends NoParamAggregation {
+        private SumWithOverflowAggregation() {
+            super(Kind.SUM_WITH_OVERFLOW);
+        }
+    }
+
+    /**
+     * Sum aggregation that also reports overflow. The result is a struct with
+     * children {sum: same type as input, overflow: BOOL8}. The input may be any
+     * signed integer type (INT8/16/32/64) or fixed-point decimal
+     * (DECIMAL32/64/128), for both column reductions and hash-based groupby.
+     * On overflow the sum value is unspecified; the boolean flag is the source of
+     * truth. Sort-based groupby, scan, segmented reduce, and rolling are not
+     * supported by cudf.
+     */
+    static SumWithOverflowAggregation sumWithOverflow() {
+        return new SumWithOverflowAggregation();
+    }
+
     static final class ProductAggregation extends NoParamAggregation {
         private ProductAggregation() {
             super(Kind.PRODUCT);
@@ -753,10 +762,7 @@ abstract class Aggregation {
     }
 
     /**
-     * Index of max element. Please note that when using this aggregation with a group by if the
-     * data is not already sorted by the grouping keys it may be automatically sorted
-     * prior to doing the aggregation. This would result in an index into the sorted data being
-     * returned.
+     * Index of the max element.
      */
     static ArgMaxAggregation argMax() {
         return new ArgMaxAggregation();
@@ -769,10 +775,7 @@ abstract class Aggregation {
     }
 
     /**
-     * Index of min element. Please note that when using this aggregation with a group by if the
-     * data is not already sorted by the grouping keys it may be automatically sorted
-     * prior to doing the aggregation. This would result in an index into the sorted data being
-     * returned.
+     * Index of the min element.
      */
     static ArgMinAggregation argMin() {
         return new ArgMinAggregation();
@@ -802,7 +805,11 @@ abstract class Aggregation {
     }
 
     /**
-     * Get the nth, non-null, element in a group.
+     * Get the nth element in a group.
+     * <p>
+     * NULL values are included (i.e. a NULL element can be returned). Use
+     * {@link #nth(int, NullPolicy)} to control NULL policy.
+     *
      * @param offset the offset to look at. Negative numbers go from the end of the group. Any
      *               value outside of the group range results in a null.
      */

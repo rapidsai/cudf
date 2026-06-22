@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -46,3 +46,11 @@ def test_repr():
 )
 def test_children(dtype, expected):
     assert DataType(dtype).children == expected
+
+
+def test_common_decimal_type_raises():
+    with pytest.raises(ValueError, match=r"Both inputs required to be decimal types."):
+        DataType.common_decimal_dtype(
+            DataType(pl.Float64()),
+            DataType(pl.Float64()),
+        )

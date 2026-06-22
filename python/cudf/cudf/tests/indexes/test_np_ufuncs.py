@@ -1,26 +1,19 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 
 import cupy as cp
 import numpy as np
+import pandas as pd
 import pytest
 from packaging.version import parse
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_LT_300,
-)
 from cudf.testing import assert_eq
 
 
 def test_ufunc_index(request, numpy_ufunc):
     # Note: This test assumes that all ufuncs are unary or binary.
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=numpy_ufunc == np.matmul and PANDAS_LT_300,
-            reason="Fixed by https://github.com/pandas-dev/pandas/pull/57079",
-        )
-    )
     request.applymarker(
         pytest.mark.xfail(
             condition=numpy_ufunc in {np.ceil, np.floor, np.trunc}
@@ -29,14 +22,21 @@ def test_ufunc_index(request, numpy_ufunc):
             reason="https://github.com/cupy/cupy/issues/9018",
         )
     )
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=numpy_ufunc == np.matmul,
+            reason="cuDF doesn't support matmul for Indexes yet",
+        )
+    )
 
     N = 100
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
+    rng = np.random.default_rng(0)
     pandas_args = args = [
         cudf.Index(
-            cp.random.randint(low=1, high=10, size=N),
+            rng.integers(low=1, high=10, size=N),
         )
         for _ in range(numpy_ufunc.nin)
     ]
@@ -53,6 +53,35 @@ def test_ufunc_index(request, numpy_ufunc):
 
 
 @pytest.mark.parametrize(
+    "ufunc", [np.add, np.logaddexp, np.greater, np.logical_and]
+)
+@pytest.mark.parametrize("reflect", [True, False])
+def test_binary_ufunc_index_series_returns_series(ufunc, reflect):
+    # ``np.ufunc(Index, Series)`` should defer to ``Series`` (which has
+    # higher priority than ``Index``) and return a ``Series``, matching
+    # pandas. Previously cudf's ``Index.__array_ufunc__`` handled the call
+    # itself and returned an ``Index``.
+    rng = np.random.default_rng(0)
+    a = rng.integers(low=1, high=10, size=20)
+    b = rng.integers(low=1, high=10, size=20)
+
+    gidx = cudf.Index(a, name="name")
+    gser = cudf.Series(b, name="name")
+    pidx = pd.Index(a, name="name")
+    pser = pd.Series(b, name="name")
+
+    if reflect:
+        got = ufunc(gser, gidx)
+        expect = ufunc(pser, pidx)
+    else:
+        got = ufunc(gidx, gser)
+        expect = ufunc(pidx, pser)
+
+    assert type(got).__name__ == type(expect).__name__
+    assert_eq(got, expect, check_exact=False)
+
+
+@pytest.mark.parametrize(
     "ufunc", [np.add, np.greater, np.greater_equal, np.logical_and]
 )
 @pytest.mark.parametrize("reflect", [True, False])
@@ -61,7 +90,8 @@ def test_binary_ufunc_index_array(ufunc, reflect):
     # Avoid zeros in either array to skip division by 0 errors. Also limit the
     # scale to avoid issues with overflow, etc. We use ints because some
     # operations (like bitwise ops) are not defined for floats.
-    args = [cudf.Index(cp.random.rand(N)) for _ in range(ufunc.nin)]
+    rng = np.random.default_rng(0)
+    args = [cudf.Index(rng.random(N)) for _ in range(ufunc.nin)]
 
     arg1 = args[1].to_cupy()
 

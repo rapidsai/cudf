@@ -1,4 +1,5 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -9,19 +10,23 @@ from pylibcudf.libcudf.strings.convert cimport (
     convert_booleans as cpp_convert_booleans,
 )
 from pylibcudf.scalar cimport Scalar
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 from cython.operator import dereference
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["from_booleans", "to_booleans"]
 
-cpdef Column to_booleans(Column input, Scalar true_string, Stream stream=None):
+cpdef Column to_booleans(
+    Column input, Scalar true_string, object stream=None, DeviceMemoryResource mr=None
+):
     """
     Returns a new bool column by parsing boolean values from the strings
     in the provided strings column.
 
-    For details, see :cpp:func:`cudf::strings::to_booleans`.
+    For details, see :cpp:func:`to_booleans`.
 
     Parameters
     ----------
@@ -43,25 +48,32 @@ cpdef Column to_booleans(Column input, Scalar true_string, Stream stream=None):
     cdef const string_scalar* c_true_string = <const string_scalar*>(
         true_string.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_booleans.to_booleans(
             input.view(),
             dereference(c_true_string),
-            stream.view()
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column from_booleans(
-    Column booleans, Scalar true_string, Scalar false_string, Stream stream=None
+    Column booleans,
+    Scalar true_string,
+    Scalar false_string,
+    object stream=None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Returns a new strings column converting the boolean values from the
     provided column into strings.
 
-    For details, see :cpp:func:`cudf::strings::from_booleans`.
+    For details, see :cpp:func:`from_booleans`.
 
     Parameters
     ----------
@@ -89,14 +101,17 @@ cpdef Column from_booleans(
     cdef const string_scalar* c_false_string = <const string_scalar*>(
         false_string.c_obj.get()
     )
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_convert_booleans.from_booleans(
             booleans.view(),
             dereference(c_true_string),
             dereference(c_false_string),
-            stream.view()
+            _cs,
+            mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream)
+    return Column.from_libcudf(move(c_result), _stream, mr)

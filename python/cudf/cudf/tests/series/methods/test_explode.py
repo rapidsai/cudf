@@ -1,4 +1,5 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
@@ -10,7 +11,7 @@ from cudf.testing import assert_eq
 
 @pytest.mark.parametrize(
     "data",
-    [[[1, 2, 3], None, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
+    [[[1, 2, 3], pd.NA, [4], [], [5, 6]], [1, 2, 3, 4, 5]],
 )
 @pytest.mark.parametrize(
     "p_index",
@@ -23,12 +24,11 @@ from cudf.testing import assert_eq
     ],
 )
 def test_explode(data, ignore_index, p_index):
-    pdf = pd.Series(data, index=p_index, name="someseries")
-    gdf = cudf.from_pandas(pdf)
+    gdf = cudf.Series(data, index=p_index, name="someseries")
+    pdf = gdf.to_pandas(arrow_type=True)
 
     expect = pdf.explode(ignore_index)
     got = gdf.explode(ignore_index)
-
     assert_eq(expect, got, check_dtype=False)
 
 
@@ -41,7 +41,7 @@ def leaf_value(request):
     elif request.param == "datetime":
         return pd.to_datetime("1900-01-01")
     elif request.param == "timedelta":
-        return pd.to_timedelta("10d")
+        return pd.to_timedelta("10D")
     else:
         raise ValueError("Unhandled data type")
 

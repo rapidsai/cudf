@@ -1,10 +1,13 @@
-# Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
+from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport SourceInfo, TableWithMetadata
 
@@ -15,7 +18,7 @@ from pylibcudf.libcudf.io.avro cimport (
 
 from pylibcudf.libcudf.types cimport size_type
 
-from pylibcudf.utils cimport _get_stream
+from pylibcudf.utils cimport _get_stream, _get_memory_resource
 
 
 __all__ = ["read_avro", "AvroReaderOptions", "AvroReaderOptionsBuilder"]
@@ -68,6 +71,21 @@ cdef class AvroReaderOptions:
         for name in col_names:
             vec.push_back(str(name).encode())
         self.c_obj.set_columns(vec)
+
+    cpdef void set_source(self, SourceInfo src):
+        """
+        Set a new source info location.
+
+        Parameters
+        ----------
+        src : SourceInfo
+            New source information, replacing existing information.
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.set_source(src.c_obj)
 
 
 cdef class AvroReaderOptionsBuilder:
@@ -135,7 +153,8 @@ cdef class AvroReaderOptionsBuilder:
 
 cpdef TableWithMetadata read_avro(
     AvroReaderOptions options,
-    Stream stream = None,
+    object stream = None,
+    DeviceMemoryResource mr=None,
 ):
     """
     Read from Avro format.
@@ -151,9 +170,13 @@ cpdef TableWithMetadata read_avro(
         Settings for controlling reading behavior
     stream : Stream | None
         CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
+    mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_avro(options.c_obj, s.view()))
+        c_result = move(cpp_read_avro(options.c_obj, _cs, mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, s)
+    return TableWithMetadata.from_libcudf(c_result, s, mr)

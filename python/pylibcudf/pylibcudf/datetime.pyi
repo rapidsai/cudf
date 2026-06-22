@@ -1,11 +1,13 @@
-# Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 from enum import IntEnum
 
-from rmm.pylibrmm.stream import Stream
+from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
 from pylibcudf.scalar import Scalar
+from pylibcudf.utils import CudaStreamLike
 
 class DatetimeComponent(IntEnum):
     YEAR = ...
@@ -29,24 +31,57 @@ class RoundingFrequency(IntEnum):
     NANOSECOND = ...
 
 def extract_datetime_component(
-    input: Column, component: DatetimeComponent, stream: Stream | None = None
+    input: Column,
+    component: DatetimeComponent,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def ceil_datetimes(
-    input: Column, freq: RoundingFrequency, stream: Stream | None = None
+    input: Column,
+    freq: RoundingFrequency,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def floor_datetimes(
-    input: Column, freq: RoundingFrequency, stream: Stream | None = None
+    input: Column,
+    freq: RoundingFrequency,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def round_datetimes(
-    input: Column, freq: RoundingFrequency, stream: Stream | None = None
+    input: Column,
+    freq: RoundingFrequency,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
 def add_calendrical_months(
-    input: Column, months: Column | Scalar, stream: Stream | None = None
+    input: Column,
+    months: Column | Scalar,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
-def day_of_year(input: Column, stream: Stream | None = None) -> Column: ...
-def is_leap_year(input: Column, stream: Stream | None = None) -> Column: ...
+def day_of_year(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def is_leap_year(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
 def last_day_of_month(
-    input: Column, stream: Stream | None = None
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> Column: ...
-def extract_quarter(input: Column, stream: Stream | None = None) -> Column: ...
-def days_in_month(input: Column, stream: Stream | None = None) -> Column: ...
+def extract_quarter(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...
+def days_in_month(
+    input: Column,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
+) -> Column: ...

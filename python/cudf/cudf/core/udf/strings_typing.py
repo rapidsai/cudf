@@ -1,4 +1,5 @@
-# Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-License-Identifier: Apache-2.0
 
 import operator
 
@@ -11,15 +12,13 @@ from numba.core.typing.templates import AbstractTemplate, AttributeTemplate
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from numba.cuda.descriptor import cuda_target
 
-import rmm
-
 # libcudf size_type
 size_type = types.int32
 
 
 # String object definitions
 class UDFString(types.Type):
-    np_dtype = np.dtype("object")
+    np_dtype: np.dtype[np.object_] = np.dtype("object")
 
     def __init__(self):
         super().__init__(name="udf_string")
@@ -30,7 +29,7 @@ class UDFString(types.Type):
 
 
 class ManagedUDFString(types.Type):
-    np_dtype = np.dtype("object")
+    np_dtype: np.dtype[np.object_] = np.dtype("object")
 
     def __init__(self):
         super().__init__(name="managed_udf_string")
@@ -41,7 +40,7 @@ class ManagedUDFString(types.Type):
 
 
 class StringView(types.Type):
-    np_dtype = np.dtype("object")
+    np_dtype: np.dtype[np.object_] = np.dtype("object")
 
     def __init__(self):
         super().__init__(name="string_view")
@@ -131,9 +130,7 @@ class StrViewArgHandler:
         if isinstance(ty, types.CPointer) and isinstance(
             ty.dtype, (StringView, UDFString, ManagedUDFString)
         ):
-            return types.uint64, val.ptr if isinstance(
-                val, rmm.pylibrmm.device_buffer.DeviceBuffer
-            ) else val.get_ptr(mode="read")
+            return types.uint64, val.ptr
         else:
             return ty, val
 
