@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -187,11 +187,12 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto const row_hash   = cudf::detail::row::hash::row_hasher(tv, stream);
   auto const row_equal  = cudf::detail::row::equality::self_comparator(tv, stream);
   auto const comparator = cudf::detail::row::equality::nan_equal_physical_equality_comparator{};
-  auto const d_equal    = row_equal.equal_to<false>(has_nulls, null_equality::EQUAL, comparator);
-  auto const empty_key  = cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL};
-  auto probe            = encode_probe_t{row_hash.device_hasher(cudf::nullate::NO{})};
-  auto allocator        = rmm::mr::polymorphic_allocator<char>{};
-  auto set              = cuco::static_set{
+  auto const d_equal =
+    row_equal.equal_to<false>(cudf::nullate::NO{}, null_equality::EQUAL, comparator);
+  auto const empty_key = cuco::empty_key{cudf::detail::CUDF_SIZE_TYPE_SENTINEL};
+  auto probe           = encode_probe_t{row_hash.device_hasher(cudf::nullate::NO{})};
+  auto allocator       = rmm::mr::polymorphic_allocator<char>{};
+  auto set             = cuco::static_set{
     all_keys->size(), 0.5, empty_key, d_equal, probe, {}, {}, allocator, stream.value()};
   auto set_ref    = set.ref(cuco::insert_and_find);
   using set_ref_t = decltype(set_ref);
