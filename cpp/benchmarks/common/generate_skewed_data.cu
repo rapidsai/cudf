@@ -151,19 +151,19 @@ std::unique_ptr<cudf::column> make_short_row_mask(cudf::size_type num_rows,
 }  // namespace
 
 std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_rows,
-                                                          cudf::size_type max_width,
+                                                          cudf::size_type short_length,
                                                           cudf::size_type long_tail_length,
                                                           int32_t short_string_pct,
                                                           int32_t hit_rate)
 {
   CUDF_EXPECTS(num_rows >= 0, "num_rows must be non-negative");
-  CUDF_EXPECTS(max_width >= 0, "max_width must be non-negative");
+  CUDF_EXPECTS(short_length >= 0, "short_length must be non-negative");
   CUDF_EXPECTS(long_tail_length >= 0, "long_tail_length must be non-negative");
   CUDF_EXPECTS(short_string_pct >= 0 && short_string_pct <= 100,
                "short_string_pct must be in the range [0, 100]");
   CUDF_EXPECTS(hit_rate >= 0 && hit_rate <= 100, "hit_rate must be in the range [0, 100]");
-  CUDF_EXPECTS(long_tail_length >= max_width,
-               "long_tail_length must be greater than or equal to max_width");
+  CUDF_EXPECTS(long_tail_length >= short_length,
+               "long_tail_length must be greater than or equal to short_length");
 
   auto const templates     = make_long_template_column(long_tail_length);
   auto const full_col      = gather_with_hit_rate(templates->view(), num_rows, hit_rate);
@@ -171,7 +171,7 @@ std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_ro
 
   auto const starts =
     cudf::make_column_from_scalar(cudf::numeric_scalar<cudf::size_type>(0), num_rows);
-  auto const short_stop = cudf::numeric_scalar<cudf::size_type>(max_width);
+  auto const short_stop = cudf::numeric_scalar<cudf::size_type>(short_length);
   auto const long_stop  = cudf::numeric_scalar<cudf::size_type>(long_tail_length);
   auto const stops      = cudf::copy_if_else(short_stop, long_stop, is_short_mask->view());
 

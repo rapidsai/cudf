@@ -18,7 +18,7 @@ extern std::string_view const skewed_string_target_substring;
  * The column is built from 10 template strings of length 256 bytes.
  *
  * Rows are then assigned one of two lengths:
- * - `short_string_pct` percent of rows are cropped to the prefix `str[0:max_width]`
+ * - `short_string_pct` percent of rows are cropped to the prefix `str[0:short_length]`
  * - The remaining rows repeat the template until `long_tail_length` and use
  * `str[0:long_tail_length]`
  *
@@ -26,13 +26,13 @@ extern std::string_view const skewed_string_target_substring;
  * find/contains string benchmarks.
  *
  * @param num_rows Number of rows in the output column
- * @param max_width Length of the cropped short strings
+ * @param short_length Length of the cropped short strings
  * @param long_tail_length Length of the repeated long tail rows
  * @param short_string_pct Percentage of rows that are short strings (0-100)
  * @param hit_rate Percentage of rows that contain the target substring (0-100)
  */
 std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_rows,
-                                                          cudf::size_type max_width,
+                                                          cudf::size_type short_length,
                                                           cudf::size_type long_tail_length,
                                                           int32_t short_string_pct,
                                                           int32_t hit_rate);

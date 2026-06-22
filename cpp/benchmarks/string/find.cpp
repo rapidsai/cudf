@@ -90,14 +90,14 @@ NVBENCH_BENCH(bench_find_string)
 static void bench_find_string_skewed(nvbench::state& state)
 {
   auto const num_rows         = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto const max_width        = static_cast<cudf::size_type>(state.get_int64("max_width"));
+  auto const short_length     = static_cast<cudf::size_type>(state.get_int64("short_length"));
   auto const long_tail_length = static_cast<cudf::size_type>(state.get_int64("long_tail_length"));
   auto const short_string_pct = static_cast<int32_t>(state.get_int64("short_string_pct"));
   auto const hit_rate         = static_cast<int32_t>(state.get_int64("hit_rate"));
 
   auto const stream = cudf::get_default_stream();
-  auto const col =
-    create_skewed_string_column(num_rows, max_width, long_tail_length, short_string_pct, hit_rate);
+  auto const col    = create_skewed_string_column(
+    num_rows, short_length, long_tail_length, short_string_pct, hit_rate);
   auto const input = cudf::strings_column_view(col->view());
 
   auto target = cudf::string_scalar(skewed_string_target_substring);
@@ -116,7 +116,7 @@ static void bench_find_string_skewed(nvbench::state& state)
 
 NVBENCH_BENCH(bench_find_string_skewed)
   .set_name("find_string_skewed")
-  .add_int64_axis("max_width", {32, 64, 128, 256})
+  .add_int64_axis("short_length", {32, 64, 128, 256})
   .add_int64_axis("long_tail_length", {1024, 4096, 16384})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("short_string_pct", {90, 95, 99})
