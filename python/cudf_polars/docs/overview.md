@@ -681,21 +681,24 @@ to JSON easier.
 
 ## Quent Traces
 
-cudf-polars emits Quent Traces. Users can control some aspects of the traces,
+cudf-polars emits [Quent] Traces. Users can control some aspects of the traces,
 like the Query Group and Query names:
 
 ```python
 import cudf_polars.quent
-import cudf_polars.engine.spmd
+# Works with any of the streaming engines, e.g. SPMDEngine
+from cudf_polars.engine.spmd import SPMDEngine
 
 quent_context = cudf_polars.quent.QuentContext(
     query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
     query=cudf_polars.quent.Query(instance_name="test_query"),
 )
 
-with StreamingEngine(executor_options={"quent_context": quent_context}) as engine:
+with SPMDEngine(executor_options={"quent_context": quent_context}) as engine:
     q.collect(engine=engine)
 ```
+
+See the [Quent] README for more on visualizing the captured data.
 
 ### Implementation Notes
 
@@ -751,3 +754,5 @@ the engine start and exit events.
 
 Upon `StreamingEngine.shutdown`, all events are gathered from the workers and persisted
 on the (now closed) engine at `StreamingEngine._quent_events`.
+
+[Quent]: https://github.com/rapidsai/quent
