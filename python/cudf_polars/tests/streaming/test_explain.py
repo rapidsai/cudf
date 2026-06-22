@@ -97,6 +97,17 @@ def test_explain_physical_plan_with_groupby(tmp_path, df):
     assert "GROUPBY ('g',)" in plan
 
 
+def test_explain_physical_plan_with_errornode():
+    df = pl.LazyFrame({"a": [[1, 2], [3, 4]], "b": [[5, 6], [7, 8]]})
+    q = df.explode("a", "b").select("a")
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+
+    plan = explain_query(q, engine, physical=True)
+
+    assert "ERRORNODE" in plan
+
+
 def test_explain_logical_plan_with_join(tmp_path, df):
     make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
 

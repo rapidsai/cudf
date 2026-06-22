@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -8,7 +8,7 @@ from __future__ import annotations
 from functools import partial, reduce, singledispatch
 from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
 
-import polars as pl
+import polars as pl  # noqa: TC002 (used at runtime for pl.datatypes, pl.Series etc.)
 
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
@@ -212,7 +212,9 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
                 # to a expr.LiteralColumn, so the actual type is in the inner type
                 # .inner returns DataTypeClass | DataType, need to cast to DataType
                 plc_dtype = DataType(
-                    cast(pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner)
+                    cast(
+                        "pl.DataType", cast("pl.List", haystack.dtype.polars_type).inner
+                    )
                 ).plc_type
             else:
                 plc_dtype = haystack.dtype.plc_type  # pragma: no cover
