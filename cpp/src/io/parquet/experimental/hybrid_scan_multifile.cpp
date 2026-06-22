@@ -7,6 +7,9 @@
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
+#include <cudf/utilities/error.hpp>
+
+#include <numeric>
 
 namespace cudf::io::parquet::experimental {
 
@@ -131,6 +134,46 @@ table_with_metadata hybrid_scan_multifile::materialize_all_columns(
 {
   CUDF_FUNC_RANGE();
   return _impl->materialize_all_columns(row_group_indices, column_chunk_data, options, stream, mr);
+}
+
+std::vector<std::vector<std::vector<size_type>>> hybrid_scan_multifile::construct_row_group_passes(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::size_t pass_read_limit) const
+{
+  auto const total_row_groups =
+    std::accumulate(row_group_indices.begin(),
+                    row_group_indices.end(),
+                    std::size_t{0},
+                    [](auto sum, auto const& rgs) { return sum + rgs.size(); });
+  CUDF_EXPECTS(
+    total_row_groups > 0, "Empty input row group indices encountered", std::invalid_argument);
+
+  auto [passes, source_map] =
+    _impl->construct_row_group_passes(row_group_indices, total_row_groups, pass_read_limit);
+
+  if (pass_read_limit == 0) { return {passes}; }
+
+  auto source_passes = std::vector<std::vector<std::vector<size_type>>>{};
+  source_passes.reserve(passes.size());
+
+  if (row_group_indices.size() == 1) {
+    for (auto& pass : passes) {
+      source_passes.emplace_back();
+      source_passes.back().push_back(std::move(pass));
+    }
+    return source_passes;
+  }
+
+  auto source_map_it = source_map.begin();
+  for (auto const& pass : passes) {
+    auto source_pass = std::vector<std::vector<size_type>>(row_group_indices.size());
+    for (auto const row_group_index : pass) {
+      source_pass[*source_map_it++].push_back(row_group_index);
+    }
+    source_passes.push_back(std::move(source_pass));
+  }
+
+  return source_passes;
 }
 
 }  // namespace cudf::io::parquet::experimental
