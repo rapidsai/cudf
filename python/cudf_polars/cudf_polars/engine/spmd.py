@@ -157,7 +157,7 @@ def allgather_polars_dataframe(
     """
     comm = engine.comm
     ctx = engine.context
-    stream = ctx.get_stream_from_pool()
+    stream = ctx.br().stream_pool.get_stream()
     col_names = local_df.columns
     dtypes = [DataType(dtype) for dtype in local_df.dtypes]
 
