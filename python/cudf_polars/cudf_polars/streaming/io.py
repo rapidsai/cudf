@@ -288,10 +288,32 @@ class SplitScan(IR):
         # - We can use all this information to calculate the
         #   "skip_rows" and "n_rows" options to use locally.
 
-        rowgroup_metadata = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(paths)
-        ).rowgroup_metadata()
-        total_row_groups = len(rowgroup_metadata)
+        if parquet_options.prefetch_file_metadata:
+            try:
+                parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
+            except KeyError as e:
+                msg = (
+                    f"Parquet file metadata was not prefetched for paths: {list(paths)}."
+                    "Please report this as a bug to cudf-polars. You can work around it "
+                    "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
+                )
+                raise AssertionError(msg) from e
+
+            row_group_num_rows = [
+                num_rows
+                for metadata in parquet_metadatas
+                for num_rows in metadata.row_group_num_rows
+            ]
+
+        else:
+            row_group_num_rows = [
+                rg["num_rows"]
+                for rg in plc.io.parquet_metadata.read_parquet_metadata(
+                    plc.io.SourceInfo(paths)
+                ).rowgroup_metadata()
+            ]
+
+        total_row_groups = len(row_group_num_rows)
         if total_splits <= total_row_groups:
             # We have enough row-groups in the file to align
             # all "total_splits" of our reads with row-group
@@ -300,17 +322,14 @@ class SplitScan(IR):
             # the row-group indices to "skip_rows" and "n_rows".
             rg_stride = total_row_groups // total_splits
             skip_rgs = rg_stride * split_index
-            skip_rows = sum(rg["num_rows"] for rg in rowgroup_metadata[:skip_rgs])
-            n_rows = sum(
-                rg["num_rows"]
-                for rg in rowgroup_metadata[skip_rgs : skip_rgs + rg_stride]
-            )
+            skip_rows = sum(row_group_num_rows[:skip_rgs])
+            n_rows = sum(row_group_num_rows[skip_rgs : skip_rgs + rg_stride])
         else:
             # There are not enough row-groups to align
             # all "total_splits" of our reads with row-group
             # boundaries. Use metadata to directly calculate
             # "skip_rows" and "n_rows" for the current read.
-            total_rows = sum(rg["num_rows"] for rg in rowgroup_metadata)
+            total_rows = sum(row_group_num_rows)
             n_rows = total_rows // total_splits
             skip_rows = n_rows * split_index
 
@@ -508,7 +527,7 @@ def can_use_native_parquet_node(
 @lower_ir_node.register(Scan)
 def _(
     ir: Scan, rec: LowerIRTransformer
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> tuple[StreamingScan, MutableMapping[IR, PartitionInfo]]:
     config_options = rec.state["config_options"]
     parquet_options = config_options.parquet_options
     if (
@@ -826,6 +845,20 @@ def _sink_to_file(
     return True
 
 
+def _columnchunk_metadata_from_footers(
+    footers: list[plc.io.parquet_metadata.FileMetaData],
+) -> dict[str, list[int]]:
+    columnchunk_metadata: dict[str, list[int]] = {}
+    for fmd in footers:
+        for rg in fmd.row_groups:
+            for col in rg.columns:
+                name = ".".join(col.meta_data.path_in_schema)
+                columnchunk_metadata.setdefault(name, []).append(
+                    col.meta_data.total_uncompressed_size
+                )
+    return columnchunk_metadata
+
+
 class ParquetMetadata:
     """
     Parquet metadata container.
@@ -840,12 +873,15 @@ class ParquetMetadata:
 
     __slots__ = (
         "column_names",
+        "file_metadata",
         "max_footer_samples",
         "mean_size_per_file",
         "num_row_groups_per_file",
         "paths",
         "row_count",
         "sample_paths",
+        "sampled_file_count",
+        "total_file_count",
     )
 
     paths: tuple[str, ...]
@@ -862,6 +898,8 @@ class ParquetMetadata:
     """All column names found it the dataset."""
     sample_paths: tuple[str, ...]
     """Sampled file paths."""
+    file_metadata: tuple[plc.io.parquet_metadata.FileMetaData, ...] | None
+    """Parquet footers read for ``sample_paths``. Populated only if all files were sampled."""
 
     @nvtx_annotate_cudf_polars(message="ParquetMetadata")
     def __init__(self, paths: tuple[str, ...], max_footer_samples: int):
@@ -871,9 +909,14 @@ class ParquetMetadata:
         self.num_row_groups_per_file = ()
         self.mean_size_per_file = {}
         self.column_names = ()
-        stride = (
-            max(1, int(len(paths) / max_footer_samples)) if max_footer_samples else 1
-        )
+        self.file_metadata = None
+        self.total_file_count = len(self.paths)
+        self.sampled_file_count = 0
+        if max_footer_samples <= 0:
+            self.sample_paths = ()
+            return
+
+        stride = max(1, int(len(paths) / max_footer_samples))
         self.sample_paths = paths[: stride * max_footer_samples : stride]
 
         if not self.sample_paths:
@@ -881,21 +924,22 @@ class ParquetMetadata:
             # TODO: This requires row_count to be nullable. Why do we allow empty paths?
             return
 
-        total_file_count = len(self.paths)
         sampled_file_count = len(self.sample_paths)
-        sample_metadata = plc.io.parquet_metadata.read_parquet_metadata(
+        sample_footers = plc.io.parquet_metadata.read_parquet_footers(
             plc.io.SourceInfo(list(self.sample_paths))
         )
+        self.file_metadata = tuple(sample_footers)
 
-        if total_file_count == sampled_file_count:
-            row_count = sample_metadata.num_rows()
+        sampled_row_count = sum(fmd.num_rows for fmd in sample_footers)
+        if self.total_file_count == sampled_file_count:
+            row_count = sampled_row_count
         else:
-            num_rows_per_sampled_file = int(
-                sample_metadata.num_rows() / sampled_file_count
-            )
-            row_count = num_rows_per_sampled_file * total_file_count
+            num_rows_per_sampled_file = int(sampled_row_count / sampled_file_count)
+            row_count = num_rows_per_sampled_file * self.total_file_count
 
-        num_row_groups_per_sampled_file = sample_metadata.num_rowgroups_per_file()
+        num_row_groups_per_sampled_file = [
+            len(fmd.row_groups) for fmd in sample_footers
+        ]
         rowgroup_offsets_per_file = list(
             itertools.accumulate(num_row_groups_per_sampled_file, initial=0)
         )
@@ -905,7 +949,9 @@ class ParquetMetadata:
                 sum(uncompressed_sizes[start:end])
                 for (start, end) in itertools.pairwise(rowgroup_offsets_per_file)
             ]
-            for name, uncompressed_sizes in sample_metadata.columnchunk_metadata().items()
+            for name, uncompressed_sizes in _columnchunk_metadata_from_footers(
+                sample_footers
+            ).items()
         }
 
         self.column_names = tuple(column_sizes_per_file)
@@ -915,6 +961,7 @@ class ParquetMetadata:
         }
         self.num_row_groups_per_file = tuple(num_row_groups_per_sampled_file)
         self.row_count = row_count
+        self.sampled_file_count = sampled_file_count
 
 
 @nvtx_annotate_cudf_polars(message="_sample_rg_sizes")
@@ -987,13 +1034,18 @@ class ParquetSourceInfo:
     type: Literal["parquet"] = "parquet"
 
     def __init__(
-        self, row_count: int | None, per_file_means: dict[str, int] | None = None
+        self,
+        row_count: int | None,
+        per_file_means: dict[str, int] | None = None,
+        *,
+        file_metadata: list[plc.io.parquet_metadata.FileMetaData] | None = None,
     ):
         if per_file_means is None:
             per_file_means = {}
 
         self.row_count = row_count
         self.per_file_means = per_file_means
+        self.file_metadata = file_metadata
 
     @classmethod
     def from_paths(
@@ -1052,7 +1104,15 @@ class ParquetSourceInfo:
                     else max(footer_mean, decoded_floor)
                 )
 
-        return cls(row_count, per_file_means)
+        file_metadata: list[plc.io.parquet_metadata.FileMetaData] | None
+        if (
+            metadata.sampled_file_count == metadata.total_file_count
+            and metadata.file_metadata is not None
+        ):
+            file_metadata = list(metadata.file_metadata)
+        else:
+            file_metadata = None
+        return cls(row_count, per_file_means, file_metadata=file_metadata)
 
     def column_storage_size(self, column: str) -> int | None:
         """Return the average storage size for a single column in one file."""

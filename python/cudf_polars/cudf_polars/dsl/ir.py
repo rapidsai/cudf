@@ -14,6 +14,7 @@ can be considered as functions:
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextlib
 import contextvars
 import functools
@@ -47,7 +48,11 @@ from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
+from cudf_polars.dsl.tracing import (
+    log_do_evaluate,
+    nvtx_annotate_cudf_polars,
+)
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
@@ -66,7 +71,6 @@ from cudf_polars.utils.versions import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
-    from concurrent.futures import ThreadPoolExecutor
     from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
@@ -74,6 +78,7 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers.dataframe import NamedColumn
+    from cudf_polars.streaming.base import StatsCollector
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -127,11 +132,21 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     query_id
         Identifier for the query being executed.
+    parquet_file_metadata
+        A cache of parquet file metadata. The keys are the ``paths`` of Scan nodes
+        with a ``parquet`` type. The values are a list of ``FileMetaData`` objects
+        associated with those ``paths``.
+
+        This cache lasts for the duration of the a single query's execution
+        (e.g. ``LazyFrame.collect()``).
     """
 
-    py_executor: ThreadPoolExecutor | None = field(default=None)
+    py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    parquet_file_metadata: dict[
+        tuple[str, ...], list[plc.io.parquet_metadata.FileMetaData]
+    ] = field(default_factory=dict)
 
     async def to_thread(
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
@@ -183,6 +198,126 @@ class IRExecutionContext:
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
         ) as result_stream:
             yield result_stream
+
+
+@nvtx_annotate_cudf_polars(message="fetch_parquet_footers_for_paths")
+def _prefetch_parquet_footers_for_paths(
+    paths: tuple[str, ...],
+) -> tuple[tuple[str, ...], list[plc.io.parquet_metadata.FileMetaData]]:
+    """
+    Prefetch parquet footers for a list of paths.
+
+    This is typically executed concurrently with prefetch operations for other
+    groups of ``paths`` for other ``Scan`` nodes.
+
+    Parameters
+    ----------
+    paths
+        The tuple of paths to prefetch. These correspond to ``paths`` in a ``Scan`` node.
+
+    Returns
+    -------
+    paths
+        The original input ``paths``. Useful for associating the result with the metadata
+        when executing out of order concurrently.
+    metadata
+        The list of ``FileMetaData`` objects for the ``paths``.
+    """
+    metadata = plc.io.parquet_metadata.read_parquet_footers(
+        plc.io.SourceInfo(list(paths))
+    )
+    return paths, metadata
+
+
+@nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")
+def prefetch_parquet_file_metadata_for_ir(
+    root: IR,
+    context: IRExecutionContext,
+) -> None:
+    """
+    Prefetch parquet metadata for all parquet scans in an IR graph.
+
+    Parameters
+    ----------
+    root
+        The root of the IR graph, which will be traversed.
+    context
+        The IR execution context. Its ``py_executor`` is used to fetch
+        metadata concurrently, its ``parquet_file_metadata`` is mutated
+        to cache the newly read parquet metadata.
+    """
+    from cudf_polars.streaming.io import FusedScan, SplitScan, StreamingScan
+
+    groups = set()
+    for node in traversal([root]):
+        if isinstance(node, StreamingScan):
+            for scan in node.scans:
+                if (
+                    isinstance(scan, (SplitScan, FusedScan))
+                    and scan.base_scan.typ == "parquet"
+                ):
+                    groups.add(tuple(scan.paths))
+        elif isinstance(node, Scan) and node.typ == "parquet":
+            groups.add(tuple(node.paths))
+
+    if not groups:
+        return
+
+    missing_paths = {
+        paths for paths in groups if paths not in context.parquet_file_metadata
+    }
+    cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
+
+    if context.py_executor is None:
+        cm = executor = concurrent.futures.ThreadPoolExecutor()
+    else:
+        executor = context.py_executor
+        # We didn't create the executor, so we don't close it.
+        cm = contextlib.nullcontext()
+
+    if missing_paths:
+        with cm:
+            futures = [
+                executor.submit(_prefetch_parquet_footers_for_paths, paths)
+                for paths in missing_paths
+            ]
+
+            for future in concurrent.futures.as_completed(futures):
+                paths, metadata = future.result()
+                context.parquet_file_metadata.setdefault(paths, metadata)
+
+
+def seed_parquet_file_metadata_from_stats(
+    stats: StatsCollector,
+    context: IRExecutionContext,
+) -> None:
+    """
+    Seed prefetched parquet footers from stats collection when available.
+
+    Stats collection reads parquet footers for sampled paths. When the sample
+    covers all paths in a scan, those footers can be reused during metadata
+    prefetch to avoid rereading file footers.
+
+    Parameters
+    ----------
+    stats: StatsCollector
+        The stats collector.
+    context: IRExecutionContext
+        The execution context. Its ``parquet_file_metadata`` is mutated to
+        cache the parquet file metadata read during stats collection.
+    """
+    from cudf_polars.streaming.io import ParquetSourceInfo
+
+    for node, info in stats.scan_stats.items():
+        if (
+            isinstance(node, Scan)
+            and node.typ == "parquet"
+            and isinstance(info, ParquetSourceInfo)
+            and info.file_metadata is not None
+        ):
+            context.parquet_file_metadata.setdefault(
+                tuple(node.paths), info.file_metadata
+            )
 
 
 _BINOPS = {
@@ -352,6 +487,7 @@ _COMPARISON_BINOPS = {
 def _parquet_physical_types(
     paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
+    # This may not be able use prefetched metadata, since we don't (currently) have a Schema.
     metadata = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
     column_types = metadata.schema().column_types()
 
@@ -648,12 +784,32 @@ class Scan(IR):
     @staticmethod
     @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
     def _get_parquet_row_count_from_metadata(
-        paths: list[str], skip_rows: int, n_rows: int
+        paths: list[str],
+        skip_rows: int,
+        n_rows: int,
+        parquet_options: ParquetOptions,
+        context: IRExecutionContext | None,
     ) -> int:
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
-        meta = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
-        num_rows = meta.num_rows() - skip_rows
+        if parquet_options.prefetch_file_metadata and context is not None:
+            try:
+                parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
+            except KeyError as e:
+                msg = (
+                    f"Parquet file metadata was not prefetched for paths: {list(paths)}."
+                    "Please report this as a bug to cudf-polars. You can work around it "
+                    "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
+                )
+                raise AssertionError(msg) from e
+            num_rows = sum(metadata.num_rows for metadata in parquet_metadatas)
+        else:
+            meta = plc.io.parquet_metadata.read_parquet_metadata(
+                plc.io.SourceInfo(paths)
+            )
+            num_rows = meta.num_rows()
+
+        num_rows -= skip_rows
         if n_rows != -1:
             num_rows = min(num_rows, n_rows)
         return max(num_rows, 0)
@@ -789,6 +945,19 @@ class Scan(IR):
                     df,
                 )
         elif typ == "parquet":
+            if parquet_options.prefetch_file_metadata:
+                try:
+                    parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
+                except KeyError as e:
+                    msg = (
+                        f"Parquet file metadata was not prefetched for paths: {list(paths)}."
+                        "Please report this as a bug to cudf-polars. You can work around it "
+                        "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
+                    )
+                    raise AssertionError(msg) from e
+            else:
+                parquet_metadatas = None
+
             filters = None
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
@@ -817,6 +986,7 @@ class Scan(IR):
                     parquet_reader_options,
                     chunk_read_limit=parquet_options.chunk_read_limit,
                     pass_read_limit=parquet_options.pass_read_limit,
+                    parquet_metadatas=parquet_metadatas,
                     stream=stream,
                 )
                 chunk = reader.read_chunk()
@@ -832,7 +1002,9 @@ class Scan(IR):
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
                 num_rows = (
-                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    cls._get_parquet_row_count_from_metadata(
+                        paths, skip_rows, n_rows, parquet_options, context
+                    )
                     if not names
                     else None
                 )
@@ -849,12 +1021,16 @@ class Scan(IR):
                     )
             else:
                 tbl_w_meta = plc.io.parquet.read_parquet(
-                    parquet_reader_options, stream=stream
+                    parquet_reader_options,
+                    parquet_metadatas=parquet_metadatas,
+                    stream=stream,
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
                 num_rows = (
-                    cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
+                    cls._get_parquet_row_count_from_metadata(
+                        paths, skip_rows, n_rows, parquet_options, context
+                    )
                     if not col_names
                     else None
                 )
@@ -1532,7 +1708,7 @@ class Select(IR):
             stream = context.get_cuda_stream()
             scan = self.children[0]
             effective_rows = Scan._get_parquet_row_count_from_metadata(
-                scan.paths, scan.skip_rows, scan.n_rows
+                scan.paths, scan.skip_rows, scan.n_rows, scan.parquet_options, context
             )
             dtype = DataType(pl.UInt32())
             col = Column(

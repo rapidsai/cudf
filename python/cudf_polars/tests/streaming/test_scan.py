@@ -12,7 +12,12 @@ import polars as pl
 
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.ir import IRExecutionContext, Scan
+from cudf_polars.dsl.ir import (
+    Empty,
+    IRExecutionContext,
+    Scan,
+    prefetch_parquet_file_metadata_for_ir,
+)
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
 from cudf_polars.streaming.io import (
@@ -30,10 +35,12 @@ from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
+    from collections.abc import Callable
     from pathlib import Path
     from typing import Any, Literal
 
     import cudf_polars.engine.core
+    from cudf_polars.engine.core import StreamingEngine
 
 
 @pytest.fixture(scope="module")
@@ -84,6 +91,39 @@ def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, streaming_engine_factor
     )
     make_partitioned_source(df, tmp_path, "parquet", n_files=1)
     assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
+
+
+@pytest.mark.parametrize(
+    "target_partition_size_and_n_files", [(1_000, 1), (1_000, 2), (1_000_000, 3)]
+)
+def test_scan_parquet_prefetch_file_metadata(
+    tmp_path: Path,
+    target_partition_size_and_n_files: tuple[int, int],
+    df: pl.DataFrame,
+    streaming_engine_factory: Callable[..., StreamingEngine],
+):
+    target_partition_size, n_files = target_partition_size_and_n_files
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            target_partition_size=target_partition_size,
+            parquet_options={"prefetch_file_metadata": True},
+        ),
+    )
+    make_partitioned_source(df, tmp_path, "parquet", n_files=n_files)
+    assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
+
+
+def test_prefetch_file_metadata_non_parquet_scan(df, streaming_engine_factory) -> None:
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
+    )
+    assert_gpu_result_equal(df.lazy().select("x"), engine=streaming_engine)
+
+
+def test_prefetch_parquet_file_metadata_no_parquet_scans() -> None:
+    context = IRExecutionContext()
+    prefetch_parquet_file_metadata_for_ir(Empty({}), context)
+    assert context.parquet_file_metadata == {}
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +221,10 @@ def test_scan_union(engine: pl.GPUEngine, tmp_path: Path) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-def _make_parquet_scan(paths: list[str]) -> Scan:
+def _make_parquet_scan(
+    paths: list[str], parquet_options: ParquetOptions | None = None
+) -> Scan:
+    parquet_options = parquet_options or ParquetOptions()
     return Scan(
         {"x": DataType(pl.Int64())},
         "parquet",
@@ -194,7 +237,7 @@ def _make_parquet_scan(paths: list[str]) -> Scan:
         None,
         None,
         None,
-        ParquetOptions(),
+        parquet_options,
     )
 
 
@@ -287,3 +330,73 @@ def test_streaming_scan_raises() -> None:
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
         StreamingScan.do_evaluate([fused], scan, context=ctx)
+
+
+def test_scan_missing_prefetch_metadata_raises() -> None:
+    # This isn't reachable by polars' public API, so we test it directly.
+    scan = _make_parquet_scan(
+        ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
+    )
+    ctx = IRExecutionContext()
+    with pytest.raises(
+        AssertionError,
+        match=r"Parquet file metadata was not prefetched for paths: \['file\.parquet'\]\.",
+    ):
+        Scan.do_evaluate(
+            scan.schema,
+            scan.typ,
+            scan.reader_options,
+            scan.paths,
+            scan.with_columns,
+            scan.skip_rows,
+            scan.n_rows,
+            scan.row_index,
+            scan.include_file_paths,
+            scan.predicate,
+            scan.parquet_options,
+            context=ctx,
+        )
+
+
+def test_streaming_scan_missing_prefetch_metadata_raises() -> None:
+    # This isn't reachable by normal cudf-polars usage.
+    scan = _make_parquet_scan(
+        ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
+    )
+    scan = _make_parquet_scan(["file.parquet"])
+    fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
+
+    ctx = IRExecutionContext()
+    with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
+        StreamingScan.do_evaluate([fused], scan, context=ctx)
+
+
+def test_split_scan_do_evaluate_missing_prefetch_metadata() -> None:
+    paths = ["/some/missing/file.parquet"]
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    context = IRExecutionContext()
+    schema = {"x": DataType(pl.Int64())}
+
+    with pytest.raises(
+        AssertionError,
+        match=(
+            r"Parquet file metadata was not prefetched for paths: "
+            r"\['/some/missing/file\.parquet'\]\."
+        ),
+    ):
+        SplitScan.do_evaluate(
+            0,
+            4,
+            schema,
+            "parquet",
+            {},
+            paths,
+            None,
+            0,
+            -1,
+            None,
+            None,
+            None,
+            parquet_options,
+            context=context,
+        )

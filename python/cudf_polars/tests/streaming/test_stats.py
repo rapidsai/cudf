@@ -16,12 +16,19 @@ import pylibcudf as plc
 import cudf_polars.streaming.io as streaming_io
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.ir import Empty, Projection
+from cudf_polars.dsl.ir import (
+    Empty,
+    IRExecutionContext,
+    Projection,
+    seed_parquet_file_metadata_from_stats,
+)
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import SerializedDataSourceInfo, StatsCollector
 from cudf_polars.streaming.io import (
     DataFrameSourceInfo,
+    ParquetMetadata,
     ParquetSourceInfo,
+    _build_parquet_source,
     _clear_source_info_cache,
 )
 from cudf_polars.streaming.statistics import collect_statistics
@@ -226,6 +233,76 @@ def test_parquet_round_trip_empty() -> None:
 
     assert restored.row_count is None
     assert restored.per_file_means == {}
+
+
+def test_parquet_source_info_stores_footers_when_all_files_sampled(
+    tmp_path: pathlib.Path,
+    df: pl.DataFrame,
+) -> None:
+    _clear_source_info_cache()
+    make_partitioned_source(df, tmp_path, "parquet", n_files=2)
+    paths = tuple(str(p) for p in sorted(tmp_path.iterdir()))
+    info = _build_parquet_source(
+        paths, frozenset(df.columns), max_footer_samples=10, max_row_group_samples=0
+    )
+
+    assert info.file_metadata is not None
+    assert len(info.file_metadata) == len(paths)
+    assert sum(fmd.num_rows for fmd in info.file_metadata) == df.height
+
+
+def test_parquet_source_info_omits_footers_when_paths_are_sampled(
+    tmp_path: pathlib.Path,
+    df: pl.DataFrame,
+) -> None:
+    _clear_source_info_cache()
+    make_partitioned_source(df, tmp_path, "parquet", n_files=5)
+    paths = tuple(str(p) for p in sorted(tmp_path.iterdir()))
+    info = _build_parquet_source(
+        paths, frozenset(df.columns), max_footer_samples=2, max_row_group_samples=0
+    )
+
+    assert info.file_metadata is None
+
+
+def test_seed_parquet_file_metadata_from_stats(
+    tmp_path: pathlib.Path,
+    df: pl.DataFrame,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+) -> None:
+    _clear_source_info_cache()
+    make_partitioned_source(df, tmp_path, "parquet", n_files=2)
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        parquet_options={"max_footer_samples": 10, "prefetch_file_metadata": True},
+    )
+    q = pl.scan_parquet(tmp_path)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+    config = ConfigOptions.from_polars_engine(engine)
+    stats = collect_statistics(ir, config, parquet_stats_executor)
+
+    context = IRExecutionContext()
+    seed_parquet_file_metadata_from_stats(stats, context)
+
+    scan_node = next(node for node in stats.scan_stats if hasattr(node, "paths"))
+    assert (
+        context.parquet_file_metadata[tuple(scan_node.paths)]
+        is stats.scan_stats[scan_node].file_metadata
+    )
+
+
+def test_parquet_metadata_reads_footers(
+    tmp_path: pathlib.Path,
+    df: pl.DataFrame,
+) -> None:
+    make_partitioned_source(df, tmp_path, "parquet", n_files=1)
+    path = next(tmp_path.iterdir())
+    metadata = ParquetMetadata((str(path),), max_footer_samples=1)
+
+    assert metadata.file_metadata is not None
+    assert len(metadata.file_metadata) == 1
+    assert metadata.row_count == df.height
 
 
 def test_dataframe_round_trip() -> None:
