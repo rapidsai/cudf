@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -328,7 +328,7 @@ if version.parse(numpy.__version__) >= version.parse("2.0"):
     # NumPy 2 introduced `_core` and gives warnings for access to `core`.
     from numpy._core.multiarray import flagsobj as _numpy_flagsobj
 else:
-    from numpy.core.multiarray import (  # type: ignore[no-redef]
+    from numpy.core.multiarray import (
         flagsobj as _numpy_flagsobj,
     )
 
