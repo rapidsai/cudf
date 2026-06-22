@@ -44,9 +44,6 @@ def _register():
     lower = lowering_registry.lower
     lower_getattr_generic = lowering_registry.lower_getattr_generic
 
-    # Data model: a MaskedType is an LLVM struct {value_ty, i1}. Each
-    # parameterization (Masked(int64), Masked(float64), ...) gets its
-    # own identified struct so MLIR can keep them distinct.
     @register_model(MaskedType)
     class MaskedTypeModel(PrimitiveModel):
         def __init__(self, dmm, fe_type):
@@ -57,7 +54,6 @@ def _register():
             )
             super().__init__(dmm, fe_type, be_type)
 
-    # ``Masked(value, valid)`` -> packed struct.
     def _lower_masked_constructor(builder, target, args, kwargs):
         target_type = builder.get_numba_type(target.name)
         val_var, valid_var = args
@@ -75,11 +71,10 @@ def _register():
         builder.store_var(target, struct_val)
 
     lower(Masked, types.Any, types.boolean)(_lower_masked_constructor)
-    # Row-apply may pass a literal True/False for ``valid``, typed as
+    # Row apply may pass a literal True/False for ``valid``, typed as
     # ``Literal[bool]``; accept that shape too.
     lower(Masked, types.Any, types.Literal)(_lower_masked_constructor)
 
-    # Generic getattr for ``.value`` and ``.valid``.
     @lower_getattr_generic(MaskedType)
     def _lower_masked_getattr(context, builder, target, value, attr):
         struct_value = builder.load_var(value)

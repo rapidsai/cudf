@@ -1,19 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-"""Tests for the MLIR backend MaskedType *typing* surface (PR 2 MVP).
-
-These cover the Python-level surface registered by
-``cudf.core.udf.mlir_backend.masked_typing``: type identity / hashing,
-the ``_supported_value_type_instances`` set, and that the ``Masked``
-constructor / ``.value`` / ``.valid`` / ``pack_return`` typing templates
-exist and have the expected key. Kernel-level tests live in
-``test_masked_lowering.py``.
-
-Out of scope (deferred to subsequent PRs): NAType, ``Masked + NA``,
-binary/unary ops, datetime / timedelta value types, string value types,
-masked-to-masked unification.
-"""
-
 from __future__ import annotations
 
 import pytest

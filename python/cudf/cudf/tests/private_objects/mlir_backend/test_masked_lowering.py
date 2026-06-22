@@ -1,19 +1,5 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
-"""Kernel-level tests for the MLIR backend MaskedType *lowering* (PR 2 MVP).
-
-Each test JIT-compiles a small ``cuda.jit`` kernel that constructs a
-``Masked`` value, accesses its ``.value`` and ``.valid`` fields, and
-writes the results to host arrays for comparison. Together they cover:
-
-* the data model registration (struct ``{value_ty, i1}``);
-* ``Masked(value, valid)`` constructor lowering;
-* the generic ``.value`` / ``.valid`` getattr lowering.
-
-Out of scope (later PRs): ``pack_return``, NA, masked binary/unary/
-comparison ops, masked-to-masked unification, datetime / timedelta /
-string value types.
-"""
 
 from __future__ import annotations
 
@@ -31,8 +17,6 @@ from numba_cuda_mlir import (
 )
 
 import cudf.core.udf.mlir_backend.masked_lowering
-
-# Importing these registers typing/lowering on numba_cuda_mlir's registries.
 import cudf.core.udf.mlir_backend.masked_typing  # noqa: F401
 from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import DEPRECATED_SM_REGEX
@@ -62,8 +46,6 @@ def _launch(kernel, *args):
     cuda.synchronize()
 
 
-# Combinations of (numba type, numpy dtype, sample value) used to
-# parametrize the multi-dtype tests below.
 _DTYPE_SAMPLES = [
     (types.int8, np.int8, np.int8(7)),
     (types.int16, np.int16, np.int16(-300)),

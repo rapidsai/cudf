@@ -14,35 +14,25 @@ from numba_cuda_mlir.typing import signature as nb_signature
 
 from cudf.core.udf.api import Masked
 
-# Numba type classes that may serve as the inner value of a ``MaskedType``
-# at this layer. Subsequent PRs extend this tuple as new value types
-# (string, datetime, timedelta) come online.
 _SUPPORTED_MASKED_VALUE_TYPE_CLASSES = (
     types.Number,
     types.Boolean,
 )
 
-# Concrete instances used for the ``Masked`` constructor's ConcreteTemplate
-# cases. ``ConcreteTemplate.cases`` requires fully-qualified instances rather
-# than type classes. ``integer_domain`` / ``real_domain`` are exposed on the
-# vendored ``numba_cuda`` types module (not on ``numba_cuda_mlir.types``).
+
 _supported_value_type_instances = (
     nb_types.integer_domain | nb_types.real_domain | {nb_types.boolean}
 )
 
 
 class MaskedType(types.Type):
-    """A Numba type for ``Masked(value_type, valid: bool)`` values.
+    """Logical struct type used for propagation of nulls. Semantically carries
+    the column value and corresponding validity bit from the columns bitmask.
+    Operations over this type such as arithmetic are implemented to be sensitive
+    to the nullity of the output value.
 
-    Parameterized by ``value_type`` so that ``MaskedType(int64)`` and
-    ``MaskedType(float64)`` are distinct types that cache and dispatch
-    independently.
-
-    Unsupported inner types are wrapped in ``types.Poison`` so the
-    typing pass can still construct a ``MaskedType`` (e.g. while
-    inferring the type of an unsupported column) and surface a
-    descriptive error later when the user actually performs an
-    operation.
+    Instances are parameterized by value type mapping to the type of the source
+    column.
     """
 
     def __init__(self, value):
