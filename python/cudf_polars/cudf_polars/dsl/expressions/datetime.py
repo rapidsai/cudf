@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document TemporalFunction to remove noqa
 # ruff: noqa: D101
@@ -188,10 +188,6 @@ class TemporalFunction(Expr):
         columns = [child.evaluate(df, context=context) for child in self.children]
         if self.name in self._ADDITIONAL_COMPONENTS:
             (column,) = columns
-            # The duration is stored as an integer count of its native unit. The
-            # native unit and the requested ``total_*`` unit are always related by
-            # an exact power-of-(2,3,5) factor, so convert with integer arithmetic
-            # rather than float scaling to avoid precision loss on large values.
             source_ns = _unit_to_nanoseconds_conversion[column.obj.type().id()]
             target_ns = self._TOTAL_COMPONENT_NANOSECONDS[self.name]
             casted = plc.unary.cast(
