@@ -490,7 +490,7 @@ def test_remap_partitioning_reorder_columns_projection(streaming_engine) -> None
 
 
 def _make_ordering(context, *, key_indices=(0,), values=(100, 200), strict=False):
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     df = DataFrame.from_polars(
         pl.DataFrame({f"k{i}": list(values) for i in key_indices}), stream
     )
@@ -768,7 +768,7 @@ def test_is_strictly_sorted(spmd_engine, scheme_key_count, strict, expected) -> 
     )
 
     ctx = spmd_engine.context
-    stream = ctx.get_stream_from_pool()
+    stream = ctx.br().stream_pool.get_stream()
     keys = [OrderKey(i, asc, before) for i in range(scheme_key_count)]
     boundary_chunk = TableChunk.from_pylibcudf_table(
         DataFrame.from_polars(
