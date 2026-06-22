@@ -15,6 +15,7 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -34,9 +35,71 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <utility>
+#include <vector>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
+
+// Regression test for a reader bug where the no-page-index decode path left some
+// PageInfo fields uninitialized and sort_pages() then copied them wholesale (an
+// uninitialized device-memory read). Round-trips a multi-page, multi-row-group
+// file with string and nested-list columns through the full and chunked readers.
+// Best run additionally under `compute-sanitizer --tool initcheck`.
+TEST_F(ParquetReaderTest, SortPagesNoPageIndexFullyInitialized)
+{
+  constexpr cudf::size_type num_rows = 40000;
+
+  std::vector<int32_t> ints_h(num_rows);
+  std::vector<int64_t> longs_h(num_rows);
+  std::vector<std::string> strs_h(num_rows);
+  for (cudf::size_type i = 0; i < num_rows; ++i) {
+    ints_h[i]  = i;
+    longs_h[i] = static_cast<int64_t>(i) * 2 + 1;
+    strs_h[i]  = "row-" + std::to_string(i);
+  }
+  cudf::test::fixed_width_column_wrapper<int32_t> const ints(ints_h.begin(), ints_h.end());
+  cudf::test::fixed_width_column_wrapper<int64_t> const longs(longs_h.begin(), longs_h.end());
+  cudf::test::strings_column_wrapper const strs(strs_h.begin(), strs_h.end());
+  // nested list<list<int>> column -- exercises the nesting-related PageInfo fields
+  auto const lists = make_parquet_list_list_col<int>(0, num_rows, 2, 3, false);
+
+  auto const expected = cudf::table_view{{ints, longs, strs, lists->view()}};
+
+  std::vector<char> buffer;
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_ROWGROUP)  // no page index => slow path
+      .max_page_size_rows(4000)                                     // multiple pages per chunk
+      .row_group_size_rows(8000)                                    // multiple row groups
+      .build();
+  cudf::io::write_parquet(out_opts);
+
+  auto const in_opts = cudf::io::parquet_reader_options::builder(
+                         cudf::io::source_info{cudf::host_span<std::byte const>(
+                           reinterpret_cast<std::byte const*>(buffer.data()), buffer.size())})
+                         .build();
+
+  // full read
+  auto const result = cudf::io::read_parquet(in_opts);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, expected);
+
+  // chunked read -- drives the same preprocess/sort_pages path across subpasses
+  {
+    auto reader = cudf::io::chunked_parquet_reader(std::size_t{1} << 18, in_opts);
+    std::vector<std::unique_ptr<cudf::table>> chunks;
+    while (reader.has_next()) {
+      chunks.emplace_back(reader.read_chunk().tbl);
+    }
+    std::vector<cudf::table_view> views;
+    views.reserve(chunks.size());
+    for (auto const& chunk : chunks) {
+      views.push_back(chunk->view());
+    }
+    auto const combined = cudf::concatenate(views);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*combined, expected);
+  }
+}
 
 TEST_F(ParquetReaderTest, UserBounds)
 {

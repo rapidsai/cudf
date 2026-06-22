@@ -16,6 +16,7 @@
 
 #include <cooperative_groups.h>
 #include <cuda/iterator>
+#include <cuda/std/cstring>
 #include <cuda/std/iterator>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
@@ -576,6 +577,9 @@ void __launch_bounds__(decode_page_headers_block_size)
   warp.sync();
 
   cg::invoke_one(warp, [&]() {
+    // Shared memory is not zero-initialized; clear every PageInfo field and any
+    // padding so sort_pages() never copies indeterminate bytes.
+    cuda::std::memset(&bs->page, 0, sizeof(bs->page));
     bs->base = bs->cur      = bs->ck.compressed_data;
     bs->end                 = bs->base + bs->ck.compressed_size;
     bs->page.chunk_idx      = chunk_idx;
@@ -783,6 +787,8 @@ struct decode_page_headers_with_pgidx_fn {
     }
 
     byte_stream_s bs{};
+    // Value-initialization above does not necessarily cover padding bytes.
+    cuda::std::memset(&bs.page, 0, sizeof(bs.page));
     bs.ck   = colchunks[chunk_idx];
     bs.base = bs.cur = page_locations[page_idx];
     bs.end           = bs.ck.compressed_data + bs.ck.compressed_size;
