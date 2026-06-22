@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-GPU frontend core."""
 
@@ -193,7 +193,7 @@ class StreamingEngine(pl.GPUEngine):
         executor_options["min_device_size"] = (
             None
             if any(dm is None for dm in device_memories)
-            else min(device_memories, default=None)
+            else min(device_memories, default=None)  # type: ignore[type-var]  # (None entries excluded by prior check)
         )
 
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
 import string
@@ -369,7 +369,7 @@ def test_indicator():
     gdf = cudf.DataFrame({"x": [1, 2, 1]})
     gdf.merge(gdf, indicator=False)
 
-    with pytest.raises(NotImplementedError, match=".*indicator=False.*"):
+    with pytest.raises(NotImplementedError, match=r".*indicator=False.*"):
         gdf.merge(gdf, indicator=True)
 
 
