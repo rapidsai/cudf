@@ -5,9 +5,10 @@
 
 #include <cudf/contiguous_split.hpp>
 
+#include <cudf_streaming/streaming/table_chunk.hpp>
+
 #include <rmm/mr/per_device_resource.hpp>
 
-#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/statistics.hpp>

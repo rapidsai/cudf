@@ -215,6 +215,19 @@ TEST_F(ToArrowHostDeviceTest, EmptyTable)
   ArrowArrayViewReset(&actual);
 }
 
+TEST_F(ToArrowHostDeviceTest, Nullable)
+{
+  auto const input = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, {1, 1, 1, 1});
+  auto const tv    = cudf::table_view{{input}};
+
+  auto schema       = cudf::to_arrow_schema(tv, cudf::interop::get_table_metadata(tv));
+  auto arrow        = cudf::to_arrow_host(tv);
+  auto roundtripped = cudf::from_arrow_host(schema.get(), arrow.get());
+  auto const after  = roundtripped->view().column(0);
+
+  EXPECT_TRUE(after.nullable());
+}
+
 TEST_F(ToArrowHostDeviceTest, EmptyDictionary)
 {
   auto empty = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
