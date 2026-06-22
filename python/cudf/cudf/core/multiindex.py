@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -243,7 +243,7 @@ class MultiIndex(Index):
         self._name = None
         self.names = names
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def names(self):
         return self._names
@@ -447,7 +447,7 @@ class MultiIndex(Index):
         mi._name = name
         return mi
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def name(self):
         return self._name
@@ -646,7 +646,7 @@ class MultiIndex(Index):
             for idx, name in zip(self._levels, self.names, strict=True)  # type: ignore[arg-type]
         ]
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def ndim(self) -> int:
         """Dimension of the data. For MultiIndex ndim is always 2."""
@@ -985,7 +985,7 @@ class MultiIndex(Index):
             )
         return NotImplemented
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def size(self) -> int:
         # The size of a MultiIndex is only dependent on the number of rows.
@@ -1708,7 +1708,7 @@ class MultiIndex(Index):
             names=self.names,
         )
 
-    @cached_property  # type: ignore[explicit-override]
+    @cached_property
     @_performance_tracking
     def is_unique(self) -> bool:
         return len(self) == self.nunique(dropna=False)

@@ -12,6 +12,7 @@
 #include <cudf/wrappers/dictionary.hpp>
 
 #include <cudf_streaming/integrations/utils.hpp>
+
 #include <rapidsmpf/cuda_stream.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/buffer.hpp>
