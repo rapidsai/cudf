@@ -755,4 +755,29 @@ the engine start and exit events.
 Upon `StreamingEngine.shutdown`, all events are gathered from the workers and persisted
 on the (now closed) engine at `StreamingEngine._quent_events`.
 
+### Concepts
+
+cudf-polars and Quent's Query Engine domain have somewhat overlapping names for
+somewhat overlapping concepts. The following table relates cudf-polars' names to
+Quent's names.
+
+#### Cluster Types
+
+| cudf-polars Type | Quent Type | Notes |
+| ---------------- | ---------- | ----- |
+| `StreamingEngine`  | `Engine`     | The Quent `Engine.implementation` field includes runtime information like the version of cudf-polars. |
+| `RankActor` / `_WorkerContext` | Worker | The logical rank / worker responsible for executing the given query plan. |
+
+#### Query Types
+
+| cudf-polars Type | Quent Type | Notes |
+| ---------------- | ---------- | ----- |
+| `LazyFrame.collect` / `sink` | `Query` | A single query, executed by an `Engine` |
+| - | `QueryGroup` | A group of queries; this is a purely logical grouping, optionally controlled by the user. `polars` / `cudf-polars` don't have any concept of a query group. |
+| `IR` | `Plan` | A plan, translated from a polars expression. Traversing the `.children` of a cudf-polars `IR` node will give you the full plan. |
+| `IR` | `Operator` | A node in the query plan. |
+| - | `Port` | The input or output of some Operator. In cudf-polars, intermediate results are typically passed between IR nodes / operators as a `pylibcudf.Table` |
+| - | `Edge` | A connection between two `Port`s. |
+
+
 [Quent]: https://github.com/rapidsai/quent
