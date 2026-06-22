@@ -136,10 +136,7 @@ auto filter_row_groups_with_dictionaries(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Get all row groups from the reader
   auto const input_row_group_indices = reader.all_row_groups(options);
-
-  // Get dictionary page byte ranges and their corresponding source indices from the reader
   auto const [dict_page_byte_ranges, dict_page_source_map] =
     reader.dictionary_pages_byte_ranges(input_row_group_indices, options);
   CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
@@ -767,7 +764,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
 
   auto inputs = multifile_inputs(build_source_info(file_buffers));
 
-  // Filter - col2 == "0100" (present only in source A's dictionary)
+  // Filter: `col2 == "0100"` (present only in source A's dictionary)
   auto literal_value = cudf::string_scalar("0100", true, stream);
   auto literal       = cudf::ast::literal(literal_value);
   auto col_ref       = cudf::ast::column_name_reference("col2");
@@ -789,19 +786,6 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
   EXPECT_TRUE(dict_filtered.back().empty());
 }
 
-// Mismatched-schema regression for the dictionary-page pruning path under
-// `allow_mismatched_pq_schemas`. `get_dictionary_page_bytes` used to resolve column chunks by the
-// raw zeroth-source `schema_idx` (without `map_schema_index`), so a reordered source read the wrong
-// column chunk.
-//
-// Both sources hold the same three `create_parquet_with_stats` columns (col0: ascending, col1:
-// low-cardinality descending, col2: constant string), but source B emits them physically reordered
-// as {col2, col0, col1}. So the predicate column `col2` is schema index 3 in source A (the zeroth
-// source) yet schema index 1 in source B. The buggy raw-index lookup reads source B's schema index
-// 3 -- `col1`, a duration column -- instead of its `col2` string dictionary, garbling/throwing on
-// the type mismatch. With the fix, `col2` maps per source: source A (col2 == "0200") is pruned and
-// source B (col2 == "0100") survives. A chrono `T` is used so the collided `col1` is itself
-// dictionary-encoded, and hence actually fetched by the buggy path.
 TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollision)
 {
   using T                    = cudf::duration_ms;
@@ -810,8 +794,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   auto mr                    = cudf::get_current_device_resource_ref();
 
   // Source A: default column order/names, col2 == "0200" (pruned by the filter).
-  // Source B: same columns emitted as {col2, col0, col1}, col2 == "0100" (survives). The reorder
-  // moves `col2` to a different schema index than in source A, which is what triggers the bug.
+  // Source B: same columns emitted as {col2, col0, col1}, col2 == "0100" (survives).
   std::vector<std::vector<char>> file_buffers;
   file_buffers.reserve(num_sources);
   srand(0xd1c7);
@@ -822,7 +805,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
 
   auto inputs = multifile_inputs(build_source_info(file_buffers));
 
-  // Filter - col2 == "0100"
+  // Filter: `col2 == "0100"`
   auto literal_value = cudf::string_scalar("0100", true, stream);
   auto literal       = cudf::ast::literal(literal_value);
   auto col_ref       = cudf::ast::column_name_reference("col2");
@@ -837,9 +820,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_multifile>(
     cudf::host_span<cudf::host_span<uint8_t const> const>{inputs.footer_byte_spans}, options);
 
-  // Guard the premise of the test: the reorder must genuinely differ the per-source schemas
-  // (source A's first column is `col0`, source B's first column is `col2`), otherwise there is no
-  // schema-index mismatch for the dictionary pruning path to get wrong.
+  // Ensure the reorder genuinely differs the per-source schemas
   auto const metadatas = reader->parquet_metadatas();
   ASSERT_EQ(metadatas.size(), num_sources);
   EXPECT_EQ(metadatas.front().schema.at(1).name, "col0");
@@ -851,8 +832,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   auto const dict_filtered =
     filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
 
-  // Correct behavior: source A is pruned (col2 == "0200"), source B survives (col2 == "0100"). The
-  // buggy raw-index path instead reads source B's `col1` duration dictionary for `col2`.
+  // Source A is pruned (col2 == "0200"), source B survives (col2 == "0100").
   ASSERT_EQ(dict_filtered.size(), num_sources);
   EXPECT_TRUE(dict_filtered.front().empty()) << "Source A should be pruned (col2 == \"0200\")";
   EXPECT_EQ(dict_filtered.back(), (std::vector<cudf::size_type>{0, 1, 2, 3}))

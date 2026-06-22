@@ -476,12 +476,12 @@ aggregate_reader_metadata::dictionary_pages_byte_ranges(
   std::vector<byte_range_info> dictionary_page_bytes;
   dictionary_page_bytes.reserve(num_chunks);
 
+  // Flag to check if we have at least one valid dictionary page
+  auto have_dictionary_pages = false;
+
   // Association between each dictionary page byte range and its source
   std::vector<cudf::size_type> dictionary_page_source_map;
   dictionary_page_source_map.reserve(num_chunks);
-
-  // Flag to check if we have at least one valid dictionary page
-  auto have_dictionary_pages = false;
 
   // Cache each dictionary column's chunk offset across sources and row groups
   std::vector<std::optional<size_type>> colchunk_offsets(dictionary_col_schemas.size());
@@ -497,12 +497,12 @@ aggregate_reader_metadata::dictionary_pages_byte_ranges(
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
         auto const& row_group     = per_file_metadata[src_index].row_groups[rg_index];
         auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
-        // For all dictionary column chunks (kept inner to preserve the source-major emission order)
+        // For all dictionary column chunks
         std::for_each(
           cuda::counting_iterator<std::size_t>{0},
           cuda::counting_iterator{dictionary_col_schemas.size()},
           [&](auto const col) {
-            // Map the schema index to this source (for `allow_mismatched_pq_schemas`)
+            // Map the schema index to this source
             auto const mapped_schema_idx =
               map_schema_index(dictionary_col_schemas[col], static_cast<int>(src_index));
             auto& colchunk_offset    = colchunk_offsets[col];

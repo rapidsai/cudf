@@ -14,12 +14,14 @@
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/device_buffer.hpp>
 
 #include <cuda/iterator>
 
+#include <algorithm>
 #include <format>
 #include <random>
 #include <string>
@@ -165,6 +167,20 @@ auto create_parquet_with_stats(
   rmm::cuda_stream_view stream              = cudf::get_default_stream())
 {
   static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
+  CUDF_EXPECTS(column_names.size() == column_order.size(),
+               "Column names and column order must have the same size");
+  CUDF_EXPECTS(column_order.size() == 3, "Column order must include all three test columns");
+  CUDF_EXPECTS(std::all_of(column_order.begin(), column_order.end(), [](auto const col_idx) {
+                 return col_idx >= 0 and col_idx < 3;
+               }),
+               "Column order contains an out-of-bounds column index");
+  CUDF_EXPECTS(std::all_of(cuda::counting_iterator<cudf::size_type>{0},
+                           cuda::counting_iterator<cudf::size_type>{3},
+                           [&](auto const col_idx) {
+                             return std::count(column_order.begin(), column_order.end(), col_idx) ==
+                                    1;
+                           }),
+               "Column order must be a permutation of the three test columns");
 
   auto col0 = testdata::ascending<T>();
   auto col1 = []() {
@@ -217,9 +233,7 @@ auto create_parquet_with_stats(
   }
 
   // Reorder the base [col0, col1, col2] columns into the requested physical order, naming them in
-  // that new order. Reordering lets callers emit the same logical columns at different schema
-  // positions across sources (a "mismatched schema"), which exercises the per-source schema-index
-  // mapping in the row-group filtering paths. The defaults leave the table and names unchanged.
+  // that new order.
   std::vector<cudf::column_view> reordered_columns;
   reordered_columns.reserve(column_order.size());
   for (auto const col_idx : column_order) {
