@@ -100,7 +100,7 @@ static void bench_find_string_skewed(nvbench::state& state)
     create_skewed_string_column(num_rows, max_width, long_tail_length, short_string_pct, hit_rate);
   auto const input = cudf::strings_column_view(col->view());
 
-  auto target = cudf::string_scalar("0987 5W43");
+  auto target = cudf::string_scalar(skewed_string_target_substring);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
   auto const data_size = col->alloc_size();

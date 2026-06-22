@@ -7,10 +7,15 @@
 
 #include <cudf/column/column.hpp>
 
+#include <string_view>
+
+/** @brief Target substring embedded in skewed string benchmark data. */
+extern std::string_view const skewed_string_target_substring;
+
 /**
  * @brief Deterministically generates a string column with a skewed length distribution.
  *
- * The column is built from 10 template strings of length 256.
+ * The column is built from 10 template strings of length 256 bytes.
  *
  * Rows are then assigned one of two lengths:
  * - `short_string_pct` percent of rows are cropped to the prefix `str[0:max_width]`

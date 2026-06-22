@@ -21,16 +21,19 @@
 
 #include <array>
 #include <string>
+#include <string_view>
 #include <vector>
+
+std::string_view const skewed_string_target_substring{"0987 5W43"};
 
 namespace {
 /**
  * @brief Template strings for skewed string benchmarks.
  *
- * Based on the strings used by `create_string_column`, with the first entry ending in the
- * target substring `0987 5W43`.
+ * Based on the strings used by `create_string_column`, with the first entry ending in
+ * `skewed_string_target_substring`.
  */
-constexpr std::array<std::string_view, 10> template_strings = {
+constexpr auto template_strings = std::to_array<std::string_view>({
   "123 abc 4567890 DEFGHI 0987 5W43123 abc 4567890 DEFGHI 0987 5W43123 abc 4567890 DEFGHI 0987 "
   "5W43123 abc 4567890 DEFGHI 0987 5W43123 abc 4567890 DEFGHI 0987 5W43123 abc 4567890 DEFGHI 0987 "
   "5W43123 abc 4567890 DEFGHI 0987 5W43123 abc 4567890 DEFGHI 0987 5W43",  // matches both patterns;
@@ -61,19 +64,18 @@ constexpr std::array<std::string_view, 10> template_strings = {
   "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
   "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
   "1111111111111111111111111111111111111111111111111111111111111111",
-};
+});
 
 /**
  * @brief Repeat a string until it reaches the given width, then take `str[0:width]`.
  */
 std::string repeat_to_width(std::string_view str, std::size_t width)
 {
-  std::string const original(str);
   std::string result;
+  result.reserve(width);
   while (result.size() < width) {
-    result += original;
+    result += str.substr(0, std::min(width - result.size(), str.size()));
   }
-  result.resize(width);
   return result;
 }
 
@@ -106,11 +108,11 @@ std::unique_ptr<cudf::column> gather_with_hit_rate(cudf::column_view const& temp
   auto gather_table =
     create_random_table({cudf::type_id::INT32}, row_count{num_rows}, gather_profile);
 
+  // Added num_matches > 0 to guard against division by zero
   if (num_matches > 0) {
-    auto const scatter_data = cudf::sequence(num_matches,
-                                             cudf::numeric_scalar<int32_t>(0),
-                                             cudf::numeric_scalar<int32_t>(num_rows / num_matches));
     auto const zero_scalar  = cudf::numeric_scalar<int32_t>(0);
+    auto const scatter_data = cudf::sequence(
+      num_matches, zero_scalar, cudf::numeric_scalar<int32_t>(num_rows / num_matches));
     auto table   = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
     gather_table = std::move(table);
   }
@@ -124,18 +126,19 @@ std::unique_ptr<cudf::column> gather_with_hit_rate(cudf::column_view const& temp
  * @brief Build a mask indicating which rows should use the cropped short string length.
  */
 std::unique_ptr<cudf::column> make_short_row_mask(cudf::size_type num_rows,
-                                                  cudf::size_type num_short)
+                                                  cudf::size_type short_string_pct)
 {
+  auto const num_short =
+    static_cast<cudf::size_type>((static_cast<int64_t>(num_rows) * short_string_pct) / 100);
   auto type_table = create_random_table({cudf::type_id::INT32},
                                         row_count{num_rows},
                                         data_profile_builder().no_validity().distribution(
                                           cudf::type_id::INT32, distribution_id::UNIFORM, 1, 1));
 
   if (num_short > 0) {
-    auto const scatter_data = cudf::sequence(num_short,
-                                             cudf::numeric_scalar<int32_t>(0),
-                                             cudf::numeric_scalar<int32_t>(num_rows / num_short));
-    auto const zero_scalar  = cudf::numeric_scalar<int32_t>(0);
+    auto const zero_scalar = cudf::numeric_scalar<int32_t>(0);
+    auto const scatter_data =
+      cudf::sequence(num_short, zero_scalar, cudf::numeric_scalar<int32_t>(num_rows / num_short));
     type_table = cudf::scatter({zero_scalar}, scatter_data->view(), type_table->view());
   }
 
@@ -162,11 +165,9 @@ std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_ro
   CUDF_EXPECTS(long_tail_length >= max_width,
                "long_tail_length must be greater than or equal to max_width");
 
-  auto const templates = make_long_template_column(long_tail_length);
-  auto const full_col  = gather_with_hit_rate(templates->view(), num_rows, hit_rate);
-  auto const num_short =
-    static_cast<cudf::size_type>((static_cast<int64_t>(num_rows) * short_string_pct) / 100);
-  auto const is_short_mask = make_short_row_mask(num_rows, num_short);
+  auto const templates     = make_long_template_column(long_tail_length);
+  auto const full_col      = gather_with_hit_rate(templates->view(), num_rows, hit_rate);
+  auto const is_short_mask = make_short_row_mask(num_rows, short_string_pct);
 
   auto const starts =
     cudf::make_column_from_scalar(cudf::numeric_scalar<cudf::size_type>(0), num_rows);
