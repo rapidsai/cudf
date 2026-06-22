@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,7 +7,6 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/dictionary/search.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 
 struct DictionarySearchTest : public cudf::test::BaseFixture {};
 
