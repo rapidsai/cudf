@@ -481,7 +481,7 @@ def make_rapidsmpf_read_parquet_node(
 
     # Build ParquetReaderOptions
     try:
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         parquet_reader_options = (
             plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
             .decimal_width(plc.TypeId.DECIMAL128)

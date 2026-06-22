@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Shuffle logic for the RapidsMPF streaming runtime."""
 
@@ -129,7 +129,7 @@ class ShuffleManager:
                 ``chunk``.
             """
             with stream_ordered_after(
-                self._manager.context.get_stream_from_pool,
+                self._manager.context.br().stream_pool.get_stream,
                 upstreams=(chunk.stream, partition_map.stream),
             ) as stream:
                 partition_map_col = partition_map.table_view().columns()[0]
