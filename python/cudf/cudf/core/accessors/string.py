@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -3851,7 +3851,7 @@ class StringMethods(BaseAccessor):
             # mypy can't deduce that the return value of
             # StringColumn.__eq__ is ColumnBase because the binops are
             # dynamically added by a mixin class
-            cast(ColumnBase, self._column == "").fillna(False)
+            cast("ColumnBase", self._column == "").fillna(False)
         )
 
     def isspace(self) -> Series | Index:
@@ -4886,7 +4886,7 @@ class StringMethods(BaseAccessor):
         if isinstance(result, cudf.Series) and not as_list:
             # before exploding, removes those lists which have 0 length
             result = result[result.list.len() > 0]
-            return result.explode()  # type: ignore[union-attr]
+            return result.explode()
         return result
 
     def hash_character_ngrams(

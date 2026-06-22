@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-GPU frontend core."""
 
@@ -197,7 +197,7 @@ class StreamingEngine(pl.GPUEngine):
         executor_options["min_device_size"] = (
             None
             if any(dm is None for dm in device_memories)
-            else min(device_memories, default=None)
+            else min(device_memories, default=None)  # type: ignore[type-var]  # (None entries excluded by prior check)
         )
 
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
@@ -693,8 +693,9 @@ def evaluate_on_rank(
         log_query_plan(ir, config_options)
 
     ir_context = IRExecutionContext(
-        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+        py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )
+
     if config_options.parquet_options.prefetch_file_metadata:
         seed_parquet_file_metadata_from_stats(stats, ir_context)
         prefetch_parquet_file_metadata_for_ir(

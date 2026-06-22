@@ -1,16 +1,19 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import json
 import pickle
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import pytest
 
 import polars as pl
 
+import pylibcudf as plc
+
+import cudf_polars.streaming.io as streaming_io
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import (
@@ -126,6 +129,72 @@ def test_base_stats_parquet(
         assert source.row_count is None
         assert source.column_storage_size("x") is None
         assert source.column_storage_size("y") is None
+
+
+def test_parquet_source_info_uses_decoded_dtype_floor(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeDataType:
+        def __init__(self, type_id: plc.TypeId) -> None:
+            self.plc_type = plc.DataType(type_id)
+
+        def id(self) -> plc.TypeId:
+            return self.plc_type.id()
+
+    class FakeParquetMetadata:
+        row_count = 2_000
+        mean_size_per_file: ClassVar[dict[str, int]] = {
+            "i64": 1,
+            "dec32": 1,
+            "s": 1,
+            "already_large": 20_000,
+        }
+        num_row_groups_per_file = (1, 1)
+
+        def __init__(self, paths: tuple[str, ...], max_footer_samples: int) -> None:
+            self.paths = paths
+            self.max_footer_samples = max_footer_samples
+
+    sampled_cols: list[str] = []
+
+    def fake_sample_rg_sizes(
+        _metadata: object,
+        target_cols: list[str],
+        _max_row_group_samples: int,
+    ) -> dict[str, int]:
+        sampled_cols.extend(target_cols)
+        return {}
+
+    monkeypatch.setattr(streaming_io, "ParquetMetadata", FakeParquetMetadata)
+    monkeypatch.setattr(streaming_io, "_sample_rg_sizes", fake_sample_rg_sizes)
+
+    source = ParquetSourceInfo.from_paths(
+        ("a.parquet", "b.parquet"),
+        frozenset(
+            {
+                "i64",
+                "dec32",
+                "s",
+                "already_large",
+            }
+        ),
+        (
+            ("i64", DataType(pl.Int64())),
+            ("dec32", cast("DataType", FakeDataType(plc.TypeId.DECIMAL32))),
+            ("s", DataType(pl.String())),
+            ("already_large", DataType(pl.Int64())),
+        ),
+        max_footer_samples=2,
+        max_row_group_samples=1,
+    )
+
+    rows_per_file = 1_000
+    nullmask = 125
+    assert source.column_storage_size("i64") == rows_per_file * 8 + nullmask
+    assert source.column_storage_size("dec32") == rows_per_file * 4 + nullmask
+    assert source.column_storage_size("s") == (rows_per_file + 1) * 4 + nullmask
+    assert source.column_storage_size("already_large") == 20_000
+    assert sampled_cols == ["s"]
 
 
 def test_dataframescan_stats_pickle(

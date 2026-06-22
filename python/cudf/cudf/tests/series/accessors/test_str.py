@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import json
@@ -393,7 +393,7 @@ def test_str_join_lists_error():
     sr = cudf.Series([["a", "a"], ["b"], ["c"]])
 
     with pytest.raises(
-        ValueError, match="sep_na_rep cannot be defined when `sep` is scalar."
+        ValueError, match=r"sep_na_rep cannot be defined when `sep` is scalar."
     ):
         sr.str.join(sep="-", sep_na_rep="-")
 
