@@ -135,6 +135,12 @@ Examples:
 
 Determine whether `--gpu` is needed: check the `node_type` field in the workflow YAML or job metadata — `gpu-*` values indicate a GPU is required.
 
+The script automatically detects `RAPIDS_SHA` (the PR's head commit) using `gh pr view`.
+This is required by CI helper scripts inside the container to locate build artifacts.
+If auto-detection fails (e.g., `gh` is not authenticated), set it manually:
+```bash
+export RAPIDS_SHA=$(gh pr view <pr-number> --repo rapidsai/cudf --json commits --jq '.commits[-1].oid')
+```
 The script launches a detached container, runs the CI script, and leaves the container running for inspection.
 After `--timeout` minutes of idle (default: 30), the container is automatically removed.
 ```bash
@@ -171,3 +177,4 @@ After `run.sh` completes, analyze the local output against the CI outcome:
 | Interactive GitHub auth prompt inside container | Ensure `GH_TOKEN` is set — `run.sh` passes it through automatically via `gh auth token` |
 | GPU driver mismatch causing test differences | Note driver version from CI log; compare with local `nvidia-smi` |
 | Log download returns empty or 403 | Verify `gh auth status` has `repo` scope; re-auth with `gh auth login` if needed |
+| `RAPIDS_SHA` is unbound | The script auto-detects this from the PR via `gh`. If auto-detection fails, set `RAPIDS_SHA=<commit>` in your environment before running. |

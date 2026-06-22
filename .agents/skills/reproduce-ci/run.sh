@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # Reproduce a cudf CI job locally by launching the same container and script
@@ -87,6 +87,19 @@ if [[ -z "$GH_TOKEN" ]]; then
     echo "Artifact downloads may fail or prompt interactively."
 fi
 
+# Determine RAPIDS_SHA from the PR's head commit
+RAPIDS_SHA="${RAPIDS_SHA:-}"
+if [[ -z "$RAPIDS_SHA" ]]; then
+    RAPIDS_SHA=$(gh pr view "$PR_NUMBER" --repo rapidsai/cudf --json commits --jq '.commits[-1].oid' 2>/dev/null || true)
+    if [[ -z "$RAPIDS_SHA" ]]; then
+        echo "Warning: Could not determine RAPIDS_SHA for PR #${PR_NUMBER}."
+        echo "Artifact downloads inside the container may fail."
+        echo "Set RAPIDS_SHA manually or ensure 'gh' can access the PR."
+    else
+        echo "Detected RAPIDS_SHA=${RAPIDS_SHA} from PR #${PR_NUMBER}"
+    fi
+fi
+
 # Remove existing container with same name if present
 DOCKER_ARGS=(
     --pull=always
@@ -101,6 +114,10 @@ DOCKER_ARGS=(
 
 if [[ -n "$GH_TOKEN" ]]; then
     DOCKER_ARGS+=(--env "GH_TOKEN=${GH_TOKEN}")
+fi
+
+if [[ -n "$RAPIDS_SHA" ]]; then
+    DOCKER_ARGS+=(--env "RAPIDS_SHA=${RAPIDS_SHA}")
 fi
 
 if [[ "$GPU_NEEDED" == "yes" ]]; then
@@ -140,6 +157,7 @@ fi
 
 echo "=== Reproducing CI job ==="
 echo "  PR:        #${PR_NUMBER}"
+echo "  SHA:       ${RAPIDS_SHA:-unknown}"
 echo "  Image:     ${CONTAINER_IMAGE}"
 echo "  Script:    ${CI_SCRIPT}"
 echo "  GPU:       ${GPU_NEEDED}"
