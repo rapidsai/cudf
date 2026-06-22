@@ -131,16 +131,6 @@ class TemporalFunction(Expr):
         Name.TotalMicroseconds: 1_000,
         Name.TotalNanoseconds: 1,
     }
-    _ADDITIONAL_COMPONENTS: ClassVar[list[Name]] = [
-        Name.TotalDays,
-        Name.TotalSeconds,
-        Name.TotalMicroseconds,
-        Name.TotalMilliseconds,
-        Name.TotalNanoseconds,
-        Name.TotalHours,
-        Name.TotalMinutes,
-    ]
-
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
@@ -150,7 +140,7 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
-        *_ADDITIONAL_COMPONENTS,
+        *_TOTAL_COMPONENT_NANOSECONDS.keys(),
         Name.CastTimeUnit,
         Name.Truncate,
     }
@@ -186,13 +176,12 @@ class TemporalFunction(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
-        if self.name in self._ADDITIONAL_COMPONENTS:
+        if self.name in self._TOTAL_COMPONENT_NANOSECONDS:
             (column,) = columns
             source_ns = _unit_to_nanoseconds_conversion[column.obj.type().id()]
             target_ns = self._TOTAL_COMPONENT_NANOSECONDS[self.name]
-            casted = plc.unary.cast(
-                column.obj, plc.DataType(plc.TypeId.INT64), stream=df.stream
-            )
+            # Reinterpret the duration's integer tick count as int64.
+            casted = column.astype(self.dtype, stream=df.stream)
             if source_ns >= target_ns:
                 # Coarser (or equal) storage unit: exact integer multiply.
                 op = plc.binaryop.BinaryOperator.MUL
@@ -202,8 +191,11 @@ class TemporalFunction(Expr):
                 # truncates toward zero for signed integer division.
                 op = plc.binaryop.BinaryOperator.DIV
                 factor = target_ns // source_ns
+            if factor == 1:
+                # Storage unit already matches the requested unit.
+                return casted
             result = plc.binaryop.binary_operation(
-                casted,
+                casted.obj,
                 plc.Scalar.from_py(
                     factor, plc.DataType(plc.TypeId.INT64), stream=df.stream
                 ),
