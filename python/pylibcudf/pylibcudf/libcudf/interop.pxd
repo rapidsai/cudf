@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int32_t
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -32,7 +32,6 @@ cdef extern from "cudf/interop.hpp" nogil:
     cdef struct ArrowArrayStream:
         void (*release)(ArrowArrayStream*) noexcept
 
-    # https://arrow.apache.org/docs/format/CDeviceDataInterface.html#structure-definitions
     cdef struct ArrowDeviceArray:
         ArrowArray array
 
