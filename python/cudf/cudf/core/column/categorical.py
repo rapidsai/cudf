@@ -98,7 +98,7 @@ class CategoricalColumn(ColumnBase):
         return encoded in self.codes
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         # Convert values to categorical dtype like self
         return self, as_column(values, dtype=self.dtype)
@@ -452,7 +452,7 @@ class CategoricalColumn(ColumnBase):
             )
             cur_categories = replaced.categories
             new_categories = cur_categories.apply_boolean_mask(
-                cur_categories.isin(drop_values).unary_operator("not")  # type: ignore[arg-type]
+                cur_categories.isin(drop_values).unary_operator("not")
             )
             replaced = replaced._set_categories(new_categories)
 
