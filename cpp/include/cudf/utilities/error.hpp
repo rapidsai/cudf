@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -134,8 +134,10 @@ struct data_type_error : std::invalid_argument {
  * @param ... This macro accepts either two or three arguments:
  *   - The first argument must be an expression that evaluates to true or
  *     false, and is the condition being checked.
- *   - The second argument is a string literal used to construct the `what` of
- *     the exception.
+ *   - The second argument is an expression that produces the error message used to construct the
+ *     `what` of the exception. This can be a string literal or a dynamic expression (e.g.,
+ *     `std::to_string(x) + " is invalid"`). The expression is only evaluated when the condition
+ *     fails.
  *   - When given, the third argument is the exception to be thrown. When not
  *     specified, defaults to `cudf::logic_error`.
  * @throw `_exception_type` if the condition evaluates to 0 (false).
@@ -148,12 +150,13 @@ struct data_type_error : std::invalid_argument {
 
 #define GET_CUDF_EXPECTS_MACRO(_1, _2, _3, NAME, ...) NAME
 
-#define CUDF_EXPECTS_3(_condition, _reason, _exception_type)                    \
-  do {                                                                          \
-    static_assert(std::is_base_of_v<std::exception, _exception_type>);          \
-    (_condition) ? static_cast<void>(0)                                         \
-                 : throw _exception_type /*NOLINT(bugprone-macro-parentheses)*/ \
-      {"CUDF failure at: " __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _reason}; \
+#define CUDF_EXPECTS_3(_condition, _reason, _exception_type)           \
+  do {                                                                 \
+    static_assert(std::is_base_of_v<std::exception, _exception_type>); \
+    if (!(_condition)) {                                               \
+      cudf::detail::cudf_fail<_exception_type>(                        \
+        [&]() -> std::string { return _reason; }, __LINE__, __FILE__); \
+    }                                                                  \
   } while (0)
 
 #define CUDF_EXPECTS_2(_condition, _reason) CUDF_EXPECTS_3(_condition, _reason, cudf::logic_error)
@@ -173,8 +176,9 @@ struct data_type_error : std::invalid_argument {
  * ```
  *
  * @param ... This macro accepts either one or two arguments:
- *   - The first argument is a string literal used to construct the `what` of
- *     the exception.
+ *   - The first argument is an expression that produces the error message used to construct the
+ *     `what` of the exception. This can be a string literal or a dynamic expression (e.g.,
+ *     `std::to_string(x) + " is invalid"`).
  *   - When given, the second argument is the exception to be thrown. When not
  *     specified, defaults to `cudf::logic_error`.
  * @throw `_exception_type` if the condition evaluates to 0 (false).
@@ -187,9 +191,9 @@ struct data_type_error : std::invalid_argument {
 
 #define GET_CUDF_FAIL_MACRO(_1, _2, NAME, ...) NAME
 
-#define CUDF_FAIL_2(_what, _exception_type)      \
-  /*NOLINTNEXTLINE(bugprone-macro-parentheses)*/ \
-  throw _exception_type { "CUDF failure at:" __FILE__ ":" CUDF_STRINGIFY(__LINE__) ": " _what }
+#define CUDF_FAIL_2(_what, _exception_type) \
+  cudf::detail::cudf_fail<_exception_type>( \
+    [&]() -> std::string { return _what; }, __LINE__, __FILE__)
 
 #define CUDF_FAIL_1(_what) CUDF_FAIL_2(_what, cudf::logic_error)
 
@@ -214,6 +218,16 @@ inline void throw_cuda_error(cudaError_t error, char const* file, unsigned int l
   } else {
     throw cuda_error{msg, error};
   }
+}
+// @endcond
+
+// @cond
+template <typename Exception, typename MsgFunc>
+[[noreturn]] void cudf_fail(MsgFunc&& msg_func, int line_number, char const* filename)
+{
+  std::string const msg = std::forward<MsgFunc>(msg_func)();
+  throw Exception{std::string{"CUDF failure at: "} + filename + ":" + std::to_string(line_number) +
+                  ": " + (msg.empty() ? "(no message)" : msg)};
 }
 // @endcond
 }  // namespace detail

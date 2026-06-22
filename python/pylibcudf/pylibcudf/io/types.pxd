@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport uint8_t, int32_t
 
@@ -29,7 +29,6 @@ from pylibcudf.libcudf.utilities.span cimport host_span
 
 from pylibcudf.table cimport Table
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 cdef class PartitionInfo:
@@ -86,7 +85,7 @@ cdef class TableWithMetadata:
 
     @staticmethod
     cdef TableWithMetadata from_libcudf(
-        table_with_metadata& tbl, Stream stream, DeviceMemoryResource mr
+        table_with_metadata& tbl, object stream, DeviceMemoryResource mr
     )
 
 cdef class SourceInfo:

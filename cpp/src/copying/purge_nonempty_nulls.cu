@@ -10,7 +10,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 namespace cudf {
 namespace detail {
@@ -43,7 +43,7 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
     return d_input.is_null_nocheck(row_idx) && (offsets[row_idx] != offsets[row_idx + 1]);
   };
 
-  auto const row_begin = thrust::counting_iterator<cudf::size_type>(0);
+  auto const row_begin = cuda::counting_iterator<cudf::size_type>{0};
   auto const row_end   = row_begin + input.size();
   return cudf::detail::count_if(row_begin, row_end, is_dirty_row, stream) > 0;
 }
@@ -85,8 +85,8 @@ std::unique_ptr<column> purge_nonempty_nulls(column_view const& input,
 
   // Implement via identity gather.
   auto gathered_table = cudf::detail::gather(table_view{{input}},
-                                             thrust::make_counting_iterator(0),
-                                             thrust::make_counting_iterator(input.size()),
+                                             cuda::counting_iterator<cudf::size_type>{0},
+                                             cuda::counting_iterator{input.size()},
                                              out_of_bounds_policy::DONT_CHECK,
                                              stream,
                                              mr);

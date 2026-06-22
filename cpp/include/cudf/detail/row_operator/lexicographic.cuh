@@ -588,15 +588,15 @@ class device_row_comparator {
   }
 
  private:
-  table_device_view const _lhs;
-  table_device_view const _rhs;
-  device_span<detail::dremel_device_view const> const _l_dremel;
-  device_span<detail::dremel_device_view const> const _r_dremel;
-  Nullate const _check_nulls;
-  cuda::std::optional<device_span<int const>> const _depth;
-  cuda::std::optional<device_span<order const>> const _column_order;
-  cuda::std::optional<device_span<null_order const>> const _null_precedence;
-  PhysicalElementComparator const _comparator;
+  table_device_view _lhs;
+  table_device_view _rhs;
+  device_span<detail::dremel_device_view const> _l_dremel;
+  device_span<detail::dremel_device_view const> _r_dremel;
+  Nullate _check_nulls;
+  cuda::std::optional<device_span<int const>> _depth;
+  cuda::std::optional<device_span<order const>> _column_order;
+  cuda::std::optional<device_span<null_order const>> _null_precedence;
+  PhysicalElementComparator _comparator;
 };
 
 /**
@@ -624,7 +624,7 @@ struct weak_ordering_comparator_impl {
     cudf::detail::weak_ordering const result = comparator(lhs_index, rhs_index);
     return ((result == values) || ...);
   }
-  Comparator const comparator;
+  Comparator comparator;
 };
 
 /**
@@ -1037,7 +1037,7 @@ struct strong_index_comparator_adapter {
     return cudf::detail::weak_ordering::EQUIVALENT;
   }
 
-  Comparator const comparator;
+  Comparator comparator;
 };
 // @endcond
 

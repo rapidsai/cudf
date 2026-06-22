@@ -18,6 +18,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuco/bloom_filter.cuh>
 #include <cuco/bucket_storage.cuh>
 #include <cuco/extent.cuh>
 #include <cuco/hash_functions.cuh>
@@ -86,6 +87,32 @@ struct masked_key_fn {
   Hasher _hasher;
 };
 
+template <typename Hasher>
+struct masked_hash_value_fn {
+  CUDF_HOST_DEVICE constexpr masked_hash_value_fn(Hasher const& hasher) : _hasher{hasher} {}
+
+  __device__ __forceinline__ hash_value_type operator()(size_type i) const noexcept
+  {
+    return unset_mark(_hasher(i));
+  }
+
+ private:
+  Hasher _hasher;
+};
+
+template <typename IndexType>
+struct hash_pair_fn {
+  CUDF_HOST_DEVICE constexpr hash_pair_fn(hash_value_type const* hashes) : _hashes{hashes} {}
+
+  __device__ __forceinline__ auto operator()(size_type i) const noexcept
+  {
+    return cuco::pair{_hashes[i], IndexType{i}};
+  }
+
+ private:
+  hash_value_type const* _hashes;
+};
+
 template <typename Equal>
 struct masked_comparator_fn {
   masked_comparator_fn(Equal const& d_equal) : _d_equal{d_equal} {}
@@ -99,11 +126,11 @@ struct masked_comparator_fn {
   }
 
   __device__ constexpr auto operator()(
-    cuco::pair<hash_value_type, rhs_index_type> const& probe,
-    cuco::pair<hash_value_type, lhs_index_type> const& build) const noexcept
+    cuco::pair<hash_value_type, rhs_index_type> const& right,
+    cuco::pair<hash_value_type, lhs_index_type> const& left) const noexcept
   {
-    if (unset_mark(probe.first) != unset_mark(build.first)) { return false; }
-    return _d_equal(build.second, probe.second);
+    if (unset_mark(right.first) != unset_mark(left.first)) { return false; }
+    return _d_equal(left.second, right.second);
   }
 
  private:
@@ -121,12 +148,31 @@ struct insertion_adapter {
   }
 };
 
-using masked_probing_scheme = cuco::double_hashing<1, masked_hash_fn, secondary_hash_fn>;
+static constexpr uint32_t mark_join_cg_size{1};
+static constexpr uint32_t mark_join_bucket_size{1};
+
+using masked_probing_scheme =
+  cuco::double_hashing<mark_join_cg_size, masked_hash_fn, secondary_hash_fn>;
 
 using mark_key_type = cuco::pair<hash_value_type, lhs_index_type>;
 
-using mark_storage_type = cuco::
-  bucket_storage<mark_key_type, 1, cuco::extent<std::size_t>, rmm::mr::polymorphic_allocator<char>>;
+using mark_storage_type = cuco::bucket_storage<mark_key_type,
+                                               mark_join_bucket_size,
+                                               cuco::extent<std::size_t>,
+                                               rmm::mr::polymorphic_allocator<char>>;
+
+using storage_ref_type =
+  cuco::bucket_storage_ref<mark_key_type, mark_join_bucket_size, cuco::extent<std::size_t>>;
+using right_key_type = cuco::pair<hash_value_type, rhs_index_type>;
+
+using bloom_filter_policy_type =
+  cuco::default_filter_policy<cuco::detail::identity_hash<hash_value_type>, hash_value_type, 2U>;
+using bloom_filter_allocator_type = rmm::mr::polymorphic_allocator<cuda::std::byte>;
+using bloom_filter_type           = cuco::bloom_filter<hash_value_type,
+                                                       cuco::extent<std::size_t>,
+                                                       cuda::thread_scope_device,
+                                                       bloom_filter_policy_type,
+                                                       bloom_filter_allocator_type>;
 
 static constexpr auto masked_empty_sentinel =
   cuco::empty_key{cuco::pair{unset_mark(cuda::std::numeric_limits<hash_value_type>::max()),
@@ -134,16 +180,17 @@ static constexpr auto masked_empty_sentinel =
 
 class mark_join {
  public:
-  mark_join(cudf::table_view const& build,
+  mark_join(cudf::table_view const& left,
             cudf::null_equality compare_nulls,
             double load_factor,
+            cudf::join_prefilter prefilter,
             rmm::cuda_stream_view stream);
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    cudf::table_view const& right, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> anti_join(
-    cudf::table_view const& probe, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+    cudf::table_view const& right, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
 
  private:
   using primitive_row_hasher =
@@ -151,26 +198,44 @@ class mark_join {
   using primitive_row_comparator = cudf::detail::row::primitive::row_equality_comparator;
   using row_hasher =
     cudf::detail::row::hash::device_row_hasher<cudf::hashing::detail::default_hash, nullate::YES>;
-
   bool _has_nested_columns;
-  cudf::table_view _build;
+  cudf::table_view _left;
   cudf::null_equality _nulls_equal;
-  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> _preprocessed_build;
+  cudf::join_prefilter _prefilter;
+  std::shared_ptr<cudf::detail::row::equality::preprocessed_table> _preprocessed_left;
   mark_storage_type _bucket_storage;
-  cudf::size_type _num_build_inserted{0};
+  std::unique_ptr<bloom_filter_type> _bloom_filter;
+  cudf::size_type _num_left_inserted{0};
 
-  [[nodiscard]] cudf::size_type num_build_inserted() const { return _num_build_inserted; }
+  [[nodiscard]] cudf::size_type num_left_inserted() const { return _num_left_inserted; }
 
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> semi_anti_join(
-    cudf::table_view const& probe,
+    cudf::table_view const& right,
     join_kind kind,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
   template <typename Comparator>
+  cudf::size_type mark_probe_without_prefilter(storage_ref_type storage_ref,
+                                               Comparator comparator,
+                                               right_key_type const* right_rows,
+                                               cudf::size_type num_right_rows,
+                                               bitmask_type const* right_row_bitmask,
+                                               rmm::cuda_stream_view stream);
+
+  template <typename Comparator>
+  cudf::size_type mark_probe_with_prefilter(storage_ref_type storage_ref,
+                                            Comparator comparator,
+                                            right_key_type const* right_rows,
+                                            cudf::size_type num_right_rows,
+                                            bitmask_type const* right_row_bitmask,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::device_async_resource_ref mr);
+
+  template <typename Comparator>
   std::unique_ptr<rmm::device_uvector<cudf::size_type>> mark_probe_and_retrieve(
-    cudf::table_view const& probe,
-    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_probe,
+    cudf::table_view const& right,
+    std::shared_ptr<cudf::detail::row::equality::preprocessed_table> preprocessed_right,
     join_kind kind,
     Comparator comparator,
     rmm::cuda_stream_view stream,

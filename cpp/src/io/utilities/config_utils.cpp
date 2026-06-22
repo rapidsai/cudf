@@ -1,11 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "getenv_or.hpp"
-
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/io/config_utils.hpp>
 #include <cudf/utilities/error.hpp>
 
@@ -24,12 +23,12 @@ void set_up_kvikio()
     // Workaround for https://github.com/rapidsai/cudf/issues/14140, where cuFileDriverOpen errors
     // out if no CUDA calls have been made before it. This is a no-op if the CUDA context is already
     // initialized.
-    cudaFree(nullptr);
+    CUDF_CUDA_TRY(cudaFree(nullptr));
 
     auto const compat_mode = kvikio::getenv_or("KVIKIO_COMPAT_MODE", kvikio::CompatMode::ON);
     kvikio::defaults::set_compat_mode(compat_mode);
 
-    auto const nthreads = getenv_or<unsigned int>("KVIKIO_NTHREADS", 4u);
+    auto const nthreads = cudf::detail::getenv_or<unsigned int>("KVIKIO_NTHREADS", 4u);
     kvikio::defaults::set_thread_pool_nthreads(nthreads);
   });
 }
@@ -49,7 +48,7 @@ enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
  */
 [[nodiscard]] usage_policy get_env_policy()
 {
-  auto const env_val = getenv_or<std::string>("LIBCUDF_NVCOMP_POLICY", "STABLE");
+  auto const env_val = cudf::detail::getenv_or<std::string>("LIBCUDF_NVCOMP_POLICY", "STABLE");
   if (env_val == "OFF") return usage_policy::OFF;
   if (env_val == "STABLE") return usage_policy::STABLE;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;

@@ -214,7 +214,7 @@ class csv_reader_options {
     }
 
     // Expand the size based on the number of columns, if available
-    return base_padding + num_columns * column_bytes;
+    return base_padding + static_cast<size_t>(num_columns) * column_bytes;
   }
 
   /**

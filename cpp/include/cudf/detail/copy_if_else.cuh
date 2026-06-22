@@ -19,7 +19,6 @@
 
 namespace cudf {
 namespace detail {
-namespace {  // anonymous
 
 template <size_type block_size,
           typename T,
@@ -91,8 +90,6 @@ __launch_bounds__(block_size) CUDF_KERNEL
   }
 }
 
-}  // anonymous namespace
-
 /**
  * @brief Returns a new column, where each element is selected from either of two input ranges based
  * on a filter
@@ -161,7 +158,8 @@ std::unique_ptr<column> copy_if_else(bool nullable,
 
   // if we have validity in the output
   if (nullable) {
-    cudf::detail::device_scalar<size_type> valid_count{0, stream};
+    cudf::detail::device_scalar<size_type> valid_count{
+      0, stream, cudf::get_current_device_resource_ref()};
 
     // call the kernel
     copy_if_else_kernel<block_size, Element, LeftIter, RightIter, FilterFn, true>

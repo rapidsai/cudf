@@ -15,7 +15,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
 
@@ -98,15 +98,15 @@ TEST_F(CompoundColumnTest, ChildrenLevel1)
   {
     auto column = cudf::column_device_view::create(parent->view());
     EXPECT_TRUE(thrust::any_of(rmm::exec_policy_nosync(cudf::get_default_stream()),
-                               thrust::make_counting_iterator<int32_t>(0),
-                               thrust::make_counting_iterator<int32_t>(100),
+                               cuda::counting_iterator<int32_t>{0},
+                               cuda::counting_iterator<int32_t>{100},
                                checker_for_level1<cudf::column_device_view>{*column}));
   }
   {
     auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
     EXPECT_TRUE(thrust::any_of(rmm::exec_policy_nosync(cudf::get_default_stream()),
-                               thrust::make_counting_iterator<int32_t>(0),
-                               thrust::make_counting_iterator<int32_t>(100),
+                               cuda::counting_iterator<int32_t>{0},
+                               cuda::counting_iterator<int32_t>{100},
                                checker_for_level1<cudf::mutable_column_device_view>{*column}));
   }
 }
@@ -196,15 +196,15 @@ TEST_F(CompoundColumnTest, ChildrenLevel2)
   {
     auto column = cudf::column_device_view::create(parent->view());
     EXPECT_TRUE(thrust::any_of(rmm::exec_policy_nosync(cudf::get_default_stream()),
-                               thrust::make_counting_iterator<int32_t>(0),
-                               thrust::make_counting_iterator<int32_t>(100),
+                               cuda::counting_iterator<int32_t>{0},
+                               cuda::counting_iterator<int32_t>{100},
                                checker_for_level2<cudf::column_device_view>{*column}));
   }
   {
     auto column = cudf::mutable_column_device_view::create(parent->mutable_view());
     EXPECT_TRUE(thrust::any_of(rmm::exec_policy_nosync(cudf::get_default_stream()),
-                               thrust::make_counting_iterator<int32_t>(0),
-                               thrust::make_counting_iterator<int32_t>(100),
+                               cuda::counting_iterator<int32_t>{0},
+                               cuda::counting_iterator<int32_t>{100},
                                checker_for_level2<cudf::mutable_column_device_view>{*column}));
   }
 }

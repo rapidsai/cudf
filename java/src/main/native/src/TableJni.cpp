@@ -6,6 +6,7 @@
 #include "csv_chunked_writer.hpp"
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
+#include "jni_cccl_any_resource.hpp"
 #include "jni_compiled_expr.hpp"
 #include "jni_utils.hpp"
 #include "jni_writer_data_sink.hpp"
@@ -46,7 +47,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <arrow/api.h>
 #include <arrow/c/bridge.h>
@@ -2254,6 +2255,8 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
                                                   jint j_compression,
                                                   jint j_row_group_size_rows,
                                                   jlong j_row_group_size_bytes,
+                                                  jlong j_max_dictionary_size,
+                                                  jint j_dictionary_policy,
                                                   jint j_stats_freq,
                                                   jbooleanArray j_isInt96,
                                                   jintArray j_precisions,
@@ -2312,6 +2315,8 @@ Java_ai_rapids_cudf_Table_writeParquetBufferBegin(JNIEnv* env,
         .compression(static_cast<compression_type>(j_compression))
         .row_group_size_rows(j_row_group_size_rows)
         .row_group_size_bytes(j_row_group_size_bytes)
+        .max_dictionary_size(j_max_dictionary_size)
+        .dictionary_policy(static_cast<cudf::io::dictionary_policy>(j_dictionary_policy))
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
         .compression_statistics(stats)
@@ -2336,6 +2341,8 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
                                                 jint j_compression,
                                                 jint j_row_group_size_rows,
                                                 jlong j_row_group_size_bytes,
+                                                jlong j_max_dictionary_size,
+                                                jint j_dictionary_policy,
                                                 jint j_stats_freq,
                                                 jbooleanArray j_isInt96,
                                                 jintArray j_precisions,
@@ -2392,6 +2399,8 @@ Java_ai_rapids_cudf_Table_writeParquetFileBegin(JNIEnv* env,
         .compression(static_cast<compression_type>(j_compression))
         .row_group_size_rows(j_row_group_size_rows)
         .row_group_size_bytes(j_row_group_size_bytes)
+        .max_dictionary_size(j_max_dictionary_size)
+        .dictionary_policy(static_cast<cudf::io::dictionary_policy>(j_dictionary_policy))
         .stats_level(static_cast<statistics_freq>(j_stats_freq))
         .key_value_metadata({kv_metadata})
         .compression_statistics(stats)
@@ -3521,7 +3530,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftSemiJoinGatherMap(
     compare_nulls_equal,
     [load_factor](
       cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      cudf::filtered_join obj(right, nulleq, load_factor, cudf::get_default_stream());
       return obj.semi_join(left);
     });
 }
@@ -3621,7 +3630,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_leftAntiJoinGatherMap(
     compare_nulls_equal,
     [load_factor](
       cudf::table_view const& left, cudf::table_view const& right, cudf::null_equality nulleq) {
-      cudf::filtered_join obj(right, nulleq, cudf::set_as_build_table::RIGHT, load_factor);
+      cudf::filtered_join obj(right, nulleq, load_factor, cudf::get_default_stream());
       return obj.anti_join(left);
     });
 }
@@ -4312,9 +4321,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_makeChunkedPack(
     cudf::table_view* n_table = reinterpret_cast<cudf::table_view*>(input_table);
     // `temp_mr` is the memory resource that `cudf::chunked_pack` will use to create temporary
     // and scratch memory only.
-    auto temp_mr = memoryResourceHandle != 0
-                     ? reinterpret_cast<rmm::mr::device_memory_resource*>(memoryResourceHandle)
-                     : cudf::get_current_device_resource_ref();
+    rmm::device_async_resource_ref temp_mr =
+      memoryResourceHandle != 0
+        ? rmm::device_async_resource_ref{cudf::jni::get_resource(memoryResourceHandle)}
+        : cudf::get_current_device_resource_ref();
     auto chunked_pack =
       cudf::chunked_pack::create(*n_table, bounce_buffer_size, cudf::get_default_stream(), temp_mr);
     return reinterpret_cast<jlong>(chunked_pack.release());

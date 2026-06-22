@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,12 +8,11 @@
 #include <cudf/aggregation.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <optional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace reduction::detail {
 
 /**
@@ -30,4 +29,4 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

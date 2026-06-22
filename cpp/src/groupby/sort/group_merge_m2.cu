@@ -11,8 +11,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
@@ -49,11 +49,23 @@ struct merge_fn {
       if (partial_n == 0) { continue; }
       auto const partial_avg = d_means[idx];
       auto const partial_m2  = d_M2s[idx];
-      auto const new_n       = n + partial_n;
-      auto const delta       = partial_avg - avg;
-      m2 += partial_m2 + delta * delta * n * partial_n / new_n;
-      avg = (avg * n + partial_avg * partial_n) / new_n;
-      n   = new_n;
+
+      // Merging an empty accumulator with a non-empty partial is an identity operation. Running
+      // the generic formula for this case can evaluate inf * 0 and turn extreme finite partials
+      // into NaN.
+      if (n == 0) {
+        n   = partial_n;
+        avg = partial_avg;
+        m2  = partial_m2;
+        continue;
+      }
+
+      auto const new_n   = n + partial_n;
+      auto const delta   = partial_avg - avg;
+      auto const delta_n = delta / new_n;
+      m2 += partial_m2 + delta * delta_n * n * partial_n;
+      avg += delta_n * partial_n;
+      n = new_n;
     }
 
     return {n, avg, m2};
@@ -82,13 +94,17 @@ std::unique_ptr<column> merge_m2(column_view const& values,
   auto const count_valid = values.child(0);
   auto const mean_values = values.child(1);
   auto const M2_values   = values.child(2);
-  auto const iter        = thrust::make_counting_iterator<size_type>(0);
+  auto const iter        = cuda::counting_iterator<size_type>{0};
 
   auto const fn = merge_fn<count_type>{group_offsets.data(),
                                        count_valid.template begin<count_type>(),
                                        mean_values.template begin<result_type>(),
                                        M2_values.template begin<result_type>()};
-  thrust::transform(rmm::exec_policy_nosync(stream), iter, iter + num_groups, out_iter, fn);
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    iter,
+                    iter + num_groups,
+                    out_iter,
+                    fn);
 
   // Output is a structs column containing the merged values of `COUNT_VALID`, `MEAN`, and `M2`.
   std::vector<std::unique_ptr<column>> out_columns;

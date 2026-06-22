@@ -6,12 +6,11 @@
 #pragma once
 
 #include <cudf/io/csv.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace io::detail::csv {
 
 /**
@@ -45,4 +44,4 @@ void write_csv(data_sink* sink,
                rmm::cuda_stream_view stream);
 
 }  // namespace io::detail::csv
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

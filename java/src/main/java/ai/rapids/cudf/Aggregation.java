@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -61,7 +61,8 @@ abstract class Aggregation {
         MERGE_TDIGEST(33), // This can take a delta argument for accuracy level
         HISTOGRAM(34),
         MERGE_HISTOGRAM(35),
-        BITWISE_AGG(36);
+        BITWISE_AGG(36),
+        SUM_WITH_OVERFLOW(37);
 
         final int nativeId;
 
@@ -533,6 +534,25 @@ abstract class Aggregation {
         return new SumAggregation();
     }
 
+    static final class SumWithOverflowAggregation extends NoParamAggregation {
+        private SumWithOverflowAggregation() {
+            super(Kind.SUM_WITH_OVERFLOW);
+        }
+    }
+
+    /**
+     * Sum aggregation that also reports overflow. The result is a struct with
+     * children {sum: same type as input, overflow: BOOL8}. The input may be any
+     * signed integer type (INT8/16/32/64) or fixed-point decimal
+     * (DECIMAL32/64/128), for both column reductions and hash-based groupby.
+     * On overflow the sum value is unspecified; the boolean flag is the source of
+     * truth. Sort-based groupby, scan, segmented reduce, and rolling are not
+     * supported by cudf.
+     */
+    static SumWithOverflowAggregation sumWithOverflow() {
+        return new SumWithOverflowAggregation();
+    }
+
     static final class ProductAggregation extends NoParamAggregation {
         private ProductAggregation() {
             super(Kind.PRODUCT);
@@ -785,7 +805,11 @@ abstract class Aggregation {
     }
 
     /**
-     * Get the nth, non-null, element in a group.
+     * Get the nth element in a group.
+     * <p>
+     * NULL values are included (i.e. a NULL element can be returned). Use
+     * {@link #nth(int, NullPolicy)} to control NULL policy.
+     *
      * @param offset the offset to look at. Negative numbers go from the end of the group. Any
      *               value outside of the group range results in a null.
      */

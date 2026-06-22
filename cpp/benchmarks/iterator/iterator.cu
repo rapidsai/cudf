@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,8 +14,8 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_reduce.cuh>
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/reduce.h>
 
@@ -106,7 +106,7 @@ void bench_iterator_cub_raw(nvbench::state& state)
 {
   using T                = double;
   auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
+  auto num_gen           = cuda::counting_iterator<cudf::size_type>{0};
 
   cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
   cudf::column_view hasnull_F = wrap_hasnull_F;
@@ -130,7 +130,7 @@ void bench_iterator_cub_iter(nvbench::state& state)
 {
   using T                = double;
   auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
+  auto num_gen           = cuda::counting_iterator<cudf::size_type>{0};
 
   cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
   cudf::column_view hasnull_F = wrap_hasnull_F;
@@ -154,7 +154,7 @@ void bench_iterator_thrust_raw(nvbench::state& state)
 {
   using T                = double;
   auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
+  auto num_gen           = cuda::counting_iterator<cudf::size_type>{0};
 
   cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
   cudf::column_view hasnull_F = wrap_hasnull_F;
@@ -178,7 +178,7 @@ void bench_iterator_thrust_iter(nvbench::state& state)
 {
   using T                = double;
   auto const column_size = static_cast<cudf::size_type>(state.get_int64("num_rows"));
-  auto num_gen           = thrust::counting_iterator<cudf::size_type>(0);
+  auto num_gen           = cuda::counting_iterator<cudf::size_type>{0};
 
   cudf::test::fixed_width_column_wrapper<T> wrap_hasnull_F(num_gen, num_gen + column_size);
   cudf::column_view hasnull_F = wrap_hasnull_F;

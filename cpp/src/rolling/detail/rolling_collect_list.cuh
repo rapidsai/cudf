@@ -16,8 +16,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/extrema.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
 
@@ -44,8 +44,12 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
 {
   // Materialize offsets column.
   auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
-  auto sizes = make_fixed_width_column(size_data_type, input_size, mask_state::UNALLOCATED, stream);
-  auto mutable_sizes = sizes->mutable_view();
+  auto sizes                           = make_fixed_width_column(size_data_type,
+                                       input_size,
+                                       mask_state::UNALLOCATED,
+                                       stream,
+                                       cudf::get_current_device_resource_ref());
+  auto mutable_sizes                   = sizes->mutable_view();
 
   // Consider the following preceding/following values:
   //    preceding = [1,2,2,2,2]
@@ -57,7 +61,7 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
   // But if min_periods=3, rows at indices 0 and 4 have too few observations, and must return
   // null. The sizes at these positions must be 0, i.e.
   //  prec + foll = [0,3,3,3,0]
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     preceding_begin,
                     preceding_begin + input_size,
                     following_begin,
@@ -100,12 +104,15 @@ std::unique_ptr<column> create_collect_gather_map(column_view const& child_offse
                                                   PrecedingIter preceding_iter,
                                                   rmm::cuda_stream_view stream)
 {
-  auto gather_map = make_fixed_width_column(
-    data_type{type_to_id<size_type>()}, per_row_mapping.size(), mask_state::UNALLOCATED, stream);
+  auto gather_map = make_fixed_width_column(data_type{type_to_id<size_type>()},
+                                            per_row_mapping.size(),
+                                            mask_state::UNALLOCATED,
+                                            stream,
+                                            cudf::get_current_device_resource_ref());
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(per_row_mapping.size()),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{per_row_mapping.size()},
     gather_map->mutable_view().template begin<size_type>(),
     cuda::proclaim_return_type<size_type>(
       [d_offsets =
@@ -186,8 +193,8 @@ std::unique_ptr<column> rolling_collect_list(column_view const& input,
                                             mr);
 
   auto [null_mask, null_count] = valid_if(
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(input.size()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{input.size()},
     [preceding_begin, following_begin, min_periods] __device__(auto i) {
       return (preceding_begin[i] + following_begin[i]) >= min_periods;
     },

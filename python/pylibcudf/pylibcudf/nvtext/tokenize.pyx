@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -24,6 +24,7 @@ from pylibcudf.scalar cimport Scalar
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "TokenizeVocabulary",
@@ -41,19 +42,20 @@ cdef class TokenizeVocabulary:
 
     For details, see :cpp:class:`cudf::nvtext::tokenize_vocabulary`.
     """
-    def __cinit__(self, Column vocab, Stream stream=None, DeviceMemoryResource mr=None):
+    def __cinit__(self, Column vocab, object stream=None, DeviceMemoryResource mr=None):
         cdef column_view c_vocab = vocab.view()
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
         with nogil:
-            self.c_obj = move(cpp_load_vocabulary(c_vocab, stream.view(), mr.get_mr()))
+            self.c_obj = move(cpp_load_vocabulary(c_vocab, _cs, mr.get_mr()))
 
     __hash__ = None
 
 cpdef Column tokenize_scalar(
     Column input,
     Scalar delimiter=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -77,26 +79,27 @@ cpdef Column tokenize_scalar(
         New strings columns of tokens
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
         c_result = cpp_tokenize(
             input.view(),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column tokenize_column(
-    Column input, Column delimiters, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, Column delimiters, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a single column of strings by tokenizing the input
@@ -119,23 +122,24 @@ cpdef Column tokenize_column(
         New strings columns of tokens
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_tokenize(
             input.view(),
             delimiters.view(),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column count_tokens_scalar(
     Column input,
     Scalar delimiter=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -159,26 +163,27 @@ cpdef Column count_tokens_scalar(
         New column of token counts
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if delimiter is None:
         delimiter = Scalar.from_libcudf(
-            cpp_make_string_scalar("".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar("".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
         c_result = cpp_count_tokens(
             input.view(),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column count_tokens_column(
-    Column input, Column delimiters, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, Column delimiters, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns the number of tokens in each string of a strings column
@@ -201,21 +206,22 @@ cpdef Column count_tokens_column(
         New column of token counts
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         c_result = cpp_count_tokens(
             input.view(),
             delimiters.view(),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column character_tokenize(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns a single column of strings by converting
@@ -236,18 +242,19 @@ cpdef Column character_tokenize(
         New strings columns of tokens
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_character_tokenize(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_character_tokenize(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column detokenize(
     Column input,
     Column row_indices,
     Scalar separator=None,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -273,12 +280,13 @@ cpdef Column detokenize(
         New strings columns of tokens
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     if separator is None:
         separator = Scalar.from_libcudf(
-            cpp_make_string_scalar(" ".encode(), stream.view(), mr.get_mr())
+            cpp_make_string_scalar(" ".encode(), _stream.view().value(), mr.get_mr())
         )
 
     with nogil:
@@ -286,18 +294,18 @@ cpdef Column detokenize(
             input.view(),
             row_indices.view(),
             dereference(<const string_scalar*>separator.c_obj.get()),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 cpdef Column tokenize_with_vocabulary(
     Column input,
     TokenizeVocabulary vocabulary,
     Scalar delimiter,
     size_type default_id=-1,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -325,7 +333,8 @@ cpdef Column tokenize_with_vocabulary(
         Lists column of token ids
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -334,8 +343,8 @@ cpdef Column tokenize_with_vocabulary(
             dereference(vocabulary.c_obj.get()),
             dereference(<const string_scalar*>delimiter.c_obj.get()),
             default_id,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

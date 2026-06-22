@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
@@ -30,6 +30,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column
 from .scalar cimport Scalar
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "DatetimeComponent",
@@ -49,7 +50,7 @@ __all__ = [
 cpdef Column extract_datetime_component(
     Column input,
     datetime_component component,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -73,19 +74,20 @@ cpdef Column extract_datetime_component(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
         result = cpp_extract_datetime_component(
-            input.view(), component, stream.view(), mr.get_mr()
+            input.view(), component, _cs, mr.get_mr()
         )
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column ceil_datetimes(
     Column input,
     rounding_frequency freq,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -109,17 +111,18 @@ cpdef Column ceil_datetimes(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_ceil_datetimes(input.view(), freq, stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_ceil_datetimes(input.view(), freq, _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column floor_datetimes(
     Column input,
     rounding_frequency freq,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -143,17 +146,18 @@ cpdef Column floor_datetimes(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_floor_datetimes(input.view(), freq, stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_floor_datetimes(input.view(), freq, _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column round_datetimes(
     Column input,
     rounding_frequency freq,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -177,17 +181,18 @@ cpdef Column round_datetimes(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_round_datetimes(input.view(), freq, stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_round_datetimes(input.view(), freq, _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column add_calendrical_months(
     Column input,
     ColumnOrScalar months,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -216,7 +221,8 @@ cpdef Column add_calendrical_months(
 
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -224,13 +230,13 @@ cpdef Column add_calendrical_months(
             input.view(),
             months.view() if ColumnOrScalar is Column else
             dereference(months.get()),
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(result), stream, mr)
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column day_of_year(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Computes the day number since the start of
@@ -253,15 +259,16 @@ cpdef Column day_of_year(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_day_of_year(input.view(), stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_day_of_year(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column is_leap_year(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Check if the year of the given date is a leap year.
@@ -283,15 +290,16 @@ cpdef Column is_leap_year(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_is_leap_year(input.view(), stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_is_leap_year(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column last_day_of_month(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Computes the last day of the month.
@@ -313,15 +321,16 @@ cpdef Column last_day_of_month(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_last_day_of_month(input.view(), stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_last_day_of_month(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column extract_quarter(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Returns the quarter (ie. a value from {1, 2, 3, 4})
@@ -343,15 +352,16 @@ cpdef Column extract_quarter(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_extract_quarter(input.view(), stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_extract_quarter(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 cpdef Column days_in_month(
-    Column input, Stream stream=None, DeviceMemoryResource mr=None
+    Column input, object stream=None, DeviceMemoryResource mr=None
 ):
     """
     Extract the number of days in the month.
@@ -372,12 +382,13 @@ cpdef Column days_in_month(
     """
     cdef unique_ptr[column] result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
-        result = cpp_days_in_month(input.view(), stream.view(), mr.get_mr())
-    return Column.from_libcudf(move(result), stream, mr)
+        result = cpp_days_in_month(input.view(), _cs, mr.get_mr())
+    return Column.from_libcudf(move(result), _stream, mr)
 
 DatetimeComponent.__str__ = DatetimeComponent.__repr__
 RoundingFrequency.__str__ = RoundingFrequency.__repr__

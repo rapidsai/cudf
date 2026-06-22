@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -9,10 +9,11 @@ from pylibcudf.libcudf.strings cimport case as cpp_case
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = ["swapcase", "to_lower", "to_upper"]
 
-cpdef Column to_lower(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column to_lower(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Returns a column of lowercased strings.
 
     For details, see :cpp:func:`to_lower`.
@@ -32,14 +33,15 @@ cpdef Column to_lower(Column input, Stream stream=None, DeviceMemoryResource mr=
         Column of strings lowercased from the input column
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.to_lower(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_case.to_lower(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
-cpdef Column to_upper(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column to_upper(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Returns a column of uppercased strings.
 
     For details, see :cpp:func:`to_upper`.
@@ -59,14 +61,15 @@ cpdef Column to_upper(Column input, Stream stream=None, DeviceMemoryResource mr=
         Column of strings uppercased from the input column
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.to_upper(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_case.to_upper(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
-cpdef Column swapcase(Column input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef Column swapcase(Column input, object stream=None, DeviceMemoryResource mr=None):
     """Returns a column of strings where the lowercase characters
     are converted to uppercase and the uppercase characters
     are converted to lowercase.
@@ -88,9 +91,10 @@ cpdef Column swapcase(Column input, Stream stream=None, DeviceMemoryResource mr=
         Column of strings
     """
     cdef unique_ptr[column] c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = cpp_case.swapcase(input.view(), stream.view(), mr.get_mr())
+        c_result = cpp_case.swapcase(input.view(), _cs, mr.get_mr())
 
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

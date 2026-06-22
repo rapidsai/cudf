@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -53,7 +53,8 @@ NVBENCH_BENCH_TYPES(nvbench_conditional_inner_join,
   .set_name("conditional_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", CONDITIONAL_JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});
 
 NVBENCH_BENCH_TYPES(nvbench_conditional_left_join,
                     NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
@@ -62,4 +63,5 @@ NVBENCH_BENCH_TYPES(nvbench_conditional_left_join,
   .set_name("conditional_left_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType"})
   .add_int64_axis("left_size", CONDITIONAL_JOIN_SIZE_RANGE)
-  .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE);
+  .add_int64_axis("right_size", CONDITIONAL_JOIN_SIZE_RANGE)
+  .add_int64_axis("skip_large_sizes", {1});

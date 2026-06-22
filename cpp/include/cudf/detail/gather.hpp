@@ -17,8 +17,7 @@
 
 #include <memory>
 
-namespace CUDF_EXPORT cudf {
-
+namespace cudf {
 namespace detail {
 
 /**
@@ -48,4 +47,4 @@ std::unique_ptr<table> gather(table_view const& source_table,
                               rmm::device_async_resource_ref mr);
 
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
