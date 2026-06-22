@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -120,7 +120,7 @@ def test_sort_slice(df, engine, offset):
     q = df.sort(by=["y", "z"]).slice(offset, 2)
     with pytest.raises(
         NotImplementedError,
-        match="This slice not supported for multiple partitions.",
+        match=r"This slice not supported for multiple partitions.",
     ):
         assert_gpu_result_equal(q, engine=engine)
 
