@@ -25,6 +25,22 @@ cudf::test::TempDirTestEnvironment* const temp_env =
   static_cast<cudf::test::TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(new cudf::test::TempDirTestEnvironment));
 
+std::string write_parquet_temp_file(cudf::table_view const& tbl,
+                                    std::string_view const filename,
+                                    std::vector<std::string> const& column_names)
+{
+  cudf::io::table_input_metadata md{tbl};
+  for (std::size_t i = 0; i < column_names.size(); ++i) {
+    md.column_metadata[i].set_name(column_names[i]);
+  }
+  auto const path = temp_env->get_temp_filepath(std::string{filename});
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{path}, tbl)
+      .metadata(std::move(md));
+  cudf::io::write_parquet(opts);
+  return path;
+}
+
 template <typename T, typename Elements>
 std::unique_ptr<cudf::table> create_fixed_table(cudf::size_type num_columns,
                                                 cudf::size_type num_rows,

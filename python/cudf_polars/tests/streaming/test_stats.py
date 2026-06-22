@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -173,7 +173,7 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
         ),
         (
             ("i64", DataType(pl.Int64())),
-            ("dec32", cast(DataType, FakeDataType(plc.TypeId.DECIMAL32))),
+            ("dec32", cast("DataType", FakeDataType(plc.TypeId.DECIMAL32))),
             ("s", DataType(pl.String())),
             ("already_large", DataType(pl.Int64())),
         ),
