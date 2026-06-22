@@ -10,9 +10,11 @@ import re
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 
     from polars import polars  # type: ignore[attr-defined]
 
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expressions.literal import Literal
 
 __all__ = ["TemporalFunction"]
@@ -111,11 +113,6 @@ class TemporalFunction(Expr):
         "us": plc.datetime.RoundingFrequency.MICROSECOND,
         "ns": plc.datetime.RoundingFrequency.NANOSECOND,
     }
-    _TIMESTAMP_TYPE_MAP: ClassVar[dict[str, plc.TypeId]] = {
-        "ms": plc.TypeId.TIMESTAMP_MILLISECONDS,
-        "us": plc.TypeId.TIMESTAMP_MICROSECONDS,
-        "ns": plc.TypeId.TIMESTAMP_NANOSECONDS,
-    }
 
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
@@ -158,7 +155,7 @@ class TemporalFunction(Expr):
             self.options = (self._TRUNCATE_FREQ_MAP[match.group(2)],)
         elif self.name is TemporalFunction.Name.TimeStamp:
             (time_unit,) = self.options
-            if time_unit not in self._TIMESTAMP_TYPE_MAP:
+            if time_unit not in {"ms", "us", "ns"}:
                 raise NotImplementedError(
                     f"Unsupported epoch/timestamp time unit: {time_unit!r}"
                 )
@@ -171,26 +168,10 @@ class TemporalFunction(Expr):
         if self.name is TemporalFunction.Name.TimeStamp:
             (column,) = columns
             (time_unit,) = self.options
-            # Rescale the timestamp to the requested resolution, then reinterpret
-            # its underlying integer ticks (always int64 for sub-day units) as the
-            # integer epoch result.
-            rescaled = plc.unary.cast(
-                column.obj,
-                plc.DataType(self._TIMESTAMP_TYPE_MAP[time_unit]),
-                stream=df.stream,
-            )
-            return Column(
-                plc.Column(
-                    self.dtype.plc_type,
-                    rescaled.size(),
-                    rescaled.data(),
-                    rescaled.null_mask(),
-                    rescaled.null_count(),
-                    rescaled.offset(),
-                    rescaled.children(),
-                ),
-                dtype=self.dtype,
-            )
+            # Rescale the timestamp to the requested resolution
+            return column.astype(
+                DataType(pl.Datetime(time_unit)), stream=df.stream
+            ).astype(self.dtype, stream=df.stream)
         elif self.name is TemporalFunction.Name.Truncate:
             (column, _) = columns
             return Column(
