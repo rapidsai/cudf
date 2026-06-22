@@ -12,6 +12,8 @@
 #    JOB_ID=XXXXXXXXX
 #    PR_NUMBER=XXXX
 
+"""Parse GitHub Actions job URLs into shell-friendly variable assignments."""
+
 import re
 import sys
 from urllib.parse import parse_qs, urlparse
@@ -20,6 +22,24 @@ PATTERN = re.compile(r"/actions/runs/(?P<run_id>\d+)/job/(?P<job_id>\d+)")
 
 
 def parse(url: str) -> dict[str, str]:
+    """Extract run ID, job ID, and optional PR number from a GitHub Actions job URL.
+
+    Parameters
+    ----------
+    url : str
+        A GitHub Actions job URL of the form:
+        https://github.com/<owner>/<repo>/actions/runs/<run_id>/job/<job_id>?pr=<N>
+
+    Returns
+    -------
+    dict[str, str]
+        Dictionary with keys RUN_ID, JOB_ID, and optionally PR_NUMBER.
+
+    Raises
+    ------
+    ValueError
+        If the URL does not match the expected pattern or contains an invalid PR number.
+    """
     parsed = urlparse(url)
     match = PATTERN.search(parsed.path)
     if not match:
