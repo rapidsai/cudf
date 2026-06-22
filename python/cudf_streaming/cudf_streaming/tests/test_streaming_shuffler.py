@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -135,7 +135,7 @@ async def generate_inputs(
     context: Context, ch: Channel[TableChunk], num_rows: int, num_chunks: int
 ) -> None:
     for i in range(num_chunks):
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         table = plc.Table(
             [
                 plc.Column.from_array(
@@ -185,7 +185,7 @@ async def do_shuffle(
     await shuffle.insert_finished(context)
     for pid in shuffle.local_partitions():
         data = shuffle.extract(pid)
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         unpacked = TableChunk.from_pylibcudf_table(
             unpack_and_concat(data, stream, context.br()),
             stream,

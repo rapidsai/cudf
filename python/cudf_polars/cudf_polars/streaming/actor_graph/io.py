@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """IO logic for the RapidsMPF streaming runtime."""
 
@@ -51,6 +51,8 @@ from cudf_polars.streaming.io import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -370,7 +372,7 @@ async def scan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    scans = ir.scans
+    scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
 
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
@@ -413,7 +415,8 @@ async def scan_node(
         ]
         for task_idx, scan in enumerate(scans):
             producer_id = task_idx % num_producers
-            producer_tasks[producer_id].append((task_idx, scan))
+            # mypy resolves __iter__ on union-of-sequences to the common base (IR)
+            producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
 
         async def _producer(producer_id: int, ch_out: Channel) -> None:
             for task_idx, scan in producer_tasks[producer_id]:
@@ -478,7 +481,7 @@ def make_rapidsmpf_read_parquet_node(
 
     # Build ParquetReaderOptions
     try:
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         parquet_reader_options = (
             plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
             .decimal_width(plc.TypeId.DECIMAL128)
@@ -702,7 +705,7 @@ async def sink_node(
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
                 writer_state = await ir_context.to_thread(
-                    _sink_to_file,
+                    _sink_to_file,  # type: ignore[arg-type]  # (to_thread accepts this keyword-only sink helper)
                     ir.sink.kind,
                     ir.sink.path,
                     ir.sink.options,

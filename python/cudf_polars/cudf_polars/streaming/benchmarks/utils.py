@@ -47,6 +47,11 @@ HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
 COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
 
 try:
+    import psutil
+except ImportError:
+    psutil = None
+
+try:
     import duckdb
 
     duckdb_err = None
@@ -345,10 +350,41 @@ class GPUInfo:
 
 
 @dataclasses.dataclass
+class CPUInfo:
+    """Information about the host CPU."""
+
+    model: str | None
+    physical_cores: int | None
+    logical_cores: int | None
+
+    @classmethod
+    def collect(cls) -> CPUInfo:
+        """Collect CPU information."""
+        model: str | None = None
+        try:
+            with Path("/proc/cpuinfo").open() as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        model = line.split(":", 1)[1].strip()
+                        break
+        except OSError:
+            pass
+        physical_cores: int | None = None
+        logical_cores: int | None = None
+        if psutil is not None:
+            physical_cores = psutil.cpu_count(logical=False)
+            logical_cores = psutil.cpu_count(logical=True)
+        return cls(
+            model=model, physical_cores=physical_cores, logical_cores=logical_cores
+        )
+
+
+@dataclasses.dataclass
 class HardwareInfo:
     """Information about the hardware used to run the query."""
 
     gpus: list[GPUInfo]
+    cpu: CPUInfo
     # TODO: ucx
 
     @classmethod
@@ -372,7 +408,7 @@ class HardwareInfo:
         else:
             # No GPUs -- CPU-only frontend or NVML unavailable
             gpus = []
-        return cls(gpus=gpus)
+        return cls(gpus=gpus, cpu=CPUInfo.collect())
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -1174,9 +1210,9 @@ def run_polars_in_memory(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     engine = pl.GPUEngine(
         executor="in-memory",
-        raise_on_fail=True,
         **engine_options,
     )
     records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1212,6 +1248,7 @@ def run_polars_spmd(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
@@ -1269,6 +1306,7 @@ def run_polars_ray(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     ray_init_options: dict[str, Any] = {}
     if run_config.connect is not None:
         ray_init_options["address"] = run_config.connect
@@ -1318,6 +1356,7 @@ def run_polars_dask(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     dask_client = None
     if run_config.connect is not None:
         if Path(run_config.connect).is_file():

@@ -399,7 +399,8 @@ ConfigureNVBench(
 # * transform benchmark
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
-  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp transform/transform.cpp
+  TRANSFORM_NVBENCH transform/encode.cpp transform/polynomials.cpp
+  transform/polynomials_concurrent.cpp transform/transform.cpp
 )
 
 # ##################################################################################################
@@ -498,6 +499,7 @@ ConfigureNVBench(
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
   DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
+  dictionary/concatenate.cpp
 )
 
 add_custom_target(
