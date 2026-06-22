@@ -12,7 +12,9 @@ import pytest
 import polars as pl
 
 import pylibcudf as plc
+import rmm.pylibrmm.stream
 
+import cudf_polars.containers
 import cudf_polars.streaming.io as streaming_io
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
@@ -40,16 +42,22 @@ if TYPE_CHECKING:
     import concurrent.futures
     import pathlib
 
+    from cudf_polars.typing import Schema
+
 
 @pytest.fixture(scope="module")
-def df():
-    return pl.DataFrame(
+def df_and_schema() -> tuple[pl.DataFrame, Schema]:
+    stream = rmm.pylibrmm.stream.Stream()
+    df = pl.DataFrame(
         {
             "x": range(3_000),
             "y": ["cat", "dog", "fish"] * 1_000,
             "z": [1.0, 2.0, 3.0, 4.0, 5.0] * 600,
         }
     )
+    df_ = cudf_polars.containers.DataFrame.from_polars(df, stream=stream)
+    schema = {column.name: column.dtype for column in df_.columns}
+    return df, schema
 
 
 # Simple engine for IR translation / stats collection only (no actual GPU execution)
@@ -237,13 +245,18 @@ def test_parquet_round_trip_empty() -> None:
 
 def test_parquet_source_info_stores_footers_when_all_files_sampled(
     tmp_path: pathlib.Path,
-    df: pl.DataFrame,
+    df_and_schema: tuple[pl.DataFrame, Schema],
 ) -> None:
     _clear_source_info_cache()
+    df, schema = df_and_schema
     make_partitioned_source(df, tmp_path, "parquet", n_files=2)
     paths = tuple(str(p) for p in sorted(tmp_path.iterdir()))
     info = _build_parquet_source(
-        paths, frozenset(df.columns), max_footer_samples=10, max_row_group_samples=0
+        paths,
+        frozenset(df.columns),
+        tuple(schema.items()),
+        max_footer_samples=10,
+        max_row_group_samples=0,
     )
 
     assert info.file_metadata is not None
@@ -253,13 +266,18 @@ def test_parquet_source_info_stores_footers_when_all_files_sampled(
 
 def test_parquet_source_info_omits_footers_when_paths_are_sampled(
     tmp_path: pathlib.Path,
-    df: pl.DataFrame,
+    df_and_schema: tuple[pl.DataFrame, Schema],
 ) -> None:
     _clear_source_info_cache()
+    df, schema = df_and_schema
     make_partitioned_source(df, tmp_path, "parquet", n_files=5)
     paths = tuple(str(p) for p in sorted(tmp_path.iterdir()))
     info = _build_parquet_source(
-        paths, frozenset(df.columns), max_footer_samples=2, max_row_group_samples=0
+        paths,
+        frozenset(df.columns),
+        tuple(schema.items()),
+        max_footer_samples=2,
+        max_row_group_samples=0,
     )
 
     assert info.file_metadata is None
@@ -267,10 +285,11 @@ def test_parquet_source_info_omits_footers_when_paths_are_sampled(
 
 def test_seed_parquet_file_metadata_from_stats(
     tmp_path: pathlib.Path,
-    df: pl.DataFrame,
+    df_and_schema: tuple[pl.DataFrame, Schema],
     parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ) -> None:
     _clear_source_info_cache()
+    df, _schema = df_and_schema
     make_partitioned_source(df, tmp_path, "parquet", n_files=2)
     engine = pl.GPUEngine(
         raise_on_fail=True,
@@ -294,8 +313,9 @@ def test_seed_parquet_file_metadata_from_stats(
 
 def test_parquet_metadata_reads_footers(
     tmp_path: pathlib.Path,
-    df: pl.DataFrame,
+    df_and_schema: tuple[pl.DataFrame, Schema],
 ) -> None:
+    df, _schema = df_and_schema
     make_partitioned_source(df, tmp_path, "parquet", n_files=1)
     path = next(tmp_path.iterdir())
     metadata = ParquetMetadata((str(path),), max_footer_samples=1)
@@ -405,10 +425,11 @@ def test_serialize_stats_roundtrip_dataframescan(
 
 def test_serialize_stats_roundtrip_parquet(
     tmp_path: pathlib.Path,
-    df: pl.DataFrame,
+    df_and_schema: tuple[pl.DataFrame, Schema],
     parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ) -> None:
     _clear_source_info_cache()
+    df, _schema = df_and_schema
     make_partitioned_source(df, tmp_path, "parquet", n_files=3)
     engine = pl.GPUEngine(
         raise_on_fail=True,

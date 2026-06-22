@@ -363,7 +363,6 @@ def test_streaming_scan_missing_prefetch_metadata_raises() -> None:
     scan = _make_parquet_scan(
         ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
     )
-    scan = _make_parquet_scan(["file.parquet"])
     fused = FusedScan(scan.schema, scan, scan.paths, scan.parquet_options)
 
     ctx = IRExecutionContext()
