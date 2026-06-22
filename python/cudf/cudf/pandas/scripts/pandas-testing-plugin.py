@@ -27,18 +27,18 @@ def patch_testing_functions():
     pytest.raises = replace_kwargs({"match": None})(pytest.raises)
 
 
-# Some transcendental numpy ufuncs differ by a small (~1e-6) amount between
-# cuDF's GPU results and NumPy's CPU results, so for the tests listed here we
-# relax ``tm.assert_index_equal`` from its default exact check to a tolerant
-# one with a tight ``rtol``.
-TOLERANT_INDEX_COMPARE_SUBSTRINGS = ("test_numpy_ufuncs_basic",)
+# Node ids (matched by substring) whose only discrepancy from pandas is a
+# small (~1e-6) GPU-vs-CPU floating-point difference in transcendental numpy
+# ufuncs. Matching tests are tagged with the ``tolerant_index_compare`` marker
+# during collection (see ``pytest_collection_modifyitems``), and
+# ``relax_exact_index_compare`` relaxes ``tm.assert_index_equal`` from its
+# default exact check to a tolerant one (with a tight ``rtol``) for them.
+NODEIDS_TOLERANT_INDEX_COMPARE = ("test_numpy_ufuncs_basic",)
 
 
 @pytest.fixture(autouse=True)
 def relax_exact_index_compare(request):
-    if not any(
-        s in request.node.nodeid for s in TOLERANT_INDEX_COMPARE_SUBSTRINGS
-    ):
+    if request.node.get_closest_marker("tolerant_index_compare") is None:
         yield
         return
     import pandas._testing as tm
@@ -6955,9 +6955,21 @@ NODEIDS_TO_SKIP: dict[str, str] = {
 }
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "tolerant_index_compare: relax tm.assert_index_equal to a tolerant "
+        "comparison for tests with small GPU-vs-CPU floating-point drift.",
+    )
+
+
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items):
     for item in items:
+        if any(
+            substr in item.nodeid for substr in NODEIDS_TOLERANT_INDEX_COMPARE
+        ):
+            item.add_marker(pytest.mark.tolerant_index_compare)
         if (reason := NODEIDS_TO_SKIP.get(item.nodeid, None)) is not None:
             item.add_marker(pytest.mark.skip(reason=reason))
         elif (
