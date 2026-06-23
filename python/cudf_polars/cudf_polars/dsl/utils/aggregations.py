@@ -211,6 +211,8 @@ def decompose_single_agg(
                 # matching rows. Mask non-matching rows to null so
                 # first_non_null extracts the selected value, and separately
                 # sum the predicate to validate item cardinality.
+                # TODO: Use libcudf predicated aggregations when available:
+                # https://github.com/rapidsai/cudf/issues/22947
                 aggs, _ = decompose_single_agg(
                     expr.NamedExpr(next(name_generator), selected),
                     name_generator,
