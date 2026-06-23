@@ -61,6 +61,16 @@ _GB_AGG_SUPPORTED = (
     "first_non_null",
 )
 
+_GB_AGG_REDUCTIONS = {
+    "sum": "sum",
+    "count": "sum",
+    "min": "min",
+    "max": "max",
+    "n_unique": "sum",
+    "item": "item",
+    "first_non_null": "first_non_null",
+}
+
 
 class _StructCreate(Expr):
     """Make a struct column from N child column expressions."""
@@ -280,26 +290,7 @@ def decompose(
         ]
         return selection, aggregation, reduction, False
     if isinstance(expr, Agg):
-        if expr.name in (
-            "sum",
-            "count",
-            "min",
-            "max",
-            "n_unique",
-            "item",
-            "first_non_null",
-        ):
-            aggfunc = (
-                expr.name
-                if expr.name
-                in {
-                    "min",
-                    "max",
-                    "item",
-                    "first_non_null",
-                }
-                else "sum"
-            )
+        if (aggfunc := _GB_AGG_REDUCTIONS.get(expr.name)) is not None:
             if expr.name == "count":
                 intermediate_dtype = DataType(pl.Int64())
                 agg_expr = Agg(

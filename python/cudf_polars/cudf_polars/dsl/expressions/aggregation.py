@@ -340,12 +340,22 @@ class Agg(Expr):
         )
 
     def _first_non_null(self, column: Column, stream: Stream) -> Column:
-        return self._reduce(
-            column,
-            request=plc.aggregation.nth_element(
-                0, null_handling=plc.types.NullPolicy.EXCLUDE
-            ),
-            stream=stream,
+        if column.size == 0:
+            plc_result = plc.Column.all_null_like(column.obj, 1, stream=stream)
+        elif column.null_count == 0:
+            plc_result = plc.copying.slice(column.obj, [0, 1], stream=stream)[0]
+        else:
+            return self._reduce(
+                column,
+                request=plc.aggregation.nth_element(
+                    0, null_handling=plc.types.NullPolicy.EXCLUDE
+                ),
+                stream=stream,
+            )
+        return Column(
+            plc_result,
+            name=column.name,
+            dtype=self.dtype,
         )
 
     def _item(self, column: Column, stream: Stream) -> Column:
