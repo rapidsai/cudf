@@ -119,7 +119,7 @@ static void bench_find_string_skewed(nvbench::state& state)
 
 NVBENCH_BENCH(bench_find_string_skewed)
   .set_name("find_string_skewed")
-  .add_int64_axis("short_length", {32, 64, 128, 256})
+  .add_int64_axis("short_length", {16, 32, 64, 96})
   .add_int64_axis("long_tail_length", {1024, 4096, 16384})
   .add_int64_axis("num_rows", {32768, 262144, 2097152})
   .add_int64_axis("short_string_pct", {90, 95, 99})

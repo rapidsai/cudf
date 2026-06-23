@@ -74,6 +74,8 @@ constexpr auto template_strings = std::to_array<std::string_view>({
 std::string repeat_to_width(std::string_view str, std::size_t width)
 {
   CUDF_EXPECTS(str.size() == 256, "string must an element of template_strings");
+  CUDF_EXPECTS(width % 32 == 0,
+               "width must be a multiple of 32 so that this function is Unicode compliant");
   std::string result;
   result.reserve(width);
   while (result.size() < width) {
