@@ -24,7 +24,7 @@
 #include <string_view>
 #include <vector>
 
-std::string_view const skewed_string_target_substring{"0987 5W43"};
+constexpr std::string_view skewed_string_target_substring{"0987 5W43"};
 
 namespace {
 /**
