@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Utility functions and classes for the RapidsMPF streaming runtime."""
 
@@ -825,7 +825,7 @@ async def replay_buffered_channel(
 
 
 @dataclass(frozen=True)
-class NormalizedPartitioning:
+class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ even with custom __eq__)
     """
     Normalized view of channel partitioning for a set of key column indices.
 

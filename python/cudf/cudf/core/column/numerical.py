@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -679,7 +679,7 @@ class NumericalColumn(NumericalBaseColumn):
             plc.transform.column_nans_to_nulls,
             same_dtype_policy,
         ).execute_with_args(self)
-        return cast(Self, result)
+        return cast("Self", result)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
@@ -757,7 +757,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
         return cast(
-            cudf.core.column.string.StringColumn,
+            "cudf.core.column.string.StringColumn",
             PylibcudfFunction(
                 plc.strings.convert.convert_ipv4.integers_to_ipv4,
                 pylibcudf_result_dtype_policy,
@@ -779,7 +779,7 @@ class NumericalColumn(NumericalBaseColumn):
             dtype = np.dtype("object")
         if len(self) == 0:
             return cast(
-                cudf.core.column.StringColumn,
+                "cudf.core.column.StringColumn",
                 column_empty(0, dtype=DEFAULT_STRING_DTYPE),
             )
 
@@ -808,7 +808,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         with col.access(mode="read", scope="internal"):
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 ColumnBase.create(conv_func(col.plc_column), dtype),
             )
 
@@ -826,13 +826,13 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return cast(
-            cudf.core.column.datetime.DatetimeColumn,
+            "cudf.core.column.datetime.DatetimeColumn",
             ColumnBase.create(self._as_temporal_column(dtype), dtype),
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return cast(
-            cudf.core.column.timedelta.TimeDeltaColumn,
+            "cudf.core.column.timedelta.TimeDeltaColumn",
             ColumnBase.create(self._as_temporal_column(dtype), dtype),
         )
 
@@ -912,7 +912,7 @@ class NumericalColumn(NumericalBaseColumn):
         return self.isnan().sum()
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         try:
             lhs, rhs = super()._process_values_for_isin(values)
@@ -1219,7 +1219,7 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError("`bins` cannot contain null entries.")
 
         return cast(
-            Self,
+            "Self",
             PylibcudfFunction(
                 getattr(
                     plc.search,

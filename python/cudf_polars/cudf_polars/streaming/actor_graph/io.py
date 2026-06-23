@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """IO logic for the RapidsMPF streaming runtime."""
 
@@ -481,7 +481,7 @@ def make_rapidsmpf_read_parquet_node(
 
     # Build ParquetReaderOptions
     try:
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         parquet_reader_options = (
             plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
             .decimal_width(plc.TypeId.DECIMAL128)
@@ -705,7 +705,7 @@ async def sink_node(
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
                 writer_state = await ir_context.to_thread(
-                    _sink_to_file,
+                    _sink_to_file,  # type: ignore[arg-type]  # (to_thread accepts this keyword-only sink helper)
                     ir.sink.kind,
                     ir.sink.path,
                     ir.sink.options,

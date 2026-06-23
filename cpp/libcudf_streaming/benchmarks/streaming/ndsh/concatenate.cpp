@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "concatenate.hpp"
@@ -31,7 +31,7 @@ streaming::Actor concatenate(std::shared_ptr<streaming::Context> ctx,
   CudaEvent event;
   std::vector<streaming::Message> messages;
   ctx->logger()->print("Concatenate");
-  auto concat_stream = ctx->br()->stream_pool().get_stream();
+  auto concat_stream = ctx->br()->stream_pool()->get_stream();
   while (!ch_out->is_shutdown()) {
     co_await ctx->executor()->schedule();
     auto msg = co_await ch_in->receive();

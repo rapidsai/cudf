@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "concatenate.hpp"
@@ -86,7 +86,7 @@ rapidsmpf::streaming::Actor read_nation(std::shared_ptr<rapidsmpf::streaming::Co
                    .build();
   // filter: "n_name" == "SAUDI ARABIA"
   auto filter_expr = [&]() -> std::unique_ptr<cudf_streaming::filter> {
-    auto stream         = ctx->br()->stream_pool().get_stream();
+    auto stream         = ctx->br()->stream_pool()->get_stream();
     auto owner          = new std::vector<std::any>;
     constexpr auto name = "SAUDI ARABIA";
     owner->push_back(std::make_shared<cudf::string_scalar>(
@@ -122,7 +122,7 @@ rapidsmpf::streaming::Actor read_orders(std::shared_ptr<rapidsmpf::streaming::Co
                    .build();
   // filter: "o_orderstatus" == "F"
   auto filter_expr = [&]() -> std::unique_ptr<cudf_streaming::filter> {
-    auto stream           = ctx->br()->stream_pool().get_stream();
+    auto stream           = ctx->br()->stream_pool()->get_stream();
     auto owner            = new std::vector<std::any>;
     constexpr auto status = "F";
     owner->push_back(std::make_shared<cudf::string_scalar>(

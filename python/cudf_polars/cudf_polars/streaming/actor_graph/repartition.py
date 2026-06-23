@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Re-chunking logic for the RapidsMPF streaming runtime."""
 
@@ -143,7 +143,7 @@ async def concatenate_node(
             if tracer is not None and output_duplicated:
                 tracer.set_duplicated()
 
-            stream = context.get_stream_from_pool()
+            stream = context.br().stream_pool.get_stream()
             seq_num = 0
             allgather = AllGatherManager(context, comm, collective_id)
             with allgather.inserting() as inserter:

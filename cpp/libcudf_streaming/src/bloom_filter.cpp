@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/stream_compaction.hpp>
@@ -32,7 +32,7 @@ rapidsmpf::streaming::Actor bloom_filter::build(
   co_await ch_out->shutdown_metadata();
   auto const& br     = ctx_->br();
   auto mr            = br->device_mr();
-  auto filter_stream = br->stream_pool().get_stream();
+  auto filter_stream = br->stream_pool()->get_stream();
   rapidsmpf::CudaEvent event;
   auto storage =
     cudf_streaming::detail::device_bloom_filter::storage(num_filter_blocks_, filter_stream, mr);

@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "concatenate.hpp"
@@ -67,7 +67,7 @@ rapidsmpf::streaming::Actor read_customer(std::shared_ptr<rapidsmpf::streaming::
                    .column_names({"c_custkey"})  // 0
                    .build();
   auto filter_expr = [&]() -> std::unique_ptr<cudf_streaming::filter> {
-    auto stream = ctx->br()->stream_pool().get_stream();
+    auto stream = ctx->br()->stream_pool()->get_stream();
     auto owner  = new std::vector<std::any>;
     owner->push_back(std::make_shared<cudf::string_scalar>("BUILDING", true, stream));
     owner->push_back(std::make_shared<cudf::ast::literal>(
@@ -104,7 +104,7 @@ rapidsmpf::streaming::Actor read_lineitem(std::shared_ptr<rapidsmpf::streaming::
                      "l_discount",       // 2
                    })
                    .build();
-  auto stream = ctx->br()->stream_pool().get_stream();
+  auto stream = ctx->br()->stream_pool()->get_stream();
   // l_shipdate > DATE '1995-03-15'
   constexpr auto date = cuda::std::chrono::year_month_day(
     cuda::std::chrono::year(1995), cuda::std::chrono::month(3), cuda::std::chrono::day(15));
@@ -134,7 +134,7 @@ rapidsmpf::streaming::Actor read_orders(std::shared_ptr<rapidsmpf::streaming::Co
                      "o_custkey"        // 3
                    })
                    .build();
-  auto stream = ctx->br()->stream_pool().get_stream();
+  auto stream = ctx->br()->stream_pool()->get_stream();
   // o_orderdate < DATE '1995-03-15'
   constexpr auto date = cuda::std::chrono::year_month_day(
     cuda::std::chrono::year(1995), cuda::std::chrono::month(3), cuda::std::chrono::day(15));

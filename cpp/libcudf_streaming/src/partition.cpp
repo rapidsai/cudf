@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/partitioning.hpp>
 
@@ -75,7 +75,7 @@ rapidsmpf::streaming::Actor unpack_and_concat(std::shared_ptr<rapidsmpf::streami
       data               = std::move(partition_vec.data);
     }
     // Get a stream for the concatenated table chunk.
-    auto stream = ctx->br()->stream_pool().get_stream();
+    auto stream = ctx->br()->stream_pool()->get_stream();
 
     std::unique_ptr<cudf::table> ret = cudf_streaming::unpack_and_concat(
       rapidsmpf::unspill_partitions(

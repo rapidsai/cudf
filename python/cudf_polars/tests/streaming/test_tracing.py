@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Integration tests for structlog tracing with rapidsmpf."""
 
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def chunk(spmd_engine: SPMDEngine) -> TableChunk:
     context = spmd_engine.context
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     df = DataFrame.from_polars(pl.DataFrame({"x": [1, 2, 3]}), stream)
     return TableChunk.from_pylibcudf_table(
         df.table, stream, exclusive_view=True, br=context.br()

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
@@ -6,7 +6,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["12.9", "13.2"]
+      cuda: ["12.9", "13.3"]
       arch: [x86_64, aarch64]
     includes:
       - build_base
@@ -92,6 +92,10 @@ files:
       - depends_on_libcudf
       - depends_on_numba_cuda
       - depends_on_numba_cuda_mlir
+  test_cuml:
+    output: none
+    includes:
+      - depends_on_cuml
   test_python_pylibcudf:
     output: none
     includes:
@@ -144,6 +148,17 @@ files:
   checks:
     output: none
     includes:
+      - develop
+      - py_version
+  test_cmake:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - build_cpp
+      - cuda
+      - cuda_static
+      - cuda_version
       - develop
       - py_version
   clang_tidy:
@@ -710,6 +725,10 @@ dependencies:
               cuda: "13.2"
             packages:
               - cuda-version=13.2
+          - matrix:
+              cuda: "13.3"
+            packages:
+              - cuda-version=13.3
       - output_types: requirements
         matrices:
           # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
@@ -760,6 +779,11 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==13.2.*
+          - matrix:
+              cuda: "13.3"
+              use_cuda_wheels: "true"
+            packages:
+              - cuda-toolkit==13.3.*
   cuda:
     common:
       - output_types: [conda]
@@ -799,6 +823,13 @@ dependencies:
           - matrix:
             packages:
               - *nvjitlink_cu13
+  cuda_static:
+    common:
+      - output_types: [conda]
+        packages:
+          - cuda-cudart-static
+          - cuda-nvrtc-static
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
@@ -1574,7 +1605,15 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib<3.11
           - numexpr
+          - odfpy
+          - pyxlsb
+          - python-calamine
+          - pytables
+          - xlrd
           - xlsxwriter
   depends_on_dask_cuda:
     common:
@@ -1606,6 +1645,11 @@ dependencies:
       - output_types: conda
         packages:
           - dask-cudf==26.8.*,>=0.0.0a0
+  depends_on_cuml:
+    common:
+      - output_types: conda
+        packages:
+          - cuml==26.8.*,>=0.0.0a0
   depends_on_custreamz:
     common:
       - output_types: conda

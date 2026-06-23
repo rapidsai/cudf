@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -244,7 +244,7 @@ def test_dataframe_axis1_unsupported_ops(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
 
     with pytest.raises(
-        NotImplementedError, match="Only axis=0 is currently supported."
+        NotImplementedError, match=r"Only axis=0 is currently supported."
     ):
         getattr(df, op)(axis=1)
 

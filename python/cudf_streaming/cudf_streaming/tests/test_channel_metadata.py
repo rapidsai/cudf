@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Tests for streaming metadata types (Partitioning and ChannelMetadata)."""
 
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 def _make_boundaries(context: Context, table: plc.Table) -> TableChunk:
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     return TableChunk.from_pylibcudf_table(
         table,
         stream,
@@ -111,9 +111,7 @@ def test_order_scheme(context: Context) -> None:
 
     with pytest.raises(TypeError, match="OrderKey"):
         OrderScheme(
-            [
-                (0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
-            ],  # ty: ignore[invalid-argument-type]
+            [(0, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)],  # ty: ignore[invalid-argument-type]
             _make_boundaries(
                 context,
                 plc.Table(
