@@ -3550,8 +3550,6 @@ NODEIDS_THAT_FAIL = {
     "tests/io/excel/test_readers.py::TestReaders::test_read_excel_blank_with_header[(None, '.xlsm')]": "AssertionError: Attributes of DataFrame.iloc[:, 0] (column name='col_1') are different",
     "tests/io/excel/test_readers.py::TestReaders::test_read_excel_blank_with_header[(None, '.xlsx')]": "AssertionError: Attributes of DataFrame.iloc[:, 0] (column name='col_1') are different",
     "tests/io/excel/test_readers.py::TestReaders::test_read_excel_ods_nested_xml[('odf', '.ods')-gh-36122-expected1]": "AssertionError: Attributes of DataFrame.iloc[:, 0] (column name='got 2nd sa') are different",
-    "tests/io/excel/test_openpyxl.py::test_engine_kwargs_append_data_only[True-0]": "openpyxl data_only=True reads cached formula results; freshly-written files have no cache, which is an openpyxl/Excel limitation rather than a cudf bug",
-    "tests/io/excel/test_openpyxl.py::test_engine_kwargs_append_data_only[False-=1+1]": "openpyxl data_only=True reads cached formula results; freshly-written files have no cache, which is an openpyxl/Excel limitation rather than a cudf bug",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[False]": "AttributeError: _compute. Did you mean: 'compare'?",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[True]": "AttributeError: _compute. Did you mean: 'compare'?",
     "tests/io/excel/test_style.py::test_format_hierarchical_rows_periodindex[columns]": "AttributeError: _compute. Did you mean: 'compare'?",
