@@ -1067,8 +1067,7 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
                                        cudf::numeric_scalar<int32_t>(0),
                                        cudf::numeric_scalar<int32_t>(num_rows / num_matches));
     auto zero_scalar  = cudf::numeric_scalar<int32_t>(0);
-    auto table        = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
-    gather_table      = std::move(table);
+    gather_table      = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
   }
 
   auto gather_map = gather_table->view().column(0);
