@@ -113,9 +113,7 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     base_mr: rmm.mr.DeviceMemoryResource | None
-    mr: RmmResourceAdaptor | None = (
-        None  # set after `Context` is built (below).
-    )
+    mr: RmmResourceAdaptor | None = None  # set after `Context` is built (below).
 
 
 def _setup_root(
