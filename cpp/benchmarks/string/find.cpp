@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -94,6 +94,9 @@ static void bench_find_string_skewed(nvbench::state& state)
   auto const long_tail_length = static_cast<cudf::size_type>(state.get_int64("long_tail_length"));
   auto const short_string_pct = static_cast<int32_t>(state.get_int64("short_string_pct"));
   auto const hit_rate         = static_cast<int32_t>(state.get_int64("hit_rate"));
+
+  CUDF_EXPECTS(short_length > 0, "short string length must be greater than 0");
+  CUDF_EXPECTS(long_tail_length > 0, "long tail length must be greater than 0");
 
   auto const stream = cudf::get_default_stream();
   auto const col    = create_skewed_string_column(

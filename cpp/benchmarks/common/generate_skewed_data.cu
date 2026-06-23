@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,18 +49,20 @@ constexpr auto template_strings = std::to_array<std::string_view>({
   "sksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksk"
   "sksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksk"
   "sksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksksk",
-  "AbcéDEFGHIJKLMNOPQRSTUVWXYZ 0123AbcéDEFGHIJKLMNOPQRSTUVWXYZ 0123AbcéDEFGHIJKLMNOPQRSTUVWXYZ "
-  "0123AbcéDEFGHIJKLMNOPQRSTUVWXYZ 0123AbcéDEFGHIJKLMNOPQRSTUVWXYZ 0123AbcéDEFGHIJKLMNOPQRSTUVWXYZ "
-  "0123AbcéDEFGHIJKLMNOPQRSTUVWXYZ 0123AbcéDEFGHIJKLMNOPQRSTUVWXYZ 0123",
+  "AbcéDEFGHIJKLMNOPQRSTUVWXYZ 012AbcéDEFGHIJKLMNOPQRSTUVWXYZ 012AbcéDEFGHIJKLMNOPQRSTUVWXYZ "
+  "012AbcéDEFGHIJKLMNOPQRSTUVWXYZ 012AbcéDEFGHIJKLMNOPQRSTUVWXYZ 012AbcéDEFGHIJKLMNOPQRSTUVWXYZ "
+  "012AbcéDEFGHIJKLMNOPQRSTUVWXYZ 012AbcéDEFGHIJKLMNOPQRSTUVWXYZ 012",
   "9876543210,abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,"
   "abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,"
   "abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU",
   "9876543210,abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,"
   "abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,"
   "abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU9876543210,abcdefghijklmnopqrstU",
-  "123 édf 4567890 DéFG 0987 X5 X67123 édf 4567890 DéFG 0987 X5 X67123 édf 4567890 DéFG 0987 X5 "
-  "X67123 édf 4567890 DéFG 0987 X5 X67123 édf 4567890 DéFG 0987 X5 X67123 édf 4567890 DéFG 0987 X5 "
-  "X67123 édf 4567890 DéFG 0987 X5 X67123 édf 4567890 DéFG 0987 X5 X67",
+  "123 édf 4567890 DéFG 0987 X567123 édf 4567890 DéFG 0987 X567123 édf 4567890 DéFG 0987 X567123 "
+  "édf "
+  "4567890 DéFG 0987 X567123 édf 4567890 DéFG 0987 X567123 édf 4567890 DéFG 0987 X567123 édf "
+  "4567890 "
+  "DéFG 0987 X567123 édf 4567890 DéFG 0987 X567",
   "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
   "111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
   "1111111111111111111111111111111111111111111111111111111111111111",
@@ -71,6 +73,7 @@ constexpr auto template_strings = std::to_array<std::string_view>({
  */
 std::string repeat_to_width(std::string_view str, std::size_t width)
 {
+  CUDF_EXPECTS(str.size() == 256, "string must an element of template_strings");
   std::string result;
   result.reserve(width);
   while (result.size() < width) {
@@ -108,8 +111,7 @@ std::unique_ptr<cudf::column> gather_with_hit_rate(cudf::column_view const& temp
   auto gather_table =
     create_random_table({cudf::type_id::INT32}, row_count{num_rows}, gather_profile);
 
-  // Added num_matches > 0 to guard against division by zero
-  if (num_matches > 0) {
+  if (num_matches > 0) {  // guard against division by zero
     auto const zero_scalar  = cudf::numeric_scalar<int32_t>(0);
     auto const scatter_data = cudf::sequence(
       num_matches, zero_scalar, cudf::numeric_scalar<int32_t>(num_rows / num_matches));
@@ -134,7 +136,7 @@ std::unique_ptr<cudf::column> make_short_row_mask(cudf::size_type num_rows,
                                         data_profile_builder().no_validity().distribution(
                                           cudf::type_id::INT32, distribution_id::UNIFORM, 1, 1));
 
-  if (num_short > 0) {
+  if (num_short > 0) {  // guard against division by zero
     auto const zero_scalar = cudf::numeric_scalar<int32_t>(0);
     auto const scatter_data =
       cudf::sequence(num_short, zero_scalar, cudf::numeric_scalar<int32_t>(num_rows / num_short));
