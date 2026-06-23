@@ -150,6 +150,17 @@ files:
     includes:
       - develop
       - py_version
+  test_cmake:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - build_cpp
+      - cuda
+      - cuda_static
+      - cuda_version
+      - develop
+      - py_version
   clang_tidy:
     output: none
     includes:
@@ -812,6 +823,13 @@ dependencies:
           - matrix:
             packages:
               - *nvjitlink_cu13
+  cuda_static:
+    common:
+      - output_types: [conda]
+        packages:
+          - cuda-cudart-static
+          - cuda-nvrtc-static
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
@@ -1587,7 +1605,15 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib<3.11
           - numexpr
+          - odfpy
+          - pyxlsb
+          - python-calamine
+          - pytables
+          - xlrd
           - xlsxwriter
   depends_on_dask_cuda:
     common:
