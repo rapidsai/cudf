@@ -50,32 +50,33 @@ class MaskedType(types.Type):
         return hash(repr(self))
 
 
+# ``Masked(value, valid)`` constructor: produces a ``Masked(value_ty)``.
+class MaskedConstructor(ConcreteTemplate):
+    key = Masked
+    cases = [
+        nb_signature(MaskedType(t), t, types.boolean)
+        for t in _supported_value_type_instances
+    ]
+
+
+# ``m.value`` -> inner value type; ``m.valid`` -> boolean.
+class MaskedTypeAttrs(AttributeTemplate):
+    key = MaskedType
+
+    def generic_resolve(self, typ, attr):
+        if attr == "value":
+            return typ.value_type
+        if attr == "valid":
+            return types.boolean
+        return None
+
+
 def _register():
     """Register typing for ``Masked`` and ``MaskedType`` attributes with
     ``numba_cuda_mlir``. Called once at module import.
     """
-
-    # ``Masked(value, valid)`` constructor: produces a ``Masked(value_ty)``.
-    class MaskedConstructor(ConcreteTemplate):
-        key = Masked
-        cases = [
-            nb_signature(MaskedType(t), t, types.boolean)
-            for t in _supported_value_type_instances
-        ]
-
     typing_registry.register_global(Masked, types.Function(MaskedConstructor))
-
-    # ``m.value`` -> inner value type; ``m.valid`` -> boolean.
-    @typing_registry.register_attr
-    class MaskedTypeAttrs(AttributeTemplate):
-        key = MaskedType
-
-        def generic_resolve(self, typ, attr):
-            if attr == "value":
-                return typ.value_type
-            if attr == "valid":
-                return types.boolean
-            return None
+    typing_registry.register_attr(MaskedTypeAttrs)
 
 
 _register()

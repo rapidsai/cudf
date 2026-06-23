@@ -15,6 +15,10 @@ from numba_cuda_mlir import (
     cuda,
     types,
 )
+from numba_cuda_mlir.numba_cuda.core.errors import (
+    NumbaPerformanceWarning,
+    NumbaWarning,
+)
 
 import cudf.core.udf.mlir_backend.masked_lowering
 import cudf.core.udf.mlir_backend.masked_typing  # noqa: F401
@@ -34,14 +38,34 @@ def _jit(sig):
                 category=UserWarning,
                 module=r"^numba\.cuda(\.|$)",
             )
+            # Advisory warning raised while linking LTOIR at opt>0; harmless
+            # for these tests and otherwise promoted to an error.
+            warnings.filterwarnings(
+                "ignore",
+                message="Linking LTOIR with optimization_level",
+                category=NumbaWarning,
+            )
             return cuda.jit(sig)(fn)
 
     return deco
 
 
 def _launch(kernel, *args):
-    """Launch ``kernel[1, 1](*args)`` with the low-occupancy warning suppressed."""
-    with _CUDFNumbaConfig():
+    """Launch ``kernel[1, 1](*args)``.
+
+    These unit kernels run on a 1x1 grid by design, so suppress the
+    low-occupancy performance warning (which numba_cuda_mlir raises on its
+    own config, independent of ``_CUDFNumbaConfig``) and the advisory LTO
+    linking warning. Both are otherwise promoted to errors by the project's
+    ``filterwarnings = error``.
+    """
+    with _CUDFNumbaConfig(), warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+        warnings.filterwarnings(
+            "ignore",
+            message="Linking LTOIR with optimization_level",
+            category=NumbaWarning,
+        )
         kernel[1, 1](*args)
     cuda.synchronize()
 
