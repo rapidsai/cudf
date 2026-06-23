@@ -14,6 +14,7 @@ import pytest
 import polars as pl
 
 import cudf_polars.quent
+import cudf_polars.quent._logging
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.quent._plan import build_plan, port_names_for_node
 from cudf_polars.quent._types import (
@@ -622,6 +623,17 @@ def test_quent_events(
     check_quent_events(engine_with_quent_context, quent_context)
 
 
+def test_emit_query_group_events_idempotent():
+    quent_context = cudf_polars.quent.QuentContext(
+        query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
+        query=cudf_polars.quent.Query(instance_name="test_query"),
+    )
+    logger = cudf_polars.quent._logging.QuentLogger()
+    quent_context._emit_query_group_events(logger)
+    quent_context._emit_query_group_events(logger)
+    assert len(logger._buffer) == 1
+
+
 def test_serialize_list_raises():
     with pytest.raises(NotImplementedError, match="not supported yet"):
         Attribute("list", [1, 2]).serialize()
@@ -630,3 +642,10 @@ def test_serialize_list_raises():
 def test_serialize_dict_raises():
     with pytest.raises(NotImplementedError, match="not supported yet"):
         Attribute("dict", {"a": 1, "b": 2}).serialize()
+
+
+def test_quent_serialize_none():
+    assert Attribute("none", None).serialize() == {
+        "key": "none",
+        "value": None,
+    }
