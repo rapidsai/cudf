@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -602,7 +602,7 @@ class DatetimeColumn(TemporalBaseColumn):
             )
         with self.access(mode="read", scope="internal"):
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 ColumnBase.create(
                     plc.strings.convert.convert_datetime.from_timestamps(
                         self.plc_column,
@@ -777,9 +777,9 @@ class DatetimeColumn(TemporalBaseColumn):
             # When the operation should yield another datetime and self
             # is tz-aware, carry the tz forward with the resolved unit.
             if self_is_tz and result_dtype.kind == "M":
-                tz_dtype = cast(pd.DatetimeTZDtype, self.dtype)
+                tz_dtype = cast("pd.DatetimeTZDtype", self.dtype)
                 unit = np.datetime_data(
-                    cast(np.dtype[np.datetime64], result_dtype)
+                    cast("np.dtype[np.datetime64]", result_dtype)
                 )[0]
                 return pd.DatetimeTZDtype(unit, tz_dtype.tz)
             return result_dtype
@@ -988,7 +988,7 @@ class DatetimeColumn(TemporalBaseColumn):
         if is_arrow:
             dtype = pd.ArrowDtype(pa.timestamp(self.time_unit, tz))  # type: ignore[call-overload]
         result = cast(
-            DatetimeTZColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+            "DatetimeTZColumn", ColumnBase.create(gmt_data.plc_column, dtype)
         )
         # Avoid re-computing local times from UTC times
         result._local_time = localized
@@ -1070,7 +1070,7 @@ class DatetimeTZColumn(DatetimeColumn):
         # Perform the add on the tz-naive UTC view so the result is naive
         # (``self + offsets`` now preserves tz by default). The local-time
         # column must be tz-naive to represent the wall-clock values.
-        return cast(DatetimeColumn, self._utc_time + offsets_from_utc)
+        return cast("DatetimeColumn", self._utc_time + offsets_from_utc)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         return self._local_time.as_string_column(dtype)
@@ -1105,7 +1105,7 @@ class DatetimeTZColumn(DatetimeColumn):
                     .plc_column
                 )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
+                    "DatetimeTZColumn", ColumnBase.create(casted_plc, dtype)
                 )
             else:
                 casted = self
@@ -1118,7 +1118,7 @@ class DatetimeTZColumn(DatetimeColumn):
                     .plc_column
                 )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
+                    "DatetimeTZColumn", ColumnBase.create(casted_plc, dtype)
                 )
             else:
                 casted = self
@@ -1192,6 +1192,6 @@ class DatetimeTZColumn(DatetimeColumn):
                 pd.DatetimeTZDtype(self.time_unit, tz)
             )
         return cast(
-            DatetimeTZColumn,
+            "DatetimeTZColumn",
             ColumnBase.create(self.plc_column, target_dtype),
         )

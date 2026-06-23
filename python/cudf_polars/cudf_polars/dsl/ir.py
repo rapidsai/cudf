@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the LogicalPlan of polars.
@@ -2156,7 +2156,7 @@ class ConditionalJoin(IR):
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
-        _, nulls_equal, zlice, suffix, coalesce, maintain_order = self.options
+        _, nulls_equal, _zlice, _suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
         assert not nulls_equal
         assert not coalesce

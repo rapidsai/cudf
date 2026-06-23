@@ -9,10 +9,14 @@ import cupy
 import pylibcudf as plc
 import pytest
 
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+)
 from cudf_streaming.streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.cuda_stream import is_equal_streams
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.content_description import ContentDescription
@@ -20,7 +24,6 @@ from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.core.actor import define_actor, run_actor_network
 from rapidsmpf.streaming.core.message import Message
 from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
-from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
@@ -406,7 +409,7 @@ def test_shape_accessor(
     expected_shape = (expect.num_rows(), expect.num_columns())
 
     if from_pack:
-        pd = PackedData.from_cudf_packed_columns(
+        pd = packed_data_from_cudf_packed_columns(
             plc.contiguous_split.pack(expect, stream), stream, context.br()
         )
         device_chunk = TableChunk.from_packed_data(pd, br=context.br())
@@ -444,7 +447,7 @@ def test_into_packed_data(
 ) -> None:
     expect = random_table(1024)
     if from_pack:
-        pd = PackedData.from_cudf_packed_columns(
+        pd = packed_data_from_cudf_packed_columns(
             plc.contiguous_split.pack(expect, stream), stream, context.br()
         )
         chunk = TableChunk.from_packed_data(pd, br=context.br())

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming-engine using the SPMD Cluster style."""
 
@@ -10,21 +10,22 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
+import pylibcudf as plc
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
+from pylibcudf.contiguous_split import pack
 from rapidsmpf import bootstrap
 from rapidsmpf.coll import AllGather
 from rapidsmpf.communicator.single import (
     new_communicator as single_communicator,
 )
 from rapidsmpf.communicator.ucxx import barrier
-from rapidsmpf.integrations.cudf.partition import unpack_and_concat
-from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import pylibcudf as plc
-from pylibcudf.contiguous_split import pack
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.core import (
@@ -51,11 +52,11 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable
 
+    import polars as pl
+
+    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.config import Options
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
-
-    import polars as pl
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -156,18 +157,17 @@ def allgather_polars_dataframe(
     """
     comm = engine.comm
     ctx = engine.context
-    stream = ctx.get_stream_from_pool()
+    stream = ctx.br().stream_pool.get_stream()
     col_names = local_df.columns
     dtypes = [DataType(dtype) for dtype in local_df.dtypes]
 
     plc_table = plc.Table.from_arrow(local_df, stream=stream)
 
-    packed_data = PackedData.from_cudf_packed_columns(
+    packed_data = packed_data_from_cudf_packed_columns(
         pack(plc_table, stream),
         stream,
         ctx.br(),
     )
-
     # Bulk AllGather: each rank contributes once (sequence_number=0)
     allgather = AllGather(comm, op_id, ctx.br())
     try:
@@ -341,7 +341,7 @@ class SPMDEngine(StreamingEngine):
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
-            HardwareBindingPolicy,
+            "HardwareBindingPolicy",
             engine_options.get("hardware_binding", HardwareBindingPolicy()),
         )
         bind_to_gpu(hw_binding)
@@ -392,7 +392,7 @@ class SPMDEngine(StreamingEngine):
             # future so by the time we reach shutdown the executor has no
             # in-flight work and wait returns immediately.
             self._py_executor = ThreadPoolExecutor(
-                max_workers=cast(int, executor_options.get("num_py_executors", 8)),
+                max_workers=cast("int", executor_options.get("num_py_executors", 8)),
                 thread_name_prefix="spmd-executor",
             )
             exit_stack.callback(

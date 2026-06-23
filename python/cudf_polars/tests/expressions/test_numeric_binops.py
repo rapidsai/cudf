@@ -10,6 +10,7 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
+    assert_ir_translation_raises,
 )
 from cudf_polars.utils.versions import POLARS_VERSION_LT_140
 
@@ -148,3 +149,21 @@ def test_sum_decimal_widens_precision(request) -> None:
         schema={"x": pl.Decimal(15, 2)},
     )
     assert df.select(pl.sum("x")).collect_schema()["x"] == pl.Decimal(38, 2)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a") * pl.col("b") + pl.col("c"),
+        pl.col("a") - pl.col("b") * pl.col("c"),
+        pl.col("a") * pl.col("b") - pl.col("c"),
+    ],
+    ids=["fma", "fsm", "fms"],
+)
+def test_fused_arithmetic(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    # fma: fused multiply add
+    # fsm: fused subtract multiply
+    # fms: fused multiply subtract
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [10, 20, 30], "c": [5, 5, 5]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)

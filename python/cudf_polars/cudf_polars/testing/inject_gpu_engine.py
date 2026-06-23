@@ -1,13 +1,15 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite using the GPU engine."""
 
 from __future__ import annotations
 
+import sqlite3
 from functools import partialmethod
 from typing import TYPE_CHECKING
 
+import packaging.version
 import pytest
 
 import polars
@@ -290,7 +292,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 
-TESTS_TO_SKIP: Mapping[str, str] = {
+TESTS_TO_SKIP: dict[str, str] = {
     "tests/unit/operations/test_profile.py::test_profile_with_cse": "Shape assertion won't match",
     # value_counts / struct-expansion row ordering is not guaranteed, so the GPU
     # result may or may not match CPU. Skip rather than xfail to avoid a flaky
@@ -340,6 +342,31 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Checks to IO metric logs specific to Polars CPU",
     "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Checks to IO metric logs specific to Polars CPU",
 }
+
+
+if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3.44.0"):
+    # These tests rely on features not available in older versions of sqlite.
+    TESTS_TO_SKIP.update(
+        {
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[SUM(x) FILTER (WHERE y > 20)-values0]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[AVG(x) FILTER (WHERE y > 20)-values1]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[MIN(x) FILTER (WHERE grp = 'a')-values2]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[MAX(x) FILTER (WHERE grp = 'a')-values3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(*) FILTER (WHERE grp = 'a')-values4]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(1) FILTER (WHERE grp = 'a')-values5]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(x) FILTER (WHERE grp = 'a')-values6]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(x) FILTER (WHERE y > 20)-values7]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(DISTINCT x) FILTER (WHERE y > 20)-values8]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[SUM(x) FILTER (WHERE y > 20)-13]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[AVG(x) FILTER (WHERE y > 20)-4.333333333333333]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(*) FILTER (WHERE grp = 'a')-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(x) FILTER (WHERE y > 20)-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(DISTINCT x) FILTER (WHERE grp = 'b')-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_multiple_aggs": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[STRING_AGG]": 'sqlite3.OperationalError: near "ORDER": syntax error',
+            "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[GROUP_CONCAT]": 'sqlite3.OperationalError: near "ORDER": syntax error',
+        }
+    )
 
 
 # Generally skip for:
@@ -484,8 +511,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_scalar.py::test_scalar_len_20046": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
     "tests/unit/sql/test_group_by.py::test_group_by_empty_or_scalar_key_exprs_23397": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df10-df20-LOWER(TRIM(df1.text)) = df2.text-expected0]": "streaming Sort resolves ORDER BY keys by alias not column (https://github.com/rapidsai/cudf/pull/22781)",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df11-df21-LOWER(SUBSTR(df1.code,1,6)) = df2.code-expected1]": "streaming Sort resolves ORDER BY keys by alias not column (https://github.com/rapidsai/cudf/pull/22781)",
     "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-WHERE 1 = 1]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-WHERE 1 = 1]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
@@ -504,7 +529,7 @@ def pytest_collection_modifyitems(
         return
     with_streaming_engine = config.getoption("--inject-gpu-engine") == "spmd"
     for item in items:
-        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
+        if (reason := TESTS_TO_SKIP.get(item.nodeid)) is not None or (
             with_streaming_engine
             and (reason := STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid, None))
             is not None

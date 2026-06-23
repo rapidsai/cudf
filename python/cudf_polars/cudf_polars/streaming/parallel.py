@@ -25,6 +25,7 @@ from cudf_polars.dsl.expr import Col, Literal, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
+    ErrorNode,
     Filter,
     HConcat,
     HStack,
@@ -165,6 +166,14 @@ def _(
     new_node = ir.reconstruct(children)
     partition_info[new_node] = PartitionInfo(count=count)
     return new_node, partition_info
+
+
+@lower_ir_node.register(ErrorNode)
+def _(
+    ir: ErrorNode, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # nothing to lower or repartition.
+    return ir, {ir: PartitionInfo(count=1)}
 
 
 @lower_ir_node.register(MapFunction)

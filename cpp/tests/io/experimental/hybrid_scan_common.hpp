@@ -9,15 +9,22 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <cuda/iterator>
 
 #include <format>
+#include <random>
+#include <string>
+#include <utility>
+#include <vector>
 
 /**
  * @brief Creates a strings column with a constant stringified value between 0 and 9999
@@ -33,6 +40,51 @@ cudf::test::strings_column_wrapper inline constant_strings(cudf::size_type value
   auto elements = thrust::make_transform_iterator(cuda::make_constant_iterator(value),
                                                   [](auto i) { return std::format("{:04d}", i); });
   return cudf::test::strings_column_wrapper(elements, elements + num_ordered_rows);
+}
+
+/**
+ * @brief Helper to construct a random list<str> column
+ *
+ * @param gen Random engine
+ * @param is_str_nullable Whether the string column should be nullable
+ * @param is_list_nullable Whether the list column should be nullable
+ *
+ * @return Unique pointer to the constructed list<str> column
+ */
+inline auto make_list_str_column(std::mt19937& gen, bool is_str_nullable, bool is_list_nullable)
+{
+  auto constexpr num_rows        = num_ordered_rows;
+  auto constexpr string_per_row  = 3;
+  auto constexpr num_string_rows = num_rows * string_per_row;
+
+  std::vector<std::string> strings{
+    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
+  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
+  auto string_iter = cudf::detail::make_counting_transform_iterator(
+    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
+
+  std::bernoulli_distribution bn(0.7f);
+  auto string_valids = cudf::detail::make_counting_transform_iterator(
+    0, [&](int index) { return is_str_nullable ? bn(gen) : true; });
+  cudf::test::strings_column_wrapper string_col{
+    string_iter, string_iter + num_string_rows, string_valids};
+
+  auto offset_iter = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type idx) { return idx * string_per_row; });
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
+                                                                  offset_iter + num_rows + 1);
+
+  auto list_valids =
+    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
+  auto [null_mask, null_count] = [&]() {
+    if (is_list_nullable) {
+      return cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+    } else {
+      return std::make_pair(rmm::device_buffer{}, 0);
+    }
+  }();
+  return cudf::make_lists_column(
+    num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
 }
 
 /**

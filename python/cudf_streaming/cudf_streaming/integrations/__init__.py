@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """Collection of cuDF specific functions."""
 
-from cudf_streaming.integrations.partition import unpack_and_concat
+from cudf_streaming.integrations.partition import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
 
-__all__ = ["unpack_and_concat"]
+__all__ = ["packed_data_from_cudf_packed_columns", "unpack_and_concat"]
