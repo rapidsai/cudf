@@ -359,19 +359,22 @@ class regex_parser {
       if (!is_quoted && chr == '-' && !literals.empty()) {
         auto [q, n_chr] = next_char();
         if (n_chr == 0) { return 0; }  // malformed: '[x-'
-
-        if (!q && n_chr == ']') {  // handles: '[x-]'
+        if (!q && n_chr == ']') {      // handles: '[x-]'
           literals.push_back(chr);
-          literals.push_back(chr);  // add '-' as literal
+          literals.push_back(0);
           break;
         }
-        // normal case: '[a-z]'
-        // update end-range character
-        literals.back() = n_chr;
+        if (0 == literals.back()) {
+          literals.back() = n_chr;  // normal case: '[a-z]' update end-range character
+        } else {
+          literals.push_back(chr);  // adds '-'
+          literals.push_back(chr);
+          literals.push_back(n_chr);  // adds new character
+          literals.push_back(0);
+        }
       } else {
-        // add single literal
         literals.push_back(chr);
-        literals.push_back(chr);
+        literals.push_back(0);
       }
       std::tie(is_quoted, chr) = next_char();
     }
@@ -382,8 +385,9 @@ class regex_parser {
                    counter + (literals.size() / 2),
                    std::back_inserter(ranges),
                    [&literals, this](auto idx) {
-                     auto const lhs = literals[idx * 2];
-                     auto const rhs = literals[idx * 2 + 1];
+                     auto const lhs  = literals[idx * 2];
+                     auto const next = literals[idx * 2 + 1];
+                     auto const rhs  = next == 0 ? lhs : next;
                      CUDF_EXPECTS(lhs <= rhs,
                                   "invalid character range in class at " +
                                     std::to_string(std::distance(_pattern_begin, _expr_ptr)));
