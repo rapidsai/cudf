@@ -150,6 +150,17 @@ files:
     includes:
       - develop
       - py_version
+  test_cmake:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - build_cpp
+      - cuda
+      - cuda_static
+      - cuda_version
+      - develop
+      - py_version
   clang_tidy:
     output: none
     includes:
@@ -812,6 +823,13 @@ dependencies:
           - matrix:
             packages:
               - *nvjitlink_cu13
+  cuda_static:
+    common:
+      - output_types: [conda]
+        packages:
+          - cuda-cudart-static
+          - cuda-nvrtc-static
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
