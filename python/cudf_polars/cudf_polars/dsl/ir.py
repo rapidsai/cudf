@@ -276,6 +276,8 @@ def prefetch_parquet_file_metadata_for_ir(
 
     if missing_paths:
         with cm:
+            # TODO: "Consider batching footer reads for SplitScan"
+            # https://github.com/rapidsai/cudf/pull/22700#discussion_r3455262132
             paths, metadata = executor.submit(
                 _prefetch_parquet_footers_for_paths, missing_paths
             ).result()
