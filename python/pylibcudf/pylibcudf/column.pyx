@@ -1,21 +1,21 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
 
-from cpython.pycapsule cimport (
-    PyCapsule_GetPointer,
-    PyCapsule_New,
-)
+from cpython.exc cimport PyErr_Occurred
+from cpython.pycapsule cimport PyCapsule_GetPointer, PyCapsule_New
+from cpython.ref cimport PyObject
 
-from libc.stdint cimport uintptr_t
-
+from libc.stddef cimport size_t
+from libc.stdint cimport uint64_t, uintptr_t
 from libcpp.limits cimport numeric_limits
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
+from pylibcudf.libcudf.copying cimport get_element
 from pylibcudf.libcudf.interop cimport (
     ArrowArray,
     ArrowArrayStream,
@@ -23,8 +23,9 @@ from pylibcudf.libcudf.interop cimport (
     ArrowDeviceArray,
     arrow_column,
     column_metadata,
-    to_arrow_host_raw,
+    release_arrow_array_raw,
     to_arrow_device_raw,
+    to_arrow_host_raw,
     to_arrow_schema_raw,
 )
 from pylibcudf.libcudf.null_mask cimport bitmask_allocation_size_bytes
@@ -32,16 +33,19 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.lists.lists_column_view cimport lists_column_view
 from pylibcudf.libcudf.strings.strings_column_view cimport strings_column_view
 from pylibcudf.libcudf.structs.structs_column_view cimport structs_column_view
-from pylibcudf.libcudf.types cimport size_type, size_of as cpp_size_of, bitmask_type
+from pylibcudf.libcudf.types cimport bitmask_type, size_of as cpp_size_of, size_type
 from pylibcudf.libcudf.utilities.traits cimport is_fixed_width
-from pylibcudf.libcudf.copying cimport get_element
-
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
-from .gpumemoryview cimport gpumemoryview
+from ._interop_helpers cimport (
+    _metadata_to_libcudf,
+    _release_array,
+    _release_device_array,
+    _release_schema,
+)
 from .filling cimport sequence
 from .gpumemoryview cimport gpumemoryview
 from .scalar cimport Scalar
@@ -51,21 +55,16 @@ from .traits cimport (
     is_nested,
 )
 from .types cimport DataType, size_of, type_id
-from ._interop_helpers cimport (
-    _release_schema,
-    _release_array,
-    _release_device_array,
-    _metadata_to_libcudf,
-)
+from pylibcudf.types import TypeId
 from .utils cimport _get_stream, _get_memory_resource
 
 from .gpumemoryview import _datatype_from_dtype_desc
 from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
 
 import array
-from itertools import accumulate
 import functools
 import operator
+from itertools import accumulate
 from typing import Iterable
 from cuda.bindings.cyruntime cimport cudaStream_t
 
@@ -1256,6 +1255,40 @@ cdef class Column:
 
         return Column.from_array_interface(ArrayInterfaceWrapper(iface), stream)
 
+    cpdef list to_pylist(self):
+        """
+        Convert the Column to a Python list.
+
+        Only supports fixed-width and string columns.
+
+        Returns
+        -------
+        list
+            A list of Python objects representing the column data.
+
+        Raises
+        ------
+        NotImplementedError
+            If the column type is not fixed-width or string.
+        """
+        cdef type_id dtype = self.type().id()
+        cdef bint large_offsets = (
+            dtype == type_id.STRING
+            and self.num_children() > 0
+            and self.child(0).type().id() == type_id.INT64
+        )
+        cdef Stream _stream = _get_stream(None)
+        cdef cudaStream_t _cs = _stream.view().value()
+        cdef ArrowArray* raw_host_array_ptr = NULL
+        with nogil:
+            raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
+        try:
+            return _arrow_to_pylist_impl(dtype, raw_host_array_ptr, large_offsets)
+        finally:
+            if raw_host_array_ptr != NULL:
+                with nogil:
+                    release_arrow_array_raw(raw_host_array_ptr)
+
     @classmethod
     def struct_from_children(cls, children: Iterable[Column]):
         """
@@ -1585,3 +1618,169 @@ def is_c_contiguous(
             return False
         cumulative_stride *= dim
     return True
+
+
+cdef extern from *:
+    """
+    #include <Python.h>
+    #include <cstdint>
+    #include <type_traits>
+    #include <cudf/types.hpp>
+    #include <cudf/utilities/type_dispatcher.hpp>
+
+    // See https://arrow.apache.org/docs/format/Columnar.html#validity-bitmaps
+    // for more details on how the validity bitmap works.
+    static inline bool _is_valid(const uint8_t* bm, size_t idx) {
+      if (!bm) return true;
+      return ((bm[idx >> 3] >> (idx & 7)) & 1) != 0;
+    }
+
+    // Helper: PyList_SetItem steals a reference, so we incref
+    // borrowed singletons before calling it.
+    // https://docs.python.org/3/c-api/list.html#c.PyList_SetItem
+    static inline void _set_item(PyObject* list, Py_ssize_t i, PyObject* obj) {
+      Py_INCREF(obj);
+      PyList_SetItem(list, i, obj);
+    }
+
+    template <bool check_valid, typename T>
+    static inline PyObject* _make_pylist(int64_t n,
+                                         int64_t offset,
+                                         const uint8_t* null_bm,
+                                         const T& conv)
+    {
+      auto out = PyList_New(n);
+      if (!out) return nullptr;
+      for (int64_t i = 0; i < n; ++i) {
+        auto bit_index = static_cast<size_t>(offset + i);
+        if constexpr (check_valid) {
+          if (!_is_valid(null_bm, bit_index)) {
+            // TODO: Py_INCREF(Py_None) unnecessary once Python<3.12 is
+            // dropped (Py_None is immortal in 3.12+).
+            _set_item(out, i, Py_None);
+            continue;
+          }
+        }
+        auto obj = conv(i, bit_index);
+        if (!obj) {
+          Py_DECREF(out);
+          return nullptr;
+        }
+        PyList_SetItem(out, i, obj);
+      }
+      return out;
+    }
+
+    // Maps supported type_ids to their C++ types, unsupported ones to void.
+    // This limits type_dispatcher instantiations to only the types we handle.
+    template <cudf::type_id Id>
+    struct dispatch_pylist_type {
+      using mapped = typename cudf::id_to_type_impl<Id>::type;
+      using type   = std::conditional_t<std::is_arithmetic_v<mapped> ||
+                                           std::is_same_v<mapped, cudf::string_view>,
+                                         mapped,
+                                         void>;
+    };
+
+    template <bool check_valid>
+    struct pylist_functor {
+      ArrowArray* arr;
+      bool large_offsets;
+
+      template <typename T, std::enable_if_t<std::is_same_v<T, void>>* = nullptr>
+      PyObject* operator()() const { return nullptr; }
+
+      template <typename T, std::enable_if_t<std::is_same_v<T, bool>>* = nullptr>
+      PyObject* operator()() const
+      {
+        auto null_bm = check_valid
+                          ? static_cast<const uint8_t*>(arr->buffers[0]) : nullptr;
+        return _make_pylist<check_valid>(
+          arr->length, arr->offset, null_bm,
+          [bools = static_cast<const uint8_t*>(arr->buffers[1])]
+          (int64_t, size_t bit_index) -> PyObject* {
+            bool val = ((bools[bit_index >> 3] >> (bit_index & 7)) & 1) != 0;
+            // TODO: Py_INCREF unnecessary for Py_True/Py_False once
+            // Python<3.12 is dropped (immortal in 3.12+).
+            // See: https://docs.python.org/3/c-api/bool.html
+            auto obj = val ? Py_True : Py_False;
+            Py_INCREF(obj);
+            return obj;
+          });
+      }
+
+      // For strings, Arrow uses offsets (buffers[1]) + char data (buffers[2]).
+      // Offsets may be int32_t (standard) or int64_t (large strings > 2GB).
+      template <typename T, std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
+      PyObject* operator()() const
+      {
+        auto null_bm = check_valid
+                          ? static_cast<const uint8_t*>(arr->buffers[0]) : nullptr;
+        auto str_base = static_cast<const char*>(arr->buffers[2]);
+        if (large_offsets) {
+          auto str_offsets = static_cast<const int64_t*>(arr->buffers[1]) + arr->offset;
+          return _make_pylist<check_valid>(
+            arr->length, arr->offset, null_bm,
+            [str_offsets, str_base](int64_t i, size_t) -> PyObject* {
+              return PyUnicode_DecodeUTF8(
+                str_base + str_offsets[i], str_offsets[i + 1] - str_offsets[i], nullptr);
+            });
+        } else {
+          auto str_offsets = static_cast<const int32_t*>(arr->buffers[1]) + arr->offset;
+          return _make_pylist<check_valid>(
+            arr->length, arr->offset, null_bm,
+            [str_offsets, str_base](int64_t i, size_t) -> PyObject* {
+              return PyUnicode_DecodeUTF8(
+                str_base + str_offsets[i], str_offsets[i + 1] - str_offsets[i], nullptr);
+            });
+        }
+      }
+
+      template <typename T,
+                std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>>* = nullptr>
+      PyObject* operator()() const
+      {
+        auto null_bm = check_valid
+                          ? static_cast<const uint8_t*>(arr->buffers[0]) : nullptr;
+        auto base = static_cast<const T*>(arr->buffers[1]) + arr->offset;
+        return _make_pylist<check_valid>(
+          arr->length, arr->offset, null_bm,
+          [base](int64_t i, size_t) -> PyObject* {
+            auto v = base[i];
+            if constexpr (std::is_integral_v<T> && std::is_signed_v<T>) {
+              return PyLong_FromLongLong(static_cast<long long>(v));
+            } else if constexpr (std::is_integral_v<T> && std::is_unsigned_v<T>) {
+              return PyLong_FromUnsignedLongLong(static_cast<unsigned long long>(v));
+            } else {
+              return PyFloat_FromDouble(static_cast<double>(v));
+            }
+          });
+      }
+    };
+
+    static inline PyObject* cpp_arrow_to_pylist_impl(
+      cudf::type_id dtype, ArrowArray* arr, bool large_offsets)
+    {
+      if (arr->length == 0) return PyList_New(0);
+
+      if (arr->null_count != 0) {
+        return cudf::type_dispatcher<dispatch_pylist_type>(
+          cudf::data_type{dtype}, pylist_functor<true>{arr, large_offsets});
+      } else {
+        return cudf::type_dispatcher<dispatch_pylist_type>(
+          cudf::data_type{dtype}, pylist_functor<false>{arr, large_offsets});
+      }
+    }
+    """
+    PyObject* cpp_arrow_to_pylist_impl(
+        type_id dtype, ArrowArray* arr, bint large_offsets)
+
+cdef list _arrow_to_pylist_impl(type_id dtype, ArrowArray* arr, bint large_offsets):
+    cdef PyObject* list_ = cpp_arrow_to_pylist_impl(dtype, arr, large_offsets)
+    if list_ == NULL:
+        if PyErr_Occurred():
+            raise
+        raise NotImplementedError(
+            f"Column with dtype={TypeId(dtype)} not supported"
+        )
+    return <list>list_
