@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -317,10 +317,10 @@ bool frontier_has_priority_conflict(std::vector<frontier_item> const& items, gkp
 void build_shift_masks(gkprog& gp)
 {
   // Collect per-span source-position bitmasks
-  std::map<int32_t, g_state_t> span_to_mask;
+  std::map<int32_t, glushkov_state_t> span_to_mask;
 
   for (uint32_t p = 0; p < gp.num_states; ++p) {
-    g_state_t follow = gp.follow_table[p];
+    glushkov_state_t follow = gp.follow_table[p];
     while (follow) {
       uint32_t const q =
         static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(follow)));
@@ -328,17 +328,18 @@ void build_shift_masks(gkprog& gp)
 
       int32_t const span = static_cast<int32_t>(q) - static_cast<int32_t>(p);
       if (span >= 1 && span <= 63) {
-        span_to_mask[span] |= g_state_t(1) << p;
+        span_to_mask[span] |= glushkov_state_t(1) << p;
       } else {
         // Unconditional exception
-        gp.exception_mask |= g_state_t(1) << p;
-        gp.exception_succs[p] |= g_state_t(1) << q;
+        gp.exception_mask |= glushkov_state_t(1) << p;
+        gp.exception_succs[p] |= glushkov_state_t(1) << q;
       }
     }
   }
 
   // Sort candidate spans by population (descending) to pick the best slots
-  std::vector<std::pair<int32_t, g_state_t>> span_list(span_to_mask.begin(), span_to_mask.end());
+  std::vector<std::pair<int32_t, glushkov_state_t>> span_list(span_to_mask.begin(),
+                                                              span_to_mask.end());
   std::sort(span_list.begin(), span_list.end(), [](auto const& a, auto const& b) {
     return __builtin_popcountll(static_cast<long long>(a.second)) >
            __builtin_popcountll(static_cast<long long>(b.second));
@@ -358,15 +359,15 @@ void build_shift_masks(gkprog& gp)
 
   // Demote overflow spans to exceptions
   for (size_t i = gp.shift_count; i < span_list.size(); ++i) {
-    g_state_t src   = span_list[i].second;
-    int32_t const s = span_list[i].first;
+    glushkov_state_t src = span_list[i].second;
+    int32_t const s      = span_list[i].first;
     while (src) {
       uint32_t const p =
         static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(src)));
       src &= src - 1;
       uint32_t const q = static_cast<uint32_t>(static_cast<int32_t>(p) + s);
-      gp.exception_mask |= g_state_t(1) << p;
-      gp.exception_succs[p] |= g_state_t(1) << q;
+      gp.exception_mask |= glushkov_state_t(1) << p;
+      gp.exception_succs[p] |= glushkov_state_t(1) << q;
     }
   }
 }
@@ -441,7 +442,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
     if (has_assert) { return nullptr; }
     for (int32_t iid : plist) {
       int32_t const pos = inst_to_pos[iid];
-      if (pos >= 0) { gp->first_set |= g_state_t(1) << pos; }
+      if (pos >= 0) { gp->first_set |= glushkov_state_t(1) << pos; }
     }
     // if (is_accept) { gp->nullable = true; }
     empty_matchable = is_accept;
@@ -466,9 +467,9 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
 
     for (int32_t fiid : follow_insts) {
       int32_t const fpos = inst_to_pos[fiid];
-      if (fpos >= 0) { gp->follow_table[idx] |= g_state_t(1) << fpos; }
+      if (fpos >= 0) { gp->follow_table[idx] |= glushkov_state_t(1) << fpos; }
     }
-    if (is_accept) { gp->accept_mask |= g_state_t(1) << idx; }
+    if (is_accept) { gp->accept_mask |= glushkov_state_t(1) << idx; }
   }
 
   // ---- Step 5b: Detect Thompson priority conflicts ------------------------
@@ -523,7 +524,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
         }
         default: break;
       }
-      if (matches) { gp->reach_ascii[c] |= g_state_t(1) << p; }
+      if (matches) { gp->reach_ascii[c] |= glushkov_state_t(1) << p; }
     }
   }
 
@@ -532,10 +533,10 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
   // literal, record that character so glushkov_find can use a tight byte-scan
   // (like Thompson NFA's find_char) instead of a reach-table lookup per byte.
   if (gp->first_set != 0) {
-    g_state_t fs    = gp->first_set;
-    char32_t common = 0;
-    bool all_char   = true;
-    bool seen_first = false;
+    glushkov_state_t fs = gp->first_set;
+    char32_t common     = 0;
+    bool all_char       = true;
+    bool seen_first     = false;
     while (fs) {
       uint32_t const p =
         static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(fs)));

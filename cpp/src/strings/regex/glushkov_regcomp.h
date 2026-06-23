@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -46,13 +46,13 @@ namespace detail {
  * character-consuming instructions in the Thompson NFA.
  */
 struct gkprog {
-  uint32_t num_states{};    ///< Number of character-consuming positions
-  g_state_t first_set{};    ///< Bitmask: positions reachable before first character
-  g_state_t accept_mask{};  ///< Bitmask: positions whose match completes the pattern
+  uint32_t num_states{};           ///< Number of character-consuming positions
+  glushkov_state_t first_set{};    ///< Bitmask: positions reachable before first character
+  glushkov_state_t accept_mask{};  ///< Bitmask: positions whose match completes the pattern
   // bool nullable{};          ///< True if the empty string satisfies the pattern
 
   /// follow_table[p] = bitmask of positions that can immediately follow position p.
-  std::array<g_state_t, GLUSHKOV_MAX_STATES> follow_table{};
+  std::array<glushkov_state_t, GLUSHKOV_MAX_STATES> follow_table{};
 
   // ---- Per-position character-matching descriptors ----
   // Using struct-of-arrays to avoid a separate shared struct that would need
@@ -73,7 +73,7 @@ struct gkprog {
   //                   + exception transitions for states in exception_mask
 
   /// shift_masks[k]: source positions whose follow includes a span-k transition.
-  std::array<g_state_t, GLUSHKOV_MAX_SHIFTS> shift_masks{};
+  std::array<glushkov_state_t, GLUSHKOV_MAX_SHIFTS> shift_masks{};
   /// The corresponding shift amounts (ascending, 1-based).
   std::array<uint8_t, GLUSHKOV_MAX_SHIFTS> shift_amounts{};
   /// Number of valid entries in shift_masks / shift_amounts.
@@ -86,10 +86,10 @@ struct gkprog {
   cuda::std::optional<char32_t> startchar{};
 
   /// Bitmask of positions with at least one "exception" (non-shift) transition.
-  g_state_t exception_mask{};
+  glushkov_state_t exception_mask{};
   /// exception_succs[p] = union of all non-shift successor positions for position p.
   /// Non-zero only when bit p is set in exception_mask.
-  std::array<g_state_t, GLUSHKOV_MAX_STATES> exception_succs{};
+  std::array<glushkov_state_t, GLUSHKOV_MAX_STATES> exception_succs{};
 
   /// Character class definitions (copied from the Thompson NFA reprog).
   std::vector<reclass> classes;
@@ -98,7 +98,7 @@ struct gkprog {
   /// reach_ascii[c] = bitmask of positions that match ASCII character c.
   /// Built by build_glushkov_program after the follow table is complete.
   /// Non-ASCII characters are handled on-the-fly at match time.
-  std::array<g_state_t, GLUSHKOV_ASCII_TABLE_SIZE> reach_ascii{};
+  std::array<glushkov_state_t, GLUSHKOV_ASCII_TABLE_SIZE> reach_ascii{};
 };
 
 /**

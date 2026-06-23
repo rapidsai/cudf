@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,7 +39,7 @@ CUDF_KERNEL void for_each_kernel(ForEachFunction fn,
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
   __syncthreads();
-  auto s_prog = reprog_device::load(d_prog, shmem);
+  auto s_prog = ProgDevice::load(d_prog, shmem);
 
   // Load Glushkov program arrays into shared memory (placed after Thompson data)
   if (s_prog.has_glushkov()) {
@@ -88,7 +88,7 @@ CUDF_KERNEL void transform_kernel(TransformFunction fn,
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
   __syncthreads();
-  auto s_prog = reprog_device::load(d_prog, shmem);
+  auto s_prog = ProgDevice::load(d_prog, shmem);
 
   // Load Glushkov program arrays into shared memory (placed after Thompson data)
   if (s_prog.has_glushkov()) {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -347,5 +347,4 @@ __device__ __forceinline__ string_view string_from_match(match_pair const result
 }  // namespace strings
 }  // namespace cudf
 
-// #include "./glushkov.inl"
 #include "./regex.inl"

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -15,11 +15,11 @@
 namespace cudf::strings::detail {
 
 /// Bitmask type: bit i is set when Glushkov position i is active.
-using g_state_t = uint64_t;
+using glushkov_state_t = uint64_t;
 
 /// Maximum number of character-consuming positions (states) in the Glushkov NFA.
 /// Patterns with more positions fall back to Thompson NFA automatically.
-constexpr int32_t GLUSHKOV_MAX_STATES = sizeof(g_state_t) * 8;
+constexpr int32_t GLUSHKOV_MAX_STATES = sizeof(glushkov_state_t) * 8;
 
 /// Maximum shift amounts for the Hyperscan-style shift-and optimization.
 constexpr int32_t GLUSHKOV_MAX_SHIFTS = 8;

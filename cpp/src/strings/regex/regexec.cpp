@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,10 +50,10 @@ reprog_device::reprog_device(reprog const& prog)
  * Buffer layout:
  *   [gkprog_device struct]
  *   [_positions    : num_states × glushkov_position]
- *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × g_state_t]
+ *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × glushkov_state_t]
  *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS_DEV × uint8_t + padding]
- *   [_reach_ascii  : GLUSHKOV_ASCII_TABLE_SIZE × g_state_t]
- *   [_exception_succs : num_states × g_state_t]
+ *   [_reach_ascii  : GLUSHKOV_ASCII_TABLE_SIZE × glushkov_state_t]
+ *   [_exception_succs : num_states × glushkov_state_t]
  *   [_classes : classes_count × reclass_device + variable-length literals]
  *
  * Returns {device_ptr_to_gkprog_device, raw_buffer_to_delete}
@@ -84,23 +84,23 @@ static std::pair<gkprog_device const*, rmm::device_uvector<u_char>*> create_glus
   off += num_states * sizeof(reinst);
 
   // _shift_masks: 8-byte aligned
-  off                          = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  off                          = cudf::util::round_up_unsafe(off, alignof(glushkov_state_t));
   std::size_t const smasks_off = off;
-  off += GLUSHKOV_MAX_SHIFTS * sizeof(g_state_t);
+  off += GLUSHKOV_MAX_SHIFTS * sizeof(glushkov_state_t);
 
   // _shift_amounts: 1-byte aligned (uint8_t array)
   std::size_t const samts_off = off;
   off += GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t);
 
-  // _reach_ascii: 8-byte aligned (GLUSHKOV_ASCII_TABLE_SIZE × g_state_t = 1 KB)
-  off                               = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  // _reach_ascii: 8-byte aligned (GLUSHKOV_ASCII_TABLE_SIZE × glushkov_state_t = 1 KB)
+  off                               = cudf::util::round_up_unsafe(off, alignof(glushkov_state_t));
   std::size_t const reach_ascii_off = off;
-  off += GLUSHKOV_ASCII_TABLE_SIZE * sizeof(g_state_t);
+  off += GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t);
 
   // _exception_succs: 8-byte aligned
-  off                       = cudf::util::round_up_unsafe(off, alignof(g_state_t));
+  off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_state_t));
   std::size_t const exc_off = off;
-  off += num_states * sizeof(g_state_t);
+  off += num_states * sizeof(glushkov_state_t);
 
   // _classes: 16-byte aligned (reclass_device is alignas(16))
   off                       = cudf::util::round_up_unsafe(off, alignof(reclass_device));
@@ -149,23 +149,23 @@ static std::pair<gkprog_device const*, rmm::device_uvector<u_char>*> create_glus
   }
 
   // ---- _shift_masks --------------------------------------------------------
-  h_gp_dev->_shift_masks = reinterpret_cast<g_state_t const*>(d_base + smasks_off);
+  h_gp_dev->_shift_masks = reinterpret_cast<glushkov_state_t const*>(d_base + smasks_off);
   std::memcpy(
-    h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS * sizeof(g_state_t));
+    h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS * sizeof(glushkov_state_t));
 
   // ---- _shift_amounts ------------------------------------------------------
   h_gp_dev->_shift_amounts = reinterpret_cast<uint8_t const*>(d_base + samts_off);
   std::memcpy(h_base + samts_off, h_gp.shift_amounts.data(), GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t));
 
   // ---- _reach_ascii -------------------------------------------------------
-  h_gp_dev->_reach_ascii = reinterpret_cast<g_state_t const*>(d_base + reach_ascii_off);
+  h_gp_dev->_reach_ascii = reinterpret_cast<glushkov_state_t const*>(d_base + reach_ascii_off);
   std::memcpy(h_base + reach_ascii_off,
               h_gp.reach_ascii.data(),
-              GLUSHKOV_ASCII_TABLE_SIZE * sizeof(g_state_t));
+              GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t));
 
   // ---- _exception_succs ---------------------------------------------------
-  h_gp_dev->_exception_succs = reinterpret_cast<g_state_t const*>(d_base + exc_off);
-  std::memcpy(h_base + exc_off, h_gp.exception_succs.data(), num_states * sizeof(g_state_t));
+  h_gp_dev->_exception_succs = reinterpret_cast<glushkov_state_t const*>(d_base + exc_off);
+  std::memcpy(h_base + exc_off, h_gp.exception_succs.data(), num_states * sizeof(glushkov_state_t));
 
   // ---- _classes (variable-length, same layout as Thompson reprog_device) --
   h_gp_dev->_classes = reinterpret_cast<reclass_device const*>(d_base + cls_off);
