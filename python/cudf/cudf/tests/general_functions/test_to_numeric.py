@@ -387,6 +387,46 @@ def test_to_numeric_nullable_string_coerce(dtype):
     assert_eq(expected, got)
 
 
+@pytest.mark.parametrize("dtype", ["string[python]", "string[pyarrow]"])
+@pytest.mark.parametrize(
+    "value",
+    [
+        "9223372036854775808",  # int64 max + 1
+        "18446744073709551615",  # uint64 max
+    ],
+)
+def test_to_numeric_nullable_string_uint64(value, dtype):
+    # Values above the int64 range route through the uint64 path and yield a
+    # masked UInt64 result, instead of silently wrapping to a negative int64.
+    expected = pd.to_numeric(pd.Series([value], dtype=dtype))
+    got = cudf.to_numeric(cudf.Series(pd.array([value], dtype=dtype)))
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("dtype", ["string[python]", "string[pyarrow]"])
+def test_to_numeric_nullable_string_overflow_coerce(dtype):
+    # A value above the uint64 range is represented as a (masked) float when
+    # coercing, matching pandas, instead of wrapping to int64.
+    value = "18446744073709551616"  # uint64 max + 1
+    expected = pd.to_numeric(pd.Series([value], dtype=dtype), errors="coerce")
+    got = cudf.to_numeric(
+        cudf.Series(pd.array([value], dtype=dtype)), errors="coerce"
+    )
+
+    assert_eq(expected, got)
+
+
+@pytest.mark.parametrize("dtype", ["string[python]", "string[pyarrow]"])
+def test_to_numeric_nullable_string_overflow_raises(dtype):
+    # cudf has no object numeric type, so an integer string beyond the uint64
+    # range raises (under cudf.pandas this triggers a fallback to pandas, which
+    # returns an object array of Python ints).
+    value = "18446744073709551616"  # uint64 max + 1
+    with pytest.raises(OverflowError):
+        cudf.to_numeric(cudf.Series(pd.array([value], dtype=dtype)))
+
+
 @pytest.mark.parametrize("val", [9876543210.0, 2.0**128])
 def test_to_numeric_large_float_not_downcast_to_float32(val):
     # float64 is preserved when narrowing to float32 would lose information

@@ -118,6 +118,14 @@ def to_numeric(
     ):
         raise ValueError("arg must be column convertible")
 
+    if isinstance(arg, np.ndarray) and arg.dtype.kind in "mM":
+        # pandas returns the raw integer view at the array's native
+        # resolution. cudf may upcast an unsupported resolution (e.g.
+        # ``datetime64[D]`` -> ``datetime64[s]``), which changes the integer
+        # values, so view the original data as int64 before building the
+        # column.
+        arg = arg.view(np.dtype(np.int64))
+
     col = as_column(arg)
     dtype = col.dtype
 
@@ -126,14 +134,7 @@ def to_numeric(
     nullable = isinstance(dtype, pd.StringDtype) and dtype.na_value is pd.NA
 
     if dtype.kind in "mM":
-        if isinstance(arg, np.ndarray) and arg.dtype.kind in "mM":
-            # pandas returns the raw integer view at the array's native
-            # resolution. cudf may have upcast an unsupported resolution
-            # (e.g. ``datetime64[D]`` -> ``datetime64[s]``), which would change
-            # the integer values, so view the original data instead.
-            col = as_column(arg.view(np.dtype(np.int64)))
-        else:
-            col = col.astype(np.dtype(np.int64))
+        col = col.astype(np.dtype(np.int64))
     elif isinstance(dtype, CategoricalDtype):
         cat_dtype = col.dtype.categories.dtype  # type: ignore[union-attr]
         if cat_dtype.kind in "iufb":
@@ -228,44 +229,6 @@ def _float_downcast_preserves_value(col, to_dtype: np.dtype) -> bool:
     return bool((within | equal | both_nan).fillna(True).all())
 
 
-def _convert_nullable_str_col(
-    string_col: StringColumn,
-    errors: Literal["raise", "coerce"],
-) -> NumericalColumn:
-    """Convert a pandas masked (nullable) string column to masked numeric.
-
-    Produces an ``Int64`` column when every parseable value is an integer and a
-    ``Float64`` column otherwise, preserving the null mask as ``pd.NA``.
-    """
-    if errors == "coerce":
-        # Null out values that cannot be parsed as a number.
-        invalid = string_col.is_float().unary_operator("not")
-        string_col = string_col.copy()
-        string_col[invalid.fillna(False)] = None
-
-    if string_col.is_all_integer():
-        return string_col.astype(np.dtype(np.int64)).astype(  # type: ignore[return-value]
-            pd.Int64Dtype()
-        )
-
-    converted_col = (
-        string_col.to_lower()
-        .find_and_replace(as_column("", length=1), as_column("NaN", length=1))
-        .replace_multiple(
-            as_column(["+", "inf", "inity"]),  # type: ignore[arg-type]
-            as_column(["", "Inf", ""]),  # type: ignore[arg-type]
-        )
-    )
-    if not converted_col.is_float().all():
-        if errors != "coerce":
-            raise ValueError("Unable to convert some strings to numerics.")
-        non_numerics = converted_col.is_float().unary_operator("not")
-        converted_col[non_numerics.fillna(False)] = None
-    return converted_col.astype(np.dtype(np.float64)).astype(  # type: ignore[return-value]
-        pd.Float64Dtype()
-    )
-
-
 def _convert_str_col(
     col: StringColumn,
     errors: Literal["raise", "coerce"],
@@ -290,7 +253,8 @@ def _convert_str_col(
     errors : {'raise', 'coerce'}, same as ``to_numeric``
     downcast : Same as ``to_numeric``, see description for use
     nullable : If True, the input came from a pandas masked (nullable) string
-        dtype and the result should be a masked ``Int64``/``Float64`` column.
+        dtype and the result should be a masked ``Int64``/``UInt64``/``Float64``
+        column, preserving the null mask as ``pd.NA``.
 
     Returns
     -------
@@ -301,18 +265,26 @@ def _convert_str_col(
 
     string_col = cast("StringColumn", col)
 
-    if nullable:
-        return _convert_nullable_str_col(string_col, errors)
+    if nullable and errors == "coerce":
+        # For a masked result, coerce unparseable values to null up front so an
+        # otherwise all-integer column still yields ``Int64`` (matching
+        # pandas), while preserving the incoming null mask.
+        invalid = string_col.is_float().unary_operator("not")
+        string_col = string_col.copy()
+        string_col[invalid.fillna(False)] = None
 
     if string_col.is_all_integer():
         if string_col.is_all_integer(np.dtype(np.int64)):
-            return col.astype(dtype=np.dtype(np.int64))  # type: ignore[return-value]
+            result = string_col.astype(np.dtype(np.int64))
+            masked_dtype: pd.api.extensions.ExtensionDtype = pd.Int64Dtype()
         elif string_col.is_all_integer(np.dtype(np.uint64)):
-            return col.astype(dtype=np.dtype(np.uint64))  # type: ignore[return-value]
+            result = string_col.astype(np.dtype(np.uint64))
+            masked_dtype = pd.UInt64Dtype()
         elif errors == "coerce":
             # The value overflows uint64; pandas represents such a result as a
             # float, so match that here.
-            return col.astype(dtype=np.dtype(np.float64))  # type: ignore[return-value]
+            result = string_col.astype(np.dtype(np.float64))
+            masked_dtype = pd.Float64Dtype()
         else:
             # pandas returns an object array of Python ints in this case. cudf
             # has no object numeric type, so surface the overflow (under
@@ -321,11 +293,14 @@ def _convert_str_col(
             raise OverflowError(
                 "Integer string value is out of bounds for int64/uint64."
             )
+        if nullable:
+            result = result.astype(masked_dtype)
+        return result  # type: ignore[return-value]
 
     # TODO: This can be handled by libcudf in
     # future see StringColumn.as_numerical_column
     converted_col = (
-        col.to_lower()
+        string_col.to_lower()
         .find_and_replace(as_column("", length=1), as_column("NaN", length=1))
         .replace_multiple(
             as_column(["+", "inf", "inity"]),  # type: ignore[arg-type]
@@ -335,21 +310,26 @@ def _convert_str_col(
 
     is_float = converted_col.is_float()
     if is_float.all():
-        if downcast in {"unsigned", "signed", "integer"}:
+        # ``downcast`` narrowing to int is limited by float32 precision; this
+        # cudf-specific path does not apply to masked results.
+        if not nullable and downcast in {"unsigned", "signed", "integer"}:
             warnings.warn(
                 UserWarning(
                     "Downcasting from float to int will be "
                     "limited by float32 precision."
                 )
             )
-            return converted_col.astype(dtype=np.dtype(np.float32))  # type: ignore[return-value]
+            float_dtype: np.dtype = np.dtype(np.float32)
         else:
-            return converted_col.astype(dtype=np.dtype(np.float64))  # type: ignore[return-value]
+            float_dtype = np.dtype(np.float64)
+    elif errors == "coerce":
+        non_numerics = is_float.unary_operator("not")
+        converted_col[non_numerics] = None
+        float_dtype = np.dtype(np.float64)
     else:
-        if errors == "coerce":
-            non_numerics = is_float.unary_operator("not")
-            converted_col[non_numerics] = None
-            converted_col = converted_col.astype(np.dtype(np.float64))  # type: ignore[assignment]
-            return converted_col  # type: ignore[return-value]
-        else:
-            raise ValueError("Unable to convert some strings to numerics.")
+        raise ValueError("Unable to convert some strings to numerics.")
+
+    result = converted_col.astype(float_dtype)
+    if nullable:
+        result = result.astype(pd.Float64Dtype())
+    return result  # type: ignore[return-value]
