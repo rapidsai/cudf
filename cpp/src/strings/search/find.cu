@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -400,8 +400,10 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
 
   // Handle empty target
   if (d_target.empty()) {
-    thrust::fill(
-      rmm::exec_policy_nosync(stream), results_view.begin<bool>(), results_view.end<bool>(), true);
+    thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                 results_view.begin<bool>(),
+                 results_view.end<bool>(),
+                 true);
     results->set_null_count(input.null_count());
     return results;
   }
@@ -412,10 +414,13 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
   // Partition indices based on string length threshold (64 bytes)
   size_type const length_threshold = 64;
   rmm::device_uvector<size_type> indices(strings_count, stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), 0);
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   indices.begin(),
+                   indices.end(),
+                   0);
 
   auto partition_point =
-    thrust::partition(rmm::exec_policy_nosync(stream),
+    thrust::partition(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       indices.begin(),
                       indices.end(),
                       [d_strings, length_threshold] __device__(size_type idx) {
@@ -435,7 +440,7 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
       return false;
     };
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       indices.begin(),
                       partition_point,
                       thrust::make_permutation_iterator(d_results, indices.begin()),
