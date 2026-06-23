@@ -1061,9 +1061,9 @@ std::unique_ptr<cudf::column> create_string_column(cudf::size_type num_rows,
   auto gather_table =
     create_random_table({cudf::type_id::INT32}, row_count{num_rows}, gather_profile);
 
-  auto zero_scalar = cudf::numeric_scalar<int32_t>(0);
   if (num_matches > 0) {  // guard against division by zero
     // Create scatter map by placing 0-index values throughout the gather-map
+    auto zero_scalar  = cudf::numeric_scalar<int32_t>(0);
     auto scatter_data = cudf::sequence(
       num_matches, zero_scalar, cudf::numeric_scalar<int32_t>(num_rows / num_matches));
     gather_table = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
