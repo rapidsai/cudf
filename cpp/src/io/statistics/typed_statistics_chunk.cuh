@@ -126,9 +126,7 @@ struct typed_statistics_chunk<T, true> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
-    if constexpr (cuda::std::is_floating_point_v<T>) {
-      if (cuda::std::isnan(elem)) { has_nan = true; }
-    }
+    if constexpr (cuda::std::is_floating_point_v<T>) { has_nan |= cuda::std::isnan(elem); }
     minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
     aggregate += detail::aggregation_type<T>::convert(elem);
@@ -170,9 +168,7 @@ struct typed_statistics_chunk<T, false> {
   __device__ void reduce(T const& elem)
   {
     non_nulls++;
-    if constexpr (cuda::std::is_floating_point_v<T>) {
-      if (cuda::std::isnan(elem)) { has_nan = true; }
-    }
+    if constexpr (cuda::std::is_floating_point_v<T>) { has_nan |= cuda::std::isnan(elem); }
     minimum_value = cuda::std::min<E>(minimum_value, detail::extrema_type<T>::convert(elem));
     maximum_value = cuda::std::max<E>(maximum_value, detail::extrema_type<T>::convert(elem));
     has_minmax    = true;
