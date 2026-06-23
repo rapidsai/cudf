@@ -1605,7 +1605,15 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib<3.11
           - numexpr
+          - odfpy
+          - pyxlsb
+          - python-calamine
+          - pytables
+          - xlrd
           - xlsxwriter
   depends_on_dask_cuda:
     common:
