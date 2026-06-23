@@ -39,7 +39,9 @@ repos:
       - id: mypy
         additional_dependencies: [
           "polars>=1.35,<1.39",
-          "numpy",
+          # Pin numpy: older stubs flag the version-guarded flagsobj import in
+          # cudf/pandas/_wrappers/numpy.py as a [no-redef]; fixed in numpy 2.3.
+          "numpy>=1.26",
           pyarrow-stubs,
           "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           pytest,
