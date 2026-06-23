@@ -431,6 +431,22 @@ def test_validate_parquet_options(option: str) -> None:
         )
 
 
+def test_prefetch_and_use_rapidsmpf_native_raises() -> None:
+    with pytest.raises(
+        NotImplementedError,
+        match="'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                parquet_options={
+                    "use_rapidsmpf_native": True,
+                    "prefetch_file_metadata": True,
+                },
+            )
+        )
+
+
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(

@@ -359,7 +359,7 @@ def test_scan_missing_prefetch_metadata_raises() -> None:
 
 
 def test_streaming_scan_missing_prefetch_metadata_raises() -> None:
-    # This isn't reachable by normal cudf-polars usage.
+    # This isn't reachable by polars' public API, so we test it directly.
     scan = _make_parquet_scan(
         ["file.parquet"], parquet_options=ParquetOptions(prefetch_file_metadata=True)
     )

@@ -277,6 +277,11 @@ class ParquetOptions:
         if not isinstance(self.prefetch_file_metadata, bool):
             raise TypeError("prefetch_file_metadata must be a bool")
 
+        if self.use_rapidsmpf_native and self.prefetch_file_metadata:
+            raise NotImplementedError(
+                "'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'"
+            )
+
 
 def default_target_partition_size(min_device_size: int | None) -> int:
     """Return the default target partition size."""
