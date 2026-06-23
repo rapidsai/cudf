@@ -14,6 +14,7 @@ jobs:
       - check-nightly-ci
       - changed-files
       - checks
+      - cmake-tests
       - conda-cpp-build
       - cpp-linters
       - conda-cpp-checks
@@ -359,6 +360,22 @@ jobs:
       build_type: pull-request
       node_type: cpu16
       script: ci/build_cpp.sh
+  cmake-tests:
+    needs: checks
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/custom-job.yaml@main
+    with:
+      build_type: pull-request
+      node_type: cpu16
+      arch: "amd64"
+      container_image: "rapidsai/ci-conda:26.08-latest"
+      script: "ci/test_cmake.sh"
   cpp-linters:
     permissions:
       actions: read
