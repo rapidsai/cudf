@@ -45,6 +45,7 @@ if TYPE_CHECKING:
 
     from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -112,7 +113,7 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     base_mr: rmm.mr.DeviceMemoryResource | None
-    mr: rmm.mr.DeviceMemoryResource | None = (
+    mr: RmmResourceAdaptor | None = (
         None  # set after `Context` is built (below).
     )
 
@@ -245,7 +246,7 @@ def _setup_worker(
     ctx = Context.from_options(comm.logger, base_mr, options, statistics)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
-    mr = ctx.br().device_mr
+    mr = ctx.br().device_mr_adaptor()
     rmm.mr.set_current_device_resource(mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
@@ -340,7 +341,7 @@ def _reset_worker(
     mp_ctx.ctx = Context.from_options(
         mp_ctx.comm.logger, mp_ctx.base_mr, options, statistics
     )
-    mp_ctx.mr = mp_ctx.ctx.br().device_mr
+    mp_ctx.mr = mp_ctx.ctx.br().device_mr_adaptor()
     rmm.mr.set_current_device_resource(mp_ctx.mr)
 
 

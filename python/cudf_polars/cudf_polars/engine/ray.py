@@ -44,6 +44,7 @@ if TYPE_CHECKING:
 
     from cudf_streaming.streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -184,7 +185,7 @@ class RankActor:
         self._base_mr: rmm.mr.DeviceMemoryResource | None = (
             memory_resource_config.create_memory_resource()
         )
-        self._mr: rmm.mr.DeviceMemoryResource | None = (
+        self._mr: RmmResourceAdaptor | None = (
             None  # set after `Context` is built (below).
         )
         self._rapidsmpf_options: Options = Options.deserialize(
