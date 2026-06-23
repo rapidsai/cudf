@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -28,5 +28,4 @@ mkdir -p "$(dirname "${RAPIDS_CMAKE_FORMAT_FILE}")"
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} "${FORMAT_FILE_URL}"
 
 # Run pre-commit checks
-pre-commit clean
 pre-commit run --all-files --show-diff-on-failure
