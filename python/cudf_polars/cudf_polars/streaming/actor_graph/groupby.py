@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """GroupBy and Distinct logic for the RapidsMPF streaming runtime."""
 
@@ -28,6 +28,7 @@ from cudf_polars.streaming.actor_graph.dispatch import (
 )
 from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
+    MAX_ROWS_PER_PARTITION,
     ChannelManager,
     NormalizedPartitioning,
     _make_hash_shuffle_metadata,
@@ -515,6 +516,7 @@ async def _choose_strategy(
     collective_ids: list[int],
     target_partition_size: int,
     skip_global_comm: bool,  # noqa: FBT001
+    require_tree: bool,  # noqa: FBT001
     tracer: ActorTracer | None,
 ) -> int:
     """
@@ -540,6 +542,8 @@ async def _choose_strategy(
         The target partition size.
     skip_global_comm
         Whether to skip the global communication.
+    require_tree
+        Whether the operation must avoid shuffle for ordering semantics.
     tracer
         Optional tracer for runtime metrics.
 
@@ -548,15 +552,24 @@ async def _choose_strategy(
     The output count.
     """
     aggregated_size = aggregated.data_alloc_size()
-    local_estimated_size = (aggregated_size // max(1, chunks_received)) * local_count
+    sample_count = max(1, chunks_received)
+    local_estimated_size = (aggregated_size // sample_count) * local_count
+    if input_drained:
+        local_estimated_rows = aggregated.shape[0]
+    else:
+        local_estimated_rows = (
+            aggregated.shape[0] * local_count + sample_count - 1
+        ) // sample_count
 
     if skip_global_comm:
         total_estimated_size = local_estimated_size
+        total_estimated_rows = local_estimated_rows
         total_chunk_count = local_count
         total_need_shuffle = int(not input_drained)
     else:
         (
             total_estimated_size,
+            total_estimated_rows,
             total_chunk_count,
             total_need_shuffle,
         ) = await allgather_reduce(
@@ -564,17 +577,31 @@ async def _choose_strategy(
             comm,
             collective_ids.pop(),
             local_estimated_size,
+            local_estimated_rows,
             local_count,
             int(not input_drained),
         )
 
+    min_row_limit_count = 1
+    if total_estimated_rows > 0:
+        min_row_limit_count = (
+            total_estimated_rows + MAX_ROWS_PER_PARTITION - 1
+        ) // MAX_ROWS_PER_PARTITION
+
     ideal_count = 1
-    use_tree = total_need_shuffle == 0
+    use_tree = require_tree or (
+        total_need_shuffle == 0
+        and (skip_global_comm or total_estimated_rows < MAX_ROWS_PER_PARTITION)
+    )
     if not use_tree:
-        ideal_count = max(2, total_estimated_size // target_partition_size)
+        ideal_count = max(
+            2, total_estimated_size // target_partition_size, min_row_limit_count
+        )
 
     output_count_limit = local_count if skip_global_comm else total_chunk_count
     output_count = min(ideal_count, output_count_limit)
+    if not use_tree:
+        output_count = max(output_count, min_row_limit_count)
     if tracer is not None:
         tracer.decision = (
             "tree_local"
@@ -694,6 +721,7 @@ async def groupby_actor(
             collective_ids,
             target_partition_size,
             skip_global_comm,
+            require_tree,
             tracer,
         )
 
