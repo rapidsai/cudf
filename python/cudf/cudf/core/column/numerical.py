@@ -912,7 +912,7 @@ class NumericalColumn(NumericalBaseColumn):
         return self.isnan().sum()
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         try:
             lhs, rhs = super()._process_values_for_isin(values)
