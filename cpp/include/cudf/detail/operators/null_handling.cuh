@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -37,20 +37,21 @@ __device__ bool is_null(T a)
 /**
  * @brief Returns the first non-null of two values.
  *
- * @tparam T Value type.
+ * @tparam A First value type.
+ * @tparam B Second value type.
  * @param a First value.
  * @param b Second value.
  */
 template <typename A, typename B>
-__device__ auto coalesce(A a, B b)
-  requires(!nullable<A> && !nullable<B> && cuda::std::same_as<A, B>)
+__device__ A coalesce(A a, B b)
+  requires(!nullable<A> && cuda::std::same_as<A, B>)
 {
   return a;
 }
 
 template <typename A, typename B>
 __device__ cuda::std::optional<A> coalesce(cuda::std::optional<A> a, cuda::std::optional<B> b)
-  requires(!nullable<A> && !nullable<B> && cuda::std::same_as<A, B>)
+  requires(!nullable<A> && cuda::std::same_as<A, B>)
 {
   if (a.has_value()) {
     return a.value();

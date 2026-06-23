@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,10 +46,8 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
                                   int32_t* __restrict__ max_error,
                                   errc* __restrict__ row_errors)
 {
-  // TODO: ensure block size is a multiple of warp size for correct warp-synchronous behavior
-  auto start        = detail::grid_1d::global_thread_id();
-  auto stride       = detail::grid_1d::grid_stride();
-  auto thread_error = errc::SUCCESS;
+  auto start  = detail::grid_1d::global_thread_id();
+  auto stride = detail::grid_1d::grid_stride();
 
   for (auto row = start; row < row_size; row += stride) {
     auto operation = [&]<typename Args>(Args args) {
@@ -71,10 +69,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
     };
 
     if constexpr (!is_null_aware) {
-      if (stencil != nullptr && !bit_is_set(stencil, row)) {
-        if (row_errors != nullptr) { row_errors[row] = errc::SUCCESS; }
-        continue;
-      }
+      if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
 
       auto ins = InputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, row)...}; });
@@ -95,7 +90,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
 
       thread_error = cuda::std::max(thread_error, row_error);
     } else {
-      auto active_mask = __ballot_sync(0xFFFF'FFFFU, row < row_size);
+      auto active_mask = __ballot_sync(__activemask(), row < row_size);
 
       auto ins = InputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(input_cols, row)...}; });

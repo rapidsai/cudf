@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -16,7 +16,7 @@ namespace CUDF_EXPORT cudf {
 enum class [[nodiscard]] errc : cuda::std::int8_t {
   SUCCESS          = 0,
   OVERFLOW         = 1,
-  DIVISION_BY_ZERO = 2
+  DIVISION_BY_ZERO = 2,
 };
 
 /**
