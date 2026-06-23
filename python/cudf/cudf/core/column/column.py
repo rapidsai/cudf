@@ -2136,7 +2136,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ColumnBase.create(gathered, self.dtype),
         )
 
-    def isin(self, values: Sequence) -> ColumnBase:
+    def isin(self, values: Sequence | ColumnBase) -> ColumnBase:
         """Check whether values are contained in the Column.
 
         Parameters
@@ -2175,7 +2175,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         """
         Helper function for `isin` which pre-process `values` based on `self`.
