@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 from functools import partial
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from polars.exceptions import ComputeError
 
@@ -56,14 +56,16 @@ class Item(Expr):
         min_count_scalar, max_count_scalar = plc.reduce.minmax(
             count.obj, stream=df.stream
         )
-        max_count = cast("int | None", max_count_scalar.to_py(stream=df.stream))
-        if max_count is not None and max_count > 1:
+        max_count = max_count_scalar.to_py(stream=df.stream)
+        assert isinstance(max_count, int)
+        if max_count > 1:
             qualifier = "no or a single value" if self.allow_empty else "a single value"
             raise ComputeError(
                 f"aggregation 'item' expected {qualifier}, got {max_count} values"
             )
         if not self.allow_empty:
-            min_count = cast("int | None", min_count_scalar.to_py(stream=df.stream))
+            min_count = min_count_scalar.to_py(stream=df.stream)
+            assert isinstance(min_count, int)
             if min_count == 0:
                 raise ComputeError(
                     "aggregation 'item' expected a single value, got none"

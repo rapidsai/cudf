@@ -186,7 +186,9 @@ def decompose_single_agg(
             if context != ExecutionContext.GROUPBY:
                 raise NotImplementedError("item is only supported in groupby context")
 
-            i64 = DataType(pl.Int64())
+            count_dtype = DataType(pl.Int32())
+            allow_empty = agg.options
+            assert isinstance(allow_empty, bool)
             count_name = next(name_generator)
 
             if isinstance(child, expr.Filter):
@@ -205,10 +207,10 @@ def decompose_single_agg(
                     expr.Literal(value.dtype, None),
                 )
 
-                # Lazy pivot lowers to filtered item aggregations. The
-                # selected expression contains nulls for non-matching rows,
-                # so extract the matching value with first_non_null and
-                # validate item cardinality separately with a predicate count.
+                # item() needs both the selected value and the number of
+                # matching rows. Mask non-matching rows to null so
+                # first_non_null extracts the selected value, and separately
+                # sum the predicate to validate item cardinality.
                 aggs, _ = decompose_single_agg(
                     expr.NamedExpr(next(name_generator), selected),
                     name_generator,
@@ -231,11 +233,11 @@ def decompose_single_agg(
                 count_agg = expr.NamedExpr(
                     count_name,
                     expr.Agg(
-                        i64,
+                        count_dtype,
                         "sum",
                         None,
                         context,
-                        expr.Cast(i64, False, predicate),  # noqa: FBT003
+                        expr.Cast(count_dtype, False, predicate),  # noqa: FBT003
                     ),
                 )
             else:
@@ -249,14 +251,14 @@ def decompose_single_agg(
                     raise NotImplementedError("Nested aggs in groupby not supported")
 
                 item_agg = named_expr
-                count_agg = expr.NamedExpr(count_name, expr.Len(i64))
+                count_agg = expr.NamedExpr(count_name, expr.Len(count_dtype))
 
             return [(item_agg, True), (count_agg, True)], named_expr.reconstruct(
                 expr.Item(
                     agg.dtype,
-                    bool(agg.options),
+                    allow_empty,
                     expr.Col(agg.dtype, name),
-                    expr.Col(i64, count_name),
+                    expr.Col(count_dtype, count_name),
                 )
             )
         needs_masking = agg.name in {"min", "max"} and plc.traits.is_floating_point(
