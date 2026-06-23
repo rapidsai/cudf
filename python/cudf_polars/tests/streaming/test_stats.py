@@ -74,8 +74,11 @@ def stats_engine():
 
 
 def test_base_stats_dataframescan(
-    df, stats_engine, parquet_stats_executor: concurrent.futures.ThreadPoolExecutor
+    df_and_schema: tuple[pl.DataFrame, Schema],
+    stats_engine,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
+    df, _schema = df_and_schema
     row_count = df.height
     q = pl.LazyFrame(df)
     ir = Translator(q._ldf.visit(), stats_engine).translate_ir()
@@ -96,7 +99,7 @@ def test_base_stats_dataframescan(
 @pytest.mark.parametrize("max_row_group_samples", [1, 0])
 def test_base_stats_parquet(
     tmp_path,
-    df,
+    df_and_schema: tuple[pl.DataFrame, Schema],
     n_files,
     row_group_size,
     max_footer_samples,
@@ -104,6 +107,7 @@ def test_base_stats_parquet(
     parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     _clear_source_info_cache()
+    df, _schema = df_and_schema
     make_partitioned_source(
         df,
         tmp_path,
@@ -162,6 +166,8 @@ def test_parquet_source_info_uses_decoded_dtype_floor(
         def __init__(self, paths: tuple[str, ...], max_footer_samples: int) -> None:
             self.paths = paths
             self.max_footer_samples = max_footer_samples
+            self.sampled_file_count = 1
+            self.total_file_count = len(paths)
 
     sampled_cols: list[str] = []
 
