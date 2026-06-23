@@ -623,11 +623,8 @@ def test_quent_events(
     check_quent_events(engine_with_quent_context, quent_context)
 
 
-def test_emit_query_group_events_idempotent():
-    quent_context = cudf_polars.quent.QuentContext(
-        query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
-        query=cudf_polars.quent.Query(instance_name="test_query"),
-    )
+def test_emit_query_group_events_idempotent(quent_context: QuentContext):
+    pytest.importorskip("structlog")
     logger = cudf_polars.quent._logging.QuentLogger()
     quent_context._emit_query_group_events(logger)
     quent_context._emit_query_group_events(logger)
