@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "environment.hpp"
@@ -407,7 +407,7 @@ TEST(Shuffler, concurrent_wait)
             static_cast<std::int32_t>(total_num_partitions),
             hash_fn,
             seed,
-            br->stream_pool().get_stream(),
+            br->stream_pool()->get_stream(),
             br.get(),
             rapidsmpf::AllowOverbooking::YES));
         }));
