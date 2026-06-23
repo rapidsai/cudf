@@ -153,12 +153,6 @@ class TemporalFunction(Expr):
                 # https://github.com/rapidsai/cudf/issues/18654 to support non-1 buckets
                 raise NotImplementedError(f"Unsupported truncate bucket: {every!r}")
             self.options = (self._TRUNCATE_FREQ_MAP[match.group(2)],)
-        elif self.name is TemporalFunction.Name.TimeStamp:
-            (time_unit,) = self.options
-            if time_unit not in {"ms", "us", "ns"}:
-                raise NotImplementedError(
-                    f"Unsupported epoch/timestamp time unit: {time_unit!r}"
-                )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
