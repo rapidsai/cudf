@@ -113,8 +113,7 @@ std::unique_ptr<cudf::column> gather_with_hit_rate(cudf::column_view const& temp
     auto const zero_scalar  = cudf::numeric_scalar<int32_t>(0);
     auto const scatter_data = cudf::sequence(
       num_matches, zero_scalar, cudf::numeric_scalar<int32_t>(num_rows / num_matches));
-    auto table   = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
-    gather_table = std::move(table);
+    gather_table = cudf::scatter({zero_scalar}, scatter_data->view(), gather_table->view());
   }
 
   auto const gather_map = gather_table->view().column(0);
