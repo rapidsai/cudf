@@ -496,7 +496,7 @@ def _key_indices(
         return tuple(schema_keys[k] for k in schema if k in subset)
 
 
-def _require_tree(ir: GroupBy | Distinct) -> bool:
+def _maintain_order(ir: GroupBy | Distinct) -> bool:
     if isinstance(ir, GroupBy):
         return ir.maintain_order
     else:
@@ -516,7 +516,7 @@ async def _choose_strategy(
     collective_ids: list[int],
     target_partition_size: int,
     skip_global_comm: bool,  # noqa: FBT001
-    require_tree: bool,  # noqa: FBT001
+    maintain_order: bool,  # noqa: FBT001
     tracer: ActorTracer | None,
 ) -> int:
     """
@@ -542,8 +542,8 @@ async def _choose_strategy(
         The target partition size.
     skip_global_comm
         Whether to skip the global communication.
-    require_tree
-        Whether the operation must avoid shuffle for ordering semantics.
+    maintain_order
+        Whether the operation should maintain input ordering semantics.
     tracer
         Optional tracer for runtime metrics.
 
@@ -589,7 +589,7 @@ async def _choose_strategy(
         ) // MAX_ROWS_PER_PARTITION
 
     ideal_count = 1
-    use_tree = require_tree or (
+    use_tree = maintain_order or (
         total_need_shuffle == 0
         and (skip_global_comm or total_estimated_rows < MAX_ROWS_PER_PARTITION)
     )
@@ -665,7 +665,7 @@ async def groupby_actor(
             nranks,
             keys=_key_indices(ir, ir.children[0].schema, concrete_prefix=True),
         )
-        require_tree = _require_tree(ir)
+        maintain_order = _maintain_order(ir)
         fully_partitioned = partitioning.is_strictly_partitioned()
         fallback_case = (
             # NOTE: This criteria means that we fell back
@@ -705,7 +705,7 @@ async def groupby_actor(
             ir_context,
             ch_in,
             target_partition_size,
-            allow_early_exit=not require_tree,
+            allow_early_exit=not maintain_order,
         )
 
         skip_global_comm = metadata_in.duplicated or isinstance(
@@ -721,7 +721,7 @@ async def groupby_actor(
             collective_ids,
             target_partition_size,
             skip_global_comm,
-            require_tree,
+            maintain_order,
             tracer,
         )
 
