@@ -363,7 +363,6 @@ class user_datasource_wrapper : public datasource {
 kvikio::RemoteEndpointType infer_remote_endpoint_type(std::string const& url)
 {
   if (kvikio::S3Endpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::S3; }
-  if (kvikio::S3PublicEndpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::S3_PUBLIC; }
   if (kvikio::S3EndpointWithPresignedUrl::is_url_valid(url)) {
     return kvikio::RemoteEndpointType::S3_PRESIGNED_URL;
   }
