@@ -15,8 +15,13 @@ import polars as pl
 
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.explain import (
+    PartitionPlanRow,
+    _fmt_partition_bytes,
     _fmt_row_count,
+    collect_partition_plan,
     explain_query,
+    factor_str,
+    format_partition_plan_table,
     serialize_query,
 )
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -695,3 +700,167 @@ def test_dynamic_planning_adds_repartition(df, op):
         assert "REPARTITION" not in plan
     else:
         assert "REPARTITION" in plan
+
+
+def test_collect_partition_plan_fused(tmp_path, df):
+    """Small files with a large target_partition_size → FUSED_FILES."""
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=4)
+    q = pl.scan_parquet(tmp_path)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"target_partition_size": 100_000_000},
+    )
+    rows = collect_partition_plan(q, engine, q_id=1)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.query == 1
+    assert row.flavor == "FUSED_FILES"
+    assert row.factor >= 1
+    assert row.files == row.partitions * row.factor
+    assert row.partitions > 0
+    assert row.projected_bytes > 0
+    assert row.task_bytes == row.projected_bytes * row.factor
+
+
+def test_collect_partition_plan_split(tmp_path, df):
+    """Very small target_partition_size → SPLIT_FILES."""
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=1)
+    q = pl.scan_parquet(tmp_path)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"target_partition_size": 1},
+    )
+    rows = collect_partition_plan(q, engine, q_id=7)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.query == 7
+    assert row.flavor == "SPLIT_FILES"
+    assert row.factor > 1
+    assert row.files == row.partitions // row.factor
+    assert row.task_bytes == row.projected_bytes // row.factor
+
+
+def test_collect_partition_plan_table_name_stem(tmp_path, df):
+    """Single named file: table name is taken from the file stem."""
+    single_file = tmp_path / "lineitem.parquet"
+    df.write_parquet(single_file)
+    q = pl.scan_parquet(single_file)
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    rows = collect_partition_plan(q, engine, q_id=1)
+    assert len(rows) == 1
+    assert rows[0].table == "lineitem"
+
+
+def test_collect_partition_plan_table_name_parent(tmp_path, df):
+    """Partitioned directory: table name is taken from the parent directory."""
+    (tmp_path / "orders").mkdir()
+    make_partitioned_source(df, tmp_path / "orders", fmt="parquet", n_files=3)
+    q = pl.scan_parquet(tmp_path / "orders")
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    rows = collect_partition_plan(q, engine, q_id=1)
+    assert len(rows) == 1
+    assert rows[0].table == "orders"
+
+
+def test_collect_partition_plan_deduplicates(tmp_path, df):
+    """A scan used twice in a join should produce only one PartitionPlanRow."""
+    make_partitioned_source(df, tmp_path, fmt="parquet", n_files=2)
+    q = pl.scan_parquet(tmp_path)
+    q = q.join(q, on="x", how="inner")
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    rows = collect_partition_plan(q, engine, q_id=1)
+    assert len(rows) == 1
+
+
+_SAMPLE_ROWS = [
+    PartitionPlanRow(
+        query=1,
+        table="lineitem",
+        flavor="SPLIT_FILES",
+        factor=2,
+        files=120,
+        projected_bytes=2_000_000_000,
+        task_bytes=1_000_000_000,
+        partitions=240,
+    ),
+    PartitionPlanRow(
+        query=1,
+        table="orders",
+        flavor="FUSED_FILES",
+        factor=1,
+        files=60,
+        projected_bytes=500_000_000,
+        task_bytes=500_000_000,
+        partitions=60,
+    ),
+    PartitionPlanRow(
+        query=2,
+        table="lineitem",
+        flavor="FUSED_FILES",
+        factor=1,
+        files=60,
+        projected_bytes=1_400_000_000,
+        task_bytes=1_400_000_000,
+        partitions=60,
+    ),
+]
+
+
+def test_format_partition_plan_table_empty():
+    assert format_partition_plan_table([]) == ""
+
+
+def test_format_partition_plan_table_content():
+    table = format_partition_plan_table(_SAMPLE_ROWS)
+    assert "Partition Plan Summary" in table
+    assert "lineitem" in table
+    assert "orders" in table
+    assert "SPLIT" in table
+    assert "FUSED" in table
+
+
+def test_format_partition_plan_table_query_shown_once():
+    """Each query number should appear on exactly one data row (Q column only)."""
+    table = format_partition_plan_table(_SAMPLE_ROWS)
+    # The Q column is the first column; its cell is "| 1 |" for query=1 and "|   |" for
+    # repeated rows. Count occurrences of the literal "| 1 |" at line start.
+    q1_lines = [line for line in table.splitlines() if line.startswith("| 1 |")]
+    assert len(q1_lines) == 1
+
+
+@pytest.mark.parametrize(
+    "b,expected",
+    [
+        (500, "500 B"),
+        (1_500, "1.5 KB"),
+        (2_500_000, "2.5 MB"),
+        (1_500_000_000, "1.5 GB"),
+    ],
+)
+def test_fmt_partition_bytes(b, expected):
+    assert _fmt_partition_bytes(b) == expected
+
+
+@pytest.mark.parametrize(
+    "flavor,factor,expected",
+    [
+        ("SPLIT_FILES", 3, "3 tasks/file"),
+        ("FUSED_FILES", 1, "1 file/task"),
+        ("FUSED_FILES", 4, "4 files/task"),
+        ("SINGLE_FILE", 1, "1"),
+    ],
+)
+def test_factor_str(flavor, factor, expected):
+    row = PartitionPlanRow(
+        query=1,
+        table="t",
+        flavor=flavor,
+        factor=factor,
+        files=1,
+        projected_bytes=1,
+        task_bytes=1,
+        partitions=1,
+    )
+    assert factor_str(row) == expected
