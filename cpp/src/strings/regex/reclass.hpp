@@ -6,6 +6,8 @@
 
 #include "regcomp.h"
 
+#include <cudf/strings/detail/char_tables.hpp>
+#include <cudf/strings/detail/utf8.hpp>
 #include <cudf/types.hpp>
 
 #include <cuda/std/optional>
@@ -37,7 +39,32 @@ struct alignas(16) reclass_device {
   int32_t count{};
   reclass_range const* literals{};
 
-  __device__ inline bool is_match(char32_t const ch, uint8_t const* flags) const;
+  __device__ inline bool is_match(char32_t const ch, uint8_t const* codepoint_flags) const
+  {
+    for (int i = 0; i < count; ++i) {
+      auto const literal = literals[i];
+      if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
+    }
+
+    if (!builtins) return false;
+    uint32_t codept = utf8_to_codepoint(ch);
+    if (codept > 0x00'FFFF) return false;
+    int8_t fl = codepoint_flags[codept];
+    if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
+      return true;
+    if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
+      return true;
+    if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
+      return true;
+    if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
+      return true;
+    if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
+      return true;
+    if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
+      return true;
+    //
+    return false;
+  }
 };
 
 /**

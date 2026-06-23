@@ -4,7 +4,7 @@
  */
 #pragma once
 
-#include "glushkov.cuh"
+// #include "glushkov.cuh"
 #include "reclass.hpp"
 #include "regcomp.h"
 
@@ -25,8 +25,8 @@ namespace detail {
 
 // Forward declaration so reprog_device::create() can reference the type without
 // pulling glushkov_regcomp.h (a host-only header) into device compilation units.
-struct gkprog;
-struct gkprog_device;
+// struct gkprog;
+// struct gkprog_device;
 
 template <positional P>
 struct reljunk;
@@ -36,13 +36,6 @@ constexpr std::size_t MAX_WORKING_MEM = 0x01'FFFF'FFFF;  ///< Memory size for st
 constexpr int32_t MINIMUM_THREADS     = 256;  // Minimum threads for computing working memory
 
 class reprog;
-
-// Include Glushkov device program definitions here so that
-// gkprog_device is visible before reprog_device is declared.
-// This file is included inside the cudf::strings::detail namespace block,
-// so all declarations in glushkov.cuh land in that namespace.
-// NOTE: glushkov.cuh must NOT include regex.cuh (no circular dependency).
-// #include "strings/regex/glushkov.cuh"
 
 /**
  * @brief Regex program of instructions/data for a specific regex pattern.
@@ -74,21 +67,6 @@ class alignas(16) reprog_device {
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
     reprog const& prog, rmm::cuda_stream_view stream);
-
-  /**
-   * @brief Create device program instance with an optional Glushkov NFA program.
-   *
-   * When @p h_glushkov is non-null the returned device program will dispatch
-   * find() to the bit-parallel Glushkov engine (zero working memory).
-   * extract() always uses the Thompson NFA engine.
-   *
-   * @param prog       The Thompson NFA regex program (always compiled)
-   * @param h_glushkov Optional Glushkov host program; pass nullptr to skip
-   * @param stream     CUDA stream used for device memory operations
-   * @return The program device object
-   */
-  static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
-    reprog const& prog, gkprog const* h_glushkov, rmm::cuda_stream_view stream);
 
   /**
    * @brief Called automatically by the unique_ptr returned from create().
@@ -165,24 +143,6 @@ class alignas(16) reprog_device {
    * This may return 0 if the MAX_SHARED_MEM value is exceeded.
    */
   [[nodiscard]] int32_t compute_shared_memory_size() const;
-
-  /**
-   * @brief Returns the Thompson-only portion of shared memory (excluding Glushkov cache).
-   */
-  [[nodiscard]] int32_t compute_shared_memory_size_thompson() const;
-
-  /**
-   * @brief Returns true if this program has a Glushkov engine.
-   */
-  [[nodiscard]] __host__ __device__ inline bool has_glushkov() const
-  {
-    return _glushkov != nullptr;
-  }
-
-  /**
-   * @brief Returns the Glushkov device program pointer (may be nullptr).
-   */
-  [[nodiscard]] __device__ inline gkprog_device const* glushkov_prog() const { return _glushkov; }
 
   /**
    * @brief Returns the thread count passed on `set_working_memory`.
@@ -291,23 +251,7 @@ class alignas(16) reprog_device {
   std::size_t _prog_size{};  // total size of this instance
   void* _buffer{};           // working memory buffer
   int32_t _thread_count{};   // threads available in working memory
-
-  // Optional Glushkov NFA program.  When non-null, find() dispatches to the
-  // Glushkov bit-parallel engine instead of the Thompson list-based engine.
-  // extract() always uses the Thompson engine (Glushkov does not track groups).
-  gkprog_device const* _glushkov{};
-
-  // Optional shared-memory cache of Glushkov program arrays.  Set at kernel
-  // entry after cooperative load; nullptr means fall back to global memory.
-  glushkov_shmem_cache const* _glushkov_cache{};
-
- public:
-  __device__ inline void set_glushkov_cache(glushkov_shmem_cache const* c) { _glushkov_cache = c; }
 };
-
-// Include Glushkov device functions after both reclass_device and
-// gkprog_device are fully defined.
-// (glushkov.inl opens and closes the cudf::strings::detail namespace itself.)
 
 /**
  * @brief Return the size in bytes needed for working memory to

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -135,33 +135,33 @@ struct reljunk {
  * @param codepoint_flags Used for mapping a character to type for builtin classes.
  * @return true if the character matches
  */
-__device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
-                                                         uint8_t const* codepoint_flags) const
-{
-  for (int i = 0; i < count; ++i) {
-    auto const literal = literals[i];
-    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
-  }
-
-  if (!builtins) return false;
-  uint32_t codept = utf8_to_codepoint(ch);
-  if (codept > 0x00'FFFF) return false;
-  int8_t fl = codepoint_flags[codept];
-  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
-    return true;
-  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
-    return true;
-  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
-    return true;
-  if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
-    return true;
-  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
-    return true;
-  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
-    return true;
-  //
-  return false;
-}
+//__device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
+//                                                         uint8_t const* codepoint_flags) const
+//{
+//  for (int i = 0; i < count; ++i) {
+//    auto const literal = literals[i];
+//    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
+//  }
+//
+//  if (!builtins) return false;
+//  uint32_t codept = utf8_to_codepoint(ch);
+//  if (codept > 0x00'FFFF) return false;
+//  int8_t fl = codepoint_flags[codept];
+//  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
+//    return true;
+//  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
+//    return true;
+//  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
+//    return true;
+//  if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
+//    return true;
+//  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
+//    return true;
+//  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
+//    return true;
+//  //
+//  return false;
+//}
 
 __device__ __forceinline__ reinst reprog_device::get_inst(int32_t id) const { return _insts[id]; }
 
@@ -449,15 +449,6 @@ __device__ __forceinline__ match_result reprog_device::find(int32_t const thread
                                                             string_view::const_iterator begin,
                                                             cudf::size_type end) const
 {
-  // Dispatch to Glushkov bit-parallel engine when available.
-  // extract() always uses Thompson (Glushkov does not track capture groups).
-  if (_glushkov) {
-    // if (_glushkov_cache) { return glushkov_find<P>(*_glushkov, dstr, begin, end,
-    // _glushkov_cache); } return glushkov_find<P>(*_glushkov, dstr, begin, end);
-    auto gk = *_glushkov;  // copy it
-    gk.store_cache(_glushkov_cache);
-    return glushkov_find<P>(gk, dstr, begin, end, _glushkov_cache);
-  }
   return call_regexec<P>(thread_idx, dstr, begin, end);
 }
 

@@ -1,14 +1,16 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
 
+#include "glushkov.cuh"
 #include "glushkov_regcomp.h"
 #include "regcomp.h"
 #include "regex.cuh"
 
 #include <cudf/strings/regex/regex_program.hpp>
+#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -21,8 +23,6 @@ namespace strings {
  * @brief Implementation object for regex_program
  *
  * It encapsulates internal reprog object used for building its device equivalent.
- * When the GLUSHKOV flag is set and the pattern is eligible, glushkov_prog is
- * non-null and will be used by create_prog_device to construct the device program.
  */
 struct regex_program::regex_program_impl {
   detail::reprog prog;
@@ -36,12 +36,21 @@ struct regex_program::regex_program_impl {
 };
 
 struct regex_device_builder {
-  static auto create_prog_device(regex_program const& p,
-                                 rmm::cuda_stream_view stream,
-                                 bool use_glushkov = true)
+  static bool glushkov_fast_path_supported(regex_program const& p)
   {
-    return detail::reprog_device::create(
-      p._impl->prog, use_glushkov ? p._impl->glushkov_prog.get() : nullptr, stream);
+    // TODO: Add environment variable check here as well
+    return p._impl->glushkov_prog.get() != nullptr;
+  }
+
+  static auto create_prog_device(regex_program const& p, rmm::cuda_stream_view stream)
+  {
+    return detail::reprog_device::create(p._impl->prog, stream);
+  }
+
+  static auto create_gkprog_device(regex_program const& p, rmm::cuda_stream_view stream)
+  {
+    CUDF_EXPECTS(glushkov_fast_path_supported(p), "fast-path not supported");
+    return detail::gkprog_device::create(*p._impl->glushkov_prog, stream);
   }
 };
 

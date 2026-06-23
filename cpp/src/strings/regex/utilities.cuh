@@ -31,24 +31,12 @@ namespace detail {
 constexpr auto regex_launch_kernel_block_size = 256;
 
 template <typename ForEachFunction, typename ProgDevice>
-CUDF_KERNEL void for_each_kernel(ForEachFunction fn,
-                                 ProgDevice const d_prog,
-                                 size_type size,
-                                 int32_t thompson_shmem_bytes)
+CUDF_KERNEL void for_each_kernel(ForEachFunction fn, ProgDevice const d_prog, size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
   __syncthreads();
   auto s_prog = ProgDevice::load(d_prog, shmem);
-
-  // Load Glushkov program arrays into shared memory (placed after Thompson data)
-  if (s_prog.has_glushkov()) {
-    auto* g_cache = reinterpret_cast<glushkov_shmem_cache*>(
-      shmem + cudf::util::round_up_unsafe(thompson_shmem_bytes, 8));
-    glushkov_load_shmem(*s_prog.glushkov_prog(), g_cache);
-    s_prog.set_glushkov_cache(g_cache);
-    __syncthreads();
-  }
 
   auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = s_prog.thread_count();
@@ -70,11 +58,10 @@ void launch_for_each_kernel(ForEachFunction fn,
   auto d_buffer = rmm::device_buffer(buffer_size, stream);
   d_prog.set_working_memory(d_buffer.data(), thread_count);
 
-  auto const thompson_shmem_bytes = d_prog.compute_shared_memory_size_thompson();
-  auto const shmem_size           = d_prog.compute_shared_memory_size();
+  auto const shmem_size = d_prog.compute_shared_memory_size();
   cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-    fn, d_prog, size, thompson_shmem_bytes);
+    fn, d_prog, size);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
@@ -82,22 +69,12 @@ template <typename TransformFunction, typename ProgDevice, typename OutputType>
 CUDF_KERNEL void transform_kernel(TransformFunction fn,
                                   ProgDevice const d_prog,
                                   OutputType* d_output,
-                                  size_type size,
-                                  int32_t thompson_shmem_bytes)
+                                  size_type size)
 {
   extern __shared__ u_char shmem[];
   if (threadIdx.x == 0) { d_prog.store(shmem); }
   __syncthreads();
   auto s_prog = ProgDevice::load(d_prog, shmem);
-
-  // Load Glushkov program arrays into shared memory (placed after Thompson data)
-  if (s_prog.has_glushkov()) {
-    auto* g_cache = reinterpret_cast<glushkov_shmem_cache*>(
-      shmem + cudf::util::round_up_unsafe(thompson_shmem_bytes, 8));
-    glushkov_load_shmem(*s_prog.glushkov_prog(), g_cache);
-    s_prog.set_glushkov_cache(g_cache);
-    __syncthreads();
-  }
 
   auto const thread_idx = cudf::detail::grid_1d::global_thread_id();
   auto const stride     = s_prog.thread_count();
@@ -120,11 +97,10 @@ void launch_transform_kernel(TransformFunction fn,
   auto d_buffer = rmm::device_buffer(buffer_size, stream);
   d_prog.set_working_memory(d_buffer.data(), thread_count);
 
-  auto const thompson_shmem_bytes = d_prog.compute_shared_memory_size_thompson();
-  auto const shmem_size           = d_prog.compute_shared_memory_size();
+  auto const shmem_size = d_prog.compute_shared_memory_size();
   cudf::detail::grid_1d grid{thread_count, regex_launch_kernel_block_size};
   transform_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-    fn, d_prog, d_output, size, thompson_shmem_bytes);
+    fn, d_prog, d_output, size);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 
@@ -142,14 +118,13 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
 
   auto d_buffer = rmm::device_buffer(buffer_size, stream);
   d_prog.set_working_memory(d_buffer.data(), thread_count);
-  auto const thompson_shmem_bytes = d_prog.compute_shared_memory_size_thompson();
-  auto const shmem_size           = d_prog.compute_shared_memory_size();
+  auto const shmem_size = d_prog.compute_shared_memory_size();
   cudf::detail::grid_1d grid{thread_count, 256};
 
   // Compute the output size for each row
   if (strings_count > 0) {
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-      size_and_exec_fn, d_prog, strings_count, thompson_shmem_bytes);
+      size_and_exec_fn, d_prog, strings_count);
     CUDF_CUDA_TRY(cudaGetLastError());
   }
   // Convert the sizes to offsets
@@ -163,7 +138,7 @@ auto make_strings_children(SizeAndExecuteFunction size_and_exec_fn,
   if (char_bytes > 0) {
     size_and_exec_fn.d_chars = chars.data();
     for_each_kernel<<<grid.num_blocks, grid.num_threads_per_block, shmem_size, stream.value()>>>(
-      size_and_exec_fn, d_prog, strings_count, thompson_shmem_bytes);
+      size_and_exec_fn, d_prog, strings_count);
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 

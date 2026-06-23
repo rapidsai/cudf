@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -961,6 +961,7 @@ add_library(
   src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/positions.cu
+  src/strings/regex/gkexec.cpp
   src/strings/regex/glushkov_regcomp.cpp
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp

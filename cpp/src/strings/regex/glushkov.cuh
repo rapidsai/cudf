@@ -81,22 +81,13 @@ struct gkprog_device {
 
   [[nodiscard]] CUDF_HOST_DEVICE bool is_empty_match_possible() const { return false; }
 
-  /**
-   * @brief Store this object into the given device pointer (e.g. shared memory).
-   *
-   * No data is stored if MAX_SHARED_MEM is exceeded for this object.
-   */
   __device__ inline void store(void* buffer) const;
-  __device__ inline void store_cache(glushkov_shmem_cache const* cache);
+  //__device__ inline void store_cache(glushkov_shmem_cache const* cache);
 
   /**
    * @brief Load an instance of this class from a device buffer (e.g. shared memory).
-   *
-   * Data is loaded from the given buffer if MAX_SHARED_MEM is not exceeded for the given object.
-   * Otherwise, a copy of the object is returned.
    */
-  //[[nodiscard]] __device__ static inline gkprog_device load(gkprog_device const prog, void*
-  // buffer);
+  [[nodiscard]] __device__ static inline gkprog_device load(gkprog_device const prog, void* buffer);
 
   /**
    * @brief Returns the size of shared memory required to hold this instance.
@@ -106,6 +97,11 @@ struct gkprog_device {
    * This may return 0 if the MAX_SHARED_MEM value is exceeded.
    */
   [[nodiscard]] int32_t compute_shared_memory_size() const;
+
+  [[nodiscard]] std::pair<std::size_t, int32_t> compute_strided_working_memory(
+    int32_t rows, int32_t min_rows = 0, std::size_t requested_max_size = 0) const;
+  void set_working_memory(void* buffer, int32_t thread_count, int32_t max_insts = 0);
+  [[nodiscard]] __device__ inline int32_t thread_count() const { return _thread_count; }
 
   /**
    * @brief Does a find evaluation using the compiled expression on the given string.
@@ -118,11 +114,11 @@ struct gkprog_device {
    *            Specify -1 to match any virtual positions past the end of the string.
    * @return If match found, returns character positions of the matches.
    */
-  // template <positional P = positional::BEGIN_END>
-  //[[nodiscard]] __device__ inline match_result find(int32_t const thread_idx,
-  //                                                   string_view const d_str,
-  //                                                   string_view::const_iterator begin,
-  //                                                   cudf::size_type end = -1) const;
+  template <positional P = positional::BEGIN_END>
+  [[nodiscard]] __device__ inline match_result find(int32_t const thread_idx,
+                                                    string_view const d_str,
+                                                    string_view::const_iterator begin,
+                                                    cudf::size_type end = -1) const;
 
   // ---- scalar fields -------------------------------------------------------
   uint32_t num_states{};              ///< Number of Glushkov positions (≤ 64)
@@ -149,6 +145,16 @@ struct gkprog_device {
   glushkov_state_t const* _exception_succs{};  ///< [num_states] exception successor masks
 
   std::size_t _prog_size{};  ///< Total buffer size (for potential shmem loading)
+  int32_t _thread_count{};   ///< Used for strided kernel loops
+
+  __device__ glushkov_state_t priority_kill(glushkov_state_t const state,
+                                            glushkov_state_t const accept_mask) const;
+  __device__ bool position_matches(reinst const& pos,
+                                   char32_t const c,
+                                   reclass_device const* classes,
+                                   uint8_t const* codepoint_flags) const;
+  __device__ glushkov_state_t compute_follow_impl(glushkov_state_t const state) const;
+  __device__ glushkov_state_t compute_reach_impl(char32_t const c) const;
 };
 
 /**
@@ -170,8 +176,6 @@ struct gkprog_device {
  *
  * Anchored (end >= 0): inner-loop from start_pos, already O(n) per string.
  *
- * Note: nullable patterns are rejected at compile time by build_glushkov_program
- * (they fall back to Thompson NFA), so prog.nullable is always false here.
  *
  * The shift-and follow computation (Hyperscan-style):
  *   follow(state) ≈ OR_k( (state & shift_masks[k]) << shift_amounts[k] )
@@ -201,27 +205,23 @@ __device__ __forceinline__ uint32_t glushkov_ctz64(uint64_t x)
  * @return            State with lower-priority alternatives killed.
  */
 __device__ __forceinline__ glushkov_state_t
-glushkov_priority_kill(glushkov_state_t const state, glushkov_state_t const accept_mask)
+gkprog_device::priority_kill(glushkov_state_t const state, glushkov_state_t const accept_mask) const
 {
-  auto const lsb_a = glushkov_ctz64(state & accept_mask);
+  auto const lsb_a = static_cast<uint32_t>(cuda::std::countr_zero(state & accept_mask));
   if (lsb_a < 63) { return state & ((glushkov_state_t(1) << (lsb_a + 1)) - 1); }
   return state;
 }
-
-// ---------------------------------------------------------------------------
-// Character matching
-// ---------------------------------------------------------------------------
 
 /**
  * @brief Returns true if character @p c is matched by Glushkov position @p pos.
  *
  * Mirrors the character-dispatch logic in the Thompson NFA regexec loop.
  */
-//__device__ __forceinline__ bool glushkov_position_matches(glushkov_position const& pos,
-__device__ __forceinline__ bool glushkov_position_matches(reinst const& pos,
-                                                          char32_t const c,
-                                                          reclass_device const* classes,
-                                                          uint8_t const* codepoint_flags)
+__device__ __forceinline__ bool gkprog_device::position_matches(
+  reinst const& pos,
+  char32_t const c,
+  reclass_device const* classes,
+  uint8_t const* codepoint_flags) const
 {
   switch (pos.type) {
     case CHAR: return c == pos.u1.c;
@@ -273,29 +273,25 @@ __device__ __forceinline__ bool glushkov_position_matches(reinst const& pos,
  *
  */
 __device__ __forceinline__ glushkov_state_t
-glushkov_compute_follow_impl(glushkov_state_t const state, gkprog_device const& prog)
+gkprog_device::compute_follow_impl(glushkov_state_t const state) const
 {
   glushkov_state_t follow = 0;
 
   // Phase 1: shift-and transitions
-  for (uint32_t k = 0; k < prog.shift_count; ++k) {
-    follow |= (state & prog._shift_masks[k]) << prog._shift_amounts[k];
+  for (uint32_t k = 0; k < shift_count; ++k) {
+    follow |= (state & _shift_masks[k]) << _shift_amounts[k];
   }
 
   // Phase 2: exception transitions (backward / large-span)
-  glushkov_state_t exc = state & prog.exception_mask;
+  glushkov_state_t exc = state & exception_mask;
   while (exc) {
     uint32_t const p = glushkov_ctz64(exc);
     exc &= exc - 1;  // clear lowest set bit
-    follow |= prog._exception_succs[p];
+    follow |= _exception_succs[p];
   }
 
   return follow;
 }
-
-// ---------------------------------------------------------------------------
-// Reach computation: bitmask of positions that match character c — templated impl
-// ---------------------------------------------------------------------------
 
 /**
  * @brief Compute the reach bitmask for character @p c.
@@ -306,15 +302,15 @@ glushkov_compute_follow_impl(glushkov_state_t const state, gkprog_device const& 
  * table — O(1).
  * Slow path (non-ASCII): O(num_states) loop over position descriptors.
  */
-__device__ __forceinline__ glushkov_state_t glushkov_compute_reach_impl(char32_t const c,
-                                                                        gkprog_device const& prog)
+__device__ __forceinline__ glushkov_state_t
+gkprog_device::compute_reach_impl(char32_t const c) const
 {
-  if (c < static_cast<uint32_t>(GLUSHKOV_ASCII_TABLE_SIZE)) { return prog._reach_ascii[c]; }
+  if (c < static_cast<uint32_t>(GLUSHKOV_ASCII_TABLE_SIZE)) { return _reach_ascii[c]; }
 
   // Non-ASCII fallback: must use prog._positions (global memory)
   glushkov_state_t reach = 0;
-  for (uint32_t p = 0; p < prog.num_states; ++p) {
-    if (glushkov_position_matches(prog._positions[p], c, prog._classes, prog._codepoint_flags)) {
+  for (uint32_t p = 0; p < num_states; ++p) {
+    if (position_matches(_positions[p], c, _classes, _codepoint_flags)) {
       reach |= glushkov_state_t(1) << p;
     }
   }
@@ -334,12 +330,9 @@ __device__ __forceinline__ glushkov_state_t glushkov_compute_reach_impl(char32_t
  * only) rescans from inject_start_pos (the earliest injection position since
  * state was last 0) to find the leftmost valid start for that match end.
  *
- * Nullable patterns are rejected at compile time by build_glushkov_program,
- * so prog.nullable is always false when this function is called.
  *
  * @tparam P     Positional mode (BEGIN_END or END_ONLY)
  *
- * @param prog   Glushkov device program.
  * @param d_str  Input string.
  * @param begin  Iterator to the first character to consider.
  * @param end    Max start-position to try (−1 = try all positions). Mirrors the
@@ -348,11 +341,11 @@ __device__ __forceinline__ glushkov_state_t glushkov_compute_reach_impl(char32_t
  *               the end of the string once a start position is chosen.
  * @return       Match pair or nullopt.
  */
-template <positional P = positional::BEGIN_END>
-__device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& prog,
-                                                           string_view const d_str,
-                                                           string_view::const_iterator begin,
-                                                           cudf::size_type end)
+template <positional P>
+__device__ __forceinline__ match_result gkprog_device::find(int32_t const,
+                                                            string_view const d_str,
+                                                            string_view::const_iterator begin,
+                                                            cudf::size_type end) const
 {
   auto const size_bytes = static_cast<int32_t>(d_str.size_bytes());  // O(1)
 
@@ -366,8 +359,8 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
       if (start >= end) { break; }
       if (outer_itr.byte_offset() >= size_bytes) { break; }
 
-      if (prog.startchar.has_value()) {
-        while (outer_itr.byte_offset() < size_bytes && *outer_itr != prog.startchar.value()) {
+      if (startchar.has_value()) {
+        while (outer_itr.byte_offset() < size_bytes && *outer_itr != startchar.value()) {
           ++outer_itr;
           ++start;
         }
@@ -375,28 +368,28 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
         if (start >= end) { break; }
       } else {
         char32_t const first_c = *outer_itr;
-        if ((glushkov_compute_reach_impl(first_c, prog) & prog.first_set) == 0) { continue; }
+        if ((compute_reach_impl(first_c) & first_set) == 0) { continue; }
       }
 
       match_result cur_match{};
 
-      glushkov_state_t state = prog.first_set;
+      glushkov_state_t state = first_set;
       auto inner_itr         = outer_itr;
       for (int32_t pos = start; inner_itr.byte_offset() < size_bytes; ++pos, ++inner_itr) {
         char32_t const c = *inner_itr;
         if (pos == start) {
-          state = state & glushkov_compute_reach_impl(c, prog);
+          state = state & compute_reach_impl(c);
         } else {
-          state = glushkov_compute_follow_impl(state, prog) & glushkov_compute_reach_impl(c, prog);
+          state = compute_follow_impl(state) & compute_reach_impl(c);
         }
         if (state == 0) { break; }
-        if (state & prog.accept_mask) {
+        if (state & accept_mask) {
           if constexpr (P == positional::BEGIN_END) {
             cur_match = match_pair{start, pos + 1};
           } else {
             cur_match = match_pair{-1, pos + 1};
           }
-          state = glushkov_priority_kill(state, prog.accept_mask);
+          state = priority_kill(state, accept_mask);
         }
       }
       if (cur_match) { return cur_match; }
@@ -431,9 +424,9 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
   for (int32_t pos = start_pos; itr.byte_offset() < size_bytes; ++pos, ++itr) {
     // Fast skip when no active states and no match found yet.
     if (state == 0 && !cur_match) {
-      if (prog.startchar.has_value()) {
+      if (startchar.has_value()) {
         // Tight byte scan for the literal start character.
-        while (itr.byte_offset() < size_bytes && *itr != prog.startchar.value()) {
+        while (itr.byte_offset() < size_bytes && *itr != startchar.value()) {
           ++itr;
           ++pos;
         }
@@ -445,13 +438,12 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
     }
 
     char32_t const c = *itr;
-    auto const reach = glushkov_compute_reach_impl(c, prog);
+    auto const reach = compute_reach_impl(c);
 
-    glushkov_state_t state_next =
-      (state != 0) ? glushkov_compute_follow_impl(state, prog) : glushkov_state_t{0};
+    glushkov_state_t state_next = (state != 0) ? compute_follow_impl(state) : glushkov_state_t{0};
 
     // Inject fresh starts unless in greedy-extension mode.
-    if (!cur_match) { state_next |= prog.first_set; }
+    if (!cur_match) { state_next |= first_set; }
 
     state = state_next & reach;
 
@@ -461,7 +453,7 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
     }
 
     // Detect match: any active state reaching accept.
-    if (state & prog.accept_mask) {
+    if (state & accept_mask) {
       if constexpr (P == positional::BEGIN_END) {
         cur_match = match_pair{inject_start_pos, pos + 1};  // start is provisional
       } else {
@@ -469,7 +461,7 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
       }
       // Greedy: continue extending.  Fresh start injection stops via
       // the !cur_match gate above.
-      state = glushkov_priority_kill(state, prog.accept_mask);
+      state = priority_kill(state, accept_mask);
     }
   }
 
@@ -487,27 +479,26 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
   auto rescan_itr = inject_start_itr;
   for (int32_t s = inject_start_pos; s < cur_match->second; ++s, ++rescan_itr) {
     char32_t const c      = *rescan_itr;
-    auto const reach      = glushkov_compute_reach_impl(c, prog);
-    glushkov_state_t seed = prog.first_set & reach;
+    auto const reach      = compute_reach_impl(c);
+    glushkov_state_t seed = first_set & reach;
     if (seed == 0) { continue; }
 
     // Check immediate accept (single-position pattern, e.g. `\d`).
     int32_t greedy_end = -1;
-    if (seed & prog.accept_mask) {
+    if (seed & accept_mask) {
       greedy_end = s + 1;
-      seed       = glushkov_priority_kill(seed, prog.accept_mask);
+      seed       = priority_kill(seed, accept_mask);
     }
 
     // Advance the single-seed NFA forward.
     auto scan_itr = rescan_itr;
     ++scan_itr;
     for (int32_t p = s + 1; scan_itr.byte_offset() < size_bytes; ++p, ++scan_itr) {
-      seed =
-        glushkov_compute_follow_impl(seed, prog) & glushkov_compute_reach_impl(*scan_itr, prog);
+      seed = compute_follow_impl(seed) & compute_reach_impl(*scan_itr);
       if (seed == 0) { break; }
-      if (seed & prog.accept_mask) {
+      if (seed & accept_mask) {
         greedy_end = p + 1;
-        seed       = glushkov_priority_kill(seed, prog.accept_mask);
+        seed       = priority_kill(seed, accept_mask);
       }
     }
 
@@ -518,32 +509,28 @@ __device__ __forceinline__ match_result glushkov_find_impl(gkprog_device const& 
   return cur_match;
 }
 
-// ===========================================================================
-// Shared-memory-cached variants (CUDA device code only)
-// ===========================================================================
-
-/// Reads program arrays from the block-shared cache populated by
-/// @ref glushkov_load_shmem.
-struct glushkov_shmem_source {
-  gkprog_device const& prog;
-  glushkov_shmem_cache const* cache;
-  __device__ __forceinline__ glushkov_state_t reach_ascii(uint32_t c) const
-  {
-    return cache->reach_ascii[c];
-  }
-  __device__ __forceinline__ glushkov_state_t shift_mask(uint32_t k) const
-  {
-    return cache->shift_masks[k];
-  }
-  __device__ __forceinline__ uint8_t shift_amount(uint32_t k) const
-  {
-    return cache->shift_amounts[k];
-  }
-  __device__ __forceinline__ glushkov_state_t exception_succ(uint32_t p) const
-  {
-    return cache->exception_succs[p];
-  }
-};
+// /// Reads program arrays from the block-shared cache populated by
+// /// @ref glushkov_load_shmem.
+// struct glushkov_shmem_source {
+//   gkprog_device const& prog;
+//   glushkov_shmem_cache const* cache;
+//   __device__ __forceinline__ glushkov_state_t reach_ascii(uint32_t c) const
+//   {
+//     return cache->reach_ascii[c];
+//   }
+//   __device__ __forceinline__ glushkov_state_t shift_mask(uint32_t k) const
+//   {
+//     return cache->shift_masks[k];
+//   }
+//   __device__ __forceinline__ uint8_t shift_amount(uint32_t k) const
+//   {
+//     return cache->shift_amounts[k];
+//   }
+//   __device__ __forceinline__ glushkov_state_t exception_succ(uint32_t p) const
+//   {
+//     return cache->exception_succs[p];
+//   }
+// };
 
 #ifdef __CUDACC__
 
@@ -553,51 +540,78 @@ struct glushkov_shmem_source {
  * Must be called by ALL threads in the block.  After return (caller must call
  * __syncthreads), the @p cache is ready for use.
  */
-__device__ __forceinline__ gkprog_device glushkov_load_shmem(gkprog_device const& prog,
-                                                             glushkov_shmem_cache* cache)
+//__device__ __forceinline__ gkprog_device glushkov_load_shmem(gkprog_device const& prog,
+//                                                             glushkov_shmem_cache* cache)
+//{
+//  auto result = gkprog_device(prog);
+//  // Cooperative load: each thread handles a strided portion of each array.
+//  for (uint32_t i = threadIdx.x; i < static_cast<uint32_t>(GLUSHKOV_ASCII_TABLE_SIZE);
+//       i += blockDim.x) {
+//    cache->reach_ascii[i] = prog._reach_ascii[i];
+//  }
+//  result._reach_ascii = cache->reach_ascii;
+//  for (uint32_t i = threadIdx.x; i < prog.shift_count; i += blockDim.x) {
+//    cache->shift_masks[i]   = prog._shift_masks[i];
+//    cache->shift_amounts[i] = prog._shift_amounts[i];
+//  }
+//  result._shift_masks   = cache->shift_masks;
+//  result._shift_amounts = cache->shift_amounts;
+//  for (uint32_t i = threadIdx.x; i < prog.num_states; i += blockDim.x) {
+//    cache->exception_succs[i] = prog._exception_succs[i];
+//  }
+//  result._exception_succs = cache->exception_succs;
+//  return result;
+//}
+
+__device__ inline void gkprog_device::store(void* buffer) const
 {
-  auto result = gkprog_device(prog);
-  // Cooperative load: each thread handles a strided portion of each array.
-  for (uint32_t i = threadIdx.x; i < static_cast<uint32_t>(GLUSHKOV_ASCII_TABLE_SIZE);
-       i += blockDim.x) {
-    cache->reach_ascii[i] = prog._reach_ascii[i];
+  auto cache = static_cast<glushkov_shmem_cache*>(buffer);
+  for (uint32_t i = 0; i < static_cast<uint32_t>(GLUSHKOV_ASCII_TABLE_SIZE); ++i) {
+    cache->reach_ascii[i] = _reach_ascii[i];
   }
-  result._reach_ascii = cache->reach_ascii;
-  for (uint32_t i = threadIdx.x; i < prog.shift_count; i += blockDim.x) {
-    cache->shift_masks[i]   = prog._shift_masks[i];
-    cache->shift_amounts[i] = prog._shift_amounts[i];
+  for (uint32_t i = 0; i < shift_count; ++i) {
+    cache->shift_masks[i]   = _shift_masks[i];
+    cache->shift_amounts[i] = _shift_amounts[i];
   }
-  result._shift_masks   = cache->shift_masks;
-  result._shift_amounts = cache->shift_amounts;
-  for (uint32_t i = threadIdx.x; i < prog.num_states; i += blockDim.x) {
-    cache->exception_succs[i] = prog._exception_succs[i];
+  for (uint32_t i = 0; i < num_states; ++i) {
+    cache->exception_succs[i] = _exception_succs[i];
   }
+}
+
+#endif  // __CUDACC__
+
+//__device__ void gkprog_device::store_cache(glushkov_shmem_cache const* cache)
+//{
+//  _reach_ascii     = cache->reach_ascii;
+//  _shift_amounts   = cache->shift_amounts;
+//  _shift_masks     = cache->shift_masks;
+//  _exception_succs = cache->exception_succs;
+//}
+
+__device__ gkprog_device gkprog_device::load(gkprog_device const prog, void* buffer)
+{
+  auto result             = gkprog_device(prog);
+  auto cache              = static_cast<glushkov_shmem_cache const*>(buffer);
+  result._reach_ascii     = cache->reach_ascii;
+  result._shift_amounts   = cache->shift_amounts;
+  result._shift_masks     = cache->shift_masks;
   result._exception_succs = cache->exception_succs;
   return result;
 }
-#endif  // __CUDACC__
 
-__device__ void gkprog_device::store_cache(glushkov_shmem_cache const* cache)
-{
-  _reach_ascii     = cache->reach_ascii;
-  _shift_amounts   = cache->shift_amounts;
-  _shift_masks     = cache->shift_masks;
-  _exception_succs = cache->exception_succs;
-}
-
-/// Overload of glushkov_compute_follow that reads from the shared-memory cache.
-__device__ __forceinline__ glushkov_state_t glushkov_compute_follow(
-  glushkov_state_t const state, gkprog_device const& prog, glushkov_shmem_cache const* cache)
-{
-  return glushkov_compute_follow_impl(state, prog);
-}
-
-/// Overload of glushkov_compute_reach that reads from the shared-memory cache.
-__device__ __forceinline__ glushkov_state_t glushkov_compute_reach(
-  char32_t const c, gkprog_device const& prog, glushkov_shmem_cache const* cache)
-{
-  return glushkov_compute_reach_impl(c, prog);
-}
+// /// Overload of glushkov_compute_follow that reads from the shared-memory cache.
+// __device__ __forceinline__ glushkov_state_t glushkov_compute_follow(
+//   glushkov_state_t const state, gkprog_device const& prog, glushkov_shmem_cache const* cache)
+// {
+//   return glushkov_compute_follow_impl(state, prog);
+// }
+//
+// /// Overload of glushkov_compute_reach that reads from the shared-memory cache.
+// __device__ __forceinline__ glushkov_state_t glushkov_compute_reach(
+//   char32_t const c, gkprog_device const& prog, glushkov_shmem_cache const* cache)
+// {
+//   return glushkov_compute_reach_impl(c, prog);
+// }
 
 /**
  * @brief Glushkov NFA find with shared-memory-cached program data.
@@ -606,14 +620,14 @@ __device__ __forceinline__ glushkov_state_t glushkov_compute_reach(
  * arrays (reach_ascii, shift_masks, exception_succs) are served from
  * shared memory instead of global/L2 cache.
  */
-template <positional P = positional::BEGIN_END>
-__device__ __forceinline__ match_result glushkov_find(gkprog_device const& prog,
-                                                      string_view const d_str,
-                                                      string_view::const_iterator begin,
-                                                      cudf::size_type end,
-                                                      glushkov_shmem_cache const* cache)
-{
-  return glushkov_find_impl<P>(prog, d_str, begin, end);
-}
+// template <positional P = positional::BEGIN_END>
+//__device__ __forceinline__ match_result glushkov_find(gkprog_device const& prog,
+//                                                       string_view const d_str,
+//                                                       string_view::const_iterator begin,
+//                                                       cudf::size_type end,
+//                                                       glushkov_shmem_cache const* cache)
+//{
+//   return glushkov_find_impl<P>(prog, d_str, begin, end);
+// }
 
 }  // namespace cudf::strings::detail
