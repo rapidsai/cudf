@@ -6,7 +6,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["12.9", "13.2"]
+      cuda: ["12.9", "13.3"]
       arch: [x86_64, aarch64]
     includes:
       - build_base
@@ -725,6 +725,10 @@ dependencies:
               cuda: "13.2"
             packages:
               - cuda-version=13.2
+          - matrix:
+              cuda: "13.3"
+            packages:
+              - cuda-version=13.3
       - output_types: requirements
         matrices:
           # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
@@ -775,6 +779,11 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==13.2.*
+          - matrix:
+              cuda: "13.3"
+              use_cuda_wheels: "true"
+            packages:
+              - cuda-toolkit==13.3.*
   cuda:
     common:
       - output_types: [conda]
