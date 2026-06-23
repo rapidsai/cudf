@@ -491,6 +491,10 @@ TEST_F(StringsSliceTest, Error)
                cudf::logic_error);
   EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_bad, indexes_bad, options),
                cudf::logic_error);
+  auto indexes_32 = cudf::test::fixed_width_column_wrapper<int32_t>({1});
+  auto indexes_64 = cudf::test::fixed_width_column_wrapper<int64_t>({1});
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_32, indexes_64, options),
+               cudf::logic_error);
 }
 
 TEST_F(StringsSliceTest, ZeroSizeStringsColumn)

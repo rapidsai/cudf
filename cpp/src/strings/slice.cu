@@ -503,6 +503,9 @@ std::unique_ptr<column> slice_strings(strings_column_view const& input,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
+  CUDF_EXPECTS(cudf::have_same_types(starts_column, stops_column),
+               "Parameters starts and stops must be the same integer type.");
+
   if (is_default_slice_options(options)) {
     return slice_strings(input, starts_column, stops_column, stream, mr);
   }
