@@ -275,7 +275,7 @@ def test_python_scan_lines(engine: pl.GPUEngine):
         def generator(with_columns, predicate, n_rows, batch_size):
             if batch_size is None:
                 batch_size = 100_000
-            batch_lines: list[str] = []
+            batch_lines = []
             while n_rows != 0:
                 batch_lines.clear()
                 remaining = batch_size
