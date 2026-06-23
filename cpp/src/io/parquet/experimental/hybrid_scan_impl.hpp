@@ -25,6 +25,7 @@
 
 #include <memory>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::parquet::experimental::detail {
@@ -281,10 +282,23 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk();
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan_reader::construct_row_group_passes
+   * @brief Partition per-source row groups into read passes
+   *
+   * @throws std::invalid_argument if @p row_group_indices.size() is all empty or not equal to the
+   * number of input datasources
+   *
+   * @param row_group_indices Input row group indices, one per source
+   * @param total_row_groups Total number of row groups across all sources
+   * @param pass_read_limit Memory limit to read and decompress row
+   * group data
+   *
+   * @return Pair of a vector of flattened row group passes and a source index map. The source index
+   * map is empty for single source input
    */
-  [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
-    cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
+  [[nodiscard]] std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
+  construct_row_group_passes(cudf::host_span<std::vector<size_type> const> row_group_indices,
+                             std::size_t total_row_groups,
+                             std::size_t pass_read_limit) const;
 
   /**
    * @copydoc cudf::io::experimental::hybrid_scan::has_next_table_chunk

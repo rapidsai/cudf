@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,7 +55,12 @@ void context::ensure_jit_cache_initialized()
   });
 }
 
-context::~context() { rtcx::teardown(); }
+context::~context()
+{
+  _jit_bundle.reset();
+  _rtcx_cache.reset();
+  rtcx::teardown();
+}
 
 rtcx::cache_t& context::rtcx_cache()
 {

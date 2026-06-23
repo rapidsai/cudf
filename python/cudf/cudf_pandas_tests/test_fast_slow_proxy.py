@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -233,6 +233,66 @@ def test_fallback_with_stringio():
     assert pxy(StringIO("hello")) == "hello"
 
 
+# "Pure" (resource-free) iterators that ``_transform_arg`` handles specially:
+# they force a fallback on the fast path and are transformed lazily into a new
+# generator on the slow path.
+_PURE_ITERATOR_FACTORIES = [
+    lambda items: (item for item in items),
+    lambda items: map(lambda item: item, items),
+    lambda items: filter(lambda item: True, items),
+    lambda items: zip(items, strict=True),
+    lambda items: enumerate(items),
+]
+_PURE_ITERATOR_IDS = ["generator", "map", "filter", "zip", "enumerate"]
+
+
+@pytest.mark.parametrize(
+    "make_iterator", _PURE_ITERATOR_FACTORIES, ids=_PURE_ITERATOR_IDS
+)
+def test_pure_iterator_forces_fallback_and_stays_iterator(
+    make_iterator, final_proxy
+):
+    # A pure iterator argument forces a fallback to the slow path (the fast
+    # path raises before consuming it), and the slow callable must receive a
+    # *bare* iterator rather than a materialized list (pandas treats iterators
+    # and lists differently, e.g. ``is_nested_list_like``).
+    _, _, x = final_proxy
+    received = {}
+
+    def fast(it):
+        raise AssertionError("fast path must not run for pure iterators")
+
+    def slow(it):
+        received["bare_iterator"] = iter(it) is it and not isinstance(
+            it, (list, tuple)
+        )
+        return list(it)
+
+    pxy = _FunctionProxy(fast=fast, slow=slow)
+    result = pxy(make_iterator([x, x]))
+    assert received["bare_iterator"]
+    assert len(result) == 2
+
+
+@pytest.mark.parametrize(
+    "make_iterator",
+    _PURE_ITERATOR_FACTORIES[:3],
+    ids=_PURE_ITERATOR_IDS[:3],
+)
+def test_pure_iterator_slow_path_unwraps_elements(make_iterator, final_proxy):
+    # The lazily produced generator still unwraps proxy elements to their slow
+    # counterparts (the motivation for transforming rather than passing the
+    # iterator through untouched, which dropped type info such as the
+    # ``category`` dtype in ``MultiIndex.from_product(map(...))``).
+    _, slow_x, x = final_proxy
+    transformed = _slow_arg(make_iterator([x, x]))
+    assert iter(transformed) is transformed
+    items = list(transformed)
+    assert items == [slow_x, slow_x]
+    # Each element is the unwrapped *slow* object, not the proxy.
+    assert all(type(item) is type(slow_x) for item in items)
+
+
 def test_access_class():
     def func():
         pass
@@ -405,8 +465,10 @@ def test_dir(fast_and_intermediate_with_doc, slow_and_intermediate_with_doc):
     "check",
     [
         lambda Pxy, Slow: dir(Pxy().method) == dir(Slow().method),
-        lambda Pxy, Slow: dir(Pxy().intermediate().method)
-        == dir(Slow().intermediate().method),
+        lambda Pxy, Slow: (
+            dir(Pxy().intermediate().method)
+            == dir(Slow().intermediate().method)
+        ),
     ],
 )
 def test_dir_bound_method(

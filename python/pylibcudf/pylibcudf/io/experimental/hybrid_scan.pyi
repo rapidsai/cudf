@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
@@ -20,8 +20,8 @@ except ImportError:
     from typing_extensions import Buffer
 
 class UseDataPageMask(IntEnum):
-    YES: int
-    NO: int
+    YES = 1
+    NO = 0
 
 class HybridScanMetadata:
     @staticmethod

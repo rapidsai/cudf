@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -327,6 +327,8 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_HYBRID_SCAN", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__HYBRID_SCAN_STATS_PRUNING", "0")
 
         # Test default
         engine = pl.GPUEngine()
@@ -431,7 +433,7 @@ def test_validate_parquet_options(option: str) -> None:
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(
-            pl.GPUEngine(executor="streaming", raise_on_fail=cast(bool, object()))
+            pl.GPUEngine(executor="streaming", raise_on_fail=cast("bool", object()))
         )
 
 
@@ -631,7 +633,7 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
 def test_cuda_stream_policy_pool_in_memory_unsupported() -> None:
     with pytest.raises(
         ValueError,
-        match="A stream pool is only supported by the streaming executor.",
+        match=r"A stream pool is only supported by the streaming executor.",
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
@@ -760,7 +762,7 @@ def test_parse_memory_resource_config() -> None:
 def test_memory_resource_config_raises() -> None:
     with pytest.raises(
         ValueError,
-        match="MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
+        match=r"MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
     ):
         MemoryResourceConfig(qualname="foo")
 

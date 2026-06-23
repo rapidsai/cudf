@@ -1421,11 +1421,26 @@ def _transform_arg(
         )
         result[...] = transformed
         return result.reshape(arg.shape)
+    elif isinstance(arg, (types.GeneratorType, map, filter, zip, enumerate)):
+        # "Pure" (resource-free) iterators. On the fast path we force a
+        # fallback because they are consumable (see below). On the slow path we
+        # transform the elements lazily into a new generator -- a bare iterator
+        # would otherwise hand wrapped proxies straight to the slow library,
+        # which can lose type information (e.g. ``MultiIndex.from_product`` of a
+        # ``map`` over categoricals dropping the ``category`` dtype). We yield a
+        # generator (rather than materializing a ``list``) so the slow library
+        # still sees a bare iterator: pandas treats iterators differently from
+        # lists in places (e.g. ``is_nested_list_like`` returns ``False`` for an
+        # iterator, and ``Index.get_loc`` reports the iterator in its error
+        # message), and materializing would silently change that behavior.
+        if attribute_name == "_fsproxy_fast":
+            raise Exception()
+        return (_transform_arg(a, attribute_name, seen) for a in arg)
     elif isinstance(arg, Iterator) and attribute_name == "_fsproxy_fast":
-        # this may include consumable objects like generators or
-        # IOBase objects, which we don't want unavailable to the slow
-        # path in case of fallback. So, we raise here and ensure the
-        # slow path is taken:
+        # Other consumable objects such as generators or IOBase objects, which
+        # we don't want unavailable to the slow path in case of fallback. So,
+        # we raise here and ensure the slow path is taken (and the object is
+        # left intact for it):
         raise Exception()
     elif isinstance(arg, types.FunctionType):
         if id(arg) in seen:

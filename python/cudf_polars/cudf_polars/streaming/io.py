@@ -46,6 +46,7 @@ if TYPE_CHECKING:
     import pylibcudf.expressions as plc_expr
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.containers import DataFrame, DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.base import (
@@ -1170,6 +1171,25 @@ def _sample_rg_sizes(
     return result
 
 
+def _is_fixed_width(dtype: DataType) -> bool:
+    """Return whether dtype is a concrete fixed-width type."""
+    return dtype.id() not in (plc.TypeId.EMPTY, plc.TypeId.NUM_TYPE_IDS) and (
+        plc.traits.is_fixed_width(dtype.plc_type)
+    )
+
+
+def _decoded_size_floor(dtype: DataType, nrows: int) -> int:
+    """Return a conservative decoded-column byte floor for scan planning."""
+    nullmask = (nrows + 7) // 8
+    plc_dtype = dtype.plc_type
+    if dtype.id() == plc.TypeId.STRING:
+        # Decoded strings always have int32 offsets (4 bytes)
+        return (nrows + 1) * 4 + nullmask
+    if _is_fixed_width(dtype):
+        return nrows * plc.types.size_of(plc_dtype) + nullmask
+    return max(1, nrows)
+
+
 class ParquetSourceInfo:
     """Parquet datasource information, fully computed at construction time."""
 
@@ -1189,6 +1209,7 @@ class ParquetSourceInfo:
         cls,
         paths: tuple[str, ...],
         needed_cols: frozenset[str],
+        schema: tuple[tuple[str, DataType], ...],
         max_footer_samples: int,
         max_row_group_samples: int,
     ) -> ParquetSourceInfo:
@@ -1202,37 +1223,43 @@ class ParquetSourceInfo:
         if not (file_count and row_count and needed_cols):
             return cls(row_count, {})
 
-        # Floor on size: dictionary encoding can make in-memory size much larger
-        # than what the compressed footer metadata reports.
-        min_floor = max(1, row_count // file_count)
-        suspicious: list[str] = []
+        rows_per_file = max(1, row_count // file_count)
+        schema_map = dict(schema)
+        sample_cols: list[str] = []
 
         for col in needed_cols:
             footer_mean = metadata.mean_size_per_file.get(col)
             if footer_mean is None:
                 continue
-            if footer_mean < min_floor:
-                suspicious.append(col)
+            dtype = schema_map[col]
+            decoded_floor = _decoded_size_floor(dtype, rows_per_file)
+            # This is conservative for all-null columns; footer null counts could
+            # refine the floor later if the extra partitioning becomes costly.
+            if (
+                footer_mean < decoded_floor
+                and max_row_group_samples > 0
+                and not _is_fixed_width(dtype)
+            ):
+                sample_cols.append(col)
             else:
-                per_file_means[col] = footer_mean
+                per_file_means[col] = max(footer_mean, decoded_floor)
 
-        if suspicious and max_row_group_samples > 0:
-            rg_sizes = _sample_rg_sizes(metadata, suspicious, max_row_group_samples)
+        if sample_cols:
+            rg_sizes = _sample_rg_sizes(metadata, sample_cols, max_row_group_samples)
             mean_rg_count = (
                 statistics.mean(metadata.num_row_groups_per_file)
                 if metadata.num_row_groups_per_file
                 else 1
             )
-            for col in suspicious:
+            for col in sample_cols:
                 rg_size = rg_sizes.get(col)
+                decoded_floor = _decoded_size_floor(schema_map[col], rows_per_file)
+                footer_mean = metadata.mean_size_per_file[col]
                 per_file_means[col] = (
-                    max(min_floor, int(rg_size * mean_rg_count))
+                    max(footer_mean, decoded_floor, int(rg_size * mean_rg_count))
                     if rg_size
-                    else min_floor
+                    else max(footer_mean, decoded_floor)
                 )
-        else:
-            for col in suspicious:
-                per_file_means[col] = min_floor
 
         return cls(row_count, per_file_means)
 
@@ -1302,12 +1329,13 @@ class DataFrameSourceInfo:
 def _build_parquet_source(
     paths: tuple[str, ...],
     needed_cols: frozenset[str],
+    schema: tuple[tuple[str, DataType], ...],
     max_footer_samples: int,
     max_row_group_samples: int,
 ) -> ParquetSourceInfo:
     """Return cached, fully-computed Parquet datasource information."""
     return ParquetSourceInfo.from_paths(
-        paths, needed_cols, max_footer_samples, max_row_group_samples
+        paths, needed_cols, schema, max_footer_samples, max_row_group_samples
     )
 
 
@@ -1316,6 +1344,7 @@ def _build_source_info(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     needed_cols: frozenset[str] | None = None,
+    schema: tuple[tuple[str, DataType], ...] | None = None,
 ) -> DataSourceInfo:
     """Return DataSourceInfo for a Scan or DataFrameScan node."""
     if isinstance(ir, DataFrameScan):
@@ -1324,8 +1353,9 @@ def _build_source_info(
         max_footer = config_options.parquet_options.max_footer_samples
         max_rg = config_options.parquet_options.max_row_group_samples
         needed_cols = frozenset(ir.schema) if needed_cols is None else needed_cols
+        schema = tuple(ir.schema.items()) if schema is None else schema
         paths = tuple(ir.paths)
-        return _build_parquet_source(paths, needed_cols, max_footer, max_rg)
+        return _build_parquet_source(paths, needed_cols, schema, max_footer, max_rg)
     else:  # pragma: no cover
         raise ValueError(f"Unsupported Scan type: {ir.typ}")
 
