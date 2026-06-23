@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "cudf/ast/jit/expressions.hpp"
@@ -58,110 +58,97 @@ expression const& jit::predicate(ast::tree& tree, expression const& condition)
   return tree.push(detail::operation(opcode::PREDICATE, {condition}));
 }
 
-std::tuple<opcode, bool> resolve_op(opcode default_op, opcode ansi_op, jit::compliance_mode mode)
+expression const& jit::add(ast::tree& tree, expression const& a, expression const& b)
 {
-  switch (mode) {
-    case jit::compliance_mode::DEFAULT: return {default_op, false};
-    case jit::compliance_mode::ANSI: return {ansi_op, false};
-    case jit::compliance_mode::ANSI_TRY: return {ansi_op, true};
-    default:
-      CUDF_FAIL(std::format("Invalid compliance mode: {}", static_cast<int>(mode)),
-                std::invalid_argument);
-  }
+  return tree.push(detail::operation(opcode::ADD, {a, b}, false));
 }
 
-expression const& jit::add(ast::tree& tree,
-                           expression const& a,
-                           expression const& b,
-                           compliance_mode mode)
+expression const& jit::add_overflow(ast::tree& tree,
+                                    expression const& a,
+                                    expression const& b,
+                                    bool nullify_on_error)
 {
-  auto [op, nullify_on_error] = resolve_op(opcode::ADD, opcode::ANSI_ADD, mode);
-
-  return tree.push(detail::operation(op, {a, b}, nullify_on_error));
+  return tree.push(detail::operation(opcode::ADD_OVERFLOW, {a, b}, nullify_on_error));
 }
 
-expression const& jit::sub(ast::tree& tree,
-                           expression const& a,
-                           expression const& b,
-                           compliance_mode mode)
+expression const& jit::sub(ast::tree& tree, expression const& a, expression const& b)
 {
-  auto [op, nullify_on_error] = resolve_op(opcode::SUB, opcode::ANSI_SUB, mode);
-
-  return tree.push(detail::operation(op, {a, b}, nullify_on_error));
+  return tree.push(detail::operation(opcode::SUB, {a, b}, false));
 }
 
-expression const& jit::mul(ast::tree& tree,
-                           expression const& a,
-                           expression const& b,
-                           compliance_mode mode)
+expression const& jit::sub_overflow(ast::tree& tree,
+                                    expression const& a,
+                                    expression const& b,
+                                    bool nullify_on_error)
 {
-  auto [op, nullify_on_error] = resolve_op(opcode::MUL, opcode::ANSI_MUL, mode);
-
-  return tree.push(detail::operation(op, {a, b}, nullify_on_error));
+  return tree.push(detail::operation(opcode::SUB_OVERFLOW, {a, b}, nullify_on_error));
 }
 
-expression const& jit::div(ast::tree& tree,
-                           expression const& a,
-                           expression const& b,
-                           compliance_mode mode)
+expression const& jit::mul(ast::tree& tree, expression const& a, expression const& b)
 {
-  auto [op, nullify_on_error] = resolve_op(opcode::DIV, opcode::ANSI_DIV, mode);
-
-  return tree.push(detail::operation(op, {a, b}, nullify_on_error));
+  return tree.push(detail::operation(opcode::MUL, {a, b}, false));
 }
 
-expression const& jit::mod(ast::tree& tree,
-                           expression const& a,
-                           expression const& b,
-                           compliance_mode mode)
+expression const& jit::mul_overflow(ast::tree& tree,
+                                    expression const& a,
+                                    expression const& b,
+                                    bool nullify_on_error)
 {
-  auto [op, nullify_on_error] = resolve_op(opcode::MOD, opcode::ANSI_MOD, mode);
-
-  return tree.push(detail::operation(op, {a, b}, nullify_on_error));
+  return tree.push(detail::operation(opcode::MUL_OVERFLOW, {a, b}, nullify_on_error));
 }
 
-expression const& jit::abs(ast::tree& tree, expression const& a, compliance_mode mode)
+expression const& jit::div(ast::tree& tree, expression const& a, expression const& b)
 {
-  auto [op, nullify_on_error] = resolve_op(opcode::ABS, opcode::ANSI_ABS, mode);
-
-  return tree.push(detail::operation(op, {a}, nullify_on_error));
+  return tree.push(detail::operation(opcode::DIV, {a, b}, false));
 }
 
-expression const& jit::neg(ast::tree& tree, expression const& a, compliance_mode mode)
+expression const& jit::div_overflow(ast::tree& tree,
+                                    expression const& a,
+                                    expression const& b,
+                                    bool nullify_on_error)
 {
-  auto [op, nullify_on_error] = resolve_op(opcode::NEG, opcode::ANSI_NEG, mode);
-
-  return tree.push(detail::operation(op, {a}, nullify_on_error));
+  return tree.push(detail::operation(opcode::DIV_OVERFLOW, {a, b}, nullify_on_error));
 }
 
-expression const& jit::precision_check(ast::tree& tree,
+expression const& jit::mod(ast::tree& tree, expression const& a, expression const& b)
+{
+  return tree.push(detail::operation(opcode::MOD, {a, b}, false));
+}
+
+expression const& jit::mod_overflow(ast::tree& tree,
+                                    expression const& a,
+                                    expression const& b,
+                                    bool nullify_on_error)
+{
+  return tree.push(detail::operation(opcode::MOD_OVERFLOW, {a, b}, nullify_on_error));
+}
+
+expression const& jit::abs(ast::tree& tree, expression const& a)
+{
+  return tree.push(detail::operation(opcode::ABS, {a}, false));
+}
+
+expression const& jit::abs_overflow(ast::tree& tree, expression const& a, bool nullify_on_error)
+{
+  return tree.push(detail::operation(opcode::ABS_OVERFLOW, {a}, nullify_on_error));
+}
+
+expression const& jit::neg(ast::tree& tree, expression const& a)
+{
+  return tree.push(detail::operation(opcode::NEG, {a}, false));
+}
+
+expression const& jit::neg_overflow(ast::tree& tree, expression const& a, bool nullify_on_error)
+{
+  return tree.push(detail::operation(opcode::NEG_OVERFLOW, {a}, nullify_on_error));
+}
+
+expression const& jit::check_precision(ast::tree& tree,
                                        expression const& a,
                                        expression const& precision,
-                                       compliance_mode mode)
+                                       bool nullify_on_error)
 {
-  opcode op             = opcode::IDENTITY;
-  bool nullify_on_error = false;
-
-  switch (mode) {
-    case compliance_mode::DEFAULT: {
-      op               = opcode::IDENTITY;
-      nullify_on_error = false;
-    } break;
-    case compliance_mode::ANSI: {
-      op               = opcode::ANSI_PRECISION_CHECK;
-      nullify_on_error = false;
-    } break;
-    case compliance_mode::ANSI_TRY: {
-      op               = opcode::ANSI_PRECISION_CHECK;
-      nullify_on_error = true;
-    } break;
-    default:
-      CUDF_FAIL(
-        std::format("Invalid compliance mode for precision check: {}", static_cast<int>(mode)),
-        std::invalid_argument);
-  }
-
-  return tree.push(detail::operation(op, {a, precision}, nullify_on_error));
+  return tree.push(detail::operation(opcode::CHECK_PRECISION, {a, precision}, nullify_on_error));
 }
 
 expression const& jit::bitwise_shift_left(ast::tree& tree, expression const& a, expression const& b)

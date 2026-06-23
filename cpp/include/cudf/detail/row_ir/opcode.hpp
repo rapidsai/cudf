@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -43,15 +43,15 @@ enum class [[nodiscard]] opcode : int32_t {
   TRUE_DIV,
   FLOOR_DIV,
 
-  /// ANSI Arithmetic functions. raise errors on overflow, division by zero, etc.
-  ANSI_ADD,
-  ANSI_SUB,
-  ANSI_MUL,
-  ANSI_DIV,
-  ANSI_NEG,
-  ANSI_ABS,
-  ANSI_MOD,
-  ANSI_PRECISION_CHECK,
+  /// Overflow-checking Arithmetic functions. raise errors on overflow, division by zero, etc.
+  ADD_OVERFLOW,
+  SUB_OVERFLOW,
+  MUL_OVERFLOW,
+  DIV_OVERFLOW,
+  NEG_OVERFLOW,
+  ABS_OVERFLOW,
+  MOD_OVERFLOW,
+  CHECK_PRECISION,
 
   /// Bitwise operators
   BITWISE_AND,
@@ -146,14 +146,14 @@ CUDF_OPCODE_EVALUATOR(MOD, mod)
 CUDF_OPCODE_EVALUATOR(PYMOD, pymod)
 CUDF_OPCODE_EVALUATOR(TRUE_DIV, true_div)
 CUDF_OPCODE_EVALUATOR(FLOOR_DIV, floor_div)
-CUDF_OPCODE_EVALUATOR(ANSI_ADD, ansi_add)
-CUDF_OPCODE_EVALUATOR(ANSI_SUB, ansi_sub)
-CUDF_OPCODE_EVALUATOR(ANSI_MUL, ansi_mul)
-CUDF_OPCODE_EVALUATOR(ANSI_DIV, ansi_div)
-CUDF_OPCODE_EVALUATOR(ANSI_NEG, ansi_neg)
-CUDF_OPCODE_EVALUATOR(ANSI_ABS, ansi_abs)
-CUDF_OPCODE_EVALUATOR(ANSI_MOD, ansi_mod)
-CUDF_OPCODE_EVALUATOR(ANSI_PRECISION_CHECK, ansi_precision_check)
+CUDF_OPCODE_EVALUATOR(ADD_OVERFLOW, add_overflow)
+CUDF_OPCODE_EVALUATOR(SUB_OVERFLOW, sub_overflow)
+CUDF_OPCODE_EVALUATOR(MUL_OVERFLOW, mul_overflow)
+CUDF_OPCODE_EVALUATOR(DIV_OVERFLOW, div_overflow)
+CUDF_OPCODE_EVALUATOR(NEG_OVERFLOW, neg_overflow)
+CUDF_OPCODE_EVALUATOR(ABS_OVERFLOW, abs_overflow)
+CUDF_OPCODE_EVALUATOR(MOD_OVERFLOW, mod_overflow)
+CUDF_OPCODE_EVALUATOR(CHECK_PRECISION, check_precision)
 CUDF_OPCODE_EVALUATOR(BITWISE_AND, bitwise_and)
 CUDF_OPCODE_EVALUATOR(BITWISE_INVERT, bitwise_invert)
 CUDF_OPCODE_EVALUATOR(BITWISE_OR, bitwise_or)

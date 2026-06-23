@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -45,14 +45,14 @@ namespace cudf::detail::row_ir {
     case opcode::MUL: return "MUL";
     case opcode::NEG: return "NEG";
     case opcode::SUB: return "SUB";
-    case opcode::ANSI_ADD: return "ANSI_ADD";
-    case opcode::ANSI_SUB: return "ANSI_SUB";
-    case opcode::ANSI_MUL: return "ANSI_MUL";
-    case opcode::ANSI_DIV: return "ANSI_DIV";
-    case opcode::ANSI_MOD: return "ANSI_MOD";
-    case opcode::ANSI_ABS: return "ANSI_ABS";
-    case opcode::ANSI_NEG: return "ANSI_NEG";
-    case opcode::ANSI_PRECISION_CHECK: return "ANSI_PRECISION_CHECK";
+    case opcode::ADD_OVERFLOW: return "ADD_OVERFLOW";
+    case opcode::SUB_OVERFLOW: return "SUB_OVERFLOW";
+    case opcode::MUL_OVERFLOW: return "MUL_OVERFLOW";
+    case opcode::DIV_OVERFLOW: return "DIV_OVERFLOW";
+    case opcode::MOD_OVERFLOW: return "MOD_OVERFLOW";
+    case opcode::ABS_OVERFLOW: return "ABS_OVERFLOW";
+    case opcode::NEG_OVERFLOW: return "NEG_OVERFLOW";
+    case opcode::CHECK_PRECISION: return "CHECK_PRECISION";
     case opcode::BITWISE_AND: return "BITWISE_AND";
     case opcode::BITWISE_INVERT: return "BITWISE_INVERT";
     case opcode::BITWISE_OR: return "BITWISE_OR";
@@ -127,14 +127,14 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::NULL_EQUAL:
     case opcode::PREDICATE: return null_output::ALWAYS_VALID;
 
-    case opcode::ANSI_ADD:
-    case opcode::ANSI_SUB:
-    case opcode::ANSI_MUL:
-    case opcode::ANSI_DIV:
-    case opcode::ANSI_MOD:
-    case opcode::ANSI_ABS:
-    case opcode::ANSI_NEG:
-    case opcode::ANSI_PRECISION_CHECK:
+    case opcode::ADD_OVERFLOW:
+    case opcode::SUB_OVERFLOW:
+    case opcode::MUL_OVERFLOW:
+    case opcode::DIV_OVERFLOW:
+    case opcode::MOD_OVERFLOW:
+    case opcode::ABS_OVERFLOW:
+    case opcode::NEG_OVERFLOW:
+    case opcode::CHECK_PRECISION:
       return nullify_on_error ? null_output::ALWAYS_NULLABLE : null_output::PROPAGATE;
 
     case opcode::NULL_LOGICAL_AND:
@@ -165,14 +165,14 @@ enum class [[nodiscard]] null_output : uint8_t {
 [[nodiscard]] bool get_op_is_fallible(opcode op, bool nullify_on_error)
 {
   switch (op) {
-    case opcode::ANSI_ADD:
-    case opcode::ANSI_SUB:
-    case opcode::ANSI_MUL:
-    case opcode::ANSI_DIV:
-    case opcode::ANSI_MOD:
-    case opcode::ANSI_ABS:
-    case opcode::ANSI_NEG:
-    case opcode::ANSI_PRECISION_CHECK: return !nullify_on_error;
+    case opcode::ADD_OVERFLOW:
+    case opcode::SUB_OVERFLOW:
+    case opcode::MUL_OVERFLOW:
+    case opcode::DIV_OVERFLOW:
+    case opcode::MOD_OVERFLOW:
+    case opcode::ABS_OVERFLOW:
+    case opcode::NEG_OVERFLOW:
+    case opcode::CHECK_PRECISION: return !nullify_on_error;
     default: return false;
   }
 }
@@ -192,18 +192,18 @@ enum class [[nodiscard]] null_output : uint8_t {
     case opcode::GET_INPUT: return 0;
     // divisions
     case opcode::FLOOR_DIV:
-    case opcode::ANSI_DIV:
+    case opcode::DIV_OVERFLOW:
     case opcode::DIV: return arg_scales[0] - arg_scales[1];
     // add/sub/mod
     case opcode::ADD:
     case opcode::SUB:
-    case opcode::ANSI_ADD:
-    case opcode::ANSI_SUB:
+    case opcode::ADD_OVERFLOW:
+    case opcode::SUB_OVERFLOW:
     case opcode::MOD:
-    case opcode::ANSI_MOD:
+    case opcode::MOD_OVERFLOW:
     case opcode::PYMOD: return std::min(arg_scales[0], arg_scales[1]);
     case opcode::MUL:
-    case opcode::ANSI_MUL: return arg_scales[0] + arg_scales[1];
+    case opcode::MUL_OVERFLOW: return arg_scales[0] + arg_scales[1];
     case opcode::RESCALE: return target_scale.value();
     default: return arg_scales[0];
   }
@@ -288,8 +288,8 @@ struct [[nodiscard]] op_type {
     case opcode::PREDICATE: return {type::ARG0, {type::BOOL8}};
     case opcode::ABS:
     case opcode::NEG:
-    case opcode::ANSI_ABS:
-    case opcode::ANSI_NEG: return {type::ARG0, {type::ARITHMETIC}};
+    case opcode::ABS_OVERFLOW:
+    case opcode::NEG_OVERFLOW: return {type::ARG0, {type::ARITHMETIC}};
     case opcode::FLOOR_DIV: return {type::ARG0, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
     case opcode::TRUE_DIV:
       return {type::FLOAT64, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
@@ -299,12 +299,12 @@ struct [[nodiscard]] op_type {
     case opcode::PYMOD:
     case opcode::MUL:
     case opcode::SUB:
-    case opcode::ANSI_ADD:
-    case opcode::ANSI_SUB:
-    case opcode::ANSI_MUL:
-    case opcode::ANSI_DIV:
-    case opcode::ANSI_MOD: return {type::ARG0, {type::ARITHMETIC, type::ARG0}};
-    case opcode::ANSI_PRECISION_CHECK: return {type::ARG0, {type::DECIMALS, type::INT32}};
+    case opcode::ADD_OVERFLOW:
+    case opcode::SUB_OVERFLOW:
+    case opcode::MUL_OVERFLOW:
+    case opcode::DIV_OVERFLOW:
+    case opcode::MOD_OVERFLOW: return {type::ARG0, {type::ARITHMETIC, type::ARG0}};
+    case opcode::CHECK_PRECISION: return {type::ARG0, {type::DECIMALS, type::INT32}};
     case opcode::BITWISE_AND:
     case opcode::BITWISE_INVERT:
     case opcode::BITWISE_OR:
@@ -770,7 +770,8 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
           }
 
           sink.emit(std::format(
-            R"***({} {} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{}, {}>(&error_flag, {});)***",
+            R"***({} {} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{}, {}>(&error_flag, {});
+)***",
             type,
             id_,
             get_opcode_name(op_),
@@ -778,7 +779,8 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
             args_str));
 
           if (get_op_is_fallible(op_, nullify_on_error_)) {
-            sink.emit(R"***(CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);)***");
+            sink.emit(R"***(CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
+)***");
           }
         }
       }

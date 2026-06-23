@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -137,7 +137,6 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
 int32_t tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, false>(&error_flag, tmp_0);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -157,7 +156,6 @@ CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
     auto expected_null_code =
       R"***(numeric::decimal32 tmp_0 = in_1;
 numeric::decimal32 tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, false>(&error_flag, tmp_0);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_null_code);
@@ -186,7 +184,6 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
       R"***(int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_0;
 int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -210,10 +207,62 @@ CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
       R"***(numeric::decimal32 tmp_0 = in_1;
 numeric::decimal32 tmp_1 = in_1;
 numeric::decimal32 tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_null_code);
+  }
+}
+
+TEST_F(RowIRCudaCodeGenTest, BinaryOperationOverflow)
+{
+  row_ir::target_info target_info{row_ir::target::CUDA};
+
+  {
+    row_ir::instance_context ctx{cudf::get_default_stream(),
+                                 cudf::get_current_device_resource_ref()};
+    [[maybe_unused]] auto in0 = ctx.add_input(*i32);
+    [[maybe_unused]] auto in1 = ctx.add_input(*d32);
+    row_ir::code_sink sink;
+    row_ir::node op{row_ir::opcode::ADD_OVERFLOW,
+                    std::nullopt,
+                    false,
+                    row_ir::node{row_ir::input_reference{0}},
+                    row_ir::node{row_ir::input_reference{0}}};
+    op.instantiate(ctx);
+    op.emit_code(ctx, target_info, sink);
+
+    auto expected_code =
+      R"***(int32_t tmp_0 = in_0;
+int32_t tmp_1 = in_0;
+int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD_OVERFLOW, false>(&error_flag, tmp_0, tmp_1);
+CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
+)***";
+
+    EXPECT_EQ(sink.get_code(), expected_code);
+  }
+
+  {
+    row_ir::instance_context ctx{cudf::get_default_stream(),
+                                 cudf::get_current_device_resource_ref()};
+    ctx.set_has_nulls(true);  // needed for nullify_on_error
+    [[maybe_unused]] auto in0 = ctx.add_input(*i32);
+    [[maybe_unused]] auto in1 = ctx.add_input(*d32);
+    row_ir::code_sink sink;
+    row_ir::node op{row_ir::opcode::ADD_OVERFLOW,
+                    std::nullopt,
+                    true,
+                    row_ir::node{row_ir::input_reference{0}},
+                    row_ir::node{row_ir::input_reference{0}}};
+    op.instantiate(ctx);
+    op.emit_code(ctx, target_info, sink);
+
+    auto expected_code =
+      R"***(cuda::std::optional<int32_t> tmp_0 = in_0;
+cuda::std::optional<int32_t> tmp_1 = in_0;
+cuda::std::optional<int32_t> tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD_OVERFLOW, true>(&error_flag, tmp_0, tmp_1);
+)***";
+
+    EXPECT_EQ(sink.get_code(), expected_code);
   }
 }
 
@@ -260,15 +309,11 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
       R"***(double tmp_0 = in_0;
 double tmp_1 = in_0;
 double tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, false>(&error_flag, tmp_0, tmp_1);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 double tmp_3 = in_1;
 double tmp_4 = in_1;
 double tmp_5 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, false>(&error_flag, tmp_3, tmp_4);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 double tmp_6 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_2, tmp_5);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 double tmp_7 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::SQRT, false>(&error_flag, tmp_6);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 double tmp_8 = tmp_7;
 *out_0 = tmp_8;
 )***";
@@ -331,7 +376,6 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_1;
 int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 int32_t tmp_3 = tmp_2;
 *out_0 = tmp_3;
 return cudf::errc::SUCCESS;
@@ -367,7 +411,6 @@ TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
 
     auto expected_code = R"***(bool tmp_0 = in_0;
 bool tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, false>(&error_flag, tmp_0);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -386,7 +429,6 @@ CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 
     auto expected_code = R"***(cuda::std::optional<bool> tmp_0 = in_0;
 cuda::std::optional<bool> tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, false>(&error_flag, tmp_0);
-CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -12,21 +12,6 @@
 namespace CUDF_EXPORT cudf {
 namespace ast {
 namespace jit {
-
-/**
- * @brief Enumeration for specifying the mode of arithmetic operations (DEFAULT, ANSI, or ANSI_TRY).
- */
-enum class compliance_mode : uint8_t {
-  //< DEFAULT mode performs arithmetic operations using DEFAULT behavior (e.g., allowing overflow,
-  // silent truncation, and undefined behavior).
-  DEFAULT,
-  //< ANSI mode performs arithmetic operations using ANSI behavior (e.g., throwing an error on
-  // overflow).
-  ANSI,
-  //< ANSI_TRY mode performs arithmetic operations using ANSI behavior but returns NULL on error
-  // instead of throwing.
-  ANSI_TRY
-};
 
 /**
  * @brief Creates an expression that evaluates to the first non-null value among its arguments.
@@ -47,113 +32,170 @@ expression const& coalesce(ast::tree& tree, expression const& a, expression cons
 expression const& predicate(ast::tree& tree, expression const& condition);
 
 /**
- * @brief Creates an expression that performs ANSI-compliant addition of `a` and `b`, which throws
- * an error on overflow.
+ * @brief Creates an expression that performs addition of `a` and `b`.
  * @param tree The expression tree to which this expression will be added
  * @param a The first addend
  * @param b The second addend
- * @param mode The mode to use for the addition operation (DEFAULT, ANSI, or ANSI_TRY)
  * @return An expression representing the result of the addition
  */
-expression const& add(ast::tree& tree,
-                      expression const& a,
-                      expression const& b,
-                      compliance_mode mode = compliance_mode::DEFAULT);
+expression const& add(ast::tree& tree, expression const& a, expression const& b);
 
 /**
- * @brief Creates an expression that performs ANSI-compliant subtraction of `a` and `b`, which
- * throws an error on overflow.
+ * @brief Creates an expression that performs addition of `a` and `b` with overflow
+ * handling.
+ * @param tree The expression tree to which this expression will be added
+ * @param a The first addend
+ * @param b The second addend
+ * @param nullify_on_error If true, returns NULL on overflow; if false, throws an error on overflow
+ * @return An expression representing the result of the addition
+ */
+expression const& add_overflow(ast::tree& tree,
+                               expression const& a,
+                               expression const& b,
+                               bool nullify_on_error = false);
+
+/**
+ * @brief Creates an expression that performs subtraction of `a` and `b`.
  * @param tree The expression tree to which this expression will be added
  * @param a The minuend
  * @param b The subtrahend
- * @param mode The mode to use for the subtraction operation (DEFAULT, ANSI, or ANSI_TRY)
  * @return An expression representing the result of the subtraction
  */
-expression const& sub(ast::tree& tree,
-                      expression const& a,
-                      expression const& b,
-                      compliance_mode mode = compliance_mode::DEFAULT);
+expression const& sub(ast::tree& tree, expression const& a, expression const& b);
 
 /**
- * @brief Creates an expression that performs ANSI-compliant multiplication of `a` and `b`, which
- * throws an error on overflow.
+ * @brief Creates an expression that performs subtraction of `a` and `b` with
+ * overflow handling.
+ * @param tree The expression tree to which this expression will be added
+ * @param a The minuend
+ * @param b The subtrahend
+ * @param nullify_on_error If true, returns NULL on overflow; if false, throws an error on overflow
+ * @return An expression representing the result of the subtraction
+ */
+expression const& sub_overflow(ast::tree& tree,
+                               expression const& a,
+                               expression const& b,
+                               bool nullify_on_error = false);
+
+/**
+ * @brief Creates an expression that performs multiplication of `a` and `b`.
  * @param tree The expression tree to which this expression will be added
  * @param a The first factor
  * @param b The second factor
- * @param mode The mode to use for the multiplication operation (DEFAULT, ANSI, or ANSI_TRY)
  * @return An expression representing the result of the multiplication
  */
-expression const& mul(ast::tree& tree,
-                      expression const& a,
-                      expression const& b,
-                      compliance_mode mode = compliance_mode::DEFAULT);
+expression const& mul(ast::tree& tree, expression const& a, expression const& b);
 
 /**
- * @brief Creates an expression that performs ANSI-compliant division of `a` by `b`, which throws
- * an error on division by zero.
+ * @brief Creates an expression that performs multiplication of `a` and `b` with
+ * overflow handling.
+ * @param tree The expression tree to which this expression will be added
+ * @param a The first factor
+ * @param b The second factor
+ * @param nullify_on_error If true, returns NULL on overflow; if false, throws an error on overflow
+ * @return An expression representing the result of the multiplication
+ */
+expression const& mul_overflow(ast::tree& tree,
+                               expression const& a,
+                               expression const& b,
+                               bool nullify_on_error = false);
+
+/**
+ * @brief Creates an expression that performs division of `a` by `b`.
  * @param tree The expression tree to which this expression will be added
  * @param a The dividend
  * @param b The divisor
- * @param mode The mode to use for the division operation (DEFAULT, ANSI, or ANSI_TRY)
  * @return An expression representing the result of the division
  */
-expression const& div(ast::tree& tree,
-                      expression const& a,
-                      expression const& b,
-                      compliance_mode mode = compliance_mode::DEFAULT);
+expression const& div(ast::tree& tree, expression const& a, expression const& b);
 
 /**
- * @brief Creates an expression that performs ANSI-compliant modulus of `a` by `b`, which throws
- * an error on division by zero.
+ * @brief Creates an expression that performs division of `a` by `b` with overflow
+ * handling.
+ * @param tree The expression tree to which this expression will be added
+ * @param a The dividend
+ * @param b The divisor
+ * @param nullify_on_error If true, returns NULL on division by zero; if false, throws an error on
+ * division by zero
+ * @return An expression representing the result of the division
+ */
+expression const& div_overflow(ast::tree& tree,
+                               expression const& a,
+                               expression const& b,
+                               bool nullify_on_error = false);
+
+/**
+ * @brief Creates an expression that performs modulus of `a` by `b`.
  * @param tree The expression tree to which this expression will be added
  * @param a The value to be divided
  * @param b The divisor
- * @param mode The mode to use for the modulus operation (DEFAULT, ANSI, or ANSI_TRY)
  * @return An expression representing the result of the modulus operation
  */
-expression const& mod(ast::tree& tree,
-                      expression const& a,
-                      expression const& b,
-                      compliance_mode mode = compliance_mode::DEFAULT);
+expression const& mod(ast::tree& tree, expression const& a, expression const& b);
 
 /**
- * @brief Creates an expression that performs ANSI-compliant absolute value of `a`, which throws
- * an error on overflow.
+ * @brief Creates an expression that performs modulus of `a` by `b` with overflow
+ * handling.
+ * @param tree The expression tree to which this expression will be added
+ * @param a The value to be divided
+ * @param b The divisor
+ * @param nullify_on_error If true, returns NULL on division by zero; if false, throws an error on
+ * division by zero
+ * @return An expression representing the result of the modulus operation
+ */
+expression const& mod_overflow(ast::tree& tree,
+                               expression const& a,
+                               expression const& b,
+                               bool nullify_on_error = false);
+
+/**
+ * @brief Creates an expression that performs absolute value of `a`.
  * @param tree The expression tree to which this expression will be added
  * @param a The value for which to compute the absolute value
- * @param mode The mode to use for the absolute value operation (DEFAULT, ANSI, or ANSI_TRY)
- * error on overflow
  * @return An expression representing the absolute value
  */
-expression const& abs(ast::tree& tree,
-                      expression const& a,
-                      compliance_mode mode = compliance_mode::DEFAULT);
+expression const& abs(ast::tree& tree, expression const& a);
 
 /**
- * @brief Creates an expression that performs ANSI-compliant negation of `a`, which throws an
- * error on overflow.
+ * @brief Creates an expression that performs absolute value of `a` with overflow
+ * handling.
+ * @param tree The expression tree to which this expression will be added
+ * @param a The value for which to compute the absolute value
+ * @param nullify_on_error If true, returns NULL on overflow; if false, throws an error on overflow
+ * @return An expression representing the absolute value
+ */
+expression const& abs_overflow(ast::tree& tree, expression const& a, bool nullify_on_error = false);
+
+/**
+ * @brief Creates an expression that performs negation of `a`.
  * @param tree The expression tree to which this expression will be added
  * @param a The value to negate
- * @param mode The mode to use for the negation operation (DEFAULT, ANSI, or ANSI_TRY)
  * @return An expression representing the negated value
  */
-expression const& neg(ast::tree& tree,
-                      expression const& a,
-                      compliance_mode mode = compliance_mode::DEFAULT);
+expression const& neg(ast::tree& tree, expression const& a);
 
 /**
- * @brief Creates an expression that performs an ANSI-compliant precision check on `a` with the
- * given precision, which throws an error if the value of `a` exceeds the specified precision.
+ * @brief Creates an expression that performs negation of `a` with overflow
+ * handling.
+ * @param tree The expression tree to which this expression will be added
+ * @param a The value to negate
+ * @param nullify_on_error If true, returns NULL on overflow; if false, throws an error on overflow
+ * @return An expression representing the negated value
+ */
+expression const& neg_overflow(ast::tree& tree, expression const& a, bool nullify_on_error = false);
+
+/**
+ * @brief Creates an expression that performs a precision check on `a` with the given precision.
  * @param tree The expression tree to which this expression will be added
  * @param a The value for which to perform the precision check
  * @param precision The precision to check against
- * @param mode The mode to use for the precision check operation (DEFAULT, ANSI, or ANSI_TRY)
+ * @param nullify_on_error If true, returns NULL on precision overflow; if false, throws an error
  * @return An expression representing the result of the precision check
  */
-expression const& precision_check(ast::tree& tree,
+expression const& check_precision(ast::tree& tree,
                                   expression const& a,
                                   expression const& precision,
-                                  compliance_mode mode = compliance_mode::DEFAULT);
+                                  bool nullify_on_error = false);
 
 /**
  * @brief Creates an expression that performs a bitwise left shift of `a` by `b`.

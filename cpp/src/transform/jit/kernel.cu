@@ -46,8 +46,9 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
                                   int32_t* __restrict__ max_error,
                                   errc* __restrict__ row_errors)
 {
-  auto start  = detail::grid_1d::global_thread_id();
-  auto stride = detail::grid_1d::grid_stride();
+  auto start        = detail::grid_1d::global_thread_id();
+  auto stride       = detail::grid_1d::grid_stride();
+  auto thread_error = errc::SUCCESS;
 
   for (auto row = start; row < row_size; row += stride) {
     auto operation = [&]<typename Args>(Args args) {
