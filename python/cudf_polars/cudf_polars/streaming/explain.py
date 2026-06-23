@@ -9,9 +9,11 @@ import contextlib
 import dataclasses
 import datetime
 import functools
+import os
 import os.path
 from collections.abc import Mapping, Sequence
 from itertools import groupby
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, TypeAlias
 
 import cudf_polars.dsl.expressions.binaryop
@@ -28,7 +30,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.streaming.io import StreamingScan
+from cudf_polars.streaming.io import StreamingScan, scan_partition_plan
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.shuffle import Shuffle
 from cudf_polars.streaming.statistics import (
@@ -44,6 +46,20 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.expressions.base import Expr
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import PartitionInfo, StatsCollector
+
+
+@dataclasses.dataclass
+class PartitionPlanRow:
+    """One row of the partition plan summary table."""
+
+    query: int
+    table: str
+    flavor: str
+    factor: int
+    files: int
+    projected_bytes: int
+    task_bytes: int
+    partitions: int
 
 
 Serializable: TypeAlias = (
@@ -101,7 +117,7 @@ def explain_query(
         with cm:
             stats = collect_statistics(ir, config, executor)
         lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
-        return _repr_ir_tree(lowered_ir, partition_info)
+        return _repr_ir_tree(lowered_ir, partition_info, stats=stats, config=config)
     else:
         if config.executor.name == "streaming":
             # Include row-count statistics for the logical plan
@@ -110,6 +126,171 @@ def explain_query(
             return _repr_ir_tree(ir, stats=stats)
         else:
             return _repr_ir_tree(ir)
+
+
+def collect_partition_plan(
+    q: pl.LazyFrame,
+    engine: pl.GPUEngine,
+    q_id: int,
+    *,
+    executor: concurrent.futures.Executor | None = None,
+) -> list[PartitionPlanRow]:
+    """
+    Return one PartitionPlanRow per unique StreamingScan in the physical plan.
+
+    Deduplicates scans that appear multiple times due to subquery structure.
+    """
+    cm: contextlib.AbstractContextManager[concurrent.futures.Executor]
+    if executor is None:
+        cm = executor = concurrent.futures.ThreadPoolExecutor()
+    else:
+        cm = contextlib.nullcontext(executor)
+
+    config = ConfigOptions.from_polars_engine(engine)
+    ir = Translator(q._ldf.visit(), engine).translate_ir()
+
+    with cm:
+        stats = collect_statistics(ir, config, executor)
+    lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
+
+    seen: set[tuple] = set()
+    rows: list[PartitionPlanRow] = []
+
+    for node in traversal([lowered_ir]):
+        if not isinstance(node, StreamingScan):
+            continue
+        base_scan = node.base_scan
+
+        dedup_key = (tuple(base_scan.paths), tuple(sorted(base_scan.schema.keys())))
+        if dedup_key in seen:
+            continue
+        seen.add(dedup_key)
+
+        source = stats.scan_stats.get(base_scan)
+        if source is None:
+            continue
+
+        plan = scan_partition_plan(base_scan, stats, config)
+        projected_bytes = sum(
+            sz
+            for col in base_scan.schema
+            if (sz := source.column_storage_size(col)) is not None
+        )
+        partitions = partition_info[node].count
+        factor = plan.factor
+        flavor = plan.flavor.name
+
+        match flavor:
+            case "SPLIT_FILES":
+                files = partitions // factor if factor > 0 else partitions
+                task_bytes = (
+                    projected_bytes // factor if factor > 0 else projected_bytes
+                )
+            case "FUSED_FILES":
+                files = partitions * factor
+                task_bytes = projected_bytes * factor
+            case _:
+                files = partitions
+                task_bytes = projected_bytes
+
+        p = Path(base_scan.paths[0])
+        stem = p.stem
+        parent = p.parent.name
+        # Prefer the stem unless it looks like a partition filename (purely
+        # numeric like "1" or prefixed like "part-0"), in which case the
+        # parent directory holds the table name.
+        table = parent if (stem.isdigit() or stem.lower().startswith("part")) else stem
+
+        rows.append(
+            PartitionPlanRow(
+                query=q_id,
+                table=table,
+                flavor=flavor,
+                factor=factor,
+                files=files,
+                projected_bytes=projected_bytes,
+                task_bytes=task_bytes,
+                partitions=partitions,
+            )
+        )
+
+    return rows
+
+
+def _fmt_partition_bytes(b: int) -> str:
+    if b < 1_000:
+        return f"{b} B"
+    elif b < 1_000_000:
+        return f"{round(b / 1_000, 2):g} KB"
+    elif b < 1_000_000_000:
+        return f"{round(b / 1_000_000, 2):g} MB"
+    else:
+        return f"{round(b / 1_000_000_000, 2):g} GB"
+
+
+def factor_str(row: PartitionPlanRow) -> str:
+    """Format the factor field with units appropriate to the scan flavor."""
+    match row.flavor:
+        case "SPLIT_FILES":
+            return f"{row.factor} tasks/file"
+        case "FUSED_FILES":
+            unit = "file" if row.factor == 1 else "files"
+            return f"{row.factor} {unit}/task"
+        case _:
+            return str(row.factor)
+
+
+def format_partition_plan_table(rows: list[PartitionPlanRow]) -> str:
+    """Format a list of PartitionPlanRows as a fixed-width ASCII table."""
+    if not rows:
+        return ""
+
+    headers = [
+        "Q",
+        "Table",
+        "Flavor",
+        "Factor",
+        "Files",
+        "Projected (bytes/file)",
+        "Size/task",
+        "Partitions",
+    ]
+
+    flavor_short = {"SPLIT_FILES": "SPLIT", "FUSED_FILES": "FUSED"}
+    formatted: list[list[str]] = []
+    prev_q: int | None = None
+    for row in rows:
+        q_str = str(row.query) if row.query != prev_q else ""
+        prev_q = row.query
+        formatted.append(
+            [
+                q_str,
+                row.table,
+                flavor_short.get(row.flavor, row.flavor),
+                factor_str(row),
+                str(row.files),
+                _fmt_partition_bytes(row.projected_bytes),
+                _fmt_partition_bytes(row.task_bytes),
+                str(row.partitions),
+            ]
+        )
+
+    col_widths = [len(h) for h in headers]
+    for cells in formatted:
+        for i, cell in enumerate(cells):
+            col_widths[i] = max(col_widths[i], len(cell))
+
+    sep = "+-" + "-+-".join("-" * w for w in col_widths) + "-+"
+    header_row = (
+        "| " + " | ".join(h.ljust(col_widths[i]) for i, h in enumerate(headers)) + " |"
+    )
+    lines = ["", "Partition Plan Summary", sep, header_row, sep]
+    lines.extend(
+        "| " + " | ".join(c.ljust(col_widths[i]) for i, c in enumerate(cells)) + " |"
+        for cells in formatted
+    )
+    lines.append(sep)
+    return "\n".join(lines)
 
 
 def serialize_query(
@@ -202,6 +383,7 @@ def _repr_ir_tree(
     *,
     offset: str = "",
     stats: StatsCollector | None = None,
+    config: ConfigOptions | None = None,
 ) -> str:
     header = _repr_ir(ir, offset=offset)
     count = partition_info[ir].count if partition_info else None
@@ -210,11 +392,31 @@ def _repr_ir_tree(
         row_count_estimate = _fmt_row_count(source.row_count)
         row_count = f"~{row_count_estimate}" if row_count_estimate else "unknown"
         header = header.rstrip("\n") + f" {row_count=}\n"
+    if (
+        os.environ.get("CUDF_POLARS__EXPLAIN__PARTITION_PLAN", "0") == "1"
+        and config is not None
+        and stats is not None
+        and isinstance(ir, StreamingScan)
+        and (source := stats.scan_stats.get(ir.base_scan)) is not None
+    ):
+        plan = scan_partition_plan(ir.base_scan, stats, config)
+        projected_size = sum(
+            sz
+            for col in ir.base_scan.schema
+            if (sz := source.column_storage_size(col)) is not None
+        )
+        plan_info = (
+            f"flavor={plan.flavor.name} factor={plan.factor}"
+            f" projected={_fmt_partition_bytes(projected_size)}"
+        )
+        header = header.rstrip("\n") + f" [{plan_info}]\n"
     if count is not None:
         header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [
-        _repr_ir_tree(child, partition_info, offset=offset + "  ", stats=stats)
+        _repr_ir_tree(
+            child, partition_info, offset=offset + "  ", stats=stats, config=config
+        )
         for child in ir.children
     ]
 
