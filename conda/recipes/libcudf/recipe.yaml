@@ -101,6 +101,7 @@ cache:
       - flatbuffers =${{ flatbuffers_version }}
       - rapids-logger =0.2
       - zlib ${{ zlib_version }}
+      - croaring =4.4.2
 
 outputs:
   - package:
@@ -364,6 +365,7 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - libcurand-dev
         - cuda-cudart-dev
+        - croaring =4.4.2
         - cuda-sanitizer-api
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
