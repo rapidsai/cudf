@@ -59,14 +59,14 @@ class Implementation:
 
     name: str = "cudf-polars"
     version: str = __version__
-    custom_attributes: list[Any] = dataclasses.field(default_factory=list)
+    custom_attributes: list[Attribute] = dataclasses.field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a plain dict for JSON output."""
         return {
             "name": self.name,
             "version": self.version,
-            "custom_attributes": self.custom_attributes,
+            "custom_attributes": [attr.serialize() for attr in self.custom_attributes],
         }
 
 
@@ -93,7 +93,7 @@ class Operator:
     parent_operators: list[Operator]
     instance_name: str
     type_name: str
-    custom_attributes: list[Any] = dataclasses.field(default_factory=list)
+    custom_attributes: list[Attribute] = dataclasses.field(default_factory=list)
 
     @property
     def plan_id(self) -> uuid.UUID:
@@ -110,7 +110,7 @@ class Operator:
             ],
             "instance_name": self.instance_name,
             "type_name": self.type_name,
-            "custom_attributes": self.custom_attributes,
+            "custom_attributes": [attr.serialize() for attr in self.custom_attributes],
         }
 
     def declare(self, timestamp: int | None = None) -> Event:
@@ -413,3 +413,58 @@ class QueryGroup:
                 }
             },
         )
+
+
+ScalarValue = int | float | str | bool
+HomogeneousListValue = list[int] | list[float] | list[str] | list[bool]
+Value = ScalarValue | HomogeneousListValue | dict[str, "Value"]
+
+
+@dataclasses.dataclass(frozen=True, slots=True)
+class Attribute:
+    """A Quent custom attribute."""
+
+    name: str
+    value: Value | None
+
+    def serialize(self) -> dict[str, Any]:
+        return {"key": self.name, "value": _serialize_value(self.value)}
+
+
+def _serialize_value(value: Value | None) -> dict[str, Any] | None:
+    match value:
+        case None:
+            return None
+        case bool():
+            # Bool is not a native Quent Value variant.
+            return {"U8": int(value)}
+        case int():
+            if value >= 0:
+                if value <= 2**8 - 1:
+                    return {"U8": value}
+                if value <= 2**16 - 1:
+                    return {"U16": value}
+                if value <= 2**32 - 1:
+                    return {"U32": value}
+                if value <= 2**64 - 1:
+                    return {"U64": value}
+            else:
+                if -(2**7) <= value <= 2**7 - 1:
+                    return {"I8": value}
+                if -(2**15) <= value <= 2**15 - 1:
+                    return {"I16": value}
+                if -(2**31) <= value <= 2**31 - 1:
+                    return {"I32": value}
+                if -(2**63) <= value <= 2**63 - 1:
+                    return {"I64": value}
+            raise ValueError(
+                f"Integer value {value} does not fit any Quent integer type."
+            )
+        case float():
+            return {"F64": value}
+        case str():
+            return {"String": value}
+        case list() | dict():
+            raise NotImplementedError("List and dict attributes are not supported yet.")
+        case _:  # pragma: no cover; should be exhaustive
+            raise TypeError(f"Unsupported Quent custom attribute type: {type(value)}")

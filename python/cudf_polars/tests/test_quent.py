@@ -17,6 +17,7 @@ import cudf_polars.quent
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.quent._plan import build_plan, port_names_for_node
 from cudf_polars.quent._types import (
+    Attribute,
     Engine,
     Implementation,
     Operator,
@@ -40,6 +41,58 @@ def _make_worker() -> Worker:
         engine=Engine(id=uuid.uuid4()),
         instance_name="test-worker",
     )
+
+
+@pytest.mark.parametrize(
+    "value,expected_variant",
+    [
+        (0, "U8"),
+        (2**8 - 1, "U8"),
+        (2**8, "U16"),
+        (2**16 - 1, "U16"),
+        (2**16, "U32"),
+        (2**32 - 1, "U32"),
+        (2**32, "U64"),
+        (2**64 - 1, "U64"),
+        (-(2**7), "I8"),
+        (2**7 - 1, "U8"),
+        (-(2**15), "I16"),
+        (-(2**15) - 1, "I32"),
+        (-(2**31), "I32"),
+        (-(2**31) - 1, "I64"),
+        (-(2**63), "I64"),
+    ],
+)
+def test_attribute_integer_serialization_variants(
+    value: int, expected_variant: str
+) -> None:
+    serialized = Attribute("x", value).serialize()
+    assert serialized["key"] == "x"
+    assert serialized["value"] == {expected_variant: value}
+
+
+@pytest.mark.parametrize("value", [2**64, -(2**63) - 1])
+def test_attribute_integer_serialization_overflow(value: int) -> None:
+    with pytest.raises(
+        ValueError,
+        match="does not fit any Quent integer type",
+    ):
+        Attribute("x", value).serialize()
+
+
+def test_attribute_serialization_uses_quent_value_envelope() -> None:
+    assert Attribute("ratio", 1.5).serialize() == {
+        "key": "ratio",
+        "value": {"F64": 1.5},
+    }
+    assert Attribute("name", "scan").serialize() == {
+        "key": "name",
+        "value": {"String": "scan"},
+    }
+    assert Attribute("enabled", value=True).serialize() == {
+        "key": "enabled",
+        "value": {"U8": 1},
+    }
 
 
 @pytest.fixture
@@ -567,3 +620,13 @@ def test_quent_events(
         q.collect(engine=engine_with_quent_context)
 
     check_quent_events(engine_with_quent_context, quent_context)
+
+
+def test_serialize_list_raises():
+    with pytest.raises(NotImplementedError, match="not supported yet"):
+        Attribute("list", [1, 2]).serialize()
+
+
+def test_serialize_dict_raises():
+    with pytest.raises(NotImplementedError, match="not supported yet"):
+        Attribute("dict", {"a": 1, "b": 2}).serialize()

@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cudf_polars.quent._types import (
+    Attribute,
     Edge,
     Operator,
     Plan,
@@ -84,12 +85,18 @@ def build_plan(
         serializable_node = serializable_plan.nodes[node_id]
 
         operator_id = new_quent_id()
+        # TODO: Include serializable_node.properties as custom attributes
+        # We need to handle serialization of lists and dicts properly.
+        custom_attributes = [
+            Attribute(name="node_id", value=node_id),
+        ]
         operator = Operator(
             id=operator_id,
             plan=plan,
             parent_operators=parent_ops.get(node_id, []),
-            instance_name=f"{serializable_node.type}-{node_id}",
+            instance_name=serializable_node.type,
             type_name=serializable_node.type,
+            custom_attributes=custom_attributes,
         )
         operator_by_ir_id[node_id] = operator
         operators.append(operator)
