@@ -78,14 +78,10 @@ __device__ void transform_kernel(size_type row_size,
 
     if constexpr (!is_null_aware) {
       if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
-      if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
 
       auto ins = InputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, row)...}; });
-        [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, row)...}; });
 
-      auto outs = OutputAccessors::map(
-        [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
       auto outs = OutputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
 
