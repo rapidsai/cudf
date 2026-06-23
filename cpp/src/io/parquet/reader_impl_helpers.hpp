@@ -100,6 +100,14 @@ struct row_group_info {
 }
 
 /**
+ * @brief Derives a bounded input `pass_read_limit` from a `chunk_read_limit`.
+ *
+ * @param chunk_read_limit The output chunk byte limit
+ * @return The derived input pass byte limit
+ */
+[[nodiscard]] std::size_t derive_pass_read_limit(std::size_t chunk_read_limit);
+
+/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
