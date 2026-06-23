@@ -789,15 +789,7 @@ class Scan(IR):
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
         if parquet_options.prefetch_file_metadata and context is not None:
-            try:
-                parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
-            except KeyError as e:
-                msg = (
-                    f"Parquet file metadata was not prefetched for paths: {list(paths)}."
-                    "Please report this as a bug to cudf-polars. You can work around it "
-                    "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
-                )
-                raise AssertionError(msg) from e
+            parquet_metadatas = Scan._lookup_parquet_metadatas(paths, context)
             num_rows = sum(metadata.num_rows for metadata in parquet_metadatas)
         else:
             meta = plc.io.parquet_metadata.read_parquet_metadata(
@@ -942,15 +934,7 @@ class Scan(IR):
                 )
         elif typ == "parquet":
             if parquet_options.prefetch_file_metadata:
-                try:
-                    parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
-                except KeyError as e:
-                    msg = (
-                        f"Parquet file metadata was not prefetched for paths: {list(paths)}."
-                        "Please report this as a bug to cudf-polars. You can work around it "
-                        "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
-                    )
-                    raise AssertionError(msg) from e
+                parquet_metadatas = cls._lookup_parquet_metadatas(paths, context)
             else:
                 parquet_metadatas = None
 
@@ -1100,6 +1084,37 @@ class Scan(IR):
                 predicate.evaluate(df), target_length=df.num_rows, stream=df.stream
             )
             return df.filter(mask)
+
+    @staticmethod
+    def _lookup_parquet_metadatas(
+        paths: list[str], context: IRExecutionContext
+    ) -> list[plc.io.parquet_metadata.FileMetaData]:
+        """
+        Lookup parquet metadata from the prefetch metadata cache.
+
+        Only call this when prefetching is enabled.
+
+        Parameters
+        ----------
+        paths
+            The list of paths from the Scan node's ``.paths``.
+        context
+            The IRExecutionContext with the prefetch parquet file metadata.
+
+        Raises
+        ------
+        AssertionError
+            If the parquet metadata for 'paths' is not found in the cache.
+        """
+        try:
+            return context.parquet_file_metadata[tuple(paths)]
+        except KeyError as e:
+            msg = (
+                f"Parquet file metadata was not prefetched for paths: {list(paths)}."
+                "Please report this as a bug to cudf-polars. You can work around it "
+                "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
+            )
+            raise AssertionError(msg) from e
 
 
 class Sink(IR):
