@@ -181,8 +181,11 @@ class RankActor:
         memory_resource_config = (
             memory_resource_config or MemoryResourceConfig.default()
         )
-        self._mr: rmm.mr.DeviceMemoryResource | None = (
+        self._base_mr: rmm.mr.DeviceMemoryResource | None = (
             memory_resource_config.create_memory_resource()
+        )
+        self._mr: rmm.mr.DeviceMemoryResource | None = (
+            None  # set after `Context` is built (below).
         )
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
@@ -243,10 +246,9 @@ class RankActor:
                 progress_thread=ProgressThread(),
             )
         barrier(self._comm)
-        assert self._mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
-            self._mr,
+            self._base_mr,
             self._rapidsmpf_options,
             self._rapidsmpf_statistics,
         )
@@ -280,10 +282,10 @@ class RankActor:
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
         self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
-        assert self._mr is not None
+        assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
-            self._mr,
+            self._base_mr,
             self._rapidsmpf_options,
             self._rapidsmpf_statistics,
         )
@@ -310,6 +312,7 @@ class RankActor:
             self._ctx = None
             self._comm = None
             self._mr = None
+            self._base_mr = None
             ray.actor.exit_actor()
 
     def get_info(self) -> ClusterInfo:
