@@ -170,10 +170,6 @@ auto create_parquet_with_stats(
   CUDF_EXPECTS(column_names.size() == column_order.size(),
                "Column names and column order must have the same size");
   CUDF_EXPECTS(column_order.size() == 3, "Column order must include all three test columns");
-  CUDF_EXPECTS(std::all_of(column_order.begin(),
-                           column_order.end(),
-                           [](auto const col_idx) { return col_idx >= 0 and col_idx < 3; }),
-               "Column order contains an out-of-bounds column index");
   CUDF_EXPECTS(std::all_of(cuda::counting_iterator<cudf::size_type>{0},
                            cuda::counting_iterator<cudf::size_type>{3},
                            [&](auto const col_idx) {

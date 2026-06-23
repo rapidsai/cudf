@@ -87,7 +87,7 @@ auto make_scalar(cudf::size_type value, rmm::cuda_stream_view stream)
 }
 
 /**
- * @brief Fetches and sets up the per-source page index on the reader.
+ * @brief Fetches and sets up the per-source page index on the reader
  */
 void setup_multifile_page_index(
   cudf::io::parquet::experimental::hybrid_scan_multifile const& reader, multifile_inputs& inputs)
