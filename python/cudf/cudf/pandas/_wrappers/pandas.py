@@ -48,6 +48,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _maybe_wrap_result,
+    _setattr_fsproxy_no_mirror,
     _State,
     _Unusable,
     is_proxy_object,
@@ -1658,8 +1659,10 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     )
 
 
-DataFrame.eval = _df_eval_method
-DataFrame.query = _df_query_method
+# These custom implementations are installed by cudf.pandas itself and must
+# not be mirrored onto (and clobber) the real ``pandas.DataFrame``.
+_setattr_fsproxy_no_mirror(DataFrame, "eval", _df_eval_method)
+_setattr_fsproxy_no_mirror(DataFrame, "query", _df_query_method)
 
 _JsonReader = make_intermediate_proxy_type(
     "_JsonReader",
@@ -2847,13 +2850,3 @@ def _reduce_NaT(obj):
 
 
 copyreg.dispatch_table[type(pd.NaT)] = _reduce_NaT
-
-
-# All proxy types and their custom methods (e.g. ``DataFrame.query``/``eval``)
-# have now been installed. From here on, class-level attribute writes on proxy
-# types are genuine runtime monkeypatches and should be mirrored onto the real
-# pandas types so that fallback code running under
-# ``disable_module_accelerator()`` can see them.
-from .. import fast_slow_proxy as _fast_slow_proxy  # noqa: E402
-
-_fast_slow_proxy._MIRROR_SLOW_OVERRIDES = True
