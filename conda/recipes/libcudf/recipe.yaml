@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -437,7 +437,7 @@ outputs:
           - libnvcomp
     tests:
       - script:
-        - test -f $PREFIX/bin/gtests/libcudf_streaming/cudf_streaming_single_tests
+        - test -f $PREFIX/bin/gtests/libcudf_streaming/libcudf_streaming_single_tests
         - test -f $PREFIX/bin/libcudf_streaming_bench_pack
         - test -f $PREFIX/bin/libcudf_streaming_bench_partition
         - test -f $PREFIX/bin/libcudf_streaming_bench_ndsh_bench_read
