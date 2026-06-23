@@ -176,8 +176,6 @@ TEST_F(SortListsInt, NullRows)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), l);
 }
 
-// sort_lists reorders each row's elements lexicographically; element contents are unchanged.
-// Nested element types are supported, so the following no longer throw.
 TEST_F(SortListsInt, NestedListElement)
 {
   using T = int;
