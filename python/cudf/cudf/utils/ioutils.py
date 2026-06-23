@@ -173,7 +173,13 @@ filters : list of tuple, list of lists of tuples, default None
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
-    for each input.
+    for each input. Rows are returned in input order, and in the given
+    row-group order within each input; row groups are not sorted or
+    deduplicated, so repeated indices are read multiple times.
+
+    .. note::
+       When ``filters`` are also provided, the given order and any repeated
+       indices may not be preserved.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Explain logical and physical plans."""
 
@@ -433,7 +433,7 @@ def _repr_schema(schema: tuple | None) -> str:
         return ""  # pragma: no cover; no test yet
     names = tuple(schema)
     if len(names) > 6:
-        names = names[:3] + ("...",) + names[-2:]
+        names = (*names[:3], "...", *names[-2:])
     return f" {names}"
 
 

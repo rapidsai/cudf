@@ -34,6 +34,7 @@ foreach(query IN ITEMS ${CUDF_STREAMING_NDSH_QUERIES})
   set_target_properties(
     ${query}
     PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CUDF_STREAMING_BINARY_DIR}/benchmarks/ndsh"
+               OUTPUT_NAME "libcudf_streaming_bench_ndsh_${query}"
                CXX_STANDARD 20
                CXX_STANDARD_REQUIRED ON
                CUDA_STANDARD 20
@@ -54,6 +55,6 @@ install(
 install(
   TARGETS ${CUDF_STREAMING_NDSH_QUERIES}
   COMPONENT benchmarking
-  DESTINATION bin/benchmarks/libcudf_streaming
+  DESTINATION "${CUDF_STREAMING_BENCHMARK_INSTALL_DIR}"
   EXCLUDE_FROM_ALL
 )
