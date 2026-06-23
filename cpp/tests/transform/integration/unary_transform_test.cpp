@@ -1193,7 +1193,7 @@ __device__ cudf::errc expression (
        int b
 )
 {
-  auto e = cudf::detail::ops::ansi_div(a, b);
+  auto e = cudf::detail::ops::div_overflow(a, b);
   if(!e.has_value()){
     return e.error();
   }
