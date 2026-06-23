@@ -2678,6 +2678,64 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         cuDF supports `null/None` as a value in any column type, which
         is transparently supported during this output process.
 
+        Parameters
+        ----------
+        buf : writable buffer, optional
+            File path or buffer to write to. If ``None`` (default), the
+            output is returned as a string.
+        columns : sequence, optional
+            The subset of columns to write. Writes all columns by default.
+        col_space : int, list or dict of int, optional
+            The minimum width of each column.
+        header : bool or list of str, default True
+            Whether to write the column names. If a list of strings is
+            given, it is assumed to be aliases for the column names.
+        index : bool, default True
+            Whether to print index (row) labels.
+        na_rep : str, default "NaN"
+            String representation of ``NaN``/null values.
+        formatters : list, tuple or dict of callables, optional
+            One-parameter formatter functions to apply to columns' elements
+            by position or name.
+        float_format : callable, optional
+            One-parameter formatter function applied to floating point
+            values.
+        sparsify : bool, optional
+            Set to ``False`` for a DataFrame with a hierarchical index to
+            print every multiindex key at each row. Defaults to ``True``.
+        index_names : bool, default True
+            Whether to print the names of the indexes.
+        justify : str, optional
+            How to justify the column labels (e.g. ``"left"``, ``"right"``,
+            ``"center"``). Defaults to the pandas display option.
+        max_rows : int, optional
+            Maximum number of rows to display before truncating.
+        max_cols : int, optional
+            Maximum number of columns to display before truncating.
+        show_dimensions : bool, default False
+            Whether to display the DataFrame dimensions (number of rows
+            and columns).
+        decimal : str, default "."
+            Character recognized as the decimal separator, e.g. ``","`` in
+            Europe.
+        line_width : int, optional
+            Width, in characters, at which to wrap a line.
+        min_rows : int, optional
+            Number of rows to show in a truncated output (when the number
+            of rows exceeds ``max_rows``).
+        max_colwidth : int, optional
+            Maximum width, in characters, to truncate each column. By
+            default there is no limit.
+        encoding : str, optional
+            Character encoding to use when writing to ``buf``.
+
+        Returns
+        -------
+        str or None
+            The string representation of the DataFrame when ``buf`` is
+            ``None``; otherwise the result is written to ``buf`` and
+            ``None`` is returned.
+
         Examples
         --------
         >>> import cudf

@@ -862,6 +862,40 @@ class Series(SingleColumnFrame, IndexedFrame):
         cuDF supports `null/None` as a value in any column type, which
         is transparently supported during this output process.
 
+        Parameters
+        ----------
+        buf : writable buffer, optional
+            File path or buffer to write to. If ``None`` (default), the
+            output is returned as a string.
+        na_rep : str, default "NaN"
+            String representation of ``NaN``/null values.
+        float_format : callable, optional
+            One-parameter formatter function applied to floating point
+            values.
+        header : bool, default True
+            Whether to print the Series header (the index name).
+        index : bool, default True
+            Whether to print index (row) labels.
+        length : bool, default False
+            Whether to append the Series length to the output.
+        dtype : bool, default False
+            Whether to append the Series dtype to the output.
+        name : bool, default False
+            Whether to append the Series name to the output.
+        max_rows : int, optional
+            Maximum number of rows to show before truncating. If ``None``,
+            all rows are shown.
+        min_rows : int, optional
+            Number of rows to show in a truncated output (when the number
+            of rows exceeds ``max_rows``).
+
+        Returns
+        -------
+        str or None
+            The string representation of the Series when ``buf`` is
+            ``None``; otherwise the result is written to ``buf`` and
+            ``None`` is returned.
+
         Examples
         --------
         >>> import cudf
