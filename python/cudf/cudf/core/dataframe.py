@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -2641,6 +2641,73 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             return cons(self.items())  # type: ignore[misc]
 
         return self.to_pandas().to_dict(orient=orient, into=into, index=index)
+
+    @_performance_tracking
+    def to_string(
+        self,
+        buf=None,
+        *,
+        columns=None,
+        col_space=None,
+        header=True,
+        index: bool = True,
+        na_rep: str = "NaN",
+        formatters=None,
+        float_format=None,
+        sparsify: bool | None = None,
+        index_names: bool = True,
+        justify: str | None = None,
+        max_rows: int | None = None,
+        max_cols: int | None = None,
+        show_dimensions: bool = False,
+        decimal: str = ".",
+        line_width: int | None = None,
+        min_rows: int | None = None,
+        max_colwidth: int | None = None,
+        encoding: str | None = None,
+    ) -> str | None:
+        r"""
+        Render a DataFrame to a console-friendly tabular output.
+
+        cuDF uses pandas internals for string formatting, so this mirrors
+        :meth:`pandas.DataFrame.to_string` and accepts the same arguments.
+        Unlike ``repr``, the output is not truncated by the
+        ``display.max_rows``/``display.max_columns`` options unless
+        ``max_rows``/``max_cols`` are passed explicitly.
+
+        cuDF supports `null/None` as a value in any column type, which
+        is transparently supported during this output process.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2]
+        >>> df['val'] = [float(i + 10) for i in range(3)]
+        >>> df.to_string()
+        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
+        """
+        return self.to_pandas().to_string(
+            buf=buf,
+            columns=columns,
+            col_space=col_space,
+            header=header,
+            index=index,
+            na_rep=na_rep,
+            formatters=formatters,
+            float_format=float_format,
+            sparsify=sparsify,
+            index_names=index_names,
+            justify=justify,
+            max_rows=max_rows,
+            max_cols=max_cols,
+            show_dimensions=show_dimensions,
+            decimal=decimal,
+            line_width=line_width,
+            min_rows=min_rows,
+            max_colwidth=max_colwidth,
+            encoding=encoding,
+        )
 
     @_performance_tracking
     def scatter_by_map(

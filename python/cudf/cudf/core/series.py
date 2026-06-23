@@ -835,6 +835,54 @@ class Series(SingleColumnFrame, IndexedFrame):
         return self.to_pandas().to_dict(into=into)
 
     @_performance_tracking
+    def to_string(
+        self,
+        buf=None,
+        *,
+        na_rep: str = "NaN",
+        float_format=None,
+        header: bool = True,
+        index: bool = True,
+        length: bool = False,
+        dtype: bool = False,
+        name: bool = False,
+        max_rows: int | None = None,
+        min_rows: int | None = None,
+    ) -> str | None:
+        r"""
+        Render a Series to a console-friendly string output.
+
+        cuDF uses pandas internals for string formatting, so this mirrors
+        :meth:`pandas.Series.to_string` and accepts the same arguments.
+        Unlike ``repr``, the output is not truncated by the
+        ``display.max_rows`` option unless ``max_rows`` is passed
+        explicitly, and the ``dtype``/``name``/``length`` footer is
+        omitted unless requested.
+
+        cuDF supports `null/None` as a value in any column type, which
+        is transparently supported during this output process.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series.to_string()
+        '0    1\n1    2\n2    3\n3    4'
+        """
+        return self.to_pandas().to_string(
+            buf=buf,
+            na_rep=na_rep,
+            float_format=float_format,
+            header=header,
+            index=index,
+            length=length,
+            dtype=dtype,
+            name=name,
+            max_rows=max_rows,
+            min_rows=min_rows,
+        )
+
+    @_performance_tracking
     def reindex(
         self,
         index=None,

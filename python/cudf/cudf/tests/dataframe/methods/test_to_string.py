@@ -1,10 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import copy
+import inspect
+import io
 import textwrap
 
 import numpy as np
 import pandas as pd
+import pytest
 
 import cudf
 
@@ -148,3 +151,88 @@ def test_series_to_string_no_dtype_footer():
     gs = cudf.from_pandas(ps)
     assert gs.to_string() == ps.to_string()
     assert "dtype:" not in gs.to_string()
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"na_rep": "NULL"},
+        {"header": False},
+        {"header": ["X", "Y"]},
+        {"index": False},
+        {"columns": ["a"]},
+        {"col_space": 12},
+        {"float_format": "{:.2f}".format},
+        {"formatters": {"a": "{:.1f}".format}},
+        {"sparsify": False},
+        {"index_names": False},
+        {"justify": "left"},
+        {"max_rows": 3},
+        {"max_cols": 1},
+        {"show_dimensions": True},
+        {"decimal": ","},
+        {"line_width": 8},
+        {"max_rows": 3, "min_rows": 2},
+        {"max_colwidth": 3},
+    ],
+    ids=[
+        "na_rep",
+        "header_false",
+        "header_seq",
+        "index_false",
+        "columns",
+        "col_space",
+        "float_format",
+        "formatters",
+        "sparsify",
+        "index_names",
+        "justify",
+        "max_rows",
+        "max_cols",
+        "show_dimensions",
+        "decimal",
+        "line_width",
+        "min_rows",
+        "max_colwidth",
+    ],
+)
+def test_dataframe_to_string_passthrough(kwargs):
+    # Each explicit pandas argument is forwarded unchanged, so cuDF's
+    # rendered output matches pandas exactly.
+    pdf = pd.DataFrame(
+        {"a": [1.5, 2.25, np.nan, 4.0], "b": [10, 20, 30, 40]},
+        index=["w", "x", "y", "z"],
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert gdf.to_string(**kwargs) == pdf.to_string(**kwargs)
+
+
+def test_dataframe_to_string_buf_writes_and_returns_none():
+    # When ``buf`` is given, to_string writes to it and returns None,
+    # matching pandas.
+    pdf = pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    gdf = cudf.from_pandas(pdf)
+    gbuf, pbuf = io.StringIO(), io.StringIO()
+    assert gdf.to_string(buf=gbuf) is None
+    pdf.to_string(buf=pbuf)
+    assert gbuf.getvalue() == pbuf.getvalue()
+
+
+def test_dataframe_to_string_arguments_are_keyword_only():
+    # Everything after ``buf`` is keyword-only, matching pandas.
+    gdf = cudf.DataFrame({"a": [1, 2, 3]})
+    with pytest.raises(TypeError):
+        gdf.to_string(None, ["a"])
+
+
+def test_dataframe_to_string_signature_matches_pandas():
+    # The whole point of the explicit signature is to mirror pandas; guard
+    # against future drift in parameter names, order, kind, or defaults.
+    def spec(func):
+        return [
+            (param.name, param.kind, param.default)
+            for param in inspect.signature(func).parameters.values()
+            if param.name != "self"
+        ]
+
+    assert spec(cudf.DataFrame.to_string) == spec(pd.DataFrame.to_string)

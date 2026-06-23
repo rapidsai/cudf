@@ -698,32 +698,6 @@ class IndexedFrame(Frame):
 
         cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
-    @_performance_tracking
-    def to_string(self, *args, **kwargs):
-        r"""
-        Render to a console-friendly tabular output.
-
-        cuDF uses pandas internals for string formatting, so this mirrors
-        :meth:`pandas.Series.to_string` / :meth:`pandas.DataFrame.to_string`
-        and accepts the same arguments. Unlike ``repr``, the output is not
-        truncated by the ``display.max_rows``/``display.max_columns``
-        options and (for ``Series``) the ``dtype``/``name``/``length``
-        footer is omitted unless requested.
-
-        cuDF supports `null/None` as a value in any column type, which
-        is transparently supported during this output process.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2]
-        >>> df['val'] = [float(i + 10) for i in range(3)]
-        >>> df.to_string()
-        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
-        """
-        return self.to_pandas().to_string(*args, **kwargs)
-
     def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
 
