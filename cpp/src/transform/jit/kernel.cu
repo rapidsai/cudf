@@ -65,42 +65,52 @@ __device__ void transform_kernel(size_type row_size,
   auto stride = detail::grid_1d::grid_stride();
 
   for (auto row = start; row < row_size; row += stride) {
-    auto operation = [&]<typename Args>(Args const& args) {
+    auto operation = [&]<typename Args>(Args args) {
+      // TODO: static assert invocable
+      auto func = [&](auto... a) { GENERIC_TRANSFORM_OP(a...); };
+
       if constexpr (has_user_data) {
-        cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); },
-                         cuda::std::tuple_cat(cuda::std::tuple{user_data, row}, args));
+        return cuda::std::apply(func, cuda::std::tuple_cat(cuda::std::tuple{user_data, row}, args));
       } else {
-        cuda::std::apply([&](auto... a) { GENERIC_TRANSFORM_OP(a...); }, args);
+        return cuda::std::apply(func, args);
       }
     };
 
     if constexpr (!is_null_aware) {
       if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
+      if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
 
       auto ins = InputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, row)...}; });
         [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, row)...}; });
 
       auto outs = OutputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
+      auto outs = OutputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
 
-      operation(cuda::std::tuple_cat(
-        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs), ins));
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
+
+      operation(cuda::std::tuple_cat(out_ptrs, ins));
 
       OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...);
       });
 
     } else {
+      auto active_mask = __ballot_sync(__activemask(), row < row_size);
+
       auto ins = InputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(input_cols, row)...}; });
 
       auto outs = OutputAccessors::map(
         [&]<typename... A>() { return cuda::std::tuple{A::null_output_arg(output_cols, row)...}; });
 
-      operation(cuda::std::tuple_cat(
-        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs), ins));
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      auto active_mask = __ballot_sync(0xFFFF'FFFFU, row < row_size);
+      operation(cuda::std::tuple_cat(out_ptrs, ins));
 
       OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, row, *cuda::std::get<A::index>(outs)), ...);
