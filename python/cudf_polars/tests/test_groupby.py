@@ -180,18 +180,23 @@ def test_groupby_len(engine: pl.GPUEngine, df, keys):
 def test_groupby_filtered_item_allow_empty(engine: pl.GPUEngine):
     lf = pl.LazyFrame(
         {
-            "bucket": [1, 1, 1, 2, 2, 3],
-            "flag": [False, True, False, False, True, False],
-            "value": [99.0, 10.0, None, 1.0, None, 5.0],
+            "bucket": [1, 1, 2, 2, 3],
+            "exchange": ["A", "B", "A", "B", "A"],
+            "value": [10.0, 20.0, 30.0, 40.0, None],
         }
     )
     q = lf.group_by("bucket").agg(
-        selected=pl.col("value").filter(pl.col("flag")).item(allow_empty=True)
+        A=pl.col("value").filter(pl.col("exchange") == "A").item(allow_empty=True),
+        B=pl.col("value").filter(pl.col("exchange") == "B").item(allow_empty=True),
+        C=pl.col("value").filter(pl.col("exchange") == "C").item(allow_empty=True),
     )
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_136, reason="LazyFrame.pivot added in Polars 1.36"
+)
 def test_groupby_pivot_item(engine: pl.GPUEngine):
     lf = pl.LazyFrame(
         {
@@ -210,7 +215,7 @@ def test_groupby_pivot_item(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_groupby_pivot_item_duplicate_cells_raise(engine_raise_on_fail):
+def test_groupby_filtered_item_duplicate_cells_raise(engine_raise_on_fail):
     lf = pl.LazyFrame(
         {
             "bucket": [1, 1],
@@ -218,11 +223,8 @@ def test_groupby_pivot_item_duplicate_cells_raise(engine_raise_on_fail):
             "value": [10.0, 20.0],
         }
     )
-    q = lf.pivot(
-        on="exchange",
-        on_columns=["A"],
-        index="bucket",
-        values="value",
+    q = lf.group_by("bucket").agg(
+        A=pl.col("value").filter(pl.col("exchange") == "A").item(allow_empty=True),
     )
 
     with pytest.raises(
