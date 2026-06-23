@@ -289,15 +289,7 @@ class SplitScan(IR):
         #   "skip_rows" and "n_rows" options to use locally.
 
         if parquet_options.prefetch_file_metadata:
-            try:
-                parquet_metadatas = context.parquet_file_metadata[tuple(paths)]
-            except KeyError as e:
-                msg = (
-                    f"Parquet file metadata was not prefetched for paths: {list(paths)}."
-                    "Please report this as a bug to cudf-polars. You can work around it "
-                    "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
-                )
-                raise AssertionError(msg) from e
+            parquet_metadatas = Scan._lookup_parquet_metadatas(paths, context)
 
             row_group_num_rows = [
                 num_rows

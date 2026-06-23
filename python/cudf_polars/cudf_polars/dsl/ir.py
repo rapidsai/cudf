@@ -133,9 +133,8 @@ class IRExecutionContext:
     query_id
         Identifier for the query being executed.
     parquet_file_metadata
-        A cache of parquet file metadata. The keys are the ``paths`` of Scan nodes
-        with a ``parquet`` type. The values are a list of ``FileMetaData`` objects
-        associated with those ``paths``.
+        A cache of parquet file metadata keyed by file path for parquet scans.
+        The values are ``FileMetaData`` objects for each cached file.
 
         This cache lasts for the duration of the a single query's execution
         (e.g. ``LazyFrame.collect()``).
@@ -144,9 +143,9 @@ class IRExecutionContext:
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    parquet_file_metadata: dict[
-        tuple[str, ...], list[plc.io.parquet_metadata.FileMetaData]
-    ] = field(default_factory=dict)
+    parquet_file_metadata: dict[str, plc.io.parquet_metadata.FileMetaData] = field(
+        default_factory=dict
+    )
 
     async def to_thread(
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
@@ -202,30 +201,27 @@ class IRExecutionContext:
 
 @nvtx_annotate_cudf_polars(message="fetch_parquet_footers_for_paths")
 def _prefetch_parquet_footers_for_paths(
-    paths: tuple[str, ...],
-) -> tuple[tuple[str, ...], list[plc.io.parquet_metadata.FileMetaData]]:
+    paths: list[str],
+) -> tuple[list[str], list[plc.io.parquet_metadata.FileMetaData]]:
     """
     Prefetch parquet footers for a list of paths.
 
     This is typically executed concurrently with prefetch operations for other
-    groups of ``paths`` for other ``Scan`` nodes.
+    path groups for other parquet scan nodes.
 
     Parameters
     ----------
     paths
-        The tuple of paths to prefetch. These correspond to ``paths`` in a ``Scan`` node.
+        The paths to prefetch.
 
     Returns
     -------
     paths
-        The original input ``paths``. Useful for associating the result with the metadata
-        when executing out of order concurrently.
+        The original input ``paths``.
     metadata
         The list of ``FileMetaData`` objects for the ``paths``.
     """
-    metadata = plc.io.parquet_metadata.read_parquet_footers(
-        plc.io.SourceInfo(list(paths))
-    )
+    metadata = plc.io.parquet_metadata.read_parquet_footers(plc.io.SourceInfo(paths))
     return paths, metadata
 
 
@@ -248,20 +244,27 @@ def prefetch_parquet_file_metadata_for_ir(
     """
     from cudf_polars.streaming.io import StreamingScan
 
-    groups = set()
+    all_paths: list[str] = []
+    seen_paths: set[str] = set()
     for node in traversal([root]):
         if isinstance(node, StreamingScan):
             for scan in node.scans:
-                groups.add(tuple(scan.paths))
+                for path in scan.paths:
+                    if path not in seen_paths:
+                        seen_paths.add(path)
+                        all_paths.append(path)
         elif isinstance(node, Scan) and node.typ == "parquet":
-            groups.add(tuple(node.paths))
+            for path in node.paths:
+                if path not in seen_paths:
+                    seen_paths.add(path)
+                    all_paths.append(path)
 
-    if not groups:
+    if not all_paths:
         return
 
-    missing_paths = {
-        paths for paths in groups if paths not in context.parquet_file_metadata
-    }
+    missing_paths = [
+        path for path in all_paths if path not in context.parquet_file_metadata
+    ]
     cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
 
     if context.py_executor is None:
@@ -273,14 +276,11 @@ def prefetch_parquet_file_metadata_for_ir(
 
     if missing_paths:
         with cm:
-            futures = [
-                executor.submit(_prefetch_parquet_footers_for_paths, paths)
-                for paths in missing_paths
-            ]
-
-            for future in concurrent.futures.as_completed(futures):
-                paths, metadata = future.result()
-                context.parquet_file_metadata.setdefault(paths, metadata)
+            paths, metadata = executor.submit(
+                _prefetch_parquet_footers_for_paths, missing_paths
+            ).result()
+            for path, file_metadata in zip(paths, metadata, strict=True):
+                context.parquet_file_metadata.setdefault(path, file_metadata)
 
 
 def seed_parquet_file_metadata_from_stats(
@@ -311,9 +311,8 @@ def seed_parquet_file_metadata_from_stats(
             and isinstance(info, ParquetSourceInfo)
             and info.file_metadata is not None
         ):
-            context.parquet_file_metadata.setdefault(
-                tuple(node.paths), info.file_metadata
-            )
+            for path, file_metadata in zip(node.paths, info.file_metadata, strict=True):
+                context.parquet_file_metadata.setdefault(path, file_metadata)
 
 
 _BINOPS = {
@@ -1104,10 +1103,10 @@ class Scan(IR):
         Raises
         ------
         AssertionError
-            If the parquet metadata for 'paths' is not found in the cache.
+            If parquet metadata for any requested file path is not found in the cache.
         """
         try:
-            return context.parquet_file_metadata[tuple(paths)]
+            return [context.parquet_file_metadata[path] for path in paths]
         except KeyError as e:
             msg = (
                 f"Parquet file metadata was not prefetched for paths: {list(paths)}."

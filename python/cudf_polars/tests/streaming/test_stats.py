@@ -22,6 +22,7 @@ from cudf_polars.dsl.ir import (
     Empty,
     IRExecutionContext,
     Projection,
+    Scan,
     seed_parquet_file_metadata_from_stats,
 )
 from cudf_polars.engine.options import StreamingOptions
@@ -310,11 +311,15 @@ def test_seed_parquet_file_metadata_from_stats(
     context = IRExecutionContext()
     seed_parquet_file_metadata_from_stats(stats, context)
 
-    scan_node = next(node for node in stats.scan_stats if hasattr(node, "paths"))
-    assert (
-        context.parquet_file_metadata[tuple(scan_node.paths)]
-        is stats.scan_stats[scan_node].file_metadata
+    scan_node, parquet_info = next(
+        (node, info)
+        for node, info in stats.scan_stats.items()
+        if isinstance(node, Scan) and isinstance(info, ParquetSourceInfo)
     )
+    file_metadata = parquet_info.file_metadata
+    assert file_metadata is not None
+    for path, metadata in zip(scan_node.paths, file_metadata, strict=True):
+        assert context.parquet_file_metadata[path] is metadata
 
 
 def test_parquet_metadata_reads_footers(
