@@ -10,23 +10,39 @@
 # ##################################################################################################
 enable_testing()
 
-include(rapids-test)
-rapids_test_init()
-
 file(WRITE "${CUDF_STREAMING_BINARY_DIR}/CTestTestfile.cmake" "subdirs(\"tests\")\n")
-
-set(_cudf_streaming_gtests_link "${CMAKE_CURRENT_BINARY_DIR}/gtests")
-if(NOT EXISTS "${_cudf_streaming_gtests_link}")
-  file(CREATE_LINK "${CUDF_STREAMING_BINARY_DIR}/gtests" "${_cudf_streaming_gtests_link}" SYMBOLIC)
-endif()
 
 # Create a separate test case for each of these n_ranks.
 set(nranks_to_run 1 2 5)
 
-# A helper function to create a test case for each parallelism (defined by nranks_to_run).
-# TEST_TARGET is the name of the test target (required). This adds len(nranks_to_run) test cases
-# identified by <TEST_TARGET>_<n_ranks>. NOTE: When running ctest, the TEST_TARGET executable should
-# be located in the ./gtests/ directory relative to the PWD.
+# ##################################################################################################
+# Test registration model --------------------------------------------------------------------------
+# All tests are registered with plain add_test() using the absolute build-tree path of each test
+# executable (${CUDF_STREAMING_BINARY_DIR}/gtests/<target>). The generated build-tree
+# CTestTestfile.cmake is re-rooted for the install tree by the install section at the bottom: the
+# executables are installed next to the CTestTestfile.cmake, so those absolute build paths are
+# rewritten to "./<target>". Matching the full absolute build path keeps that rewrite unambiguous.
+# ##################################################################################################
+
+# Register a single-process test for TEST_TARGET.
+function(libcudf_streaming_test_add)
+  set(options) # no options
+  set(one_value TEST_TARGET)
+  set(multi_value) # no multi_value args
+  cmake_parse_arguments(_TEST "${options}" "${one_value}" "${multi_value}" ${ARGN})
+
+  if(NOT DEFINED _TEST_TEST_TARGET)
+    message(FATAL_ERROR "libcudf_streaming_test_add called without a test target")
+  endif()
+
+  add_test(
+    NAME "${_TEST_TEST_TARGET}"
+    COMMAND "${CUDF_STREAMING_BINARY_DIR}/gtests/${_TEST_TEST_TARGET}"
+  )
+endfunction()
+
+# Register an mpirun-launched test for TEST_TARGET, creating one test case per parallelism in
+# nranks_to_run identified by <TEST_TARGET>_<n_ranks>.
 function(libcudf_streaming_mpirun_test_add)
   set(options) # no options
   set(one_value TEST_TARGET)
@@ -39,13 +55,40 @@ function(libcudf_streaming_mpirun_test_add)
 
   message(STATUS "Adding mpirun test: ${_MPIRUN_TEST_TEST_TARGET} nranks: ${nranks_to_run}")
   foreach(np IN ITEMS ${nranks_to_run})
-    # add the test using the relative path of the target
     add_test(
-      NAME "${_MPIRUN_TEST_TEST_TARGET}_${np}" COMMAND mpirun --map-by node --bind-to none -np
-                                                       ${np} "gtests/${_MPIRUN_TEST_TEST_TARGET}"
+      NAME "${_MPIRUN_TEST_TEST_TARGET}_${np}"
+      COMMAND mpirun --map-by node --bind-to none -np ${np}
+              "${CUDF_STREAMING_BINARY_DIR}/gtests/${_MPIRUN_TEST_TEST_TARGET}"
     )
   endforeach(np)
 endfunction(libcudf_streaming_mpirun_test_add)
+
+# Collect targets in this directory carrying the property KEY:VALUE into OUTPUT.
+function(libcudf_streaming_targets_with_property)
+  set(options)
+  set(one_value KEY VALUE OUTPUT)
+  set(multi_value)
+  cmake_parse_arguments(_PROP "${options}" "${one_value}" "${multi_value}" ${ARGN})
+
+  get_property(
+    all_targets
+    DIRECTORY
+    PROPERTY BUILDSYSTEM_TARGETS
+  )
+
+  set(matched_targets "")
+  foreach(target ${all_targets})
+    get_target_property(prop_value ${target} ${_PROP_KEY})
+    if(prop_value STREQUAL ${_PROP_VALUE})
+      list(APPEND matched_targets ${target})
+    endif()
+  endforeach()
+
+  set(${_PROP_OUTPUT}
+      ${matched_targets}
+      PARENT_SCOPE
+  )
+endfunction()
 
 add_library(libcudf_streaming_test_sources OBJECT)
 set_target_properties(
@@ -98,6 +141,8 @@ set_target_properties(
              CXX_EXTENSIONS ON
              CUDA_STANDARD 20
              CUDA_STANDARD_REQUIRED ON
+             # Custom marker property so this target can be discovered and installed below.
+             COMPONENT testing
 )
 target_include_directories(
   libcudf_streaming_single_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
@@ -108,13 +153,7 @@ target_link_libraries(
   PRIVATE cudf_streaming rapidsmpf::rapidsmpf GTest::gmock GTest::gtest
           $<TARGET_NAME_IF_EXISTS:conda_env> libcudf_streaming_test_sources
 )
-rapids_test_add(
-  NAME libcudf_streaming_single_tests
-  COMMAND libcudf_streaming_single_tests
-  GPUS 1
-  PERCENT 100
-  INSTALL_COMPONENT_SET testing
-)
+libcudf_streaming_test_add(TEST_TARGET libcudf_streaming_single_tests)
 
 # ##################################################################################################
 # MPI and UCXX based tests -------------------------------------------------------------------------
@@ -131,6 +170,8 @@ if(CUDF_STREAMING_HAVE_MPI)
                CXX_EXTENSIONS ON
                CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
+               # Custom marker property so this target can be discovered and installed below.
+               COMPONENT testing
   )
   target_include_directories(
     libcudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
@@ -154,6 +195,8 @@ if(CUDF_STREAMING_HAVE_MPI)
                  CXX_EXTENSIONS ON
                  CUDA_STANDARD 20
                  CUDA_STANDARD_REQUIRED ON
+                 # Custom marker property so this target can be discovered and installed below.
+                 COMPONENT testing
     )
     target_include_directories(
       libcudf_streaming_ucxx_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
@@ -178,6 +221,51 @@ else()
   cudf_streaming_skip_optional_target(libcudf_streaming_mpi_tests "MPI not found")
 endif()
 
-rapids_test_install_relocatable(
-  INSTALL_COMPONENT_SET testing DESTINATION bin/gtests/libcudf_streaming
+# ##################################################################################################
+# Install the tests --------------------------------------------------------------------------------
+# Discover every test executable via the custom COMPONENT marker property, install them, and write
+# the installed CTestTestfile.cmake from the entries accumulated by the test-add helpers. The
+# testing component is EXCLUDE_FROM_ALL so it is only installed on demand
+# (e.g. `cmake --install . --component testing`).
+# ##################################################################################################
+libcudf_streaming_targets_with_property(
+  KEY COMPONENT VALUE testing OUTPUT _cudf_streaming_test_targets
 )
+
+if(_cudf_streaming_test_targets)
+  install(
+    TARGETS ${_cudf_streaming_test_targets}
+    DESTINATION bin/gtests/libcudf_streaming
+    COMPONENT testing
+    EXCLUDE_FROM_ALL
+  )
+
+  # Re-root the generated build-tree CTestTestfile.cmake for the install tree. Tests reference the
+  # absolute build path of each executable (${CUDF_STREAMING_BINARY_DIR}/gtests/<target>); in the
+  # install tree the executables sit next to the CTestTestfile.cmake, so that absolute prefix is
+  # rewritten to "./. Matching the full absolute build path keeps the rewrite unambiguous. This runs
+  # at install time because CTestTestfile.cmake is produced during CMake's generate step (it does
+  # not exist yet while this directory is being configured).
+  set(_cudf_streaming_relocate_script
+      "${CMAKE_CURRENT_BINARY_DIR}/relocate_installed_ctestfile.cmake"
+  )
+  file(WRITE "${_cudf_streaming_relocate_script}"
+       "set(_src_ctestfile \"${CMAKE_CURRENT_BINARY_DIR}/CTestTestfile.cmake\")\n"
+       "set(_build_gtests_prefix \"${CUDF_STREAMING_BINARY_DIR}/gtests/\")\n"
+  )
+  file(
+    APPEND "${_cudf_streaming_relocate_script}"
+    [=[
+file(READ "${_src_ctestfile}" _ctest_contents)
+string(REPLACE "\"${_build_gtests_prefix}" "\"./" _ctest_contents "${_ctest_contents}")
+file(WRITE "${CMAKE_INSTALL_PREFIX}/bin/gtests/libcudf_streaming/CTestTestfile.cmake"
+     "${_ctest_contents}"
+)
+]=]
+  )
+  install(
+    SCRIPT "${_cudf_streaming_relocate_script}"
+    COMPONENT testing
+    EXCLUDE_FROM_ALL
+  )
+endif()
