@@ -399,7 +399,7 @@ std::unique_ptr<cudf::column> hybrid_scan_reader_impl::build_row_mask_with_page_
   auto [expr_conv, output_dtypes] = prepare_filter_and_output_types(options);
 
   return _extended_metadata->build_row_mask_with_page_index_stats(
-    host_span<std::vector<size_type> const>{row_group_indices.data(), row_group_indices.size()},
+    row_group_indices,
     output_dtypes,
     _output_column_schemas,
     expr_conv.get_converted_expr().value(),
