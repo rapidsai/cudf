@@ -269,20 +269,21 @@ void names_from_expression::visit_operands(
   else if (selected_column_indices.has_value()) {
     auto const& root = schema_tree.front();
 
-    std::transform(selected_column_indices->begin(),
-                   selected_column_indices->end(),
-                   cuda::counting_iterator<cudf::size_type>{0},
-                   std::inserter(column_indices_to_names, column_indices_to_names.end()),
-                   [&](auto selected_col_idx, auto const mapped_col_idx) {
-                     CUDF_EXPECTS(
-                       std::cmp_less(selected_col_idx, root.children_idx.size()),
-                       "Encountered an invalid col index in the top-level column selection",
-                       std::invalid_argument);
-                     auto const schema_idx = root.children_idx[selected_col_idx];
-                     return std::make_pair(
-                       mapped_col_idx,
-                       normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names));
-                   });
+    std::transform(
+      selected_column_indices->begin(),
+      selected_column_indices->end(),
+      cuda::counting_iterator<cudf::size_type>{0},
+      std::inserter(column_indices_to_names, column_indices_to_names.end()),
+      [&](auto selected_col_idx, auto const mapped_col_idx) {
+        CUDF_EXPECTS(
+          selected_col_idx > 0 and std::cmp_less(selected_col_idx, root.children_idx.size()),
+          "Encountered an invalid col index in the top-level column selection",
+          std::invalid_argument);
+        auto const schema_idx = root.children_idx[selected_col_idx];
+        return std::make_pair(
+          mapped_col_idx,
+          normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names));
+      });
   }
   // Map selected field ids to column paths from the schema tree
   else if (selected_column_field_ids.has_value()) {
