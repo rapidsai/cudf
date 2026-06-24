@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stdint cimport uint8_t, uintptr_t
@@ -266,7 +266,7 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        dictionary_page_data : list[Span]
+        dictionary_page_data : list
             Span-like objects containing dictionary page data
         row_group_indices : list[int]
             Input row group indices
@@ -309,7 +309,7 @@ cdef class HybridScanReader:
 
         Parameters
         ----------
-        bloom_filter_data : list[Span]
+        bloom_filter_data : list
             Span-like objects containing bloom filter data
         row_group_indices : list[int]
             Input row group indices
@@ -421,7 +421,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list[Span]
+        column_chunk_data : list
             Span-like objects containing column chunk data of filter columns
         row_mask : Column
             Mutable boolean column indicating surviving rows
@@ -505,7 +505,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list[Span]
+        column_chunk_data : list
             Span-like objects containing column chunk data of payload columns
         row_mask : Column
             Boolean column indicating surviving rows
@@ -587,7 +587,7 @@ cdef class HybridScanReader:
         ----------
         row_group_indices : list[int]
             Input row group indices
-        column_chunk_data : list[Span]
+        column_chunk_data : list
             Span-like objects containing column chunk data of all columns
         options : ParquetReaderOptions
             Parquet reader options
@@ -646,7 +646,7 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_data : list[Span]
+        column_chunk_data : list
             Span-like objects containing column chunk data of filter columns
         options : ParquetReaderOptions
             Parquet reader options
@@ -729,7 +729,7 @@ cdef class HybridScanReader:
             Boolean column indicating surviving rows
         mask_data_pages : UseDataPageMask
             Whether to use a data page mask
-        column_chunk_data : list[Span]
+        column_chunk_data : list
             Span-like objects containing column chunk data of payload columns
         options : ParquetReaderOptions
             Parquet reader options

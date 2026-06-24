@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Base class for Frame types that have an index."""
 
@@ -697,29 +697,6 @@ class IndexedFrame(Frame):
         """{docstring}"""
 
         cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
-
-    @_performance_tracking
-    def to_string(self):
-        r"""
-        Convert to string
-
-        cuDF uses Pandas internals for efficient string formatting.
-        Set formatting options using pandas string formatting options and
-        cuDF objects will print identically to Pandas objects.
-
-        cuDF supports `null/None` as a value in any column type, which
-        is transparently supported during this output process.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2]
-        >>> df['val'] = [float(i + 10) for i in range(3)]
-        >>> df.to_string()
-        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
-        """
-        return str(self)
 
     def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
@@ -3164,7 +3141,7 @@ class IndexedFrame(Frame):
             return self._gather(
                 GatherMap.from_column_unchecked(
                     cast(
-                        cudf.core.column.numerical.NumericalColumn,
+                        "cudf.core.column.numerical.NumericalColumn",
                         ColumnBase.from_range(
                             range(start, stop, stride)
                         ).astype(SIZE_TYPE_DTYPE),
@@ -4813,7 +4790,7 @@ class IndexedFrame(Frame):
                 raise ValueError(
                     "Please enter a value for `frac` OR `n`, not both."
                 )
-            n = int(round(size * frac))
+            n = round(size * frac)
 
         if n > 0 and size == 0:
             raise ValueError(
@@ -4872,7 +4849,7 @@ class IndexedFrame(Frame):
         try:
             gather_map = GatherMap.from_column_unchecked(
                 cast(
-                    cudf.core.column.numerical.NumericalColumn,
+                    "cudf.core.column.numerical.NumericalColumn",
                     as_column(
                         random_state.choice(
                             len(self), size=n, replace=replace, p=weights
@@ -7147,7 +7124,7 @@ def _get_replacement_values_for_columns(
     for i in to_replace_columns:
         if i in values_columns:
             if isinstance(values_columns[i], list):
-                val_col = cast(list, values_columns[i])
+                val_col = cast("list", values_columns[i])
                 all_na = any(val is None for val in val_col)
             else:
                 all_na = False
