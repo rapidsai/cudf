@@ -385,8 +385,10 @@ include(cmake/thirdparty/get_cccl.cmake)
 # find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
 
-# find croaring
-include(cmake/thirdparty/get_croaring.cmake)
+# find croaring, needed by tests and benchmarks
+if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
+  include(cmake/thirdparty/get_croaring.cmake)
+endif()
 
 # find flatbuffers
 include(cmake/thirdparty/get_flatbuffers.cmake)

@@ -16,8 +16,8 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/partition_utils.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -39,11 +39,11 @@
 #include <vector>
 
 namespace rapidsmpf::ndsh {
-using cudf_streaming::integrations::partition_and_pack;
-using cudf_streaming::integrations::partition_and_split;
-using cudf_streaming::integrations::unpack_and_concat;
-using cudf_streaming::streaming::TableChunk;
-using cudf_streaming::streaming::to_message;
+using cudf_streaming::partition_and_pack;
+using cudf_streaming::partition_and_split;
+using cudf_streaming::table_chunk;
+using cudf_streaming::to_message;
+using cudf_streaming::unpack_and_concat;
 
 coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx,
                                          std::shared_ptr<Communicator> comm,
@@ -56,21 +56,19 @@ coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx
   CudaEvent event;
   comm->logger()->print("Broadcast ", static_cast<int>(tag));
   if (comm->nranks() == 1) {
-    std::vector<cudf_streaming::streaming::TableChunk> chunks;
+    std::vector<cudf_streaming::table_chunk> chunks;
     std::vector<cudf::table_view> views;
     auto gather_stream = ctx->br()->stream_pool()->get_stream();
     while (true) {
       auto msg = co_await ch_in->receive();
       if (msg.empty()) { break; }
-      auto chunk =
-        co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+      auto chunk = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
       cuda_stream_join(gather_stream, chunk.stream(), &event);
       views.push_back(chunk.table_view());
       chunks.push_back(std::move(chunk));
     }
     if (chunks.size() == 1) {
-      co_return to_message(
-        0, std::make_unique<cudf_streaming::streaming::TableChunk>(std::move(chunks[0])));
+      co_return to_message(0, std::make_unique<cudf_streaming::table_chunk>(std::move(chunks[0])));
     } else {
       RAPIDSMPF_EXPECTS(chunks.size() > 0, "No chunks in broadcast");
       auto result = cudf::concatenate(views, gather_stream, ctx->br()->device_mr());
@@ -80,8 +78,7 @@ coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx
                        std::ranges::single_view(gather_stream),
                        &event);
       co_return to_message(
-        0,
-        std::make_unique<cudf_streaming::streaming::TableChunk>(std::move(result), gather_stream));
+        0, std::make_unique<cudf_streaming::table_chunk>(std::move(result), gather_stream));
     }
   } else {
     streaming::AllGather gatherer{ctx, comm, tag};
@@ -89,8 +86,7 @@ coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx
       auto msg = co_await ch_in->receive();
       if (msg.empty()) { break; }
       // TODO: If this chunk is already in pack form, this is unnecessary.
-      auto chunk =
-        co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+      auto chunk       = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
       auto pack        = cudf::pack(chunk.table_view(), chunk.stream(), ctx->br()->device_mr());
       auto packed_data = PackedData(std::move(pack.metadata),
                                     ctx->br()->move(std::move(pack.gpu_data), chunk.stream()));
@@ -100,13 +96,13 @@ coro::task<streaming::Message> broadcast(std::shared_ptr<streaming::Context> ctx
     auto result = co_await gatherer.extract_all(ordered);
     if (result.size() == 1) {
       co_return to_message(0,
-                           std::make_unique<cudf_streaming::streaming::TableChunk>(
+                           std::make_unique<cudf_streaming::table_chunk>(
                              std::make_unique<PackedData>(std::move(result[0]))));
     } else {
       auto stream = ctx->br()->stream_pool()->get_stream();
       co_return to_message(
         0,
-        std::make_unique<cudf_streaming::streaming::TableChunk>(
+        std::make_unique<cudf_streaming::table_chunk>(
           unpack_and_concat(rapidsmpf::unspill_partitions(
                               std::move(result), ctx->br().get(), AllowOverbooking::YES),
                             stream,
@@ -141,11 +137,11 @@ streaming::Actor broadcast(std::shared_ptr<streaming::Context> ctx,
  * @param sequence Sequence number of the output
  * @param left_event Event recording the availability of `left_chunk`.
  *
- * @return Message of `TableChunk` containing the result of the semi join.
+ * @return Message of `table_chunk` containing the result of the semi join.
  */
 streaming::Message semi_join_chunk(std::shared_ptr<streaming::Context> ctx,
-                                   cudf_streaming::streaming::TableChunk const& left_chunk,
-                                   cudf_streaming::streaming::TableChunk&& right_chunk,
+                                   cudf_streaming::table_chunk const& left_chunk,
+                                   cudf_streaming::table_chunk&& right_chunk,
                                    cudf::table_view left_carrier,
                                    std::vector<cudf::size_type> left_on,
                                    std::vector<cudf::size_type> right_on,
@@ -183,8 +179,7 @@ streaming::Message semi_join_chunk(std::shared_ptr<streaming::Context> ctx,
   cuda_stream_join(left_chunk.stream(), chunk_stream);
 
   return to_message(
-    sequence,
-    std::make_unique<cudf_streaming::streaming::TableChunk>(std::move(result_table), chunk_stream));
+    sequence, std::make_unique<cudf_streaming::table_chunk>(std::move(result_table), chunk_stream));
 }
 
 /**
@@ -201,10 +196,10 @@ streaming::Message semi_join_chunk(std::shared_ptr<streaming::Context> ctx,
  * @param build_event Event recording the creation of the `joiner`.
  * @param tmp_event Preallocated event used for internal stream ordering.
  *
- * @return Message of `TableChunk` containing the result of the inner join.
+ * @return Message of `table_chunk` containing the result of the inner join.
  */
 streaming::Message inner_join_chunk(std::shared_ptr<streaming::Context> ctx,
-                                    cudf_streaming::streaming::TableChunk&& right_chunk,
+                                    cudf_streaming::table_chunk&& right_chunk,
                                     std::uint64_t sequence,
                                     cudf::hash_join& joiner,
                                     cudf::table_view build_carrier,
@@ -249,7 +244,7 @@ streaming::Message inner_join_chunk(std::shared_ptr<streaming::Context> ctx,
   // This also ensure deallocation of the hash_join object waits for completion.
   cuda_stream_join(build_stream, chunk_stream, tmp_event);
   return to_message(sequence,
-                    std::make_unique<cudf_streaming::streaming::TableChunk>(
+                    std::make_unique<cudf_streaming::table_chunk>(
                       std::make_unique<cudf::table>(std::move(result_columns)), chunk_stream));
 }
 
@@ -270,7 +265,7 @@ streaming::Actor inner_join_broadcast(
   comm->logger()->print("Inner broadcast join ", static_cast<int>(tag));
   auto build_table =
     co_await ((co_await broadcast(ctx, comm, left, tag, streaming::AllGather::Ordered::NO))
-                .release<cudf_streaming::streaming::TableChunk>()
+                .release<cudf_streaming::table_chunk>()
                 .make_available(ctx));
   comm->logger()->print("Build table has ", build_table.table_view().num_rows(), " rows");
 
@@ -292,16 +287,15 @@ streaming::Actor inner_join_broadcast(
   while (!ch_out->is_shutdown()) {
     auto right_msg = co_await right->receive();
     if (right_msg.empty()) { break; }
-    co_await ch_out->send(
-      inner_join_chunk(ctx,
-                       right_msg.release<cudf_streaming::streaming::TableChunk>(),
-                       right_msg.sequence_number(),
-                       joiner,
-                       build_carrier,
-                       right_on,
-                       build_table.stream(),
-                       &build_event,
-                       &tmp_event));
+    co_await ch_out->send(inner_join_chunk(ctx,
+                                           right_msg.release<cudf_streaming::table_chunk>(),
+                                           right_msg.sequence_number(),
+                                           joiner,
+                                           build_carrier,
+                                           right_on,
+                                           build_table.stream(),
+                                           &build_event,
+                                           &tmp_event));
   }
 
   co_await ch_out->drain(ctx->executor());
@@ -332,8 +326,7 @@ streaming::Actor inner_join_shuffle(std::shared_ptr<streaming::Context> ctx,
     RAPIDSMPF_EXPECTS(left_msg.sequence_number() == right_msg.sequence_number(),
                       "Mismatching sequence numbers");
     // TODO: currently always using left as build table.
-    auto build_chunk =
-      co_await left_msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    auto build_chunk = co_await left_msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     auto build_stream = build_chunk.stream();
     auto joiner       = cudf::hash_join(
       build_chunk.table_view().select(left_on), cudf::null_equality::UNEQUAL, build_stream);
@@ -348,16 +341,15 @@ streaming::Actor inner_join_shuffle(std::shared_ptr<streaming::Context> ctx,
                            [&](auto i) { return std::ranges::find(left_on, i) == left_on.end(); });
       build_carrier = build_chunk.table_view().select(to_keep);
     }
-    co_await ch_out->send(
-      inner_join_chunk(ctx,
-                       right_msg.release<cudf_streaming::streaming::TableChunk>(),
-                       left_msg.sequence_number(),
-                       joiner,
-                       build_carrier,
-                       right_on,
-                       build_stream,
-                       &build_event,
-                       &tmp_event));
+    co_await ch_out->send(inner_join_chunk(ctx,
+                                           right_msg.release<cudf_streaming::table_chunk>(),
+                                           left_msg.sequence_number(),
+                                           joiner,
+                                           build_carrier,
+                                           right_on,
+                                           build_stream,
+                                           &build_event,
+                                           &tmp_event));
   }
   co_await ch_out->drain(ctx->executor());
 }
@@ -376,7 +368,7 @@ streaming::Actor left_semi_join_broadcast_left(std::shared_ptr<streaming::Contex
   co_await ctx->executor()->schedule();
   comm->logger()->print("Left semi broadcast join ", static_cast<int>(tag));
   auto left_table = co_await (co_await broadcast(ctx, comm, left, tag))
-                      .release<cudf_streaming::streaming::TableChunk>()
+                      .release<cudf_streaming::table_chunk>()
                       .make_available(ctx);
   comm->logger()->print("Left (probe) table has ", left_table.table_view().num_rows(), " rows");
   CudaEvent left_event;
@@ -401,7 +393,7 @@ streaming::Actor left_semi_join_broadcast_left(std::shared_ptr<streaming::Contex
     // about deduplicating matches across partitions. Anything that matches
     // in the semi-join belongs in the output.
     auto right_chunk =
-      co_await right_msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+      co_await right_msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     co_await ch_out->send(semi_join_chunk(ctx,
                                           left_table,
                                           std::move(right_chunk),
@@ -442,10 +434,9 @@ streaming::Actor left_semi_join_shuffle(std::shared_ptr<streaming::Context> ctx,
     RAPIDSMPF_EXPECTS(left_msg.sequence_number() == right_msg.sequence_number(),
                       "Mismatching sequence numbers");
 
-    auto left_chunk =
-      co_await left_msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    auto left_chunk = co_await left_msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     auto right_chunk =
-      co_await right_msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+      co_await right_msg.release<cudf_streaming::table_chunk>().make_available(ctx);
 
     left_event.record(left_chunk.stream());
 
@@ -489,7 +480,7 @@ streaming::Actor shuffle(std::shared_ptr<streaming::Context> ctx,
       comm->logger()->debug("Shuffle: no more input");
       break;
     }
-    auto chunk  = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    auto chunk  = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     auto packed = partition_and_pack(chunk.table_view(),
                                      keys,
                                      static_cast<int>(num_partitions),
@@ -505,7 +496,7 @@ streaming::Actor shuffle(std::shared_ptr<streaming::Context> ctx,
     auto stream      = ctx->br()->stream_pool()->get_stream();
     co_await ch_out->send(to_message(
       pid,
-      std::make_unique<cudf_streaming::streaming::TableChunk>(
+      std::make_unique<cudf_streaming::table_chunk>(
         unpack_and_concat(rapidsmpf::unspill_partitions(
                             std::move(packed_data), ctx->br().get(), AllowOverbooking::YES),
                           stream,
