@@ -179,9 +179,7 @@ dispatch_tuple_t dispatch_from_arrow_device::operator()<cudf::string_view>(
     auto const d_items = view.buffer_views[binary_view_vector_idx].data.as_binary_view;
     auto variadic_ptrs = std::vector<char const*>();
     for (auto i = 0L; i < view.n_variadic_buffers; ++i) {
-      auto variadic_buf =
-        ArrowArrayBuffer(const_cast<ArrowArray*>(input), i + NANOARROW_BINARY_VIEW_FIXED_BUFFERS);
-      variadic_ptrs.push_back(reinterpret_cast<char const*>(variadic_buf->data));
+      variadic_ptrs.push_back(reinterpret_cast<char const*>(view.variadic_buffers[i]));
     }
     auto d_variadic_ptrs = cudf::detail::make_device_uvector_async(
       variadic_ptrs, stream, cudf::get_current_device_resource_ref());

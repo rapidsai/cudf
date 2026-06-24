@@ -29,7 +29,6 @@
 #include <jit/row_ir.hpp>
 #include <jit/span.cuh>
 #include <jit/util.hpp>
-#include <jit_preprocessed_files/transform/jit/kernel.cu.jit.hpp>
 
 #include <span>
 #include <variant>
@@ -158,14 +157,14 @@ using handle        = std::variant<
 
 namespace jit_transform {
 
-jitify2::Kernel instantiate(null_aware is_null_aware,
-                            bool has_user_data,
-                            std::string const& ins,
-                            std::string const& outs,
-                            std::vector<std::string> const& ptx_input_types,
-                            std::vector<std::string> const& ptx_output_types,
-                            std::string const& udf,
-                            udf_source_type source_type)
+kernel instantiate(bool is_null_aware,
+                   bool has_user_data,
+                   std::string const& ins,
+                   std::string const& outs,
+                   std::vector<std::string> const& ptx_input_types,
+                   std::vector<std::string> const& ptx_output_types,
+                   std::string const& udf,
+                   udf_source_type source_type)
 {
   CUDF_FUNC_RANGE();
   auto cuda_source = (source_type == udf_source_type::PTX)
@@ -175,14 +174,16 @@ jitify2::Kernel instantiate(null_aware is_null_aware,
                            jit::build_ptx_params(ptx_output_types, ptx_input_types, has_user_data))
                        : jit::parse_single_function_cuda(udf, "GENERIC_TRANSFORM_OP");
 
-  auto kernel = jitify2::reflection::Template("cudf::jit::transform_kernel")
-                  .instantiate(is_null_aware, has_user_data, ins, outs);
+  auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
+                                       rtcx::reflect(is_null_aware),
+                                       rtcx::reflect(has_user_data),
+                                       ins,
+                                       outs);
 
-  return jit::get_udf_kernel(
-    *transform_jit_kernel_cu_jit, kernel, cuda_source, {"-restrict", "--dopt=on"});
+  return jit::get_udf_kernel("cudf/cpp/src/transform/jit/kernel.cu", kernel, cuda_source);
 }
 
-void launch(jitify2::Kernel const& kernel,
+void launch(cudf::kernel const& kernel,
             size_type row_size,
             bitmask_type const* stencil,
             void* user_data,
@@ -192,7 +193,11 @@ void launch(jitify2::Kernel const& kernel,
 {
   CUDF_FUNC_RANGE();
   void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
-  kernel->configure_1d_max_occupancy(0, 0, nullptr, stream.value())->launch_raw(args);
+  auto cfg     = kernel.max_occupancy_config(0, 0);
+  CUDF_EXPECTS(cfg.block_size % cudf::detail::warp_size == 0,
+               "Expected block size to be a multiple of warp size",
+               std::runtime_error);
+  kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
 std::string reflect_input_element(column_view const& c) { return type_to_name(c.type()); }
@@ -244,8 +249,12 @@ auto reflect(udf_source_type source_type,
     auto column    = std::visit([](auto& c) { return reflect_input_column(c); }, in);
     auto element   = std::visit([](auto& c) { return reflect_input_element(c); }, in);
     bool as_scalar = std::holds_alternative<scalar_column_view>(in);
-    auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
-                      .instantiate(i, column, element, as_scalar);
+    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
+                                           rtcx::reflect(i),
+                                           column,
+                                           element,
+                                           rtcx::reflect(as_scalar),
+                                           rtcx::reflect(0));
     in_types.push_back(accessor);
   }
 
@@ -256,14 +265,18 @@ auto reflect(udf_source_type source_type,
     auto column    = std::visit([](auto& c) { return reflect_output_column(c); }, out);
     auto element   = std::visit([](auto& c) { return reflect_output_element(c); }, out);
     bool as_scalar = false;  // never scalar
-    auto accessor  = jitify2::reflection::Template("cudf::jit::column_accessor")
-                      .instantiate(i, column, element, as_scalar);
+    auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
+                                           rtcx::reflect(i),
+                                           column,
+                                           element,
+                                           rtcx::reflect(as_scalar),
+                                           rtcx::reflect(0));
 
     out_types.push_back(accessor);
   }
 
-  auto ins  = jitify2::reflection::Template("cudf::jit::type_list").instantiate(in_types);
-  auto outs = jitify2::reflection::Template("cudf::jit::type_list").instantiate(out_types);
+  auto ins  = rtcx::reflect_template("cudf::jit::type_list", in_types);
+  auto outs = rtcx::reflect_template("cudf::jit::type_list", out_types);
 
   std::vector<std::string> ptx_in_types;
   std::vector<std::string> ptx_out_types;
@@ -314,12 +327,12 @@ auto to_args(std::span<input_column_view const> inputs,
       out);
   }
 
-  auto d_args = detail::make_device_uvector_async(h_args, stream, mr);
+  auto d_args = detail::make_device_uvector(h_args, stream, mr);
 
   return std::make_tuple(std::move(d_args), std::move(handles));
 }
 
-void run(null_aware is_null_aware,
+void run(bool is_null_aware,
          bool has_user_data,
          size_type row_size,
          bitmask_type const* d_stencil,
@@ -819,7 +832,7 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
 
   auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
   auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
-  jit_transform::run(is_null_aware,
+  jit_transform::run(is_null_aware == null_aware::YES,
                      user_data.has_value(),
                      row_size,
                      stencil_has_nulls ? stencil_arg : nullptr,
@@ -922,19 +935,20 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
 {
-  detail::row_ir::ast_args ast_args{.table = table};
   auto args = detail::row_ir::ast_converter::compute_column(
-    detail::row_ir::target::CUDA, expr, ast_args, stream, mr);
-  return transform_extended(args.inputs,
-                            args.udf,
-                            args.output_type,
-                            args.source_type,
-                            args.user_data,
-                            args.is_null_aware,
-                            args.row_size,
-                            args.null_policy,
-                            stream,
-                            mr);
+    detail::row_ir::target::CUDA, expr, table, {}, "compute_operation", stream, mr);
+  auto result = multi_transform(args.udf,
+                                args.source_type,
+                                args.is_null_aware,
+                                args.user_data,
+                                args.inputs,
+                                args.outputs,
+                                std::move(args.string_offsets),
+                                args.row_size,
+                                stream,
+                                mr);
+  auto cols   = result->release();
+  return std::move(cols[0]);
 }
 
 }  // namespace cudf

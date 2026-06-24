@@ -12,7 +12,7 @@ from pylibcudf.libcudf.scalar.scalar cimport scalar
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport data_type, null_order, order, size_type
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from cuda.bindings.cyruntime cimport cudaStream_t
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
@@ -44,7 +44,7 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         range_window_type preceding,
         range_window_type following,
         vector[rolling_request]& requests,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
@@ -54,7 +54,7 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         column_view following_window,
         size_type min_periods,
         rolling_aggregation& agg,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef unique_ptr[column] rolling_window(
@@ -63,7 +63,7 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         size_type following_window,
         size_type min_periods,
         rolling_aggregation& agg,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr) except +libcudf_exception_handler
 
     cdef pair[unique_ptr[column], unique_ptr[column]] make_range_windows(
@@ -73,7 +73,7 @@ cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
         null_order null_order,
         range_window_type preceding,
         range_window_type following,
-        cuda_stream_view stream,
+        cudaStream_t stream,
         device_async_resource_ref mr
     ) except +libcudf_exception_handler
 

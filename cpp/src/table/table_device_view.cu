@@ -22,24 +22,14 @@ namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
 void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
 {
-  delete _descendant_storage;
   delete this;
 }
 
 template <typename ColumnDeviceView, typename HostTableView>
 table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
-  HostTableView source_view, rmm::cuda_stream_view stream)
-  : _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}
+  HostTableView source_view, ColumnDeviceView* columns)
+  : _columns{columns}, _num_rows{source_view.num_rows()}, _num_columns{source_view.num_columns()}
 {
-  // The table's columns must be converted to ColumnDeviceView
-  // objects and copied into device memory for the table_device_view's
-  // _columns member.
-  if (source_view.num_columns() > 0) {
-    std::unique_ptr<rmm::device_buffer> descendant_storage_owner;
-    std::tie(descendant_storage_owner, _columns) =
-      contiguous_copy_column_device_views<ColumnDeviceView, HostTableView>(source_view, stream);
-    _descendant_storage = descendant_storage_owner.release();
-  }
 }
 
 // Explicit instantiation for a device table of immutable views
@@ -51,8 +41,8 @@ template class table_device_view_base<mutable_column_device_view, mutable_table_
 }  // namespace detail
 
 template <typename ColumnDeviceView, typename HostTableView>
-std::pair<std::unique_ptr<rmm::device_buffer>, ColumnDeviceView*>
-contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_stream_view stream)
+std::pair<std::unique_ptr<rmm::device_buffer>, ColumnDeviceView*> create_column_device_views(
+  HostTableView source_view, rmm::cuda_stream_view stream)
 {
   // First calculate the size of memory needed to hold the
   // table's ColumnDeviceViews. This is done by calling extent()
@@ -89,7 +79,47 @@ contiguous_copy_column_device_views(HostTableView source_view, rmm::cuda_stream_
 }
 
 template std::pair<std::unique_ptr<rmm::device_buffer>, column_device_view*>
-contiguous_copy_column_device_views<column_device_view, host_span<column_view const>>(
+create_column_device_views<column_device_view, host_span<column_view const>>(
   host_span<column_view const> source_view, rmm::cuda_stream_view stream);
+
+table_device_view::table_device_view(table_view source_view, column_device_view* columns)
+  : detail::table_device_view_base<column_device_view, table_view>(source_view, columns)
+{
+}
+
+std::unique_ptr<table_device_view, std::function<void(table_device_view*)>>
+table_device_view::create(table_view source_view, rmm::cuda_stream_view stream)
+{
+  auto [descendant_storage, columns] =
+    create_column_device_views<column_device_view, table_view>(source_view, stream);
+  auto deleter = [ds = descendant_storage.release()](table_device_view* tv) {
+    tv->destroy();
+    delete ds;
+  };
+  std::unique_ptr<table_device_view, decltype(deleter)> result{
+    new table_device_view(source_view, columns), deleter};
+  return result;
+}
+
+mutable_table_device_view::mutable_table_device_view(mutable_table_view source_view,
+                                                     mutable_column_device_view* columns)
+  : detail::table_device_view_base<mutable_column_device_view, mutable_table_view>(source_view,
+                                                                                   columns)
+{
+}
+
+std::unique_ptr<mutable_table_device_view, std::function<void(mutable_table_device_view*)>>
+mutable_table_device_view::create(mutable_table_view source_view, rmm::cuda_stream_view stream)
+{
+  auto [descendant_storage, columns] =
+    create_column_device_views<mutable_column_device_view, mutable_table_view>(source_view, stream);
+  auto deleter = [ds = descendant_storage.release()](mutable_table_device_view* tv) {
+    tv->destroy();
+    delete ds;
+  };
+  std::unique_ptr<mutable_table_device_view, decltype(deleter)> result{
+    new mutable_table_device_view(source_view, columns), deleter};
+  return result;
+}
 
 }  // namespace cudf

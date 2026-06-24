@@ -123,7 +123,9 @@ int main(int argc, char** argv)
     cudf::set_current_device_resource(mr);
     auto rc = RUN_ALL_TESTS();
     std::cout << "Peak memory usage " << mr.get_bytes_counter().peak << " bytes" << std::endl;
+    rmm::mr::reset_current_device_resource();
     return rc;
   }
+  rmm::mr::reset_current_device_resource();
   return RUN_ALL_TESTS();
 }

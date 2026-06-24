@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -91,18 +91,23 @@ inline size_type __device__ row_to_value_idx(size_type idx,
  * @param stream CUDA stream to use
  */
 void populate_chunk_hash_maps(device_span<slot_type> const map_storage,
-                              cudf::detail::device_2dspan<PageFragment const> frags,
+                              cudf::detail::device_2dspan<PageFragment> frags,
                               rmm::cuda_stream_view stream);
 
 /**
  * @brief Compact dictionary hash map entries into chunk.dict_data
  *
+ * `dict_id`s are assigned in fragment-first-insert order, so pages over earlier
+ * fragments see smaller ids and can use narrower RLE bit widths.
+ *
  * @param map_storage Bulk hashmap storage
  * @param chunks Flat span of chunks to compact hash maps for
+ * @param frags 2D span of per-column page fragments
  * @param stream CUDA stream to use
  */
 void collect_map_entries(device_span<slot_type> const map_storage,
                          device_span<EncColumnChunk> chunks,
+                         cudf::detail::device_2dspan<PageFragment const> frags,
                          rmm::cuda_stream_view stream);
 
 /**
@@ -121,5 +126,13 @@ void collect_map_entries(device_span<slot_type> const map_storage,
 void get_dictionary_indices(device_span<slot_type> const map_storage,
                             cudf::detail::device_2dspan<PageFragment const> frags,
                             rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compute the minimum width required for the dictionary indices for each data page
+ *
+ * @param pages Device span of encoder pages
+ * @param stream CUDA stream to use
+ */
+void compute_per_page_dict_bits(device_span<EncPage> pages, rmm::cuda_stream_view stream);
 
 }  // namespace cudf::io::parquet::detail

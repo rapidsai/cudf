@@ -7,20 +7,29 @@ from __future__ import annotations
 
 import importlib.util
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 if TYPE_CHECKING:
-    from rapidsmpf.communicator.communicator import Communicator
+    from contextlib import AbstractContextManager
 
     import polars as pl
 
-    from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.engine.options import StreamingOptions
 
 
 STREAMING_ENGINE_FIXTURE_PARAMS: list[str] = []
 if importlib.util.find_spec("rapidsmpf") is not None:
     STREAMING_ENGINE_FIXTURE_PARAMS.extend(["spmd", "spmd-small"])
+    # ``DaskEngine`` and ``RayEngine`` both reject construction inside an
+    # ``rrun`` cluster.
+    from rapidsmpf.bootstrap import is_running_with_rrun as _is_running_with_rrun
+
+    if not _is_running_with_rrun():  # pragma: no cover
+        if importlib.util.find_spec("distributed") is not None:
+            STREAMING_ENGINE_FIXTURE_PARAMS.append("dask")
+        if importlib.util.find_spec("ray") is not None:
+            STREAMING_ENGINE_FIXTURE_PARAMS.append("ray")
 ALL_ENGINE_FIXTURE_PARAMS = ["in-memory", *STREAMING_ENGINE_FIXTURE_PARAMS]
 
 
@@ -57,15 +66,46 @@ class EngineFixtureParam:
 def is_streaming_engine(obj: Any) -> bool:
     """Return ``True`` if ``obj`` is a :class:`StreamingEngine`."""
     try:
-        from cudf_polars.experimental.rapidsmpf.frontend.core import StreamingEngine
+        from cudf_polars.engine.core import StreamingEngine
     except ImportError:  # pragma: no cover; only triggered without rapidsmpf
         return False
     return isinstance(obj, StreamingEngine)
 
 
+def warns_on_spmd(  # pragma: no cover; rapidsmpf-only path
+    engine: Any,
+    *args: Any,
+    when: bool = True,
+    **kwargs: Any,
+) -> AbstractContextManager[Any]:
+    """
+    ``pytest.warns(*args, **kwargs)`` on SPMD; ``nullcontext`` otherwise.
+
+    ``pytest.warns`` only captures warnings emitted in the test process. On
+    multi-process backends (``DaskEngine``, ``RayEngine``) the fallback
+    warning fires on workers/actors and only appears in worker logs/stdout,
+    so the assertion is replaced with a passthrough on those backends.
+
+    The optional ``when`` kwarg lets callers compose an additional gate (e.g.
+    a parametrize value) without an outer ``if``.
+    """
+    import contextlib
+
+    import pytest
+
+    from cudf_polars.engine.spmd import SPMDEngine
+
+    if when and isinstance(engine, SPMDEngine):
+        return pytest.warns(*args, **kwargs)
+    return contextlib.nullcontext()
+
+
+SMALL_MAX_ROWS_PER_PARTITION = 4
+SMALL_TARGET_PARTITION_SIZE = 10
+
+
 def create_streaming_options(
     blocksize_mode: Literal["medium", "small"],
-    overrides: StreamingOptions | None = None,
 ) -> StreamingOptions:
     """
     Create :class:`StreamingOptions` for a block size mode.
@@ -76,75 +116,85 @@ def create_streaming_options(
         Block size configuration. ``"medium"`` uses moderate partition sizes,
         while ``"small"`` uses very small partitions and sets
         ``fallback_mode=SILENT`` to avoid excessive warnings from CPU fallback.
-    overrides
-        Optional options to merge on top of the selected baseline. Fields in
-        ``overrides`` take precedence over the baseline.
 
     Returns
     -------
-    The merged streaming options.
+    The streaming options for the given block size.
     """
-    from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+    from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.utils.config import StreamingFallbackMode
 
+    # ``allow_gpu_sharing=True`` is always set so the cached multi-rank
+    # engines (Dask workers, Ray actors with ``num_ranks > 1``) don't trip
+    # the UUID-collision guard on every ``_reset(...)``.
     match blocksize_mode:
         case "medium":
-            baseline = StreamingOptions(
+            return StreamingOptions(
                 max_rows_per_partition=50,
                 dynamic_planning={},
                 target_partition_size=1_000_000,
                 raise_on_fail=True,
+                allow_gpu_sharing=True,
             )
         case "small":
-            baseline = StreamingOptions(
-                max_rows_per_partition=4,
+            return StreamingOptions(
+                max_rows_per_partition=SMALL_MAX_ROWS_PER_PARTITION,
                 dynamic_planning={},
-                target_partition_size=10,
+                target_partition_size=SMALL_TARGET_PARTITION_SIZE,
                 raise_on_fail=True,
                 fallback_mode=StreamingFallbackMode.SILENT,
+                allow_gpu_sharing=True,
             )
         case _:  # pragma: no cover
             raise ValueError(f"Unknown blocksize_mode: {blocksize_mode!r}")
-    if overrides is None:
-        return baseline
-    return StreamingOptions(**{**baseline.to_dict(), **overrides.to_dict()})
 
 
-def build_streaming_engine(
-    param: EngineFixtureParam,
-    spmd_comm: Communicator,
-    options: StreamingOptions | None = None,
-) -> StreamingEngine:
+def merge_streaming_options(
+    base: StreamingOptions, overrides: StreamingOptions
+) -> StreamingOptions:
     """
-    Build a :class:`StreamingEngine` from an engine fixture parameter.
+    Merge override options into the base streaming options.
 
     Parameters
     ----------
-    param
-        Decoded engine fixture parameter describing the backend and block size mode.
-    spmd_comm
-        Communicator used when constructing an :class:`SPMDEngine`.
-    options
-        Optional streaming options to merge on top of the baseline selected by
-        ``param.blocksize_mode``.
+    base
+        The base streaming options.
+    overrides
+        Any additional streaming options.
 
     Returns
     -------
-    A streaming engine matching ``param``.
+    The merged streaming options with overrides overriding any base options.
     """
-    from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+    from cudf_polars.engine.options import StreamingOptions
 
-    streaming_options = create_streaming_options(param.blocksize_mode, options)
-    match param.engine_name:
-        case "spmd":
-            return SPMDEngine(
-                comm=spmd_comm,
-                rapidsmpf_options=streaming_options.to_rapidsmpf_options(),
-                executor_options=streaming_options.to_executor_options(),
-                engine_options=streaming_options.to_engine_options(),
-            )
-        case _:  # pragma: no cover
-            raise AssertionError(f"Unknown streaming backend: {param.engine_name!r}")
+    return StreamingOptions(**{**base.to_dict(), **overrides.to_dict()})
+
+
+EngineT = TypeVar("EngineT", bound="StreamingEngine")
+
+
+def configure_streaming_engine(engine: EngineT, options: StreamingOptions) -> EngineT:
+    """
+    Configure an engine with a set of options.
+
+    Parameters
+    ----------
+    engine
+        Streaming engine to configure. The caller owns its lifecycle.
+    options
+        Configuration options to apply to the engine.
+
+    Returns
+    -------
+    ``engine``, reset to the requested options.
+    """
+    engine._reset(
+        rapidsmpf_options=options.to_rapidsmpf_options(),
+        executor_options=options.to_executor_options(),
+        engine_options=options.to_engine_options(),
+    )
+    return engine
 
 
 def get_blocksize_mode(obj: pl.GPUEngine) -> Literal["medium", "small"]:

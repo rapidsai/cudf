@@ -1,21 +1,26 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+
 #include <memory>
+#include <utility>
 #include <vector>
 
-namespace cudf {
-namespace groupby {
-namespace detail {
+namespace cudf::groupby::detail {
 
 template <typename RequestType>
 inline std::vector<aggregation_result> extract_results(host_span<RequestType const> requests,
@@ -47,6 +52,34 @@ inline std::vector<aggregation_result> extract_results(host_span<RequestType con
   return results;
 }
 
-}  // namespace detail
-}  // namespace groupby
-}  // namespace cudf
+/**
+ * @brief Compute a combined null bitmask for multi-column keys.
+ *
+ * @return Pair of {buffer, raw_pointer} where pointer is null if no nulls exist.
+ */
+std::pair<rmm::device_buffer, bitmask_type const*> compute_row_bitmask(
+  table_view const& keys, rmm::cuda_stream_view stream);
+
+/// Whether the given aggregation kind is supported by hash-based groupby.
+constexpr bool is_hash_aggregation(aggregation::Kind k)
+{
+  switch (k) {
+    case aggregation::SUM:
+    case aggregation::SUM_WITH_OVERFLOW:
+    case aggregation::SUM_OF_SQUARES:
+    case aggregation::PRODUCT:
+    case aggregation::MIN:
+    case aggregation::MAX:
+    case aggregation::COUNT_VALID:
+    case aggregation::COUNT_ALL:
+    case aggregation::ARGMIN:
+    case aggregation::ARGMAX:
+    case aggregation::MEAN:
+    case aggregation::M2:
+    case aggregation::STD:
+    case aggregation::VARIANCE: return true;
+    default: return false;
+  }
+}
+
+}  // namespace cudf::groupby::detail

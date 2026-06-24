@@ -1,13 +1,15 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite using the GPU engine."""
 
 from __future__ import annotations
 
+import sqlite3
 from functools import partialmethod
 from typing import TYPE_CHECKING
 
+import packaging.version
 import pytest
 
 import polars
@@ -59,7 +61,7 @@ def pytest_configure(config: pytest.Config) -> None:
     if variant == "in-memory":
         engine = polars.GPUEngine(executor="in-memory", raise_on_fail=raise_on_fail)
     else:
-        from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+        from cudf_polars.engine.spmd import SPMDEngine
 
         executor_options: dict[str, object] = {}
         if blocksize == "small":
@@ -134,7 +136,7 @@ def pytest_report_header(config: pytest.Config) -> str:
     return f"injected GPU engine: {cls.__module__}.{cls.__name__}"
 
 
-EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
+EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_csv.py::test_read_csv_only_loads_selected_columns": "Memory usage won't be correct due to GPU",
     "tests/unit/io/test_delta.py::test_scan_delta_version": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_relative": "Need to expose hive partitioning",
@@ -142,6 +144,15 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_delta.py::test_scan_delta_schema_evolution_nested_struct_field_19915": "Need to expose hive partitioning",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
     "tests/unit/io/test_delta.py::test_scan_delta_nanosecond_timestamp_nested": "polars generates the wrong schema: https://github.com/pola-rs/polars/issues/23949",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_row_index_renamed": "Iceberg support not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_extra_columns": "Iceberg support not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_extra_struct_fields": "Iceberg support not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_column_deletion": "Iceberg schema evolution not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_nested_column_cast_deletion_rename": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values_nested": "Iceberg partition column injection not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Iceberg support not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_iceberg_filter_bool_26474": "Iceberg support not yet implemented in cudf-polars",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[small.parquet-4]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[foods*.parquet-54]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_is_in_statistics": "Debug output on stderr doesn't match",
@@ -174,6 +185,10 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type0]": "partition sinks not yet supported in standard engine.",
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type1]": "partition sinks not yet supported in standard engine.",
     "tests/unit/io/test_partition.py::test_partition_to_memory_sort_by[df1-a-io_type2]": "partition sinks not yet supported in standard engine.",
+    "tests/unit/io/test_scan.py::test_async_read_21945[scan_type0]": "chunked-reader + include_file_paths bug: chunk.num_rows_per_source only reflects the first chunk",
+    "tests/unit/io/test_scan.py::test_async_read_21945[scan_type1]": "chunked-reader + include_file_paths bug: chunk.num_rows_per_source only reflects the first chunk",
+    "tests/unit/io/test_scan.py::test_async_read_21945[scan_type2]": "chunked-reader + include_file_paths bug: chunk.num_rows_per_source only reflects the first chunk",
+    "tests/unit/io/test_scan.py::test_async_read_21945[scan_type3]": "chunked-reader + include_file_paths bug: chunk.num_rows_per_source only reflects the first chunk",
     "tests/unit/io/test_sink.py::test_collect_all_lazy": "SinkMultiple not supported by InMemory CPU Engine, which we fallback to. See pola-rs/polars/pull/26537",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[False-False]": "Needs some variant of cudf#16394",
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_ignores_dtype_mismatch_for_non_projected_columns_19249[True-False]": "Needs some variant of cudf#16394",
@@ -253,12 +268,36 @@ EXPECTED_FAILURES: Mapping[str, str | tuple[str, bool]] = {
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-0-len1-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-0-False]": "List literal loses nesting in slice: cudf#19610",
     "tests/unit/operations/test_slice.py::test_schema_slice_on_literal_23999[lit1-offset1-len1-False]": "List literal loses nesting in slice: cudf#19610",
-    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "polars doesnt hand us the hconcat options. Fixed in 1.39.",
+    "tests/unit/functions/test_concat.py::test_concat_with_empty_dataframes_strict_25725": "https://github.com/rapidsai/cudf/issues/21644",
+    "tests/unit/sql/test_window_functions.py::test_over_with_order_by": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_function_order_by_multi": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_cumulative_agg_with_nulls": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_multiple_named_windows": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-WHERE a == 1 OR a != 1]": "column-less SELECT (always-true WHERE) loses its row count (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-WHERE a == 1 OR a != 1]": "column-less SELECT (always-true WHERE) loses its row count (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY a-WHERE a == 1 OR a != 1]": "column-less SELECT (always-true WHERE) loses its row count (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/operations/namespaces/array/test_array.py::test_array_idx_size_limit_eval": "polars-internal IdxSize chunking debug assertion does not apply with the GPU engine",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_implode_and_agg": "implode + agg returns a mismatched dtype",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_duration_aggs": "Unsupported libcudf reduction operator for Duration dtype",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "boolean-agg mean floating-point precision mismatch",
+    "tests/unit/lazyframe/test_projections.py::test_select_len_20337": "len() over a column-less input returns 0 (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan.py::test_scan_sink_metrics_multiple_phases": "sink metrics are not reported by the GPU engine",
+    "tests/unit/io/test_parquet.py::test_read_parquet_legacy_nested_maps_27159": "legacy nested-map parquet read produces a mismatched result",
+    "tests/unit/datatypes/test_struct.py::test_struct_equal_missing_null_25360": "struct equality with a null raises libcudf 'Index out of bounds' (get_element)",
 }
 
 
-TESTS_TO_SKIP: Mapping[str, str] = {
+TESTS_TO_SKIP: dict[str, str] = {
     "tests/unit/operations/test_profile.py::test_profile_with_cse": "Shape assertion won't match",
+    # value_counts / struct-expansion row ordering is not guaranteed, so the GPU
+    # result may or may not match CPU. Skip rather than xfail to avoid a flaky
+    # XPASS/FAIL (these pass on some runs and fail on others).
+    "tests/unit/lazyframe/test_cse.py::test_cse_as_struct_value_counts_20927": "non-deterministic value_counts ordering",
+    "tests/unit/lazyframe/test_cse.py::test_eager_cse_during_struct_expansion_18411": "non-deterministic struct-expansion ordering",
     # On Ubuntu 20.04, the tzdata package contains a bunch of symlinks
     # for obsolete timezone names. However, the chrono_tz package that
     # polars uses doesn't read /usr/share/zoneinfo, instead packaging
@@ -274,7 +313,6 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/benchmark/test_with_columns.py::test_with_columns_quadratic_19503": "Tests performance bug in CPU engine",
     # The test may segfault with the legacy streaming engine. We should
     # remove this skip when all polars tests use the new streaming engine.
-    "tests/unit/streaming/test_streaming_group_by.py::test_streaming_group_by_literal[1]": "May segfault w/the legacy streaming engine",
     # Fails in CI, but passes locally
     "tests/unit/streaming/test_streaming.py::test_streaming_streamable_functions": "RuntimeError: polars_python::sql::PySQLContext is unsendable, but is being dropped on another thread",
     # Remove when polars supports Pydantic V3
@@ -285,9 +323,6 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/series/test_describe.py::test_series_describe_float": "https://github.com/rapidsai/cudf/issues/19324",
     "tests/unit/series/test_describe.py::test_series_describe_int": "https://github.com/rapidsai/cudf/issues/19324",
     "tests/unit/streaming/test_streaming.py::test_streaming_apply": "https://github.com/pola-rs/polars/issues/22558",
-    # New iceberg release causes this test to fail. We can remove in the next polars version bump: https://github.com/rapidsai/cudf/pull/19912
-    "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values[False]": "https://github.com/pola-rs/polars/pull/24456",
-    "tests/unit/operations/test_rolling.py::test_rolling_agg_bad_input_types[str]": "https://github.com/rapidsai/cudf/issues/20551",
     "tests/unit/operations/test_group_by_dynamic.py::test_group_by_dynamic_agg_bad_input_types[str]": "TODO: Need to investigate why this fails in CI but passes locally. We should fallback to CPU for group_by_dynamic",
     "tests/unit/expr/test_exprs.py::test_exp_log1p[Float16-Float16]": "Flaky test: Small floating-point precision differences in exp/log1p results",
     # TODO: Investigate why these tests fail in CI but pass locally.
@@ -299,14 +334,48 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     # Short term adds in the aftermath of the rapidsmpf switch to get CI passing
     "tests/unit/io/test_lazy_parquet.py::test_scan_parquet_local_with_async": "Flaky, otherwise TBD",
     "tests/unit/operations/test_join.py::test_join_where_nested_expr_21066": "Flaky, otherwise TBD",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-parquet]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-csv]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[True-ndjson]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-parquet]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Checks to IO metric logs specific to Polars CPU",
+    "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Checks to IO metric logs specific to Polars CPU",
 }
+
+
+if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3.44.0"):
+    # These tests rely on features not available in older versions of sqlite.
+    TESTS_TO_SKIP.update(
+        {
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[SUM(x) FILTER (WHERE y > 20)-values0]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[AVG(x) FILTER (WHERE y > 20)-values1]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[MIN(x) FILTER (WHERE grp = 'a')-values2]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[MAX(x) FILTER (WHERE grp = 'a')-values3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(*) FILTER (WHERE grp = 'a')-values4]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(1) FILTER (WHERE grp = 'a')-values5]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(x) FILTER (WHERE grp = 'a')-values6]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(x) FILTER (WHERE y > 20)-values7]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(DISTINCT x) FILTER (WHERE y > 20)-values8]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[SUM(x) FILTER (WHERE y > 20)-13]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[AVG(x) FILTER (WHERE y > 20)-4.333333333333333]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(*) FILTER (WHERE grp = 'a')-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(x) FILTER (WHERE y > 20)-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(DISTINCT x) FILTER (WHERE grp = 'b')-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_multiple_aggs": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[STRING_AGG]": 'sqlite3.OperationalError: near "ORDER": syntax error',
+            "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[GROUP_CONCAT]": 'sqlite3.OperationalError: near "ORDER": syntax error',
+        }
+    )
 
 
 # Generally skip for:
 # 1) Tests that are too slow with --inject-gpu-engine-blocksize=small due to many small partitions for large data
-# 2) Tests that fail during cudf_polars execution and segfaults later due to https://github.com/rapidsai/cudf/issues/22138
 STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/operations/aggregation/test_aggregations.py::test_boolean_aggs": "float difference in std/var in the unit of least precision",
+    # No deterministic key sort (https://github.com/rapidsai/cudf/issues/21641):
+    # passes on some streaming runs and fails on others, so skip rather than
+    # xfail to avoid a flaky XPASS/FAIL.
+    "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "non-deterministic key sort under the streaming engine",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q1": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q2": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/benchmark/test_group_by.py::test_groupby_h2oai_q3": "Too slow with --inject-gpu-engine-blocksize=small",
@@ -333,9 +402,20 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[glob-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-async]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/io/test_scan.py::test_scan_with_row_index_projected_out[single-parquet-sync]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs0-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs1-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs2-True-unordered_columns2]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs3-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs4-True-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs5-True-unordered_columns5]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs6-False-unordered_columns6]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs7-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs8-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs9-True-unordered_columns9]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs10-True-unordered_columns10]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs11-False-unordered_columns11]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs12-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
+    "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs13-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
     "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
@@ -357,13 +437,13 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
 # xfail for tests that produce different results than CPU Polars
 STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072",
-    "tests/unit/lazyframe/test_projections.py::test_join_projection_pushdown_struct_field_as_key_24446": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/functions/test_concat.py::test_concat_horizontal_zero_width_height_mismatch_26876": "https://github.com/rapidsai/cudf/issues/21644",
+    "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
+    "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
     "tests/unit/operations/test_slice.py::test_slice_pushdown_literal_projection_14349": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_group_by_lit_series": "Incorrect broadcasting of literals in groupby-agg",
     "tests/unit/operations/test_group_by.py::test_group_by_series_partitioned": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072",
-    "tests/unit/interop/test_interop.py::test_0_width_df_roundtrip": "https://github.com/rapidsai/cudf/issues/21644",
-    "tests/unit/operations/test_group_by.py::test_group_by_unique_parametric[n_unique-True-True]": "https://github.com/rapidsai/cudf/issues/21641",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/rapidsai/cudf/issues/22084",
@@ -412,25 +492,30 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes43]": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_order": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_panic_on_binary_expr_5915": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/operations/test_join.py::test_join_rewrite_panic_23307": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_semi_anti_join": "https://github.com/rapidsai/cudf/issues/22049",
+    "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
-    "tests/unit/sql/test_joins.py::test_join_anti_semi[SELECT * FROM tbl_a LEFT SEMI JOIN tbl_b USING (a)-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df10-df20-df1.category = df2.category AND (df1.code * 2) = df2.code_doubled-df1.name, df1.code, df2.type-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
-    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df11-df21-df1.id = df2.id AND LOWER(df1.name) = df2.match-df1.id, df1.name, df2.match-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[LOWER(df1.text) = df2.text-2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[SUBSTR(df1.code, 1, 2) = SUBSTR(df2.code, 1, 2)-3]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_conditions[LENGTH(df1.text) = LENGTH(df2.text)-5]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_with_literals[df10-df20-df1.id = df2.id AND df1.multiplier * 5 = df2.base AND df1.category = 'A'-df1.id, df1.multiplier, df2.base-expected0-schema0]": "https://github.com/rapidsai/cudf/issues/22085 (or similar)",
-    "tests/unit/sql/test_joins.py::test_join_on_expression_with_literals[df11-df21-df1.id = df2.id AND (df1.value * 2) = df2.target AND df1.id = 2-df1.id, df1.value, df2.target-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_mixed_expression_conditions[df12-df22-df1.x * 2 = df2.a AND df1.y = df2.b-df1.x, df1.y, df2.a-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df10-df20-LOWER(TRIM(df1.text)) = df2.text-expected0]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df11-df21-LOWER(SUBSTR(df1.code,1,6)) = df2.code-expected1]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df12-df22-LENGTH(df1.name) = df2.len-expected2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_reversed_constraint_order[df12-df22-(df1.a + df1.a) = df2.b-df2.b = (df1.a + df1.a)-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df11-df21-x + y = sum-expected1-schema1]": "https://github.com/rapidsai/cudf/issues/22105",
-    "tests/unit/sql/test_joins.py::test_join_on_unqualified_expressions[df12-df22-LENGTH(name) = len-expected2-schema2]": "https://github.com/rapidsai/cudf/issues/22105",
+    "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_over_with_order_by": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_cumulative_agg_with_nulls": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_function_order_by_multi": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/sql/test_window_functions.py::test_window_multiple_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
+    "tests/unit/functions/test_concat.py::test_concat_horizontal_lazy_strict_raises_shape_error_27415": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[False-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[True-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/io/test_scan_lines.py::test_scan_lines[True-True-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/lazyframe/test_lazyframe.py::test_len": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_select_len": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/operations/test_scalar.py::test_scalar_len_20046": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+    "tests/unit/sql/test_group_by.py::test_group_by_empty_or_scalar_key_exprs_23397": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-WHERE 1 = 1]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-WHERE 1 = 1]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY a-WHERE 1 = 1]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY a-]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
 }
 
 
@@ -443,7 +528,7 @@ def pytest_collection_modifyitems(
         return
     with_streaming_engine = config.getoption("--inject-gpu-engine") == "spmd"
     for item in items:
-        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
+        if (reason := TESTS_TO_SKIP.get(item.nodeid)) is not None or (
             with_streaming_engine
             and (reason := STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid, None))
             is not None
@@ -455,15 +540,5 @@ def pytest_collection_modifyitems(
             is not None
         ):
             item.add_marker(pytest.mark.xfail(reason=s_reason))
-        elif (entry := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
-            if isinstance(entry, tuple):
-                # the second entry in the tuple is the condition to xfail on
-                reason, condition = entry
-                item.add_marker(
-                    pytest.mark.xfail(
-                        condition=condition,
-                        reason=reason,
-                    ),
-                )
-            else:
-                item.add_marker(pytest.mark.xfail(reason=entry))
+        elif (reason := EXPECTED_FAILURES.get(item.nodeid, None)) is not None:
+            item.add_marker(pytest.mark.xfail(reason=reason))

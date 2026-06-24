@@ -15,6 +15,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -29,7 +30,7 @@ cpdef tuple[Table, list] hash_partition(
     int num_partitions,
     cpp_partitioning.hash_id hash_function = cpp_partitioning.hash_id.HASH_MURMUR3,
     uint32_t seed = cpp_partitioning.DEFAULT_HASH_SEED,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -63,7 +64,8 @@ cpdef tuple[Table, list] hash_partition(
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     cdef int c_num_partitions = num_partitions
     cdef vector[libcudf_types.size_type] columns_to_hash
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     if TableOrList is Table:
         with nogil:
@@ -73,7 +75,7 @@ cpdef tuple[Table, list] hash_partition(
                 c_num_partitions,
                 hash_function,
                 seed,
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
     else:
@@ -85,17 +87,17 @@ cpdef tuple[Table, list] hash_partition(
                 c_num_partitions,
                 hash_function,
                 seed,
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
-    return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)
+    return Table.from_libcudf(move(c_result.first), _stream, mr), list(c_result.second)
 
 
 cpdef tuple[Table, list] partition(
     Table t,
     Column partition_map,
     int num_partitions,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -126,7 +128,8 @@ cpdef tuple[Table, list] partition(
     cdef pair[unique_ptr[table], vector[libcudf_types.size_type]] c_result
     cdef int c_num_partitions = num_partitions
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -134,18 +137,18 @@ cpdef tuple[Table, list] partition(
             t.view(),
             partition_map.view(),
             c_num_partitions,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)
+    return Table.from_libcudf(move(c_result.first), _stream, mr), list(c_result.second)
 
 
 cpdef tuple[Table, list] round_robin_partition(
     Table input,
     int num_partitions,
     int start_partition=0,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -176,7 +179,8 @@ cpdef tuple[Table, list] round_robin_partition(
     cdef int c_num_partitions = num_partitions
     cdef int c_start_partition = start_partition
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     with nogil:
@@ -184,8 +188,8 @@ cpdef tuple[Table, list] round_robin_partition(
             input.view(),
             c_num_partitions,
             c_start_partition,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
 
-    return Table.from_libcudf(move(c_result.first), stream, mr), list(c_result.second)
+    return Table.from_libcudf(move(c_result.first), _stream, mr), list(c_result.second)

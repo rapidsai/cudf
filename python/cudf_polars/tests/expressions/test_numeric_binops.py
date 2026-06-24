@@ -10,8 +10,9 @@ import polars as pl
 
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
+    assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_132
+from cudf_polars.utils.versions import POLARS_VERSION_LT_140
 
 dtypes = [
     pl.Int8,
@@ -120,7 +121,7 @@ def test_true_div_with_decimals(engine: pl.GPUEngine):
         schema={"foo": pl.Decimal(15, 2), "bar": pl.Decimal(15, 2)},
     )
     q = df.select(pl.col("bar") / pl.col("foo"))
-    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_multiply_with_decimals(engine: pl.GPUEngine):
@@ -133,18 +134,36 @@ def test_multiply_with_decimals(engine: pl.GPUEngine):
     )
 
     q = df.select(pl.col("x") * pl.col("y"))
-    assert_gpu_result_equal(q, engine=engine, check_dtypes=not POLARS_VERSION_LT_132)
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_sum_decimal_widens_precision(request) -> None:
-    request.applymarker(
-        pytest.mark.xfail(
-            # Should be fixed in polars 1.40
-            reason="Polars does not widen precision for sum of decimals."
+    if POLARS_VERSION_LT_140:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason="Polars does not widen precision for sum of decimals."
+            )
         )
-    )
     df = pl.LazyFrame(
         {"x": [Decimal("5000000000000.00"), Decimal("5000000000000.00")]},
         schema={"x": pl.Decimal(15, 2)},
     )
     assert df.select(pl.sum("x")).collect_schema()["x"] == pl.Decimal(38, 2)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a") * pl.col("b") + pl.col("c"),
+        pl.col("a") - pl.col("b") * pl.col("c"),
+        pl.col("a") * pl.col("b") - pl.col("c"),
+    ],
+    ids=["fma", "fsm", "fms"],
+)
+def test_fused_arithmetic(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    # fma: fused multiply add
+    # fsm: fused subtract multiply
+    # fms: fused multiply subtract
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [10, 20, 30], "c": [5, 5, 5]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)

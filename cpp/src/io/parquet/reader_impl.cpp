@@ -189,8 +189,7 @@ void reader_impl::decode_page_data(read_mode mode, size_t skip_rows, size_t num_
     std::fill(
       host_offsets_vector.begin(), host_offsets_vector.end(), std::numeric_limits<size_t>::max());
     // Initialize the initial string offsets vector from the host vector
-    initial_str_offsets =
-      cudf::detail::make_device_uvector_async(host_offsets_vector, _stream, _mr);
+    initial_str_offsets = cudf::detail::make_device_uvector(host_offsets_vector, _stream, _mr);
     chunk_nested_str_data.host_to_device_async(_stream);
   }
 

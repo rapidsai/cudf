@@ -428,6 +428,7 @@ void persisted_statistics::persist(int num_table_rows,
         offsets.data(),
         intermediate_stats.stripe_stat_chunks.data(),
         intermediate_stats.stripe_stat_merge.device_ptr());
+      CUDF_CUDA_TRY(cudaGetLastError());
       string_pools.emplace_back(std::move(string_pool));
     }
   }
@@ -2299,16 +2300,21 @@ stripe_dictionaries build_dictionaries(orc_table_view& orc_table,
           std::move(dict_order_owner)};
 }
 
+struct stripe_stream_size_less {
+  __device__ bool operator()(stripe_stream const& lhs, stripe_stream const& rhs) const
+  {
+    return lhs.stream_size < rhs.stream_size;
+  }
+};
+
 [[nodiscard]] uint32_t find_largest_stream_size(device_2dspan<stripe_stream const> ss,
                                                 rmm::cuda_stream_view stream)
 {
-  auto const longest_stream = thrust::max_element(
-    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-    ss.data(),
-    ss.data() + ss.count(),
-    cuda::proclaim_return_type<bool>([] __device__(auto const& lhs, auto const& rhs) {
-      return lhs.stream_size < rhs.stream_size;
-    }));
+  auto const longest_stream =
+    thrust::max_element(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                        ss.data(),
+                        ss.data() + ss.count(),
+                        stripe_stream_size_less{});
 
   auto const h_longest_stream =
     cudf::detail::make_host_vector(device_span<stripe_stream const>{longest_stream, 1}, stream);

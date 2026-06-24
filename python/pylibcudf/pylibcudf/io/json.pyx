@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -49,6 +49,7 @@ from pylibcudf.utils cimport _get_stream
 from cython.operator import dereference
 
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "chunked_read_json",
@@ -704,7 +705,7 @@ cdef class JsonReaderOptionsBuilder:
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size=100_000_000,
-    Stream stream = None,
+    object stream = None,
     DeviceMemoryResource mr = None,
 ):
     """
@@ -735,6 +736,7 @@ cpdef tuple chunked_read_json(
     child_names = None
     i = 0
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
     while True:
         options.enable_lines(True)
@@ -743,7 +745,7 @@ cpdef tuple chunked_read_json(
 
         try:
             with nogil:
-                c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
+                c_result = move(cpp_read_json(options.c_obj, _cs, mr.get_mr()))
         except (ValueError, OverflowError):
             break
         if meta_names is None:
@@ -772,7 +774,7 @@ cpdef tuple chunked_read_json(
 
 cpdef TableWithMetadata read_json(
     JsonReaderOptions options,
-    Stream stream = None,
+    object stream = None,
     DeviceMemoryResource mr = None
 ):
     """
@@ -797,9 +799,10 @@ cpdef TableWithMetadata read_json(
     """
     cdef table_with_metadata c_result
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, s.view(), mr.get_mr()))
+        c_result = move(cpp_read_json(options.c_obj, _cs, mr.get_mr()))
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 
@@ -810,7 +813,7 @@ cpdef TableWithMetadata read_json_from_string_column(
     list dtypes = None,
     compression_type compression = compression_type.NONE,
     json_recovery_mode_t recovery_mode = json_recovery_mode_t.RECOVER_WITH_NULL,
-    Stream stream = None,
+    object stream = None,
     DeviceMemoryResource mr = None
 ):
     """
@@ -852,7 +855,8 @@ cpdef TableWithMetadata read_json_from_string_column(
     cdef unique_ptr[column] c_join_string_column
     cdef column_contents c_contents
     cdef table_with_metadata c_result
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
     # Join the string column into a single string
@@ -862,7 +866,7 @@ cpdef TableWithMetadata read_json_from_string_column(
                 input.view(),
                 dereference(c_separator),
                 dereference(c_narep),
-                stream.view(),
+                _cs,
                 mr.get_mr()
             )
         )
@@ -870,7 +874,7 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Create a new source from the joined string data
     cdef SourceInfo joined_source = SourceInfo(
-            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), stream, mr)])
+            [DeviceBuffer.c_from_unique_ptr(move(c_contents.data), _stream, mr)])
 
     # Create new options using the joined string as source
     cdef JsonReaderOptions options = (
@@ -886,9 +890,9 @@ cpdef TableWithMetadata read_json_from_string_column(
 
     # Read JSON from the joined string
     with nogil:
-        c_result = move(cpp_read_json(options.c_obj, stream.view(), mr.get_mr()))
+        c_result = move(cpp_read_json(options.c_obj, _cs, mr.get_mr()))
 
-    return TableWithMetadata.from_libcudf(c_result, stream, mr)
+    return TableWithMetadata.from_libcudf(c_result, _stream, mr)
 
 cdef class JsonWriterOptions:
     """
@@ -1090,7 +1094,7 @@ cdef class JsonWriterOptionsBuilder:
         return json_options
 
 
-cpdef void write_json(JsonWriterOptions options, Stream stream = None):
+cpdef void write_json(JsonWriterOptions options, object stream = None):
     """
     Writes a set of columns to JSON format.
 
@@ -1106,8 +1110,9 @@ cpdef void write_json(JsonWriterOptions options, Stream stream = None):
     None
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        cpp_write_json(options.c_obj, s.view())
+        cpp_write_json(options.c_obj, _cs)
 
 cpdef bool is_supported_write_json(DataType type):
     """Check if the dtype is supported for JSON writing

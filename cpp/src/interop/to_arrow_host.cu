@@ -90,6 +90,7 @@ struct dispatch_to_arrow_host {
                             : column.null_mask(),
       bitmap->buffer.size_bytes,
       stream));
+    stream.synchronize();  // ensures the bitmap is not destroyed before the copy is completed
     return NANOARROW_OK;
   }
 

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from cudf_polars.dsl.expressions.aggregation import Agg
 from cudf_polars.dsl.expressions.base import (
-    AggInfo,
     Col,
     ColRef,
     ErrorExpr,
@@ -37,7 +36,6 @@ from cudf_polars.dsl.expressions.unary import Cast, Len, UnaryFunction
 
 __all__ = [
     "Agg",
-    "AggInfo",
     "BinOp",
     "BooleanFunction",
     "Cast",

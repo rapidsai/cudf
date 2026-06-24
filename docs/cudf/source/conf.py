@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # cudf documentation build configuration file, created by
@@ -82,7 +82,7 @@ extensions = [
     "myst_nb",
 ]
 
-remove_from_toctrees = ["user_guide/api_docs/api/*"]
+remove_from_toctrees = ["cudf/api_docs/api/*"]
 
 
 # Preprocess doxygen xml for compatibility with latest Breathe
@@ -231,7 +231,7 @@ html_theme_options = {
     "github_url": "https://github.com/rapidsai/cudf",
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
-    "navbar_align": "right",
+    "navbar_align": "content",
     "navigation_with_keys": True,
 }
 include_pandas_compat = True
@@ -327,7 +327,7 @@ intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),
     # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
     # "pandas": (
-    #     "https://pandas.pydata.org/pandas-docs/version/2.3.3/",
+    #     "https://pandas.pydata.org/pandas-docs/stable/",
     #     None,
     # ),
     "polars": ("https://docs.pola.rs/api/python/stable/", None),
@@ -625,17 +625,49 @@ nitpick_ignore = [
     ("py:class", "Axis"),
     ("py:class", "ArrowLike"),
     ("py:class", "ExecutorType"),
+    ("py:class", "ArrowIntervalType"),
+    # cudf-polars: bare rapidsmpf type names appear in autodoc'd signatures
+    # because they are imported under ``if TYPE_CHECKING:`` and rendered as
+    # unqualified strings in type annotations. The ``rapidsmpf.*`` regex below
+    # only matches fully qualified targets, so the bare leaf names are listed
+    # explicitly here.
+    ("py:class", "Statistics"),
+    ("py:class", "Communicator"),
+    ("py:class", "Options"),
+    # polars aliases that don't match the public intersphinx targets.
+    ("py:class", "pl.DataFrame"),
+    ("py:class", "polars.LazyFrame"),
+    ("py:class", "polars.DataFrame"),
+    ("py:class", "polars.dataframe.frame.DataFrame"),
 ]
 # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
 nitpick_ignore_regex = [
     ("py:.*", "pandas.*"),
     ("py:.*", "pd.*"),
     ("ref.*", ".*pandas.*"),
+    # External libs without configured intersphinx inventories.
+    ("py:.*", r"rapidsmpf(\..*)?"),
+    ("py:.*", r"ray(\..*)?"),
+    ("py:.*", r"distributed(\..*)?"),
+    ("py:.*", r"dask_cuda(\..*)?"),
 ]
 
 
 # Needed for the [source] button on the API docs to link to the github code
 # based on pandas doc/source/conf.py
+_python_source_roots = {
+    "cudf": "python/cudf/cudf",
+    "cudf_kafka": "python/cudf_kafka/cudf_kafka",
+    "cudf_polars": "python/cudf_polars/cudf_polars",
+    "cudf_streaming": "python/cudf_streaming/cudf_streaming",
+    "custreamz": "python/custreamz/custreamz",
+    "dask_cudf": "python/dask_cudf/dask_cudf",
+    "libcudf": "python/libcudf/libcudf",
+    "libcudf_streaming": "python/libcudf_streaming/libcudf_streaming",
+    "pylibcudf": "python/pylibcudf/pylibcudf",
+}
+
+
 def linkcode_resolve(domain, info) -> str | None:
     """
     Determine the URL corresponding to Python object
@@ -685,10 +717,17 @@ def linkcode_resolve(domain, info) -> str | None:
     else:
         linespec = ""
 
-    fn = os.path.relpath(fn, start=os.path.dirname(cudf.__file__))
+    pkg_name = modname.partition(".")[0]
+    source_path = _python_source_roots.get(pkg_name)
+    pkg = sys.modules.get(pkg_name)
+    pkg_file = getattr(pkg, "__file__", None)
+    if source_path is None or pkg_file is None:
+        return None
+
+    fn = os.path.relpath(fn, start=os.path.dirname(pkg_file))
     return (
         f"https://github.com/rapidsai/cudf/blob/"
-        f"{RAPIDS_BRANCH}/python/cudf/cudf/{fn}{linespec}"
+        f"{RAPIDS_BRANCH}/{source_path}/{fn}{linespec}"
     )
 
 

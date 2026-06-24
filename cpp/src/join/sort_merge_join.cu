@@ -42,7 +42,6 @@
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/tabulate_output_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/transform.h>
 #include <thrust/unique.h>
@@ -233,8 +232,8 @@ merge<LargerIterator, SmallerIterator>::matches_per_row(rmm::cuda_stream_view st
                       comparator);
 
   auto match_counts_update_it =
-    thrust::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
-                                       size_type idx, size_type val) { match_counts[idx] -= val; });
+    cuda::tabulate_output_iterator([match_counts = match_counts.begin()] __device__(
+                                     size_type idx, size_type val) { match_counts[idx] -= val; });
   thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       smaller_it,
                       smaller_it + smaller_numrows,
@@ -319,10 +318,10 @@ merge<LargerIterator, SmallerIterator>::inner(rmm::cuda_stream_view stream,
 
   {
     auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-    auto smaller_tabulate_it = thrust::tabulate_output_iterator(
+    auto smaller_tabulate_it = cuda::tabulate_output_iterator(
       [nonzero_matches = nonzero_matches.begin(),
        match_offsets   = match_offsets.begin(),
-       smaller_indices = smaller_indices.begin()] __device__(auto idx, auto lb) {
+       smaller_indices = smaller_indices.begin()] __device__(size_type idx, size_type lb) {
         auto const lhs_idx   = nonzero_matches[idx];
         auto const pos       = match_offsets[lhs_idx];
         smaller_indices[pos] = lb;
@@ -469,11 +468,11 @@ merge<LargerIterator, SmallerIterator>::left(rmm::cuda_stream_view stream,
 
   {
     auto const comparator    = tt_comparator->less<true>(nullate::DYNAMIC{has_nulls});
-    auto smaller_tabulate_it = thrust::tabulate_output_iterator(
+    auto smaller_tabulate_it = cuda::tabulate_output_iterator(
       [nonzero_matches = nonzero_matches.begin(),
        match_offsets   = match_offsets.begin(),
-       smaller_indices = smaller_indices.begin() + left_join_only_matches] __device__(auto idx,
-                                                                                      auto lb) {
+       smaller_indices =
+         smaller_indices.begin() + left_join_only_matches] __device__(size_type idx, size_type lb) {
         auto const lhs_idx   = nonzero_matches[idx];
         auto const pos       = match_offsets[lhs_idx];
         smaller_indices[pos] = lb;
@@ -903,6 +902,7 @@ sort_merge_join::left_join(table_view const& left,
         sizes[1]   = preprocessed_right_indices->size();
 
         batched_copy(input_iterators.begin(), output_iterators.begin(), sizes.begin(), 2, stream);
+        stream.synchronize();  // ensures the vectors are not destroyed before the copy is completed
       }
 
       // Append filtered null rows with JoinNoMatch for right side

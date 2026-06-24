@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -27,9 +27,12 @@ from cudf.core.column.column import (
     same_dtype_policy,
 )
 from cudf.core.column.numerical_base import NumericalBaseColumn
+from cudf.core.dtype.validators import (
+    is_dtype_obj_string,
+)
 from cudf.core.mixins import BinaryOperand
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
+    DEFAULT_STRING_DTYPE,
     cudf_dtype_from_pa_type,
     cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
@@ -84,7 +87,7 @@ if TYPE_CHECKING:
         DtypeObj,
         ScalarLike,
     )
-    from cudf.core.column import DecimalBaseColumn
+    from cudf.core.column import DecimalColumn
     from cudf.core.column.datetime import DatetimeColumn
     from cudf.core.column.string import StringColumn
     from cudf.core.column.timedelta import TimeDeltaColumn
@@ -99,11 +102,7 @@ class NumericalColumn(NumericalBaseColumn):
     @property
     def _PANDAS_NA_VALUE(self) -> ScalarLike:
         """Float columns return np.nan as NA value in pandas compatibility mode."""
-        if (
-            cudf.get_option("mode.pandas_compatible")
-            and self.dtype.kind == "f"
-            and not is_pandas_nullable_extension_dtype(self.dtype)
-        ):
+        if self.dtype.kind == "f" and isinstance(self.dtype, np.dtype):
             return np.nan
         return super()._PANDAS_NA_VALUE
 
@@ -127,6 +126,24 @@ class NumericalColumn(NumericalBaseColumn):
                 nan_as_null=not cudf.get_option("mode.pandas_compatible"),
             ),
         ).any()
+
+    def dropna(self) -> Self:
+        if self.has_nulls(include_nan=True):
+            with self.access(mode="read", scope="internal") as accessed:
+                plc_table = plc.Table([accessed.plc_column])
+                plc_result = plc.stream_compaction.drop_nulls(
+                    plc_table, [0], 1
+                )
+                if self.dtype.kind == "f":
+                    plc_result = plc.stream_compaction.drop_nans(
+                        plc_result, [0], 1
+                    )
+            return cast(
+                "Self",
+                ColumnBase.create(plc_result.columns()[0], dtype=self.dtype),
+            )
+        else:
+            return self.copy()
 
     @property
     def values(self) -> cp.ndarray:
@@ -245,7 +262,25 @@ class NumericalColumn(NumericalBaseColumn):
 
     def _cast_setitem_value(self, value: Any) -> plc.Scalar | ColumnBase:
         if is_scalar(value):
-            if value is cudf.NA or value is None:
+            nan_value = isinstance(value, float) and np.isnan(value)
+            pandas_compatible = cudf.get_option("mode.pandas_compatible")
+            # Only treat ``np.nan`` as null in pandas-compatible mode. In
+            # legacy cudf mode, ``np.nan`` is stored as the float value
+            # ``nan`` in the data buffer (no null mask). Changing this
+            # silently turns any ``loc[...] = np.nan`` assignment into a
+            # masked-null, which breaks consumers that read the raw data
+            # buffer (e.g. the ``engine="jit"`` groupby kernel).
+            if (
+                value is cudf.NA
+                or value is None
+                or (nan_value and pandas_compatible)
+            ):
+                if self.dtype.kind == "b" and pandas_compatible:
+                    # pandas raises TypeError when setting a null into bool
+                    # because bool dtype cannot hold NA without dtype change.
+                    raise TypeError(
+                        f"Invalid value '{value}' for dtype '{self.dtype}'"
+                    )
                 scalar = pa.scalar(
                     None, type=cudf_dtype_to_pa_type(self.dtype)
                 )
@@ -263,6 +298,14 @@ class NumericalColumn(NumericalBaseColumn):
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
                 )
+            if pa.types.is_temporal(scalar.type):
+                # Reject datetime64/timedelta64 scalars (including NaT)
+                # assigned into a numeric column. pyarrow would otherwise
+                # silently cast timestamp[ns]/duration[ns] to int64 via the
+                # underlying integer representation.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
             return pa_scalar_to_plc_scalar(
                 scalar.cast(cudf_dtype_to_pa_type(self.dtype))
             )
@@ -271,6 +314,24 @@ class NumericalColumn(NumericalBaseColumn):
             if col.dtype.kind == "b" and self.dtype.kind != "b":
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
+                )
+            if col.dtype.kind in "mM":
+                # See the temporal-scalar rejection above: assigning a
+                # datetime64/timedelta64 array into a numeric column is
+                # invalid.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
+            if (
+                cudf.get_option("mode.pandas_compatible")
+                and self.dtype.kind in {"i", "u"}
+                and col.dtype.kind == "f"
+                and not col.can_cast_safely(self.dtype)
+            ):
+                # pandas rejects float→int assignment when values can't be
+                # losslessly cast.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
                 )
             return col.astype(self.dtype)
 
@@ -363,16 +424,93 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(other, pa.Scalar)
             else other.dtype
         )
-        if isinstance(self.dtype, pd.ArrowDtype) or isinstance(
-            other_cudf_dtype, pd.ArrowDtype
-        ):
+        self_is_arrow = isinstance(self.dtype, pd.ArrowDtype)
+        other_is_arrow = isinstance(other_cudf_dtype, pd.ArrowDtype)
+        if self_is_arrow or other_is_arrow:
             if op == "__mod__":
                 raise NotImplementedError("ArrowDtype does not support modulo")
-            if op == "__truediv__":
-                if self.dtype.kind == "b" or other_cudf_dtype.kind == "b":
-                    raise TypeError(
-                        "ArrowDtype boolean division is not supported"
+            # pyarrow.compute raises ArrowInvalid for integer divide by zero in
+            # floordiv. Mirror that behavior for ArrowDtype operands instead of
+            # silently returning inf via float promotion.
+            if op == "__floordiv__":
+                divisor = self if reflect else other
+                divisor_dtype = self.dtype if reflect else other_cudf_dtype
+                if divisor_dtype.kind in "iu" and (
+                    (isinstance(divisor, NumericalColumn) and 0 in divisor)
+                    or (
+                        isinstance(divisor, pa.Scalar) and divisor.as_py() == 0
                     )
+                ):
+                    raise pa.ArrowInvalid("divide by zero")
+            # pyarrow.compute.subtract_checked raises ArrowInvalid on overflow
+            # for unsigned integer subtraction. Mirror that for ArrowDtype, but
+            # only when both operands are unsigned: a Python int operand is
+            # promoted to signed int64, so the subtraction is no longer
+            # unsigned and cannot underflow.
+            if (
+                op == "__sub__"
+                and self_is_arrow
+                and self.dtype.kind == "u"
+                and other_is_arrow
+                and other_cudf_dtype.kind == "u"
+            ):
+                actual_lhs = other if reflect else self
+                actual_rhs = self if reflect else other
+                overflow = False
+                if isinstance(actual_lhs, NumericalColumn) and isinstance(
+                    actual_rhs, NumericalColumn
+                ):
+                    overflow = bool(
+                        actual_lhs._binaryop(actual_rhs, "__lt__").any()
+                    )
+                elif isinstance(actual_lhs, NumericalColumn) and isinstance(
+                    actual_rhs, pa.Scalar
+                ):
+                    if actual_rhs.is_valid:
+                        overflow = bool(
+                            actual_lhs._binaryop(
+                                actual_rhs.as_py(), "__lt__"
+                            ).any()
+                        )
+                elif isinstance(actual_lhs, pa.Scalar) and isinstance(
+                    actual_rhs, NumericalColumn
+                ):
+                    if actual_lhs.is_valid:
+                        overflow = bool(
+                            actual_rhs._binaryop(
+                                actual_lhs.as_py(), "__gt__"
+                            ).any()
+                        )
+                if overflow:
+                    raise pa.ArrowInvalid("overflow")
+            bool_unsupported_ops = {
+                "__add__",
+                "__radd__",
+                "__sub__",
+                "__rsub__",
+                "__mul__",
+                "__rmul__",
+                "__truediv__",
+                "__rtruediv__",
+                "__floordiv__",
+                "__rfloordiv__",
+                "__pow__",
+                "__rpow__",
+            }
+            if op in bool_unsupported_ops and (
+                (self_is_arrow and self.dtype.kind == "b")
+                or (other_is_arrow and other_cudf_dtype.kind == "b")
+            ):
+                # pandas raises TypeError for arithmetic on bool[pyarrow]:
+                # operation 'X' not supported for dtype 'bool[pyarrow]' ...
+                other_py = (
+                    other.as_py() if isinstance(other, pa.Scalar) else other
+                )
+                raise TypeError(
+                    f"operation '{op[2:-2]}' not supported for dtype "
+                    f"'bool[pyarrow]' with object of type "
+                    f"{type(other_py).__name__!r}"
+                )
 
         if out_dtype is None:
             out_dtype = find_common_type((self.dtype, other_cudf_dtype))
@@ -387,6 +525,29 @@ class NumericalColumn(NumericalBaseColumn):
                     out_dtype = get_dtype_of_same_kind(
                         out_dtype, np.dtype(np.float64)
                     )
+            # pandas pyarrow preserves the LHS dtype for integer floordiv
+            # rather than upcasting based on the operand widths. The LHS is
+            # `other` when the operation is reflected, otherwise `self`.
+            if (
+                op == "__floordiv__"
+                and self.dtype.kind in "iu"
+                and other_cudf_dtype.kind in "iu"
+            ):
+                lhs_is_arrow = other_is_arrow if reflect else self_is_arrow
+                if lhs_is_arrow:
+                    out_dtype = other_cudf_dtype if reflect else self.dtype
+            # For ArrowDtype integer + Python int (now a pa.Scalar with a
+            # pyarrow int type), pandas pyarrow promotes to int64[pyarrow]
+            # regardless of width. numpy promotion would instead pick float64
+            # for (uint64, int64); override to match pandas pyarrow.
+            elif (
+                self_is_arrow
+                and self.dtype.kind in "iu"
+                and isinstance(other, pa.Scalar)
+                and other_cudf_dtype.kind in "iu"
+                and op in {"__add__", "__sub__", "__mul__", "__pow__"}
+            ):
+                out_dtype = pd.ArrowDtype(pa.int64())
 
         if op in {"__and__", "__or__", "__xor__"}:
             if self.dtype.kind == "f" or other_cudf_dtype.kind == "f":
@@ -431,6 +592,11 @@ class NumericalColumn(NumericalBaseColumn):
                 and rhs_dtype.kind == "f"
                 and isinstance(rhs, NumericalColumn)
             ):
+                rhs = rhs.nans_to_nulls()
+        if op in cmp_ops and is_pandas_nullable_extension_dtype(out_dtype):
+            if lhs_dtype.kind == "f" and isinstance(lhs, NumericalColumn):
+                lhs = lhs.nans_to_nulls()
+            if rhs_dtype.kind == "f" and isinstance(rhs, NumericalColumn):
                 rhs = rhs.nans_to_nulls()
         lhs_binaryop: plc.Scalar | ColumnBase = (
             pa_scalar_to_plc_scalar(lhs) if isinstance(lhs, pa.Scalar) else lhs
@@ -510,7 +676,14 @@ class NumericalColumn(NumericalBaseColumn):
             cudf.get_option("mode.pandas_compatible")
             and op in cmp_ops
             and not is_pandas_nullable_extension_dtype(self.dtype)
+            and self.dtype.kind != "b"
         ):
+            # For numeric dtypes, pandas converts nulls to NaN and the
+            # comparison follows NumPy semantics (NaN == anything is False,
+            # NaN != anything is True). Fill so we match that. Bool dtype
+            # is excluded: a nullable cudf bool column maps to pandas'
+            # ``boolean`` extension dtype, which preserves nulls in
+            # comparisons.
             res = res.fillna(op == "__ne__")
         return res
 
@@ -521,7 +694,7 @@ class NumericalColumn(NumericalBaseColumn):
             plc.transform.column_nans_to_nulls,
             same_dtype_policy,
         ).execute_with_args(self)
-        return cast(Self, result)
+        return cast("Self", result)
 
     def _normalize_binop_operand(self, other: Any) -> pa.Scalar | ColumnBase:
         if isinstance(other, ColumnBase):
@@ -541,9 +714,10 @@ class NumericalColumn(NumericalBaseColumn):
 
         if is_scalar(other):
             if is_na_like(other):
-                if isinstance(
-                    other, (np.datetime64, np.timedelta64)
-                ) and np.isnat(other):
+                if other is pd.NaT or (
+                    isinstance(other, (np.datetime64, np.timedelta64))
+                    and np.isnat(other)
+                ):
                     return NotImplemented
                 return pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
             if not isinstance(other, (int, float, complex)):
@@ -567,9 +741,15 @@ class NumericalColumn(NumericalBaseColumn):
             #   => np.int64
             if is_pandas_nullable_extension_dtype(self.dtype):
                 if isinstance(self.dtype, pd.ArrowDtype):
-                    common_dtype = cudf.utils.dtypes.find_common_type(
-                        [self.dtype, other]
-                    )
+                    if self.dtype.kind in "iu" and type(other) is int:
+                        # pandas pyarrow treats a Python int as int64 when
+                        # combined with an ArrowDtype integer column, so the
+                        # promoted scalar type is int64 regardless of width.
+                        common_dtype = pd.ArrowDtype(pa.int64())
+                    else:
+                        common_dtype = cudf.utils.dtypes.find_common_type(
+                            [self.dtype, other]
+                        )
                 else:
                     common_dtype = get_dtype_of_same_kind(
                         self.dtype,
@@ -577,7 +757,7 @@ class NumericalColumn(NumericalBaseColumn):
                     )
             else:
                 common_dtype = np.result_type(self.dtype, other)  # noqa: TID251
-            if common_dtype.kind in {"b", "i", "u", "f"}:  # type: ignore[union-attr]
+            if common_dtype.kind in {"b", "i", "u", "f"}:
                 if self.dtype.kind == "b" and not isinstance(other, bool):
                     common_dtype = min_signed_type(other)
                 return pa.scalar(
@@ -592,7 +772,7 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype != np.dtype(np.uint32):
             raise TypeError("Only uint32 type can be converted to ip")
         return cast(
-            cudf.core.column.string.StringColumn,
+            "cudf.core.column.string.StringColumn",
             PylibcudfFunction(
                 plc.strings.convert.convert_ipv4.integers_to_ipv4,
                 pylibcudf_result_dtype_policy,
@@ -614,8 +794,8 @@ class NumericalColumn(NumericalBaseColumn):
             dtype = np.dtype("object")
         if len(self) == 0:
             return cast(
-                cudf.core.column.StringColumn,
-                column_empty(0, dtype=CUDF_STRING_DTYPE),
+                "cudf.core.column.StringColumn",
+                column_empty(0, dtype=DEFAULT_STRING_DTYPE),
             )
 
         conv_func: Callable[[plc.Column], plc.Column]
@@ -643,7 +823,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         with col.access(mode="read", scope="internal"):
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 ColumnBase.create(conv_func(col.plc_column), dtype),
             )
 
@@ -661,17 +841,17 @@ class NumericalColumn(NumericalBaseColumn):
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         return cast(
-            cudf.core.column.datetime.DatetimeColumn,
+            "cudf.core.column.datetime.DatetimeColumn",
             ColumnBase.create(self._as_temporal_column(dtype), dtype),
         )
 
     def as_timedelta_column(self, dtype: np.dtype) -> TimeDeltaColumn:
         return cast(
-            cudf.core.column.timedelta.TimeDeltaColumn,
+            "cudf.core.column.timedelta.TimeDeltaColumn",
             ColumnBase.create(self._as_temporal_column(dtype), dtype),
         )
 
-    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalColumn:
         return self.cast(dtype=dtype)  # type: ignore[return-value]
 
     def as_numerical_column(self, dtype: DtypeObj) -> NumericalColumn:
@@ -747,7 +927,7 @@ class NumericalColumn(NumericalBaseColumn):
         return self.isnan().sum()
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         try:
             lhs, rhs = super()._process_values_for_isin(values)
@@ -758,7 +938,7 @@ class NumericalColumn(NumericalBaseColumn):
                 return super()._process_values_for_isin(values.tolist())
             else:
                 raise
-        if lhs.dtype != rhs.dtype and rhs.dtype != CUDF_STRING_DTYPE:
+        if lhs.dtype != rhs.dtype and not is_dtype_obj_string(rhs.dtype):
             if rhs.can_cast_safely(lhs.dtype):
                 rhs = rhs.astype(lhs.dtype)
             elif lhs.can_cast_safely(rhs.dtype):
@@ -952,7 +1132,7 @@ class NumericalColumn(NumericalBaseColumn):
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
 
-                return (min_ >= lower_) and (col.max() < upper_)
+                return (min_ >= lower_) and (col.max() <= upper_)
 
         # want to cast int to uint
         elif self_dtype_numpy.kind == "i" and to_dtype_numpy.kind == "u":
@@ -960,7 +1140,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(to_dtype_numpy).max
 
             return (self.min() >= 0) and (
-                (i_max_ <= u_max_) or (self.max() < u_max_)
+                (i_max_ <= u_max_) or (self.max() <= u_max_)
             )
 
         # want to cast uint to int
@@ -968,7 +1148,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(self_dtype_numpy).max
             i_max_ = np.iinfo(to_dtype_numpy).max
 
-            return (u_max_ <= i_max_) or (self.max() < i_max_)
+            return (u_max_ <= i_max_) or (self.max() <= i_max_)
 
         # want to cast int to float
         elif (
@@ -1014,6 +1194,10 @@ class NumericalColumn(NumericalBaseColumn):
                 return self.dtype
             elif self.dtype.kind == "u":
                 return np.dtype("uint64")
+            elif self.dtype.kind == "b" and isinstance(
+                self.dtype, pd.ArrowDtype
+            ):
+                return np.dtype("uint64")
             return np.dtype("int64")
         elif reduction_op == "sum_of_squares":
             return find_common_type((self.dtype, np.dtype(np.uint64)))
@@ -1050,7 +1234,7 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError("`bins` cannot contain null entries.")
 
         return cast(
-            Self,
+            "Self",
             PylibcudfFunction(
                 getattr(
                     plc.search,
