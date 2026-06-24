@@ -151,6 +151,27 @@ fetch_byte_ranges_to_device_async(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Fetches Parquet bloom filter bitsets from a datasource into device buffers
+ *
+ * @ingroup io_utils
+ *
+ * @param datasource Input datasource
+ * @param bloom_filter_byte_ranges Byte ranges of complete bloom filters to fetch, must span a complete bloom filter
+ * @param stream CUDA stream
+ * @param mr Device memory resource
+ *
+ * @return A tuple containing the device buffers, the device spans of the bitset data (one per input
+ * range; empty for ranges without a bloom filter), and a future to wait on the read tasks
+ */
+std::tuple<std::vector<rmm::device_buffer>,
+           std::vector<cudf::device_span<uint8_t const>>,
+           std::future<void>>
+fetch_bloom_filters_to_device_async(cudf::io::datasource& datasource,
+                                    cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::device_async_resource_ref mr);
+
 /** @} */  // end of group
 }  // namespace io::parquet
 }  // namespace CUDF_EXPORT cudf

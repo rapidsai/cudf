@@ -15,10 +15,12 @@
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -141,6 +143,22 @@ struct surviving_row_group_metrics {
   std::optional<size_type> after_stats_filter;  // number of surviving row groups after stats filter
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
+
+/**
+ * @brief Upper bound on the size in bytes of a Parquet `BloomFilterHeader`
+ */
+inline constexpr int64_t bloom_filter_header_max_size = 256;
+
+/**
+ * @brief Parses and validates a Parquet `BloomFilterHeader` from the front of `bytes`
+ *
+ * @param bytes Host bytes starting at the beginning of a bloom filter (header followed by bitset)
+ *
+ * @return A pair of the bloom filter header size and the bitset size in bytes, or `std::nullopt`
+ * if the header is missing or unsupported
+ */
+[[nodiscard]] std::optional<std::pair<int64_t, std::size_t>> parse_bloom_filter_header(
+  host_span<uint8_t const> bytes);
 
 class aggregate_reader_metadata {
  protected:

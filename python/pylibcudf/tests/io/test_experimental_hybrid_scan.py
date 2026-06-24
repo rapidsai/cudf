@@ -252,10 +252,6 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
     assert isinstance(dict_ranges, list)
 
 
-@pytest.mark.xfail(
-    reason="hybrid scan does not strip the Parquet BloomFilterHeader before probing",
-    strict=True,
-)
 @pytest.mark.parametrize(
     "fixture_name,column_name,query_value",
     [
@@ -277,7 +273,8 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet(
     """A/B test hybrid scan bloom filtering vs read_parquet.
 
     A: read_parquet path (libcudf strips the BloomFilterHeader before probing)
-    B: hybrid-scan path (fetches BloomFilterHeader + bitset from secondary_filters_byte_ranges)
+    B: hybrid-scan path (fetch_bloom_filters_to_device_async strips the header,
+       returning header-free, 32-byte-aligned bitsets)
 
     The hybrid path must keep the same row groups as read_parquet.
     """
@@ -336,8 +333,8 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet(
 
     # B: hybrid scan should keep the same row group.
     print(
-        "[bloom-demo] B: hybrid-scan path (fetches "
-        "BloomFilterHeader + bitset from secondary_filters_byte_ranges)",
+        "[bloom-demo] B: hybrid-scan path "
+        "(fetch_bloom_filters_to_device_async strips the header)",
         flush=True,
     )
     options = make_options()
@@ -358,13 +355,16 @@ def test_hybrid_scan_bloom_filter_matches_read_parquet(
         )
 
     stream = plc.utils._get_stream(None)
-    bloom_data = [
-        plc.gpumemoryview(
-            rmm.DeviceBuffer.to_device(data[r.offset : r.offset + r.size], stream)
-        )
-        for r in bloom_ranges
-    ]
+    # The fix: fetch header-stripped, 32-byte-aligned bitsets via the IO helper
+    # (this is what the C++ hybrid-scan callers now use), instead of copying the
+    # whole BloomFilterHeader+bitset range to device.
+    bloom_data = plc.io.experimental.hybrid_scan.fetch_bloom_filters_to_device_async(
+        plc.io.SourceInfo([io.BytesIO(data)]), bloom_ranges, stream
+    )
     synchronize_stream(None)
+    # The bloom filter probe requires 32-byte-aligned bitsets.
+    for bitset in bloom_data:
+        assert bitset.ptr % 32 == 0
     surviving = reader.filter_row_groups_with_bloom_filters(
         bloom_data, row_groups, options
     )

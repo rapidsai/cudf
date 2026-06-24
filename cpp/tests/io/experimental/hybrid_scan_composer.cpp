@@ -104,13 +104,10 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
   std::vector<cudf::size_type> bloom_filtered_row_group_indices;
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (bloom_filter_byte_ranges.size()) {
-    // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
-    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
-                                                        bloom_filter_alignment);
-
+    // Fetch the header-stripped, 32-byte-aligned bloom filter bitsets from the input file
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
-      cudf::io::parquet::fetch_byte_ranges_to_device_async(
-        datasource, bloom_filter_byte_ranges, stream, aligned_mr);
+      cudf::io::parquet::fetch_bloom_filters_to_device_async(
+        datasource, bloom_filter_byte_ranges, stream, mr);
     bloom_read_tasks.get();
 
     // Filter row groups with bloom filters

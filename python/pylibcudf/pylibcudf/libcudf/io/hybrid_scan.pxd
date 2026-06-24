@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from libc.stddef cimport size_t
 from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -9,6 +10,7 @@ from libcpp.vector cimport vector
 from pylibcudf.exception_handler cimport libcudf_exception_handler
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
+from pylibcudf.libcudf.io.datasource cimport datasource
 from pylibcudf.libcudf.io.parquet cimport parquet_reader_options
 from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData
 from pylibcudf.libcudf.io.text cimport byte_range_info
@@ -16,11 +18,14 @@ from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 from cuda.bindings.cyruntime cimport cudaStream_t
+from rmm.librmm.cuda_stream_view cimport cuda_stream_view
+from rmm.librmm.device_buffer cimport device_buffer
 from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 ctypedef const uint8_t const_uint8_t
 ctypedef const size_type const_size_type
 ctypedef const device_span[const_uint8_t] const_device_span_const_uint8_t
+ctypedef const byte_range_info const_byte_range_info
 
 cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         namespace "cudf::io::parquet::experimental" nogil:
@@ -173,3 +178,41 @@ cdef extern from "cudf/io/experimental/hybrid_scan.hpp" \
         ) except +libcudf_exception_handler
 
         bool has_next_table_chunk() except +libcudf_exception_handler
+
+
+# Bloom filter fetch IO util (cudf/io/parquet_io_utils.hpp). Co-located here as
+# the hybrid scan flow is its only consumer. Binding the tuple/future return
+# requires a little std:: glue since there is no Cython precedent for either.
+cdef extern from "cudf/utilities/span.hpp" namespace "cudf" nogil:
+    cdef cppclass device_span_u8 "cudf::device_span<const uint8_t>":
+        const_uint8_t* data()
+        size_t size()
+
+
+cdef extern from "<future>" namespace "std" nogil:
+    cdef cppclass future_void "std::future<void>":
+        void get() except +libcudf_exception_handler
+
+
+cdef extern from "cudf/io/parquet_io_utils.hpp" namespace "cudf::io::parquet" nogil:
+    cdef cppclass bloom_filter_fetch_result "std::tuple<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<const uint8_t> >, std::future<void> >":  # noqa: E501
+        bloom_filter_fetch_result()
+
+    bloom_filter_fetch_result fetch_bloom_filters_to_device_async(
+        datasource& source,
+        host_span[const_byte_range_info] bloom_filter_byte_ranges,
+        cuda_stream_view stream,
+        device_async_resource_ref mr,
+    ) except +libcudf_exception_handler
+
+
+cdef extern from "<tuple>" namespace "std" nogil:
+    vector[device_buffer]& bloom_fetch_get_buffers "std::get<0>"(
+        bloom_filter_fetch_result& result
+    )
+    vector[device_span_u8]& bloom_fetch_get_spans "std::get<1>"(
+        bloom_filter_fetch_result& result
+    )
+    future_void& bloom_fetch_get_future "std::get<2>"(
+        bloom_filter_fetch_result& result
+    )

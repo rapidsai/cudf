@@ -33,6 +33,7 @@
 #include <future>
 #include <numeric>
 #include <optional>
+#include <utility>
 
 namespace cudf::io::parquet::detail {
 namespace {
@@ -305,7 +306,6 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
                                    cuco::extent<std::size_t>,
                                    cuco::thread_scope_thread,
                                    policy_type>::filter_block_type);
-  auto constexpr words_per_block = policy_type::words_per_block;
 
   // Read tasks for bloom filter data
   std::vector<std::future<std::size_t>> read_tasks;
@@ -323,39 +323,28 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
       // Read bloom filter iff present
       auto const bloom_filter_offset = bloom_filter_offsets[chunk].value();
 
-      // If Bloom filter size (header + bitset) is available, just read the entire thing.
-      // Else just read 256 bytes which will contain the entire header and may contain the
-      // entire bitset as well.
-      auto constexpr bloom_filter_size_guess = 256;
+      // If the bloom filter size (header + bitset) is available, read the entire thing. Else read
+      // the max header size, which contains the entire header and may contain the entire bitset.
       auto const initial_read_size =
-        static_cast<std::size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_size_guess));
+        static_cast<std::size_t>(bloom_filter_sizes[chunk].value_or(bloom_filter_header_max_size));
 
       // Read an initial buffer from source
       auto& source = sources[chunk_source_map[chunk]];
       auto buffer  = source->host_read(bloom_filter_offset, initial_read_size);
 
-      // Deserialize the Bloom filter header from the buffer.
-      BloomFilterHeader header;
-      CompactProtocolReader cp{buffer->data(), buffer->size()};
-      cp.read(&header);
-
-      // Check if the bloom filter header is valid.
-      auto const is_header_valid =
-        (header.num_bytes % words_per_block) == 0 and
-        header.compression.compression == BloomFilterCompression::UNCOMPRESSED and
-        header.algorithm.algorithm == BloomFilterAlgorithm::SPLIT_BLOCK and
-        header.hash.hash == BloomFilterHash::XXHASH;
+      // Deserialize and validate the bloom filter header from the buffer.
+      auto const header_info = parse_bloom_filter_header({buffer->data(), buffer->size()});
 
       // Do not read if the bloom filter is invalid
-      if (not is_header_valid) {
+      if (not header_info.has_value()) {
         bloom_filter_data[chunk] = {};
         CUDF_LOG_WARN("Encountered an invalid bloom filter header. Skipping");
         return;
       }
 
-      // Bloom filter header size
-      auto const bloom_filter_header_size = static_cast<int64_t>(cp.bytecount());
-      auto const bitset_size              = static_cast<std::size_t>(header.num_bytes);
+      // Bloom filter header and bitset sizes
+      auto const bloom_filter_header_size = header_info->first;
+      auto const bitset_size              = header_info->second;
 
       // Check if we already read in the filter bitset in the initial read.
       if (initial_read_size >= bloom_filter_header_size + bitset_size) {
@@ -405,6 +394,29 @@ void read_bloom_filter_data(host_span<std::unique_ptr<datasource> const> sources
 }
 
 }  // namespace
+
+std::optional<std::pair<int64_t, std::size_t>> parse_bloom_filter_header(
+  host_span<uint8_t const> bytes)
+{
+  using policy_type              = arrow_filter_policy<cuda::std::byte>;
+  auto constexpr words_per_block = policy_type::words_per_block;
+
+  // Deserialize the bloom filter header from the front of the buffer
+  BloomFilterHeader header;
+  CompactProtocolReader cp{bytes.data(), bytes.size()};
+  cp.read(&header);
+
+  // Check if the bloom filter header is valid
+  auto const is_header_valid =
+    (header.num_bytes % words_per_block) == 0 and
+    header.compression.compression == BloomFilterCompression::UNCOMPRESSED and
+    header.algorithm.algorithm == BloomFilterAlgorithm::SPLIT_BLOCK and
+    header.hash.hash == BloomFilterHash::XXHASH;
+  if (not is_header_valid) { return std::nullopt; }
+
+  return std::pair{static_cast<int64_t>(cp.bytecount()),
+                   static_cast<std::size_t>(header.num_bytes)};
+}
 
 std::size_t aggregate_reader_metadata::get_bloom_filter_alignment() const
 {
