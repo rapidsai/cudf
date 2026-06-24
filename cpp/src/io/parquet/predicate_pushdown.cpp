@@ -24,6 +24,7 @@
 
 #include <algorithm>
 #include <format>
+#include <functional>
 #include <numeric>
 #include <optional>
 #include <unordered_set>
@@ -136,37 +137,36 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
            stats.max.has_value() or stats.null_count.has_value();
   };
 
-  auto const find_colchunk = [](RowGroup const& row_group, int schema_idx) {
-    return std::find_if(row_group.columns.begin(),
-                        row_group.columns.end(),
-                        [schema_idx](ColumnChunk const& c) { return c.schema_idx == schema_idx; });
-  };
-
   // Iterate columns on the outside so a single offset caches the chunk position across sources
   for (auto const schema_idx : filter_column_schemas) {
-    std::optional<size_type> colchunk_offset;
+    std::optional<size_type> colchunk_offset{std::nullopt};
 
     for (size_t src_idx = 0; src_idx < input_row_group_indices.size(); ++src_idx) {
       auto const& row_group_indices = input_row_group_indices[src_idx];
       if (row_group_indices.empty()) { continue; }
 
-      auto const& first_row_group     = per_file_metadata[src_idx].row_groups[row_group_indices.front()];
-      auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
+      auto const& first_row_group =
+        per_file_metadata[src_idx].row_groups[row_group_indices.front()];
+      auto const num_col_chunks    = static_cast<size_type>(first_row_group.columns.size());
       auto const mapped_schema_idx = map_schema_index(schema_idx, static_cast<int>(src_idx));
       auto const cached_offset     = colchunk_offset.value_or(-1);
 
       if (cached_offset < 0 or cached_offset >= num_col_chunks or
-          row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
-        auto const it = find_colchunk(row_group, mapped_schema_idx);
-        CUDF_EXPECTS(it != row_group.columns.end(),
-                     std::format("Column chunk with schema index {} not found in source {}",
-                                 mapped_schema_idx,
-                                 src_idx),
-                     std::invalid_argument);
-        colchunk_offset = static_cast<size_type>(std::distance(row_group.columns.begin(), it));
+          first_row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
+        auto const it = std::find_if(
+          first_row_group.columns.begin(),
+          first_row_group.columns.end(),
+          [mapped_schema_idx](ColumnChunk const& c) { return c.schema_idx == mapped_schema_idx; });
+        CUDF_EXPECTS(
+          it != first_row_group.columns.end(),
+          std::format(
+            "Column chunk with schema index {} not found in source {}", mapped_schema_idx, src_idx),
+          std::invalid_argument);
+        colchunk_offset =
+          static_cast<size_type>(std::distance(first_row_group.columns.begin(), it));
       }
 
-      if (colchunk_has_stats(row_group.columns[colchunk_offset.value()])) { return true; }
+      if (colchunk_has_stats(first_row_group.columns[colchunk_offset.value()])) { return true; }
     }
   }
   return false;
@@ -198,7 +198,7 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                   output_column_schemas.end(),
                   stats_columns_mask.begin(),
                   std::back_inserter(filter_column_schemas),
-                  [](auto mask) { return mask; });
+                  std::identity{});
 
   // Skip building the stats table if no filter column carries usable row-group statistics.
   if (not any_row_group_stats_available(input_row_group_indices, filter_column_schemas)) {
