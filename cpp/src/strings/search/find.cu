@@ -411,8 +411,8 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
 
-  // Partition indices based on string length threshold (64 bytes)
-  size_type const length_threshold = 64;
+  // Partition indices based on string length threshold (128 bytes)
+  size_type const length_threshold = 128;
   rmm::device_uvector<size_type> indices(strings_count, stream);
   thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    indices.begin(),
