@@ -175,6 +175,8 @@ std::vector<std::vector<std::vector<size_type>>> hybrid_scan_multifile::construc
   cudf::host_span<std::vector<size_type> const> row_group_indices,
   std::size_t pass_read_limit) const
 {
+  CUDF_FUNC_RANGE();
+
   auto const total_row_groups =
     std::accumulate(row_group_indices.begin(),
                     row_group_indices.end(),
