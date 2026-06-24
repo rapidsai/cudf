@@ -27,6 +27,7 @@
 #include <cuda/std/functional>
 
 #include <concepts>
+#include <span>
 
 namespace cudf {
 
@@ -213,7 +214,7 @@ namespace {
 template <typename MakeWindows>
   requires(std::invocable<MakeWindows&>)
 std::unique_ptr<table> grouped_range_rolling_window_impl(table_view const& group_keys,
-                                                         host_span<rolling_request const> requests,
+                                                         std::span<rolling_request const> requests,
                                                          range_window_type preceding,
                                                          range_window_type following,
                                                          size_type orderby_size,
