@@ -35,13 +35,15 @@ def _pack_masked_result(builder, target_type, result_value, result_valid):
 
 
 class MaskedTypeModel(PrimitiveModel):
-    def __init__(self, dmm, fe_type):
-        value_mlir = dmm.lookup(fe_type.value_type).get_value_type()
-        valid_mlir = dmm.lookup(types.boolean).get_value_type()
-        be_type = llvm.StructType.new_identified(
-            fe_type.name, [value_mlir, valid_mlir]
+    def __init__(self, data_model_manager, masked_type):
+        value_mlir = data_model_manager.lookup(
+            masked_type.value_type
+        ).get_value_type()
+        valid_mlir = data_model_manager.lookup(types.boolean).get_value_type()
+        struct_type = llvm.StructType.new_identified(
+            masked_type.name, [value_mlir, valid_mlir]
         )
-        super().__init__(dmm, fe_type, be_type)
+        super().__init__(data_model_manager, masked_type, struct_type)
 
 
 def _lower_masked_constructor(builder, target, args, kwargs):
