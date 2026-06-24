@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,31 +31,6 @@
 #include <vector>
 
 namespace {
-
-/**
- * @brief Group flattened column chunk byte ranges by their corresponding sources
- */
-std::vector<std::vector<cudf::io::text::byte_range_info>> column_chunks_byte_ranges_per_source(
-  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
-    byte_ranges_and_source_map,
-  std::size_t num_sources)
-{
-  auto const& [byte_ranges, source_map] = byte_ranges_and_source_map;
-  CUDF_EXPECTS(byte_ranges.size() == source_map.size(), "Invalid source map size");
-
-  auto byte_ranges_per_source =
-    std::vector<std::vector<cudf::io::text::byte_range_info>>(num_sources);
-  std::for_each(byte_ranges.begin(),
-                byte_ranges.end(),
-                [&, range_index = std::size_t{0}](auto const& range) mutable {
-                  auto const source_index = source_map[range_index++];
-                  CUDF_EXPECTS(source_index >= 0 and static_cast<std::size_t>(source_index) <
-                                                       byte_ranges_per_source.size(),
-                               "Invalid byte range source index");
-                  byte_ranges_per_source[source_index].push_back(range);
-                });
-  return byte_ranges_per_source;
-}
 
 /**
  * @brief Helper to test multifile hybrid scan single-shot materialization
@@ -111,7 +86,7 @@ void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
   auto reader =
     cudf::io::parquet::experimental::hybrid_scan_multifile{inputs.footer_byte_spans, options};
   auto const row_groups             = reader.all_row_groups(options);
-  auto const byte_ranges_per_source = column_chunks_byte_ranges_per_source(
+  auto const byte_ranges_per_source = group_byte_ranges_by_source(
     reader.all_column_chunks_byte_ranges(row_groups, options), inputs.datasources.size());
   auto [column_chunk_buffers, column_chunks_per_source, tasks] =
     cudf::io::parquet::fetch_byte_ranges_to_device_async(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,11 +8,16 @@
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <memory>
+#include <utility>
 #include <vector>
 
 /**
@@ -76,4 +81,33 @@ inline void setup_page_indexes(cudf::io::parquet::experimental::hybrid_scan_mult
 
   reader.setup_page_indexes(
     cudf::host_span<cudf::host_span<uint8_t const> const>{page_index_byte_spans});
+}
+
+/**
+ * @brief Group flattened byte ranges by their corresponding source indices
+ *
+ * @param byte_ranges_and_source_map Pair of flattened byte ranges and their parallel source map
+ * @param num_sources Number of sources
+ * @return Vector of byte ranges, one inner vector per source
+ */
+inline std::vector<std::vector<cudf::io::text::byte_range_info>> group_byte_ranges_by_source(
+  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
+    byte_ranges_and_source_map,
+  std::size_t num_sources)
+{
+  auto const& [byte_ranges, source_map] = byte_ranges_and_source_map;
+  CUDF_EXPECTS(byte_ranges.size() == source_map.size(), "Invalid source map size");
+
+  auto byte_ranges_per_source =
+    std::vector<std::vector<cudf::io::text::byte_range_info>>(num_sources);
+  std::for_each(byte_ranges.begin(),
+                byte_ranges.end(),
+                [&, range_index = std::size_t{0}](auto const& range) mutable {
+                  auto const source_index = source_map[range_index++];
+                  CUDF_EXPECTS(source_index >= 0 and static_cast<std::size_t>(source_index) <
+                                                       byte_ranges_per_source.size(),
+                               "Invalid byte range source index");
+                  byte_ranges_per_source[source_index].push_back(range);
+                });
+  return byte_ranges_per_source;
 }

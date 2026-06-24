@@ -27,7 +27,6 @@
 
 #include <algorithm>
 #include <cstdint>
-#include <functional>
 #include <iterator>
 #include <memory>
 #include <numeric>
@@ -87,37 +86,6 @@ auto make_scalar(cudf::size_type value, rmm::cuda_stream_view stream)
 }
 
 /**
- * @brief Fetches and sets up the per-source page index on the reader
- */
-void setup_multifile_page_index(
-  cudf::io::parquet::experimental::hybrid_scan_multifile const& reader, multifile_inputs& inputs)
-{
-  // Reference wrappers to the datasources, in source order
-  std::vector<std::reference_wrapper<cudf::io::datasource>> datasource_refs;
-  datasource_refs.reserve(inputs.datasources.size());
-  std::transform(inputs.datasources.begin(),
-                 inputs.datasources.end(),
-                 std::back_inserter(datasource_refs),
-                 [](auto& datasource) { return std::ref(*datasource); });
-
-  // Fetch all per-source page index buffers in one batch
-  auto const page_index_byte_ranges = reader.page_index_byte_ranges();
-  auto const page_index_buffers =
-    cudf::io::parquet::fetch_page_indexes_to_host(datasource_refs, page_index_byte_ranges);
-
-  // Set up the page index on the reader from the fetched buffers
-  std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
-  page_index_byte_spans.reserve(page_index_buffers.size());
-  std::transform(page_index_buffers.begin(),
-                 page_index_buffers.end(),
-                 std::back_inserter(page_index_byte_spans),
-                 [](auto const& buffer) { return cudf::host_span<uint8_t const>{*buffer}; });
-
-  reader.setup_page_indexes(
-    cudf::host_span<cudf::host_span<uint8_t const> const>{page_index_byte_spans});
-}
-
-/**
  * @brief Filter input row groups using column chunk dictionaries via the experimental parquet
  * reader for hybrid scan (multi-file)
  *
@@ -130,37 +98,31 @@ void setup_multifile_page_index(
  * @return Vector of per-source dictionary-filtered row group indices
  */
 auto filter_row_groups_with_dictionaries(
-  multifile_inputs& inputs,
+  multifile_inputs const& inputs,
   cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
   cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   auto const input_row_group_indices = reader.all_row_groups(options);
-  auto const [dict_page_byte_ranges, dict_page_source_map] =
-    reader.dictionary_pages_byte_ranges(input_row_group_indices, options);
-  CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
-  // Fetch each source's dictionary page byte ranges from its own datasource, grouping the flat
-  // byte ranges by the parallel source map
-  std::vector<rmm::device_buffer> dict_page_buffers;
+  auto const dict_pages = reader.dictionary_pages_byte_ranges(input_row_group_indices, options);
+  CUDF_EXPECTS(dict_pages.first.size() > 0, "No dictionary page byte ranges found");
+
+  auto const dict_page_ranges_per_source =
+    group_byte_ranges_by_source(dict_pages, inputs.datasources.size());
+  auto [dict_page_buffers, dict_page_data_per_source, task] =
+    cudf::io::parquet::fetch_byte_ranges_to_device_async(
+      inputs.datasource_refs,
+      cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{
+        dict_page_ranges_per_source},
+      stream,
+      mr);
+  task.get();
+
   std::vector<cudf::device_span<uint8_t const>> dict_page_data;
-  std::size_t range_idx = 0;
-  while (range_idx < dict_page_byte_ranges.size()) {
-    auto const src = dict_page_source_map[range_idx];
-    std::vector<cudf::io::text::byte_range_info> src_ranges;
-    for (; range_idx < dict_page_byte_ranges.size() and dict_page_source_map[range_idx] == src;
-         ++range_idx) {
-      src_ranges.emplace_back(dict_page_byte_ranges[range_idx]);
-    }
-
-    auto [buffers, data, task] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
-      *inputs.datasources[src], src_ranges, stream, mr);
-    task.get();
-    for (auto& buffer : buffers) {
-      dict_page_buffers.emplace_back(std::move(buffer));
-    }
-    dict_page_data.insert(dict_page_data.end(), data.begin(), data.end());
+  for (auto const& source_dict_pages : dict_page_data_per_source) {
+    dict_page_data.insert(dict_page_data.end(), source_dict_pages.begin(), source_dict_pages.end());
   }
 
   return reader.filter_row_groups_with_dictionary_pages(
@@ -775,7 +737,7 @@ TEST_F(HybridScanMultifileFiltersTest, FilterRowGroupsWithDictionaryPages)
     inputs.footer_byte_spans, options);
 
   // Page index is needed to detect dictionary-only encoded pages
-  setup_multifile_page_index(*reader, inputs);
+  setup_page_indexes(*reader, inputs);
 
   auto const dict_filtered =
     filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
@@ -827,7 +789,7 @@ TEST_F(HybridScanMultifileFiltersTest, MismatchedSchemaDictionaryPruningCollisio
   EXPECT_EQ(metadatas.back().schema.at(1).name, "col2");
 
   // Page index is needed to detect dictionary-only encoded pages
-  setup_multifile_page_index(*reader, inputs);
+  setup_page_indexes(*reader, inputs);
 
   auto const dict_filtered =
     filter_row_groups_with_dictionaries(inputs, *reader, options, stream, mr);
