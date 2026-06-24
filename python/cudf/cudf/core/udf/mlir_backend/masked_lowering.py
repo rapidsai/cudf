@@ -13,8 +13,8 @@ from cudf.core.udf.api import Masked
 from cudf.core.udf.mlir_backend.masked_typing import MaskedType
 
 
-def _pack_masked_result(builder, target_type, result_value, result_valid):
-    """Build a ``MaskedType`` struct value from raw ``value`` and ``valid``.
+def _pack_masked(builder, target_type, value, valid):
+    """Build a ``MaskedType`` struct value from a ``value`` and a ``valid`` bit.
 
     Used by the constructor lowering and by ``pack_return`` for plain
     scalars.
@@ -23,12 +23,12 @@ def _pack_masked_result(builder, target_type, result_value, result_valid):
     undef = llvm.UndefOp(struct_ty)
     with_value = llvm.insertvalue(
         container=undef,
-        value=result_value,
+        value=value,
         position=mlir_ir.DenseI64ArrayAttr.get([0]),
     )
     with_valid = llvm.insertvalue(
         container=with_value,
-        value=result_valid,
+        value=valid,
         position=mlir_ir.DenseI64ArrayAttr.get([1]),
     )
     return with_valid
@@ -62,7 +62,7 @@ def _lower_masked_constructor(builder, target, args, kwargs):
     value_mlir = convert(builder.load_var(val_var), value_mlir_ty)
     valid_mlir = convert(builder.load_var(valid_var), valid_mlir_ty)
 
-    struct_val = _pack_masked_result(
+    struct_val = _pack_masked(
         builder, target_type, value_mlir, valid_mlir
     )
     builder.store_var(target, struct_val)
