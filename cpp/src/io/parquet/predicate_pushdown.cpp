@@ -49,7 +49,7 @@ struct row_group_stats_caster : public stats_caster_base {
   template <typename T>
   std::
     tuple<std::unique_ptr<column>, std::unique_ptr<column>, std::optional<std::unique_ptr<column>>>
-    operator()(int schema_idx,
+    operator()(host_span<int const> per_source_schema_indices,
                cudf::data_type dtype,
                rmm::cuda_stream_view stream,
                rmm::device_async_resource_ref mr) const
@@ -58,15 +58,6 @@ struct row_group_stats_caster : public stats_caster_base {
     if constexpr (cudf::is_compound<T>() && !std::is_same_v<T, string_view>) {
       CUDF_FAIL("Compound types do not have statistics");
     } else {
-      // Compute timestamp scale factor for precision conversion
-      auto const ts_scale = [&] {
-        if constexpr (cudf::is_timestamp<T>()) {
-          auto const& schema = per_file_metadata[0].schema[schema_idx];
-          return calc_timestamp_scale(schema.logical_type, static_cast<int32_t>(T::period::den));
-        }
-        return 0;
-      }();
-
       host_column<T> min(total_row_groups, stream);
       host_column<T> max(total_row_groups, stream);
       std::optional<host_column<bool>> is_null;
@@ -74,12 +65,23 @@ struct row_group_stats_caster : public stats_caster_base {
 
       size_type stats_idx = 0;
       for (size_t src_idx = 0; src_idx < row_group_indices.size(); ++src_idx) {
+        auto const mapped_schema_idx = per_source_schema_indices[src_idx];
+        // Compute timestamp scale factor for precision conversion from the mapped source schema.
+        auto const ts_scale = [&] {
+          if constexpr (cudf::is_timestamp<T>()) {
+            auto const& schema = per_file_metadata[src_idx].schema[mapped_schema_idx];
+            return calc_timestamp_scale(schema.logical_type, static_cast<int32_t>(T::period::den));
+          }
+          return 0;
+        }();
+
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
-          auto col              = std::find_if(
-            row_group.columns.begin(),
-            row_group.columns.end(),
-            [schema_idx](ColumnChunk const& col) { return col.schema_idx == schema_idx; });
+          auto col              = std::find_if(row_group.columns.begin(),
+                                  row_group.columns.end(),
+                                  [mapped_schema_idx](ColumnChunk const& col) {
+                                    return col.schema_idx == mapped_schema_idx;
+                                  });
           if (col != std::end(row_group.columns)) {
             auto const& colchunk = *col;
             // To support deprecated min, max fields.
@@ -244,8 +246,16 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
       }
       continue;
     }
-    auto [min_col, max_col, is_null_col] =
-      cudf::type_dispatcher<dispatch_storage_type>(dtype, stats_col, schema_idx, dtype, stream, mr);
+    // Map each filter column's zeroth-source schema index into every source's schema tree.
+    auto const num_sources         = input_row_group_indices.size();
+    auto per_source_schema_indices = std::vector<int>(num_sources);
+    auto const src_iter            = cuda::counting_iterator<size_t>{0};
+    std::transform(
+      src_iter, src_iter + num_sources, per_source_schema_indices.begin(), [&](size_t src_idx) {
+        return map_schema_index(schema_idx, static_cast<int>(src_idx));
+      });
+    auto [min_col, max_col, is_null_col] = cudf::type_dispatcher<dispatch_storage_type>(
+      dtype, stats_col, per_source_schema_indices, dtype, stream, mr);
     columns.push_back(std::move(min_col));
     columns.push_back(std::move(max_col));
     if (has_is_null_operator) {

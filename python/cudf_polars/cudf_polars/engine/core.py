@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-GPU frontend core."""
 
@@ -14,14 +14,15 @@ import weakref
 from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
 import cuda.core
+
+import polars as pl
+
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.coll import AllGather
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
@@ -42,10 +43,10 @@ if TYPE_CHECKING:
     from concurrent.futures import Executor, ThreadPoolExecutor
 
     import rapidsmpf.config
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import PartitionInfo
@@ -192,7 +193,7 @@ class StreamingEngine(pl.GPUEngine):
         executor_options["min_device_size"] = (
             None
             if any(dm is None for dm in device_memories)
-            else min(device_memories, default=None)
+            else min(device_memories, default=None)  # type: ignore[type-var]  # (None entries excluded by prior check)
         )
 
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
@@ -452,7 +453,7 @@ def execute_ir_on_rank(
         Collected channel metadata.
     """
     ir_context = IRExecutionContext(
-        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
+        py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )
     metadata_collector: list[ChannelMetadata] = []
 

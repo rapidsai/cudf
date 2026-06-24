@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,8 +14,9 @@
 #include <cudf/contiguous_split.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/integrations/utils.hpp>
+#include <cudf_streaming/partition_utils.hpp>
+#include <cudf_streaming/utils.hpp>
+
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
@@ -24,7 +25,7 @@
 
 #include <memory>
 
-using namespace cudf_streaming::integrations;
+using namespace cudf_streaming;
 
 class NumOfPartitions : public cudf::test::BaseFixtureWithParam<std::tuple<int, int>> {};
 
@@ -90,43 +91,4 @@ TEST_P(NumOfPartitions, split_and_pack)
 
   // Compare the input table with the result.
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expect, *result);
-}
-
-class SpillingTest : public ::testing::Test {
- protected:
-  void SetUp() override
-  {
-    br     = rapidsmpf::BufferResource::create(cudf::get_current_device_resource_ref());
-    stream = cudf::get_default_stream();
-  }
-
-  std::shared_ptr<rapidsmpf::BufferResource> br;
-  rmm::cuda_stream_view stream;
-};
-
-TEST_F(SpillingTest, SpillUnspillRoundtripPreservesDataAndMetadata)
-{
-  std::vector<std::uint8_t> metadata{42, 99};
-  std::vector<std::uint8_t> payload{10, 20, 30};
-
-  // Create device input.
-  std::vector<rapidsmpf::PackedData> input;
-  input.push_back(create_packed_data(metadata, payload, stream, br.get()));
-
-  // Device -> Device (moves data)
-  auto on_gpu = unspill_partitions(std::move(input), br.get(), rapidsmpf::AllowOverbooking::YES);
-  ASSERT_EQ(on_gpu.size(), 1);
-  EXPECT_EQ(on_gpu[0].data->mem_type(), rapidsmpf::MemoryType::DEVICE);
-  EXPECT_EQ(*on_gpu[0].metadata, metadata);
-
-  // Device -> Host
-  auto back_on_host = spill_partitions(std::move(on_gpu), br.get());
-  ASSERT_EQ(back_on_host.size(), 1);
-  EXPECT_EQ(back_on_host[0].data->mem_type(), rapidsmpf::MemoryType::HOST);
-  EXPECT_EQ(*back_on_host[0].metadata, metadata);
-
-  // Check that contents match original
-  auto res    = br->reserve_or_fail(back_on_host[0].data->size, rapidsmpf::MemoryType::HOST);
-  auto actual = br->move_to_host_buffer(std::move(back_on_host[0].data), res);
-  EXPECT_EQ(actual->copy_to_uint8_vector(), payload);
 }

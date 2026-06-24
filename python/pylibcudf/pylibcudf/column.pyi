@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
@@ -136,6 +136,7 @@ class Column:
         dtype: DataType | None = None,
         stream: CudaStreamLike | None = None,
     ) -> Column: ...
+    def to_pylist(self) -> list: ...
 
 class ListsColumnView:
     def __init__(self, column: Column): ...

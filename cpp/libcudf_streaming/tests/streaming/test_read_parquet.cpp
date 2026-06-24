@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "base_streaming_fixture.hpp"
@@ -20,12 +20,14 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <cudf_streaming/parquet.hpp>
+#include <cudf_streaming/partition.hpp>
+#include <cudf_streaming/partition_utils.hpp>
+#include <cudf_streaming/table_chunk.hpp>
+
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/mr/per_device_resource.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/streaming/parquet.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <rapidsmpf/coll/allgather.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
 #include <rapidsmpf/owning_wrapper.hpp>
@@ -45,7 +47,7 @@
 #include <tuple>
 #include <vector>
 
-using namespace cudf_streaming::streaming;
+using namespace cudf_streaming;
 
 class StreamingReadParquet : public BaseStreamingFixture {
  protected:
@@ -167,9 +169,9 @@ TEST_P(StreamingReadParquetParams, ReadParquet)
   auto options = cudf::io::parquet_reader_options::builder(source).build();
   if (skip_rows.has_value()) { options.set_skip_rows(skip_rows.value()); }
   if (num_rows.has_value()) { options.set_num_rows(num_rows.value()); }
-  auto filter_expr = [&]() -> std::unique_ptr<Filter> {
+  auto filter_expr = [&]() -> std::unique_ptr<filter> {
     if (!use_filter) { return nullptr; }
-    auto stream = ctx->br()->stream_pool().get_stream();
+    auto stream = ctx->br()->stream_pool()->get_stream();
     auto owner  = new std::vector<std::any>;
     owner->push_back(std::make_shared<cudf::numeric_scalar<std::int32_t>>(15, true, stream));
     owner->push_back(std::make_shared<cudf::ast::literal>(
@@ -179,7 +181,7 @@ TEST_P(StreamingReadParquetParams, ReadParquet)
       cudf::ast::ast_operator::LESS,
       *std::any_cast<std::shared_ptr<cudf::ast::column_reference>>(owner->at(2)),
       *std::any_cast<std::shared_ptr<cudf::ast::literal>>(owner->at(1))));
-    return std::make_unique<Filter>(
+    return std::make_unique<filter>(
       stream,
       *std::any_cast<std::shared_ptr<cudf::ast::operation>>(owner->back()),
       rapidsmpf::OwningWrapper(static_cast<void*>(owner),
@@ -200,7 +202,7 @@ TEST_P(StreamingReadParquetParams, ReadParquet)
   auto ch = ctx->create_channel();
   std::vector<rapidsmpf::streaming::Actor> actors;
 
-  actors.push_back(cudf_streaming::streaming::actor::read_parquet(
+  actors.push_back(cudf_streaming::actor::read_parquet(
     ctx, GlobalEnvironment->comm_, ch, 4, options, 3, std::move(filter_expr)));
 
   std::vector<rapidsmpf::streaming::Message> messages;
@@ -219,7 +221,7 @@ TEST_P(StreamingReadParquetParams, ReadParquet)
                                        br.get());
 
   for (auto& msg : messages) {
-    auto chunk            = msg.release<TableChunk>();
+    auto chunk            = msg.release<table_chunk>();
     auto seq              = msg.sequence_number();
     auto [reservation, _] = br->reserve(
       rapidsmpf::MemoryType::DEVICE, chunk.make_available_cost(), rapidsmpf::AllowOverbooking::YES);
@@ -236,7 +238,7 @@ TEST_P(StreamingReadParquetParams, ReadParquet)
 
   // May as well check on all ranks, so we also mildly exercise the allgather.
   auto gathered_packed_data = allgather.wait_and_extract(rapidsmpf::coll::AllGather::Ordered::YES);
-  auto result               = cudf_streaming::integrations::unpack_and_concat(
+  auto result               = cudf_streaming::unpack_and_concat(
     std::move(gathered_packed_data), rmm::cuda_stream_default, br.get());
   EXPECT_EQ(result->num_rows(), expected->num_rows());
   EXPECT_EQ(result->num_columns(), expected->num_columns());

@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -37,32 +37,42 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/Modules/ConfigureCUDA.cmake)
 rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
+# * find C++ libraries from RAPIDS wheels in site-packages -----------------------------------------
+find_package(Python COMPONENTS Interpreter)
+if(Python_FOUND)
+  include(${rapids-cmake-dir}/cython-core/find_prefix_paths.cmake)
+  rapids_cython_find_prefix_paths("${Python_EXECUTABLE}" wheel_prefix_paths)
+  set_property(GLOBAL PROPERTY FIND_LIBRARY_USE_LIB64_PATHS TRUE)
+  list(APPEND CMAKE_PREFIX_PATH ${wheel_prefix_paths})
+endif()
+
+# ##################################################################################################
 # * Build options
 option(BUILD_TESTS "Build tests for libcudf_streaming" OFF)
+option(BUILD_BENCHMARKS "Build benchmarks for libcudf_streaming" OFF)
+option(BUILD_EXAMPLES "Build examples for libcudf_streaming" OFF)
 
 message(VERBOSE "CUDF_STREAMING: Build gtests: ${BUILD_TESTS}")
+message(VERBOSE "CUDF_STREAMING: Build benchmarks: ${BUILD_BENCHMARKS}")
+message(VERBOSE "CUDF_STREAMING: Build examples: ${BUILD_EXAMPLES}")
 
 # ##################################################################################################
 # * Dependencies
 
 # add third party dependencies using CPM
 rapids_cpm_init()
+include(cmake/ConfigureOptionalCommunication.cmake)
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rapidsmpf.cmake)
+cudf_streaming_configure_optional_communication()
 include(../cmake/thirdparty/get_cucollections.cmake)
 
 # ##################################################################################################
 # * library target --------------------------------------------------------------------------------
 add_library(
   cudf_streaming SHARED
-  src/integrations/bloom_filter.cu
-  src/integrations/partition.cpp
-  src/integrations/utils.cpp
-  src/streaming/bloom_filter.cpp
-  src/streaming/channel_metadata.cpp
-  src/streaming/parquet.cpp
-  src/streaming/partition.cpp
-  src/streaming/table_chunk.cpp
+  src/bloom_filter.cpp src/channel_metadata.cpp src/detail/device_bloom_filter.cu src/parquet.cpp
+  src/partition.cpp src/partition_utils.cpp src/table_chunk.cpp src/utils.cpp
 )
 
 # ##################################################################################################
@@ -115,6 +125,16 @@ if(BUILD_TESTS)
   add_subdirectory(tests)
 endif()
 
+# Benchmarks if enabled
+if(BUILD_BENCHMARKS)
+  add_subdirectory(benchmarks)
+endif()
+
+# Examples if enabled
+if(BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()
+
 # ##################################################################################################
 # * cudf_streaming Install -------------------------------------------------------------------------
 rapids_cmake_install_lib_dir(lib_dir)
@@ -123,7 +143,13 @@ install(
   DESTINATION ${lib_dir}
   EXPORT cudf_streaming-exports
 )
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(
+  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING
+  PATTERN "*.hpp"
+  PATTERN "detail" EXCLUDE
+)
 
 rapids_export(
   INSTALL cudf_streaming
