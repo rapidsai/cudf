@@ -40,5 +40,3 @@ def test_filter_drops_dynamic_predicate_hint(engine: pl.GPUEngine):
     # before executing on the GPU.
     q = ldf.filter((pl.col("a") > 1) & (pl.col("c") == 3)).sort("b").head(3)
     assert_gpu_result_equal(q, engine=engine)
-
-
