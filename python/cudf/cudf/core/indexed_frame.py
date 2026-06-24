@@ -698,29 +698,6 @@ class IndexedFrame(Frame):
 
         cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
-    @_performance_tracking
-    def to_string(self):
-        r"""
-        Convert to string
-
-        cuDF uses Pandas internals for efficient string formatting.
-        Set formatting options using pandas string formatting options and
-        cuDF objects will print identically to Pandas objects.
-
-        cuDF supports `null/None` as a value in any column type, which
-        is transparently supported during this output process.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2]
-        >>> df['val'] = [float(i + 10) for i in range(3)]
-        >>> df.to_string()
-        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
-        """
-        return str(self)
-
     def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
 
@@ -7368,12 +7345,12 @@ def _is_same_dtype(lhs_dtype, rhs_dtype):
         return True
     elif is_dtype_obj_string(lhs_dtype) and is_dtype_obj_string(rhs_dtype):
         return True
-    elif is_dtype_obj_numeric(
-        lhs_dtype, include_decimal=False
-    ) and is_dtype_obj_numeric(rhs_dtype, include_decimal=False):
-        # Numeric index labels are joinable across int/float widths
-        # (e.g. an int level reindexed against a float level), matching
-        # pandas instead of bailing to an all-null result.
+    elif getattr(lhs_dtype, "kind", None) in {"i", "u", "f"} and getattr(
+        rhs_dtype, "kind", None
+    ) in {"i", "u", "f"}:
+        # Numeric index labels are compatible across int/float for
+        # reindexing; the join matches labels by equality (e.g. 4 == 4.0)
+        # instead of bailing to an all-null result.
         return True
     else:
         return False
