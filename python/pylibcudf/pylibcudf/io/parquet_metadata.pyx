@@ -493,6 +493,28 @@ cdef class FileMetaData:
         cdef cpp_RowGroup row_group
         return [RowGroup.from_cpp(row_group) for row_group in self.c_obj.row_groups]
 
+    @property
+    def row_group_num_rows(self):
+        """
+        Get row counts for each row group in this file.
+
+        Returns
+        -------
+        row_counts
+            A list with the row count per row group in this file.
+
+        Notes
+        -----
+        Equivalent to, but faster than, checking each row groups' num_rows:
+
+        .. code-block:: python
+
+           >>> [rg.num_rows for rg in file_metadata.row_groups]
+        """
+        cdef Py_ssize_t i
+        cdef Py_ssize_t n = self.c_obj.row_groups.size()
+        return [self.c_obj.row_groups[i].num_rows for i in range(n)]
+
     @classmethod
     def from_bytes(cls, const uint8_t[::1] footer_bytes):
         """Build ``FileMetaData`` from parquet footer bytes.

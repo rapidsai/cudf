@@ -81,7 +81,9 @@ cdef vector[cpp_FileMetaData] _build_parquet_metadatas(
     size_t num_sources,
 ) except *:
     cdef vector[cpp_FileMetaData] c_metadatas
+    cdef vector[cpp_FileMetaData*] metadata_ptrs
     cdef object metadata
+    cdef size_t i
     if parquet_metadatas is None:
         return c_metadatas
 
@@ -90,14 +92,21 @@ cdef vector[cpp_FileMetaData] _build_parquet_metadatas(
             raise TypeError(
                 "parquet_metadatas must contain only FileMetaData objects"
             )
-        c_metadatas.push_back((<FileMetaData>metadata).c_obj)
+        metadata_ptrs.push_back(&(<FileMetaData>metadata).c_obj)
 
-    if c_metadatas.size() != num_sources:
+    if metadata_ptrs.size() != num_sources:
         raise ValueError(
-            f"Length of 'parquet_metadatas' ({c_metadatas.size()}) "
+            f"Length of 'parquet_metadatas' ({metadata_ptrs.size()}) "
             f"must match the number of input sources "
             f"({num_sources})"
         )
+
+    c_metadatas.reserve(metadata_ptrs.size())
+    with nogil:
+        # This copies the (potentially large) metadata object. We don't
+        # want to hold the GIL for that.
+        for i in range(metadata_ptrs.size()):
+            c_metadatas.push_back(dereference(metadata_ptrs[i]))
 
     return c_metadatas
 
@@ -136,8 +145,19 @@ cdef class ParquetReaderOptions:
 
         Parameters
         ----------
-        row_groups : list
-            List of row groups to read
+        row_groups : list[list[int]]
+            Row groups to read, one inner list per input source.
+
+        Notes
+        -----
+        Rows are emitted in input-source order; all rows selected from
+        source 0 are emitted before rows selected from source 1, and so on.
+        Within each source, row groups are read in the order provided;
+        indices are not sorted or deduplicated, and repeated indices are
+        emitted multiple times. Empty inner lists contribute no rows.
+        When unset, all row groups are read in source order, then in
+        on-disk order within each source. Predicate pushdown drops row
+        groups in place; remaining row groups keep their relative order.
 
         Returns
         -------
@@ -567,7 +587,8 @@ cdef class ChunkedParquetReader:
                     )
                 )
         else:
-            sources = make_datasources(options.c_obj.get_source())
+            with nogil:
+                sources = make_datasources(options.c_obj.get_source())
             c_metadatas = _build_parquet_metadatas(
                 parquet_metadatas, sources.size()
             )
@@ -658,7 +679,8 @@ cpdef read_parquet(
         with nogil:
             c_result = move(cpp_read_parquet(options.c_obj, _cs, mr.get_mr()))
     else:
-        sources = make_datasources(options.c_obj.get_source())
+        with nogil:
+            sources = make_datasources(options.c_obj.get_source())
         c_metadatas = _build_parquet_metadatas(parquet_metadatas, sources.size())
         with nogil:
             c_result = move(

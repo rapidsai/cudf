@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -302,6 +302,31 @@ def test_isoyear(engine: pl.GPUEngine):
 
 
 @pytest.mark.parametrize(
+    "dtype",
+    [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")],
+    ids=repr,
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns", "s", "d"])
+def test_epoch(engine: pl.GPUEngine, dtype, time_unit):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.Series(
+                [
+                    datetime.datetime(2001, 1, 1),
+                    datetime.datetime(2001, 1, 2, 12, 30, 15),
+                    datetime.datetime(2020, 2, 29, 23, 59, 59),
+                    datetime.datetime(2024, 12, 31, 23, 59, 59),
+                ],
+                dtype=dtype,
+            )
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.epoch(time_unit))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
     "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
 )
 @pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])
@@ -384,6 +409,43 @@ def test_datetime_from_integer(engine: pl.GPUEngine, datetime_dtype, integer_dty
             q.collect(engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+@pytest.mark.parametrize("every", ["1ns", "1us", "1ms", "1s", "1m", "1h", "1d"])
+def test_datetime_truncate(engine: pl.GPUEngine, dtype, every):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.datetime_range(
+                datetime.datetime(2020, 1, 1),
+                datetime.datetime(2020, 1, 2),
+                "3h14m15s11ms33us999ns",
+                eager=True,
+            ).cast(dtype)
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.truncate(every))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("every", ["30m", "1mo"])
+def test_datetime_truncate_unsupported(engine: pl.GPUEngine, every: str):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.datetime_range(
+                datetime.datetime(2020, 1, 1),
+                datetime.datetime(2020, 1, 2),
+                "30m",
+                eager=True,
+            )
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.truncate(every))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(

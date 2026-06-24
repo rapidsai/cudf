@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Translate polars IR representation to ours."""
@@ -36,6 +36,8 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
     POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_139,
+    POLARS_VERSION_LT_140,
+    POLARS_VERSION_LT_141,
 )
 
 if TYPE_CHECKING:
@@ -69,6 +71,16 @@ def _align_decimal_float_for_comparison(
             for op in operands
         )
     return operands
+
+
+def _strip_file_uri(path: str) -> str:
+    # file:///foo/path is treated as a local path. Polars
+    # rejects file:// URIs with any non-empty host, so
+    # we don't need to handle file://host/foo/path paths
+    prefix = "file://"
+    if path.startswith(prefix):
+        return path[len(prefix) :]
+    return path
 
 
 def _check_compression(data: bytes) -> str | None:
@@ -152,7 +164,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (12, 2):
+        if (version := self.visitor.version()) >= (13, 1):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -274,15 +286,42 @@ class set_expr_context(AbstractContextManager[None]):
         self.translator._expr_context = self._prev
 
 
-def _is_dynamic_pred(visitor: Any, expr_ir: Any) -> bool:
+def _drop_dyn_pred_hints(
+    translator: Translator, n: int, schema: Schema
+) -> expr.Expr | None:
     try:
-        visitor.view_expression(expr_ir.node)
+        node = translator.visitor.view_expression(n)
     except Exception as e:
         if str(e) == "dynamic_pred":
-            return True
+            return None
         raise  # pragma: no cover
-    else:
-        return False
+    if isinstance(node, plrs._expr_nodes.BinaryExpr) and node.op in (
+        plrs._expr_nodes.Operator.And,
+        plrs._expr_nodes.Operator.LogicalAnd,
+    ):
+        left = _drop_dyn_pred_hints(translator, node.left, schema)
+        right = _drop_dyn_pred_hints(translator, node.right, schema)
+        if left is None:
+            return right  # pragma: no cover
+        if right is None:
+            return left
+        return expr.BinOp(
+            DataType(translator.visitor.get_dtype(n)),
+            expr.BinOp._MAPPING[node.op],
+            left,
+            right,
+        )
+    return translator.translate_expr(n=n, schema=schema)
+
+
+def translate_predicate(
+    translator: Translator, *, n: Any, schema: Schema
+) -> expr.NamedExpr | None:
+    """Translate predicate, dropping Polars' dynamic predicate hints."""
+    mask = _drop_dyn_pred_hints(translator, n.node, schema)
+    if mask is None:
+        return None
+    return expr.NamedExpr(n.output_name, mask)
 
 
 class set_internal_name_gen(AbstractContextManager[None]):
@@ -325,7 +364,7 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.IR:
     typ, *options = node.scan_type
-    paths = node.paths
+    paths = [_strip_file_uri(p) for p in node.paths]
     # Polars can produce a Scan with an empty ``node.paths`` (eg. the native
     # Iceberg reader on a table with no data files yet). In this case, polars returns an
     # empty DataFrame with the declared schema. Mirror that here by
@@ -385,8 +424,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         (
             None
             if node.predicate is None
-            or _is_dynamic_pred(translator.visitor, node.predicate)
-            else translate_named_expr(translator, n=node.predicate, schema=schema)
+            else translate_predicate(translator, n=node.predicate, schema=schema)
         ),
         parquet_options,
     )
@@ -451,8 +489,11 @@ def _(node: plrs._ir_nodes.GroupBy, translator: Translator, schema: Schema) -> i
         )
     else:
         # TODO: Investigate whether polars can raise ahead of time
-        if not keys:
-            raise NotImplementedError(
+        # polars >= 1.40 rewrites an empty-key group_by into a Select, so an
+        # empty-key group_by only reaches here on older polars; the raise is
+        # dead on the latest polars used for coverage.
+        if POLARS_VERSION_LT_140 and not keys:
+            raise NotImplementedError(  # pragma: no cover
                 "at least one key is required in a group_by operation"
             )
         return rewrite_groupby(node, schema, keys, original_aggs, inp)
@@ -600,9 +641,9 @@ def _(node: plrs._ir_nodes.Slice, translator: Translator, schema: Schema) -> ir.
 def _(node: plrs._ir_nodes.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        if _is_dynamic_pred(translator.visitor, node.predicate):
+        mask = translate_predicate(translator, n=node.predicate, schema=inp.schema)
+        if mask is None:
             return inp
-        mask = translate_named_expr(translator, n=node.predicate, schema=inp.schema)
     return ir.Filter(schema, mask, inp)
 
 
@@ -643,8 +684,13 @@ def _(
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.Union, translator: Translator, schema: Schema) -> ir.IR:
+    zlice = node.options if POLARS_VERSION_LT_141 else node.slice
+    maintain_order = True if POLARS_VERSION_LT_141 else node.maintain_order
     return ir.Union(
-        schema, node.options, *(translator.translate_ir(n=n) for n in node.inputs)
+        schema,
+        zlice,
+        maintain_order,
+        *(translator.translate_ir(n=n) for n in node.inputs),
     )
 
 
@@ -881,6 +927,15 @@ def _(
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        elif not POLARS_VERSION_LT_141 and name == "quantile":
+            # polars >= 1.41 emits quantile as a string-named Function
+            # expression (function_data=("quantile", interpolation)) with the
+            # column and quantile value as inputs; earlier versions used a
+            # dedicated Agg node.
+            (interp,) = options
+            return expr.Agg(
+                dtype, "quantile", interp, translator._expr_context, *children
+            )
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"
@@ -1189,6 +1244,21 @@ def _(
 ) -> expr.Expr:
     agg_name = node.name
     args = [translator.translate_expr(n=arg, schema=schema) for arg in node.arguments]
+
+    if (
+        not POLARS_VERSION_LT_140
+        and agg_name == "implode"
+        and translator._expr_context
+        in (ExecutionContext.GROUPBY, ExecutionContext.ROLLING)
+    ):
+        # polars >= 1.40 makes the per-group collect-to-list explicit: an
+        # element-wise expression inside a groupby/rolling aggregation is now
+        # wrapped in an explicit ``implode`` node. Earlier versions left it
+        # implicit, emitting the bare expression (whose dtype already reflects
+        # the per-group list). Unwrap the explicit ``implode`` so the existing
+        # pointwise-collect path handles it as before.
+        (child,) = args
+        return child
 
     # libcudf does not support std/var on decimal types; cast to float first.
     if agg_name in {"std", "var"} and dtype.plc_type.id() in {

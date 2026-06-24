@@ -4,6 +4,7 @@
  */
 
 #include "detail/range_utils.cuh"
+#include "detail/rolling.hpp"
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_device_view.cuh>
@@ -26,9 +27,11 @@
 
 #include <cub/device/device_segmented_reduce.cuh>
 #include <cuda/functional>
+#include <thrust/copy.h>
 #include <thrust/reduce.h>
 
 #include <optional>
+#include <vector>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -149,6 +152,82 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
                               stream,
                               mr)};
   }
+}
+
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
+  table_view const& group_keys,
+  table_view const& orderby,
+  host_span<order const> orders,
+  host_span<null_order const> null_orders,
+  range_window_type preceding,
+  range_window_type following,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+  CUDF_EXPECTS(orderby.num_columns() > 0, "orderby must be non-empty");
+  CUDF_EXPECTS(group_keys.num_columns() == 0 || group_keys.num_rows() == orderby.num_rows(),
+               "Size mismatch between group_keys and orderby table.");
+  CUDF_EXPECTS(orderby.num_columns() == static_cast<size_type>(orders.size()),
+               "ORDER BY column count must match order vector");
+  CUDF_EXPECTS(orderby.num_columns() == static_cast<size_type>(null_orders.size()),
+               "ORDER BY column count must match null-order vector");
+
+  if (orderby.num_columns() == 1) {
+    return detail::make_range_windows(group_keys,
+                                      orderby.column(0),
+                                      orders.front(),
+                                      null_orders.front(),
+                                      preceding,
+                                      following,
+                                      stream,
+                                      mr);
+  }
+
+  auto const is_peer_bound = [](range_window_type const& w) {
+    return std::holds_alternative<unbounded>(w) || std::holds_alternative<current_row>(w);
+  };
+  CUDF_EXPECTS(is_peer_bound(preceding) && is_peer_bound(following),
+               "Multi-column RANGE windows support only UNBOUNDED and CURRENT ROW bounds");
+
+  using sort_helper = cudf::groupby::detail::sort::sort_groupby_helper;
+
+  std::vector<column_view> peer_keys(group_keys.begin(), group_keys.end());
+  peer_keys.insert(peer_keys.end(), orderby.begin(), orderby.end());
+  sort_helper peer_helper{table_view{peer_keys}, null_policy::INCLUDE, sorted::YES, {}};
+  auto const peers = rolling::grouped{peer_helper.group_labels(stream).data(),
+                                      peer_helper.group_offsets(stream).data()};
+
+  std::optional<sort_helper> group_helper;
+  if (group_keys.num_columns() > 0 && (std::holds_alternative<unbounded>(preceding) ||
+                                       std::holds_alternative<unbounded>(following))) {
+    group_helper.emplace(group_keys, null_policy::INCLUDE, sorted::YES, std::vector<null_order>{});
+  }
+
+  auto const num_rows = orderby.num_rows();
+  auto make_offsets   = [&](range_window_type const& window, rolling::direction direction) {
+    auto result = make_numeric_column(
+      data_type{type_to_id<size_type>()}, num_rows, mask_state::UNALLOCATED, stream, mr);
+    auto write_offsets = [&](auto grouping) {
+      thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cudf::detail::make_counting_transform_iterator(
+                       size_type{0}, rolling::unbounded_distance_functor{grouping, direction}),
+                     num_rows,
+                     result->mutable_view().begin<size_type>());
+    };
+    if (std::holds_alternative<current_row>(window)) {
+      write_offsets(peers);
+    } else if (group_helper.has_value()) {
+      write_offsets(rolling::grouped{group_helper->group_labels(stream).data(),
+                                     group_helper->group_offsets(stream).data()});
+    } else {
+      write_offsets(rolling::ungrouped{num_rows});
+    }
+    return result;
+  };
+
+  return {make_offsets(preceding, rolling::direction::PRECEDING),
+          make_offsets(following, rolling::direction::FOLLOWING)};
 }
 }  // namespace detail
 

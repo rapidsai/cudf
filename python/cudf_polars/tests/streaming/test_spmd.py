@@ -9,12 +9,12 @@ from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
-from rapidsmpf.bootstrap import is_running_with_rrun
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
 import polars as pl
 
 import rmm.mr
+from rapidsmpf.bootstrap import is_running_with_rrun
+from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
 from cudf_polars.engine.core import _find_memory_error
 from cudf_polars.engine.hardware_binding import HardwareBindingPolicy

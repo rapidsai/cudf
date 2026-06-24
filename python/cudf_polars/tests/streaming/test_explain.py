@@ -21,6 +21,7 @@ from cudf_polars.streaming.explain import (
 )
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.testing.io import make_lazy_frame, make_partitioned_source
+from cudf_polars.utils.versions import POLARS_VERSION_LT_141
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -94,6 +95,17 @@ def test_explain_physical_plan_with_groupby(tmp_path, df):
     plan = explain_query(q, engine, physical=True)
 
     assert "GROUPBY ('g',)" in plan
+
+
+def test_explain_physical_plan_with_errornode():
+    df = pl.LazyFrame({"a": [[1, 2], [3, 4]], "b": [[5, 6], [7, 8]]})
+    q = df.explode("a", "b").select("a")
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+
+    plan = explain_query(q, engine, physical=True)
+
+    assert "ERRORNODE" in plan
 
 
 def test_explain_logical_plan_with_join(tmp_path, df):
@@ -459,9 +471,22 @@ def test_serialize_query():
     # We don't know the exact node IDs, but we can check the structure.
     assert len(dag.roots) == 1
     node_types = sorted({x.type for x in dag.nodes.values()})
-    assert node_types == ["DataFrameScan", "GroupBy", "Join", "Projection", "Select"]
-    assert len(dag.nodes) == 6
-    assert len(dag.partition_info) == 6
+    if POLARS_VERSION_LT_141:
+        assert node_types == [
+            "DataFrameScan",
+            "GroupBy",
+            "Join",
+            "Projection",
+            "Select",
+        ]
+        assert len(dag.nodes) == 6
+        assert len(dag.partition_info) == 6
+    else:
+        # polars >= 1.41 elides the post-aggregation SimpleProjection, so there
+        # is no Projection node and one fewer node overall.
+        assert node_types == ["DataFrameScan", "GroupBy", "Join", "Select"]
+        assert len(dag.nodes) == 5
+        assert len(dag.partition_info) == 5
     node_ids = set(dag.nodes)
 
     for node_id, node in dag.nodes.items():
@@ -521,6 +546,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
         "prefix": f"{root}/",
         "typ": "parquet",
         "predicate": None,
+        "scan_count": 1,
     }
     if predicate is not None:
         q = q.filter(predicate)
@@ -537,7 +563,7 @@ def test_scan_properties(tmp_path: Path, predicate: pl.Expr | None):
     dag = serialize_query(q, engine)
 
     node = dag.nodes[dag.roots[0]]
-    assert node.type == "Scan"
+    assert node.type == "StreamingScan"
     assert node.properties == expected_properties
 
 
@@ -674,9 +700,9 @@ def test_dynamic_planning_adds_repartition(df, op):
     )
     plan = explain_query(q, engine, physical=True)
 
-    # With dynamic planning enabled, sum needs a REPARTITION to collapse
-    # partitions for global aggregation. Sort does not.
+    # With dynamic planning enabled, sum needs a REPARTITION for global
+    # aggregation, while sort does not.
     if op == "sort":
-        assert "SORT" in plan
+        assert "REPARTITION" not in plan
     else:
         assert "REPARTITION" in plan

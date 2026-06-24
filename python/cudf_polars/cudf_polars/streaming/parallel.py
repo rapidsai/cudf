@@ -26,6 +26,7 @@ from cudf_polars.dsl.expr import Col, Literal, NamedExpr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
+    ErrorNode,
     Filter,
     HConcat,
     HStack,
@@ -69,6 +70,9 @@ def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     """
     Rewrite an IR graph and extract partitioning information.
@@ -81,6 +85,10 @@ def lower_ir_graph(
         GPUEngine configuration options.
     stats
         Pre-computed statistics collector.
+    rank
+        Rank of the current worker.
+    nranks
+        Number of workers in the current cluster.
 
     Returns
     -------
@@ -100,6 +108,8 @@ def lower_ir_graph(
     state: State = {
         "config_options": config_options,
         "stats": stats,
+        "rank": rank,
+        "nranks": nranks,
     }
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
     return mapper(ir)
@@ -142,7 +152,7 @@ def _(
             Slice(
                 ir.schema,
                 *ir.zlice,
-                Union(ir.schema, None, *ir.children),
+                Union(ir.schema, None, ir.maintain_order, *ir.children),
             )
         )
 
@@ -157,6 +167,14 @@ def _(
     new_node = ir.reconstruct(children)
     partition_info[new_node] = PartitionInfo(count=count)
     return new_node, partition_info
+
+
+@lower_ir_node.register(ErrorNode)
+def _(
+    ir: ErrorNode, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # nothing to lower or repartition.
+    return ir, {ir: PartitionInfo(count=1)}
 
 
 @lower_ir_node.register(MapFunction)

@@ -13,26 +13,29 @@
 
 namespace rtcx {
 
-inline namespace detail {
+namespace functions {
 
-std::uint32_t ror(std::uint32_t x, std::uint32_t n) { return (x >> n) | (x << (32 - n)); }
+inline std::uint32_t ror(std::uint32_t x, std::uint32_t n) { return (x >> n) | (x << (32 - n)); }
 
-std::uint32_t ch(std::uint32_t x, std::uint32_t y, std::uint32_t z) { return z ^ (x & (y ^ z)); }
+inline std::uint32_t ch(std::uint32_t x, std::uint32_t y, std::uint32_t z)
+{
+  return z ^ (x & (y ^ z));
+}
 
-std::uint32_t maj(std::uint32_t x, std::uint32_t y, std::uint32_t z)
+inline std::uint32_t maj(std::uint32_t x, std::uint32_t y, std::uint32_t z)
 {
   return ((x | y) & z) | (x & y);
 }
 
-std::uint32_t sigma0(std::uint32_t x) { return ror(x, 2) ^ ror(x, 13) ^ ror(x, 22); }
+inline std::uint32_t sigma0(std::uint32_t x) { return ror(x, 2) ^ ror(x, 13) ^ ror(x, 22); }
 
-std::uint32_t sigma1(std::uint32_t x) { return ror(x, 6) ^ ror(x, 11) ^ ror(x, 25); }
+inline std::uint32_t sigma1(std::uint32_t x) { return ror(x, 6) ^ ror(x, 11) ^ ror(x, 25); }
 
-std::uint32_t gamma0(std::uint32_t x) { return ror(x, 7) ^ ror(x, 18) ^ (x >> 3); }
+inline std::uint32_t gamma0(std::uint32_t x) { return ror(x, 7) ^ ror(x, 18) ^ (x >> 3); }
 
-std::uint32_t gamma1(std::uint32_t x) { return ror(x, 17) ^ ror(x, 19) ^ (x >> 10); }
+inline std::uint32_t gamma1(std::uint32_t x) { return ror(x, 17) ^ ror(x, 19) ^ (x >> 10); }
 
-void put_be32(void* ptr, std::uint32_t value)
+inline void put_be32(void* ptr, std::uint32_t value)
 {
   auto* p = (std::uint8_t*)ptr;
   p[0]    = (value >> 24) & 0xff;
@@ -41,14 +44,14 @@ void put_be32(void* ptr, std::uint32_t value)
   p[3]    = (value >> 0) & 0xff;
 }
 
-std::uint32_t get_be32(void const* ptr)
+inline std::uint32_t get_be32(void const* ptr)
 {
   auto const* p = (std::uint8_t const*)ptr;
   return (std::uint32_t)p[0] << 24 | (std::uint32_t)p[1] << 16 | (std::uint32_t)p[2] << 8 |
          (std::uint32_t)p[3] << 0;
 }
 
-}  // namespace detail
+}  // namespace functions
 
 struct [[nodiscard]] sha256_hex_string {
   char data_[65];  // NOLINT(modernize-avoid-c-arrays)
@@ -110,8 +113,8 @@ struct [[nodiscard]] sha256 {
 
 struct sha256_context {
  private:
-  static constexpr size_t BLOCK_SIZE = 64;
-  std::uint32_t state_[8]            =  // NOLINT(modernize-avoid-c-arrays)
+  static constexpr std::size_t BLOCK_SIZE = 64;
+  std::uint32_t state_[8]                 =  // NOLINT(modernize-avoid-c-arrays)
     {0x6a09'e667ul,
      0xbb67'ae85ul,
      0x3c6e'f372ul,
@@ -143,16 +146,16 @@ struct sha256_context {
 
     /* copy the state into 512-bits into W[0..15] */
     for (i = 0; i < 16; i++, buf += sizeof(std::uint32_t))
-      W[i] = get_be32(buf);
+      W[i] = functions::get_be32(buf);
 
     /* fill W[16..63] */
     for (i = 16; i < 64; i++)
-      W[i] = gamma1(W[i - 2]) + W[i - 7] + gamma0(W[i - 15]) + W[i - 16];
+      W[i] = functions::gamma1(W[i - 2]) + W[i - 7] + functions::gamma0(W[i - 15]) + W[i - 16];
 
-#define RND(a, b, c, d, e, f, g, h, i, ki)      \
-  t0 = h + sigma1(e) + ch(e, f, g) + ki + W[i]; \
-  t1 = sigma0(a) + maj(a, b, c);                \
-  d += t0;                                      \
+#define RND(a, b, c, d, e, f, g, h, i, ki)                            \
+  t0 = h + functions::sigma1(e) + functions::ch(e, f, g) + ki + W[i]; \
+  t1 = functions::sigma0(a) + functions::maj(a, b, c);                \
+  d += t0;                                                            \
   h = t0 + t1;
 
     RND(S[0], S[1], S[2], S[3], S[4], S[5], S[6], S[7], 0, 0x428a'2f98);
@@ -240,7 +243,7 @@ struct sha256_context {
     if (len_buf) {
       std::uint32_t left = 64 - len_buf;
       if (len < left) left = len;
-      memcpy(len_buf + buf_, data, left);
+      std::memcpy(len_buf + buf_, data, left);
       len_buf = (len_buf + left) & 63;
       len -= left;
       data = (data + left);
@@ -254,7 +257,7 @@ struct sha256_context {
       len -= 64;
     }
 
-    if (len) memcpy(buf_, data, len);
+    if (len) std::memcpy(buf_, data, len);
   }
 
   sha256 finalize()
@@ -276,7 +279,7 @@ struct sha256_context {
 
     /* copy output */
     for (i = 0; i < 8; i++, digest += sizeof(std::uint32_t)) {
-      put_be32(digest, state_[i]);
+      functions::put_be32(digest, state_[i]);
     }
     return out;
   }

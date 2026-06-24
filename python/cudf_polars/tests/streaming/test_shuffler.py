@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -6,14 +6,15 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from rapidsmpf.streaming.cudf.channel_metadata import (
+
+import polars as pl
+
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     Partitioning,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import polars as pl
+from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.options import StreamingOptions
@@ -155,7 +156,7 @@ def test_local_repartitioner_hash(spmd_engine, local_count) -> None:
     results: list[tuple[int, pl.DataFrame]] = []
 
     async def _run() -> None:
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         cudf_df = DataFrame.from_polars(pl_df, stream)
         with reserve_op_id() as op_id:
             shuffle = ShuffleManager(
@@ -221,7 +222,7 @@ def test_local_repartitioner_index(spmd_engine, local_count) -> None:
     results: list[tuple[int, pl.DataFrame]] = []
 
     async def _run() -> None:
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         payload_df = DataFrame.from_polars(pl_payload, stream)
         rank_part_df = DataFrame.from_polars(pl_rank_part, stream)
 

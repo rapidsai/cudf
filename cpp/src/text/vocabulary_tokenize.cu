@@ -409,12 +409,14 @@ std::unique_ptr<cudf::column> tokenize_with_vocabulary(cudf::strings_column_view
                        grid_chars.num_threads_per_block,
                        0,
                        stream.value()>>>(d_input_chars, chars_size, d_delimiter, d_marks.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // launch warp per string to compute token counts
   constexpr cudf::thread_index_type warp_size = cudf::detail::warp_size;
   cudf::detail::grid_1d grid{input.size() * warp_size, block_size};
   token_counts_fn<<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
     *d_strings, d_delimiter, d_token_counts.data(), d_marks.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
   auto [token_offsets, total_count] = cudf::detail::make_offsets_child_column(
     d_token_counts.begin(), d_token_counts.end(), stream, mr);
 
