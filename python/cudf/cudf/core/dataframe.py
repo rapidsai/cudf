@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -2641,6 +2641,131 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             return cons(self.items())  # type: ignore[misc]
 
         return self.to_pandas().to_dict(orient=orient, into=into, index=index)
+
+    @_performance_tracking
+    def to_string(
+        self,
+        buf=None,
+        *,
+        columns=None,
+        col_space=None,
+        header=True,
+        index: bool = True,
+        na_rep: str = "NaN",
+        formatters=None,
+        float_format=None,
+        sparsify: bool | None = None,
+        index_names: bool = True,
+        justify: str | None = None,
+        max_rows: int | None = None,
+        max_cols: int | None = None,
+        show_dimensions: bool = False,
+        decimal: str = ".",
+        line_width: int | None = None,
+        min_rows: int | None = None,
+        max_colwidth: int | None = None,
+        encoding: str | None = None,
+    ) -> str | None:
+        r"""
+        Render a DataFrame to a console-friendly tabular output.
+
+        cuDF uses pandas internals for string formatting, so this mirrors
+        :meth:`pandas.DataFrame.to_string` and accepts the same arguments.
+        Unlike ``repr``, the output is not truncated by the
+        ``display.max_rows``/``display.max_columns`` options unless
+        ``max_rows``/``max_cols`` are passed explicitly.
+
+        cuDF supports `null/None` as a value in any column type, which
+        is transparently supported during this output process.
+
+        Parameters
+        ----------
+        buf : writable buffer, optional
+            File path or buffer to write to. If ``None`` (default), the
+            output is returned as a string.
+        columns : sequence, optional
+            The subset of columns to write. Writes all columns by default.
+        col_space : int, list or dict of int, optional
+            The minimum width of each column.
+        header : bool or list of str, default True
+            Whether to write the column names. If a list of strings is
+            given, it is assumed to be aliases for the column names.
+        index : bool, default True
+            Whether to print index (row) labels.
+        na_rep : str, default "NaN"
+            String representation of ``NaN``/null values.
+        formatters : list, tuple or dict of callables, optional
+            One-parameter formatter functions to apply to columns' elements
+            by position or name.
+        float_format : callable, optional
+            One-parameter formatter function applied to floating point
+            values.
+        sparsify : bool, optional
+            Set to ``False`` for a DataFrame with a hierarchical index to
+            print every multiindex key at each row. Defaults to ``True``.
+        index_names : bool, default True
+            Whether to print the names of the indexes.
+        justify : str, optional
+            How to justify the column labels (e.g. ``"left"``, ``"right"``,
+            ``"center"``). Defaults to the pandas display option.
+        max_rows : int, optional
+            Maximum number of rows to display before truncating.
+        max_cols : int, optional
+            Maximum number of columns to display before truncating.
+        show_dimensions : bool, default False
+            Whether to display the DataFrame dimensions (number of rows
+            and columns).
+        decimal : str, default "."
+            Character recognized as the decimal separator, e.g. ``","`` in
+            Europe.
+        line_width : int, optional
+            Width, in characters, at which to wrap a line.
+        min_rows : int, optional
+            Number of rows to show in a truncated output (when the number
+            of rows exceeds ``max_rows``).
+        max_colwidth : int, optional
+            Maximum width, in characters, to truncate each column. By
+            default there is no limit.
+        encoding : str, optional
+            Character encoding to use when writing to ``buf``.
+
+        Returns
+        -------
+        str or None
+            The string representation of the DataFrame when ``buf`` is
+            ``None``; otherwise the result is written to ``buf`` and
+            ``None`` is returned.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2]
+        >>> df['val'] = [float(i + 10) for i in range(3)]
+        >>> df.to_string()
+        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
+        """
+        return self.to_pandas().to_string(
+            buf=buf,
+            columns=columns,
+            col_space=col_space,
+            header=header,
+            index=index,
+            na_rep=na_rep,
+            formatters=formatters,
+            float_format=float_format,
+            sparsify=sparsify,
+            index_names=index_names,
+            justify=justify,
+            max_rows=max_rows,
+            max_cols=max_cols,
+            show_dimensions=show_dimensions,
+            decimal=decimal,
+            line_width=line_width,
+            min_rows=min_rows,
+            max_colwidth=max_colwidth,
+            encoding=encoding,
+        )
 
     @_performance_tracking
     def scatter_by_map(

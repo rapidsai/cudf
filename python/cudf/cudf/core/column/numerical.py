@@ -912,7 +912,7 @@ class NumericalColumn(NumericalBaseColumn):
         return self.isnan().sum()
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         try:
             lhs, rhs = super()._process_values_for_isin(values)
@@ -1117,7 +1117,7 @@ class NumericalColumn(NumericalBaseColumn):
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
 
-                return (min_ >= lower_) and (col.max() < upper_)
+                return (min_ >= lower_) and (col.max() <= upper_)
 
         # want to cast int to uint
         elif self_dtype_numpy.kind == "i" and to_dtype_numpy.kind == "u":
@@ -1125,7 +1125,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(to_dtype_numpy).max
 
             return (self.min() >= 0) and (
-                (i_max_ <= u_max_) or (self.max() < u_max_)
+                (i_max_ <= u_max_) or (self.max() <= u_max_)
             )
 
         # want to cast uint to int
@@ -1133,7 +1133,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(self_dtype_numpy).max
             i_max_ = np.iinfo(to_dtype_numpy).max
 
-            return (u_max_ <= i_max_) or (self.max() < i_max_)
+            return (u_max_ <= i_max_) or (self.max() <= i_max_)
 
         # want to cast int to float
         elif (
