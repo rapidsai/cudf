@@ -41,7 +41,6 @@ namespace CUDF_EXPORT cudf {
  * types
  * @throws std::invalid_argument if any of the input columns have nulls
  * @throws std::logic_error if JIT is not supported by the runtime
- * @throws cudf::evaluation_error if the UDF produces an error during execution.
  *
  * The size of the resulting column is the size of the largest column.
  *
@@ -57,7 +56,7 @@ namespace CUDF_EXPORT cudf {
  * @return              The column resulting from applying the transform function to
  *                      every element of the input
  */
-[[deprecated("Use multi_transform instead")]] std::unique_ptr<column> transform(
+[[deprecated("Use transform_extended instead")]] std::unique_ptr<column> transform(
   std::vector<column_view> const& inputs,
   std::string const& transform_udf,
   data_type output_type,
@@ -102,7 +101,6 @@ struct transform_output {
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
- * @throws cudf::evaluation_error if the UDF produces an error during execution.
  *
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input columns.
@@ -206,6 +204,7 @@ std::unique_ptr<table> multi_transform(
  * @param udf The PTX/CUDA string of the transform function to apply
  * @param source_type   The source type of the UDF (CUDA or PTX)
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param is_fallible Signifies the UDF may produce errors during execution
  * @param user_data     User-defined device data to pass to the UDF.
  * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
  * @param outputs       Specification of the output columns to be created
@@ -213,7 +212,6 @@ std::unique_ptr<table> multi_transform(
  * to prevent overhead of compacting string views into run-end strings column.
  * @param row_size The row size of the transform operation. If not provided, it is inferred from the
  * input columns.
- * @param error_policy Specifies the error handling policy for the transform operation
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              A table containing the columns resulting from applying the transform
@@ -224,12 +222,12 @@ std::unique_ptr<table> multi_transform(
   std::string const& udf,
   udf_source_type source_type,
   null_aware is_null_aware,
+  fallible is_fallible,
   std::optional<void*> user_data,
   std::span<transform_input const> inputs,
   std::span<transform_output const> outputs,
   std::vector<std::unique_ptr<column>>&& string_offsets,
   std::optional<size_type> row_size,
-  error_output error_policy,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -291,30 +289,6 @@ std::unique_ptr<column> compute_column(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Compute a new column by evaluating an expression tree on a table.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
- * @throws cudf::evaluation_error if the evaluation of the expression results in an error during
- * execution.
- *
- * @param table The table used for expression evaluation
- * @param expr The root of the expression tree
- * @param error_policy Specifies the error handling policy for the transform operation
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource
- * @return Output column
- */
-std::unique_ptr<column> compute_column(
-  table_view const& table,
-  ast::expression const& expr,
-  error_output error_policy,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
  * @brief Compute a new column by evaluating an expression tree on a table using a JIT-compiled
  * kernel.
  *
@@ -334,31 +308,6 @@ std::unique_ptr<column> compute_column(
 std::unique_ptr<column> compute_column_jit(
   table_view const& table,
   ast::expression const& expr,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
-
-/**
- * @brief Compute a new column by evaluating an expression tree on a table using a JIT-compiled
- * kernel.
- *
- * This evaluates an expression over a table to produce a new column. Also called an n-ary
- * transform.
- *
- * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
- * @throws cudf::evaluation_error if the evaluation of the expression results in an error during
- * execution.
- *
- * @param table The table used for expression evaluation
- * @param expr The root of the expression tree
- * @param error_policy Specifies the error handling policy for the transform operation
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource
- * @return Output column
- */
-std::unique_ptr<column> compute_column_jit(
-  table_view const& table,
-  ast::expression const& expr,
-  error_output error_policy,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

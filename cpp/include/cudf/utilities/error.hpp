@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include <cudf/errc.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <cuda.h>
@@ -105,6 +106,40 @@ struct data_type_error : std::invalid_argument {
   explicit data_type_error(std::string const& message) : std::invalid_argument(message) {}
 };
 /** @} */
+
+/**
+ * @brief Exception type thrown when evaluating an operator function results in an error (e.g.
+ * overflow, division by zero, etc.)
+ *
+ */
+struct evaluation_error : public std::exception {
+  /**
+   * @brief Construct a new evaluation error object.
+   *
+   * @param error The maximum error code that occurred during evaluation
+   * @param message An error message describing the evaluation error
+   */
+  evaluation_error(errc error, std::string message)
+    : max_error_(error), message_(std::move(message))
+  {
+  }
+
+  /**
+   * @brief Get the error message.
+   * @return A C-string describing the error
+   */
+  [[nodiscard]] char const* what() const noexcept override { return message_.c_str(); }
+
+  /**
+   * @brief Get the maximum error code that occurred during evaluation.
+   * @return The maximum error code
+   */
+  [[nodiscard]] errc error_code() const { return max_error_; }
+
+ private:
+  errc max_error_;       //< The maximum error code that occurred during evaluation
+  std::string message_;  //< An error message describing the evaluation error
+};
 
 }  // namespace CUDF_EXPORT cudf
 

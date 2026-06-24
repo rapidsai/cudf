@@ -22,96 +22,6 @@
 namespace cudf::detail::row_ir {
 
 /**
- * @brief Get the opcode name for a given opcode
- * This function returns the name of the opcode corresponding to a given opcode.
- * The opcode name matches the operators in `cudf::detail::operators`.
- */
-[[nodiscard]] std::string_view get_opcode_name(opcode op)
-{
-  switch (op) {
-    case opcode::GET_INPUT: return "GET_INPUT";
-    case opcode::SET_OUTPUT: return "SET_OUTPUT";
-    case opcode::IDENTITY: return "IDENTITY";
-    case opcode::IS_NULL: return "IS_NULL";
-    case opcode::COALESCE: return "COALESCE";
-    case opcode::PREDICATE: return "PREDICATE";
-    case opcode::ABS: return "ABS";
-    case opcode::ADD: return "ADD";
-    case opcode::DIV: return "DIV";
-    case opcode::TRUE_DIV: return "TRUE_DIV";
-    case opcode::FLOOR_DIV: return "FLOOR_DIV";
-    case opcode::MOD: return "MOD";
-    case opcode::PYMOD: return "PYMOD";
-    case opcode::MUL: return "MUL";
-    case opcode::NEG: return "NEG";
-    case opcode::SUB: return "SUB";
-    case opcode::ADD_OVERFLOW: return "ADD_OVERFLOW";
-    case opcode::SUB_OVERFLOW: return "SUB_OVERFLOW";
-    case opcode::MUL_OVERFLOW: return "MUL_OVERFLOW";
-    case opcode::DIV_OVERFLOW: return "DIV_OVERFLOW";
-    case opcode::MOD_OVERFLOW: return "MOD_OVERFLOW";
-    case opcode::ABS_OVERFLOW: return "ABS_OVERFLOW";
-    case opcode::NEG_OVERFLOW: return "NEG_OVERFLOW";
-    case opcode::CHECK_PRECISION: return "CHECK_PRECISION";
-    case opcode::BITWISE_AND: return "BITWISE_AND";
-    case opcode::BITWISE_INVERT: return "BITWISE_INVERT";
-    case opcode::BITWISE_OR: return "BITWISE_OR";
-    case opcode::BITWISE_XOR: return "BITWISE_XOR";
-    case opcode::BITWISE_SHIFT_LEFT: return "BITWISE_SHIFT_LEFT";
-    case opcode::BITWISE_SHIFT_RIGHT: return "BITWISE_SHIFT_RIGHT";
-    case opcode::CAST_TO_BOOL8: return "CAST_TO_BOOL8";
-    case opcode::CAST_TO_INT8: return "CAST_TO_INT8";
-    case opcode::CAST_TO_INT16: return "CAST_TO_INT16";
-    case opcode::CAST_TO_INT32: return "CAST_TO_INT32";
-    case opcode::CAST_TO_INT64: return "CAST_TO_INT64";
-    case opcode::CAST_TO_UINT8: return "CAST_TO_UINT8";
-    case opcode::CAST_TO_UINT16: return "CAST_TO_UINT16";
-    case opcode::CAST_TO_UINT32: return "CAST_TO_UINT32";
-    case opcode::CAST_TO_UINT64: return "CAST_TO_UINT64";
-    case opcode::CAST_TO_FLOAT32: return "CAST_TO_FLOAT32";
-    case opcode::CAST_TO_FLOAT64: return "CAST_TO_FLOAT64";
-    case opcode::CAST_TO_DECIMAL32: return "CAST_TO_DECIMAL32";
-    case opcode::CAST_TO_DECIMAL64: return "CAST_TO_DECIMAL64";
-    case opcode::CAST_TO_DECIMAL128: return "CAST_TO_DECIMAL128";
-    case opcode::RESCALE: return "RESCALE";
-    case opcode::EQUAL: return "EQUAL";
-    case opcode::NOT_EQUAL: return "NOT_EQUAL";
-    case opcode::GREATER: return "GREATER";
-    case opcode::GREATER_EQUAL: return "GREATER_EQUAL";
-    case opcode::LESS: return "LESS";
-    case opcode::LESS_EQUAL: return "LESS_EQUAL";
-    case opcode::NULL_EQUAL: return "NULL_EQUAL";
-    case opcode::NULL_LOGICAL_AND: return "NULL_LOGICAL_AND";
-    case opcode::NULL_LOGICAL_OR: return "NULL_LOGICAL_OR";
-    case opcode::LOGICAL_AND: return "LOGICAL_AND";
-    case opcode::LOGICAL_OR: return "LOGICAL_OR";
-    case opcode::LOGICAL_NOT: return "LOGICAL_NOT";
-    case opcode::IF_ELSE: return "IF_ELSE";
-    case opcode::CBRT: return "CBRT";
-    case opcode::CEIL: return "CEIL";
-    case opcode::FLOOR: return "FLOOR";
-    case opcode::RINT: return "RINT";
-    case opcode::SQRT: return "SQRT";
-    case opcode::POW: return "POW";
-    case opcode::EXP: return "EXP";
-    case opcode::LOG: return "LOG";
-    case opcode::ARCCOS: return "ARCCOS";
-    case opcode::ARCCOSH: return "ARCCOSH";
-    case opcode::ARCSIN: return "ARCSIN";
-    case opcode::ARCSINH: return "ARCSINH";
-    case opcode::ARCTAN: return "ARCTAN";
-    case opcode::ARCTANH: return "ARCTANH";
-    case opcode::COS: return "COS";
-    case opcode::COSH: return "COSH";
-    case opcode::SIN: return "SIN";
-    case opcode::SINH: return "SINH";
-    case opcode::TAN: return "TAN";
-    case opcode::TANH: return "TANH";
-    default: CUDF_FAIL(std::format("Invalid opcode: {}", static_cast<int>(op)), std::runtime_error);
-  }
-}
-
-/**
  * @brief Indicates how an operator propagates null values
  */
 enum class [[nodiscard]] null_output : uint8_t {
@@ -119,63 +29,6 @@ enum class [[nodiscard]] null_output : uint8_t {
   ALWAYS_VALID    = 1,
   ALWAYS_NULLABLE = 2,
 };
-
-[[nodiscard]] null_output get_op_null_output(opcode op, bool nullify_on_error)
-{
-  switch (op) {
-    case opcode::IS_NULL:
-    case opcode::NULL_EQUAL:
-    case opcode::PREDICATE: return null_output::ALWAYS_VALID;
-
-    case opcode::ADD_OVERFLOW:
-    case opcode::SUB_OVERFLOW:
-    case opcode::MUL_OVERFLOW:
-    case opcode::DIV_OVERFLOW:
-    case opcode::MOD_OVERFLOW:
-    case opcode::ABS_OVERFLOW:
-    case opcode::NEG_OVERFLOW:
-    case opcode::CHECK_PRECISION:
-      return nullify_on_error ? null_output::ALWAYS_NULLABLE : null_output::PROPAGATE;
-
-    case opcode::NULL_LOGICAL_AND:
-    case opcode::NULL_LOGICAL_OR: return null_output::ALWAYS_NULLABLE;
-
-    default: return null_output::PROPAGATE;
-  }
-}
-
-/**
- * @brief Indicates whether the output of the operator will be different when it is called with or
- * without the null-ness of a value.
- */
-[[nodiscard]] bool get_op_is_null_dependent(opcode op)
-{
-  switch (op) {
-    case opcode::IS_NULL:
-    case opcode::NULL_EQUAL:
-    case opcode::NULL_LOGICAL_AND:
-    case opcode::NULL_LOGICAL_OR:
-    case opcode::PREDICATE:
-    case opcode::COALESCE: return true;
-
-    default: return false;
-  }
-}
-
-[[nodiscard]] bool get_op_is_fallible(opcode op, bool nullify_on_error)
-{
-  switch (op) {
-    case opcode::ADD_OVERFLOW:
-    case opcode::SUB_OVERFLOW:
-    case opcode::MUL_OVERFLOW:
-    case opcode::DIV_OVERFLOW:
-    case opcode::MOD_OVERFLOW:
-    case opcode::ABS_OVERFLOW:
-    case opcode::NEG_OVERFLOW:
-    case opcode::CHECK_PRECISION: return !nullify_on_error;
-    default: return false;
-  }
-}
 
 /**
  * @brief Get the output scale for a given operator and input scales
@@ -209,6 +62,9 @@ enum class [[nodiscard]] null_output : uint8_t {
   }
 }
 
+/**
+ * @brief A type mask used to indicate the types of the arguments and output of an operator.
+ */
 enum class [[nodiscard]] type : uint64_t {
   NONE                   = 0x0,
   BOOL8                  = 0x1,
@@ -264,107 +120,119 @@ constexpr type operator&(type lhs, type rhs)
 
 constexpr type operator~(type t) { return static_cast<type>(~static_cast<uint64_t>(t)); }
 
-struct [[nodiscard]] op_type {
-  type output                             = type::NONE;
-  cuda::std::inplace_vector<type, 4> args = {};
+struct [[nodiscard]] opcode_info {
+  std::string_view name                             = "";
+  null_output null_policy                      = null_output::PROPAGATE;
+  bool is_null_dependent                       = false;
+  bool is_fallible                             = false;
+  cuda::std::inplace_vector<type, 4> arg_types = {};
+  type output_type                             = type::NONE;
 };
 
 /**
- * @brief Get the typing information for a given operator
- * This function returns the expected input and output types for a given operator. The typing
- * information can be used for type checking and inference when constructing expression trees.
- * @param op The operator for which to get the typing information
- * @return An `op_typing` struct containing the expected output type and input types for the
- * operator
+ * @brief Get the opcode information for a given operator
  */
-[[nodiscard]] op_type get_op_type(opcode op)
+[[nodiscard]] opcode_info get_op_info(opcode op, bool nullify_on_error)
 {
-  switch (op) {
-    case opcode::GET_INPUT: return {type::INPUT, {}};
-    case opcode::SET_OUTPUT: return {type::NONE, {type::ALL}};
-    case opcode::IDENTITY: return {type::ARG0, {type::ALL}};
-    case opcode::IS_NULL: return {type::BOOL8, {type::ALL}};
-    case opcode::COALESCE: return {type::ARG0, {type::ALL, type::ARG0}};
-    case opcode::PREDICATE: return {type::ARG0, {type::BOOL8}};
-    case opcode::ABS:
-    case opcode::NEG:
-    case opcode::ABS_OVERFLOW:
-    case opcode::NEG_OVERFLOW: return {type::ARG0, {type::ARITHMETIC}};
-    case opcode::FLOOR_DIV: return {type::ARG0, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
-    case opcode::TRUE_DIV:
-      return {type::FLOAT64, {type{type::FLOATS | type::INTEGERS}, type::ARG0}};
-    case opcode::ADD:
-    case opcode::DIV:
-    case opcode::MOD:
-    case opcode::PYMOD:
-    case opcode::MUL:
-    case opcode::SUB:
-    case opcode::ADD_OVERFLOW:
-    case opcode::SUB_OVERFLOW:
-    case opcode::MUL_OVERFLOW:
-    case opcode::DIV_OVERFLOW:
-    case opcode::MOD_OVERFLOW: return {type::ARG0, {type::ARITHMETIC, type::ARG0}};
-    case opcode::CHECK_PRECISION: return {type::ARG0, {type::DECIMALS, type::INT32}};
-    case opcode::BITWISE_AND:
-    case opcode::BITWISE_INVERT:
-    case opcode::BITWISE_OR:
-    case opcode::BITWISE_XOR:
-    case opcode::BITWISE_SHIFT_LEFT:
-    case opcode::BITWISE_SHIFT_RIGHT: return {type::ARG0, {type::INTEGERS, type::ARG0}};
-    case opcode::CAST_TO_BOOL8: return {type::BOOL8, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_INT8: return {type::INT8, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_INT16: return {type::INT16, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_INT32: return {type::INT32, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_INT64: return {type::INT64, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_UINT8: return {type::UINT8, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_UINT16: return {type::UINT16, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_UINT32: return {type::UINT32, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_UINT64: return {type::UINT64, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_FLOAT32: return {type::FLOAT32, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_FLOAT64: return {type::FLOAT64, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::CAST_TO_DECIMAL32: return {type::DECIMAL32, {type::DECIMALS}};
-    case opcode::CAST_TO_DECIMAL64: return {type::DECIMAL64, {type::DECIMALS}};
-    case opcode::CAST_TO_DECIMAL128: return {type::DECIMAL128, {type::DECIMALS}};
-    case opcode::RESCALE: return {type::ARG0, {type::DECIMALS, type::INT32}};
-    case opcode::EQUAL:
-    case opcode::GREATER:
-    case opcode::GREATER_EQUAL:
-    case opcode::LESS:
-    case opcode::LESS_EQUAL:
-    case opcode::NOT_EQUAL:
-    case opcode::NULL_EQUAL: return {type::BOOL8, {type::ALL, type::ARG0}};
-    case opcode::NULL_LOGICAL_AND:
-    case opcode::NULL_LOGICAL_OR:
-    case opcode::LOGICAL_AND:
-    case opcode::LOGICAL_OR:
-      return {type::BOOL8, {type{type::ARITHMETIC | type::BOOL8}, type::ARG0}};
-    case opcode::LOGICAL_NOT: return {type::BOOL8, {type{type::ARITHMETIC | type::BOOL8}}};
-    case opcode::IF_ELSE: return {type::ARG0, {type::ALL, type::ARG0, type::BOOL8}};
-    case opcode::CBRT:
-    case opcode::CEIL:
-    case opcode::FLOOR:
-    case opcode::RINT:
-    case opcode::SQRT:
-    case opcode::POW:
-    case opcode::EXP:
-    case opcode::LOG:
-    case opcode::ARCCOS:
-    case opcode::ARCCOSH:
-    case opcode::ARCSIN:
-    case opcode::ARCSINH:
-    case opcode::ARCTAN:
-    case opcode::ARCTANH:
-    case opcode::COS:
-    case opcode::COSH:
-    case opcode::SIN:
-    case opcode::SINH:
-    case opcode::TAN:
-    case opcode::TANH: return {type::ARG0, {type::FLOATS}};
-    default: CUDF_FAIL(std::format("Invalid opcode: {}", static_cast<int>(op)), std::runtime_error);
+  using enum null_output;
+  using enum type;
+
+  static const opcode_info map[] = {
+    {"GET_INPUT", PROPAGATE, false, false, {}, INPUT},
+    {"SET_OUTPUT", PROPAGATE, false, false, {ALL}, NONE},
+    {"IDENTITY", PROPAGATE, false, false, {ALL}, ARG0},
+    {"IS_NULL", ALWAYS_VALID, true, false, {ALL}, BOOL8},
+    {"COALESCE", PROPAGATE, true, false, {ALL, ARG0}, ARG0},
+    {"PREDICATE", ALWAYS_VALID, true, false, {BOOL8}, ARG0},
+    {"ADD", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
+    {"SUB", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
+    {"MUL", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
+    {"DIV", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
+    {"NEG", PROPAGATE, false, false, {ARITHMETIC}, ARG0},
+    {"ABS", PROPAGATE, false, false, {ARITHMETIC}, ARG0},
+    {"MOD", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
+    {"PYMOD", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
+    {"TRUE_DIV", PROPAGATE, false, false, {type{FLOATS | INTEGERS}, ARG0}, FLOAT64},
+    {"FLOOR_DIV", PROPAGATE, false, false, {type{FLOATS | INTEGERS}, ARG0}, ARG0},
+    {"ADD_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
+    {"SUB_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
+    {"MUL_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
+    {"DIV_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
+    {"NEG_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC}, ARG0},
+    {"ABS_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC}, ARG0},
+    {"MOD_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
+    {"CHECK_PRECISION", PROPAGATE, false, true, {DECIMALS, INT32}, ARG0},
+    {"BITWISE_AND", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
+    {"BITWISE_INVERT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
+    {"BITWISE_OR", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
+    {"BITWISE_XOR", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
+    {"BITWISE_SHIFT_LEFT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
+    {"BITWISE_SHIFT_RIGHT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
+    {"CAST_TO_BOOL8", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, BOOL8},
+    {"CAST_TO_INT8", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT8},
+    {"CAST_TO_INT16", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT16},
+    {"CAST_TO_INT32", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT32},
+    {"CAST_TO_INT64", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT64},
+    {"CAST_TO_UINT8", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT8},
+    {"CAST_TO_UINT16", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT16},
+    {"CAST_TO_UINT32", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT32},
+    {"CAST_TO_UINT64", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT64},
+    {"CAST_TO_FLOAT32", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, FLOAT32},
+    {"CAST_TO_FLOAT64", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, FLOAT64},
+    {"CAST_TO_DECIMAL32", PROPAGATE, false, false, {DECIMALS}, DECIMAL32},
+    {"CAST_TO_DECIMAL64", PROPAGATE, false, false, {DECIMALS}, DECIMAL64},
+    {"CAST_TO_DECIMAL128", PROPAGATE, false, false, {DECIMALS}, DECIMAL128},
+    {"RESCALE", PROPAGATE, false, false, {DECIMALS, INT32}, ARG0},
+    {"EQUAL", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
+    {"NOT_EQUAL", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
+    {"GREATER", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
+    {"GREATER_EQUAL", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
+    {"LESS", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
+    {"LESS_EQUAL", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
+    {"NULL_EQUAL", ALWAYS_VALID, true, false, {ALL, ARG0}, BOOL8},
+    {"NULL_LOGICAL_AND", ALWAYS_NULLABLE, true, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"NULL_LOGICAL_OR", ALWAYS_NULLABLE, true, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"LOGICAL_AND", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"LOGICAL_OR", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"LOGICAL_NOT", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, BOOL8},
+    {"IF_ELSE", PROPAGATE, false, false, {ALL, ARG0, BOOL8}, ARG0},
+    {"CBRT", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"CEIL", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"FLOOR", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"RINT", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"SQRT", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"POW", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"EXP", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"LOG", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"ARCCOS", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"ARCCOSH", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"ARCSIN", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"ARCSINH", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"ARCTAN", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"ARCTANH", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"COS", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"COSH", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"SIN", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"SINH", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"TAN", PROPAGATE, false, false, {FLOATS}, ARG0},
+    {"TANH", PROPAGATE, false, false, {FLOATS}, ARG0},
+  };
+
+  auto index = static_cast<size_t>(op);
+  CUDF_EXPECTS(index < std::size(map),
+               std::format("Invalid opcode: {}", static_cast<int>(op)),
+               std::runtime_error);
+
+  auto info = map[index];
+  if (nullify_on_error && info.is_fallible) {
+    info.is_fallible = false;
+    info.null_policy = null_output::ALWAYS_NULLABLE;
   }
+
+  return info;
 }
 
-[[nodiscard]] size_t get_op_arity(opcode op) { return get_op_type(op).args.size(); }
+[[nodiscard]] size_t get_op_arity(opcode op) { return get_op_info(op, false).arg_types.size(); }
 
 opcode as_opcode(ast::ast_operator op)
 {
@@ -505,25 +373,24 @@ data_type get_return_type(opcode op,
     arg_scales.emplace_back(type.scale());
   }
 
-  auto op_type_match = get_op_type(op);
-  auto rescaled      = get_op_output_scale(op, arg_scales, target_scale);
+  auto op_info  = get_op_info(op, false);
+  auto rescaled = get_op_output_scale(op, arg_scales, target_scale);
 
   for (size_t i = 0; i < args.size(); ++i) {
-    auto required_type = op_type_match.args[i];
+    auto required_type = op_info.arg_types[i];
     auto arg_type      = arg_types[i];
 
     if ((required_type & type::ARG_MASK) != type::NONE) {
       auto src_index = static_cast<size_t>(required_type & ~type::ARG_MASK);
       CUDF_EXPECTS(
         src_index < i,
-        std::format(
-          "Invalid type match rule for operator `{}` at argument #{}", get_opcode_name(op), i),
+        std::format("Invalid type match rule for operator `{}` at argument #{}", op_info.name, i),
         std::runtime_error);
       CUDF_EXPECTS(args[i].id() == args[src_index].id(),
                    std::format("Argument #{} of operator `{}` does not match type of argument "
                                "#{}. Got `{}`, expected `{}`",
                                i,
-                               get_opcode_name(op),
+                               op_info.name,
                                src_index,
                                type_to_name(args[i]),
                                type_to_name(args[src_index])));
@@ -532,22 +399,21 @@ data_type get_return_type(opcode op,
         (arg_type & required_type) != type::NONE,
         std::format("Argument #{} of operator `{}` does not match expected types. Got {}",
                     i,
-                    get_opcode_name(op),
+                    op_info.name,
                     type_to_name(args[i])));
     }
   }
 
-  if ((op_type_match.output & type::ARG_MASK) != type::NONE) {
-    auto arg_index = static_cast<size_t>(op_type_match.output & ~type::ARG_MASK);
+  if ((op_info.output_type & type::ARG_MASK) != type::NONE) {
+    auto arg_index = static_cast<size_t>(op_info.output_type & ~type::ARG_MASK);
     auto type      = args[arg_index].id();
     auto scale     = numeric::scale_type{is_fixed_point(data_type{type}) ? rescaled : 0};
     return data_type{type, scale};
   } else {
-    CUDF_EXPECTS(
-      op_type_match.output != type::NONE,
-      std::format("Invalid type match rule for operator `{}` return type", get_opcode_name(op)),
-      std::runtime_error);
-    auto type  = as_type_id(op_type_match.output);
+    CUDF_EXPECTS(op_info.output_type != type::NONE,
+                 std::format("Invalid type match rule for operator `{}` return type", op_info.name),
+                 std::runtime_error);
+    auto type  = as_type_id(op_info.output_type);
     auto scale = numeric::scale_type{is_fixed_point(data_type{type}) ? rescaled : 0};
     return data_type{type, scale};
   }
@@ -603,8 +469,10 @@ node::node(opcode op,
     nullify_on_error_{nullify_on_error},
     args_{std::move(args)}
 {
+  auto op_info = get_op_info(op_, false);
+
   CUDF_EXPECTS(op_ != opcode::GET_INPUT && op_ != opcode::SET_OUTPUT,
-               std::format("Invalid opcode `{}` for operation node.", get_opcode_name(op_)),
+               std::format("Invalid opcode `{}` for operation node.", op_info.name),
                std::runtime_error);
 
   if (op != opcode::RESCALE) {
@@ -612,7 +480,7 @@ node::node(opcode op,
     auto actual_arity   = args_.size();
     CUDF_EXPECTS(actual_arity == expected_arity,
                  std::format("Invalid number of arguments for operator `{}`. Expected {}, Got {}.",
-                             get_opcode_name(op_),
+                             op_info.name,
                              expected_arity,
                              actual_arity),
                  std::runtime_error);
@@ -657,9 +525,11 @@ bool node::is_null_aware() const
   if (op_ == opcode::GET_INPUT) { return false; }
 
   // to emit nulls for always-nullable operators, we  need to mark them as null-aware
-  if (get_op_null_output(op_, nullify_on_error_) == null_output::ALWAYS_NULLABLE) { return true; }
+  auto op_info = get_op_info(op_, nullify_on_error_);
 
-  if (get_op_is_null_dependent(op_)) { return true; }
+  if (op_info.null_policy == null_output::ALWAYS_NULLABLE) { return true; }
+
+  if (op_info.is_null_dependent) { return true; }
 
   CUDF_EXPECTS(!args_.empty(),
                "Unexpectedly found an operator node with no arguments. All operator nodes should "
@@ -669,11 +539,25 @@ bool node::is_null_aware() const
   return std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_null_aware(); });
 }
 
+bool node::is_fallible() const
+{
+  if (op_ == opcode::GET_INPUT) { return false; }
+
+  if (get_op_info(op_, nullify_on_error_).is_fallible) { return true; }
+
+  CUDF_EXPECTS(!args_.empty(),
+               "Unexpectedly found an operator node with no arguments. All operator nodes should "
+               "have at least one argument.",
+               std::runtime_error);
+
+  return std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_fallible(); });
+}
+
 bool node::is_always_valid() const
 {
   if (op_ == opcode::GET_INPUT) { return false; }
 
-  if (get_op_null_output(op_, nullify_on_error_) == null_output::ALWAYS_VALID) { return true; }
+  if (get_op_info(op_, nullify_on_error_).null_policy == null_output::ALWAYS_VALID) { return true; }
 
   CUDF_EXPECTS(!args_.empty(),
                "Unexpectedly found an operator node with no arguments. All operator nodes should "
@@ -754,6 +638,7 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
         } break;
 
         default: {
+          auto op_info   = get_op_info(op_, nullify_on_error_);
           auto first_arg = std::format("{}", args_[0]->get_id());
           auto args_str  = (args_.size() == 1)
                              ? std::string{first_arg}
@@ -774,11 +659,11 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
 )***",
             type,
             id_,
-            get_opcode_name(op_),
+            op_info.name,
             nullify_on_error_,
             args_str));
 
-          if (get_op_is_fallible(op_, nullify_on_error_)) {
+          if (op_info.is_fallible) {
             sink.emit(R"***(CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***");
           }
@@ -848,7 +733,7 @@ bool is_nullable(scalar_input const& in) { return in.scalar_column->view().nulla
 
 bool is_nullable(column_input const& in) { return in.column.nullable(); }
 
-std::tuple<std::string, null_aware, output_nullability> ast_converter::generate_code(
+std::tuple<std::string, null_aware, fallible, output_nullability> ast_converter::generate_code(
   target target_id, ast::expression const& expr, std::string_view function_name)
 {
   // add 1 auto-deduced output variable
@@ -863,6 +748,9 @@ std::tuple<std::string, null_aware, output_nullability> ast_converter::generate_
 
   bool is_null_aware = std::any_of(
     output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_null_aware(); });
+
+  bool is_fallible = std::any_of(
+    output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_fallible(); });
 
   bool output_is_always_valid = std::all_of(
     output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_always_valid(); });
@@ -927,7 +815,10 @@ std::tuple<std::string, null_aware, output_nullability> ast_converter::generate_
     ir->emit_code(instance_, target, sink);
   }
   sink.emit("return cudf::errc::SUCCESS;\n}");
-  return {sink.get_code(), is_null_aware ? null_aware::YES : null_aware::NO, null_policy};
+  return {sink.get_code(),
+          is_null_aware ? null_aware::YES : null_aware::NO,
+          is_fallible ? fallible::YES : fallible::NO,
+          null_policy};
 }
 
 std::variant<column_view, scalar_column_view> get_column_view(scalar_input const& in)
@@ -955,7 +846,7 @@ transform_args ast_converter::compute_column(target target_id,
   // TODO(lamarrr): consider deduplicating ast expression's input column references. See
   // TransformTest/1.DeeplyNestedArithmeticLogicalExpression for reference
 
-  auto [code, is_null_aware, output_nullability] =
+  auto [code, is_null_aware, is_fallible, output_nullability] =
     converter.generate_code(target_id, expr, function_name);
   std::vector<std::variant<column_view, scalar_column_view>> inputs;
   std::vector<std::unique_ptr<column>> scalar_columns;
@@ -991,6 +882,7 @@ transform_args ast_converter::compute_column(target target_id,
                                  .udf                  = std::move(code),
                                  .source_type          = cudf::udf_source_type::CUDA,
                                  .is_null_aware        = is_null_aware,
+                                 .is_fallible          = is_fallible,
                                  .user_data            = std::nullopt,
                                  .inputs               = inputs,
                                  .outputs{output},

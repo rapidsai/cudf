@@ -12,7 +12,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/ast/expressions.hpp>
-#include <cudf/ast/jit/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -20,7 +19,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/transform.hpp>
-#include <cudf/utilities/evaluation_error.hpp>
 
 #include <rmm/cuda_stream.hpp>
 

@@ -37,14 +37,17 @@ namespace cudf {
 namespace jit {
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
-template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
+template <bool is_null_aware,
+          bool discard_errors,
+          bool has_user_data,
+          typename InputAccessors,
+          typename OutputAccessors>
 CUDF_KERNEL void transform_kernel(size_type row_size,
                                   bitmask_type const* __restrict__ stencil,
                                   void* __restrict__ user_data,
                                   column_device_view_core const* __restrict__ input_cols,
                                   mutable_column_device_view_core const* __restrict__ output_cols,
-                                  int32_t* __restrict__ max_error,
-                                  errc* __restrict__ row_errors)
+                                  int32_t* __restrict__ max_error)
 {
   auto start        = detail::grid_1d::global_thread_id();
   auto stride       = detail::grid_1d::grid_stride();
@@ -54,7 +57,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
     auto operation = [&]<typename Args>(Args args) {
       // TODO: static assert invocable
       auto func = [&](auto... a) {
-        if constexpr (!cuda::std::is_void_v<decltype(GENERIC_TRANSFORM_OP(a...))>) {
+        if constexpr (!discard_errors) {
           return GENERIC_TRANSFORM_OP(a...);
         } else {
           GENERIC_TRANSFORM_OP(a...);
@@ -87,9 +90,8 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
         (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...);
       });
 
-      if (row_errors != nullptr) { row_errors[row] = row_error; }
+      if constexpr (!discard_errors) { thread_error = cuda::std::max(thread_error, row_error); }
 
-      thread_error = cuda::std::max(thread_error, row_error);
     } else {
       auto active_mask = __ballot_sync(__activemask(), row < row_size);
 
@@ -111,13 +113,11 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
          ...);
       });
 
-      if (row_errors != nullptr) { row_errors[row] = row_error; }
-
-      thread_error = cuda::std::max(thread_error, row_error);
+      if constexpr (!discard_errors) { thread_error = cuda::std::max(thread_error, row_error); }
     }
   }
 
-  atomicMax(max_error, static_cast<int32_t>(thread_error));
+  if constexpr (!discard_errors) { atomicMax(max_error, static_cast<int32_t>(thread_error)); }
 }
 
 }  // namespace jit
@@ -138,9 +138,7 @@ extern "C" __global__ void cudf_kernel_entry(
   void* __restrict__ user_data,
   cudf::column_device_view_core const* __restrict__ input_cols,
   cudf::mutable_column_device_view_core const* __restrict__ output_cols,
-  int32_t* __restrict__ max_error,
-  cudf::errc* __restrict__ row_errors)
+  int32_t* __restrict__ max_error)
 {
-  CUDF_KERNEL_INSTANCE(
-    row_size, stencil, user_data, input_cols, output_cols, max_error, row_errors);
+  CUDF_KERNEL_INSTANCE(row_size, stencil, user_data, input_cols, output_cols, max_error);
 }

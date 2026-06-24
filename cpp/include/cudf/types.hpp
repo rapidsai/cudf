@@ -262,11 +262,11 @@ enum class output_nullability : uint8_t {
 };
 
 /**
- * @brief Enum to specify the error handling policy for the transform operation
- */
-enum class [[nodiscard]] error_output : int8_t {
-  ANY,     //< Only the maximum error code will be recorded
-  PER_ROW  //< Per-row errors will be recorded
+* @brief Indicates whether a function can produce an error during execution.
+*/
+enum class fallible : bool {
+  NO  = 0,  ///< The function is not fallible
+  YES = 1   ///< The function is fallible
 };
 
 /**

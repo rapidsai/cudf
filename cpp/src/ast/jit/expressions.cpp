@@ -3,7 +3,7 @@
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "cudf/ast/jit/expressions.hpp"
+#include "cudf/ast/expressions.hpp"
 
 #include "ast/jit/expressions.hpp"
 #include "jit/row_ir.hpp"
