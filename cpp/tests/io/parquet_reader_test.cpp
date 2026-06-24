@@ -15,7 +15,6 @@
 #include <cudf_test/table_utilities.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
 #include <cudf/stream_compaction.hpp>
@@ -35,9 +34,7 @@
 #include <limits>
 #include <memory>
 #include <stdexcept>
-#include <string>
 #include <utility>
-#include <vector>
 
 using ParquetDecompressionTest = DecompressionTest<ParquetReaderTest>;
 
