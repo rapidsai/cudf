@@ -47,7 +47,7 @@ class UCXXEnvironment : public Environment {
   {
     // Ensure UCXX cleanup before MPI. If this is not done failures related to
     // accessing the CUDA context may be thrown during shutdown.
-    comm_ = nullptr;  // Clean up the communicator.
+    comm_       = nullptr;  // Clean up the communicator.
     split_comm_ = nullptr;
     RAPIDSMPF_MPI(MPI_Finalize());
   }
