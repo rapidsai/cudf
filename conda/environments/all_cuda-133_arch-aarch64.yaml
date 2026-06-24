@@ -51,7 +51,7 @@ dependencies:
 - librmm==26.8.*,>=0.0.0a0
 - libucxx==0.51.*,>=0.0.0a0
 - make
-- matplotlib<3.11
+- matplotlib-base<3.11
 - mmh3
 - moto>=4.0.8
 - msgpack-python

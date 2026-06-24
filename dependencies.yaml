@@ -1608,7 +1608,7 @@ dependencies:
         packages:
           # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
           # (https://github.com/pandas-dev/pandas/pull/65742)
-          - matplotlib<3.11
+          - matplotlib-base<3.11
           - numexpr
           - odfpy
           - pyxlsb
