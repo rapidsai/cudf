@@ -2888,6 +2888,7 @@ class IndexedFrame(Frame):
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
                     label_dtype=self._data.label_dtype,
+                    level_dtypes=self._data._level_dtypes,
                     verify=False,
                 )
             out = self._from_data_like_self(ca)

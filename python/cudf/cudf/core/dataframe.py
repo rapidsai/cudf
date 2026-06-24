@@ -159,6 +159,17 @@ def _shape_mismatch_error(x, y):
     )
 
 
+class _RowLabelKeyError(KeyError):
+    """Marks a ``KeyError`` raised while looking up a *row* label.
+
+    ``_DataFrameLocIndexer.__getitem__`` retries a failed lookup as
+    ``(arg, slice(None))`` to support pandas-like tuple indexing. That retry
+    must only fire when *column* gathering failed, not when the row label
+    itself is genuinely missing (otherwise a bare scalar row miss is silently
+    reinterpreted positionally instead of raising ``KeyError``).
+    """
+
+
 class _DataFrameIndexer(_FrameIndexer):
     def __setitem__(self, key, value):
         if not isinstance(key, tuple):
@@ -178,8 +189,15 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             # tuple arguments to index into MultiIndex dataframes.
             try:
                 return self._getitem_tuple_arg(arg)
+            except _RowLabelKeyError as e:
+                # A genuine row-label miss must raise, not retry positionally.
+                raise KeyError(*e.args) from None
             except (TypeError, KeyError, IndexError, ValueError):
-                return self._getitem_tuple_arg((arg, slice(None)))
+                # The retry reinterprets ``arg`` as the full per-level row key
+                # (pandas "Form A"), so scalar-selected levels are dropped.
+                return self._getitem_tuple_arg(
+                    (arg, slice(None)), per_level=True
+                )
         else:
             (
                 row_key,
@@ -198,7 +216,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             )
 
     @_performance_tracking
-    def _getitem_tuple_arg(self, arg):
+    def _getitem_tuple_arg(self, arg, per_level=False):
         # Step 1: Gather columns
         if isinstance(arg, tuple):
             columns_df = self._frame._get_columns_by_label(arg[1])
@@ -226,14 +244,50 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     row_arg = (arg,)
                 else:
                     row_arg = arg
-                result = columns_df.index._get_row_major(columns_df, row_arg)
-                if (
-                    len(result) == 1
-                    and isinstance(arg, tuple)
-                    and len(arg) > 1
-                    and is_scalar(arg[1])
-                ):
-                    return result._columns[0].element_indexing(0)
+                try:
+                    result = columns_df.index._get_row_major(
+                        columns_df, row_arg, per_level=per_level
+                    )
+                except KeyError as e:
+                    # Tag a row-label miss so __getitem__ raises instead of
+                    # retrying it as a positional/column lookup.
+                    raise _RowLabelKeyError(*e.args) from None
+                # A column key that selects a single complete column (a scalar
+                # label for single-level columns, or a full-length tuple for
+                # MultiIndex columns) yields a Series, collapsing to a scalar
+                # only when the row key is itself a full scalar label.
+                col_key = (
+                    arg[1]
+                    if (isinstance(arg, tuple) and len(arg) > 1)
+                    else None
+                )
+                if col_key is not None:
+                    col_nlevels = self._frame._data.nlevels
+                    col_is_single_label = (
+                        is_scalar(col_key)
+                        if col_nlevels == 1
+                        # A full-length all-scalar tuple is one complete
+                        # column label; a tuple containing a slice/list is a
+                        # column *slicer* selecting multiple columns.
+                        else (
+                            isinstance(col_key, tuple)
+                            and len(col_key) == col_nlevels
+                            and all(is_scalar(x) for x in col_key)
+                        )
+                    )
+                else:
+                    col_is_single_label = False
+                if col_is_single_label:
+                    row_is_full_label = is_scalar(row_arg) or (
+                        isinstance(row_arg, tuple)
+                        and len(row_arg) == columns_df.index.nlevels
+                        and all(is_scalar(x) for x in row_arg)
+                    )
+                    if isinstance(result, cudf.DataFrame):
+                        result = result[result._column_names[0]]
+                    if len(result) == 1 and row_is_full_label:
+                        return result._column.element_indexing(0)
+                    return result
                 return result
         else:
             raise RuntimeError(
@@ -680,6 +734,7 @@ def _array_to_column_accessor(
         multiindex=isinstance(columns_labels, pd.MultiIndex),
         label_dtype=columns_labels.dtype,
         level_names=tuple(columns_labels.names),
+        level_dtypes=_pd_index_level_dtypes(columns_labels),
     )
 
 
@@ -1089,6 +1144,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 rangeindex=isinstance(columns, pd.RangeIndex),
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(columns),
             )
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
@@ -3085,6 +3141,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             rangeindex=other.rangeindex,
             level_names=other.level_names,
             label_dtype=other.label_dtype,
+            level_dtypes=other._level_dtypes,
             verify=False,
         )
 
@@ -4102,16 +4159,24 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
             if level is not None and isinstance(self.index, MultiIndex):
-                level = self.index._get_level_label(level)
+                # Resolve to the ColumnAccessor label (e.g. the positional key
+                # ``0`` for an unnamed level), NOT the level *name* (which is
+                # ``None`` for unnamed levels and would insert a spurious extra
+                # column rather than overwrite the level being renamed).
+                ca_label, _ = self.index._level_to_ca_label(level)
                 level_values = self.index.get_level_values(level)
                 ca = self.index._data.copy(deep=copy)
-                ca[level] = level_values._column.find_and_replace(
+                ca[ca_label] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
                     replacement=list(index.values()),
                 )
                 out_index = type(self.index)._from_data(
                     ca, name=self.index.name
                 )
+                # ``_from_data`` derives level names from the ColumnAccessor
+                # keys (positional ints for an unnamed MultiIndex); restore the
+                # original level names so renaming a level does not rename it.
+                out_index.names = self.index.names
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
