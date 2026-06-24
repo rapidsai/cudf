@@ -59,16 +59,16 @@ class MaskedConstructor(ConcreteTemplate):
     ]
 
 
-# ``m.value`` -> inner value type; ``m.valid`` -> boolean.
+# ``m.value`` -> inner value type; ``m.valid`` -> boolean. ``AttributeTemplate``
+# dispatches ``resolve_<attr>`` methods automatically.
 class MaskedTypeAttrs(AttributeTemplate):
     key = MaskedType
 
-    def generic_resolve(self, typ, attr):
-        if attr == "value":
-            return typ.value_type
-        if attr == "valid":
-            return types.boolean
-        return None
+    def resolve_value(self, typ):
+        return typ.value_type
+
+    def resolve_valid(self, typ):
+        return types.boolean
 
 
 def _register():
