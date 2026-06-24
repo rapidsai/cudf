@@ -1352,9 +1352,15 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd
-          $<BUILD_LOCAL_INTERFACE:xxhash> rtcx::rtcx
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          $<BUILD_LOCAL_INTERFACE:cuco::cuco>
+          ZLIB::ZLIB
+          ${CUDF_nvcomp_TARGET}
+          kvikio::kvikio
+          ${CUDF_nanoarrow_TARGET}
+          zstd
+          $<BUILD_LOCAL_INTERFACE:xxhash>
+          rtcx::rtcx
 )
 
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
