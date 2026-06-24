@@ -7927,13 +7927,14 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testGroupBySortSumWithOverflow() {
-    GroupByOptions sortOpts = GroupByOptions.builder().withKeysSorted(true).build();
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
              .column(1L, 2L, 3L, 4L)
              .build();
-         Table results = input.groupBy(sortOpts, 0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1))) {
+         // median() is sort-only, so it forces the sort-based groupby path
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1),
+             GroupByAggregation.median().onColumn(1))) {
       assertSumWithOverflowResult(results,
           new int[]{1, 2}, new long[]{3L, 7L}, new boolean[]{false, false});
     }
@@ -7941,13 +7942,14 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testGroupBySortSumWithOverflowDetectsOverflow() {
-    GroupByOptions sortOpts = GroupByOptions.builder().withKeysSorted(true).build();
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
              .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
              .build();
-         Table results = input.groupBy(sortOpts, 0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1))) {
+         // median() is sort-only, so it forces the sort-based groupby path
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1),
+             GroupByAggregation.median().onColumn(1))) {
       assertSumWithOverflowResult(results, new int[]{1, 2}, null, new boolean[]{true, false});
     }
   }
