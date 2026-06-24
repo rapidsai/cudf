@@ -1495,6 +1495,31 @@ def test_groupby_reduction_skipna_false(op, dtype):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("op", ["sum", "prod", "mean", "median", "min", "max"])
+@pytest.mark.parametrize("dtype", ["float64", "Int64", "Float64"])
+def test_groupby_reduction_skipna_false_as_index_false(op, dtype):
+    # Regression: with as_index=False the grouping key is a column of the
+    # result and ``size()`` returns a DataFrame. The skipna=False
+    # null-propagation must mask only the value columns (never the key
+    # column) and must not raise on the Series/DataFrame comparison.
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 2],
+            "b": pd.array([1, None, 3, 4, 5], dtype=dtype),
+            "c": pd.array([10, 20, None, 40, 50], dtype=dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a", as_index=False, sort=True), op)(
+            skipna=False
+        )
+    expect = getattr(pdf.groupby("a", as_index=False, sort=True), op)(
+        skipna=False
+    )
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("how", ["idxmin", "idxmax"])
 @pytest.mark.parametrize("as_series", [False, True])
 def test_groupby_idxmin_idxmax_skipna_false_raises(how, as_series):

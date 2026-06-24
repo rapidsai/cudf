@@ -1454,16 +1454,24 @@ class GroupBy(Serializable, Reducible, Scannable):
 
             non_null_counts = self.agg("count")
             group_sizes = self.size()
+            if isinstance(group_sizes, DataFrame):
+                # With ``as_index=False`` the per-group counts are returned as
+                # the "size" column of a DataFrame; reduce it to a Series so it
+                # aligns with each value column below.
+                group_sizes = group_sizes["size"]
             if isinstance(result, DataFrame):
-                all_non_null = DataFrame(
-                    {
-                        name: non_null_counts[name] == group_sizes
-                        for name in non_null_counts._column_names
-                    }
-                )
+                # ``as_index=False`` keeps the grouping keys as columns of
+                # ``result``; they must never be nulled out, so mask only the
+                # value columns.
+                key_names = set(self.grouping.names)
+                for name in result._column_names:
+                    if name in key_names:
+                        continue
+                    result[name] = result[name].where(
+                        non_null_counts[name] == group_sizes, None
+                    )
             else:
-                all_non_null = non_null_counts == group_sizes
-            result = result.where(all_non_null, None)
+                result = result.where(non_null_counts == group_sizes, None)
         if min_count and min_count > 0:
             counts = self.agg("count")
             result = result.where(counts >= min_count, None)
