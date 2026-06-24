@@ -96,12 +96,12 @@ cache:
           - libcufile-dev
       - cuda-version =${{ cuda_version }}
       - libnvcomp-dev ${{ nvcomp_version }}
+      - croaring ${{ croaring_version }}
       - dlpack ${{ dlpack_version }}
       - librdkafka
       - flatbuffers =${{ flatbuffers_version }}
       - rapids-logger =0.2
       - zlib ${{ zlib_version }}
-      - croaring =4.4.2
 
 outputs:
   - package:
@@ -365,7 +365,7 @@ outputs:
         - cuda-version =${{ cuda_version }}
         - libcurand-dev
         - cuda-cudart-dev
-        - croaring =4.4.2
+        - croaring ${{ croaring_version }}
         - cuda-sanitizer-api
       run:
         - ${{ pin_compatible("cuda-version", upper_bound="x", lower_bound="x") }}
