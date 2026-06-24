@@ -164,7 +164,7 @@ class TemporalBaseColumn(ColumnBase, Scannable):
         return super()._cast_setitem_value(value)
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         lhs, rhs = super()._process_values_for_isin(values)
         if isinstance(rhs, type(self)):
