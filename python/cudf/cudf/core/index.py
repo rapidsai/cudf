@@ -2767,7 +2767,6 @@ class RangeIndex(Index):
         """
         if na_value is not None:
             raise ValueError("RangeIndex cannot contain missing values")
-        copy = copy or cudf.get_option("copy_on_write")
         result = self._numpy_values
         if dtype is not None:
             return result.astype(dtype, copy=copy)
