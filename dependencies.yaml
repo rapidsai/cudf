@@ -683,7 +683,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - numpy>=1.26,<3.0
+          - numpy>=2.0,<3.0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -1044,7 +1044,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - cupy==13.6.0
+              - cupy==14.0.1
           - matrix:
             packages:
       - output_types: requirements
@@ -1057,20 +1057,20 @@ dependencies:
               cuda: "12.*"
               dependencies: "oldest"
             packages:
-              - cupy-cuda12x==13.6.0
+              - cupy-cuda12x[ctk]==14.0.1
           - matrix:
               cuda: "13.*"
               dependencies: "oldest"
             packages:
-              - cupy-cuda13x==13.6.0
+              - cupy-cuda13x[ctk]==14.0.1
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x!=14.0.0,!=14.1.0
+              - cupy-cuda12x[ctk]>=14.0.1,!=14.1.0
           - matrix:
               cuda: "13.*"
             packages:
-              - cupy-cuda13x!=14.0.0,!=14.1.0
+              - cupy-cuda13x[ctk]>=14.0.1,!=14.1.0
           - matrix:
             packages:
   test_python_dask_cudf:
@@ -1082,7 +1082,7 @@ dependencies:
             packages:
               # this is sometimes different from the floor in cudf because
               # dask imposes its own constraints on 'numpy' (e.g. for 'dask.array')
-              - numpy==1.26.*
+              - numpy==2.0.*
           - matrix:
             packages:
   test_python_pylibcudf:
@@ -1138,7 +1138,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numpy==1.26.*
+              - numpy==2.0.*
               - pyarrow==19.*
           - matrix:
             packages:
@@ -1315,7 +1315,7 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cupy>=13.6.0,!=14.0.0,!=14.1.0
+          - cupy>=14.0.1,!=14.1.0
     # NOTE: This is intentionally not broken into groups by a 'cuda_suffixed' selector like
     #       other packages with -cu{nn}x suffixes in this file.
     #       All RAPIDS wheel builds (including in devcontainers) expect cupy to be suffixed.
@@ -1325,11 +1325,11 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x>=13.6.0,!=14.0.0,!=14.1.0
+              - cupy-cuda12x[ctk]>=14.0.1,!=14.1.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cupy-cuda13x>=13.6.0,!=14.0.0,!=14.1.0
+              - cupy-cuda13x[ctk]>=14.0.1,!=14.1.0
   depends_on_libkvikio:
     common:
       - output_types: conda
@@ -1678,7 +1678,7 @@ dependencies:
           - matrix:
               pandas_compat_version: "3.0"
             packages:
-              - numpy>=1.26,<2.0a0
+              - numpy>=2.0,<3.0
               - pandas==3.0.*
           - matrix:
             packages:
@@ -1687,11 +1687,11 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x<14
+              - cupy-cuda12x[ctk]<14
           - matrix:
               cuda: "13.*"
             packages:
-              - cupy-cuda13x<14
+              - cupy-cuda13x[ctk]<14
           - matrix:
             packages:
   test_cudf_polars_compat:
