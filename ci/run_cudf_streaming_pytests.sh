@@ -17,7 +17,7 @@ EXTRA_ARGS=("$@")
 run_mpirun_test() {
     local nrank="$1" # Number of ranks
     echo "Running pytest with $nrank ranks"
-    mpirun --map-by node --bind-to none -np "$nrank" \
+    mpirun --oversubscribe --map-by node --bind-to none -np "$nrank" \
         python -m pytest --cache-clear --verbose "${EXTRA_ARGS[@]}" .
 }
 
