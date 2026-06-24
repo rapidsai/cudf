@@ -30,6 +30,8 @@ class ThrowingDeviceReadDatasource : public cudf::io::datasource {
   std::vector<char> const& data_;
 
  public:
+  using cudf::io::datasource::device_read;
+
   explicit ThrowingDeviceReadDatasource(std::vector<char> const& data) : data_(data) {}
 
   std::unique_ptr<cudf::io::datasource::buffer> host_read(size_t offset, size_t size) override
