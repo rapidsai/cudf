@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for RapidsMPF metadata functionality."""
@@ -10,14 +10,14 @@ import pytest
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars import Translator
 from cudf_polars.containers import DataFrame, DataType
@@ -490,7 +490,7 @@ def test_remap_partitioning_reorder_columns_projection(streaming_engine) -> None
 
 
 def _make_order_scheme(context, *, key_indices=(0,), values=(100, 200), strict=False):
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     df = DataFrame.from_polars(
         pl.DataFrame({f"k{i}": list(values) for i in key_indices}), stream
     )
@@ -678,7 +678,7 @@ def test_is_already_sorted(spmd_engine, scheme_key_count, strict, expected) -> N
     )
 
     ctx = spmd_engine.context
-    stream = ctx.get_stream_from_pool()
+    stream = ctx.br().stream_pool.get_stream()
     keys = [OrderKey(i, asc, before) for i in range(scheme_key_count)]
     boundary_chunk = TableChunk.from_pylibcudf_table(
         DataFrame.from_polars(
