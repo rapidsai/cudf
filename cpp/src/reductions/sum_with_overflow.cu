@@ -115,8 +115,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
 }
 
 struct sum_with_overflow_dispatcher {
-  template <typename Source>
-    requires(cudf::detail::is_sum_with_overflow_supported<Source>())
+  template <cudf::detail::sum_with_overflow_supported Source>
   std::unique_ptr<cudf::scalar> operator()(column_view const& col,
                                            std::optional<std::reference_wrapper<scalar const>> init,
                                            rmm::cuda_stream_view stream,
@@ -126,7 +125,7 @@ struct sum_with_overflow_dispatcher {
   }
 
   template <typename Source>
-    requires(!cudf::detail::is_sum_with_overflow_supported<Source>())
+    requires(!cudf::detail::sum_with_overflow_supported<Source>)
   std::unique_ptr<cudf::scalar> operator()(column_view const&,
                                            std::optional<std::reference_wrapper<scalar const>>,
                                            rmm::cuda_stream_view,

@@ -983,16 +983,13 @@ struct target_type_impl<Source,
  * Supports signed integral types (excluding bool) and fixed-point (decimal) types.
  */
 template <typename Source>
-constexpr bool is_sum_with_overflow_supported()
-{
-  return (cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
-         cudf::is_fixed_point<Source>();
-}
+concept sum_with_overflow_supported =
+  (cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
+  cudf::is_fixed_point<Source>();
 
 // SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where the sum matches the input
 // type
-template <typename Source>
-  requires(is_sum_with_overflow_supported<Source>())
+template <sum_with_overflow_supported Source>
 struct target_type_impl<Source, aggregation::SUM_WITH_OVERFLOW> {
   using type = struct_view;  // SUM_WITH_OVERFLOW outputs a struct with sum and overflow fields
 };

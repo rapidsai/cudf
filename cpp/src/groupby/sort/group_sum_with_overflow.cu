@@ -45,8 +45,7 @@ struct split_accumulator {
 };
 
 struct group_sum_with_overflow_fn {
-  template <typename Source>
-    requires(cudf::detail::is_sum_with_overflow_supported<Source>())
+  template <cudf::detail::sum_with_overflow_supported Source>
   std::unique_ptr<column> operator()(column_view const& values,
                                      size_type num_groups,
                                      cudf::device_span<size_type const> group_labels,
@@ -107,7 +106,7 @@ struct group_sum_with_overflow_fn {
   }
 
   template <typename Source, typename... Args>
-    requires(!cudf::detail::is_sum_with_overflow_supported<Source>())
+    requires(!cudf::detail::sum_with_overflow_supported<Source>)
   std::unique_ptr<column> operator()(Args&&...) const
   {
     CUDF_FAIL("SUM_WITH_OVERFLOW is only supported for signed integral and fixed-point types");
