@@ -95,7 +95,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
       rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       counting_iter,
       counting_iter + col.size(),
-      null_replaced_to_sum_overflow<DeviceType>{*dcol},
+      null_aware_to_sum_overflow<DeviceType>{*dcol},
       initial_value,
       overflow_sum_op<DeviceType>{});
   } else {

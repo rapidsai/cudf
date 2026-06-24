@@ -50,10 +50,10 @@ struct to_sum_overflow {
 
 /// @brief Maps a row index to an accumulator, treating nulls as a zero contribution.
 template <typename DeviceType>
-struct null_replaced_to_sum_overflow {
+struct null_aware_to_sum_overflow {
   cudf::column_device_view dcol;
 
-  CUDF_HOST_DEVICE null_replaced_to_sum_overflow(cudf::column_device_view const& d) : dcol{d} {}
+  CUDF_HOST_DEVICE null_aware_to_sum_overflow(cudf::column_device_view const& d) : dcol{d} {}
 
   __device__ sum_overflow_result<DeviceType> operator()(cudf::size_type idx) const
   {

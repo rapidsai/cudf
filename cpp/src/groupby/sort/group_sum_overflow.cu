@@ -62,9 +62,8 @@ struct group_sum_overflow_fn {
       cudf::data_type{type_id::BOOL8}, num_groups, mask_state::UNALLOCATED, stream, mr);
 
     // Segmented reduction per group, written straight into the two struct children.
-    auto const values_in = cuda::make_transform_iterator(
-      cuda::counting_iterator<size_type>{0},
-      cudf::reduction::detail::null_replaced_to_sum_overflow<DeviceType>{*dcol});
+    auto const values_in = cudf::detail::make_counting_transform_iterator(
+      0, cudf::reduction::detail::null_aware_to_sum_overflow<DeviceType>{*dcol});
     auto const children_out = cuda::transform_output_iterator{
       cuda::make_zip_iterator(sum_child->mutable_view().begin<DeviceType>(),
                               overflow_child->mutable_view().begin<bool>()),
