@@ -115,10 +115,10 @@ struct group_sum_overflow_fn {
 }  // namespace
 
 std::unique_ptr<column> group_sum_overflow(column_view const& values,
-                                                size_type num_groups,
-                                                cudf::device_span<size_type const> group_labels,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
+                                           size_type num_groups,
+                                           cudf::device_span<size_type const> group_labels,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   return cudf::type_dispatcher(
     values.type(), group_sum_overflow_fn{}, values, num_groups, group_labels, stream, mr);
