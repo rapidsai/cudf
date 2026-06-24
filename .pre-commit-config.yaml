@@ -39,7 +39,7 @@ repos:
       - id: mypy
         additional_dependencies: [
           "polars>=1.35,<1.39",
-          "numpy",
+          "numpy>=1.26",
           pyarrow-stubs,
           "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           pytest,
