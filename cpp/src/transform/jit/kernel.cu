@@ -60,7 +60,11 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
         if constexpr (!discard_errors) {
           return GENERIC_TRANSFORM_OP(a...);
         } else {
-          GENERIC_TRANSFORM_OP(a...);
+          if constexpr (!cuda::std::is_void_v<decltype(GENERIC_TRANSFORM_OP(a...))>) {
+            cuda::std::ignore = GENERIC_TRANSFORM_OP(a...);
+          } else {
+            GENERIC_TRANSFORM_OP(a...);
+          }
           return errc::SUCCESS;
         }
       };
