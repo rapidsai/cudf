@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """GroupBy and Distinct logic for the RapidsMPF streaming runtime."""
 
@@ -7,18 +7,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+import pylibcudf as plc
+from cudf_streaming.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+)
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import (
-    ChannelMetadata,
-    HashScheme,
-)
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
-
-import pylibcudf as plc
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
@@ -28,6 +26,7 @@ from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     NormalizedPartitioning,
@@ -320,9 +319,7 @@ async def _tree_reduce(
         aggregated = await evaluate_chunk(
             context, aggregated, decomposed.select_ir, ir_context=ir_context
         )
-    if tracer is not None:
-        tracer.add_chunk(table=aggregated.table_view())
-    await ch_out.send(context, Message(0, aggregated))
+    await send_chunk(context, ch_out, aggregated, 0, tracer=tracer)
 
     await ch_out.drain(context)
 
@@ -442,9 +439,7 @@ async def _shuffle_reduce(
             *extract_irs,
             ir_context=ir_context,
         )
-        if tracer is not None:
-            tracer.add_chunk(table=partition_chunk.table_view())
-        await ch_out.send(context, Message(partition_id, partition_chunk))
+        await send_chunk(context, ch_out, partition_chunk, partition_id, tracer=tracer)
 
     await ch_out.drain(context)
 

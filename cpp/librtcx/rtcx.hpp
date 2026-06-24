@@ -809,7 +809,7 @@ void teardown();
  * appropriate CUDA string representations.
  */
 template <typename T>
-std::string reflect(T value);
+std::string reflect(T value) = delete;
 
 /**
  * @brief Reflect a boolean value into its CUDA string representation ("true" or "false")

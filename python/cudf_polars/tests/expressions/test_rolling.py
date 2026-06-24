@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -358,6 +358,7 @@ def test_rank_over_with_null_values(
 @pytest.mark.parametrize("method", ["ordinal", "dense", "min", "max", "average"])
 @pytest.mark.parametrize("descending", [False, True])
 @pytest.mark.parametrize("order_by", [None, ["g2", pl.col("x2") * 2]])
+@pytest.mark.timeout(120)
 def test_rank_over_with_null_group_keys(
     engine: pl.GPUEngine,
     df: pl.LazyFrame,
@@ -400,7 +401,7 @@ def test_fill_over(
     expr: pl.Expr,
 ) -> None:
     q = df.select(
-        expr.fill_null(strategy=cast(Literal["forward", "backward"], strategy)).over(
+        expr.fill_null(strategy=cast("Literal['forward', 'backward']", strategy)).over(
             group_key, order_by=order_by
         )
     )

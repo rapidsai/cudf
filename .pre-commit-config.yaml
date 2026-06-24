@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 ci:
@@ -9,6 +9,9 @@ ci:
   autoupdate_schedule: quarterly
   skip: ["mypy", "verify-alpha-spec"]
   submodules: false
+
+# Agent skill artifacts are validated and signed by the NVIDIA skills pipeline.
+exclude: ^skills/
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -27,16 +30,16 @@ repos:
             ^python/cudf/cudf/tests/data/vocab.txt
           )
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.18.1
+    rev: v0.19.0
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.13.0'
+    rev: 'v2.1.0'
     hooks:
       - id: mypy
         additional_dependencies: [
           "polars>=1.35,<1.39",
-          "numpy",
+          "numpy>=1.26",
           pyarrow-stubs,
           "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           pytest,
@@ -199,7 +202,7 @@ repos:
         pass_filenames: false
         verbose: true
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
@@ -210,13 +213,13 @@ repos:
             ^CHANGELOG.md$
           )
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.3
+    rev: v0.15.17
     hooks:
       - id: ruff
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.4.1
+    rev: v1.5.1
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -314,7 +317,7 @@ repos:
           (?x)
             ^pyproject[.]toml$
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.20.2
+    rev: v1.20.3
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean", "--warn-all", "--strict"]
@@ -324,7 +327,7 @@ repos:
       - id: shellcheck
         args: ["--severity=warning"]
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.24.1
+    rev: v1.25.2
     hooks:
       - id: zizmor
 

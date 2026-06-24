@@ -1093,6 +1093,7 @@ struct dictionary_caster {
                                                                      num_dictionary_columns,
                                                                      dictionary_col_idx,
                                                                      error_code.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
 
     } else {
       // Check if the decode block size is a multiple of the warp size
@@ -1119,6 +1120,7 @@ struct dictionary_caster {
         num_dictionary_columns,
         dictionary_col_idx,
         error_code.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
 
     // Check if there are any errors in data decoding
@@ -1158,6 +1160,7 @@ struct dictionary_caster {
                                                                     value_offsets.data(),
                                                                     total_row_groups,
                                                                     physical_type);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     // Build the BOOL8 columns from the results buffers
     return build_columns(results_buffers, stream, mr);
@@ -1233,6 +1236,7 @@ struct dictionary_caster {
                                                                      num_dictionary_columns,
                                                                      dictionary_col_idx,
                                                                      error_code.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       static_assert(DECODE_BLOCK_SIZE % cudf::detail::warp_size == 0,
                     "decoder block size must be a multiple of warp_size");
@@ -1256,6 +1260,7 @@ struct dictionary_caster {
         num_dictionary_columns,
         dictionary_col_idx,
         error_code.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
 
     // Check if there are any errors in data decoding

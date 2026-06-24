@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming engine running on a Ray cluster."""
 
@@ -12,16 +12,17 @@ from typing import TYPE_CHECKING, Any, cast
 
 import ray
 import ucxx._lib.libucxx as ucx_api
+
+import polars as pl
+
+import rmm.mr
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import polars as pl
-
-import rmm.mr
 
 from cudf_polars.engine.core import (
     ClusterInfo,
@@ -40,10 +41,10 @@ if TYPE_CHECKING:
     import uuid
     from collections.abc import Callable
 
-    from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.statistics import Statistics
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
     from ray.actor import ActorHandle
+
+    from cudf_streaming.channel_metadata import ChannelMetadata
+    from rapidsmpf.communicator.communicator import Communicator
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -186,6 +187,7 @@ class RankActor:
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
+        self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
         self._nranks: int = nranks
         self._py_executor = ThreadPoolExecutor(
             max_workers=num_py_executors,
@@ -242,7 +244,10 @@ class RankActor:
             )
         barrier(self._comm)
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, self._rapidsmpf_options
+            self._comm.logger,
+            self._mr,
+            self._rapidsmpf_options,
+            self._rapidsmpf_statistics,
         )
         # Set the current RMM device resource so all temporary allocations
         # in libcudf also use the same memory resource.
@@ -269,8 +274,12 @@ class RankActor:
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
+        self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, self._rapidsmpf_options
+            self._comm.logger,
+            self._mr,
+            self._rapidsmpf_options,
+            self._rapidsmpf_statistics,
         )
 
     def shutdown(self) -> None:
@@ -577,7 +586,7 @@ class RayEngine(StreamingEngine):
                     nranks=nranks,
                     rapidsmpf_options_as_bytes=rapidsmpf_options_as_bytes,
                     num_py_executors=cast(
-                        int,
+                        "int",
                         executor_options.get("num_py_executors", 8),
                     ),
                     hardware_binding=hw_binding,

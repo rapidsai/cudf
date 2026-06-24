@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming engine running on a Dask distributed cluster."""
 
@@ -16,16 +16,17 @@ import distributed
 import distributed.system
 import pynvml
 import ucxx._lib.libucxx as ucx_api
+
+import polars as pl
+
+import rmm.mr
 from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
 from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
+from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
-
-import polars as pl
-
-import rmm.mr
 
 from cudf_polars.engine.core import (
     ClusterInfo,
@@ -43,9 +44,8 @@ from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.statistics import Statistics
-    from rapidsmpf.streaming.cudf.channel_metadata import ChannelMetadata
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -240,13 +240,14 @@ def _setup_worker(
         comm = mp_ctx.comm
 
     barrier(comm)
-    ctx = Context.from_options(comm.logger, mr, options)
+    statistics = Statistics.from_options(options)
+    ctx = Context.from_options(comm.logger, mr, options, statistics)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
-            int,
+            "int",
             executor_options.get("num_py_executors", 8),
         ),
         thread_name_prefix="dask-executor",
@@ -329,7 +330,10 @@ def _reset_worker(
     mp_ctx.ctx.shutdown()
     mp_ctx.ctx = None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    mp_ctx.ctx = Context.from_options(mp_ctx.comm.logger, mp_ctx.mr, options)
+    statistics = Statistics.from_options(options)
+    mp_ctx.ctx = Context.from_options(
+        mp_ctx.comm.logger, mp_ctx.mr, options, statistics
+    )
     rmm.mr.set_current_device_resource(mp_ctx.ctx.br().device_mr)
 
 

@@ -10,15 +10,16 @@
 #include <cudf/types.hpp>
 
 #include <cuda/numeric>
+#include <cuda/std/cassert>
+#include <cuda/std/cmath>
 #include <cuda/std/functional>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
 
+#ifndef __CUDACC_RTC__
 #include <algorithm>
-#include <cassert>
-#include <cmath>
-#include <string>
+#endif
 
 /// `fixed_point` and supporting types
 namespace CUDF_EXPORT numeric {
@@ -571,6 +572,8 @@ class fixed_point {
     return fixed_point<Rep, Rad>{scaled_integer<Rep>{value, scale}};
   }
 
+#ifndef __CUDACC_RTC__
+
   /**
    * @brief Returns a string representation of the fixed_point value.
    */
@@ -590,6 +593,8 @@ class fixed_point {
     auto const zeros = std::string(_scale, '0');
     return detail::to_string(_value) + zeros;
   }
+
+#endif
 };
 
 /**
@@ -779,6 +784,9 @@ CUDF_HOST_DEVICE inline fixed_point<Rep1, Rad1> operator%(fixed_point<Rep1, Rad1
   return fixed_point<Rep1, Rad1>{scaled_integer<Rep1>{remainder, scale}};
 }
 
+template <typename Rep>
+using decimal =
+  fixed_point<Rep, Radix::BASE_10>;  ///< decimal fixed point with user defined representation type
 using decimal32  = fixed_point<int32_t, Radix::BASE_10>;     ///<  32-bit decimal fixed point
 using decimal64  = fixed_point<int64_t, Radix::BASE_10>;     ///<  64-bit decimal fixed point
 using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;  ///< 128-bit decimal fixed point

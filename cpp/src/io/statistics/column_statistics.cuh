@@ -344,6 +344,7 @@ void calculate_group_statistics(statistics_chunk* chunks,
   constexpr int block_size = 256;
   gpu_calculate_group_statistics<block_size, IO>
     <<<num_chunks, block_size, 0, stream.value()>>>(chunks, groups, int96_timestamps);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 /**
@@ -398,6 +399,7 @@ void merge_group_statistics(statistics_chunk* chunks_out,
   constexpr int block_size = 256;
   gpu_merge_group_statistics<block_size, IO>
     <<<num_chunks, block_size, 0, stream.value()>>>(chunks_out, chunks_in, groups);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace detail
