@@ -67,6 +67,8 @@ def test_unique_select_dynamic_planning_uses_dynamic_distinct():
         },
     )
 
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
     plan = explain_query(q, engine, physical=True)
 
     assert "DISTINCT" in plan
