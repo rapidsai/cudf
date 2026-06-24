@@ -344,6 +344,31 @@ def test_isoyear(engine: pl.GPUEngine):
 
 
 @pytest.mark.parametrize(
+    "dtype",
+    [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")],
+    ids=repr,
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns", "s", "d"])
+def test_epoch(engine: pl.GPUEngine, dtype, time_unit):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.Series(
+                [
+                    datetime.datetime(2001, 1, 1),
+                    datetime.datetime(2001, 1, 2, 12, 30, 15),
+                    datetime.datetime(2020, 2, 29, 23, 59, 59),
+                    datetime.datetime(2024, 12, 31, 23, 59, 59),
+                ],
+                dtype=dtype,
+            )
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.epoch(time_unit))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
     "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
 )
 @pytest.mark.parametrize("time_unit", ["ms", "us", "ns"])

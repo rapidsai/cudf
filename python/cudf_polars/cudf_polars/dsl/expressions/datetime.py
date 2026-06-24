@@ -10,9 +10,11 @@ import re
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 
     from polars import polars  # type: ignore[attr-defined]
 
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expressions.literal import Literal
 
 __all__ = ["TemporalFunction"]
@@ -140,9 +142,10 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
-        *_TOTAL_COMPONENT_NANOSECONDS.keys(),
+        Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
     def __init__(
@@ -204,6 +207,14 @@ class TemporalFunction(Expr):
                 stream=df.stream,
             )
             return Column(result, dtype=self.dtype)
+        if self.name is TemporalFunction.Name.TimeStamp:
+            (column,) = columns
+            (time_unit,) = self.options
+            # Rescale the timestamp to the requested resolution
+            df_stream = df.stream
+            return column.astype(
+                DataType(pl.Datetime(time_unit)), stream=df_stream
+            ).astype(self.dtype, stream=df_stream)
         elif self.name is TemporalFunction.Name.Truncate:
             (column, _) = columns
             return Column(
