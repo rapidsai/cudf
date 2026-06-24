@@ -599,6 +599,54 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
   }
 }
 
+TEST_F(ParquetReaderTest, SelectMismatchedStructChildByFieldId)
+{
+  auto x_a      = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto y_a      = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
+  auto struct_a = cudf::test::structs_column_wrapper{{x_a, y_a}, {true, true, true}}.release();
+  cudf::table_view const table_a{{*struct_a}};
+
+  auto path_a = temp_env->get_temp_filepath("SelectNestedFieldIdChildOrderA.parquet");
+  cudf::io::table_input_metadata metadata_a(table_a);
+  metadata_a.column_metadata[0].set_name("record").set_parquet_field_id(1);
+  metadata_a.column_metadata[0].child(0).set_name("x").set_parquet_field_id(2);
+  metadata_a.column_metadata[0].child(1).set_name("y").set_parquet_field_id(3);
+  auto write_args_a =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{path_a}, table_a)
+      .metadata(std::move(metadata_a));
+  cudf::io::write_parquet(write_args_a);
+
+  auto y_b      = cudf::test::fixed_width_column_wrapper<int32_t>{40, 50};
+  auto x_b      = cudf::test::fixed_width_column_wrapper<int32_t>{4, 5};
+  auto struct_b = cudf::test::structs_column_wrapper{{y_b, x_b}, {true, true}}.release();
+  cudf::table_view const table_b{{*struct_b}};
+
+  auto path_b = temp_env->get_temp_filepath("SelectNestedFieldIdChildOrderB.parquet");
+  cudf::io::table_input_metadata metadata_b(table_b);
+  metadata_b.column_metadata[0].set_name("record").set_parquet_field_id(1);
+  metadata_b.column_metadata[0].child(0).set_name("y").set_parquet_field_id(3);
+  metadata_b.column_metadata[0].child(1).set_name("x").set_parquet_field_id(2);
+  auto write_args_b =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{path_b}, table_b)
+      .metadata(std::move(metadata_b));
+  cudf::io::write_parquet(write_args_b);
+
+  auto expected_x = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5};
+  auto expected_y = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50};
+  auto expected_struct =
+    cudf::test::structs_column_wrapper{{expected_x, expected_y}, {true, true, true, true, true}}
+      .release();
+  cudf::table_view const expected{{*expected_struct}};
+
+  auto const read_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_field_ids({1})
+      .build();
+  auto const result = cudf::io::read_parquet(read_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 TEST_F(ParquetReaderTest, DecimalRead)
 {
   {

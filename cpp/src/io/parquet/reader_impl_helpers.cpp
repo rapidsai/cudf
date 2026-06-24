@@ -1906,10 +1906,14 @@ aggregate_reader_metadata::select_columns(
         std::for_each(cuda::counting_iterator<int32_t>{0},
                       cuda::counting_iterator{src_schema_elem.num_children},
                       [&](auto const child_idx) {
-                        map_column(nullptr,
-                                   src_schema_elem.children_idx[child_idx],
-                                   dst_schema_elem.children_idx[child_idx],
-                                   pfm_idx);
+                        auto const src_child_idx = src_schema_elem.children_idx[child_idx];
+                        auto const dst_child_idx = find_schema_child_for_mapping(
+                          src_schema_elem, dst_schema_elem, get_schema(src_child_idx).name, pfm_idx);
+                        CUDF_EXPECTS(dst_child_idx != -1,
+                                     "Encountered mismatching schema tree depths across data "
+                                     "sources",
+                                     std::out_of_range);
+                        map_column(nullptr, src_child_idx, dst_child_idx, pfm_idx);
                       });
       }
       // The path goes further down to specific child(ren) of this column so map only those
