@@ -65,7 +65,7 @@ enum class [[nodiscard]] null_output : uint8_t {
 /**
  * @brief A type mask used to indicate the types of the arguments and output of an operator.
  */
-enum class [[nodiscard]] type : uint64_t {
+enum class [[nodiscard]] types : uint64_t {
   NONE                   = 0x0,
   BOOL8                  = 0x1,
   INT8                   = 0x2,
@@ -108,25 +108,25 @@ enum class [[nodiscard]] type : uint64_t {
   INPUT                  = 0x20000000,
 };
 
-constexpr type operator|(type lhs, type rhs)
+constexpr types operator|(types lhs, types rhs)
 {
-  return static_cast<type>(static_cast<uint64_t>(lhs) | static_cast<uint64_t>(rhs));
+  return static_cast<types>(static_cast<uint64_t>(lhs) | static_cast<uint64_t>(rhs));
 }
 
-constexpr type operator&(type lhs, type rhs)
+constexpr types operator&(types lhs, types rhs)
 {
-  return static_cast<type>(static_cast<uint64_t>(lhs) & static_cast<uint64_t>(rhs));
+  return static_cast<types>(static_cast<uint64_t>(lhs) & static_cast<uint64_t>(rhs));
 }
 
-constexpr type operator~(type t) { return static_cast<type>(~static_cast<uint64_t>(t)); }
+constexpr types operator~(types t) { return static_cast<types>(~static_cast<uint64_t>(t)); }
 
 struct [[nodiscard]] opcode_info {
-  std::string_view name                        = "";
-  null_output null_policy                      = null_output::PROPAGATE;
-  bool is_null_dependent                       = false;
-  bool is_fallible                             = false;
-  cuda::std::inplace_vector<type, 4> arg_types = {};
-  type output_type                             = type::NONE;
+  std::string_view name                         = "";
+  null_output null_policy                       = null_output::PROPAGATE;
+  bool is_null_dependent                        = false;
+  bool is_fallible                              = false;
+  cuda::std::inplace_vector<types, 4> arg_types = {};
+  types output_type                             = types::NONE;
 };
 
 /**
@@ -135,7 +135,7 @@ struct [[nodiscard]] opcode_info {
 [[nodiscard]] opcode_info get_op_info(opcode op, bool nullify_on_error)
 {
   using enum null_output;
-  using enum type;
+  using enum types;
 
   static const opcode_info map[] = {
     {"GET_INPUT", PROPAGATE, false, false, {}, INPUT},
@@ -152,8 +152,8 @@ struct [[nodiscard]] opcode_info {
     {"ABS", PROPAGATE, false, false, {ARITHMETIC}, ARG0},
     {"MOD", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
     {"PYMOD", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
-    {"TRUE_DIV", PROPAGATE, false, false, {type{FLOATS | INTEGERS}, ARG0}, FLOAT64},
-    {"FLOOR_DIV", PROPAGATE, false, false, {type{FLOATS | INTEGERS}, ARG0}, ARG0},
+    {"TRUE_DIV", PROPAGATE, false, false, {types{FLOATS | INTEGERS}, ARG0}, FLOAT64},
+    {"FLOOR_DIV", PROPAGATE, false, false, {types{FLOATS | INTEGERS}, ARG0}, ARG0},
     {"ADD_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
     {"SUB_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
     {"MUL_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
@@ -168,17 +168,17 @@ struct [[nodiscard]] opcode_info {
     {"BITWISE_XOR", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
     {"BITWISE_SHIFT_LEFT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
     {"BITWISE_SHIFT_RIGHT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
-    {"CAST_TO_BOOL8", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, BOOL8},
-    {"CAST_TO_INT8", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT8},
-    {"CAST_TO_INT16", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT16},
-    {"CAST_TO_INT32", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT32},
-    {"CAST_TO_INT64", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, INT64},
-    {"CAST_TO_UINT8", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT8},
-    {"CAST_TO_UINT16", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT16},
-    {"CAST_TO_UINT32", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT32},
-    {"CAST_TO_UINT64", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, UINT64},
-    {"CAST_TO_FLOAT32", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, FLOAT32},
-    {"CAST_TO_FLOAT64", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, FLOAT64},
+    {"CAST_TO_BOOL8", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, BOOL8},
+    {"CAST_TO_INT8", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT8},
+    {"CAST_TO_INT16", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT16},
+    {"CAST_TO_INT32", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT32},
+    {"CAST_TO_INT64", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT64},
+    {"CAST_TO_UINT8", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT8},
+    {"CAST_TO_UINT16", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT16},
+    {"CAST_TO_UINT32", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT32},
+    {"CAST_TO_UINT64", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT64},
+    {"CAST_TO_FLOAT32", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, FLOAT32},
+    {"CAST_TO_FLOAT64", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, FLOAT64},
     {"CAST_TO_DECIMAL32", PROPAGATE, false, false, {DECIMALS}, DECIMAL32},
     {"CAST_TO_DECIMAL64", PROPAGATE, false, false, {DECIMALS}, DECIMAL64},
     {"CAST_TO_DECIMAL128", PROPAGATE, false, false, {DECIMALS}, DECIMAL128},
@@ -190,11 +190,11 @@ struct [[nodiscard]] opcode_info {
     {"LESS", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
     {"LESS_EQUAL", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
     {"NULL_EQUAL", ALWAYS_VALID, true, false, {ALL, ARG0}, BOOL8},
-    {"NULL_LOGICAL_AND", ALWAYS_NULLABLE, true, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"NULL_LOGICAL_OR", ALWAYS_NULLABLE, true, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"LOGICAL_AND", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"LOGICAL_OR", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"LOGICAL_NOT", PROPAGATE, false, false, {type{ARITHMETIC | BOOL8}}, BOOL8},
+    {"NULL_LOGICAL_AND", ALWAYS_NULLABLE, true, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"NULL_LOGICAL_OR", ALWAYS_NULLABLE, true, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"LOGICAL_AND", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"LOGICAL_OR", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
+    {"LOGICAL_NOT", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, BOOL8},
     {"IF_ELSE", PROPAGATE, false, false, {ALL, ARG0, BOOL8}, ARG0},
     {"CBRT", PROPAGATE, false, false, {FLOATS}, ARG0},
     {"CEIL", PROPAGATE, false, false, {FLOATS}, ARG0},
@@ -293,68 +293,68 @@ opcode as_opcode(ast::ast_operator op)
   }
 }
 
-row_ir::type as_type(data_type type)
+row_ir::types as_type(data_type type)
 {
   switch (type.id()) {
-    case type_id::BOOL8: return type::BOOL8;
-    case type_id::INT8: return type::INT8;
-    case type_id::INT16: return type::INT16;
-    case type_id::INT32: return type::INT32;
-    case type_id::INT64: return type::INT64;
-    case type_id::UINT8: return type::UINT8;
-    case type_id::UINT16: return type::UINT16;
-    case type_id::UINT32: return type::UINT32;
-    case type_id::UINT64: return type::UINT64;
-    case type_id::FLOAT32: return type::FLOAT32;
-    case type_id::FLOAT64: return type::FLOAT64;
-    case type_id::DECIMAL32: return type::DECIMAL32;
-    case type_id::DECIMAL64: return type::DECIMAL64;
-    case type_id::DECIMAL128: return type::DECIMAL128;
-    case type_id::TIMESTAMP_DAYS: return type::TIMESTAMP_DAYS;
-    case type_id::TIMESTAMP_SECONDS: return type::TIMESTAMP_SECONDS;
-    case type_id::TIMESTAMP_MILLISECONDS: return type::TIMESTAMP_MILLISECONDS;
-    case type_id::TIMESTAMP_MICROSECONDS: return type::TIMESTAMP_MICROSECONDS;
-    case type_id::TIMESTAMP_NANOSECONDS: return type::TIMESTAMP_NANOSECONDS;
-    case type_id::DURATION_DAYS: return type::DURATION_DAYS;
-    case type_id::DURATION_SECONDS: return type::DURATION_SECONDS;
-    case type_id::DURATION_MILLISECONDS: return type::DURATION_MILLISECONDS;
-    case type_id::DURATION_MICROSECONDS: return type::DURATION_MICROSECONDS;
-    case type_id::DURATION_NANOSECONDS: return type::DURATION_NANOSECONDS;
-    case type_id::STRING: return type::STRING;
+    case type_id::BOOL8: return types::BOOL8;
+    case type_id::INT8: return types::INT8;
+    case type_id::INT16: return types::INT16;
+    case type_id::INT32: return types::INT32;
+    case type_id::INT64: return types::INT64;
+    case type_id::UINT8: return types::UINT8;
+    case type_id::UINT16: return types::UINT16;
+    case type_id::UINT32: return types::UINT32;
+    case type_id::UINT64: return types::UINT64;
+    case type_id::FLOAT32: return types::FLOAT32;
+    case type_id::FLOAT64: return types::FLOAT64;
+    case type_id::DECIMAL32: return types::DECIMAL32;
+    case type_id::DECIMAL64: return types::DECIMAL64;
+    case type_id::DECIMAL128: return types::DECIMAL128;
+    case type_id::TIMESTAMP_DAYS: return types::TIMESTAMP_DAYS;
+    case type_id::TIMESTAMP_SECONDS: return types::TIMESTAMP_SECONDS;
+    case type_id::TIMESTAMP_MILLISECONDS: return types::TIMESTAMP_MILLISECONDS;
+    case type_id::TIMESTAMP_MICROSECONDS: return types::TIMESTAMP_MICROSECONDS;
+    case type_id::TIMESTAMP_NANOSECONDS: return types::TIMESTAMP_NANOSECONDS;
+    case type_id::DURATION_DAYS: return types::DURATION_DAYS;
+    case type_id::DURATION_SECONDS: return types::DURATION_SECONDS;
+    case type_id::DURATION_MILLISECONDS: return types::DURATION_MILLISECONDS;
+    case type_id::DURATION_MICROSECONDS: return types::DURATION_MICROSECONDS;
+    case type_id::DURATION_NANOSECONDS: return types::DURATION_NANOSECONDS;
+    case type_id::STRING: return types::STRING;
     default:
       CUDF_FAIL(std::format("Unsupported data type for Row IR: {}", type_to_name(type)),
                 std::invalid_argument);
   }
 }
 
-type_id as_type_id(type type)
+type_id as_type_id(types type)
 {
   switch (type) {
-    case type::BOOL8: return type_id::BOOL8;
-    case type::INT8: return type_id::INT8;
-    case type::INT16: return type_id::INT16;
-    case type::INT32: return type_id::INT32;
-    case type::INT64: return type_id::INT64;
-    case type::UINT8: return type_id::UINT8;
-    case type::UINT16: return type_id::UINT16;
-    case type::UINT32: return type_id::UINT32;
-    case type::UINT64: return type_id::UINT64;
-    case type::FLOAT32: return type_id::FLOAT32;
-    case type::FLOAT64: return type_id::FLOAT64;
-    case type::DECIMAL32: return type_id::DECIMAL32;
-    case type::DECIMAL64: return type_id::DECIMAL64;
-    case type::DECIMAL128: return type_id::DECIMAL128;
-    case type::TIMESTAMP_DAYS: return type_id::TIMESTAMP_DAYS;
-    case type::TIMESTAMP_SECONDS: return type_id::TIMESTAMP_SECONDS;
-    case type::TIMESTAMP_MILLISECONDS: return type_id::TIMESTAMP_MILLISECONDS;
-    case type::TIMESTAMP_MICROSECONDS: return type_id::TIMESTAMP_MICROSECONDS;
-    case type::TIMESTAMP_NANOSECONDS: return type_id::TIMESTAMP_NANOSECONDS;
-    case type::DURATION_DAYS: return type_id::DURATION_DAYS;
-    case type::DURATION_SECONDS: return type_id::DURATION_SECONDS;
-    case type::DURATION_MILLISECONDS: return type_id::DURATION_MILLISECONDS;
-    case type::DURATION_MICROSECONDS: return type_id::DURATION_MICROSECONDS;
-    case type::DURATION_NANOSECONDS: return type_id::DURATION_NANOSECONDS;
-    case type::STRING: return type_id::STRING;
+    case types::BOOL8: return type_id::BOOL8;
+    case types::INT8: return type_id::INT8;
+    case types::INT16: return type_id::INT16;
+    case types::INT32: return type_id::INT32;
+    case types::INT64: return type_id::INT64;
+    case types::UINT8: return type_id::UINT8;
+    case types::UINT16: return type_id::UINT16;
+    case types::UINT32: return type_id::UINT32;
+    case types::UINT64: return type_id::UINT64;
+    case types::FLOAT32: return type_id::FLOAT32;
+    case types::FLOAT64: return type_id::FLOAT64;
+    case types::DECIMAL32: return type_id::DECIMAL32;
+    case types::DECIMAL64: return type_id::DECIMAL64;
+    case types::DECIMAL128: return type_id::DECIMAL128;
+    case types::TIMESTAMP_DAYS: return type_id::TIMESTAMP_DAYS;
+    case types::TIMESTAMP_SECONDS: return type_id::TIMESTAMP_SECONDS;
+    case types::TIMESTAMP_MILLISECONDS: return type_id::TIMESTAMP_MILLISECONDS;
+    case types::TIMESTAMP_MICROSECONDS: return type_id::TIMESTAMP_MICROSECONDS;
+    case types::TIMESTAMP_NANOSECONDS: return type_id::TIMESTAMP_NANOSECONDS;
+    case types::DURATION_DAYS: return type_id::DURATION_DAYS;
+    case types::DURATION_SECONDS: return type_id::DURATION_SECONDS;
+    case types::DURATION_MILLISECONDS: return type_id::DURATION_MILLISECONDS;
+    case types::DURATION_MICROSECONDS: return type_id::DURATION_MICROSECONDS;
+    case types::DURATION_NANOSECONDS: return type_id::DURATION_NANOSECONDS;
+    case types::STRING: return type_id::STRING;
     default:
       CUDF_FAIL(std::format("Invalid typing for {}: {}", __FUNCTION__, static_cast<int>(type)),
                 std::invalid_argument);
@@ -365,7 +365,7 @@ data_type get_return_type(opcode op,
                           std::span<data_type const> args,
                           std::optional<int32_t> target_scale)
 {
-  std::vector<row_ir::type> arg_types;
+  std::vector<row_ir::types> arg_types;
   std::vector<int32_t> arg_scales;
 
   for (auto& type : args) {
@@ -380,8 +380,8 @@ data_type get_return_type(opcode op,
     auto required_type = op_info.arg_types[i];
     auto arg_type      = arg_types[i];
 
-    if ((required_type & type::ARG_MASK) != type::NONE) {
-      auto src_index = static_cast<size_t>(required_type & ~type::ARG_MASK);
+    if ((required_type & types::ARG_MASK) != types::NONE) {
+      auto src_index = static_cast<size_t>(required_type & ~types::ARG_MASK);
       CUDF_EXPECTS(
         src_index < i,
         std::format("Invalid type match rule for operator `{}` at argument #{}", op_info.name, i),
@@ -396,7 +396,7 @@ data_type get_return_type(opcode op,
                                type_to_name(args[src_index])));
     } else {
       CUDF_EXPECTS(
-        (arg_type & required_type) != type::NONE,
+        (arg_type & required_type) != types::NONE,
         std::format("Argument #{} of operator `{}` does not match expected types. Got {}",
                     i,
                     op_info.name,
@@ -404,13 +404,13 @@ data_type get_return_type(opcode op,
     }
   }
 
-  if ((op_info.output_type & type::ARG_MASK) != type::NONE) {
-    auto arg_index = static_cast<size_t>(op_info.output_type & ~type::ARG_MASK);
+  if ((op_info.output_type & types::ARG_MASK) != types::NONE) {
+    auto arg_index = static_cast<size_t>(op_info.output_type & ~types::ARG_MASK);
     auto type      = args[arg_index].id();
     auto scale     = numeric::scale_type{is_fixed_point(data_type{type}) ? rescaled : 0};
     return data_type{type, scale};
   } else {
-    CUDF_EXPECTS(op_info.output_type != type::NONE,
+    CUDF_EXPECTS(op_info.output_type != types::NONE,
                  std::format("Invalid type match rule for operator `{}` return type", op_info.name),
                  std::runtime_error);
     auto type  = as_type_id(op_info.output_type);
