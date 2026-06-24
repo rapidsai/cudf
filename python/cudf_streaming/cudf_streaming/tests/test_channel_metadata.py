@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.streaming import (
+from cudf_streaming import (
     ChannelMetadata,
     HashScheme,
     Ordering,

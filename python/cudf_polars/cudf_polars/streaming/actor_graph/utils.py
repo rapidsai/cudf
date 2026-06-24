@@ -18,14 +18,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import pylibcudf as plc
 import rmm.mr
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
@@ -55,7 +55,7 @@ if TYPE_CHECKING:
         Sequence,
     )
 
-    from cudf_streaming.streaming.channel_metadata import Ordering
+    from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
