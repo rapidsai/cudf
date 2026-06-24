@@ -1,6 +1,6 @@
-/**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../utils/comm.hpp"
@@ -323,8 +323,7 @@ int main(int argc, char** argv)
 
   RAPIDSMPF_EXPECTS(comm->nranks() == 1, "only single-rank runs are supported");
 
-  set_current_rmm_resource(args.rmm_mr);
-  auto stat_enabled_mr = set_device_mem_resource_with_stats();
+  auto rmm_mr = create_rmm_resource(args.rmm_mr);
   std::unordered_map<rapidsmpf::MemoryType, std::int64_t> memory_limits{};
   if (args.device_mem_limit_mb >= 0) {
     memory_limits[rapidsmpf::MemoryType::DEVICE] = args.device_mem_limit_mb << 20;
@@ -335,12 +334,17 @@ int main(int argc, char** argv)
   auto pinned_mr = args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
                                            : rapidsmpf::PinnedMemoryResource::make_if_available();
   auto br        = rapidsmpf::BufferResource::create(
-    stat_enabled_mr,
+    rmm_mr,
     pinned_mr,
     std::move(memory_limits),
     std::nullopt,
     std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking),
     stats);
+  // `BufferResource` wraps the device resource in an internal tracking
+  // `RmmResourceAdaptor` (exposed via `device_mr_adaptor()`). Install it as
+  // the current device resource so libcudf temp allocations are also tracked.
+  auto& stat_enabled_mr = br->device_mr_adaptor();
+  rmm::mr::set_current_device_resource(stat_enabled_mr);
 
   rmm::cuda_stream_view stream = cudf::get_default_stream();
 
