@@ -563,11 +563,6 @@ void reader_impl::read_compressed_data()
                                            : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
   rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
-  // sort_pages() later copies each PageInfo wholesale; zero the buffer so no
-  // uninitialized device memory (including struct padding or unwritten entries)
-  // is ever read.
-  CUDF_CUDA_TRY(cudaMemsetAsync(
-    unsorted_pages.data(), 0, unsorted_pages.size() * sizeof(PageInfo), _stream.value()));
 
   // decoding of column/page information
   decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);

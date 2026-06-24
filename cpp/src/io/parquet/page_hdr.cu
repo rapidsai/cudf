@@ -513,30 +513,10 @@ inline __device__ bool parse_valid_page_header(byte_stream_s* bs)
  */
 void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
 {
-  // this computation is only valid for flat schemas. for nested schemas,
-  // they will be recomputed in the preprocess step by examining repetition and
-  // definition levels
-  bs->page.chunk_row            = 0;
-  bs->page.num_rows             = 0;
-  bs->page.is_num_rows_adjusted = false;
-  bs->page.skipped_values       = -1;
-  bs->page.skipped_leaf_values  = 0;
-  bs->page.str_bytes            = 0;
-  bs->page.str_bytes_from_index = 0;
-  bs->page.num_valids           = 0;
-  bs->page.start_val            = 0;
-  bs->page.end_val              = 0;
-  bs->page.has_page_index       = false;
-  bs->page.temp_string_size     = 0;
-  bs->page.temp_string_buf      = nullptr;
-  bs->page.kernel_mask          = decode_kernel_mask::NONE;
-  bs->page.flags                = 0;
-  bs->page.str_bytes_all        = 0;
-  // zero out V2 info
-  bs->page.is_compressed                     = true;
-  bs->page.num_nulls                         = 0;
-  bs->page.lvl_bytes[level_type::DEFINITION] = 0;
-  bs->page.lvl_bytes[level_type::REPETITION] = 0;
+  cuda::std::memset(&bs->page, 0, sizeof(bs->page));
+  // Apply non-zero defaults
+  bs->page.skipped_values = -1;
+  bs->page.is_compressed  = true;
 }
 
 /**
@@ -577,14 +557,12 @@ void __launch_bounds__(decode_page_headers_block_size)
   warp.sync();
 
   cg::invoke_one(warp, [&]() {
-    // Shared memory is not zero-initialized; clear every PageInfo field and any
-    // padding so sort_pages() never copies indeterminate bytes.
-    cuda::std::memset(&bs->page, 0, sizeof(bs->page));
-    bs->base = bs->cur      = bs->ck.compressed_data;
-    bs->end                 = bs->base + bs->ck.compressed_size;
+    bs->base = bs->cur = bs->ck.compressed_data;
+    bs->end            = bs->base + bs->ck.compressed_size;
+    // Clear page header info before writing known fields
+    zero_out_page_header_info(bs);
     bs->page.chunk_idx      = chunk_idx;
     bs->page.src_col_schema = bs->ck.src_col_schema;
-    zero_out_page_header_info(bs);
   });
   size_t const num_values        = bs->ck.num_values;
   size_t values_found            = 0;
@@ -787,8 +765,6 @@ struct decode_page_headers_with_pgidx_fn {
     }
 
     byte_stream_s bs{};
-    // Value-initialization above does not necessarily cover padding bytes.
-    cuda::std::memset(&bs.page, 0, sizeof(bs.page));
     bs.ck   = colchunks[chunk_idx];
     bs.base = bs.cur = page_locations[page_idx];
     bs.end           = bs.ck.compressed_data + bs.ck.compressed_size;
@@ -798,11 +774,11 @@ struct decode_page_headers_with_pgidx_fn {
                 error_code);
       return;
     }
+    // Clear page header info before writing known fields
+    zero_out_page_header_info(&bs);
+
     bs.page.chunk_idx      = chunk_idx;
     bs.page.src_col_schema = bs.ck.src_col_schema;
-
-    // Zero out the rest of the page header info
-    zero_out_page_header_info(&bs);
 
     // bs.page.chunk_row not computed here and will be filled in later by
     // `fill_in_page_info()`.
