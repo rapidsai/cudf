@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # cuDF build script
@@ -49,7 +49,7 @@ HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [dask_cudf] [benchma
    --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
    -h | --h[elp]                 - print this text
 
-   default action (no args) is to build and install 'libcudf', 'pylibcudf', 'cudf', 'cudf_polars', and 'dask_cudf' targets
+   default action (no args) is to build and install 'libcudf', 'pylibcudf', 'cudf', 'libcudf_streaming', 'cudf_streaming', 'cudf_polars', and 'dask_cudf' targets
 "
 LIB_BUILD_DIR=${LIB_BUILD_DIR:=${REPODIR}/cpp/build}
 KAFKA_LIB_BUILD_DIR=${KAFKA_LIB_BUILD_DIR:=${REPODIR}/cpp/libcudf_kafka/build}
@@ -303,6 +303,35 @@ if buildAll || hasArg cudf; then
             .
 fi
 
+# Build libcudf_streaming library
+if buildAll || hasArg libcudf_streaming; then
+    cmake -S "$REPODIR/cpp/libcudf_streaming" -B "${STREAMING_LIB_BUILD_DIR}" \
+          -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+          -DCMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES}" \
+          -DBUILD_TESTS=${BUILD_TESTS} \
+          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+          "${EXTRA_CMAKE_ARGS[@]}"
+
+
+    cd "${STREAMING_LIB_BUILD_DIR}"
+    cmake --build . -j"${PARALLEL_LEVEL}" ${VERBOSE_FLAG}
+
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        cmake --build . -j"${PARALLEL_LEVEL}" --target install ${VERBOSE_FLAG}
+    fi
+fi
+
+# build cudf_streaming Python package
+if buildAll || hasArg cudf_streaming; then
+    cd "${REPODIR}/python/cudf_streaming"
+    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${STREAMING_LIB_BUILD_DIR};${EXTRA_CMAKE_ARGS[*]}" \
+        python -m pip install \
+            "${PYTHON_ARGS_FOR_INSTALL[@]}" \
+            "${PY_API_ARGS[@]}" \
+            .
+fi
+
 # Build and install the cudf_polars Python package
 if buildAll || hasArg cudf_polars; then
 
@@ -349,33 +378,4 @@ fi
 if hasArg custreamz; then
     cd "${REPODIR}/python/custreamz"
     python -m pip install "${PYTHON_ARGS_FOR_INSTALL[@]}" .
-fi
-
-# Build libcudf_streaming library
-if hasArg libcudf_streaming; then
-    cmake -S "$REPODIR/cpp/libcudf_streaming" -B "${STREAMING_LIB_BUILD_DIR}" \
-          -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-          -DCMAKE_CUDA_ARCHITECTURES="${CUDF_CMAKE_CUDA_ARCHITECTURES}" \
-          -DBUILD_TESTS=${BUILD_TESTS} \
-          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
-          "${EXTRA_CMAKE_ARGS[@]}"
-
-
-    cd "${STREAMING_LIB_BUILD_DIR}"
-    cmake --build . -j"${PARALLEL_LEVEL}" ${VERBOSE_FLAG}
-
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-        cmake --build . -j"${PARALLEL_LEVEL}" --target install ${VERBOSE_FLAG}
-    fi
-fi
-
-# build cudf_streaming Python package
-if hasArg cudf_streaming; then
-    cd "${REPODIR}/python/cudf_streaming"
-    SKBUILD_CMAKE_ARGS="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX};-DCMAKE_LIBRARY_PATH=${STREAMING_LIB_BUILD_DIR};${EXTRA_CMAKE_ARGS[*]}" \
-        python -m pip install \
-            "${PYTHON_ARGS_FOR_INSTALL[@]}" \
-            "${PY_API_ARGS[@]}" \
-            .
 fi
