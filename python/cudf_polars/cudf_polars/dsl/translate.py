@@ -302,7 +302,7 @@ def _drop_dyn_pred_hints(
         left = _drop_dyn_pred_hints(translator, node.left, schema)
         right = _drop_dyn_pred_hints(translator, node.right, schema)
         if left is None:
-            return right  # pragma: no cover
+            return right
         if right is None:
             return left
         return expr.BinOp(
