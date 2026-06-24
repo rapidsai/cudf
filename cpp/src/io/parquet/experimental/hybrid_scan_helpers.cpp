@@ -271,7 +271,8 @@ aggregate_reader_metadata::select_payload_columns(
   bool ignore_missing_columns,
   type_id timestamp_type_id,
   type_id decimal_type_id,
-  bool case_sensitive_names)
+  bool case_sensitive_names,
+  bool match_schema_by_field_id)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
@@ -283,7 +284,8 @@ aggregate_reader_metadata::select_payload_columns(
                           ignore_missing_columns,
                           timestamp_type_id,
                           decimal_type_id,
-                          case_sensitive_names);
+                          case_sensitive_names,
+                          match_schema_by_field_id);
   }
 
   std::vector<std::string> valid_payload_columns;
@@ -318,7 +320,8 @@ aggregate_reader_metadata::select_payload_columns(
                           ignore_missing_columns,
                           timestamp_type_id,
                           decimal_type_id,
-                          case_sensitive_names);
+                          case_sensitive_names,
+                          match_schema_by_field_id);
   }
 
   // Else if only filter columns are specified, select all columns that do not appear in the
@@ -348,7 +351,8 @@ aggregate_reader_metadata::select_payload_columns(
                         ignore_missing_columns,
                         timestamp_type_id,
                         decimal_type_id,
-                        case_sensitive_names);
+                        case_sensitive_names,
+                        match_schema_by_field_id);
 }
 
 std::vector<std::vector<cudf::size_type>>

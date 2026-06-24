@@ -602,6 +602,9 @@ class aggregate_reader_metadata {
    * @param ignore_missing_columns Whether to ignore non-existent projected columns
    * @param timestamp_type_id Type conversion parameter
    * @param decimal_type_id Type conversion parameter
+   * @param case_sensitive_names Whether column name matching is case sensitive
+   * @param match_schema_by_field_id Whether multi-source schema matching should use Parquet field
+   * IDs
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -616,7 +619,8 @@ class aggregate_reader_metadata {
                  bool ignore_missing_columns,
                  type_id timestamp_type_id,
                  type_id decimal_type_id,
-                 bool case_sensitive_names);
+                 bool case_sensitive_names,
+                 bool match_schema_by_field_id);
 };
 
 }  // namespace cudf::io::parquet::detail
