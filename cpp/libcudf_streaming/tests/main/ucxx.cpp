@@ -48,6 +48,7 @@ class UCXXEnvironment : public Environment {
     // Ensure UCXX cleanup before MPI. If this is not done failures related to
     // accessing the CUDA context may be thrown during shutdown.
     comm_ = nullptr;  // Clean up the communicator.
+    split_comm_ = nullptr;
     RAPIDSMPF_MPI(MPI_Finalize());
   }
 
@@ -55,8 +56,14 @@ class UCXXEnvironment : public Environment {
 
   std::shared_ptr<rapidsmpf::Communicator> split_comm() override
   {
-    return std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm_)->split();
+    if (split_comm_ == nullptr) {
+      split_comm_ = std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm_)->split();
+    }
+    return split_comm_;
   }
+
+ private:
+  std::shared_ptr<rapidsmpf::Communicator> split_comm_{nullptr};
 };
 }  // namespace
 
