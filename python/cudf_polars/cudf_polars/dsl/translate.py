@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Translate polars IR representation to ours."""
@@ -302,7 +302,7 @@ def _drop_dyn_pred_hints(
         left = _drop_dyn_pred_hints(translator, node.left, schema)
         right = _drop_dyn_pred_hints(translator, node.right, schema)
         if left is None:
-            return right
+            return right  # pragma: no cover
         if right is None:
             return left
         return expr.BinOp(
