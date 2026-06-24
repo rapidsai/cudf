@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import operator
 import re
 import weakref
 from contextlib import contextmanager
@@ -1537,3 +1538,58 @@ def test_loc_missing_combination_raises_pandas_compatible():
     with cudf.option_context("mode.pandas_compatible", True):
         with pytest.raises(KeyError):
             gdf.loc[("b", "1"), :]
+
+
+@pytest.mark.parametrize(
+    "key", [{1}, {1: 1}, ({1}, "a"), (1, {"a"}), (({1}, 2), "a")]
+)
+def test_loc_getitem_dict_or_set_indexer_disallowed(key):
+    # A set/dict (or a tuple nesting one, incl. nested MultiIndex keys) is
+    # not a valid indexer.
+    pdf = pd.DataFrame(
+        [[1, 2], [3, 4]],
+        columns=["a", "b"],
+        index=pd.MultiIndex.from_tuples([(1, 2), (3, 4)]),
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_exceptions_equal(
+        lfunc=operator.getitem,
+        rfunc=operator.getitem,
+        lfunc_args_and_kwargs=([pdf.loc, key],),
+        rfunc_args_and_kwargs=([gdf.loc, key],),
+    )
+
+
+def test_loc_getitem_boolean_series_misaligned():
+    # A boolean Series indexer carrying a reordered index is aligned by
+    # label rather than applied positionally.
+    pdf = pd.DataFrame({"a": [1, 4, 2, 3], "b": [5, 6, 7, 8]})
+    gdf = cudf.from_pandas(pdf)
+    pmask = (pdf["a"] >= 3)[::-1]
+    gmask = (gdf["a"] >= 3)[::-1]
+    assert_eq(pdf.loc[pmask], gdf.loc[gmask])
+
+
+def test_loc_getitem_list_of_tuples_multiindex():
+    # A list of full-length tuples selects those exact MultiIndex rows;
+    # a scalar column key downcasts the result to a Series.
+    pdf = pd.DataFrame(
+        {"c": [1, 2, 3, 4]},
+        index=pd.MultiIndex.from_arrays(
+            [[1, 2, 1, 2], [1, 2, 3, 4]], names=["i1", "i2"]
+        ),
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc[[(1, 1)], "c"], gdf.loc[[(1, 1)], "c"])
+    assert_eq(pdf.loc[[(1, 1)], ["c"]], gdf.loc[[(1, 1)], ["c"]])
+
+
+def test_loc_one_level_multiindex_keeps_frame():
+    # .loc on a single-level MultiIndex keeps the result a DataFrame with
+    # the MultiIndex preserved (no downcast to a Series).
+    pdf = pd.DataFrame(
+        [[0], [1]],
+        index=pd.MultiIndex.from_tuples([("a",), ("b",)], names=["first"]),
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc["a"], gdf.loc["a"])

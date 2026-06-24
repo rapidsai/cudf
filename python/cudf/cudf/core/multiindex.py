@@ -964,6 +964,14 @@ class MultiIndex(Index):
         cols = list(index._columns)
         names = list(index.names)
 
+        if nlevels == 1:
+            # On a 1-level MultiIndex, keep the result as-is (a DataFrame with
+            # the MultiIndex preserved) rather than dropping the level or
+            # downcasting to a Series.
+            if isinstance(result, cudf.DataFrame):
+                result.index = index
+            return result
+
         if per_level:
             # Series.loc / DataFrame "Form A" (a single per-level tuple): drop
             # exactly the levels selected by a SCALAR, positionally; keep the
