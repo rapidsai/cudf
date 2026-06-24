@@ -321,7 +321,7 @@ int main(int argc, char** argv)
 
   RAPIDSMPF_EXPECTS(comm->nranks() == 1, "only single-rank runs are supported");
 
-  set_current_rmm_resource(args.rmm_mr);
+  auto rmm_mr = create_rmm_resource(args.rmm_mr);
   std::unordered_map<rapidsmpf::MemoryType, std::int64_t> memory_limits{};
   if (args.device_mem_limit_mb >= 0) {
     memory_limits[rapidsmpf::MemoryType::DEVICE] = args.device_mem_limit_mb << 20;
@@ -332,7 +332,7 @@ int main(int argc, char** argv)
   auto pinned_mr = args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
                                            : rapidsmpf::PinnedMemoryResource::make_if_available();
   auto br        = rapidsmpf::BufferResource::create(
-    rmm::mr::get_current_device_resource_ref(),
+    rmm_mr,
     pinned_mr,
     std::move(memory_limits),
     std::nullopt,

@@ -490,7 +490,7 @@ int main(int argc, char** argv)
   // Initialize configuration options from environment variables.
   rapidsmpf::config::Options options{rapidsmpf::config::get_environment_variables()};
 
-  set_current_rmm_resource(args.rmm_mr);
+  auto rmm_mr = create_rmm_resource(args.rmm_mr);
 
   std::unordered_map<rapidsmpf::MemoryType, std::int64_t> memory_limits{};
   if (args.device_mem_limit_mb >= 0) {
@@ -502,7 +502,7 @@ int main(int argc, char** argv)
   // We're only going to measure the last run, so disable initially.
   stats->disable();
   auto br = rapidsmpf::BufferResource::create(
-    rmm::mr::get_current_device_resource_ref(),
+    rmm_mr,
     args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
                             : rapidsmpf::PinnedMemoryResource::make_if_available(),
     std::move(memory_limits),
