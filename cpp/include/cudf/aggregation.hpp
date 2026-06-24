@@ -77,9 +77,11 @@ class aggregation {
    * @brief Possible aggregation operations.
    */
   enum Kind : int32_t {
-    SUM = 0,            ///< sum reduction
-    SUM_WITH_OVERFLOW,  ///< sum reduction with overflow detection
-    PRODUCT,            ///< product reduction
+    SUM = 0,       ///< sum reduction
+    SUM_OVERFLOW,  ///< sum reduction with overflow detection
+    /// @deprecated Use SUM_OVERFLOW instead.
+    SUM_WITH_OVERFLOW = SUM_OVERFLOW,  ///< deprecated alias for SUM_OVERFLOW
+    PRODUCT,                           ///< product reduction
     MIN,                ///< min reduction
     MAX,                ///< max reduction
     COUNT_VALID,        ///< count number of valid elements
@@ -212,8 +214,14 @@ enum class ewm_history : int32_t { INFINITE, FINITE };
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_aggregation();
 
+/// Factory to create a SUM_OVERFLOW aggregation
+/// @return A SUM_OVERFLOW aggregation object
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_overflow_aggregation();
+
 /// Factory to create a SUM_WITH_OVERFLOW aggregation
 /// @return A SUM_WITH_OVERFLOW aggregation object
+/// @deprecated Use make_sum_overflow_aggregation() instead.
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_with_overflow_aggregation();
 

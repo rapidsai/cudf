@@ -10,7 +10,7 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/reduction/detail/sum_with_overflow.cuh>
+#include <cudf/reduction/detail/sum_overflow.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -44,8 +44,8 @@ struct split_accumulator {
   }
 };
 
-struct group_sum_with_overflow_fn {
-  template <cudf::detail::sum_with_overflow_supported Source>
+struct group_sum_overflow_fn {
+  template <cudf::detail::sum_overflow_supported Source>
   std::unique_ptr<column> operator()(column_view const& values,
                                      size_type num_groups,
                                      cudf::device_span<size_type const> group_labels,
@@ -106,23 +106,23 @@ struct group_sum_with_overflow_fn {
   }
 
   template <typename Source, typename... Args>
-    requires(!cudf::detail::sum_with_overflow_supported<Source>)
+    requires(!cudf::detail::sum_overflow_supported<Source>)
   std::unique_ptr<column> operator()(Args&&...) const
   {
-    CUDF_FAIL("SUM_WITH_OVERFLOW is only supported for signed integral and fixed-point types");
+    CUDF_FAIL("SUM_OVERFLOW is only supported for signed integral and fixed-point types");
   }
 };
 
 }  // namespace
 
-std::unique_ptr<column> group_sum_with_overflow(column_view const& values,
+std::unique_ptr<column> group_sum_overflow(column_view const& values,
                                                 size_type num_groups,
                                                 cudf::device_span<size_type const> group_labels,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::device_async_resource_ref mr)
 {
   return cudf::type_dispatcher(
-    values.type(), group_sum_with_overflow_fn{}, values, num_groups, group_labels, stream, mr);
+    values.type(), group_sum_overflow_fn{}, values, num_groups, group_labels, stream, mr);
 }
 
 }  // namespace cudf::groupby::detail

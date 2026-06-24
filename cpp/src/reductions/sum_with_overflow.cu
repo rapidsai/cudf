@@ -11,7 +11,7 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction/detail/reduction_functions.hpp>
-#include <cudf/reduction/detail/sum_with_overflow.cuh>
+#include <cudf/reduction/detail/sum_overflow.cuh>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -115,7 +115,7 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
 }
 
 struct sum_with_overflow_dispatcher {
-  template <cudf::detail::sum_with_overflow_supported Source>
+  template <cudf::detail::sum_overflow_supported Source>
   std::unique_ptr<cudf::scalar> operator()(column_view const& col,
                                            std::optional<std::reference_wrapper<scalar const>> init,
                                            rmm::cuda_stream_view stream,
@@ -125,7 +125,7 @@ struct sum_with_overflow_dispatcher {
   }
 
   template <typename Source>
-    requires(!cudf::detail::sum_with_overflow_supported<Source>)
+    requires(!cudf::detail::sum_overflow_supported<Source>)
   std::unique_ptr<cudf::scalar> operator()(column_view const&,
                                            std::optional<std::reference_wrapper<scalar const>>,
                                            rmm::cuda_stream_view,

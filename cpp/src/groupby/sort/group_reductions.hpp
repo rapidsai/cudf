@@ -57,7 +57,7 @@ std::unique_ptr<column> group_sum(column_view const& values,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
-[[nodiscard]] std::unique_ptr<column> group_sum_with_overflow(
+[[nodiscard]] std::unique_ptr<column> group_sum_overflow(
   column_view const& values,
   size_type num_groups,
   cudf::device_span<size_type const> group_labels,
