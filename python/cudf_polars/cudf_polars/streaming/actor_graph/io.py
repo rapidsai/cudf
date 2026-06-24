@@ -9,8 +9,8 @@ import math
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
@@ -477,11 +477,11 @@ def make_rapidsmpf_read_parquet_node(
     The RapidsMPF read parquet node, or None if the predicate cannot be
     converted to a parquet filter (caller should fall back to scan_node).
     """
-    from cudf_streaming.streaming.parquet import Filter, read_parquet
+    from cudf_streaming.parquet import Filter, read_parquet
 
     # Build ParquetReaderOptions
     try:
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         parquet_reader_options = (
             plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
             .decimal_width(plc.TypeId.DECIMAL128)

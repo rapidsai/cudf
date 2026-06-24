@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for RapidsMPF AllGather functionality."""
@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
@@ -22,7 +22,7 @@ async def _test_allgather(engine) -> None:
     """Very simple test that AllGatherManager can concatenate tables."""
     context = engine.context
     comm = engine.comm
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
 
     # Create simple test tables with different sizes
     tables = [

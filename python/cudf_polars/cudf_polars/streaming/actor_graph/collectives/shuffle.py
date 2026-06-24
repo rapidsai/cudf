@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Shuffle logic for the RapidsMPF streaming runtime."""
 
@@ -8,17 +8,17 @@ from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 import pylibcudf.partitioning
-from cudf_streaming.integrations.partition import (
-    partition_and_pack as py_partition_and_pack,
-    split_and_pack as py_split_and_pack,
-    unpack_and_concat as py_unpack_and_concat,
-)
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.partition_utils import (
+    partition_and_pack as py_partition_and_pack,
+    split_and_pack as py_split_and_pack,
+    unpack_and_concat as py_unpack_and_concat,
+)
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.communicator.single import new_communicator as single_comm
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.shuffler import PartitionAssignment
@@ -129,7 +129,7 @@ class ShuffleManager:
                 ``chunk``.
             """
             with stream_ordered_after(
-                self._manager.context.get_stream_from_pool,
+                self._manager.context.br().stream_pool.get_stream,
                 upstreams=(chunk.stream, partition_map.stream),
             ) as stream:
                 partition_map_col = partition_map.table_view().columns()[0]
@@ -443,7 +443,7 @@ async def shuffle_actor(
 
     This node combines partition_and_pack, shuffler, and unpack_and_concat
     into a single Python node using rapidsmpf.shuffler.Shuffler and utilities
-    from cudf_streaming.integrations.partition.
+    from cudf_streaming.partition_utils.
 
     Parameters
     ----------
