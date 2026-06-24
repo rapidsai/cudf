@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -42,22 +42,21 @@ using metadata_base = parquet::detail::metadata;
   cudf::host_span<std::vector<size_type> const> row_group_indices);
 
 /**
- * @brief Compute page row counts and page row offsets and column chunk page (count) offsets for a
- * given column schema index
+ * @brief Compute page row offsets and column chunk page (count) offsets for a given column schema
+ * index
  *
  * @param per_file_metadata Span of parquet footer metadata
  * @param row_group_indices Span of input row group indices
  * @param schema_idx Column's schema index
  * @param stream CUDA stream
- * @return Tuple of page row counts, page row offsets, and column chunk page (count) offsets
+ * @return Pair of page row offsets and column chunk page (count) offsets
  */
-[[nodiscard]] std::tuple<cudf::detail::host_vector<size_type>,
-                         cudf::detail::host_vector<size_type>,
-                         cudf::detail::host_vector<size_type>>
-compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_file_metadata,
-                                    cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                    size_type schema_idx,
-                                    rmm::cuda_stream_view stream);
+[[nodiscard]] std::pair<cudf::detail::host_vector<size_type>, cudf::detail::host_vector<size_type>>
+compute_page_row_offsets_and_colchunk_page_offsets(
+  cudf::host_span<metadata_base const> per_file_metadata,
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  size_type schema_idx,
+  rmm::cuda_stream_view stream);
 
 /**
  * @brief Computes page row offsets and the size (number of rows) of the largest page for a given
@@ -77,7 +76,6 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 /**
  * @brief Computes a device vector where each row contains the index of the page it belongs to
  *
- * @param page_row_counts Span of page row counts
  * @param page_row_offsets Span of page row offsets
  * @param total_rows Total number of rows
  * @param stream CUDA stream
@@ -85,7 +83,6 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
  * @return Device vector where each row contains the index of the page it belongs to
  */
 [[nodiscard]] rmm::device_uvector<size_type> compute_page_indices_async(
-  cudf::host_span<cudf::size_type const> page_row_counts,
   cudf::host_span<cudf::size_type const> page_row_offsets,
   cudf::size_type total_rows,
   rmm::cuda_stream_view stream,

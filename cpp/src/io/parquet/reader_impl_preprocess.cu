@@ -12,6 +12,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -1205,7 +1206,8 @@ void reader_impl::prepend_source_index_column(std::span<std::size_t const> num_r
   using column_type    = cudf::size_type;
   auto constexpr dtype = cudf::data_type{cudf::type_to_id<column_type>()};
 
-  auto const num_rows = std::accumulate(num_rows_per_source.begin(), num_rows_per_source.end(), 0);
+  auto const num_rows =
+    std::accumulate(num_rows_per_source.begin(), num_rows_per_source.end(), std::size_t{0});
 
   auto const prepend_column = [&](auto&& column) {
     out_columns.emplace(out_columns.begin(), std::move(column));
@@ -1225,42 +1227,24 @@ void reader_impl::prepend_source_index_column(std::span<std::size_t const> num_r
     return;
   }
 
-  auto col_data =
-    cudf::detail::make_zeroed_device_uvector_async<column_type>(num_rows, _stream, _mr);
-
   // Multiple sources
+  auto col_data = rmm::device_uvector<column_type>(num_rows, _stream, _mr);
   {
     auto temp_mr = cudf::get_current_device_resource_ref();
 
-    // Host per-source exclusive row offsets
+    // Host per-source row offsets, including the final total row count.
     auto host_row_offsets =
-      cudf::detail::make_empty_pinned_vector<cudf::size_type>(num_sources, _stream);
-    host_row_offsets.resize(num_sources);
-    std::exclusive_scan(num_rows_per_source.begin(),
-                        num_rows_per_source.end(),
-                        host_row_offsets.begin(),
-                        cudf::size_type{0});
+      cudf::detail::make_empty_pinned_vector<cudf::size_type>(num_sources + 1, _stream);
+    host_row_offsets.resize(num_sources + 1);
+    host_row_offsets.front() = cudf::size_type{0};
+    std::inclusive_scan(
+      num_rows_per_source.begin(), num_rows_per_source.end(), host_row_offsets.begin() + 1);
 
-    // Copy row counts (scatter stencil) and offsets (scatter map) to device.
-    auto const row_counts =
-      cudf::detail::make_device_uvector_async(num_rows_per_source, _stream, temp_mr);
     auto const row_offsets =
       cudf::detail::make_device_uvector_async(host_row_offsets, _stream, temp_mr);
 
-    // Scatter each source index to its first row's position, but only for sources that have rows.
-    thrust::scatter_if(rmm::exec_policy_nosync(_stream, temp_mr),
-                       cuda::counting_iterator<cudf::size_type>(0),
-                       cuda::counting_iterator<cudf::size_type>(num_sources),
-                       row_offsets.begin(),
-                       row_counts.begin(),
-                       col_data.begin());
-    // Inclusive scan with maximum to replace zeros with the source index each row belongs to.
-    thrust::inclusive_scan(rmm::exec_policy_nosync(_stream, temp_mr),
-                           col_data.begin(),
-                           col_data.end(),
-                           col_data.begin(),
-                           cuda::maximum<cudf::size_type>());
-    _stream.synchronize();
+    cudf::detail::label_segments(
+      row_offsets.begin(), row_offsets.end(), col_data.begin(), col_data.end(), _stream);
   }
 
   prepend_column(std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{}, 0));
