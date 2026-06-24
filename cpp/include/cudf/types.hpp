@@ -262,8 +262,8 @@ enum class output_nullability : uint8_t {
 };
 
 /**
-* @brief Indicates whether a function can produce an error during execution.
-*/
+ * @brief Indicates whether a function can produce an error during execution.
+ */
 enum class fallible : bool {
   NO  = 0,  ///< The function is not fallible
   YES = 1   ///< The function is fallible

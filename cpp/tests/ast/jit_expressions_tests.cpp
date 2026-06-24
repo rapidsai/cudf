@@ -64,7 +64,7 @@ TEST_F(JITExpressionTest, Coalesce)
   auto tree      = cudf::ast::tree{};
   auto a_ref     = cudf::ast::column_reference(0);
   auto b_ref     = cudf::ast::column_reference(1);
-  auto& coalesce = cudf::ast::jit::coalesce(tree, a_ref, b_ref);
+  auto& coalesce = cudf::ast::jit::operation(tree, cudf::ast::jit::op::COALESCE, {a_ref, b_ref});
   auto result    = cudf::compute_column_jit(table, coalesce);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
@@ -84,11 +84,13 @@ TYPED_TEST(JITIntegerArithmeticTest, AddOverflow)
   auto b_ref         = cudf::ast::column_reference(1);
   auto b_fail_ref    = cudf::ast::column_reference(2);
 
-  auto& add          = cudf::ast::jit::add_overflow(tree, a_ref, b_ref);
-  auto& add_fail     = cudf::ast::jit::add_overflow(tree, a_ref, b_fail_ref);
-  auto& try_add_fail = cudf::ast::jit::add_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, add);
-  auto result_fail   = cudf::compute_column_jit(table, try_add_fail);
+  auto& add = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref});
+  auto& add_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_add_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, add);
+  auto result_fail = cudf::compute_column_jit(table, try_add_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -107,16 +109,18 @@ TYPED_TEST(JITDecimalArithmeticTest, AddOverflow)
   auto expected = decimal_column_wrapper<T>{{13, 27, 21, 50}, numeric::scale_type{0}};
   auto expected_fail =
     decimal_column_wrapper<T>{{13, 0, 21, 50}, {1, 0, 1, 1}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b, b_fail}};
-  auto tree          = cudf::ast::tree{};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_ref         = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto& add          = cudf::ast::jit::add_overflow(tree, a_ref, b_ref);
-  auto& add_fail     = cudf::ast::jit::add_overflow(tree, a_ref, b_fail_ref);
-  auto& try_add_fail = cudf::ast::jit::add_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, add);
-  auto result_fail   = cudf::compute_column_jit(table, try_add_fail);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto tree       = cudf::ast::tree{};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto& add = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref});
+  auto& add_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_add_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, add);
+  auto result_fail = cudf::compute_column_jit(table, try_add_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -138,9 +142,11 @@ TYPED_TEST(JITSignedIntegerArithmeticTest, SubOverflow)
   auto a_ref         = cudf::ast::column_reference(0);
   auto b_ref         = cudf::ast::column_reference(1);
   auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto& sub          = cudf::ast::jit::sub_overflow(tree, a_ref, b_ref);
-  auto& sub_fail     = cudf::ast::jit::sub_overflow(tree, a_ref, b_fail_ref);
-  auto& try_sub_fail = cudf::ast::jit::sub_overflow(tree, a_ref, b_fail_ref, true);
+  auto& sub = cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_ref});
+  auto& sub_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_sub_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref}, true);
 
   auto result      = cudf::compute_column_jit(table, sub);
   auto result_fail = cudf::compute_column_jit(table, try_sub_fail);
@@ -163,16 +169,18 @@ TYPED_TEST(JITDecimalArithmeticTest, SubOverflow)
   auto expected = decimal_column_wrapper<T>{{-7, 13, -19, 50}, numeric::scale_type{0}};
   auto expected_fail =
     decimal_column_wrapper<T>{{-7, 0, -19, 50}, {1, 0, 1, 1}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b, b_fail}};
-  auto tree          = cudf::ast::tree{};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_ref         = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto& sub          = cudf::ast::jit::sub_overflow(tree, a_ref, b_ref);
-  auto& sub_fail     = cudf::ast::jit::sub_overflow(tree, a_ref, b_fail_ref);
-  auto& try_sub_fail = cudf::ast::jit::sub_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, sub);
-  auto result_fail   = cudf::compute_column_jit(table, try_sub_fail);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto tree       = cudf::ast::tree{};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto& sub = cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_ref});
+  auto& sub_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_sub_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, sub);
+  auto result_fail = cudf::compute_column_jit(table, try_sub_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -194,11 +202,13 @@ TYPED_TEST(JITIntegerArithmeticTest, MulOverflow)
   auto b_ref         = cudf::ast::column_reference(1);
   auto b_fail_ref    = cudf::ast::column_reference(2);
   auto tree          = cudf::ast::tree{};
-  auto& mul          = cudf::ast::jit::mul_overflow(tree, a_ref, b_ref);
-  auto& mul_fail     = cudf::ast::jit::mul_overflow(tree, a_ref, b_fail_ref);
-  auto& try_mul_fail = cudf::ast::jit::mul_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, mul);
-  auto result_fail   = cudf::compute_column_jit(table, try_mul_fail);
+  auto& mul = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_ref});
+  auto& mul_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_mul_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, mul);
+  auto result_fail = cudf::compute_column_jit(table, try_mul_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -218,16 +228,18 @@ TYPED_TEST(JITDecimalArithmeticTest, MulOverflow)
   auto expected = decimal_column_wrapper<T>{{30, 140, 2, 0}, numeric::scale_type{0}};
   auto expected_fail =
     decimal_column_wrapper<T>{{30, 0, 2, 0}, {1, 0, 1, 1}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b, b_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_ref         = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto tree          = cudf::ast::tree{};
-  auto& mul          = cudf::ast::jit::mul_overflow(tree, a_ref, b_ref);
-  auto& mul_fail     = cudf::ast::jit::mul_overflow(tree, a_ref, b_fail_ref);
-  auto& try_mul_fail = cudf::ast::jit::mul_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, mul);
-  auto result_fail   = cudf::compute_column_jit(table, try_mul_fail);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& mul = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_ref});
+  auto& mul_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_mul_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, mul);
+  auto result_fail = cudf::compute_column_jit(table, try_mul_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -249,11 +261,13 @@ TYPED_TEST(JITIntegerArithmeticTest, DivOverflow)
   auto b_ref         = cudf::ast::column_reference(1);
   auto b_fail_ref    = cudf::ast::column_reference(2);
   auto tree          = cudf::ast::tree{};
-  auto& div          = cudf::ast::jit::div_overflow(tree, a_ref, b_ref);
-  auto& div_fail     = cudf::ast::jit::div_overflow(tree, a_ref, b_fail_ref);
-  auto& try_div_fail = cudf::ast::jit::div_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, div);
-  auto result_fail   = cudf::compute_column_jit(table, try_div_fail);
+  auto& div = cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_ref});
+  auto& div_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_div_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, div);
+  auto result_fail = cudf::compute_column_jit(table, try_div_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -271,16 +285,18 @@ TYPED_TEST(JITDecimalArithmeticTest, DivOverflow)
   auto expected = decimal_column_wrapper<T>{{0, 2, 0, 50}, numeric::scale_type{0}};
   auto expected_fail =
     decimal_column_wrapper<T>{{0, 20, 0, 50}, {1, 1, 1, 0}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b, b_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_ref         = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto tree          = cudf::ast::tree{};
-  auto& div          = cudf::ast::jit::div_overflow(tree, a_ref, b_ref);
-  auto& div_fail     = cudf::ast::jit::div_overflow(tree, a_ref, b_fail_ref);
-  auto& try_div_fail = cudf::ast::jit::div_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, div);
-  auto result_fail   = cudf::compute_column_jit(table, try_div_fail);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& div = cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_ref});
+  auto& div_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_div_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, div);
+  auto result_fail = cudf::compute_column_jit(table, try_div_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -302,11 +318,13 @@ TYPED_TEST(JITIntegerArithmeticTest, ModOverflow)
   auto b_ref         = cudf::ast::column_reference(1);
   auto b_fail_ref    = cudf::ast::column_reference(2);
   auto tree          = cudf::ast::tree{};
-  auto& mod          = cudf::ast::jit::mod_overflow(tree, a_ref, b_ref);
-  auto& mod_fail     = cudf::ast::jit::mod_overflow(tree, a_ref, b_fail_ref);
-  auto& try_mod_fail = cudf::ast::jit::mod_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, mod);
-  auto result_fail   = cudf::compute_column_jit(table, try_mod_fail);
+  auto& mod = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_ref});
+  auto& mod_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_mod_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, mod);
+  auto result_fail = cudf::compute_column_jit(table, try_mod_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -324,16 +342,18 @@ TYPED_TEST(JITDecimalArithmeticTest, ModOverflow)
   auto expected = decimal_column_wrapper<T>{{3, 6, 1, 0}, numeric::scale_type{0}};
   auto expected_fail =
     decimal_column_wrapper<T>{{3, 0, 1, 0}, {1, 1, 1, 0}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, b, b_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto b_ref         = cudf::ast::column_reference(1);
-  auto b_fail_ref    = cudf::ast::column_reference(2);
-  auto tree          = cudf::ast::tree{};
-  auto& mod          = cudf::ast::jit::mod_overflow(tree, a_ref, b_ref);
-  auto& mod_fail     = cudf::ast::jit::mod_overflow(tree, a_ref, b_fail_ref);
-  auto& try_mod_fail = cudf::ast::jit::mod_overflow(tree, a_ref, b_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, mod);
-  auto result_fail   = cudf::compute_column_jit(table, try_mod_fail);
+  auto table      = cudf::table_view{{a, b, b_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto b_ref      = cudf::ast::column_reference(1);
+  auto b_fail_ref = cudf::ast::column_reference(2);
+  auto tree       = cudf::ast::tree{};
+  auto& mod = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_ref});
+  auto& mod_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref});
+  auto& try_mod_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, mod);
+  auto result_fail = cudf::compute_column_jit(table, try_mod_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -354,11 +374,12 @@ TYPED_TEST(JITSignedIntegerArithmeticTest, AbsOverflow)
   auto a_ref         = cudf::ast::column_reference(0);
   auto a_fail_ref    = cudf::ast::column_reference(1);
   auto tree          = cudf::ast::tree{};
-  auto& abs          = cudf::ast::jit::abs_overflow(tree, a_ref);
-  auto& abs_fail     = cudf::ast::jit::abs_overflow(tree, a_fail_ref);
-  auto& try_abs_fail = cudf::ast::jit::abs_overflow(tree, a_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, abs);
-  auto result_fail   = cudf::compute_column_jit(table, try_abs_fail);
+  auto& abs          = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_ref});
+  auto& abs_fail = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref});
+  auto& try_abs_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, abs);
+  auto result_fail = cudf::compute_column_jit(table, try_abs_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -380,15 +401,16 @@ TYPED_TEST(JITDecimalArithmeticTest, AbsOverflow)
     numeric::scale_type{0}};
   auto expected_fail = decimal_column_wrapper<T>{
     {3, 20, 1, 50, 0, 1, 0}, {1, 1, 1, 1, 0, 1, 1}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, a_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto a_fail_ref    = cudf::ast::column_reference(1);
-  auto tree          = cudf::ast::tree{};
-  auto& abs          = cudf::ast::jit::abs_overflow(tree, a_ref);
-  auto& abs_fail     = cudf::ast::jit::abs_overflow(tree, a_fail_ref);
-  auto& try_abs_fail = cudf::ast::jit::abs_overflow(tree, a_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, abs);
-  auto result_fail   = cudf::compute_column_jit(table, try_abs_fail);
+  auto table      = cudf::table_view{{a, a_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto a_fail_ref = cudf::ast::column_reference(1);
+  auto tree       = cudf::ast::tree{};
+  auto& abs       = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_ref});
+  auto& abs_fail  = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref});
+  auto& try_abs_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, abs);
+  auto result_fail = cudf::compute_column_jit(table, try_abs_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -408,11 +430,12 @@ TYPED_TEST(JITSignedIntegerArithmeticTest, NegOverflow)
   auto a_ref         = cudf::ast::column_reference(0);
   auto a_fail_ref    = cudf::ast::column_reference(1);
   auto tree          = cudf::ast::tree{};
-  auto& neg          = cudf::ast::jit::neg_overflow(tree, a_ref);
-  auto& neg_fail     = cudf::ast::jit::neg_overflow(tree, a_fail_ref);
-  auto& try_neg_fail = cudf::ast::jit::neg_overflow(tree, a_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, neg);
-  auto result_fail   = cudf::compute_column_jit(table, try_neg_fail);
+  auto& neg          = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_ref});
+  auto& neg_fail = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref});
+  auto& try_neg_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, neg);
+  auto result_fail = cudf::compute_column_jit(table, try_neg_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -433,15 +456,16 @@ TYPED_TEST(JITDecimalArithmeticTest, NegOverflow)
     {R{-3}, R{20}, R{-1}, R{50}, R{-this->MAX}, this->MAX, R{0}}, numeric::scale_type{0}};
   auto expected_fail = decimal_column_wrapper<T>{
     {-3, 20, -1, 50, 0, -1, 0}, {1, 1, 1, 1, 0, 1, 1}, numeric::scale_type{0}};
-  auto table         = cudf::table_view{{a, a_fail}};
-  auto a_ref         = cudf::ast::column_reference(0);
-  auto a_fail_ref    = cudf::ast::column_reference(1);
-  auto tree          = cudf::ast::tree{};
-  auto& neg          = cudf::ast::jit::neg_overflow(tree, a_ref);
-  auto& neg_fail     = cudf::ast::jit::neg_overflow(tree, a_fail_ref);
-  auto& try_neg_fail = cudf::ast::jit::neg_overflow(tree, a_fail_ref, true);
-  auto result        = cudf::compute_column_jit(table, neg);
-  auto result_fail   = cudf::compute_column_jit(table, try_neg_fail);
+  auto table      = cudf::table_view{{a, a_fail}};
+  auto a_ref      = cudf::ast::column_reference(0);
+  auto a_fail_ref = cudf::ast::column_reference(1);
+  auto tree       = cudf::ast::tree{};
+  auto& neg       = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_ref});
+  auto& neg_fail  = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref});
+  auto& try_neg_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref}, true);
+  auto result      = cudf::compute_column_jit(table, neg);
+  auto result_fail = cudf::compute_column_jit(table, try_neg_fail);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -458,17 +482,20 @@ TYPED_TEST(JITDecimalArithmeticTest, CheckPrecision)
   auto expected = decimal_column_wrapper<T>{{3, 200, 250, 200}, numeric::scale_type{0}};
   auto expected_fail =
     decimal_column_wrapper<T>{{3, 200, 250, 200}, {1, 1, 1, 0}, numeric::scale_type{0}};
-  auto max_precision         = cudf::numeric_scalar<int32_t>(3);
-  auto table                 = cudf::table_view{{a, a_fail}};
-  auto a_ref                 = cudf::ast::column_reference(0);
-  auto a_fail_ref            = cudf::ast::column_reference(1);
-  auto tree                  = cudf::ast::tree{};
-  auto precision             = cudf::ast::literal(max_precision);
-  auto& check_precision      = cudf::ast::jit::check_precision(tree, a_ref, precision);
-  auto& check_precision_fail = cudf::ast::jit::check_precision(tree, a_fail_ref, precision);
-  auto& try_check_precision  = cudf::ast::jit::check_precision(tree, a_fail_ref, precision, true);
-  auto result                = cudf::compute_column_jit(table, check_precision);
-  auto result_fail           = cudf::compute_column_jit(table, try_check_precision);
+  auto max_precision = cudf::numeric_scalar<int32_t>(3);
+  auto table         = cudf::table_view{{a, a_fail}};
+  auto a_ref         = cudf::ast::column_reference(0);
+  auto a_fail_ref    = cudf::ast::column_reference(1);
+  auto tree          = cudf::ast::tree{};
+  auto precision     = cudf::ast::literal(max_precision);
+  auto& check_precision =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::CHECK_PRECISION, {a_ref, precision});
+  auto& check_precision_fail =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::CHECK_PRECISION, {a_fail_ref, precision});
+  auto& try_check_precision = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::CHECK_PRECISION, {a_fail_ref, precision}, true);
+  auto result      = cudf::compute_column_jit(table, check_precision);
+  auto result_fail = cudf::compute_column_jit(table, try_check_precision);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -487,8 +514,9 @@ TEST_F(JITExpressionTest, BitShiftLeft)
   auto a_ref         = cudf::ast::column_reference(0);
   auto tree          = cudf::ast::tree{};
   auto shift_literal = cudf::ast::literal(shift);
-  auto& shift_left   = cudf::ast::jit::bitwise_shift_left(tree, a_ref, shift_literal);
-  auto result        = cudf::compute_column_jit(table, shift_left);
+  auto& shift_left =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::BITWISE_SHIFT_LEFT, {a_ref, shift_literal});
+  auto result = cudf::compute_column_jit(table, shift_left);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
@@ -502,8 +530,9 @@ TEST_F(JITExpressionTest, BitShiftRight)
   auto a_ref         = cudf::ast::column_reference(0);
   auto tree          = cudf::ast::tree{};
   auto shift_literal = cudf::ast::literal(shift);
-  auto& shift_right  = cudf::ast::jit::bitwise_shift_right(tree, a_ref, shift_literal);
-  auto result        = cudf::compute_column_jit(table, shift_right);
+  auto& shift_right  = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::BITWISE_SHIFT_RIGHT, {a_ref, shift_literal});
+  auto result = cudf::compute_column_jit(table, shift_right);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
@@ -520,28 +549,28 @@ void test_cast()
   cudf::ast::expression const* cast = nullptr;
 
   if constexpr (std::is_same_v<To, bool>) {
-    cast = &cudf::ast::jit::cast_to_bool8(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_BOOL8, {a_ref});
   } else if constexpr (std::is_same_v<To, int8_t>) {
-    cast = &cudf::ast::jit::cast_to_int8(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT8, {a_ref});
   } else if constexpr (std::is_same_v<To, int16_t>) {
-    cast = &cudf::ast::jit::cast_to_int16(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT16, {a_ref});
   } else if constexpr (std::is_same_v<To, int32_t>) {
-    cast = &cudf::ast::jit::cast_to_int32(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT32, {a_ref});
   } else if constexpr (std::is_same_v<To, int64_t>) {
-    cast = &cudf::ast::jit::cast_to_int64(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT64, {a_ref});
   } else if constexpr (std::is_same_v<To, uint8_t>) {
-    cast = &cudf::ast::jit::cast_to_uint8(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT8, {a_ref});
   } else if constexpr (std::is_same_v<To, uint16_t>) {
-    cast = &cudf::ast::jit::cast_to_uint16(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT16, {a_ref});
   } else if constexpr (std::is_same_v<To, uint32_t>) {
-    cast = &cudf::ast::jit::cast_to_uint32(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT32, {a_ref});
   } else if constexpr (std::is_same_v<To, uint64_t>) {
-    cast = &cudf::ast::jit::cast_to_uint64(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT64, {a_ref});
   } else if constexpr (std::is_same_v<To, float>) {
-    cast = &cudf::ast::jit::cast_to_float32(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT32, {a_ref});
   } else {
     static_assert(std::is_same_v<To, double>);
-    cast = &cudf::ast::jit::cast_to_float64(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT64, {a_ref});
   }
 
   auto result = cudf::compute_column_jit(table, *cast);
@@ -560,28 +589,28 @@ void test_from_decimal_cast()
   cudf::ast::expression const* cast = nullptr;
 
   if constexpr (std::is_same_v<To, bool>) {
-    cast = &cudf::ast::jit::cast_to_bool8(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_BOOL8, {a_ref});
   } else if constexpr (std::is_same_v<To, int8_t>) {
-    cast = &cudf::ast::jit::cast_to_int8(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT8, {a_ref});
   } else if constexpr (std::is_same_v<To, int16_t>) {
-    cast = &cudf::ast::jit::cast_to_int16(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT16, {a_ref});
   } else if constexpr (std::is_same_v<To, int32_t>) {
-    cast = &cudf::ast::jit::cast_to_int32(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT32, {a_ref});
   } else if constexpr (std::is_same_v<To, int64_t>) {
-    cast = &cudf::ast::jit::cast_to_int64(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT64, {a_ref});
   } else if constexpr (std::is_same_v<To, uint8_t>) {
-    cast = &cudf::ast::jit::cast_to_uint8(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT8, {a_ref});
   } else if constexpr (std::is_same_v<To, uint16_t>) {
-    cast = &cudf::ast::jit::cast_to_uint16(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT16, {a_ref});
   } else if constexpr (std::is_same_v<To, uint32_t>) {
-    cast = &cudf::ast::jit::cast_to_uint32(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT32, {a_ref});
   } else if constexpr (std::is_same_v<To, uint64_t>) {
-    cast = &cudf::ast::jit::cast_to_uint64(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT64, {a_ref});
   } else if constexpr (std::is_same_v<To, float>) {
-    cast = &cudf::ast::jit::cast_to_float32(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT32, {a_ref});
   } else {
     static_assert(std::is_same_v<To, double>);
-    cast = &cudf::ast::jit::cast_to_float64(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT64, {a_ref});
   }
 
   auto result = cudf::compute_column_jit(table, *cast);
@@ -633,12 +662,12 @@ void test_decimal_cast()
   cudf::ast::expression const* cast = nullptr;
 
   if constexpr (std::is_same_v<To, numeric::decimal32>) {
-    cast = &cudf::ast::jit::cast_to_decimal32(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL32, {a_ref});
   } else if constexpr (std::is_same_v<To, numeric::decimal64>) {
-    cast = &cudf::ast::jit::cast_to_decimal64(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL64, {a_ref});
   } else if constexpr (std::is_same_v<To, numeric::decimal128>) {
     static_assert(std::is_same_v<To, numeric::decimal128>);
-    cast = &cudf::ast::jit::cast_to_decimal128(tree, a_ref);
+    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL128, {a_ref});
   }
 
   auto result = cudf::compute_column_jit(table, *cast);
@@ -662,7 +691,7 @@ TEST_F(JITExpressionTest, Rescale)
   auto table     = cudf::table_view{{a}};
   auto a_ref     = cudf::ast::column_reference(0);
   auto tree      = cudf::ast::tree{};
-  auto& rescaled = cudf::ast::jit::rescale(tree, a_ref, -2);
+  auto& rescaled = cudf::ast::jit::operation(tree, cudf::ast::jit::op::RESCALE, {a_ref}, false, -2);
   auto result    = cudf::compute_column_jit(table, rescaled);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
@@ -682,10 +711,11 @@ TEST_F(JITExpressionTest, OverflowFused)
   auto b_ref             = cudf::ast::column_reference(1);
   auto c_ref             = cudf::ast::column_reference(2);
   auto d_ref             = cudf::ast::column_reference(3);
-  auto& add              = cudf::ast::jit::add_overflow(tree, a_ref, b_ref, true);
-  auto& mul              = cudf::ast::jit::mul_overflow(tree, add, c_ref, true);
-  auto& div              = cudf::ast::jit::div_overflow(tree, mul, d_ref, true);
-  auto result            = cudf::compute_column_jit(table, div);
+  auto& add =
+    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref}, true);
+  auto& mul = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {add, c_ref}, true);
+  auto& div = cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {mul, d_ref}, true);
+  auto result = cudf::compute_column_jit(table, div);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }

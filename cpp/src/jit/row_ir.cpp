@@ -121,7 +121,7 @@ constexpr type operator&(type lhs, type rhs)
 constexpr type operator~(type t) { return static_cast<type>(~static_cast<uint64_t>(t)); }
 
 struct [[nodiscard]] opcode_info {
-  std::string_view name                             = "";
+  std::string_view name                        = "";
   null_output null_policy                      = null_output::PROPAGATE;
   bool is_null_dependent                       = false;
   bool is_fallible                             = false;
