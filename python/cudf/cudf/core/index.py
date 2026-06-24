@@ -2726,7 +2726,7 @@ class RangeIndex(Index):
         """
         Return a numpy array from the RangeIndex.
 
-        .. deprecated:: 26.04
+        .. deprecated:: 26.06
             `values_host` is deprecated and will be removed in a future version.
             Use `to_numpy()` instead.
         """
