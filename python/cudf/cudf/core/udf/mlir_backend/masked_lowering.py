@@ -45,6 +45,11 @@ class MaskedTypeModel(PrimitiveModel):
 
 
 def _lower_masked_constructor(builder, target, args, kwargs):
+    if kwargs:
+        raise TypeError(
+            "Masked(value, valid) does not accept keyword arguments; "
+            f"got {kwargs!r}"
+        )
     target_type = builder.get_numba_type(target.name)
     val_var, valid_var = args
 
