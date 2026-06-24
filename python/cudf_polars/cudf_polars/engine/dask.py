@@ -47,7 +47,7 @@ from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
 
     from cudf_polars.dsl.ir import IR

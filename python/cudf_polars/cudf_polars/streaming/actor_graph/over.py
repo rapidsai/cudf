@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """
 Window ``over()`` actor for the RapidsMPF streaming runtime.
@@ -43,8 +43,8 @@ from typing import TYPE_CHECKING, Any, ClassVar, cast
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
