@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -350,7 +350,7 @@ endif()
 rapids_cpm_init()
 
 include(${rapids-cmake-dir}/cpm/rapids_logger.cmake)
-set(_rapids_logger_args BUILD_EXPORT_SET cudf-exports)
+set(_rapids_logger_args)
 if(NOT CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
   list(APPEND _rapids_logger_args ${CUDF_EXCLUDE_DEPS_FROM_ALL_FLAG} CPM_ARGS OPTIONS
        "BUILD_SHARED_LIBS OFF"
@@ -362,6 +362,10 @@ rapids_cpm_rapids_logger(${_rapids_logger_args})
 # must be in the installed config when CUDF_INSTALL_LIBRARY_DEPS is OFF. If it's ON then we always
 # export
 get_target_property(_rapids_logger_type rapids_logger::rapids_logger TYPE)
+if(NOT BUILD_SHARED_LIBS OR NOT _rapids_logger_type STREQUAL "STATIC_LIBRARY")
+  include("${rapids-cmake-dir}/export/package.cmake")
+  rapids_export_package(BUILD rapids_logger cudf-exports VERSION ${rapids_logger_VERSION})
+endif()
 if(CUDF_INSTALL_LIBRARY_DEPS OR NOT _rapids_logger_type STREQUAL "STATIC_LIBRARY")
   include("${rapids-cmake-dir}/export/package.cmake")
   rapids_export_package(INSTALL rapids_logger cudf-exports VERSION ${rapids_logger_VERSION})
@@ -381,8 +385,10 @@ include(cmake/thirdparty/get_cccl.cmake)
 # find rmm, should come after including CCCL to allow overriding the CCCL version used for testing
 include(cmake/thirdparty/get_rmm.cmake)
 
-# find croaring
-include(cmake/thirdparty/get_croaring.cmake)
+# find croaring, needed by tests and benchmarks
+if(CUDF_BUILD_TESTS OR CUDF_BUILD_BENCHMARKS)
+  include(cmake/thirdparty/get_croaring.cmake)
+endif()
 
 # find flatbuffers
 include(cmake/thirdparty/get_flatbuffers.cmake)
@@ -1169,81 +1175,87 @@ target_link_libraries(
           ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
 )
 
-# When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
-# their symbols are available to downstream users linking to libcudf.so without needing to link
-# against them directly. In this scenario, its public transitive dependencies must be promoted into
-# cudf's installed interface (consumers still need them at link time), and its export set metadata
-# (find_dependency calls, global targets) is merged into cudf-exports.
-set(_absorbed_deps rmm rapids_logger)
-foreach(_dep IN LISTS _absorbed_deps)
-  set(_${_dep}_link ${_dep}::${_dep})
-endforeach()
-if(BUILD_SHARED_LIBS)
-  # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
-  # interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
-  # cudf's include path without needing the nvtx3 target or find_dependency(nvtx3).
-  get_target_property(_rmm_type rmm::rmm TYPE)
-  if(_rmm_type STREQUAL "STATIC_LIBRARY")
-    get_target_property(_rmm_real rmm::rmm ALIASED_TARGET)
-    if(_rmm_real)
-      get_target_property(_rmm_libs ${_rmm_real} INTERFACE_LINK_LIBRARIES)
-      if(_rmm_libs)
-        list(REMOVE_ITEM _rmm_libs nvtx3::nvtx3-cpp)
-        set_property(TARGET ${_rmm_real} PROPERTY INTERFACE_LINK_LIBRARIES ${_rmm_libs})
-      endif()
+# When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
+# interface. We bundle nvtx3 headers directly into cudf's install tree, so consumers get them from
+# cudf's include path without needing the nvtx3 target or find_dependency(nvtx3).
+get_target_property(_rmm_type rmm::rmm TYPE)
+if(BUILD_SHARED_LIBS AND _rmm_type STREQUAL "STATIC_LIBRARY")
+  get_target_property(_rmm_real rmm::rmm ALIASED_TARGET)
+  if(_rmm_real)
+    get_target_property(_rmm_libs ${_rmm_real} INTERFACE_LINK_LIBRARIES)
+    if(_rmm_libs)
+      list(REMOVE_ITEM _rmm_libs nvtx3::nvtx3-cpp)
+      set_property(TARGET ${_rmm_real} PROPERTY INTERFACE_LINK_LIBRARIES ${_rmm_libs})
     endif()
   endif()
-  foreach(_dep IN LISTS _absorbed_deps)
-    get_target_property(_target_type ${_dep}::${_dep} TYPE)
-    if(NOT _target_type STREQUAL "STATIC_LIBRARY")
+endif()
+
+# When building a shared libcudf with static deps, we absorb them via whole-archive linking so that
+# their symbols are available to downstream users linking to libcudf.so without needing to link
+# against them directly. Public absorbed dependencies still promote their public transitive
+# dependencies and export set metadata into cudf's interface.
+set(_absorbed_deps rmm rapids_logger)
+foreach(_dep IN LISTS _absorbed_deps)
+  set(_dep_link "${_dep}::${_dep}")
+  get_target_property(_target_type ${_dep_link} TYPE)
+  if(NOT BUILD_SHARED_LIBS OR NOT _target_type STREQUAL "STATIC_LIBRARY")
+    # If not building a shared library, or the dependency is not a static library, link normally.
+    target_link_libraries(cudf PUBLIC ${_dep_link})
+    continue()
+  endif()
+
+  # Promote the absorbed library's public transitive deps into cudf's public interface. Filter out
+  # deps that are themselves absorbed — they are already linked via whole-archive. Also filter
+  # LINK_ONLY entries — those are private link deps already statically linked in.
+  get_target_property(_iface_libs ${_dep_link} INTERFACE_LINK_LIBRARIES)
+  if(_iface_libs)
+    foreach(_absorbed IN LISTS _absorbed_deps)
+      list(REMOVE_ITEM _iface_libs ${_absorbed}::${_absorbed})
+    endforeach()
+    list(FILTER _iface_libs EXCLUDE REGEX "\\\$<LINK_ONLY:")
+    target_link_libraries(cudf PUBLIC ${_iface_libs})
+  endif()
+
+  # Promote the absorbed library's public include directories into cudf's public interface so that
+  # in-tree consumers (tests, Python bindings) can find the absorbed library's headers.
+  get_target_property(_dep_includes ${_dep_link} INTERFACE_INCLUDE_DIRECTORIES)
+  if(_dep_includes)
+    target_include_directories(cudf PUBLIC ${_dep_includes})
+  endif()
+
+  # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
+  # hidden from the installed interface.
+  target_link_libraries(
+    cudf PRIVATE "$<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep_link}>>"
+  )
+
+  # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
+  # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
+  foreach(_mode build install)
+    set(_src_target rapids_export_${_mode}_${_dep}-exports)
+    if(NOT TARGET ${_src_target})
       continue()
     endif()
-
-    # Wrap with WHOLE_ARCHIVE + BUILD_INTERFACE so the static lib is absorbed into libcudf.so and
-    # hidden from the installed interface.
-    set(_${_dep}_link $<BUILD_INTERFACE:$<LINK_LIBRARY:WHOLE_ARCHIVE,${_dep}::${_dep}>>)
-
-    # Promote the absorbed library's public transitive deps into cudf's public interface. Filter out
-    # deps that are themselves absorbed — they are already linked via whole-archive. Also filter
-    # LINK_ONLY entries — those are private link deps already statically linked in.
-    get_target_property(_iface_libs ${_dep}::${_dep} INTERFACE_LINK_LIBRARIES)
-    if(_iface_libs)
-      foreach(_absorbed IN LISTS _absorbed_deps)
-        list(REMOVE_ITEM _iface_libs ${_absorbed}::${_absorbed})
-      endforeach()
-      list(FILTER _iface_libs EXCLUDE REGEX "\\\$<LINK_ONLY:")
-      target_link_libraries(cudf PUBLIC ${_iface_libs})
-    endif()
-
-    # Merge the absorbed library's export set metadata into cudf-exports so the installed config has
-    # find_dependency() calls for all transitive deps (e.g. nvtx3, CUDAToolkit from rmm).
-    foreach(_mode build install)
-      set(_src_target rapids_export_${_mode}_${_dep}-exports)
-      if(NOT TARGET ${_src_target})
+    get_property(
+      _pkg_names
+      TARGET ${_src_target}
+      PROPERTY "PACKAGE_NAMES"
+    )
+    get_property(
+      _global_tgts
+      TARGET ${_src_target}
+      PROPERTY "GLOBAL_TARGETS"
+    )
+    foreach(_pkg IN LISTS _pkg_names)
+      # Skip packages that are themselves absorbed into libcudf or bundled as headers — they won't
+      # be findable as separate packages.
+      if(_pkg IN_LIST _absorbed_deps OR _pkg STREQUAL "nvtx3")
         continue()
       endif()
-      get_property(
-        _pkg_names
-        TARGET ${_src_target}
-        PROPERTY "PACKAGE_NAMES"
-      )
-      get_property(
-        _global_tgts
-        TARGET ${_src_target}
-        PROPERTY "GLOBAL_TARGETS"
-      )
-      foreach(_pkg IN LISTS _pkg_names)
-        # Skip packages that are themselves absorbed into libcudf or bundled as headers — they won't
-        # be installed as separate findable packages.
-        if(_mode STREQUAL "install" AND (_pkg IN_LIST _absorbed_deps OR _pkg STREQUAL "nvtx3"))
-          continue()
-        endif()
-        rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
-      endforeach()
+      rapids_export_package(${_mode} ${_pkg} cudf-exports GLOBAL_TARGETS ${_global_tgts})
     endforeach()
   endforeach()
-endif()
-target_link_libraries(cudf PUBLIC ${_rapids_logger_link} ${_rmm_link})
+endforeach()
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)

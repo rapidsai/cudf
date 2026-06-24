@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming engine running on a Dask distributed cluster."""
 
@@ -44,7 +44,7 @@ from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
 
     from cudf_polars.dsl.ir import IR
@@ -247,7 +247,7 @@ def _setup_worker(
     rmm.mr.set_current_device_resource(ctx.br().device_mr)
     py_executor = ThreadPoolExecutor(
         max_workers=cast(
-            int,
+            "int",
             executor_options.get("num_py_executors", 8),
         ),
         thread_name_prefix="dask-executor",
