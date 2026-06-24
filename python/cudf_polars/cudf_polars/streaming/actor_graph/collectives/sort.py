@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Sort logic for the RapidsMPF streaming runtime."""
 
@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
