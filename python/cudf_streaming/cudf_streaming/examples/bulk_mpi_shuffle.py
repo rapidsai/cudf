@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Bulk-synchronous MPI shuffle."""
 
@@ -16,7 +16,7 @@ from mpi4py import MPI
 import rapidsmpf.bootstrap
 import rapidsmpf.communicator.mpi
 import rmm.mr
-from cudf_streaming.integrations.partition import (
+from cudf_streaming.partition_utils import (
     partition_and_pack,
     unpack_and_concat,
 )

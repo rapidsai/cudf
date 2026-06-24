@@ -4,6 +4,7 @@
  */
 
 #include "io/orc/orc.hpp"
+#include "io/parquet/reader_impl_helpers.hpp"
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -743,13 +744,14 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                parquet_reader_options const& options,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
-                                                            0,
-                                                            make_datasources(options.get_source()),
-                                                            std::vector<parquet::FileMetaData>{},
-                                                            options,
-                                                            stream,
-                                                            mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(
+      chunk_read_limit,
+      detail_parquet::derive_pass_read_limit(chunk_read_limit),
+      make_datasources(options.get_source()),
+      std::vector<parquet::FileMetaData>{},
+      options,
+      stream,
+      mr)}
 {
 }
 
@@ -763,13 +765,14 @@ chunked_parquet_reader::chunked_parquet_reader(
   parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
-  : reader{std::make_unique<detail_parquet::chunked_reader>(chunk_read_limit,
-                                                            0,
-                                                            std::move(datasources),
-                                                            std::move(parquet_metadatas),
-                                                            options,
-                                                            stream,
-                                                            mr)}
+  : reader{std::make_unique<detail_parquet::chunked_reader>(
+      chunk_read_limit,
+      detail_parquet::derive_pass_read_limit(chunk_read_limit),
+      std::move(datasources),
+      std::move(parquet_metadatas),
+      options,
+      stream,
+      mr)}
 {
 }
 

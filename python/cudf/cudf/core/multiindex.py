@@ -872,6 +872,9 @@ class MultiIndex(Index):
             isinstance(result, cudf.DataFrame)
             and len(result) == 1  # only downcast if we have a single row
             and not slice_access  # never downcast if we sliced
+            # On a 1-level MultiIndex, keep the result a DataFrame (with the
+            # MultiIndex preserved) rather than downcasting to a Series.
+            and self.nlevels > 1
             and (
                 size == 0  # index_key was an integer
                 # we indexed into a single row directly, using its label:
