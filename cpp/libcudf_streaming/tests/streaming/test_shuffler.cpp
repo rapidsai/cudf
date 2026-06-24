@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,9 +10,8 @@
 
 #include <cudf/copying.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/streaming/partition.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/partition.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -26,9 +25,9 @@
 
 using namespace rapidsmpf;
 using namespace rapidsmpf::streaming;
-using cudf_streaming::streaming::TableChunk;
+using cudf_streaming::table_chunk;
 namespace actor    = rapidsmpf::streaming::actor;
-namespace cs_actor = cudf_streaming::streaming::actor;
+namespace cs_actor = cudf_streaming::actor;
 
 class StreamingShuffler : public BaseStreamingFixture, public ::testing::WithParamInterface<int> {
  public:
@@ -60,7 +59,7 @@ TEST_P(StreamingShuffler, basic_shuffler)
   for (unsigned int i = 0; i < num_chunks; ++i) {
     input_chunks.emplace_back(
       to_message(i,
-                 std::make_unique<TableChunk>(
+                 std::make_unique<table_chunk>(
                    std::make_unique<cudf::table>(
                      cudf::slice(full_input_table,
                                  {static_cast<cudf::size_type>(i * chunk_size),
@@ -122,7 +121,7 @@ TEST_P(StreamingShuffler, basic_shuffler)
   // Concat all output chunks to a single table.
   std::vector<cudf::table_view> output_chunks_as_views;
   for (auto& chunk : output_chunks) {
-    output_chunks_as_views.push_back(chunk.get<TableChunk>().table_view());
+    output_chunks_as_views.push_back(chunk.get<table_chunk>().table_view());
   }
   auto result_table = cudf::concatenate(output_chunks_as_views);
 
