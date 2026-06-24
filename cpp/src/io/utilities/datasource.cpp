@@ -355,26 +355,10 @@ class user_datasource_wrapper : public datasource {
 };
 
 #ifdef CUDF_KVIKIO_REMOTE_IO
-/**
- * @brief Infer the KvikIO remote endpoint type from a URL (no network I/O).
- *
- * Mirrors the order used by `kvikio::RemoteHandle::open()` in AUTO mode.
- */
-kvikio::RemoteEndpointType infer_remote_endpoint_type(std::string const& url)
-{
-  if (kvikio::S3Endpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::S3; }
-  if (kvikio::S3EndpointWithPresignedUrl::is_url_valid(url)) {
-    return kvikio::RemoteEndpointType::S3_PRESIGNED_URL;
-  }
-  if (kvikio::WebHdfsEndpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::WEBHDFS; }
-  if (kvikio::HttpEndpoint::is_url_valid(url)) { return kvikio::RemoteEndpointType::HTTP; }
-  return kvikio::RemoteEndpointType::HTTP;
-}
-
 kvikio::RemoteHandle open_remote_handle(char const* filepath, std::optional<std::size_t> known_size)
 {
   if (known_size.has_value()) {
-    auto const endpoint_type = infer_remote_endpoint_type(filepath);
+    auto const endpoint_type = kvikio::infer_remote_endpoint_type(filepath);
     return kvikio::RemoteHandle::open(filepath, endpoint_type, std::nullopt, *known_size);
   }
   return kvikio::RemoteHandle::open(filepath);
