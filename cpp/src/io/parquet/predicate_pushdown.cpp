@@ -150,7 +150,7 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
       auto const& row_group_indices = input_row_group_indices[src_idx];
       if (row_group_indices.empty()) { continue; }
 
-      auto const& row_group     = per_file_metadata[src_idx].row_groups[row_group_indices.front()];
+      auto const& first_row_group     = per_file_metadata[src_idx].row_groups[row_group_indices.front()];
       auto const num_col_chunks = static_cast<size_type>(row_group.columns.size());
       auto const mapped_schema_idx = map_schema_index(schema_idx, static_cast<int>(src_idx));
       auto const cached_offset     = colchunk_offset.value_or(-1);
@@ -159,8 +159,7 @@ bool aggregate_reader_metadata::any_row_group_stats_available(
           row_group.columns[cached_offset].schema_idx != mapped_schema_idx) {
         auto const it = find_colchunk(row_group, mapped_schema_idx);
         CUDF_EXPECTS(it != row_group.columns.end(),
-                     std::format("Column chunk with schema index {} not found in row group for "
-                                 "source {}",
+                     std::format("Column chunk with schema index {} not found in source {}",
                                  mapped_schema_idx,
                                  src_idx),
                      std::invalid_argument);
