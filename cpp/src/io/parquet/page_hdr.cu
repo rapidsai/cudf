@@ -517,6 +517,7 @@ void __forceinline__ __device__ zero_out_page_header_info(byte_stream_s* bs)
   // Apply non-zero defaults
   bs->page.skipped_values = -1;
   bs->page.is_compressed  = true;
+  bs->page.kernel_mask    = decode_kernel_mask::NONE;
 }
 
 /**
