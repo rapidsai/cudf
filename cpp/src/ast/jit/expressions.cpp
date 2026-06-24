@@ -116,5 +116,19 @@ expression const& jit::operation(ast::tree& tree,
   return tree.push(detail::operation(ir_opcode, std::move(args), nullify_on_error));
 }
 
+expression const& jit::operation(
+  ast::tree& tree,
+  op operator_id,
+  std::initializer_list<std::reference_wrapper<expression const>> args,
+  bool nullify_on_error,
+  std::optional<int32_t> target_scale)
+{
+  return operation(tree,
+                   operator_id,
+                   std::vector<std::reference_wrapper<expression const>>{args},
+                   nullify_on_error,
+                   target_scale);
+}
+
 }  // namespace ast
 }  // namespace cudf

@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -755,6 +756,26 @@ enum class op : uint8_t {
 expression const& operation(ast::tree& tree,
                             op operator_id,
                             std::vector<std::reference_wrapper<expression const>> args,
+                            bool nullify_on_error               = false,
+                            std::optional<int32_t> target_scale = std::nullopt);
+
+/**
+ * @brief Creates a JIT expression operation from an opcode and initializer-list arguments.
+ *
+ * This overload exists so call sites can use `{arg0, arg1}` without materializing a temporary
+ * vector at the call site, which can trigger dangling-reference diagnostics under stricter
+ * warning settings.
+ *
+ * @param tree The expression tree to which this expression will be added.
+ * @param operator_id The JIT operation kind.
+ * @param args Operation arguments.
+ * @param nullify_on_error If true, fallible operations return null on error.
+ * @param target_scale Required only for `op::RESCALE`.
+ * @return A reference to the created operation expression.
+ */
+expression const& operation(ast::tree& tree,
+                            op operator_id,
+                            std::initializer_list<std::reference_wrapper<expression const>> args,
                             bool nullify_on_error               = false,
                             std::optional<int32_t> target_scale = std::nullopt);
 
