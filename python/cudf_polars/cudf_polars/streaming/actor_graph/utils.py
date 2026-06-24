@@ -70,6 +70,11 @@ if TYPE_CHECKING:
 InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
 
+# cuDF column/concatenate row limit (int32)
+CUDF_ROW_LIMIT = 2**31 - 1
+# Stay well below the cuDF row limit when forming a single table/partition.
+MAX_ROWS_PER_PARTITION = CUDF_ROW_LIMIT // 4
+
 
 class ChunkStore:
     """Ordered spillable buffer for TableChunk messages."""
