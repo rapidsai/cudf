@@ -276,7 +276,7 @@ void names_from_expression::visit_operands(
       std::inserter(column_indices_to_names, column_indices_to_names.end()),
       [&](auto selected_col_idx, auto const mapped_col_idx) {
         CUDF_EXPECTS(
-          selected_col_idx > 0 and std::cmp_less(selected_col_idx, root.children_idx.size()),
+          selected_col_idx >= 0 and std::cmp_less(selected_col_idx, root.children_idx.size()),
           "Encountered an invalid col index in the top-level column selection",
           std::invalid_argument);
         auto const schema_idx = root.children_idx[selected_col_idx];
