@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -8,6 +8,9 @@ source rapids-init-pip
 
 package_name="libcudf_streaming"
 package_dir="python/libcudf_streaming"
+
+# TODO: Remove before merging. Use rapidsmpf wheels from rapidsai/rapidsmpf#1108.
+source ./ci/use_wheels_from_prs.sh
 
 rapids-logger "Generating build requirements"
 
