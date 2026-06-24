@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -12,7 +12,10 @@ set(CUDF_STREAMING_FOUND_UCXX OFF)
 set(CUDF_STREAMING_HAVE_MPI OFF)
 set(CUDF_STREAMING_HAVE_UCXX OFF)
 
-if(BUILD_BENCHMARKS OR BUILD_EXAMPLES)
+if(BUILD_BENCHMARKS
+   OR BUILD_EXAMPLES
+   OR BUILD_TESTS
+)
   rapids_find_package(
     MPI QUIET
     BUILD_EXPORT_SET cudf_streaming-exports
@@ -23,7 +26,7 @@ if(BUILD_BENCHMARKS OR BUILD_EXAMPLES)
   endif()
 endif()
 
-if(BUILD_BENCHMARKS)
+if(BUILD_BENCHMARKS OR BUILD_TESTS)
   rapids_find_package(
     ucxx QUIET
     BUILD_EXPORT_SET cudf_streaming-exports
