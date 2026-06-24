@@ -18,14 +18,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import pylibcudf as plc
 import rmm.mr
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
@@ -55,6 +55,7 @@ if TYPE_CHECKING:
         Sequence,
     )
 
+    from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
@@ -69,6 +70,99 @@ if TYPE_CHECKING:
 
 InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
+
+# cuDF column/concatenate row limit (int32)
+CUDF_ROW_LIMIT = 2**31 - 1
+# Stay well below the cuDF row limit when forming a single table/partition.
+MAX_ROWS_PER_PARTITION = CUDF_ROW_LIMIT // 4
+
+
+def _hash_keys_match(
+    scheme: HashScheme, key_indices: tuple[int, ...], *, allow_subset: bool
+) -> bool:
+    current = scheme.column_indices
+    target = key_indices[: len(current)] if allow_subset else key_indices
+    return target == current
+
+
+def _ordering_keys_match(
+    ordering: Ordering,
+    keys: Sequence[int | OrderKey],
+    key_indices: tuple[int, ...],
+    *,
+    allow_subset: bool,
+    order_based: bool,
+) -> bool:
+    if allow_subset:
+        n = len(ordering.keys)
+        if n > len(key_indices):
+            return False
+    else:
+        if len(ordering.keys) != len(key_indices):
+            return False
+        n = len(key_indices)
+    if order_based:
+        return all(ok == k for ok, k in zip(ordering.keys, keys[:n], strict=True))
+    return all(
+        k.column_index == k_idx
+        for k, k_idx in zip(ordering.keys, key_indices[:n], strict=True)
+    )
+
+
+def _matching_order_scheme(
+    scheme: OrderScheme,
+    keys: Sequence[int | OrderKey],
+    key_indices: tuple[int, ...],
+    *,
+    allow_subset: bool,
+    order_based: bool,
+) -> OrderScheme | None:
+    matches = [
+        (i, ordering)
+        for i, ordering in enumerate(scheme.orderings)
+        if _ordering_keys_match(
+            ordering,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
+    ]
+    if matches:
+        # Prefer the most specific matching ordering; equal-length ties
+        # keep the original metadata order.
+        i, ordering = max(matches, key=lambda match: len(match[1].keys))
+        return OrderScheme(
+            (
+                ordering,
+                *scheme.orderings[:i],
+                *scheme.orderings[i + 1 :],
+            )
+        )
+    return None
+
+
+def _keys_match(
+    scheme: object,
+    keys: Sequence[int | OrderKey],
+    key_indices: tuple[int, ...],
+    *,
+    allow_subset: bool,
+    order_based: bool,
+) -> InterRankScheme:
+    if isinstance(scheme, HashScheme) and _hash_keys_match(
+        scheme, key_indices, allow_subset=allow_subset
+    ):
+        return scheme
+    if isinstance(scheme, OrderScheme):
+        return _matching_order_scheme(
+            scheme,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
+    return None
 
 
 class ChunkStore:
@@ -206,40 +300,49 @@ async def shutdown_on_error(
             )
 
 
-def _scheme_column_indices(scheme: HashScheme | OrderScheme) -> tuple[int, ...]:
-    if isinstance(scheme, HashScheme):
-        return scheme.column_indices
-    return tuple(k.column_index for k in scheme.keys)
-
-
-def _update_scheme_indices(
-    scheme: HashScheme | OrderScheme, new_indices: tuple[int, ...]
-) -> HashScheme | OrderScheme:
-    if isinstance(scheme, HashScheme):
-        return HashScheme(new_indices, scheme.modulus)
-    return scheme.with_keys(
-        [
+def _update_ordering_indices(
+    ordering: Ordering, new_indices: tuple[int, ...]
+) -> Ordering:
+    return ordering.with_keys(
+        (
             OrderKey(idx, k.order, k.null_order)
-            for k, idx in zip(scheme.keys, new_indices, strict=False)
-        ]
+            for k, idx in zip(ordering.keys, new_indices, strict=True)
+        )
     )
 
 
 def _remap_scheme_select(
     select: Select, scheme: PartitioningScheme
 ) -> PartitioningScheme:
-    if isinstance(scheme, (HashScheme, OrderScheme)):
+    if isinstance(scheme, HashScheme):
         old_to_new_names = {
             ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
         }
         old_key_names = indices_to_names(
-            _scheme_column_indices(scheme), select.children[0].schema
+            scheme.column_indices, select.children[0].schema
         )
         if set(old_key_names).issubset(set(old_to_new_names)):
             new_indices = names_to_indices(
                 tuple(old_to_new_names[n] for n in old_key_names), select.schema
             )
-            return _update_scheme_indices(scheme, new_indices)
+            return HashScheme(new_indices, scheme.modulus)
+        return None
+    if isinstance(scheme, OrderScheme):
+        old_to_new_names = {
+            ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
+        }
+        new_orderings: list[Ordering] = []
+        for ordering in scheme.orderings:
+            old_key_names = indices_to_names(
+                ordering.column_indices, select.children[0].schema
+            )
+            if set(old_key_names).issubset(set(old_to_new_names)):
+                new_indices = names_to_indices(
+                    tuple(old_to_new_names[n] for n in old_key_names), select.schema
+                )
+                new_orderings.append(_update_ordering_indices(ordering, new_indices))
+        if new_orderings:
+            return OrderScheme(new_orderings)
         return None
     if scheme not in (None, "inherit"):  # pragma: no cover
         return None  # Guard against future/unsupported scheme types
@@ -249,13 +352,25 @@ def _remap_scheme_select(
 def _remap_scheme_simple(
     ir: IR, scheme: PartitioningScheme, child: IR
 ) -> PartitioningScheme:
-    if isinstance(scheme, (HashScheme, OrderScheme)):
-        old_key_names = indices_to_names(_scheme_column_indices(scheme), child.schema)
+    if isinstance(scheme, HashScheme):
+        old_key_names = indices_to_names(scheme.column_indices, child.schema)
         try:
             new_indices = names_to_indices(old_key_names, ir.schema)
         except (ValueError, IndexError):
             return None
-        return _update_scheme_indices(scheme, new_indices)
+        return HashScheme(new_indices, scheme.modulus)
+    if isinstance(scheme, OrderScheme):
+        new_orderings: list[Ordering] = []
+        for ordering in scheme.orderings:
+            old_key_names = indices_to_names(ordering.column_indices, child.schema)
+            try:
+                new_indices = names_to_indices(old_key_names, ir.schema)
+            except (ValueError, IndexError):
+                continue
+            new_orderings.append(_update_ordering_indices(ordering, new_indices))
+        if new_orderings:
+            return OrderScheme(new_orderings)
+        return None
     return scheme  # None or "inherit" passes through unchanged
 
 
@@ -856,8 +971,22 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         if not self:
             return False
         for scheme in [self.inter_rank_scheme, self.local_scheme]:
-            if isinstance(scheme, OrderScheme) and not scheme.strict_boundaries:
+            if (
+                isinstance(scheme, OrderScheme)
+                and not scheme.orderings[0].strict_boundaries
+            ):
                 return False
+        return True
+
+    def is_strictly_sorted(self, order_keys: Sequence[OrderKey]) -> bool:
+        """True if the selected ordering proves sortedness for order_keys."""
+        if not self or not isinstance(self.inter_rank_scheme, OrderScheme):
+            return False
+        ordering = self.inter_rank_scheme.orderings[0]
+        if len(ordering.keys) < len(order_keys):
+            # If we are only sorted on a subset of the keys, we need strict
+            # boundaries to know later keys cannot interleave across chunks.
+            return ordering.strict_boundaries
         return True
 
     def is_aligned_with(
@@ -870,9 +999,9 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
             rhs: PartitioningScheme,
         ) -> bool:
             if isinstance(lhs, OrderScheme):
-                return isinstance(rhs, OrderScheme) and lhs.boundaries_aligned_with(
-                    rhs, br
-                )
+                return isinstance(rhs, OrderScheme) and lhs.orderings[
+                    0
+                ].boundaries_aligned_with(rhs.orderings[0], br)
             elif isinstance(lhs, HashScheme):
                 return (
                     isinstance(rhs, HashScheme)
@@ -962,38 +1091,14 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         if partitioning_metadata is None:
             return trivial, None
 
-        def _hash_keys_match(scheme: HashScheme) -> bool:
-            current = scheme.column_indices
-            target = key_indices[: len(current)] if allow_subset else key_indices
-            return target == current
-
-        def _order_keys_match(scheme: OrderScheme) -> bool:
-            if allow_subset:
-                n = len(scheme.keys)
-                if n > len(key_indices):
-                    return False
-            else:
-                if len(scheme.keys) != len(key_indices):
-                    return False
-                n = len(key_indices)
-            if order_based:
-                return all(ok == k for ok, k in zip(scheme.keys, keys[:n], strict=True))
-            return all(
-                k.column_index == k_idx
-                for k, k_idx in zip(scheme.keys, key_indices[:n], strict=True)
-            )
-
-        def _keys_match(
-            scheme: object,
-        ) -> InterRankScheme:
-            if isinstance(scheme, HashScheme) and _hash_keys_match(scheme):
-                return scheme
-            if isinstance(scheme, OrderScheme) and _order_keys_match(scheme):
-                return scheme
-            return None
-
         inter_rank = partitioning_metadata.inter_rank
-        strict_inter_rank = _keys_match(inter_rank)
+        strict_inter_rank = _keys_match(
+            inter_rank,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
         inter_rank_scheme: InterRankScheme = strict_inter_rank or trivial
         if inter_rank_scheme is None and nranks > 1:
             # Partitioning is meaningless without inter-rank partitioning
@@ -1001,7 +1106,13 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
 
         local = partitioning_metadata.local
         local_scheme: PartitioningScheme
-        matched_local = _keys_match(local)
+        matched_local = _keys_match(
+            local,
+            keys,
+            key_indices,
+            allow_subset=allow_subset,
+            order_based=order_based,
+        )
         if matched_local is not None:
             local_scheme = matched_local
         elif local == "inherit":

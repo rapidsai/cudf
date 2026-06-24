@@ -16,6 +16,7 @@ dependencies:
 - clang==20.1.8
 - cmake>=4.0
 - cramjam
+- croaring==4.4.2
 - cuda-cudart-dev
 - cuda-cupti-dev
 - cuda-nvcc
@@ -50,6 +51,7 @@ dependencies:
 - librmm==26.8.*,>=0.0.0a0
 - libucxx==0.51.*,>=0.0.0a0
 - make
+- matplotlib<3.11
 - mmh3
 - moto>=4.0.8
 - msgpack-python
@@ -67,6 +69,7 @@ dependencies:
 - numpydoc
 - nvidia-ml-py>=12
 - nvtx>=0.2.1
+- odfpy
 - openpyxl
 - packaging
 - pandas>=3.0.0,<3.1.0
@@ -75,6 +78,7 @@ dependencies:
 - pre-commit
 - pyarrow>=19.0.0,<24
 - pydata-sphinx-theme>=0.15.4
+- pytables
 - pytest-benchmark
 - pytest-cases>=3.8.2
 - pytest-cov
@@ -83,10 +87,12 @@ dependencies:
 - pytest-timeout
 - pytest-xdist
 - pytest<9.1.0
+- python-calamine
 - python-confluent-kafka
 - python-xxhash
 - python>=3.11
 - pytorch>=2.4.0
+- pyxlsb
 - rapids-build-backend>=0.4.0,<0.5.0
 - rapids-dask-dependency==26.8.*,>=0.0.0a0
 - rapids-logger==0.2.*,>=0.0.0a0
@@ -108,6 +114,7 @@ dependencies:
 - sysroot_linux-aarch64==2.28
 - typing_extensions>=4.0.0
 - ucxx==0.51.*,>=0.0.0a0
+- xlrd
 - xlsxwriter
 - zlib>=1.2.13
 - zstandard

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Sort logic for the RapidsMPF streaming runtime."""
 
@@ -9,13 +9,14 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     OrderKey,
     OrderScheme,
+    Ordering,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
@@ -486,31 +487,6 @@ def _sort_to_order_keys(ir: Sort) -> list[OrderKey]:
     ]
 
 
-def _is_already_sorted(
-    metadata_in: ChannelMetadata,
-    order_keys: list[OrderKey],
-    nranks: int,
-) -> bool:
-    """Check if the input data is already sorted according to the order keys."""
-    np = NormalizedPartitioning.from_keys(
-        metadata_in.partitioning, nranks, keys=order_keys
-    )
-    if not np:
-        # np is falsy if `order_keys` does not match
-        # any prefix of keys in `metadata_in.partitioning`.
-        # If `order_keys` is Sequence[OrderKey], the order
-        # and null_order attributes must also match.
-        return False
-    scheme = np.inter_rank_scheme
-    if not isinstance(scheme, OrderScheme):
-        return False
-    elif len(scheme.keys) < len(order_keys):
-        # If we are only sorted on a subset of the keys,
-        # we need to check if the boundaries are strict.
-        return scheme.strict_boundaries
-    return True
-
-
 def _build_order_scheme(
     context: Context,
     order_keys: list[OrderKey],
@@ -541,7 +517,7 @@ def _build_order_scheme(
         by_table, stream, exclusive_view=False, br=context.br()
     )
     return OrderScheme(
-        order_keys, boundaries_chunk, strict_boundaries=strict_boundaries
+        [Ordering(order_keys, boundaries_chunk, strict_boundaries=strict_boundaries)]
     )
 
 
@@ -638,7 +614,11 @@ async def sort_actor(
             )
             return
 
-        if _is_already_sorted(metadata_in, _sort_to_order_keys(ir), comm.nranks):
+        order_keys = _sort_to_order_keys(ir)
+        partitioning = NormalizedPartitioning.from_keys(
+            metadata_in.partitioning, comm.nranks, keys=order_keys
+        )
+        if partitioning.is_strictly_sorted(order_keys):
             if tracer is not None:
                 tracer.decision = "already_sorted"
             await chunkwise_evaluate(
