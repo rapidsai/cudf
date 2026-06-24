@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,9 +7,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
-#include <cudf_streaming/integrations/utils.hpp>
+#include <cudf_streaming/utils.hpp>
 
-using namespace cudf_streaming::integrations;
+using namespace cudf_streaming;
 
 class BaseEstimatedMemoryUsageTest : public ::testing::Test {
  protected:
@@ -45,8 +45,7 @@ TYPED_TEST(EstimatedMemoryUsageTest, FixedWidthColumnMemoryUsage)
     auto column = wrapper.release();
 
     std::size_t exp = column->alloc_size();
-    std::size_t est =
-      cudf_streaming::integrations::estimated_memory_usage(column->view(), this->stream);
+    std::size_t est = cudf_streaming::estimated_memory_usage(column->view(), this->stream);
 
     EXPECT_EQ(exp, est);
   }
@@ -73,7 +72,7 @@ TEST_F(BaseEstimatedMemoryUsageTest, StringType)
     auto column = wrapper.release();
 
     std::size_t exp = column->alloc_size();
-    std::size_t est = cudf_streaming::integrations::estimated_memory_usage(column->view(), stream);
+    std::size_t est = cudf_streaming::estimated_memory_usage(column->view(), stream);
 
     EXPECT_EQ(exp, est);
   }
@@ -99,7 +98,7 @@ TEST_F(BaseEstimatedMemoryUsageTest, ListType)
     auto column = wrapper.release();
 
     std::size_t exp = column->alloc_size();
-    std::size_t est = cudf_streaming::integrations::estimated_memory_usage(column->view(), stream);
+    std::size_t est = cudf_streaming::estimated_memory_usage(column->view(), stream);
 
     EXPECT_EQ(exp, est);
   }
@@ -144,7 +143,7 @@ TEST_F(BaseEstimatedMemoryUsageTest, StructType)
     auto column = wrapper.release();
 
     std::size_t exp = column->alloc_size();
-    std::size_t est = cudf_streaming::integrations::estimated_memory_usage(column->view(), stream);
+    std::size_t est = cudf_streaming::estimated_memory_usage(column->view(), stream);
 
     EXPECT_EQ(exp, est);
   }
@@ -170,7 +169,7 @@ TEST_F(BaseEstimatedMemoryUsageTest, DictionaryType)
     auto column = wrapper.release();
 
     std::size_t exp = column->alloc_size();
-    std::size_t est = cudf_streaming::integrations::estimated_memory_usage(column->view(), stream);
+    std::size_t est = cudf_streaming::estimated_memory_usage(column->view(), stream);
 
     EXPECT_EQ(exp, est);
   }

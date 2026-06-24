@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
     from ray.actor import ActorHandle
 
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
