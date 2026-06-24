@@ -698,29 +698,6 @@ class IndexedFrame(Frame):
 
         cudf.io.hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
 
-    @_performance_tracking
-    def to_string(self):
-        r"""
-        Convert to string
-
-        cuDF uses Pandas internals for efficient string formatting.
-        Set formatting options using pandas string formatting options and
-        cuDF objects will print identically to Pandas objects.
-
-        cuDF supports `null/None` as a value in any column type, which
-        is transparently supported during this output process.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2]
-        >>> df['val'] = [float(i + 10) for i in range(3)]
-        >>> df.to_string()
-        '   key   val\n0    0  10.0\n1    1  11.0\n2    2  12.0'
-        """
-        return str(self)
-
     def copy(self, deep: bool = True) -> Self:
         """Make a copy of this object's indices and data.
 
