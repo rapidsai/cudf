@@ -35,9 +35,8 @@ function(libcudf_streaming_test_add)
     message(FATAL_ERROR "libcudf_streaming_test_add called without a test target")
   endif()
 
-  add_test(
-    NAME "${_TEST_TEST_TARGET}"
-    COMMAND "${CUDF_STREAMING_BINARY_DIR}/gtests/${_TEST_TEST_TARGET}"
+  add_test(NAME "${_TEST_TEST_TARGET}"
+           COMMAND "${CUDF_STREAMING_BINARY_DIR}/gtests/${_TEST_TEST_TARGET}"
   )
 endfunction()
 
@@ -225,8 +224,8 @@ endif()
 # Install the tests --------------------------------------------------------------------------------
 # Discover every test executable via the custom COMPONENT marker property, install them, and write
 # the installed CTestTestfile.cmake from the entries accumulated by the test-add helpers. The
-# testing component is EXCLUDE_FROM_ALL so it is only installed on demand
-# (e.g. `cmake --install . --component testing`).
+# testing component is EXCLUDE_FROM_ALL so it is only installed on demand (e.g. `cmake --install .
+# --component testing`).
 # ##################################################################################################
 libcudf_streaming_targets_with_property(
   KEY COMPONENT VALUE testing OUTPUT _cudf_streaming_test_targets
@@ -249,9 +248,10 @@ if(_cudf_streaming_test_targets)
   set(_cudf_streaming_relocate_script
       "${CMAKE_CURRENT_BINARY_DIR}/relocate_installed_ctestfile.cmake"
   )
-  file(WRITE "${_cudf_streaming_relocate_script}"
-       "set(_src_ctestfile \"${CMAKE_CURRENT_BINARY_DIR}/CTestTestfile.cmake\")\n"
-       "set(_build_gtests_prefix \"${CUDF_STREAMING_BINARY_DIR}/gtests/\")\n"
+  file(
+    WRITE "${_cudf_streaming_relocate_script}"
+    "set(_src_ctestfile \"${CMAKE_CURRENT_BINARY_DIR}/CTestTestfile.cmake\")\n"
+    "set(_build_gtests_prefix \"${CUDF_STREAMING_BINARY_DIR}/gtests/\")\n"
   )
   file(
     APPEND "${_cudf_streaming_relocate_script}"
