@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.streaming import (
+from cudf_streaming import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 
 def _make_boundaries(context: Context, table: plc.Table) -> TableChunk:
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     return TableChunk.from_pylibcudf_table(
         table,
         stream,
