@@ -18,7 +18,7 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd "$(dirname "$0")"; pwd)
 
-VALIDARGS="clean libcudf pylibcudf cudf cudf_polars dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz libcudf_streaming cudf_streaming -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --show_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
+VALIDARGS="clean libcudf pylibcudf cudf cudf_polars dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz libcudf_streaming cudf_streaming -v -g -n --pydevelop -l --allgpuarch --disable_nvtx --opensource_nvcomp  --hide_depr_warn --ptds -h --build_metrics --incl_cache_stats --disable_large_strings"
 HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [libcudf_streaming] [cudf_streaming] [-v] [-g] [-n] [-h] [--cmake-args=\\\"<args>\\\"]
    clean                         - remove all existing build artifacts and configuration (start
                                    over)
@@ -41,7 +41,7 @@ HELP="$0 [clean] [libcudf] [pylibcudf] [cudf] [cudf_polars] [dask_cudf] [benchma
    --allgpuarch                  - build for all supported GPU architectures
    --disable_nvtx                - disable inserting NVTX profiling ranges
    --opensource_nvcomp           - disable use of proprietary nvcomp extensions
-   --show_depr_warn              - show cmake deprecation warnings
+   --hide_depr_warn              - hide cmake deprecation warnings
    --ptds                        - enable per-thread default stream
    --disable_large_strings       - disable large strings support
    --build_metrics               - generate build metrics report for libcudf
@@ -71,7 +71,7 @@ BUILD_BENCHMARKS=OFF
 BUILD_ALL_GPU_ARCH=0
 BUILD_NVTX=ON
 BUILD_TESTS=OFF
-BUILD_DISABLE_DEPRECATION_WARNINGS=ON
+BUILD_DISABLE_DEPRECATION_WARNINGS=OFF
 BUILD_PER_THREAD_DEFAULT_STREAM=OFF
 BUILD_REPORT_METRICS=OFF
 BUILD_REPORT_INCL_CACHE_STATS=OFF
@@ -159,8 +159,8 @@ fi
 if hasArg --disable_nvtx; then
     BUILD_NVTX="OFF"
 fi
-if hasArg --show_depr_warn; then
-    BUILD_DISABLE_DEPRECATION_WARNINGS=OFF
+if hasArg --hide_depr_warn; then
+    BUILD_DISABLE_DEPRECATION_WARNINGS=ON
 fi
 if hasArg --ptds; then
     BUILD_PER_THREAD_DEFAULT_STREAM=ON

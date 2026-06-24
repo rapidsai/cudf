@@ -10,11 +10,11 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.integrations.partition import (
+from cudf_streaming.partition_utils import (
     packed_data_from_cudf_packed_columns,
     unpack_and_concat,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 from cudf_streaming.testing import assert_eq
 from rapidsmpf.streaming.chunks.packed_data import PackedDataChunk
 from rapidsmpf.streaming.coll.allgather import AllGather, allgather
