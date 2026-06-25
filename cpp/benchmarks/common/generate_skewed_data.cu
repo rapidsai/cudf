@@ -32,7 +32,7 @@ namespace {
  * `skewed_string_target_substring`.
  */
 constexpr auto template_strings = std::to_array<std::string_view>({
-  "123abc 0987 5W43",  // matches both patterns;
+  "123abc 0987 5W43",  // matches pattern;
   "012345 6789 0123",  // the rest do not match
   "abc 4567890 DEFG",
   "01234abcdefghijk",
@@ -64,6 +64,8 @@ static_assert(templates_are_slice_aligned(),
 std::string repeat_to_width(std::string_view str, std::size_t width)
 {
   CUDF_EXPECTS(!str.empty(), "template string must be non-empty");
+  CUDF_EXPECTS(str.size() == matching_template_length,
+               "template string must be the same length as the other template strings");
   CUDF_EXPECTS(width % str.size() == 0,
                "width must be a multiple of the template length so that this function does not "
                "accidentally truncate a UTF-8 sequence");
@@ -156,20 +158,17 @@ std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_ro
                                                           int32_t short_string_pct,
                                                           int32_t hit_rate)
 {
-  CUDF_EXPECTS(num_rows >= 0, "num_rows must be non-negative");
-  CUDF_EXPECTS(short_length >= 0, "short_length must be non-negative");
-  CUDF_EXPECTS(long_tail_length >= 0, "long_tail_length must be non-negative");
+  CUDF_EXPECTS(num_rows > 0, "num_rows must be greater than 0");
+  CUDF_EXPECTS(short_length > 0, "short_length must be greater than 0");
   CUDF_EXPECTS(short_string_pct >= 0 && short_string_pct <= 100,
                "short_string_pct must be in the range [0, 100]");
   CUDF_EXPECTS(hit_rate >= 0 && hit_rate <= 100, "hit_rate must be in the range [0, 100]");
-  CUDF_EXPECTS(long_tail_length >= short_length,
-               "long_tail_length must be greater than or equal to short_length");
-  CUDF_EXPECTS(short_length >= matching_template_length,
-               "short_length must include the target substring in template_strings[0]");
+  CUDF_EXPECTS(long_tail_length > short_length,
+               "long_tail_length must be greater than short_length");
   CUDF_EXPECTS(short_length % matching_template_length == 0,
-               "short_length must be a multiple of the template length");
+               "short_length must be a multiple of the template length (16 bytes)");
   CUDF_EXPECTS(long_tail_length % matching_template_length == 0,
-               "long_tail_length must be a multiple of the template length");
+               "long_tail_length must be a multiple of the template length (16 bytes)");
 
   auto const short_templates = make_template_column(short_length);
   auto const long_templates  = make_template_column(long_tail_length);
