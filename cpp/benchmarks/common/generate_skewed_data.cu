@@ -65,8 +65,8 @@ std::string repeat_to_width(std::string_view str, std::size_t width)
 {
   CUDF_EXPECTS(!str.empty(), "template string must be non-empty");
   CUDF_EXPECTS(width % str.size() == 0,
-               "width must be a multiple of the template length so that this function is Unicode "
-               "compliant");
+               "width must be a multiple of the template length so that this function does not "
+               "accidentally truncate a UTF-8 sequence");
   std::string result;
   result.reserve(width);
   while (result.size() < width) {
