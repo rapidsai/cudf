@@ -25,7 +25,7 @@ dependencies = [
     "cudf-streaming==26.8.*,>=0.0.0a0",
     "nvidia-ml-py>=12",
     "packaging",
-    "polars>=1.35,<1.42",
+    "polars>=1.35,<1.43",
     "pylibcudf==26.8.*,>=0.0.0a0",
     "rapidsmpf==26.8.*,>=0.0.0a0",
     "typing_extensions>=4.0.0",
