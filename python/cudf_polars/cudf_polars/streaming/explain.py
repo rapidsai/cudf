@@ -270,35 +270,37 @@ _BINOP_SYMBOLS: dict[_BinaryOperator, str] = {
     _BinaryOperator.LESS_EQUAL: "<=",
     _BinaryOperator.GREATER: ">",
     _BinaryOperator.GREATER_EQUAL: ">=",
-    _BinaryOperator.LOGICAL_AND: "AND",
-    _BinaryOperator.NULL_LOGICAL_AND: "AND",
-    _BinaryOperator.LOGICAL_OR: "OR",
-    _BinaryOperator.NULL_LOGICAL_OR: "OR",
+    _BinaryOperator.LOGICAL_AND: "&",
+    _BinaryOperator.NULL_LOGICAL_AND: "&",
+    _BinaryOperator.LOGICAL_OR: "|",
+    _BinaryOperator.NULL_LOGICAL_OR: "|",
 }
 
 
 def _predicate_to_str(expr: Expr) -> str:
-    if isinstance(expr, Col):
-        return expr.name
-    if isinstance(expr, ColRef):
-        col = expr.children[0]
-        assert isinstance(col, Col)
-        return col.name
-    if isinstance(expr, Literal):
-        return repr(expr.value)
-    if isinstance(expr, Cast):
-        return _predicate_to_str(expr.children[0])
-    if isinstance(expr, BinOp):
-        left, right = expr.children
-        op = _BINOP_SYMBOLS.get(expr.op, expr.op.name)
-        return f"({_predicate_to_str(left)} {op} {_predicate_to_str(right)})"
-    if isinstance(expr, UnaryFunction):
-        (child,) = expr.children
-        return f"{expr.name}({_predicate_to_str(child)})"
-    if isinstance(expr, Ternary):
-        when, then, otherwise = expr.children
-        return f"when({_predicate_to_str(when)}).then({_predicate_to_str(then)}).otherwise({_predicate_to_str(otherwise)})"
-    return type(expr).__name__
+    match expr:
+        case Col(name=name):
+            return name
+        case ColRef():
+            col = expr.children[0]
+            assert isinstance(col, Col)
+            return col.name
+        case Literal(value=value):
+            return repr(value)
+        case Cast():
+            return _predicate_to_str(expr.children[0])
+        case BinOp(op=op):
+            left, right = expr.children
+            sym = _BINOP_SYMBOLS.get(op, op.name)
+            return f"({_predicate_to_str(left)} {sym} {_predicate_to_str(right)})"
+        case UnaryFunction(name=name):
+            (child,) = expr.children
+            return f"{name}({_predicate_to_str(child)})"
+        case Ternary():
+            when, then, otherwise = expr.children
+            return f"when({_predicate_to_str(when)}).then({_predicate_to_str(then)}).otherwise({_predicate_to_str(otherwise)})"
+        case _:
+            return type(expr).__name__
 
 
 @_repr_ir.register
