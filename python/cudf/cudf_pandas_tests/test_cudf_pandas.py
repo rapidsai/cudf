@@ -157,6 +157,27 @@ def test_groupby(dataframe):
     tm.assert_frame_equal(expected, got)
 
 
+def test_groupby_reflects_parent_frame_mutation():
+    # A groupby keyed by a string-column-derived array (df["a"].values) falls
+    # back to the slow path, so the proxy groupby is created in the "slow"
+    # state. A column added to the parent frame *after* the groupby is created
+    # must still be visible through it, matching pandas' live-reference
+    # semantics (the groupby holds a reference to the frame, not a snapshot).
+    data = {"a": ["x", "y", "x", "y"], "b": [1, 2, 3, 4]}
+
+    pdf = pd.DataFrame(data)
+    pgb = pdf.groupby(pdf["a"].values)
+    pdf["c"] = pdf["b"] * 10
+    expected = pgb["c"].sum()
+
+    df = xpd.DataFrame(data)
+    gb = df.groupby(df["a"].values)
+    df["c"] = df["b"] * 10
+    got = gb["c"].sum()
+
+    tm.assert_series_equal(expected, got)
+
+
 def test_repr(dataframe):
     pdf, df = dataframe
     assert df.__repr__() == pdf.__repr__()
