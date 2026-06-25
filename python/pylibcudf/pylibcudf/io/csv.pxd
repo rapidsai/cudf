@@ -94,6 +94,7 @@ cdef class CsvWriterOptionsBuilder:
     cpdef CsvWriterOptionsBuilder inter_column_delimiter(self, str delim)
     cpdef CsvWriterOptionsBuilder true_value(self, str val)
     cpdef CsvWriterOptionsBuilder false_value(self, str val)
+    cpdef CsvWriterOptionsBuilder compression(self, compression_type comp)
     cpdef CsvWriterOptions build(self)
 
 

@@ -871,6 +871,25 @@ cdef class CsvWriterOptionsBuilder:
         self.c_obj.false_value(val.encode())
         return self
 
+    cpdef CsvWriterOptionsBuilder compression(self, compression_type comp):
+        """Sets the compression type for the output
+
+        Parameters
+        ----------
+        comp : CompressionType
+            Compression type. Only NONE and ZSTD are supported for CSV writer.
+            ZSTD is used because it supports concatenated frames, enabling
+            progressive chunk-based compression compatible with standard
+            decompression tools.
+
+        Returns
+        -------
+        CsvWriterOptionsBuilder
+            Builder to build CsvWriterOptions
+        """
+        self.c_obj.compression(comp)
+        return self
+
     cpdef CsvWriterOptions build(self):
         """Create a CsvWriterOptions object"""
         cdef CsvWriterOptions csv_options = CsvWriterOptions.__new__(

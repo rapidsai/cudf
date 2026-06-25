@@ -371,9 +371,14 @@ def to_csv(
         )
         raise NotImplementedError(error_msg)
 
-    if compression:
-        error_msg = "Writing compressed csv is not currently supported in cudf"
-        raise NotImplementedError(error_msg)
+    # Validate compression type
+    # Only zstd is supported because it supports concatenated frames
+    # which allows progressive compression with standard tool decompression
+    if compression and compression != "zstd":
+        raise NotImplementedError(
+            f"Compression {compression} is not supported. "
+            "Only 'zstd' is supported for CSV compression."
+        )
 
     return_as_string = False
     if path_or_buf is None:
@@ -428,6 +433,7 @@ def to_csv(
                 lineterminator=lineterminator,
                 rows_per_chunk=rows_per_chunk,
                 index=index,
+                compression=compression,
             )
     else:
         _plc_write_csv(
@@ -439,6 +445,7 @@ def to_csv(
             lineterminator=lineterminator,
             rows_per_chunk=rows_per_chunk,
             index=index,
+            compression=compression,
         )
 
     if return_as_string:
@@ -455,6 +462,7 @@ def _plc_write_csv(
     lineterminator: str = "\n",
     rows_per_chunk: int = 8,
     index: bool = True,
+    compression: str | None = None,
 ) -> None:
     iter_columns = (
         itertools.chain(table.index._columns, table._columns)
@@ -463,6 +471,12 @@ def _plc_write_csv(
     )
     # Materialize iterator to avoid consuming it during access context setup
     columns_list = list(iter_columns)
+
+    # Map compression string to pylibcudf enum
+    if compression == "zstd":
+        plc_compression = plc.io.types.CompressionType.ZSTD
+    else:
+        plc_compression = plc.io.types.CompressionType.NONE
 
     with access_columns(*columns_list, mode="read", scope="internal"):
         columns = [col.plc_column for col in columns_list]
@@ -498,6 +512,7 @@ def _plc_write_csv(
                     .inter_column_delimiter(str(sep))
                     .true_value("True")
                     .false_value("False")
+                    .compression(plc_compression)
                     .build()
                 )
             )

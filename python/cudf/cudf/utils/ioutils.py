@@ -1302,9 +1302,11 @@ index : bool, default True
 encoding : str, default 'utf-8'
     A string representing the encoding to use in the output file
     Only 'utf-8' is currently supported
-compression : str, None
-    A string representing the compression scheme to use in the output file
-    Compression while writing csv is not supported currently
+compression : {{'zstd', None}}, default None
+    A string representing the compression scheme to use in the output file.
+    Only 'zstd' is currently supported. ZSTD compression uses nvCOMP for
+    GPU-accelerated compression with concatenated frames, enabling
+    progressive compression compatible with standard tools (zstd -d)
 lineterminator : str, optional
     The newline character or character sequence to use in the output file.
     Defaults to :data:`os.linesep`.
