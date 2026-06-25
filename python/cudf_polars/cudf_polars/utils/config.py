@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -144,6 +144,7 @@ class Cluster(enum.StrEnum):
 
 
 T = TypeVar("T")
+_DEFAULT_JOIN_PREFILTER_MAX_KEY_COLUMNS: int | None = 1
 
 
 def _make_default_factory(
@@ -166,6 +167,18 @@ def _bool_converter(v: str) -> bool:
         return False
     else:
         raise ValueError(f"Invalid boolean value: '{v}'")
+
+
+def _optional_float_converter(v: str) -> float | None:
+    if v.lower() in {"none", "null"}:
+        return None
+    return float(v)
+
+
+def _optional_int_converter(v: str) -> int | None:
+    if v.lower() in {"none", "null"}:
+        return None
+    return int(v)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -306,8 +319,19 @@ class DynamicPlanningOptions:
         to shuffle. Default is 2.
     bloom_filter_threshold
         Row-count ratio (small / large) below which a bloom filter is applied
-        to pre-filter the large side of an inner or semi shuffle join.
-        Set to 0 to disable bloom filtering. Default is 0.5.
+        to pre-filter a join side. This is retained as the legacy default for
+        ``join_prefilter_threshold``. Set to 0 to disable join prefiltering
+        when ``join_prefilter_threshold`` is unset. Default is 0.5.
+    join_prefilter_threshold
+        Row-count ratio (small / large) below which a join key prefilter is
+        applied. When unset, ``bloom_filter_threshold`` is used. Default is
+        unset.
+    join_prefilter_max_key_columns
+        Maximum number of join-key columns to use for the prefilter. Set to
+        ``None`` to use all join keys. Default is 1.
+    join_prefilter_trace
+        Whether to collect input/output row counts around applied join
+        prefilters. Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -322,6 +346,27 @@ class DynamicPlanningOptions:
             f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
         )
     )
+    join_prefilter_threshold: float | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_PREFILTER_THRESHOLD",
+            _optional_float_converter,
+            default=None,
+        )
+    )
+    join_prefilter_max_key_columns: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_PREFILTER_MAX_KEY_COLUMNS",
+            _optional_int_converter,
+            default=_DEFAULT_JOIN_PREFILTER_MAX_KEY_COLUMNS,
+        )
+    )
+    join_prefilter_trace: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_PREFILTER_TRACE",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.sample_chunk_count, int):
@@ -332,6 +377,25 @@ class DynamicPlanningOptions:
             raise TypeError("bloom_filter_threshold must be a float")
         if not 0.0 <= self.bloom_filter_threshold <= 1.0:
             raise ValueError("bloom_filter_threshold must be between 0 and 1")
+        join_prefilter_threshold = self.join_prefilter_threshold
+        if join_prefilter_threshold is None:
+            join_prefilter_threshold = self.bloom_filter_threshold
+            object.__setattr__(
+                self, "join_prefilter_threshold", join_prefilter_threshold
+            )
+        elif not isinstance(join_prefilter_threshold, float):
+            raise TypeError("join_prefilter_threshold must be a float or None")
+        if not 0.0 <= join_prefilter_threshold <= 1.0:
+            raise ValueError("join_prefilter_threshold must be between 0 and 1")
+        if self.join_prefilter_max_key_columns is not None:
+            if not isinstance(self.join_prefilter_max_key_columns, int):
+                raise TypeError("join_prefilter_max_key_columns must be an int or None")
+            if self.join_prefilter_max_key_columns < 1:
+                raise ValueError(
+                    "join_prefilter_max_key_columns must be at least 1 or None"
+                )
+        if not isinstance(self.join_prefilter_trace, bool):
+            raise TypeError("join_prefilter_trace must be a bool")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
