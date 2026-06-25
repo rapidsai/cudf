@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1480,6 +1480,25 @@ TYPED_TEST(TransformTest, NonDefaultStream)
   stream.synchronize();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TEST_F(ComputeColumnTest, Decimal128Unsupported)
+{
+  // column = {2000.00, 2000.00}  (rep 200000 @ scale -2)
+  auto const scale = numeric::scale_type{-2};
+  auto col         = cudf::test::fixed_point_column_wrapper<__int128>{
+    {__int128_t{200000}, __int128_t{200000}}, scale};
+  auto table = cudf::table_view{{col}};
+
+  // literal = 0.5 @ scale -2  (rep 50)
+  auto half = numeric::decimal128{numeric::scaled_integer<numeric::decimal128::rep>{50, scale}};
+  auto lit  = cudf::fixed_point_scalar<numeric::decimal128>(half, true);
+
+  auto lr        = cudf::ast::literal(lit);
+  auto cr        = cudf::ast::column_reference(0);
+  auto const ast = cudf::ast::operation(cudf::ast::ast_operator::MUL, lr, cr);
+
+  EXPECT_THROW(cudf::compute_column(table, ast), cudf::data_type_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
