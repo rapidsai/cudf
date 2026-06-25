@@ -100,13 +100,14 @@ enum class [[nodiscard]] types : uint64_t {
   ARITHMETIC             = INTEGERS | FLOATS | DECIMALS,
   SIGNED_ARITHMETIC      = SIGNED_INTEGERS | FLOATS | DECIMALS,
   ALL                    = 0x0FFFFFFF,
-  ARG_MASK               = 0x10000000,
-  ARG0                   = 0x10000000,
-  ARG1                   = 0x10000001,
-  ARG2                   = 0x10000002,
-  ARG3                   = 0x10000003,
   INPUT                  = 0x20000000,
 };
+
+/**
+ * @brief A reference to an argument of an operator. Used to indicate that an argument is the same
+ * type as a previous argument.
+ */
+enum class arg_ref : uint8_t { ARG0 = 0, ARG1 = 1, ARG2 = 2, ARG3 = 3 };
 
 constexpr types operator|(types lhs, types rhs)
 {
@@ -121,12 +122,12 @@ constexpr types operator&(types lhs, types rhs)
 constexpr types operator~(types t) { return static_cast<types>(~static_cast<uint64_t>(t)); }
 
 struct [[nodiscard]] opcode_info {
-  std::string_view name                         = "";
-  null_output null_policy                       = null_output::PROPAGATE;
-  bool is_null_dependent                        = false;
-  bool is_fallible                              = false;
-  cuda::std::inplace_vector<types, 4> arg_types = {};
-  types output_type                             = types::NONE;
+  std::string_view name                                                = "";
+  null_output null_policy                                              = null_output::PROPAGATE;
+  bool is_null_dependent                                               = false;
+  bool is_fallible                                                     = false;
+  cuda::std::inplace_vector<std::variant<types, arg_ref>, 4> arg_types = {};
+  std::variant<types, arg_ref> output_type                             = types::NONE;
 };
 
 /**
@@ -136,6 +137,7 @@ struct [[nodiscard]] opcode_info {
 {
   using enum null_output;
   using enum types;
+  using enum arg_ref;
 
   static const opcode_info map[] = {
     {"GET_INPUT", PROPAGATE, false, false, {}, INPUT},
@@ -377,11 +379,11 @@ data_type get_return_type(opcode op,
   auto rescaled = get_op_output_scale(op, arg_scales, target_scale);
 
   for (size_t i = 0; i < args.size(); ++i) {
-    auto required_type = op_info.arg_types[i];
-    auto arg_type      = arg_types[i];
+    auto spec     = op_info.arg_types[i];
+    auto arg_type = arg_types[i];
 
-    if ((required_type & types::ARG_MASK) != types::NONE) {
-      auto src_index = static_cast<size_t>(required_type & ~types::ARG_MASK);
+    if (auto* ref = std::get_if<arg_ref>(&spec)) {
+      auto src_index = static_cast<size_t>(*ref);
       CUDF_EXPECTS(
         src_index < i,
         std::format("Invalid type match rule for operator `{}` at argument #{}", op_info.name, i),
@@ -395,6 +397,7 @@ data_type get_return_type(opcode op,
                                type_to_name(args[i]),
                                type_to_name(args[src_index])));
     } else {
+      auto required_type = std::get<types>(spec);
       CUDF_EXPECTS(
         (arg_type & required_type) != types::NONE,
         std::format("Argument #{} of operator `{}` does not match expected types. Got {}",
@@ -404,16 +407,17 @@ data_type get_return_type(opcode op,
     }
   }
 
-  if ((op_info.output_type & types::ARG_MASK) != types::NONE) {
-    auto arg_index = static_cast<size_t>(op_info.output_type & ~types::ARG_MASK);
+  if (auto* ref = std::get_if<arg_ref>(&op_info.output_type)) {
+    auto arg_index = static_cast<size_t>(*ref);
     auto type      = args[arg_index].id();
     auto scale     = numeric::scale_type{is_fixed_point(data_type{type}) ? rescaled : 0};
     return data_type{type, scale};
   } else {
-    CUDF_EXPECTS(op_info.output_type != types::NONE,
+    auto required_type = std::get<types>(op_info.output_type);
+    CUDF_EXPECTS(required_type != types::NONE,
                  std::format("Invalid type match rule for operator `{}` return type", op_info.name),
                  std::runtime_error);
-    auto type  = as_type_id(op_info.output_type);
+    auto type  = as_type_id(required_type);
     auto scale = numeric::scale_type{is_fixed_point(data_type{type}) ? rescaled : 0};
     return data_type{type, scale};
   }
