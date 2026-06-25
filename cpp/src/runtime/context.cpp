@@ -93,16 +93,15 @@ void context::initialize_components(init_flags flags)
 
 /**
  * @brief Returns the path to the CUDF kernel cache directory.
- * The directory is determined by checking the following environment variables in order:
- * 1. LIBCUDF_KERNEL_CACHE_PATH
- * 2. XDG_CACHE_HOME
- * 3. HOME
- * 4. TMPDIR
- * 5. /var/tmp
- * 6. /tmp
+ * The base directory is determined by resolving in the following in order:
+ * 1. ${LIBCUDF_KERNEL_CACHE_PATH}
+ * 2. ${XDG_CACHE_HOME}/libcudf
+ * 3. ${HOME}/.cache/libcudf
+ * 4. ${TMPDIR}/libcudf
+ * 5. /tmp/libcudf
  *
- * If none of these environment variables are set, or if the directories cannot be created, an
- * exception is thrown.
+ * If all of the resolutions fail (e.g. the directories can not be created or are not accessible),
+ * an exception is thrown.
  */
 std::filesystem::path get_cudf_kernel_cache_dir()
 {
@@ -134,38 +133,43 @@ std::filesystem::path get_cudf_kernel_cache_dir()
     }
   }
 
-  static constexpr std::array<std::string_view, 3> base_dir_env_vars = {
-    "XDG_CACHE_HOME", "HOME", "TMPDIR"};
+  if (auto base = detail::getenv_optional<std::string>("XDG_CACHE_HOME"); base.has_value()) {
+    auto path = std::filesystem::path(*base) / "libcudf";
+    std::error_code ec;
+    std::filesystem::create_directories(path, ec);
+    if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
+  }
+
+  static constexpr std::array<std::string_view, 2> base_dir_env_vars = {"HOME", "TMPDIR"};
 
   for (auto env_var : base_dir_env_vars) {
-    if (auto env_path = detail::getenv_optional<std::string>(env_var); env_path.has_value()) {
-      if (!is_accessible_dir(*env_path)) { continue; }
+    if (auto base = detail::getenv_optional<std::string>(env_var); base.has_value()) {
+      if (!is_accessible_dir(*base)) { continue; }
       // attempt to create the subdirectory if non-existent
-      auto path = std::filesystem::path(*env_path) / ".libcudf";
+      auto path = std::filesystem::path(*base) / ".cache" / "libcudf";
       std::error_code ec;
-      std::filesystem::create_directory(path, ec);
+      std::filesystem::create_directories(path, ec);
       if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
     }
   }
 
-  static constexpr std::array<std::string_view, 2> tmp_dirs = {"/var/tmp", "/tmp"};
+  static constexpr std::array<std::string_view, 1> tmp_dirs = {"/tmp"};
 
   for (auto dir : tmp_dirs) {
     if (!is_accessible_dir(dir)) { continue; }
-    auto path = std::filesystem::path(dir) / ".libcudf";
+    auto path = std::filesystem::path(dir) / "libcudf";
     std::error_code ec;
     std::filesystem::create_directory(path, ec);
     if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
   }
 
   CUDF_FAIL(
-    R"***(Unable to resolve the CUDF kernel cache root directory. Tried:
-- $LIBCUDF_KERNEL_CACHE_PATH
-- $XDG_CACHE_HOME/.libcudf
-- $HOME/.libcudf
-- $TMPDIR/.libcudf
-- /var/tmp/.libcudf
-- /tmp/.libcudf)***",
+    R"***(Unable to resolve the CUDF kernel cache base directory. Tried:
+- ${LIBCUDF_KERNEL_CACHE_PATH}
+- ${XDG_CACHE_HOME}/libcudf
+- ${HOME}/.cache/libcudf
+- ${TMPDIR}/libcudf
+- /tmp/libcudf)***",
     std::runtime_error);
 }
 
