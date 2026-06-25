@@ -93,20 +93,17 @@ def _ordering_keys_match(
     allow_subset: bool,
     order_based: bool,
 ) -> bool:
+    n_keys = len(ordering.keys)
     if allow_subset:
-        n = len(ordering.keys)
-        if n > len(key_indices):
+        if n_keys > len(key_indices):
             return False
     else:
-        if len(ordering.keys) != len(key_indices):
+        if n_keys != len(key_indices):
             return False
-        n = len(key_indices)
+        n_keys = len(key_indices)
     if order_based:
-        return all(ok == k for ok, k in zip(ordering.keys, keys[:n], strict=True))
-    return all(
-        k.column_index == k_idx
-        for k, k_idx in zip(ordering.keys, key_indices[:n], strict=True)
-    )
+        return all(ok == k for ok, k in zip(ordering.keys, keys[:n_keys], strict=True))
+    return tuple(k.column_index for k in ordering.keys) == key_indices[:n_keys]
 
 
 def _matching_order_scheme(
@@ -117,9 +114,10 @@ def _matching_order_scheme(
     allow_subset: bool,
     order_based: bool,
 ) -> OrderScheme | None:
+    orderings = scheme.orderings
     matches = [
         (i, ordering)
-        for i, ordering in enumerate(scheme.orderings)
+        for i, ordering in enumerate(orderings)
         if _ordering_keys_match(
             ordering,
             keys,
@@ -135,8 +133,8 @@ def _matching_order_scheme(
         return OrderScheme(
             (
                 ordering,
-                *scheme.orderings[:i],
-                *scheme.orderings[i + 1 :],
+                *orderings[:i],
+                *orderings[i + 1 :],
             )
         )
     return None
@@ -971,10 +969,10 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
         if not self:
             return False
         for scheme in [self.inter_rank_scheme, self.local_scheme]:
-            if (
-                isinstance(scheme, OrderScheme)
-                and not scheme.orderings[0].strict_boundaries
-            ):
+            if isinstance(scheme, OrderScheme):
+                ordering = scheme.orderings[0]
+                if ordering.strict_boundaries:
+                    continue
                 return False
         return True
 
@@ -999,9 +997,11 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
             rhs: PartitioningScheme,
         ) -> bool:
             if isinstance(lhs, OrderScheme):
-                return isinstance(rhs, OrderScheme) and lhs.orderings[
-                    0
-                ].boundaries_aligned_with(rhs.orderings[0], br)
+                if not isinstance(rhs, OrderScheme):
+                    return False
+                lhs_ordering = lhs.orderings[0]
+                rhs_ordering = rhs.orderings[0]
+                return lhs_ordering.boundaries_aligned_with(rhs_ordering, br)
             elif isinstance(lhs, HashScheme):
                 return (
                     isinstance(rhs, HashScheme)
