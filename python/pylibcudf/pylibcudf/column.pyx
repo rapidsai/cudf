@@ -1593,8 +1593,6 @@ cdef class StructsColumnView:
 
         cdef cudaStream_t _cs = _stream.view().value()
         cdef column_view c_child
-
-        cdef column_view c_child
         c_child = self.view().get_sliced_child(index, _cs)
         return Column.from_column_view(c_child, self._column.child(index))
 
