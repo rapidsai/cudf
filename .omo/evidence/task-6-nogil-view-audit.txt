@@ -1,0 +1,104 @@
+Task 6 nvtext nogil .view() audit
+Scope: python/pylibcudf/pylibcudf/nvtext/{byte_pair_encode.pyx, deduplicate.pyx, edit_distance.pyx, generate_ngrams.pyx, jaccard.pyx, minhash.pyx, ngrams_tokenize.pyx, normalize.pyx, replace.pyx, stemmer.pyx, tokenize.pyx, wordpiece_tokenize.pyx}
+Allowed in with nogil: stream.view(), _stream.view(), mr.get_mr()
+
+byte_pair_encode.pyx: PASS
+  predeclared column_view calls:
+    L37: cdef column_view c_pairs = merge_pairs.view()
+    L86: cdef column_view c_input = input.view()
+  non-RMM .view() inside with nogil: 0
+
+deduplicate.pyx: PASS
+  predeclared column_view calls:
+    L75: cdef column_view c_input = input.view()
+    L120: cdef column_view c_input = input.view()
+    L121: cdef column_view c_indices = indices.view()
+    L173: cdef column_view c_input1 = input1.view()
+    L174: cdef column_view c_indices1 = indices1.view()
+    L175: cdef column_view c_input2 = input2.view()
+    L176: cdef column_view c_indices2 = indices2.view()
+  non-RMM .view() inside with nogil: 0
+
+edit_distance.pyx: PASS
+  predeclared column_view calls:
+    L46: cdef column_view c_strings = input.view()
+    L47: cdef column_view c_targets = targets.view()
+  non-RMM .view() inside with nogil: 0
+
+generate_ngrams.pyx: PASS
+  predeclared column_view calls:
+    L57: cdef column_view c_strings = input.view()
+    L100: cdef column_view c_strings = input.view()
+    L144: cdef column_view c_strings = input.view()
+  non-RMM .view() inside with nogil: 0
+
+jaccard.pyx: PASS
+  predeclared column_view calls:
+    L50: cdef column_view c_input1 = input1.view()
+    L51: cdef column_view c_input2 = input2.view()
+  non-RMM .view() inside with nogil: 0
+
+minhash.pyx: PASS
+  predeclared column_view calls:
+    L67: cdef column_view c_input = input.view()
+    L68: cdef column_view c_a = a.view()
+    L69: cdef column_view c_b = b.view()
+    L123: cdef column_view c_input = input.view()
+    L124: cdef column_view c_a = a.view()
+    L125: cdef column_view c_b = b.view()
+    L180: cdef column_view c_input = input.view()
+    L181: cdef column_view c_a = a.view()
+    L182: cdef column_view c_b = b.view()
+    L237: cdef column_view c_input = input.view()
+    L238: cdef column_view c_a = a.view()
+    L239: cdef column_view c_b = b.view()
+  non-RMM .view() inside with nogil: 0
+
+ngrams_tokenize.pyx: PASS
+  predeclared column_view calls:
+    L61: cdef column_view c_input = input.view()
+  non-RMM .view() inside with nogil: 0
+
+normalize.pyx: PASS
+  predeclared column_view calls:
+    L35: cdef column_view c_tokens = tokens.view()
+    L77: cdef column_view c_input = input.view()
+    L116: cdef column_view c_input = input.view()
+  non-RMM .view() inside with nogil: 0
+
+replace.pyx: PASS
+  predeclared column_view calls:
+    L67: cdef column_view c_input = input.view()
+    L68: cdef column_view c_targets = targets.view()
+    L69: cdef column_view c_replacements = replacements.view()
+    L128: cdef column_view c_input = input.view()
+  non-RMM .view() inside with nogil: 0
+
+stemmer.pyx: PASS
+  predeclared column_view calls:
+    L64: cdef column_view c_input = input.view()
+    L106: cdef column_view c_input = input.view()
+  non-RMM .view() inside with nogil: 0
+
+tokenize.pyx: PASS
+  predeclared column_view calls:
+    L46: cdef column_view c_vocab = vocab.view()
+    L91: cdef column_view c_input = input.view()
+    L130: cdef column_view c_input = input.view()
+    L131: cdef column_view c_delimiters = delimiters.view()
+    L178: cdef column_view c_input = input.view()
+    L217: cdef column_view c_input = input.view()
+    L218: cdef column_view c_delimiters = delimiters.view()
+    L254: cdef column_view c_input = input.view()
+    L299: cdef column_view c_input = input.view()
+    L300: cdef column_view c_row_indices = row_indices.view()
+    L349: cdef column_view c_input = input.view()
+  non-RMM .view() inside with nogil: 0
+
+wordpiece_tokenize.pyx: PASS
+  predeclared column_view calls:
+    L36: cdef column_view c_vocab = vocab.view()
+    L82: cdef column_view c_input = input.view()
+  non-RMM .view() inside with nogil: 0
+
+TOTAL_DISALLOWED=0
