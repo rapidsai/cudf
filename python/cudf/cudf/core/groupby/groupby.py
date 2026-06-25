@@ -3722,14 +3722,14 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         # combinations and the subset categories. The base order is the
         # category product when the groupby is sorted, else first appearance
         # with the unobserved combinations placed last.
-        from cudf.core.dtypes import CategoricalDtype
-
         cat_subset = [
             s
             for s in subset
             if isinstance(self.obj._data[s].dtype, CategoricalDtype)
         ]
         if cat_subset and len(result):
+            # TODO: This conversion to host objects can be avoided once
+            # MultiIndex.from_product supports GPU inputs.
             subset_levels = [
                 cast("CategoricalDtype", self.obj._data[s].dtype)
                 .categories.to_pandas()
