@@ -34,7 +34,7 @@ namespace detail {
  *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × glushkov_state_t]
  *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS_DEV × uint8_t + padding]
  *   [_reach_ascii  : GLUSHKOV_ASCII_TABLE_SIZE × glushkov_state_t]
- *   [_exception_succs : num_states × glushkov_state_t]
+ *   [_exception_successors : num_states × glushkov_state_t]
  *   [_classes : classes_count × reclass_device + variable-length literals]
  *
  * Returns {device_ptr_to_gkprog_device, raw_buffer_to_delete}
@@ -52,10 +52,6 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   // arrays live in the device buffer.
   std::size_t off = 0;
 
-  // _positions: 4-byte aligned (int32_t / char32_t fields)
-  // off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_position));
-  // std::size_t const pos_off = off;
-  // off += num_states * sizeof(glushkov_position);
   off                       = cudf::util::round_up_unsafe(off, alignof(reinst));
   std::size_t const pos_off = off;
   off += num_states * sizeof(reinst);
@@ -74,7 +70,7 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   std::size_t const reach_ascii_off = off;
   off += GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t);
 
-  // _exception_succs: 8-byte aligned
+  // _exception_successors: 8-byte aligned
   off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_state_t));
   std::size_t const exc_off = off;
   off += num_states * sizeof(glushkov_state_t);
@@ -141,9 +137,10 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
               h_gp.reach_ascii.data(),
               GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t));
 
-  // ---- _exception_succs ---------------------------------------------------
-  h_gp_dev->_exception_succs = reinterpret_cast<glushkov_state_t const*>(d_base + exc_off);
-  std::memcpy(h_base + exc_off, h_gp.exception_succs.data(), num_states * sizeof(glushkov_state_t));
+  // ---- _exception_successors ---------------------------------------------------
+  h_gp_dev->_exception_successors = reinterpret_cast<glushkov_state_t const*>(d_base + exc_off);
+  std::memcpy(
+    h_base + exc_off, h_gp.exception_successors.data(), num_states * sizeof(glushkov_state_t));
 
   // ---- _classes (variable-length, same layout as Thompson reprog_device) --
   h_gp_dev->_classes = reinterpret_cast<reclass_device const*>(d_base + cls_off);

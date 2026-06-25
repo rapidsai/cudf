@@ -332,7 +332,7 @@ void build_shift_masks(gkprog& gp)
       } else {
         // Unconditional exception
         gp.exception_mask |= glushkov_state_t(1) << p;
-        gp.exception_succs[p] |= glushkov_state_t(1) << q;
+        gp.exception_successors[p] |= glushkov_state_t(1) << q;
       }
     }
   }
@@ -367,7 +367,7 @@ void build_shift_masks(gkprog& gp)
       src &= src - 1;
       uint32_t const q = static_cast<uint32_t>(static_cast<int32_t>(p) + s);
       gp.exception_mask |= glushkov_state_t(1) << p;
-      gp.exception_succs[p] |= glushkov_state_t(1) << q;
+      gp.exception_successors[p] |= glushkov_state_t(1) << q;
     }
   }
 }

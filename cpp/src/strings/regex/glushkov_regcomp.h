@@ -87,9 +87,9 @@ struct gkprog {
 
   /// Bitmask of positions with at least one "exception" (non-shift) transition.
   glushkov_state_t exception_mask{};
-  /// exception_succs[p] = union of all non-shift successor positions for position p.
+  /// exception_successors[p] = union of all non-shift successor positions for position p.
   /// Non-zero only when bit p is set in exception_mask.
-  std::array<glushkov_state_t, GLUSHKOV_MAX_STATES> exception_succs{};
+  std::array<glushkov_state_t, GLUSHKOV_MAX_STATES> exception_successors{};
 
   /// Character class definitions (copied from the Thompson NFA reprog).
   std::vector<reclass> classes;
