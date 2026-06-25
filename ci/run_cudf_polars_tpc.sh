@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -43,23 +43,25 @@ rapids-logger "Generating TPC-DS data at SF=0.01"
 
 export TPCDS_DATA_DIR
 TPCDS_DATA_DIR=$(mktemp -d)
-python3 - <<EOF
-import duckdb, os
-conn = duckdb.connect()
-conn.execute("INSTALL tpcds; LOAD tpcds; CALL dsdgen(sf=0.01);")
-out = os.environ["TPCDS_DATA_DIR"]
-for table in conn.execute("SHOW TABLES").df()["name"]:
-    conn.execute(f"COPY {table} TO '{out}/{table}.parquet' (FORMAT PARQUET)")
-EOF
+python3 "$(dirname "$0")/generate_tpcds_data.py" --scale 0.01 --output-dir "${TPCDS_DATA_DIR}"
 
-rapids-logger "Running TPC validation tests"
+rapids-logger "Running TPC-H validation tests"
 
 cd python/cudf_polars
 
-python -m pytest \
-    --no-cov \
-    -ra \
-    --iterations=2 \
-    --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-tpc.xml" \
-    tests/streaming/test_tpch.py \
-    tests/streaming/test_tpcds.py
+python -m cudf_polars.streaming.benchmarks.pdsh all \
+    --path "${TPCH_DATA_DIR}" \
+    --suffix "/*.parquet" \
+    --frontend spmd \
+    --validate-against duckdb \
+    --iterations 2
+
+rapids-logger "Running TPC-DS validation tests"
+
+python -m cudf_polars.streaming.benchmarks.pdsds all \
+    --path "${TPCDS_DATA_DIR}" \
+    --scale 0.01 \
+    --qualification \
+    --frontend spmd \
+    --validate-against duckdb \
+    --iterations 2
