@@ -54,17 +54,14 @@ def test_unique_select(df, streaming_engine_factory, maintain_order):
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
-def test_unique_select_dynamic_planning_uses_dynamic_distinct():
+def test_unique_select_dynamic_planning_uses_dynamic_distinct(spmd_engine_factory):
     df = pl.LazyFrame({"y": list(range(10)) * 2})
     q = df.select(pl.col("y").unique())
-    engine = pl.GPUEngine(
-        executor="streaming",
-        raise_on_fail=True,
-        executor_options={
-            "dynamic_planning": {},
-            "max_rows_per_partition": 5,
-            "min_device_size": 1 << 30,
-        },
+    engine = spmd_engine_factory(
+        StreamingOptions(
+            dynamic_planning={},
+            max_rows_per_partition=5,
+        )
     )
 
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
