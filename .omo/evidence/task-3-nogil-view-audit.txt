@@ -1,0 +1,48 @@
+Task 3: root pylibcudf M-Z nogil view audit
+
+Scope:
+- python/pylibcudf/pylibcudf/merge.pyx
+- python/pylibcudf/pylibcudf/null_mask.pyx
+- python/pylibcudf/pylibcudf/partitioning.pyx
+- python/pylibcudf/pylibcudf/quantiles.pyx
+- python/pylibcudf/pylibcudf/reduce.pyx
+- python/pylibcudf/pylibcudf/replace.pyx
+- python/pylibcudf/pylibcudf/reshape.pyx
+- python/pylibcudf/pylibcudf/rolling.pyx
+- python/pylibcudf/pylibcudf/round.pyx
+- python/pylibcudf/pylibcudf/search.pyx
+- python/pylibcudf/pylibcudf/sorting.pyx
+- python/pylibcudf/pylibcudf/stream_compaction.pyx
+- python/pylibcudf/pylibcudf/table.pyx
+- python/pylibcudf/pylibcudf/table_equality.pyx
+- python/pylibcudf/pylibcudf/transform.pyx
+- python/pylibcudf/pylibcudf/transpose.pyx
+- python/pylibcudf/pylibcudf/unary.pyx
+
+Rules:
+- Disallowed inside with nogil: pylibcudf Column/Table .view() and .mutable_view().
+- Allowed inside with nogil: stream.view(), _stream.view(), py_stream.view(), mr.get_mr(), temp_mr.get_mr().
+
+Final audit:
+python/pylibcudf/pylibcudf/merge.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/null_mask.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/partitioning.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/quantiles.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/reduce.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/replace.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/reshape.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/rolling.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/round.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/search.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/sorting.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/stream_compaction.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/table.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/table_equality.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/transform.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/transpose.pyx: 0 disallowed
+python/pylibcudf/pylibcudf/unary.pyx: 0 disallowed
+TOTAL_DISALLOWED=0
+
+Verification:
+- lsp_diagnostics: no .pyx LSP server configured; directory diagnostics only cover .pyi and report pre-existing environment/syntax-version issues outside changed .pyx files.
+- build-pylibcudf-python: PASS after fixing Cython cdef placement in partitioning.pyx and rolling.pyx.

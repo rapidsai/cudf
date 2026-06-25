@@ -11,6 +11,13 @@
 - Left RMM `_stream.view()`, `stream.view()`, and `mr.get_mr()` calls in `with nogil:` as allowed.
 - Audit saved to `.omo/evidence/task-2-nogil-view-audit.txt`; all listed A-L files reported `TOTAL_DISALLOWED=0`.
 
+## Task 3 learnings
+- Processed root pylibcudf M-Z files for `.view()` / `.mutable_view()` inside `with nogil:`.
+- Hoisted Column/Table/mutable Column views to typed `cdef column_view`, `cdef table_view`, and `cdef mutable_column_view` variables before `with nogil:` blocks.
+- Left RMM stream/memory-resource calls in `with nogil:` as allowed.
+- Audit saved to `.omo/evidence/task-3-nogil-view-audit.txt`; all listed M-Z files reported `TOTAL_DISALLOWED=0`.
+- Cython requires typed `cdef` declarations outside fused-type `if` bodies in `partitioning.pyx` and `rolling.pyx`; declare first, assign inside the branch.
+
 ## Task 4 learnings
 - Processed listed `python/pylibcudf/pylibcudf/strings/*.pyx` files only: attributes, capitalize, case, char_types, combine, contains, extract, find, find_multiple, findall, padding, repeat, replace, replace_re, reverse, slice, strip, translate, wrap.
 - Hoisted Column `.view()` calls out of `with nogil:` blocks into typed `cdef column_view` variables and assignment statements immediately before the `with nogil:` call sites.
