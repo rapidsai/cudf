@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
   SPDX-License-Identifier: Apache-2.0
 -->
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -17,7 +17,7 @@
         This project provides java bindings for cudf, to be able to process large amounts of data on a GPU.
         This is still a work in progress so some APIs may change until the 1.0 release.
     </description>
-    <url>http://ai.rapids</url>
+    <url>https://rapids.ai/</url>
 
     <licenses>
         <license>
@@ -80,6 +80,60 @@
             <timezone>-8</timezone>
         </developer>
     </developers>
+
+    <repositories>
+        <!-- Prefer Google Cloud mirror, which has higher rate limits -->
+        <repository>
+            <id>gcs-maven-central-mirror</id>
+            <name>GCS Maven Central mirror</name>
+            <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <!-- Fall back to Maven upstream for packages not found in GCS mirror -->
+        <repository>
+            <id>central</id>
+            <name>Maven Central</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
+    <pluginRepositories>
+        <!-- Prefer Google Cloud mirror, which has higher rate limits -->
+        <pluginRepository>
+            <id>gcs-maven-central-mirror</id>
+            <name>GCS Maven Central mirror</name>
+            <url>https://maven-central.storage-download.googleapis.com/maven2/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+        <!-- Fall back to Maven upstream for packages not found in GCS mirror -->
+        <pluginRepository>
+            <id>central</id>
+            <name>Maven Plugin Repository</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
 
     <dependencies>
         <dependency>
@@ -149,7 +203,6 @@
         <junit.version>5.4.2</junit.version>
         <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
         <ai.rapids.cudf.nvtx.enabled>false</ai.rapids.cudf.nvtx.enabled>
-        <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
         <cxx.flags/>
         <CMAKE_EXPORT_COMPILE_COMMANDS>OFF</CMAKE_EXPORT_COMPILE_COMMANDS>
@@ -332,17 +385,6 @@
                             </execution>
                         </executions>
                     </plugin>
-                    <plugin>
-                        <groupId>org.sonatype.plugins</groupId>
-                        <artifactId>nexus-staging-maven-plugin</artifactId>
-                        <version>1.6.7</version>
-                        <extensions>true</extensions>
-                        <configuration>
-                            <serverId>ossrh</serverId>
-                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-                            <autoReleaseAfterClose>false</autoReleaseAfterClose>
-                        </configuration>
-                    </plugin>
                 </plugins>
             </build>
         </profile>
@@ -398,10 +440,6 @@
                     <groupId>org.codehaus.gmaven</groupId>
                     <artifactId>gmaven-plugin</artifactId>
                     <version>1.5</version>
-                </plugin>
-                <plugin>
-                    <artifactId>maven-exec-plugin</artifactId>
-                    <version>1.6.0</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-clean-plugin</artifactId>

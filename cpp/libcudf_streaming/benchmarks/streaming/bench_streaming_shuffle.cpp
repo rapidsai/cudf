@@ -1,23 +1,20 @@
-/**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "../utils/comm.hpp"
 #include "../utils/misc.hpp"
 #include "../utils/rmm_utils.hpp"
 #include "data_generator.hpp"
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/streaming/partition.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
-#include <mpi.h>
+#include <cudf_streaming/partition.hpp>
+#include <cudf_streaming/partition_utils.hpp>
+#include <cudf_streaming/table_chunk.hpp>
+
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
-#include <rapidsmpf/bootstrap/ucxx.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
-#include <rapidsmpf/communicator/mpi.hpp>
-#include <rapidsmpf/communicator/ucxx.hpp>
-#include <rapidsmpf/communicator/ucxx_utils.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/nvtx.hpp>
 #include <rapidsmpf/shuffler/shuffler.hpp>
@@ -35,21 +32,49 @@
 #include <string>
 #include <vector>
 
+#ifdef CUDF_STREAMING_HAVE_MPI
+#include <mpi.h>
+#include <rapidsmpf/communicator/mpi.hpp>
+#endif
+
+#ifdef CUDF_STREAMING_HAVE_UCXX
+#include <rapidsmpf/bootstrap/ucxx.hpp>
+#include <rapidsmpf/communicator/ucxx.hpp>
+#endif
+
+#if defined(CUDF_STREAMING_HAVE_MPI) && defined(CUDF_STREAMING_HAVE_UCXX)
+#include <rapidsmpf/communicator/ucxx_utils.hpp>
+#endif
+
 class ArgumentParser {
  public:
   ArgumentParser(int argc, char* const* argv, bool use_mpi = true)
   {
-    int rank   = 0;
-    int nranks = 1;
+    int rank           = 0;
+    int nranks         = 1;
+    auto abort_or_exit = [&](int code) {
+#ifdef CUDF_STREAMING_HAVE_MPI
+      if (use_mpi) { RAPIDSMPF_MPI(MPI_Abort(MPI_COMM_WORLD, code)); }
+#endif
+      std::exit(code);
+    };
 
     if (use_mpi) {
+#ifdef CUDF_STREAMING_HAVE_MPI
       RAPIDSMPF_EXPECTS(rapidsmpf::mpi::is_initialized() == true, "MPI is not initialized");
 
       RAPIDSMPF_MPI(MPI_Comm_rank(MPI_COMM_WORLD, &rank));
       RAPIDSMPF_MPI(MPI_Comm_size(MPI_COMM_WORLD, &nranks));
+#else
+      RAPIDSMPF_FAIL("MPI support is not available in this build", std::runtime_error);
+#endif
     } else {
       // When not using MPI, expect to be using bootstrap mode (rrun)
+#ifdef CUDF_STREAMING_HAVE_UCXX
       nranks = rapidsmpf::bootstrap::get_nranks();
+#else
+      RAPIDSMPF_FAIL("UCXX bootstrap support is not available in this build", std::runtime_error);
+#endif
     }
     try {
       int option;
@@ -59,7 +84,9 @@ class ArgumentParser {
             std::stringstream ss;
             ss << "Usage: " << argv[0] << " [options]\n"
                << "Options:\n"
-               << "  -C <comm>  Communicator {mpi, ucxx} (default: mpi)\n"
+               << "  -C <comm>  Communicator {"
+               << cudf_streaming::benchmarks::available_communicators()
+               << "} (default: " << comm_type << ")\n"
                << "  -r <num>   Number of runs (default: 1)\n"
                << "  -w <num>   Number of warmup runs (default: 0)\n"
                << "  -c <num>   Number of columns in the input tables "
@@ -78,23 +105,17 @@ class ArgumentParser {
                << "  -x         Enable memory profiler (default: disabled)\n"
                << "  -h         Display this help message\n";
             if (rank == 0) { std::cerr << ss.str(); }
-            if (use_mpi) {
-              RAPIDSMPF_MPI(MPI_Abort(MPI_COMM_WORLD, 0));
-            } else {
-              std::exit(0);
-            }
+            abort_or_exit(0);
           } break;
           case 'C':
             comm_type = std::string{optarg};
-            if (!(comm_type == "mpi" || comm_type == "ucxx")) {
+            if (!cudf_streaming::benchmarks::is_communicator_available(comm_type)) {
               if (rank == 0) {
-                std::cerr << "-C (Communicator) must be one of {mpi, ucxx}" << std::endl;
+                std::cerr << "-C (Communicator) must be one of {"
+                          << cudf_streaming::benchmarks::available_communicators() << "}"
+                          << std::endl;
               }
-              if (use_mpi) {
-                RAPIDSMPF_MPI(MPI_Abort(MPI_COMM_WORLD, -1));
-              } else {
-                std::exit(-1);
-              }
+              abort_or_exit(-1);
             }
             break;
           case 'r': parse_integer(num_runs, optarg, 1); break;
@@ -112,34 +133,20 @@ class ArgumentParser {
                              "{cuda, pool, async, managed}"
                           << std::endl;
               }
-              if (use_mpi) {
-                RAPIDSMPF_MPI(MPI_Abort(MPI_COMM_WORLD, -1));
-              } else {
-                std::exit(-1);
-              }
+              abort_or_exit(-1);
             }
             break;
           case 'l': parse_integer(device_mem_limit_mb, optarg); break;
           case 'L': pinned_mem_disable = true; break;
           case 'x': enable_memory_profiler = true; break;
-          case '?':
-            if (use_mpi) {
-              RAPIDSMPF_MPI(MPI_Abort(MPI_COMM_WORLD, -1));
-            } else {
-              std::exit(-1);
-            }
-            break;
+          case '?': abort_or_exit(-1); break;
           default: RAPIDSMPF_FAIL("unknown option", std::invalid_argument);
         }
       }
       if (optind < argc) { RAPIDSMPF_FAIL("unknown option", std::invalid_argument); }
     } catch (std::exception const& e) {
       if (rank == 0) { std::cerr << "Error parsing arguments: " << e.what() << std::endl; }
-      if (use_mpi) {
-        RAPIDSMPF_MPI(MPI_Abort(MPI_COMM_WORLD, -1));
-      } else {
-        std::exit(-1);
-      }
+      abort_or_exit(-1);
     }
 
     local_nbytes = num_columns * num_local_rows * num_local_partitions * sizeof(std::int32_t);
@@ -185,7 +192,7 @@ class ArgumentParser {
   rapidsmpf::shuffler::PartID num_local_partitions{1};
   rapidsmpf::shuffler::PartID num_output_partitions{1};
   std::string rmm_mr{"pool"};
-  std::string comm_type{"mpi"};
+  std::string comm_type{cudf_streaming::benchmarks::default_communicator()};
   std::uint64_t local_nbytes;
   std::uint64_t total_nbytes;
   bool enable_memory_profiler{false};
@@ -226,13 +233,13 @@ rapidsmpf::Duration run(std::shared_ptr<rapidsmpf::streaming::Context> ctx,
     actors.push_back(rapidsmpf::streaming::actor::random_table_generator(
       ctx, stream, ch1, args.num_local_partitions, num_columns, num_local_rows, min_val, max_val));
     auto ch2 = ctx->create_channel();
-    actors.push_back(cudf_streaming::streaming::actor::partition_and_pack(
+    actors.push_back(cudf_streaming::actor::partition_and_pack(
       ctx, ch1, ch2, {0}, static_cast<int>(total_num_partitions), hash_function, seed));
     auto ch3 = ctx->create_channel();
     actors.push_back(
       rapidsmpf::streaming::actor::shuffler(ctx, comm, ch2, ch3, op_id, total_num_partitions));
     auto ch4 = ctx->create_channel();
-    actors.push_back(cudf_streaming::streaming::actor::unpack_and_concat(ctx, ch3, ch4));
+    actors.push_back(cudf_streaming::actor::unpack_and_concat(ctx, ch3, ch4));
     actors.push_back(consumer(ctx, ch4));
   }
   auto const t0_elapsed = rapidsmpf::Clock::now();
@@ -248,10 +255,22 @@ int main(int argc, char** argv)
   // and ucxx communicators when not using bootstrap mode.
   int provided = 0;
   if (!use_bootstrap) {
+#ifdef CUDF_STREAMING_HAVE_MPI
     RAPIDSMPF_MPI(MPI_Init_thread(&argc, &argv, MPI_THREAD_MULTIPLE, &provided));
 
     RAPIDSMPF_EXPECTS(provided == MPI_THREAD_MULTIPLE,
                       "didn't get the requested thread level support: MPI_THREAD_MULTIPLE");
+#else
+    std::cerr << "Error: this build has no MPI support. Use UCXX bootstrap mode or build with MPI."
+              << std::endl;
+    return 1;
+#endif
+  } else {
+#ifndef CUDF_STREAMING_HAVE_UCXX
+    std::cerr << "Error: this build has no UCXX support. Bootstrap mode is unavailable."
+              << std::endl;
+    return 1;
+#endif
   }
   ArgumentParser args{argc, argv, !use_bootstrap};
 
@@ -261,6 +280,7 @@ int main(int argc, char** argv)
 
   std::shared_ptr<rapidsmpf::Communicator> comm;
   if (args.comm_type == "mpi") {
+#ifdef CUDF_STREAMING_HAVE_MPI
     if (use_bootstrap) {
       std::cerr << "Error: MPI communicator requires MPI initialization. Don't use with "
                    "rrun or unset RRUN_RANK."
@@ -269,15 +289,29 @@ int main(int argc, char** argv)
     }
     rapidsmpf::mpi::init(&argc, &argv);
     comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, options, progress_thread);
+#else
+    std::cerr << "Error: MPI communicator is not available in this build." << std::endl;
+    return 1;
+#endif
   } else if (args.comm_type == "ucxx") {
+#ifdef CUDF_STREAMING_HAVE_UCXX
     if (use_bootstrap) {
       // Launched with rrun - use bootstrap backend
       comm = rapidsmpf::bootstrap::create_ucxx_comm(
         progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options);
     } else {
+#ifdef CUDF_STREAMING_HAVE_MPI
       // Launched with mpirun - use MPI bootstrap
       comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread);
+#else
+      std::cerr << "Error: UCXX without MPI support requires bootstrap mode." << std::endl;
+      return 1;
+#endif
     }
+#else
+    std::cerr << "Error: UCXX communicator is not available in this build." << std::endl;
+    return 1;
+#endif
   } else {
     std::cerr << "Error: Unknown communicator type: " << args.comm_type << std::endl;
     return 1;
@@ -287,8 +321,7 @@ int main(int argc, char** argv)
 
   RAPIDSMPF_EXPECTS(comm->nranks() == 1, "only single-rank runs are supported");
 
-  set_current_rmm_resource(args.rmm_mr);
-  auto stat_enabled_mr = set_device_mem_resource_with_stats();
+  auto rmm_mr = create_rmm_resource(args.rmm_mr);
   std::unordered_map<rapidsmpf::MemoryType, std::int64_t> memory_limits{};
   if (args.device_mem_limit_mb >= 0) {
     memory_limits[rapidsmpf::MemoryType::DEVICE] = args.device_mem_limit_mb << 20;
@@ -299,12 +332,17 @@ int main(int argc, char** argv)
   auto pinned_mr = args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
                                            : rapidsmpf::PinnedMemoryResource::make_if_available();
   auto br        = rapidsmpf::BufferResource::create(
-    stat_enabled_mr,
+    rmm_mr,
     pinned_mr,
     std::move(memory_limits),
     std::nullopt,
     std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking),
     stats);
+  // `BufferResource` wraps the device resource in an internal tracking
+  // `RmmResourceAdaptor` (exposed via `device_mr_adaptor()`). Install it as
+  // the current device resource so libcudf temp allocations are also tracked.
+  auto& stat_enabled_mr = br->device_mr_adaptor();
+  rmm::mr::set_current_device_resource(stat_enabled_mr);
 
   auto& log                    = *comm->logger();
   rmm::cuda_stream_view stream = cudf::get_default_stream();
@@ -345,14 +383,22 @@ int main(int argc, char** argv)
   }
 
   if (!use_bootstrap) {
+#ifdef CUDF_STREAMING_HAVE_MPI
     RAPIDSMPF_MPI(MPI_Barrier(MPI_COMM_WORLD));
+#else
+    RAPIDSMPF_FAIL("MPI barrier requested, but MPI support is not available in this build",
+                   std::runtime_error);
+#endif
   } else {
+#ifdef CUDF_STREAMING_HAVE_UCXX
     auto ucxx = std::dynamic_pointer_cast<rapidsmpf::ucxx::UCXX>(comm);
-    if (ucxx == nullptr) {
-      log.print("Expected UCXX communicator when using bootstrap mode");
-      throw std::runtime_error{"Expected UCXX communicator when using bootstrap mode"};
-    }
+    RAPIDSMPF_EXPECTS(
+      ucxx != nullptr, "Expected UCXX communicator when using bootstrap mode", std::runtime_error);
     ucxx->barrier();
+#else
+    RAPIDSMPF_FAIL("UCXX bootstrap barrier requested, but UCXX support is not available",
+                   std::runtime_error);
+#endif
   }
 
   {
@@ -385,6 +431,8 @@ int main(int argc, char** argv)
     log.print(statistics->report({.header = "Statistics (of the last run):"}));
   }
 
+#ifdef CUDF_STREAMING_HAVE_MPI
   if (!use_bootstrap) { RAPIDSMPF_MPI(MPI_Finalize()); }
+#endif
   return 0;
 }

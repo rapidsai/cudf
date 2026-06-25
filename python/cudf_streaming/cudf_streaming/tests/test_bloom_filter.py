@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,21 +10,21 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.streaming import ChannelMetadata
-from cudf_streaming.streaming.bloom_filter import BloomFilter
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming import ChannelMetadata
+from cudf_streaming.bloom_filter import BloomFilter
+from cudf_streaming.table_chunk import TableChunk
+from cudf_streaming.testing import assert_eq
 from rapidsmpf.streaming.core.actor import define_actor, run_actor_network
 from rapidsmpf.streaming.core.leaf_actor import (
     pull_from_channel,
     push_to_channel,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.testing import assert_eq
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from cudf_streaming.streaming.bloom_filter import BloomFilterChunk
+    from cudf_streaming.bloom_filter import BloomFilterChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.actor import CppActor
@@ -129,7 +129,7 @@ def test_bloom_filter_roundtrip(context: Context, comm: Communicator) -> None:
     if comm.nranks != 1:
         pytest.skip("Only support single-rank runs")
 
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     values = np.arange(10, dtype=np.int32)
     build_table = make_table(values, stream=stream, br=context.br())
     probe_table = make_table(values, stream=stream, br=context.br())
@@ -150,7 +150,7 @@ def test_bloom_filter_empty_build_filters_all(
     if comm.nranks != 1:
         pytest.skip("Only support single-rank runs")
 
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     build_table = make_table(
         np.array([], dtype=np.int32), stream=stream, br=context.br()
     )

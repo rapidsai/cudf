@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 """DSL nodes for unary operations."""
@@ -496,14 +496,14 @@ class UnaryFunction(Expr):
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
-            (column, k) = (
+            (column, _k) = (
                 child.evaluate(df, context=context) for child in self.children
             )
             (reverse,) = self.options
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    cast(Literal, self.children[1]).value,
+                    cast("Literal", self.children[1]).value,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,

@@ -6,9 +6,7 @@
 # =============================================================================
 
 if(NOT TARGET zstd)
-  message(
-    FATAL_ERROR "zstd library is required for JIT embedding. Please ensure it is found by CMake."
-  )
+  message(FATAL_ERROR "embed(): zstd target is required for LIBRTCX embedding.")
 endif()
 
 # This function initializes a target for JIT embedding. It must be called before any calls to
@@ -274,10 +272,11 @@ function(embed TARGET)
 
   set(RUNNER "${TARGET}__jit_embed_run")
   add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
-  target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
   target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd)
+  target_include_directories(
+    ${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${ZSTD_INCLUDE_DIR}
+  )
   set_target_properties(${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
-  target_include_directories(${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
