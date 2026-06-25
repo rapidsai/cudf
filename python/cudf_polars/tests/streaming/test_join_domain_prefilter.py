@@ -120,6 +120,18 @@ def _joins(ir: IR, how: str | None = None) -> list[Join]:
     ]
 
 
+def _contains_node(ir: IR, needle: IR) -> bool:
+    return any(node is needle for node in traversal([ir]))
+
+
+def _join_key_names(keys: tuple[expr.NamedExpr, ...]) -> tuple[str, ...]:
+    names = []
+    for key in keys:
+        assert isinstance(key.value, expr.Col)
+        names.append(key.value.name)
+    return tuple(names)
+
+
 def test_simple_domain_prefilter_filters_large_side() -> None:
     part = _scan("part", ("p_partkey",), predicate=True)
     lineitem = _scan("lineitem", ("l_partkey", "l_suppkey"))
@@ -192,6 +204,70 @@ def test_composite_domain_prefilter_constrains_domain_first() -> None:
     assert optimized.children[1] is supplier
     assert any(semi.children[0] is supplier for semi in semis)
     assert any(semi.children[0] is lineitem for semi in semis)
+
+
+def test_prefilter_uses_cheaper_source_domain_and_skips_expensive_domain() -> None:
+    part = _scan("part", ("p_partkey",), predicate=True)
+    partsupp = _scan("partsupp", ("ps_partkey", "ps_suppkey"))
+    supplier = _scan("supplier", ("s_suppkey",))
+    lineitem = _scan("lineitem", ("l_partkey", "l_suppkey", "l_orderkey"))
+    orders = _scan("orders", ("o_orderkey",))
+
+    part_partsupp = _join(part, partsupp, ("p_partkey",), ("ps_partkey",))
+    part_partsupp_supplier = _join(
+        part_partsupp, supplier, ("ps_suppkey",), ("s_suppkey",)
+    )
+    q9_left = _join(
+        part_partsupp_supplier,
+        lineitem,
+        ("p_partkey", "ps_suppkey"),
+        ("l_partkey", "l_suppkey"),
+    )
+    root = _join(q9_left, orders, ("l_orderkey",), ("o_orderkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(
+            part=(part, 60),
+            partsupp=(partsupp, 120),
+            supplier=(supplier, 30),
+            lineitem=(lineitem, 1_800),
+            orders=(orders, 900),
+        ),
+        _config(),
+    )
+
+    semis = _joins(optimized, "Semi")
+    lineitem_semis = [semi for semi in semis if semi.children[0] is lineitem]
+    assert lineitem_semis
+    assert not any(semi.children[0] is orders for semi in semis)
+    assert _contains_node(lineitem_semis[0].children[1], part)
+    assert not _contains_node(lineitem_semis[0].children[1], supplier)
+
+
+def test_source_only_domain_does_not_stack_on_prefiltered_source() -> None:
+    part = _scan("part", ("p_partkey",), predicate=True)
+    lineitem = _scan("lineitem", ("l_partkey", "l_orderkey"))
+    orders = _scan("orders", ("o_orderkey",), predicate=True)
+
+    part_lineitem = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+    root = _join(part_lineitem, orders, ("l_orderkey",), ("o_orderkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(part=(part, 60), lineitem=(lineitem, 1_800), orders=(orders, 150)),
+        _config(),
+    )
+
+    lineitem_semis = [
+        semi for semi in _joins(optimized, "Semi") if semi.children[0] is lineitem
+    ]
+    assert any(
+        _join_key_names(semi.left_on) == ("l_partkey",) for semi in lineitem_semis
+    )
+    assert not any(
+        _join_key_names(semi.left_on) == ("l_orderkey",) for semi in lineitem_semis
+    )
 
 
 def test_no_domain_prefilter_for_outer_join() -> None:

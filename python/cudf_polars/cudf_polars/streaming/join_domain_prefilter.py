@@ -47,6 +47,7 @@ class _Producer:
     node: IR
     column: str
     rows: int
+    cost: int
 
 
 @dataclass(frozen=True)
@@ -69,26 +70,33 @@ class _Candidate:
         return self.domain.rows
 
     @property
+    def domain_cost(self) -> int:
+        """Estimated scan-row cost to build the domain input."""
+        return self.domain.cost
+
+    @property
     def target_rows(self) -> int:
         """Estimated rows in the target input."""
         return _estimate_rows(self.target) or 0
 
     @property
     def score(self) -> tuple[int, int, int]:
-        """Prefer composite filters, then smaller constraint/domain inputs."""
-        constraint_rows = (
-            self.constraint_domain.rows
+        """Prefer composite filters, then cheaper constraint/domain inputs."""
+        constraint_cost = (
+            self.constraint_domain.cost
             if self.constraint_domain is not None
-            else self.domain.rows
+            else self.domain.cost
         )
         return (
             0 if self.mode == "composite" else 1,
-            constraint_rows,
-            self.domain.rows,
+            constraint_cost,
+            self.domain.cost,
         )
 
 
 _ROW_ESTIMATES: dict[IR, int | None] = {}
+_SOURCE_COSTS: dict[IR, int | None] = {}
+_SOURCE_COUNTS: dict[IR, int] = {}
 _SELECTIVE: dict[IR, bool] = {}
 _STATS: StatsCollector | None = None
 
@@ -113,9 +121,21 @@ def optimize_join_domain_prefilters(
     if threshold is None or threshold == 0 or trace is None:
         return ir
 
-    global _ROW_ESTIMATES, _SELECTIVE, _STATS
-    old_estimates, old_selective, old_stats = _ROW_ESTIMATES, _SELECTIVE, _STATS
-    _ROW_ESTIMATES, _SELECTIVE, _STATS = {}, {}, stats
+    global _ROW_ESTIMATES, _SOURCE_COSTS, _SOURCE_COUNTS, _SELECTIVE, _STATS
+    old_estimates, old_costs, old_counts, old_selective, old_stats = (
+        _ROW_ESTIMATES,
+        _SOURCE_COSTS,
+        _SOURCE_COUNTS,
+        _SELECTIVE,
+        _STATS,
+    )
+    _ROW_ESTIMATES, _SOURCE_COSTS, _SOURCE_COUNTS, _SELECTIVE, _STATS = (
+        {},
+        {},
+        {},
+        {},
+        stats,
+    )
     try:
         return _rewrite_node(
             ir,
@@ -123,8 +143,10 @@ def optimize_join_domain_prefilters(
             trace=trace,
         )
     finally:
-        _ROW_ESTIMATES, _SELECTIVE, _STATS = (
+        _ROW_ESTIMATES, _SOURCE_COSTS, _SOURCE_COUNTS, _SELECTIVE, _STATS = (
             old_estimates,
+            old_costs,
+            old_counts,
             old_selective,
             old_stats,
         )
@@ -203,7 +225,7 @@ def _select_candidate(ir: Join, threshold: float) -> tuple[_Candidate | None, st
         )
 
     if not candidates:
-        return None, "no_selective_domain"
+        return None, "no_profitable_domain"
     return min(candidates, key=lambda c: c.score), "applied"
 
 
@@ -243,7 +265,13 @@ def _simple_candidates(
             continue
         if _contains_identity(target, domain.node):
             continue
+        if _is_source_only_domain(domain.node) and _has_filtering_semi_ancestor(
+            target_child, target
+        ):
+            continue
         if domain.rows / target_rows > threshold:
+            continue
+        if not _domain_cost_is_small(domain.node, target, threshold):
             continue
         yield _Candidate(
             mode="simple",
@@ -302,6 +330,12 @@ def _composite_candidates(
             if domain.rows / target_rows > threshold:
                 continue
             if constraint_domain.rows / domain.rows > threshold:
+                continue
+            if not _domain_cost_is_small(domain.node, target, threshold):
+                continue
+            if not _domain_cost_is_small(
+                constraint_domain.node, domain.node, threshold
+            ):
                 continue
             yield _Candidate(
                 mode="composite",
@@ -403,10 +437,14 @@ def _smallest_key_producer(
             continue
         if require_selective and not _is_selective(node):
             continue
-        candidates.append((rows, len(node.schema), _Producer(node, column, rows)))
+        cost = _source_cost(node)
+        if cost is None:
+            continue
+        producer = _Producer(node, column, rows, cost)
+        candidates.append((cost, rows, len(node.schema), producer))
     if not candidates:
         return None
-    return min(candidates, key=lambda item: (item[0], item[1]))[2]
+    return min(candidates, key=lambda item: (item[0], item[1], item[2]))[3]
 
 
 def _smallest_node_containing_all(root: IR, columns: Sequence[str]) -> _Producer | None:
@@ -418,10 +456,14 @@ def _smallest_node_containing_all(root: IR, columns: Sequence[str]) -> _Producer
         rows = _estimate_rows(node)
         if rows is None or rows <= 0:
             continue
-        candidates.append((rows, len(node.schema), _Producer(node, columns[0], rows)))
+        cost = _source_cost(node)
+        if cost is None:
+            continue
+        producer = _Producer(node, columns[0], rows, cost)
+        candidates.append((cost, rows, len(node.schema), producer))
     if not candidates:
         return None
-    return min(candidates, key=lambda item: (item[0], item[1]))[2]
+    return min(candidates, key=lambda item: (item[0], item[1], item[2]))[3]
 
 
 def _largest_key_source(root: IR, column: str) -> IR | None:
@@ -490,6 +532,74 @@ def _estimate_join_rows(
     return None
 
 
+def _domain_cost_is_small(domain: IR, target: IR, threshold: float) -> bool:
+    """Return whether building a domain is cheap enough for the target it reduces."""
+    domain_cost = _source_cost(domain)
+    target_rows = _estimate_rows(target)
+    if domain_cost is None or target_rows is None or target_rows <= 0:
+        return False
+    return domain_cost / target_rows <= threshold
+
+
+def _source_cost(ir: IR) -> int | None:
+    """Estimate source rows that must be scanned to materialize an IR subtree."""
+    try:
+        return _SOURCE_COSTS[ir]
+    except KeyError:
+        pass
+
+    sources: list[int] = []
+    seen: set[IR] = set()
+    for node in traversal([ir]):
+        if node in seen:
+            continue
+        seen.add(node)
+        if not isinstance(node, (Scan, DataFrameScan)):
+            continue
+        rows = _estimate_rows(node)
+        if rows is not None and rows > 0:
+            sources.append(rows)
+
+    cost = sum(sources) if sources else _estimate_rows(ir)
+    _SOURCE_COSTS[ir] = cost
+    return cost
+
+
+def _source_count(ir: IR) -> int:
+    """Count unique source scans in an IR subtree."""
+    try:
+        return _SOURCE_COUNTS[ir]
+    except KeyError:
+        pass
+
+    sources = {
+        node for node in traversal([ir]) if isinstance(node, (Scan, DataFrameScan))
+    }
+    count = len(sources)
+    _SOURCE_COUNTS[ir] = count
+    return count
+
+
+def _is_source_only_domain(ir: IR) -> bool:
+    """Return whether a domain is derived from just one source scan."""
+    return _source_count(ir) == 1
+
+
+def _has_filtering_semi_ancestor(root: IR, target: IR) -> bool:
+    """Return whether target is already below a semi join's filtered side."""
+    if root is target:
+        return False
+
+    for index, child in enumerate(root.children):
+        if not _contains_identity(child, target):
+            continue
+        if isinstance(root, Join) and root.options[0] == "Semi" and index == 0:
+            return True
+        if _has_filtering_semi_ancestor(child, target):
+            return True
+    return False
+
+
 def _is_selective(ir: IR) -> bool:
     try:
         return _SELECTIVE[ir]
@@ -545,6 +655,8 @@ def _trace_decision(
                 "domain_key": candidate.domain_key.name,
                 "estimated_target_rows": candidate.target_rows,
                 "estimated_domain_rows": candidate.domain_rows,
+                "estimated_target_cost": _source_cost(candidate.target),
+                "estimated_domain_cost": candidate.domain_cost,
                 "target_node_type": type(candidate.target).__name__,
                 "domain_node_type": type(candidate.domain.node).__name__,
             }
@@ -556,6 +668,7 @@ def _trace_decision(
                     if candidate.target_constraint_key is not None
                     else None,
                     "estimated_constraint_rows": candidate.constraint_domain.rows,
+                    "estimated_constraint_cost": candidate.constraint_domain.cost,
                 }
             )
     log("Join Domain Prefilter", **record)
