@@ -93,7 +93,7 @@ void context::initialize_components(init_flags flags)
 
 /**
  * @brief Returns the path to the CUDF kernel cache directory.
- * The base directory is determined by resolving in the following in order:
+ * The cache directory is determined by resolving in the following in order:
  * 1. ${LIBCUDF_KERNEL_CACHE_PATH}
  * 2. ${XDG_CACHE_HOME}/libcudf
  * 3. ${HOME}/.cache/libcudf
@@ -164,7 +164,7 @@ std::filesystem::path get_cudf_kernel_cache_dir()
   }
 
   CUDF_FAIL(
-    R"***(Unable to resolve the CUDF kernel cache base directory. Tried:
+    R"***(Unable to resolve cuDF kernel cache directory. Tried:
 - ${LIBCUDF_KERNEL_CACHE_PATH}
 - ${XDG_CACHE_HOME}/libcudf
 - ${HOME}/.cache/libcudf
