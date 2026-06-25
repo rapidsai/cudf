@@ -629,8 +629,9 @@ dependencies:
     common:
       - output_types: conda
         packages:
+          - croaring==4.4.2
           - flatbuffers==24.3.25
-          - librdkafka>=2.11.1,<2.12.0
+          - librdkafka<2.15.0a0
   depends_on_libnvcomp:
     common:
       - output_types: conda
@@ -677,7 +678,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
 
-          - cython>=3.2.2
+          - cython>=3.2.2,<3.3.0a0
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1607,7 +1608,7 @@ dependencies:
         packages:
           # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
           # (https://github.com/pandas-dev/pandas/pull/65742)
-          - matplotlib<3.11
+          - matplotlib-base<3.11
           - numexpr
           - odfpy
           - pyxlsb
