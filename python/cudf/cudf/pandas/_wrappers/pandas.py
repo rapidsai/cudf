@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import contextlib
@@ -48,6 +48,7 @@ from ..fast_slow_proxy import (
     _FastSlowAttribute,
     _FunctionProxy,
     _maybe_wrap_result,
+    _setattr_fsproxy_no_mirror,
     _State,
     _Unusable,
     is_proxy_object,
@@ -1658,8 +1659,10 @@ def _df_query_method(self, *args, local_dict=None, global_dict=None, **kwargs):
     )
 
 
-DataFrame.eval = _df_eval_method
-DataFrame.query = _df_query_method
+# These custom implementations are installed by cudf.pandas itself and must
+# not be mirrored onto (and clobber) the real ``pandas.DataFrame``.
+_setattr_fsproxy_no_mirror(DataFrame, "eval", _df_eval_method)
+_setattr_fsproxy_no_mirror(DataFrame, "query", _df_query_method)
 
 _JsonReader = make_intermediate_proxy_type(
     "_JsonReader",
