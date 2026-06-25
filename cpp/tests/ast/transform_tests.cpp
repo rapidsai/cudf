@@ -1486,7 +1486,7 @@ TEST_F(ComputeColumnTest, Decimal128Unsupported)
 {
   // column = {2000.00, 2000.00}  (rep 200000 @ scale -2)
   auto const scale = numeric::scale_type{-2};
-  auto col         = cudf::test::fixed_point_column_wrapper<__int128>{
+  auto const col   = cudf::test::fixed_point_column_wrapper<__int128>{
     {__int128_t{200000}, __int128_t{200000}}, scale};
   auto table = cudf::table_view{{col}};
 
@@ -1499,6 +1499,14 @@ TEST_F(ComputeColumnTest, Decimal128Unsupported)
   auto const ast = cudf::ast::operation(cudf::ast::ast_operator::MUL, lr, cr);
 
   EXPECT_THROW(cudf::compute_column(table, ast), cudf::data_type_error);
+
+  auto result = cudf::compute_column_jit(table, ast);
+  // Expected: 0.5 * 2000.00 = 1000.00  => rep 10000000 @ scale -4
+  EXPECT_EQ(result->type().id(), cudf::type_id::DECIMAL128);
+  EXPECT_EQ(result->type().scale(), numeric::scale_type{-4});
+  auto expected = cudf::test::fixed_point_column_wrapper<__int128>{
+    {__int128_t{10000000}, __int128_t{10000000}}, numeric::scale_type{-4}};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
