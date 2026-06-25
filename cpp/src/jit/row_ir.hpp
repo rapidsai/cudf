@@ -185,6 +185,18 @@ struct [[nodiscard]] instance_context {
    * @return A span of output variable information
    */
   [[nodiscard]] std::span<untyped_var_info const> get_output_vars() const;
+
+  /**
+   * @brief Get the CUDA stream for device operations during IR generation
+   * @return The CUDA stream for device operations during IR generation
+   */
+  [[nodiscard]] rmm::cuda_stream_view get_stream() const { return stream_; }
+
+  /**
+   * @brief Get the device memory resource for device memory allocation during IR generation
+   * @return The device memory resource for device memory allocation during IR generation
+   */
+  [[nodiscard]] rmm::device_async_resource_ref get_mr() const { return mr_; }
 };
 
 struct [[nodiscard]] code_sink {

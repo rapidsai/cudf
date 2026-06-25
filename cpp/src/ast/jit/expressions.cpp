@@ -1,12 +1,12 @@
-
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "cudf/ast/expressions.hpp"
-
 #include "ast/jit/expressions.hpp"
+
 #include "jit/row_ir.hpp"
+
+#include <cudf/ast/expressions.hpp>
 
 namespace cudf {
 namespace ast {
@@ -54,23 +54,32 @@ namespace {
 {
   using enum cudf::ast::jit::op;
   switch (operator_id) {
+    case IDENTITY: return opcode::IDENTITY;
+    case IS_NULL: return opcode::IS_NULL;
     case COALESCE: return opcode::COALESCE;
     case PREDICATE: return opcode::PREDICATE;
     case ADD: return opcode::ADD;
-    case ADD_OVERFLOW: return opcode::ADD_OVERFLOW;
     case SUB: return opcode::SUB;
-    case SUB_OVERFLOW: return opcode::SUB_OVERFLOW;
     case MUL: return opcode::MUL;
-    case MUL_OVERFLOW: return opcode::MUL_OVERFLOW;
     case DIV: return opcode::DIV;
-    case DIV_OVERFLOW: return opcode::DIV_OVERFLOW;
-    case MOD: return opcode::MOD;
-    case MOD_OVERFLOW: return opcode::MOD_OVERFLOW;
-    case ABS: return opcode::ABS;
-    case ABS_OVERFLOW: return opcode::ABS_OVERFLOW;
     case NEG: return opcode::NEG;
+    case ABS: return opcode::ABS;
+    case MOD: return opcode::MOD;
+    case PYMOD: return opcode::PYMOD;
+    case TRUE_DIV: return opcode::TRUE_DIV;
+    case FLOOR_DIV: return opcode::FLOOR_DIV;
+    case ADD_OVERFLOW: return opcode::ADD_OVERFLOW;
+    case SUB_OVERFLOW: return opcode::SUB_OVERFLOW;
+    case MUL_OVERFLOW: return opcode::MUL_OVERFLOW;
+    case DIV_OVERFLOW: return opcode::DIV_OVERFLOW;
     case NEG_OVERFLOW: return opcode::NEG_OVERFLOW;
+    case ABS_OVERFLOW: return opcode::ABS_OVERFLOW;
+    case MOD_OVERFLOW: return opcode::MOD_OVERFLOW;
     case CHECK_PRECISION: return opcode::CHECK_PRECISION;
+    case BITWISE_AND: return opcode::BITWISE_AND;
+    case BITWISE_INVERT: return opcode::BITWISE_INVERT;
+    case BITWISE_OR: return opcode::BITWISE_OR;
+    case BITWISE_XOR: return opcode::BITWISE_XOR;
     case BITWISE_SHIFT_LEFT: return opcode::BITWISE_SHIFT_LEFT;
     case BITWISE_SHIFT_RIGHT: return opcode::BITWISE_SHIFT_RIGHT;
     case CAST_TO_BOOL8: return opcode::CAST_TO_BOOL8;
@@ -88,6 +97,39 @@ namespace {
     case CAST_TO_DECIMAL64: return opcode::CAST_TO_DECIMAL64;
     case CAST_TO_DECIMAL128: return opcode::CAST_TO_DECIMAL128;
     case RESCALE: return opcode::RESCALE;
+    case EQUAL: return opcode::EQUAL;
+    case NOT_EQUAL: return opcode::NOT_EQUAL;
+    case GREATER: return opcode::GREATER;
+    case GREATER_EQUAL: return opcode::GREATER_EQUAL;
+    case LESS: return opcode::LESS;
+    case LESS_EQUAL: return opcode::LESS_EQUAL;
+    case NULL_EQUAL: return opcode::NULL_EQUAL;
+    case NULL_LOGICAL_AND: return opcode::NULL_LOGICAL_AND;
+    case NULL_LOGICAL_OR: return opcode::NULL_LOGICAL_OR;
+    case LOGICAL_AND: return opcode::LOGICAL_AND;
+    case LOGICAL_OR: return opcode::LOGICAL_OR;
+    case LOGICAL_NOT: return opcode::LOGICAL_NOT;
+    case IF_ELSE: return opcode::IF_ELSE;
+    case CBRT: return opcode::CBRT;
+    case CEIL: return opcode::CEIL;
+    case FLOOR: return opcode::FLOOR;
+    case RINT: return opcode::RINT;
+    case SQRT: return opcode::SQRT;
+    case POW: return opcode::POW;
+    case EXP: return opcode::EXP;
+    case LOG: return opcode::LOG;
+    case ARCCOS: return opcode::ARCCOS;
+    case ARCCOSH: return opcode::ARCCOSH;
+    case ARCSIN: return opcode::ARCSIN;
+    case ARCSINH: return opcode::ARCSINH;
+    case ARCTAN: return opcode::ARCTAN;
+    case ARCTANH: return opcode::ARCTANH;
+    case COS: return opcode::COS;
+    case COSH: return opcode::COSH;
+    case SIN: return opcode::SIN;
+    case SINH: return opcode::SINH;
+    case TAN: return opcode::TAN;
+    case TANH: return opcode::TANH;
     default: CUDF_FAIL("Invalid JIT op", std::invalid_argument);
   }
 }
@@ -96,7 +138,7 @@ namespace {
 
 expression const& jit::operation(ast::tree& tree,
                                  op operator_id,
-                                 std::vector<std::reference_wrapper<expression const>> args,
+                                 std::vector<std::reference_wrapper<expression const>> const& args,
                                  bool nullify_on_error,
                                  std::optional<int32_t> target_scale)
 {
@@ -114,20 +156,6 @@ expression const& jit::operation(ast::tree& tree,
                "target_scale must be set for jit::op::RESCALE",
                std::invalid_argument);
   return tree.push(detail::operation(ir_opcode, std::move(args), nullify_on_error));
-}
-
-expression const& jit::operation(
-  ast::tree& tree,
-  op operator_id,
-  std::initializer_list<std::reference_wrapper<expression const>> args,
-  bool nullify_on_error,
-  std::optional<int32_t> target_scale)
-{
-  return operation(tree,
-                   operator_id,
-                   std::vector<std::reference_wrapper<expression const>>{args},
-                   nullify_on_error,
-                   target_scale);
 }
 
 }  // namespace ast

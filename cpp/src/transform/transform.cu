@@ -936,18 +936,20 @@ std::unique_ptr<column> transform_extended(std::span<transform_input const> inpu
                                            rmm::device_async_resource_ref mr)
 {
   transform_output outputs[] = {{.type = output_type, .nullability = null_policy}};
-  auto table                 = multi_transform(udf,
+
+  auto table = multi_transform(udf,
                                source_type,
                                is_null_aware,
                                fallible::NO,
                                user_data,
                                inputs,
                                outputs,
-                                               {},
+                               {},
                                row_size,
                                stream,
                                mr);
-  auto cols                  = table->release();
+
+  auto cols = table->release();
   return std::move(cols[0]);
 }
 

@@ -707,25 +707,46 @@ namespace jit {
  * @brief JIT operation kinds for `cudf::ast::jit::operation`.
  */
 enum class op : uint8_t {
+  // Identity operators
+  IDENTITY,
+
+  // Null handling operators
+  IS_NULL,
+
   COALESCE,
   PREDICATE,
+
+  /// Arithmetic operators
   ADD,
-  ADD_OVERFLOW,
   SUB,
-  SUB_OVERFLOW,
   MUL,
-  MUL_OVERFLOW,
   DIV,
-  DIV_OVERFLOW,
-  MOD,
-  MOD_OVERFLOW,
-  ABS,
-  ABS_OVERFLOW,
   NEG,
+  ABS,
+  MOD,
+  PYMOD,
+  TRUE_DIV,
+  FLOOR_DIV,
+
+  /// Overflow-checking Arithmetic functions. raise errors on overflow, division by zero, etc.
+  ADD_OVERFLOW,
+  SUB_OVERFLOW,
+  MUL_OVERFLOW,
+  DIV_OVERFLOW,
   NEG_OVERFLOW,
+  ABS_OVERFLOW,
+  MOD_OVERFLOW,
   CHECK_PRECISION,
+
+  /// Bitwise operators
+  BITWISE_AND,
+  BITWISE_INVERT,
+  BITWISE_OR,
+  BITWISE_XOR,
   BITWISE_SHIFT_LEFT,
   BITWISE_SHIFT_RIGHT,
+
+  /// Type conversion/scaling operators
   CAST_TO_BOOL8,
   CAST_TO_INT8,
   CAST_TO_INT16,
@@ -741,6 +762,45 @@ enum class op : uint8_t {
   CAST_TO_DECIMAL64,
   CAST_TO_DECIMAL128,
   RESCALE,
+
+  /// Comparison & Logic operators
+  EQUAL,
+  NOT_EQUAL,
+  GREATER,
+  GREATER_EQUAL,
+  LESS,
+  LESS_EQUAL,
+  NULL_EQUAL,
+  NULL_LOGICAL_AND,
+  NULL_LOGICAL_OR,
+  LOGICAL_AND,
+  LOGICAL_OR,
+  LOGICAL_NOT,
+  IF_ELSE,
+
+  /// Mathematical operators
+  CBRT,
+  CEIL,
+  FLOOR,
+  RINT,
+  SQRT,
+  POW,
+  EXP,
+  LOG,
+
+  /// Trigonometric operators
+  ARCCOS,
+  ARCCOSH,
+  ARCSIN,
+  ARCSINH,
+  ARCTAN,
+  ARCTANH,
+  COS,
+  COSH,
+  SIN,
+  SINH,
+  TAN,
+  TANH,
 };
 
 /**
@@ -755,16 +815,12 @@ enum class op : uint8_t {
  */
 expression const& operation(ast::tree& tree,
                             op operator_id,
-                            std::vector<std::reference_wrapper<expression const>> args,
+                            std::vector<std::reference_wrapper<expression const>> const& args,
                             bool nullify_on_error               = false,
                             std::optional<int32_t> target_scale = std::nullopt);
 
 /**
- * @brief Creates a JIT expression operation from an opcode and initializer-list arguments.
- *
- * This overload exists so call sites can use `{arg0, arg1}` without materializing a temporary
- * vector at the call site, which can trigger dangling-reference diagnostics under stricter
- * warning settings.
+ * @brief Creates a JIT expression operation from an opcode and argument list.
  *
  * @param tree The expression tree to which this expression will be added.
  * @param operator_id The JIT operation kind.

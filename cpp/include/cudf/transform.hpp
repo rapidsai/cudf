@@ -193,25 +193,25 @@ std::unique_ptr<table> multi_transform(
  * types
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
- * this case.
+ * this case
  * @throws std::invalid_argument if string offsets are provided for non-string output columns, or
- * if the number of string offsets does not match the number of output columns.
- * @throws cudf::evaluation_error if the UDF produces an error during execution.
+ * if the number of string offsets does not match the number of output columns
+ * @throws cudf::evaluation_error if the UDF produces an error during execution
  *
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
  *
- * @param udf The PTX/CUDA string of the transform function to apply
+ * @param udf           The PTX/CUDA string of the transform function to apply
  * @param source_type   The source type of the UDF (CUDA or PTX)
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
- * @param is_fallible Signifies the UDF may produce errors during execution
- * @param user_data     User-defined device data to pass to the UDF.
+ * @param is_fallible   Signifies the UDF may produce errors during execution
+ * @param user_data     User-defined device data to pass to the UDF
  * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
  * @param outputs       Specification of the output columns to be created
  * @param string_offsets For string output columns, the offsets can be pre-allocated and passed in
  * to prevent overhead of compacting string views into run-end strings column.
  * @param row_size The row size of the transform operation. If not provided, it is inferred from the
- * input columns.
+ * input columns
  * @param stream        CUDA stream used for device memory operations and kernel launches
  * @param mr            Device memory resource used to allocate the returned column's device memory
  * @return              A table containing the columns resulting from applying the transform

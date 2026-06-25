@@ -13,6 +13,7 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/std/atomic>
 #include <cuda/std/cstddef>
 #include <cuda/std/tuple>
 #include <cuda/std/utility>
@@ -121,7 +122,10 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
     }
   }
 
-  if constexpr (!discard_errors) { atomicMax(max_error, static_cast<int32_t>(thread_error)); }
+  if constexpr (!discard_errors) {
+    cuda::std::atomic_ref ref(*max_error);
+    ref.fetch_max(static_cast<int32_t>(thread_error), cuda::std::memory_order_relaxed);
+  }
 }
 
 }  // namespace jit

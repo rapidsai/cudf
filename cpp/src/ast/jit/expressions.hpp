@@ -1,4 +1,3 @@
-
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
@@ -65,7 +64,7 @@ struct operation : public ast::expression {
   /**
    * @brief Get the operands.
    *
-   * @return Vector of operands
+   * @return Span of operands
    */
   [[nodiscard]] std::span<std::reference_wrapper<expression const> const> get_arguments() const
   {

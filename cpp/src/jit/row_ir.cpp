@@ -152,8 +152,8 @@ struct [[nodiscard]] opcode_info {
     {"ABS", PROPAGATE, false, false, {ARITHMETIC}, ARG0},
     {"MOD", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
     {"PYMOD", PROPAGATE, false, false, {ARITHMETIC, ARG0}, ARG0},
-    {"TRUE_DIV", PROPAGATE, false, false, {types{FLOATS | INTEGERS}, ARG0}, FLOAT64},
-    {"FLOOR_DIV", PROPAGATE, false, false, {types{FLOATS | INTEGERS}, ARG0}, ARG0},
+    {"TRUE_DIV", PROPAGATE, false, false, {FLOATS | INTEGERS, ARG0}, FLOAT64},
+    {"FLOOR_DIV", PROPAGATE, false, false, {FLOATS | INTEGERS, ARG0}, ARG0},
     {"ADD_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
     {"SUB_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
     {"MUL_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
@@ -168,17 +168,17 @@ struct [[nodiscard]] opcode_info {
     {"BITWISE_XOR", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
     {"BITWISE_SHIFT_LEFT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
     {"BITWISE_SHIFT_RIGHT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
-    {"CAST_TO_BOOL8", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, BOOL8},
-    {"CAST_TO_INT8", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT8},
-    {"CAST_TO_INT16", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT16},
-    {"CAST_TO_INT32", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT32},
-    {"CAST_TO_INT64", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, INT64},
-    {"CAST_TO_UINT8", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT8},
-    {"CAST_TO_UINT16", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT16},
-    {"CAST_TO_UINT32", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT32},
-    {"CAST_TO_UINT64", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, UINT64},
-    {"CAST_TO_FLOAT32", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, FLOAT32},
-    {"CAST_TO_FLOAT64", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, FLOAT64},
+    {"CAST_TO_BOOL8", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, BOOL8},
+    {"CAST_TO_INT8", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, INT8},
+    {"CAST_TO_INT16", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, INT16},
+    {"CAST_TO_INT32", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, INT32},
+    {"CAST_TO_INT64", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, INT64},
+    {"CAST_TO_UINT8", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, UINT8},
+    {"CAST_TO_UINT16", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, UINT16},
+    {"CAST_TO_UINT32", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, UINT32},
+    {"CAST_TO_UINT64", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, UINT64},
+    {"CAST_TO_FLOAT32", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, FLOAT32},
+    {"CAST_TO_FLOAT64", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, FLOAT64},
     {"CAST_TO_DECIMAL32", PROPAGATE, false, false, {DECIMALS}, DECIMAL32},
     {"CAST_TO_DECIMAL64", PROPAGATE, false, false, {DECIMALS}, DECIMAL64},
     {"CAST_TO_DECIMAL128", PROPAGATE, false, false, {DECIMALS}, DECIMAL128},
@@ -190,11 +190,11 @@ struct [[nodiscard]] opcode_info {
     {"LESS", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
     {"LESS_EQUAL", PROPAGATE, false, false, {ALL, ARG0}, BOOL8},
     {"NULL_EQUAL", ALWAYS_VALID, true, false, {ALL, ARG0}, BOOL8},
-    {"NULL_LOGICAL_AND", ALWAYS_NULLABLE, true, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"NULL_LOGICAL_OR", ALWAYS_NULLABLE, true, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"LOGICAL_AND", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"LOGICAL_OR", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}, ARG0}, BOOL8},
-    {"LOGICAL_NOT", PROPAGATE, false, false, {types{ARITHMETIC | BOOL8}}, BOOL8},
+    {"NULL_LOGICAL_AND", ALWAYS_NULLABLE, true, false, {ARITHMETIC | BOOL8, ARG0}, BOOL8},
+    {"NULL_LOGICAL_OR", ALWAYS_NULLABLE, true, false, {ARITHMETIC | BOOL8, ARG0}, BOOL8},
+    {"LOGICAL_AND", PROPAGATE, false, false, {ARITHMETIC | BOOL8, ARG0}, BOOL8},
+    {"LOGICAL_OR", PROPAGATE, false, false, {ARITHMETIC | BOOL8, ARG0}, BOOL8},
+    {"LOGICAL_NOT", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, BOOL8},
     {"IF_ELSE", PROPAGATE, false, false, {ALL, ARG0, BOOL8}, ARG0},
     {"CBRT", PROPAGATE, false, false, {FLOATS}, ARG0},
     {"CEIL", PROPAGATE, false, false, {FLOATS}, ARG0},
@@ -595,8 +595,8 @@ void node::instantiate(instance_context& ctx)
       }
 
       if (op_ == opcode::RESCALE) {
-        scale_reference_ =
-          input_reference{ctx.add_input(cudf::numeric_scalar<int32_t>{target_scale_.value_or(0)})};
+        scale_reference_ = input_reference{ctx.add_input(cudf::numeric_scalar<int32_t>{
+          target_scale_.value_or(0), ctx.get_stream(), ctx.get_mr()})};
         arg_types.emplace_back(cudf::type_id::INT32);
       }
 
