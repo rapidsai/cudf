@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -138,7 +138,7 @@ class reprog {
   [[nodiscard]] match_flags compute_match_flags() const;
 
 #ifndef NDEBUG
-  void print(regex_flags const flags);
+  void print() const;
 #endif
 
  private:
@@ -147,8 +147,9 @@ class reprog {
   int32_t _startinst_id{};              // id of first instruction
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
   int32_t _num_capturing_groups{};
+  regex_flags _flags{};
 
-  reprog() = default;
+  reprog(regex_flags);
   void collapse_nops();
   void build_start_ids();
   void check_for_errors(int32_t id, int32_t next_id);
