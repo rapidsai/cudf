@@ -86,6 +86,7 @@ serialized_table_header read_header(std::uint8_t const* ptr,
   }
   serialized_table_header header;
   std::memcpy(&header, ptr, sizeof(serialized_table_header));
+  CUDF_EXPECTS(header.num_columns >= 0, "packed metadata header has negative column count");
   return header;
 }
 
@@ -100,6 +101,7 @@ serialized_column read_entry(std::uint8_t const* ptr, std::uint8_t const* buffer
   }
   serialized_column entry;
   std::memcpy(&entry, ptr, sizeof(serialized_column));
+  CUDF_EXPECTS(entry.num_children >= 0, "packed metadata column has negative child count");
   return entry;
 }
 

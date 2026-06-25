@@ -687,6 +687,41 @@ TEST_F(PackUnpackTest, MetadataViewRejectsCorruptedChildCount)
   EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
 }
 
+TEST_F(PackUnpackTest, MetadataRejectsNegativeColumnCount)
+{
+  cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
+  auto packed = cudf::pack(cudf::table_view({col}));
+
+  auto corrupted                 = *packed.metadata;
+  cudf::size_type const negative = -1;
+  std::memcpy(corrupted.data(), &negative, sizeof(negative));
+
+  EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
+  EXPECT_THROW(
+    cudf::unpack(corrupted.data(), reinterpret_cast<uint8_t const*>(packed.gpu_data->data())),
+    cudf::logic_error);
+}
+
+TEST_F(PackUnpackTest, MetadataRejectsNegativeChildCount)
+{
+  cudf::test::fixed_width_column_wrapper<int> ints{1, 2, 3};
+  cudf::test::fixed_width_column_wrapper<float> floats{4.0f, 5.0f, 6.0f};
+  auto struct_col = cudf::test::structs_column_wrapper({ints, floats});
+  auto packed     = cudf::pack(cudf::table_view({struct_col}));
+
+  auto corrupted                 = *packed.metadata;
+  auto constexpr header_size     = sizeof(cudf::size_type);
+  auto const entry_size          = (corrupted.size() - header_size) / 3;  // 3 column entries
+  auto const num_children_offset = header_size + entry_size - 2 * sizeof(int32_t);
+  cudf::size_type const negative = -1;
+  std::memcpy(corrupted.data() + num_children_offset, &negative, sizeof(negative));
+
+  EXPECT_THROW(cudf::packed_metadata_view{corrupted}, cudf::logic_error);
+  EXPECT_THROW(
+    cudf::unpack(corrupted.data(), reinterpret_cast<uint8_t const*>(packed.gpu_data->data())),
+    cudf::logic_error);
+}
+
 TEST_F(PackUnpackTest, MetadataViewColumnIndexOutOfRange)
 {
   cudf::test::fixed_width_column_wrapper<int> col{1, 2, 3};
