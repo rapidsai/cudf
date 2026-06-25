@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,8 +18,8 @@ namespace rapidsmpf::ndsh {
  * @brief Sort chunks in a channel
  *
  * @param ctx Streaming context
- * @param ch_in Input channel of `TableChunk`s
- * @param ch_out Output channel of sorted `TableChunk`s
+ * @param ch_in Input channel of `table_chunk`s
+ * @param ch_out Output channel of sorted `table_chunk`s
  * @param keys Indices of key columns in the input channel
  * @param values Indices of value columns in the input channel
  * @param order Sort order for each column named in `keys`

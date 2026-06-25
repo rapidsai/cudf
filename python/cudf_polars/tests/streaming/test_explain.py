@@ -13,11 +13,17 @@ import pytest
 
 import polars as pl
 
+import pylibcudf as plc
+
+from cudf_polars.containers import DataType
+from cudf_polars.dsl.expressions.base import Col
+from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.explain import (
     PartitionPlanRow,
     _fmt_partition_bytes,
     _fmt_row_count,
+    _predicate_to_str,
     collect_partition_plan,
     explain_query,
     factor_str,
@@ -661,6 +667,44 @@ def test_hstack_properties():
     node = dag.nodes[dag.roots[0]]
     assert node.type == "HStack"
     assert node.properties == {"columns": ["a", "b"]}
+
+
+def test_predicate_to_str_col():
+    col = Col(DataType(pl.Float64()), "c_acctbal")
+    assert _predicate_to_str(col) == "c_acctbal"
+
+
+def test_predicate_to_str_binop():
+    float_dtype = DataType(pl.Float64())
+    bool_dtype = DataType(pl.Boolean())
+    left = Col(float_dtype, "c_acctbal")
+    right = Col(float_dtype, "avg_acctbal")
+    expr = BinOp(bool_dtype, plc.binaryop.BinaryOperator.GREATER, left, right)
+    assert _predicate_to_str(expr) == "(c_acctbal > avg_acctbal)"
+
+
+def test_predicate_to_str_nested_binop():
+    float_dtype = DataType(pl.Float64())
+    bool_dtype = DataType(pl.Boolean())
+    a = Col(float_dtype, "a")
+    b = Col(float_dtype, "b")
+    c = Col(float_dtype, "c")
+    ab = BinOp(bool_dtype, plc.binaryop.BinaryOperator.GREATER, a, b)
+    abc = BinOp(bool_dtype, plc.binaryop.BinaryOperator.LOGICAL_AND, ab, c)
+    assert _predicate_to_str(abc) == "((a > b) & c)"
+
+
+def test_explain_conditional_join_shows_predicate():
+    customers = pl.LazyFrame({"c_val": [4.0, 5.0, 6.0]})
+    avg = pl.LazyFrame({"avg_val": [3.5]})
+    q = customers.join_where(avg, pl.col("c_val") > pl.col("avg_val"))
+
+    engine = pl.GPUEngine(executor="streaming", raise_on_fail=True)
+    with pytest.warns(UserWarning, match="ConditionalJoin not supported"):
+        plan = explain_query(q, engine, physical=True)
+
+    assert "CONDITIONALJOIN" in plan
+    assert "c_val > avg_val" in plan
 
 
 def test_explain_physical_plan(tmp_path, df):
