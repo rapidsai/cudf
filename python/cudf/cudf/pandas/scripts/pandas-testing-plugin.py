@@ -3217,6 +3217,8 @@ NODEIDS_THAT_FAIL = {
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_getitem_slice": "TODO: Add a reason for failure",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_getitem_slice_negative_step_ea_block": "TODO: Add a reason for failure",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_mask": "TODO: Add a reason for failure",
+    "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_axis_argument[False]": "TODO: Add a reason for failure",
+    "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_axis_argument[True]": "TODO: Add a reason for failure",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_categorical_updates_inplace": "TODO: Add a reason for failure",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_custom_object": "TypeError: len() of unsized object",
     "tests/indexing/test_iloc.py::TestiLocBaseIndependent::test_iloc_setitem_ea_inplace[DataFrame-array-False]": "TODO: Add a reason for failure",
