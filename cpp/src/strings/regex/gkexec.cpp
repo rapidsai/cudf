@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "strings/regex/glushkov_regcomp.h"
-// #include "strings/regex/regcomp.h"
 #include "strings/regex/glushkov.cuh"
+#include "strings/regex/glushkov_regcomp.h"
 
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
@@ -29,144 +28,121 @@ namespace detail {
  *        return a device pointer to the embedded gkprog_device struct.
  *
  * Buffer layout:
- *   [gkprog_device struct]
- *   [_positions    : num_states × glushkov_position]
- *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS_DEV × glushkov_state_t]
- *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS_DEV × uint8_t + padding]
+ *   [_positions    : num_states × reinst]
+ *   [_shift_masks  : GLUSHKOV_MAX_SHIFTS × glushkov_state_t]
+ *   [_shift_amounts: GLUSHKOV_MAX_SHIFTS × uint8_t + padding]
  *   [_reach_ascii  : GLUSHKOV_ASCII_TABLE_SIZE × glushkov_state_t]
- *   [_exception_successors : num_states × glushkov_state_t]
+ *   [_exception_successors : num_states × glushkov_state_t + padding]
  *   [_classes : classes_count × reclass_device + variable-length literals]
- *
- * Returns {device_ptr_to_gkprog_device, raw_buffer_to_delete}
- * where the device ptr is the beginning of the buffer (cast as the struct).
  */
 std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_device::create(
   gkprog const& h_gp, rmm::cuda_stream_view stream)
 {
-  uint32_t const num_states = h_gp.num_states;
-  uint32_t const num_shifts = h_gp.shift_count;
-  int32_t const classes_cnt = static_cast<int32_t>(h_gp.classes.size());
+  auto const num_states  = h_gp.num_states;
+  auto const classes_cnt = static_cast<int32_t>(h_gp.classes.size());
 
-  // ---- Compute cumulative section offsets from buffer start ---------------
-  // gkprog_device is allocated on the host with plain new; only the data
-  // arrays live in the device buffer.
-  std::size_t off = 0;
+  // compute size of each section
+  auto pos_size         = num_states * sizeof(reinst);
+  auto smasks_size      = GLUSHKOV_MAX_SHIFTS * sizeof(glushkov_state_t);
+  auto samts_size       = GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t);
+  auto reach_ascii_size = GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t);
+  auto exc_size         = num_states * sizeof(glushkov_state_t);
+  auto cls_size         = std::transform_reduce(
+    h_gp.classes.begin(),
+    h_gp.classes.end(),
+    static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device),
+    std::plus<std::size_t>{},
+    [](auto const& cls) { return cls.literals.size() * sizeof(reclass_range); });
 
-  off                       = cudf::util::round_up_unsafe(off, alignof(reinst));
-  std::size_t const pos_off = off;
-  off += num_states * sizeof(reinst);
+  // make sure each section is aligned for the subsequent section's data type
+  auto const memsize =
+    cudf::util::round_up_safe(pos_size, alignof(glushkov_state_t)) + smasks_size +
+    cudf::util::round_up_safe(samts_size, alignof(glushkov_state_t)) + reach_ascii_size +
+    cudf::util::round_up_safe(exc_size, alignof(reclass_device)) +
+    cudf::util::round_up_safe(cls_size, sizeof(char32_t));
 
-  // _shift_masks: 8-byte aligned
-  off                          = cudf::util::round_up_unsafe(off, alignof(glushkov_state_t));
-  std::size_t const smasks_off = off;
-  off += GLUSHKOV_MAX_SHIFTS * sizeof(glushkov_state_t);
+  // allocate memory to store all the prog data in a flat contiguous buffer
+  auto h_buffer = cudf::detail::make_host_vector<u_char>(memsize, stream);
+  auto h_ptr    = h_buffer.data();
+  auto d_buffer = new rmm::device_uvector<u_char>(memsize, stream);
+  auto d_ptr    = d_buffer->data();
 
-  // _shift_amounts: 1-byte aligned (uint8_t array)
-  std::size_t const samts_off = off;
-  off += GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t);
+  // create our device object; this is managed separately and returned to the caller
+  auto* d_prog             = new gkprog_device{};
+  d_prog->num_states       = num_states;
+  d_prog->shift_count      = h_gp.shift_count;
+  d_prog->first_set        = h_gp.first_set;
+  d_prog->accept_mask      = h_gp.accept_mask;
+  d_prog->exception_mask   = h_gp.exception_mask;
+  d_prog->startchar        = h_gp.startchar;
+  d_prog->_codepoint_flags = get_character_flags_table(stream);
+  d_prog->_prog_size       = memsize;
 
-  // _reach_ascii: 8-byte aligned (GLUSHKOV_ASCII_TABLE_SIZE × glushkov_state_t = 1 KB)
-  off                               = cudf::util::round_up_unsafe(off, alignof(glushkov_state_t));
-  std::size_t const reach_ascii_off = off;
-  off += GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t);
+  // copy the positions array (fixed-sized structs)
+  memcpy(h_ptr, h_gp.pos_insts.data(), pos_size);
+  d_prog->_positions = reinterpret_cast<reinst const*>(d_ptr);
 
-  // _exception_successors: 8-byte aligned
-  off                       = cudf::util::round_up_unsafe(off, alignof(glushkov_state_t));
-  std::size_t const exc_off = off;
-  off += num_states * sizeof(glushkov_state_t);
+  // advance to next section; align for glushkov_state_t
+  pos_size = cudf::util::round_up_safe(pos_size, alignof(glushkov_state_t));
+  h_ptr += pos_size;
+  d_ptr += pos_size;
 
-  // _classes: 16-byte aligned (reclass_device is alignas(16))
-  off                       = cudf::util::round_up_unsafe(off, alignof(reclass_device));
-  std::size_t const cls_off = off;
-  std::size_t cls_size      = static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
-  for (auto const& cls : h_gp.classes) {
-    cls_size += cls.literals.size() * sizeof(reclass_range);
-  }
-  off += cls_size;
-  off = cudf::util::round_up_unsafe(off, sizeof(char32_t));
+  // copy shift_masks
+  memcpy(h_ptr, h_gp.shift_masks.data(), smasks_size);
+  d_prog->_shift_masks = reinterpret_cast<glushkov_state_t const*>(d_ptr);
+  h_ptr += smasks_size;
+  d_ptr += smasks_size;
 
-  std::size_t const total = off;
+  // copy shift_amounts (uint8_t; no alignment padding needed after glushkov_state_t[])
+  memcpy(h_ptr, h_gp.shift_amounts.data(), samts_size);
+  d_prog->_shift_amounts = reinterpret_cast<uint8_t const*>(d_ptr);
 
-  // Allocate flat host + device buffers
-  auto h_buf = cudf::detail::make_host_vector<u_char>(total, stream);
-  std::memset(h_buf.data(), 0, total);
-  auto* d_raw = new rmm::device_uvector<u_char>(total, stream);
+  // advance to next section; align for glushkov_state_t
+  samts_size = cudf::util::round_up_safe(samts_size, alignof(glushkov_state_t));
+  h_ptr += samts_size;
+  d_ptr += samts_size;
 
-  u_char* const h_base = h_buf.data();
-  u_char* const d_base = d_raw->data();
+  // copy reach_ascii table (GLUSHKOV_ASCII_TABLE_SIZE × glushkov_state_t = 1 KB)
+  memcpy(h_ptr, h_gp.reach_ascii.data(), reach_ascii_size);
+  d_prog->_reach_ascii = reinterpret_cast<glushkov_state_t const*>(d_ptr);
+  h_ptr += reach_ascii_size;
+  d_ptr += reach_ascii_size;
 
-  // ---- Place gkprog_device header --------------------------------
-  // Allocated with plain new so it survives past h_buf's lifetime.
-  auto* h_gp_dev           = new gkprog_device{};
-  h_gp_dev->num_states     = num_states;
-  h_gp_dev->shift_count    = num_shifts;
-  h_gp_dev->first_set      = h_gp.first_set;
-  h_gp_dev->accept_mask    = h_gp.accept_mask;
-  h_gp_dev->exception_mask = h_gp.exception_mask;
-  // h_gp_dev->nullable         = h_gp.nullable;
-  // h_gp_dev->has_startchar    = h_gp.has_startchar;
-  h_gp_dev->startchar        = h_gp.startchar;
-  h_gp_dev->_codepoint_flags = get_character_flags_table(stream);
-  h_gp_dev->_prog_size       = total;
+  // copy exception_successors
+  memcpy(h_ptr, h_gp.exception_successors.data(), exc_size);
+  d_prog->_exception_successors = reinterpret_cast<glushkov_state_t const*>(d_ptr);
 
-  // ---- _positions ---------------------------------------------------------
-  // h_gp_dev->_positions = reinterpret_cast<glushkov_position const*>(d_base + pos_off);
-  // auto* pos_arr        = reinterpret_cast<glushkov_position*>(h_base + pos_off);
-  h_gp_dev->_positions = reinterpret_cast<reinst const*>(d_base + pos_off);
-  auto* pos_arr        = reinterpret_cast<reinst*>(h_base + pos_off);
-  for (uint32_t i = 0; i < num_states; ++i) {  // memcpy could replace this now
-    // auto t     = h_gp.pos_inst_type[i];
-    // pos_arr[i] = t == CCLASS || t == NCCLASS
-    //                ? reinst{.type = t, .u1 = {.cls_id = h_gp.pos_cls_idx[i]}}
-    //                : reinst{.type = t, .u1 = {.c = h_gp.pos_ch[i]}};
-    pos_arr[i] = h_gp.pos_insts[i];
-  }
+  // advance to next section; align for reclass_device (alignas(16))
+  exc_size = cudf::util::round_up_safe(exc_size, alignof(reclass_device));
+  h_ptr += exc_size;
+  d_ptr += exc_size;
 
-  // ---- _shift_masks --------------------------------------------------------
-  h_gp_dev->_shift_masks = reinterpret_cast<glushkov_state_t const*>(d_base + smasks_off);
-  std::memcpy(
-    h_base + smasks_off, h_gp.shift_masks.data(), GLUSHKOV_MAX_SHIFTS * sizeof(glushkov_state_t));
-
-  // ---- _shift_amounts ------------------------------------------------------
-  h_gp_dev->_shift_amounts = reinterpret_cast<uint8_t const*>(d_base + samts_off);
-  std::memcpy(h_base + samts_off, h_gp.shift_amounts.data(), GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t));
-
-  // ---- _reach_ascii -------------------------------------------------------
-  h_gp_dev->_reach_ascii = reinterpret_cast<glushkov_state_t const*>(d_base + reach_ascii_off);
-  std::memcpy(h_base + reach_ascii_off,
-              h_gp.reach_ascii.data(),
-              GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t));
-
-  // ---- _exception_successors ---------------------------------------------------
-  h_gp_dev->_exception_successors = reinterpret_cast<glushkov_state_t const*>(d_base + exc_off);
-  std::memcpy(
-    h_base + exc_off, h_gp.exception_successors.data(), num_states * sizeof(glushkov_state_t));
-
-  // ---- _classes (variable-length, same layout as Thompson reprog_device) --
-  h_gp_dev->_classes = reinterpret_cast<reclass_device const*>(d_base + cls_off);
-  auto* h_cls        = reinterpret_cast<reclass_device*>(h_base + cls_off);
-  u_char* h_lit = h_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
-  u_char* d_lit = d_base + cls_off + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  // copy classes into flat memory: [class1, class2, ...][literals arrays]
+  auto* classes    = reinterpret_cast<reclass_device*>(h_ptr);
+  d_prog->_classes = reinterpret_cast<reclass_device const*>(d_ptr);
+  auto h_end       = h_ptr + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
+  auto d_end       = d_ptr + static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device);
   for (int32_t ci = 0; ci < classes_cnt; ++ci) {
-    auto const& src             = h_gp.classes[ci];
-    *h_cls++                    = reclass_device{src.builtins,
-                              static_cast<int32_t>(src.literals.size()),
-                              reinterpret_cast<reclass_range const*>(d_lit)};
-    std::size_t const lit_bytes = src.literals.size() * sizeof(reclass_range);
-    std::memcpy(h_lit, src.literals.data(), lit_bytes);
-    h_lit += lit_bytes;
-    d_lit += lit_bytes;
+    auto const& src      = h_gp.classes[ci];
+    *classes++           = reclass_device{src.builtins,
+                                static_cast<int32_t>(src.literals.size()),
+                                reinterpret_cast<reclass_range const*>(d_end)};
+    auto const lit_bytes = src.literals.size() * sizeof(reclass_range);
+    memcpy(h_end, src.literals.data(), lit_bytes);
+    h_end += lit_bytes;
+    d_end += lit_bytes;
   }
 
   // copy flat buffer to device
-  cudf::detail::cuda_memcpy_async<u_char>(*d_raw, h_buf, stream);
+  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
 
-  auto deleter = [d_raw](gkprog_device* t) {
+  // create a deleter to free both device buffers
+  auto deleter = [d_buffer](gkprog_device* t) {
     t->destroy();
-    delete d_raw;
+    delete d_buffer;
   };
 
-  return std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>>(h_gp_dev, deleter);
+  return std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>>(d_prog, deleter);
 }
 
 void gkprog_device::destroy() { delete this; }
