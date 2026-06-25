@@ -310,6 +310,12 @@ def _(ir: ConditionalJoin, *, offset: str = "") -> str:
 
 
 @_repr_ir.register
+def _(ir: Filter, *, offset: str = "") -> str:
+    pred = _predicate_to_str(ir.mask.value)
+    return _repr_header(offset, f"FILTER {pred}", ir.schema)
+
+
+@_repr_ir.register
 def _(ir: Sort, *, offset: str = "") -> str:
     by = tuple(ne.name for ne in ir.by)
     return _repr_header(offset, f"SORT {by}", ir.schema)
@@ -318,6 +324,8 @@ def _(ir: Sort, *, offset: str = "") -> str:
 @_repr_ir.register
 def _(ir: Scan, *, offset: str = "") -> str:
     label = f"SCAN {ir.typ.upper()}"
+    if ir.predicate is not None:
+        label += f" {_predicate_to_str(ir.predicate.value)}"
     return _repr_header(offset, label, ir.schema)
 
 
