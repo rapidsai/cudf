@@ -147,7 +147,7 @@ class reprog {
   int32_t _startinst_id{};              // id of first instruction
   std::vector<int32_t> _startinst_ids;  // short-cut to speed-up ORs
   int32_t _num_capturing_groups{};
-  regex_flags _flags{};
+  [[maybe_unused]] regex_flags _flags{};
 
   reprog(regex_flags);
   void collapse_nops();
