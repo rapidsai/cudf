@@ -376,7 +376,9 @@ class MultiIndex(Index):
 
         return self._set_names(names=names, inplace=inplace)
 
-    def _maybe_materialize_codes_and_levels(self: Self) -> Self:
+    def _maybe_materialize_codes_and_levels(
+        self: Self, *, sort: bool = True
+    ) -> Self:
         """
         Set self._codes and self._levels from self._columns _when_ needed.
 
@@ -384,18 +386,20 @@ class MultiIndex(Index):
         due to being expensive and sometimes unnecessary for operations.
 
         MultiIndex methods are responsible for calling this when needed.
+
+        ``sort`` controls the order of the materialized ``levels``. The default
+        ``sort=True`` mirrors ``MultiIndex.from_arrays`` (which also factorizes
+        with ``sort=True``), matching pandas' always-sorted levels for indexes
+        built from raw data. Callers that build a ``MultiIndex`` with a
+        meaningful level order (e.g. the result of ``stack``/``unstack``, which
+        pandas constructs with explicit, *unsorted* levels) should pass
+        ``sort=False`` so that a subsequent ``to_pandas()`` preserves that order.
         """
         if self._levels is None and self._codes is None:
             levels = []
             codes = []
             for col in self._data.values():
-                # ``sort=True`` mirrors ``MultiIndex.from_arrays`` (which also
-                # factorizes with ``sort=True``) so that lazily materialized
-                # levels match pandas' always-sorted levels. This keeps the
-                # lexsort depth reported by ``to_pandas`` consistent with
-                # pandas (decoded values and row order are unchanged because
-                # the codes are renumbered to match the sorted levels).
-                code, cats = factorize(col, sort=True)
+                code, cats = factorize(col, sort=sort)
                 codes.append(as_column(code.astype(np.dtype(np.int64))))
                 levels.append(cats)
             self._levels = levels
@@ -1026,11 +1030,17 @@ class MultiIndex(Index):
         per_level: bool = False,
     ) -> DataFrameOrSeries:
         def _reject_sets(x):
-            # pandas rejects a set anywhere in a .loc indexer. Scan recursively
-            # so a set survives ``__getitem__``'s re-nesting retry as well.
+            # pandas rejects a set or dict anywhere in a .loc indexer. Scan
+            # recursively so it survives ``__getitem__``'s re-nesting retry as
+            # well.
             if isinstance(x, (set, frozenset)):
                 raise TypeError(
                     "Passing a set as an indexer is not supported. "
+                    "Use a list instead."
+                )
+            if isinstance(x, dict):
+                raise TypeError(
+                    "Passing a dict as an indexer is not supported. "
                     "Use a list instead."
                 )
             if isinstance(x, tuple):

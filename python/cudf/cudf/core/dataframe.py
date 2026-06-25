@@ -7839,6 +7839,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
         new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
+        # Materialize the levels in order of first appearance (rather than the
+        # default sorted order) so that converting the result to pandas keeps
+        # the level order pandas' own ``stack`` produces. Otherwise a later
+        # ``unstack``/``to_pandas`` would lexicographically reorder the pivoted
+        # axis (e.g. ``"foo_10"`` before ``"foo_2"``).
+        new_index._maybe_materialize_codes_and_levels(sort=False)
         new_index.names = index_names
 
         # Compute the column indices that serves as the input for
