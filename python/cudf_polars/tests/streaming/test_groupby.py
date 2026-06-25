@@ -13,7 +13,7 @@ import pytest
 
 import polars as pl
 
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.engine.options import StreamingOptions
