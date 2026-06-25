@@ -13,7 +13,7 @@ import pytest
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.buffer import MemoryType
 from rapidsmpf.memory.pinned_memory_resource import is_pinned_memory_resources_supported
 from rapidsmpf.streaming.core.message import Message

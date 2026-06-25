@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -868,6 +868,106 @@ public class ColumnVectorTest extends CudfTestBase {
       assertEquals(bigInteger1, hostColumnVector.getBigDecimal(0).unscaledValue());
       assertEquals(bigInteger2, hostColumnVector.getBigDecimal(1).unscaledValue());
       assertEquals(bigInteger3, hostColumnVector.getBigDecimal(2).unscaledValue());
+    }
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorFixedWidth() {
+    int intSize = DType.INT32.getSizeInBytes();
+    HostMemoryBuffer data = HostMemoryBuffer.allocate(2L * intSize);
+    data.setInt(0, 42);
+    data.setInt(intSize, 7);
+    try (HostColumnVector hcv = new HostColumnVector(
+        DType.INT32, 2, Optional.of(0L), data, null)) {
+      assertEquals(2L, hcv.getRowCount());
+      assertEquals(0L, hcv.getNullCount());
+      assertEquals(DType.INT32, hcv.getType());
+      assertFalse(hcv.isNull(0));
+      assertFalse(hcv.isNull(1));
+      assertEquals(42, hcv.getInt(0));
+      assertEquals(7, hcv.getInt(1));
+    }
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorString() {
+    byte[] bytes = "helloworld".getBytes(StandardCharsets.UTF_8);
+    HostMemoryBuffer data = HostMemoryBuffer.allocate(bytes.length);
+    data.setBytes(0, bytes, 0, bytes.length);
+    int intSize = DType.INT32.getSizeInBytes();
+    HostMemoryBuffer offsets = HostMemoryBuffer.allocate(3L * intSize);
+    offsets.setInt(0, 0);
+    offsets.setInt(intSize, 5);
+    offsets.setInt(2L * intSize, 10);
+    try (HostColumnVector hcv = new HostColumnVector(
+        DType.STRING, 2, Optional.of(0L), data, null, offsets)) {
+      assertEquals(2L, hcv.getRowCount());
+      assertEquals(0L, hcv.getNullCount());
+      assertEquals(DType.STRING, hcv.getType());
+      assertFalse(hcv.isNull(0));
+      assertFalse(hcv.isNull(1));
+      assertEquals("hello", hcv.getJavaString(0));
+      assertEquals("world", hcv.getJavaString(1));
+    }
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorStringWithNull() {
+    byte[] bytes = "hello".getBytes(StandardCharsets.UTF_8);
+    HostMemoryBuffer data = HostMemoryBuffer.allocate(bytes.length);
+    data.setBytes(0, bytes, 0, bytes.length);
+    int intSize = DType.INT32.getSizeInBytes();
+    HostMemoryBuffer offsets = HostMemoryBuffer.allocate(3L * intSize);
+    offsets.setInt(0, 0);
+    offsets.setInt(intSize, 5);
+    // Row 1 is null so its offset range is empty.
+    offsets.setInt(2L * intSize, 5);
+    // 64 bytes is a safe over-allocation for the Arrow-style validity bitmap.
+    HostMemoryBuffer validity = HostMemoryBuffer.allocate(64);
+    for (long i = 0; i < 64; i++) {
+      validity.setByte(i, (byte) 0);
+    }
+    // Row 0 valid (bit 0 set), row 1 null (bit 1 clear).
+    validity.setByte(0, (byte) 0x01);
+    try (HostColumnVector hcv = new HostColumnVector(
+        DType.STRING, 2, Optional.of(1L), data, validity, offsets)) {
+      assertEquals(2L, hcv.getRowCount());
+      assertEquals(1L, hcv.getNullCount());
+      assertEquals(DType.STRING, hcv.getType());
+      assertFalse(hcv.isNull(0));
+      assertTrue(hcv.isNull(1));
+      assertEquals("hello", hcv.getJavaString(0));
+    }
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorRejectsListType() {
+    assertThrows(IllegalArgumentException.class, () ->
+        new HostColumnVector(DType.LIST, 0, Optional.of(0L), null, null, null));
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorRequiresOffsetsForNonEmptyString() {
+    assertThrows(IllegalArgumentException.class, () ->
+        new HostColumnVector(DType.STRING, 1, Optional.of(0L), null, null, null));
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorAllowsEmptyStringWithoutOffsets() {
+    try (HostColumnVector hcv = new HostColumnVector(
+        DType.STRING, 0, Optional.of(0L), null, null, null)) {
+      assertEquals(0L, hcv.getRowCount());
+      assertEquals(0L, hcv.getNullCount());
+      assertEquals(DType.STRING, hcv.getType());
+    }
+  }
+
+  @Test
+  void testHostColumnVectorPublicCtorOffsetForNonStringMessage() {
+    try (HostMemoryBuffer offsets = HostMemoryBuffer.allocate(8)) {
+      IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+          new HostColumnVector(DType.INT32, 0, Optional.of(0L), null, null, offsets));
+      assertEquals("offsetBuffer is only supported for STRING", ex.getMessage());
     }
   }
 
