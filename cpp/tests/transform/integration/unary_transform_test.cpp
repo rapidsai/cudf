@@ -1183,8 +1183,7 @@ return l - t * l + t * h;
 
 TEST_F(UnaryOperationIntegrationTest, Transform_ErrorHandling)
 {
-  // c = a*a*a*a
-  std::string const cuda =
+  auto cuda =
     R"***(
 __device__ cudf::errc expression (
        int* c,
