@@ -26,7 +26,7 @@ CUDF_HOST_DEVICE constexpr bool is_complex_type(cudf::type_id type)
  * @param op The AST operator to test.
  * @return true if @p op is a comparison operator, false otherwise.
  */
-bool is_comparison_operator(ast_operator op);
+[[nodiscard]] bool is_comparison_operator(ast_operator op);
 
 /**
  * @brief Gets the return type of an AST operator.
