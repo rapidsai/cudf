@@ -563,8 +563,8 @@ void reader_impl::read_compressed_data()
                                            : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
 
-  // Zero out the `PageInfo` vector as the struct has padding which remains uninitialized after
-  // `decode_page_headers` but `sort_pages` copies each PageInfo as a whole.
+  // Zero out the vector before `decode_page_headers` as `sort_pages` copies each
+  // `PageInfo` as a whole object
   auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
     total_pages, _stream, cudf::get_current_device_resource_ref());
 
