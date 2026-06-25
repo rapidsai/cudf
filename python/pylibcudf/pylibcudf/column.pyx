@@ -14,6 +14,7 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
+from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.copying cimport get_element
 from pylibcudf.libcudf.interop cimport (
@@ -1258,6 +1259,8 @@ cdef class Column:
         NotImplementedError
             If the column type is not fixed-width or string.
         """
+        cdef column_view c_self
+
         cdef type_id dtype = self.type().id()
         cdef bint large_offsets = (
             dtype == type_id.STRING
@@ -1267,8 +1270,9 @@ cdef class Column:
         cdef Stream _stream = _get_stream(None)
         cdef cudaStream_t _cs = _stream.view().value()
         cdef ArrowArray* raw_host_array_ptr = NULL
+        c_self = self.view()
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
+            raw_host_array_ptr = to_arrow_host_raw(c_self, _cs)
         try:
             return _arrow_to_pylist_impl(dtype, raw_host_array_ptr, large_offsets)
         finally:
@@ -1395,9 +1399,13 @@ cdef class Column:
         cdef unique_ptr[column] c_result
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
+
+        cdef column_view c_self
+
         mr = _get_memory_resource(mr)
+        c_self = self.view()
         with nogil:
-            c_result = make_unique[column](self.view(), _cs, mr.get_mr())
+            c_result = make_unique[column](c_self, _cs, mr.get_mr())
         return Column.from_libcudf(move(c_result), _stream, mr)
 
     cpdef uint64_t device_buffer_size(self):
@@ -1433,6 +1441,9 @@ cdef class Column:
 
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this Column."""
+
+        cdef column_view c_self
+
         if metadata is None:
             metadata = self._create_nested_column_metadata()
         elif isinstance(metadata, str):
@@ -1441,8 +1452,9 @@ cdef class Column:
         cdef column_metadata c_metadata = _metadata_to_libcudf(metadata)
 
         cdef ArrowSchema* raw_schema_ptr
+        c_self = self.view()
         with nogil:
-            raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
+            raw_schema_ptr = to_arrow_schema_raw(c_self, c_metadata)
 
         return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
 
@@ -1450,15 +1462,23 @@ cdef class Column:
         cdef ArrowArray* raw_host_array_ptr
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
+
+        cdef column_view c_self
+
+        c_self = self.view()
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
+            raw_host_array_ptr = to_arrow_host_raw(c_self, _cs)
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
     def _to_device_array(self):
         cdef ArrowDeviceArray* raw_device_array_ptr
+
+        cdef column_view c_self
+
+        c_self = self.view()
         with nogil:
-            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
+            raw_device_array_ptr = to_arrow_device_raw(c_self, self)
 
         return PyCapsule_New(
             <void*>raw_device_array_ptr,
@@ -1529,7 +1549,9 @@ cdef class ListsColumnView:
         """
         cdef Stream _stream = _get_stream(stream)
 
-        cdef column_view c_child = self.view().get_sliced_child(_stream.view().value())
+        cdef column_view c_child
+
+        c_child = self.view().get_sliced_child(_stream.view().value())
         return Column.from_column_view(c_child, self._column.child(1))
 
 
@@ -1570,7 +1592,10 @@ cdef class StructsColumnView:
         cdef Stream _stream = _get_stream(stream)
 
         cdef cudaStream_t _cs = _stream.view().value()
-        cdef column_view c_child = self.view().get_sliced_child(index, _cs)
+        cdef column_view c_child
+
+        cdef column_view c_child
+        c_child = self.view().get_sliced_child(index, _cs)
         return Column.from_column_view(c_child, self._column.child(index))
 
 
