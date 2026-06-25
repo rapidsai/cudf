@@ -1441,7 +1441,6 @@ def test_groupby_reduce_min_count(op, min_count):
     ["Int64", "UInt32", "Float64", "int64[pyarrow]", "double[pyarrow]"],
 )
 @pytest.mark.parametrize("op", ["first", "last"])
-@pytest.mark.parametrize("skipna", [True, False])
 def test_groupby_first_last_skipna(dtype, op, skipna):
     # first/last honor skipna: with skipna=True nulls are dropped, with
     # skipna=False the actual first/last element of each group is returned
@@ -1461,7 +1460,6 @@ def test_groupby_first_last_skipna(dtype, op, skipna):
 
 
 @pytest.mark.parametrize("op", ["first", "last"])
-@pytest.mark.parametrize("skipna", [True, False])
 def test_groupby_series_first_last_skipna(op, skipna):
     psr = pd.Series(
         pd.array([None, 3, None, 4, None, None], dtype="Float64"), name="b"
