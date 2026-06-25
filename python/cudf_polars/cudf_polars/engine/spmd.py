@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
 import pylibcudf as plc
+import rmm.mr
 from cudf_streaming.partition_utils import (
     packed_data_from_cudf_packed_columns,
     unpack_and_concat,
@@ -24,7 +25,6 @@ from rapidsmpf.communicator.single import (
 )
 from rapidsmpf.communicator.ucxx import barrier
 from rapidsmpf.progress_thread import ProgressThread
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.config import Options
+    from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -274,10 +275,12 @@ class SPMDEngine(StreamingEngine):
 
     **Memory resource**
 
-    ``SPMDEngine`` captures ``rmm.mr.get_current_device_resource()`` at construction,
-    wraps it in ``RmmResourceAdaptor`` (so libcudf temporary allocations and the
-    RapidsMPF ``Context`` share the same resource), sets the wrapped resource as
-    current, and restores the original on shutdown.
+    ``SPMDEngine`` captures the configured device memory resource at construction
+    and hands it to the RapidsMPF ``Context``, which wraps it in an internal
+    tracking ``RmmResourceAdaptor`` (exposed via ``BufferResource.device_mr_adaptor()``).
+    That tracking adaptor is installed as the current device resource so libcudf
+    temporary allocations and the RapidsMPF ``Context`` share the same resource;
+    the previous current resource is restored on shutdown.
 
     To use a custom allocator, call ``rmm.mr.set_current_device_resource(your_mr)``
     before constructing ``SPMDEngine``. Do not pre-wrap it in ``RmmResourceAdaptor``.
@@ -402,7 +405,6 @@ class SPMDEngine(StreamingEngine):
             "memory_resource_config", MemoryResourceConfig.default()
         )
         base_mr = mr_config.create_memory_resource()
-        mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
@@ -417,7 +419,8 @@ class SPMDEngine(StreamingEngine):
                 )
         # else: caller-provided comm; the caller retains ownership
 
-        self._mr: RmmResourceAdaptor = mr
+        self._base_mr: rmm.mr.DeviceMemoryResource = base_mr
+        self._mr: RmmResourceAdaptor  # set after `Context` is built (below).
         self._comm: Communicator | None = comm
         self._ctx: Context | None = None
         self._py_executor: ThreadPoolExecutor | None = None
@@ -427,8 +430,6 @@ class SPMDEngine(StreamingEngine):
         # TODO: there's no reason our API needs a plain dict[str, Any] rather than
         # a typed config object here.
         try:
-            exit_stack.enter_context(set_memory_resource(mr))
-
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
             if self.rapidsmpf_options is not None:
@@ -437,8 +438,14 @@ class SPMDEngine(StreamingEngine):
                 statistics = None
 
             self._ctx = Context.from_options(
-                comm.logger, mr, self.rapidsmpf_options, statistics
+                comm.logger, base_mr, self.rapidsmpf_options, statistics
             )
+            # `Context` wraps `base_mr` in its `BufferResource`'s internal
+            # tracking `RmmResourceAdaptor`. Capture it as `self._mr` and
+            # install it as the current device resource so libcudf temporary
+            # allocations share the same resource and are tracked.
+            self._mr = self._ctx.br().device_mr_adaptor()
+            exit_stack.enter_context(set_memory_resource(self._mr))
             exit_stack.callback(self._cleanup_ctx)
 
             quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
@@ -591,8 +598,14 @@ class SPMDEngine(StreamingEngine):
             statistics = None
 
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, rapidsmpf_options, statistics
+            self._comm.logger, self._base_mr, rapidsmpf_options, statistics
         )
+        # Refresh `self._mr` and the current device resource to the new
+        # Context's tracking adaptor (the original adaptor was tied to the
+        # now-defunct Context). The original ``set_memory_resource`` exit
+        # callback still restores the pre-engine MR at engine shutdown.
+        self._mr = self._ctx.br().device_mr_adaptor()
+        rmm.mr.set_current_device_resource(self._mr)
 
         quent_context = synchronize_quent_context(
             comm=self._comm,
