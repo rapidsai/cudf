@@ -19,6 +19,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl.expressions.base import Col
 from cudf_polars.dsl.expressions.binaryop import BinOp
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.base import IOPartitionFlavor
 from cudf_polars.streaming.explain import (
     PartitionPlanRow,
     _fmt_partition_bytes,
@@ -770,7 +771,7 @@ def test_collect_partition_plan_fused(tmp_path, df):
     assert len(rows) == 1
     row = rows[0]
     assert row.query == 1
-    assert row.flavor == "FUSED_FILES"
+    assert row.flavor == IOPartitionFlavor.FUSED_FILES
     assert row.factor >= 1
     assert row.files == row.partitions * row.factor
     assert row.partitions > 0
@@ -791,7 +792,7 @@ def test_collect_partition_plan_split(tmp_path, df):
     assert len(rows) == 1
     row = rows[0]
     assert row.query == 7
-    assert row.flavor == "SPLIT_FILES"
+    assert row.flavor == IOPartitionFlavor.SPLIT_FILES
     assert row.factor > 1
     assert row.files == row.partitions // row.factor
     assert row.task_bytes == row.projected_bytes // row.factor
@@ -833,7 +834,7 @@ _SAMPLE_ROWS = [
     PartitionPlanRow(
         query=1,
         table="lineitem",
-        flavor="SPLIT_FILES",
+        flavor=IOPartitionFlavor.SPLIT_FILES,
         factor=2,
         files=120,
         projected_bytes=2_000_000_000,
@@ -843,7 +844,7 @@ _SAMPLE_ROWS = [
     PartitionPlanRow(
         query=1,
         table="orders",
-        flavor="FUSED_FILES",
+        flavor=IOPartitionFlavor.FUSED_FILES,
         factor=1,
         files=60,
         projected_bytes=500_000_000,
@@ -853,7 +854,7 @@ _SAMPLE_ROWS = [
     PartitionPlanRow(
         query=2,
         table="lineitem",
-        flavor="FUSED_FILES",
+        flavor=IOPartitionFlavor.FUSED_FILES,
         factor=1,
         files=60,
         projected_bytes=1_400_000_000,
@@ -901,10 +902,10 @@ def test_fmt_partition_bytes(b, expected):
 @pytest.mark.parametrize(
     "flavor,factor,expected",
     [
-        ("SPLIT_FILES", 3, "3 tasks/file"),
-        ("FUSED_FILES", 1, "1 file/task"),
-        ("FUSED_FILES", 4, "4 files/task"),
-        ("SINGLE_FILE", 1, "1"),
+        (IOPartitionFlavor.SPLIT_FILES, 3, "3 tasks/file"),
+        (IOPartitionFlavor.FUSED_FILES, 1, "1 file/task"),
+        (IOPartitionFlavor.FUSED_FILES, 4, "4 files/task"),
+        (IOPartitionFlavor.SINGLE_FILE, 1, "1"),
     ],
 )
 def test_factor_str(flavor, factor, expected):

@@ -35,6 +35,7 @@ from cudf_polars.dsl.ir import (
 )
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.streaming.base import IOPartitionFlavor
 from cudf_polars.streaming.io import StreamingScan, scan_partition_plan
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.shuffle import Shuffle
@@ -59,7 +60,7 @@ class PartitionPlanRow:
 
     query: int
     table: str
-    flavor: str
+    flavor: IOPartitionFlavor
     factor: int
     files: int
     projected_bytes: int
@@ -137,24 +138,16 @@ def collect_partition_plan(
     q: pl.LazyFrame,
     engine: pl.GPUEngine,
     q_id: int,
-    *,
-    executor: concurrent.futures.Executor | None = None,
 ) -> list[PartitionPlanRow]:
     """
     Return one PartitionPlanRow per unique StreamingScan in the physical plan.
 
     Deduplicates scans that appear multiple times due to subquery structure.
     """
-    cm: contextlib.AbstractContextManager[concurrent.futures.Executor]
-    if executor is None:
-        cm = executor = concurrent.futures.ThreadPoolExecutor()
-    else:
-        cm = contextlib.nullcontext(executor)
-
     config = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
 
-    with cm:
+    with concurrent.futures.ThreadPoolExecutor() as executor:
         stats = collect_statistics(ir, config, executor)
     lowered_ir, partition_info = lower_ir_graph(ir, config, stats)
 
@@ -183,15 +176,15 @@ def collect_partition_plan(
         )
         partitions = partition_info[node].count
         factor = plan.factor
-        flavor = plan.flavor.name
+        flavor = plan.flavor
 
         match flavor:
-            case "SPLIT_FILES":
+            case IOPartitionFlavor.SPLIT_FILES:
                 files = partitions // factor if factor > 0 else partitions
                 task_bytes = (
                     projected_bytes // factor if factor > 0 else projected_bytes
                 )
-            case "FUSED_FILES":
+            case IOPartitionFlavor.FUSED_FILES:
                 files = partitions * factor
                 task_bytes = projected_bytes * factor
             case _:
@@ -236,9 +229,9 @@ def _fmt_partition_bytes(b: int) -> str:
 def factor_str(row: PartitionPlanRow) -> str:
     """Format the factor field with units appropriate to the scan flavor."""
     match row.flavor:
-        case "SPLIT_FILES":
+        case IOPartitionFlavor.SPLIT_FILES:
             return f"{row.factor} tasks/file"
-        case "FUSED_FILES":
+        case IOPartitionFlavor.FUSED_FILES:
             unit = "file" if row.factor == 1 else "files"
             return f"{row.factor} {unit}/task"
         case _:
@@ -261,7 +254,6 @@ def format_partition_plan_table(rows: list[PartitionPlanRow]) -> str:
         "Partitions",
     ]
 
-    flavor_short = {"SPLIT_FILES": "SPLIT", "FUSED_FILES": "FUSED"}
     formatted: list[list[str]] = []
     prev_q: int | None = None
     for row in rows:
@@ -271,7 +263,7 @@ def format_partition_plan_table(rows: list[PartitionPlanRow]) -> str:
             [
                 q_str,
                 row.table,
-                flavor_short.get(row.flavor, row.flavor),
+                row.flavor.name,
                 factor_str(row),
                 str(row.files),
                 _fmt_partition_bytes(row.projected_bytes),
