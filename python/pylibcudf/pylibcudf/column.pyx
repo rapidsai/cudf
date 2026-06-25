@@ -533,7 +533,7 @@ cdef class Column:
         else:
             raise ValueError("Invalid Arrow-like object")
 
-    cdef column_view view(self) nogil:
+    cdef column_view view(self):
         """Generate a libcudf column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -545,37 +545,26 @@ cdef class Column:
         cdef size_t data_ptr
         cdef size_t mask_ptr
 
-        with gil:
-            if self._data is not None:
-                data_ptr = <size_t>self._data.ptr
-                data = <void*>data_ptr
-            if self._mask is not None:
-                mask_ptr = <size_t>self._mask.ptr
-                null_mask = <bitmask_type*>mask_ptr
+        if self._data is not None:
+            data_ptr = <size_t>self._data.ptr
+            data = <void*>data_ptr
+        if self._mask is not None:
+            mask_ptr = <size_t>self._mask.ptr
+            null_mask = <bitmask_type*>mask_ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
         cdef vector[column_view] c_children
-        with gil:
-            if self._children is not None:
-                for child in self._children:
-                    # Need to cast to Column here so that Cython knows that
-                    # `view` returns a typed object, not a Python object. We
-                    # cannot use a typed variable for `child` because cdef
-                    # declarations cannot be inside nested blocks (`if` or
-                    # `with` blocks) so we cannot declare it inside the `with
-                    # gil` block, but we also cannot declare it outside the
-                    # `with gil` block because it is erroneous to declare a
-                    # variable of a cdef class type in a `nogil` context (which
-                    # this whole function is).
-                    c_children.push_back((<Column> child).view())
+        if self._children is not None:
+            for child in self._children:
+                c_children.push_back((<Column> child).view())
 
         return column_view(
             self._data_type.c_obj, self._size, data, null_mask,
             self._null_count, self._offset, c_children
         )
 
-    cdef mutable_column_view mutable_view(self) nogil:
+    cdef mutable_column_view mutable_view(self):
         """Generate a libcudf mutable_column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -587,20 +576,18 @@ cdef class Column:
         cdef size_t data_ptr
         cdef size_t mask_ptr
 
-        with gil:
-            if self._data is not None:
-                data_ptr = <size_t>self._data.ptr
-                data = <void*>data_ptr
-            if self._mask is not None:
-                mask_ptr = <size_t>self._mask.ptr
-                null_mask = <bitmask_type*>mask_ptr
+        if self._data is not None:
+            data_ptr = <size_t>self._data.ptr
+            data = <void*>data_ptr
+        if self._mask is not None:
+            mask_ptr = <size_t>self._mask.ptr
+            null_mask = <bitmask_type*>mask_ptr
 
         cdef vector[mutable_column_view] c_children
-        with gil:
-            if self._children is not None:
-                for child in self._children:
-                    # See the view method for why this needs to be cast.
-                    c_children.push_back((<Column> child).mutable_view())
+        if self._children is not None:
+            for child in self._children:
+                # See the view method for why this needs to be cast.
+                c_children.push_back((<Column> child).mutable_view())
 
         return mutable_column_view(
             self._data_type.c_obj, self._size, data, null_mask,
@@ -1517,7 +1504,7 @@ cdef class ListsColumnView:
         """The offsets column of the underlying list column."""
         return self._column.child(0)
 
-    cdef lists_column_view view(self) nogil:
+    cdef lists_column_view view(self):
         """Generate a libcudf lists_column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -1555,7 +1542,7 @@ cdef class StructsColumnView:
 
     __hash__ = None
 
-    cdef structs_column_view view(self) nogil:
+    cdef structs_column_view view(self):
         """Generate a libcudf structs_column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when

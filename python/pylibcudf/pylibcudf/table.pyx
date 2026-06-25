@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -215,7 +215,7 @@ cdef class Table:
         else:
             raise ValueError("Invalid Arrow-like object")
 
-    cdef table_view view(self) nogil:
+    cdef table_view view(self):
         """Generate a libcudf table_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -226,9 +226,8 @@ cdef class Table:
         # self._columns whenever new columns are added or columns are removed.
         cdef vector[column_view] c_columns
 
-        with gil:
-            for col in self._columns:
-                c_columns.push_back((<Column> col).view())
+        for col in self._columns:
+            c_columns.push_back((<Column> col).view())
 
         return table_view(c_columns)
 
