@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,6 +24,7 @@
 #include <cuda/std/tuple>
 
 #include <bitset>
+#include <format>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
@@ -523,13 +524,11 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
                                          _sources,
                                          options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas())
+                                         has_mismatched_pq_schema_selection(options))
                                      : std::make_unique<aggregate_reader_metadata>(
                                          std::forward<std::vector<FileMetaData>>(file_metadatas),
                                          options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas());
+                                         has_mismatched_pq_schema_selection(options));
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -832,11 +831,23 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   } else {
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
+    // In mismatched mode, `ignore_missing_columns` is not honored: an out-of-range index refers to
+    // a required column absent from the reference source and must throw.
+    auto const validate_required_columns =
+      has_mismatched_pq_schema_selection(options) and _metadata->get_num_sources() > 1;
     for (auto const index : options.get_column_indices().value_or(std::vector<cudf::size_type>{})) {
       auto const is_valid_index =
         std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
-      CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
-                   "Encountered an invalid col index in the top-level column selection");
+      if (validate_required_columns) {
+        CUDF_EXPECTS(is_valid_index,
+                     std::format("Selected column index {} is out of range; when "
+                                 "allow_mismatched_pq_schemas is enabled, every selected column "
+                                 "must be present in each Parquet source",
+                                 index));
+      } else {
+        CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
+                     "Encountered an invalid col index in the top-level column selection");
+      }
       if (is_valid_index) {
         col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
       }

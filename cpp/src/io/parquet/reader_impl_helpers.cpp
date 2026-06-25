@@ -509,6 +509,12 @@ aggregate_reader_metadata::collect_keyval_metadata() const
   return kv_maps;
 }
 
+bool has_mismatched_pq_schema_selection(cudf::io::parquet_reader_options const& options)
+{
+  return (options.get_column_names().has_value() or options.get_column_indices().has_value()) and
+         options.is_enabled_allow_mismatched_pq_schemas();
+}
+
 std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::init_schema_idx_maps(
   bool const has_cols_from_mismatched_srcs) const
 {
@@ -1831,8 +1837,9 @@ aggregate_reader_metadata::select_columns(
       // the specific column paths in the schema trees. Raise an invalid_argument error if the
       // schema elements don't match.
       CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
-                   "Encountered mismatching SchemaElement properties for a column in "
-                   "the selected path",
+                   std::format("Column '{}' has an incompatible data type or schema (SchemaElement "
+                               "properties) across the Parquet sources",
+                               src_schema_elem.name),
                    std::invalid_argument);
 
       // Get the schema_idx_map for this data source (pfm)
@@ -1845,9 +1852,12 @@ aggregate_reader_metadata::select_columns(
       if (src_schema_elem.is_stub()) {
         // Check if dst_schema_elem is also a stub i.e. has num_children == 1 that we didn't
         // previously check. Raise an invalid_argument error if dst_schema_elem is not a stub.
-        CUDF_EXPECTS(dst_schema_elem.is_stub(),
-                     "Encountered mismatching schemas for stub.",
-                     std::invalid_argument);
+        CUDF_EXPECTS(
+          dst_schema_elem.is_stub(),
+          std::format(
+            "Stub column '{}' has an incompatible nested structure across the Parquet sources",
+            src_schema_elem.name),
+          std::invalid_argument);
         auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
         return map_column(child_col_name_info,
                           src_schema_elem.children_idx[0],
@@ -1860,10 +1870,12 @@ aggregate_reader_metadata::select_columns(
       if (col_name_info == nullptr or col_name_info->children.empty()) {
         // Check the number of children to be equal to be mapped. An out_of_range error if the
         // number of children isn't equal.
-        CUDF_EXPECTS(src_schema_elem.num_children == dst_schema_elem.num_children,
-                     "Encountered mismatching number of children for a "
-                     "column in the selected path",
-                     std::out_of_range);
+        CUDF_EXPECTS(
+          src_schema_elem.num_children == dst_schema_elem.num_children,
+          std::format(
+            "Column '{}' has a different number of child columns across the Parquet sources",
+            src_schema_elem.name),
+          std::out_of_range);
 
         std::for_each(cuda::counting_iterator<int32_t>{0},
                       cuda::counting_iterator{src_schema_elem.num_children},
@@ -1885,7 +1897,10 @@ aggregate_reader_metadata::select_columns(
             // paths to align up. An out_of_range error otherwise.
             CUDF_EXPECTS(
               find_schema_child(dst_schema_elem, child_col_name_info.name, pfm_idx) != -1,
-              "Encountered mismatching schema tree depths across data sources",
+              std::format(
+                "Nested column '{}' is present in the first Parquet source but missing from "
+                "another source",
+                child_col_name_info.name),
               std::out_of_range);
             map_column(&child_col_name_info,
                        find_schema_child(src_schema_elem, child_col_name_info.name),
@@ -1946,6 +1961,9 @@ aggregate_reader_metadata::select_columns(
     // Find which of the selected paths are valid and get their schema index
     std::vector<path_info> valid_selected_paths;
     auto const empty_names = std::vector<std::string>{};
+    // In mismatched mode (schema_idx_maps is non-empty), `ignore_missing_columns` is not honored:
+    // a required column missing from the zeroth (reference) source must throw.
+    bool const validate_required_columns = not schema_idx_maps.empty();
     // vector reference pushback for select column and/or filter names passed. Use empty names
     // reference if the no filter column names provided.
     std::vector<std::reference_wrapper<std::vector<std::string> const>> const column_names{
@@ -1957,11 +1975,21 @@ aggregate_reader_metadata::select_columns(
             return are_column_paths_equal(
               valid_path.full_path, selected_path, case_sensitive_names);
           });
+        auto const column_found = found_path != all_paths.end();
         // Ensure that selected path matches a path in all_paths
-        CUDF_EXPECTS(found_path != all_paths.end() or ignore_missing_columns,
-                     "Encountered non-existent column in selected path",
-                     std::invalid_argument);
-        if (found_path != all_paths.end()) {
+        if (validate_required_columns) {
+          CUDF_EXPECTS(column_found,
+                       std::format("Column '{}' is not present in all Parquet sources; when "
+                                   "allow_mismatched_pq_schemas is enabled, every selected or "
+                                   "filter column must be present in each source",
+                                   selected_path),
+                       std::invalid_argument);
+        } else {
+          CUDF_EXPECTS(column_found or ignore_missing_columns,
+                       "Encountered non-existent column in selected path",
+                       std::invalid_argument);
+        }
+        if (column_found) {
           // Use the file's actual path (preserving original case) for the valid_selected_paths
           valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
         }
@@ -2049,7 +2077,9 @@ aggregate_reader_metadata::select_columns(
                           // tree. An out_of_range error is thrown otherwise.
                           CUDF_EXPECTS(
                             find_schema_child(dst_root, col.name, pfm_idx) != -1,
-                            "Encountered mismatching schema tree depths across data sources",
+                            std::format("Column '{}' is present in the first Parquet source but "
+                                        "missing from another source",
+                                        col.name),
                             std::out_of_range);
                           map_column(&col,
                                      top_level_col_schema_idx,

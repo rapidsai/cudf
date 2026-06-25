@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -4877,4 +4877,129 @@ TEST_F(ParquetReaderTest, MismatchedSchemaFilterOnlyColumnCollision)
   cudf::table_view const expected{{exp_id}};
   auto const result = cudf::io::read_parquet(opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetReaderTest, MismatchedSchemaRequiredColumnValidation)
+{
+  // With allow_mismatched_pq_schemas, every required column (selected or filter-referenced,
+  // including index-resolved selections) must exist and be schema-compatible in all sources;
+  // otherwise the read is rejected even when ignore_missing_columns is set.
+  using i64 = column_wrapper<int64_t>;
+  using f64 = column_wrapper<double>;
+
+  // `price < 100` filter, reused by the filter-only cases.
+  auto value  = cudf::numeric_scalar<double>(100.0);
+  auto lit    = cudf::ast::literal(value);
+  auto col    = cudf::ast::column_name_reference("price");
+  auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
+
+  // `price` is absent from the first (reference) source.
+  {
+    auto const id0 = i64{1, 2, 3};
+    auto const path0 =
+      write_parquet_temp_file(cudf::table_view{{id0}}, "MismatchReqAbsentFirst0.parquet", {"id"});
+    auto const id1    = i64{4, 5, 6};
+    auto const price1 = f64{10.0, 20.0, 30.0};
+    auto const path1  = write_parquet_temp_file(
+      cudf::table_view{{id1, price1}}, "MismatchReqAbsentFirst1.parquet", {"id", "price"});
+
+    // A selected column absent from the first source is rejected, regardless of
+    // ignore_missing_columns.
+    for (auto const ignore_missing : {true, false}) {
+      SCOPED_TRACE(ignore_missing ? "ignore_missing_columns=true" : "ignore_missing_columns=false");
+      auto const opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+          .allow_mismatched_pq_schemas(true)
+          .ignore_missing_columns(ignore_missing)
+          .column_names({"id", "price"})
+          .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+    }
+
+    // A filter-only column absent from the first source is rejected, regardless of
+    // ignore_missing_columns.
+    for (auto const ignore_missing : {true, false}) {
+      SCOPED_TRACE(ignore_missing ? "ignore_missing_columns=true" : "ignore_missing_columns=false");
+      auto const opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+          .allow_mismatched_pq_schemas(true)
+          .ignore_missing_columns(ignore_missing)
+          .column_names({"id"})
+          .filter(filter)
+          .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+    }
+
+    // An index past the first source's column count is rejected.
+    {
+      auto const opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+          .allow_mismatched_pq_schemas(true)
+          .ignore_missing_columns(true)
+          .column_indices({0, 1})
+          .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), cudf::logic_error);
+    }
+  }
+
+  // `price` is present in the first source but absent from a later source.
+  {
+    auto const id0    = i64{1, 2, 3};
+    auto const price0 = f64{10.0, 20.0, 30.0};
+    auto const path0  = write_parquet_temp_file(
+      cudf::table_view{{id0, price0}}, "MismatchReqAbsentLater0.parquet", {"id", "price"});
+    auto const id1 = i64{4, 5, 6};
+    auto const path1 =
+      write_parquet_temp_file(cudf::table_view{{id1}}, "MismatchReqAbsentLater1.parquet", {"id"});
+
+    // A selected column absent from a later source is rejected.
+    {
+      auto const opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+          .allow_mismatched_pq_schemas(true)
+          .column_names({"id", "price"})
+          .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::out_of_range);
+    }
+
+    // A filter-only column absent from a later source is rejected.
+    {
+      auto const opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+          .allow_mismatched_pq_schemas(true)
+          .column_names({"id"})
+          .filter(filter)
+          .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::out_of_range);
+    }
+
+    // An index resolving to a column absent from a later source is rejected.
+    {
+      auto const opts =
+        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+          .allow_mismatched_pq_schemas(true)
+          .column_indices({0, 1})
+          .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::out_of_range);
+    }
+  }
+
+  // `price` is present in all sources but with an incompatible type (double vs int64).
+  {
+    auto const id0    = i64{1, 2, 3};
+    auto const price0 = f64{10.0, 20.0, 30.0};
+    auto const path0  = write_parquet_temp_file(
+      cudf::table_view{{id0, price0}}, "MismatchReqType0.parquet", {"id", "price"});
+    auto const id1    = i64{4, 5, 6};
+    auto const price1 = i64{40, 50, 60};
+    auto const path1  = write_parquet_temp_file(
+      cudf::table_view{{id1, price1}}, "MismatchReqType1.parquet", {"id", "price"});
+
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+        .allow_mismatched_pq_schemas(true)
+        .column_names({"id", "price"})
+        .build();
+    EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+  }
 }

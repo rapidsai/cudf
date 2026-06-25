@@ -142,6 +142,13 @@ struct surviving_row_group_metrics {
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
 
+/**
+ * @brief Whether columns are explicitly selected (by names or indices) with
+ * `allow_mismatched_pq_schemas` enabled, requiring per-source schema index maps
+ */
+[[nodiscard]] bool has_mismatched_pq_schema_selection(
+  cudf::io::parquet_reader_options const& options);
+
 class aggregate_reader_metadata {
  protected:
   std::vector<metadata> per_file_metadata;

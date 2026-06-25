@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -71,7 +71,7 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   _metadata = std::make_unique<aggregate_reader_metadata>(
     footer_bytes,
     options.is_enabled_use_arrow_schema(),
-    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+    parquet::detail::has_mismatched_pq_schema_selection(options));
 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
@@ -82,7 +82,7 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   _metadata = std::make_unique<aggregate_reader_metadata>(
     parquet_metadatas,
     options.is_enabled_use_arrow_schema(),
-    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+    parquet::detail::has_mismatched_pq_schema_selection(options));
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
