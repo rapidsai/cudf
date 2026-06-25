@@ -298,6 +298,14 @@ class NumericalColumn(NumericalBaseColumn):
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
                 )
+            if pa.types.is_temporal(scalar.type):
+                # Reject datetime64/timedelta64 scalars (including NaT)
+                # assigned into a numeric column. pyarrow would otherwise
+                # silently cast timestamp[ns]/duration[ns] to int64 via the
+                # underlying integer representation.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
             return pa_scalar_to_plc_scalar(
                 scalar.cast(cudf_dtype_to_pa_type(self.dtype))
             )
@@ -306,6 +314,13 @@ class NumericalColumn(NumericalBaseColumn):
             if col.dtype.kind == "b" and self.dtype.kind != "b":
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
+                )
+            if col.dtype.kind in "mM":
+                # See the temporal-scalar rejection above: assigning a
+                # datetime64/timedelta64 array into a numeric column is
+                # invalid.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
                 )
             if (
                 cudf.get_option("mode.pandas_compatible")
@@ -1117,7 +1132,7 @@ class NumericalColumn(NumericalBaseColumn):
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
 
-                return (min_ >= lower_) and (col.max() < upper_)
+                return (min_ >= lower_) and (col.max() <= upper_)
 
         # want to cast int to uint
         elif self_dtype_numpy.kind == "i" and to_dtype_numpy.kind == "u":
@@ -1125,7 +1140,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(to_dtype_numpy).max
 
             return (self.min() >= 0) and (
-                (i_max_ <= u_max_) or (self.max() < u_max_)
+                (i_max_ <= u_max_) or (self.max() <= u_max_)
             )
 
         # want to cast uint to int
@@ -1133,7 +1148,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(self_dtype_numpy).max
             i_max_ = np.iinfo(to_dtype_numpy).max
 
-            return (u_max_ <= i_max_) or (self.max() < i_max_)
+            return (u_max_ <= i_max_) or (self.max() <= i_max_)
 
         # want to cast int to float
         elif (

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document TemporalFunction to remove noqa
 # ruff: noqa: D101
@@ -10,9 +10,11 @@ import re
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
 
     from polars import polars  # type: ignore[attr-defined]
 
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expressions.literal import Literal
 
 __all__ = ["TemporalFunction"]
@@ -121,6 +123,7 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
     }
@@ -156,7 +159,15 @@ class TemporalFunction(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
-        if self.name is TemporalFunction.Name.Truncate:
+        if self.name is TemporalFunction.Name.TimeStamp:
+            (column,) = columns
+            (time_unit,) = self.options
+            # Rescale the timestamp to the requested resolution
+            df_stream = df.stream
+            return column.astype(
+                DataType(pl.Datetime(time_unit)), stream=df_stream
+            ).astype(self.dtype, stream=df_stream)
+        elif self.name is TemporalFunction.Name.Truncate:
             (column, _) = columns
             return Column(
                 plc.datetime.floor_datetimes(
