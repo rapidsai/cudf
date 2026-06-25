@@ -1,0 +1,100 @@
+Task 5 nogil view audit
+Generated: 2026-06-25T19:33:21.302030+00:00
+Scope: strings/convert and strings/split listed .pyx files
+Rule: no pylibcudf Column .view() calls inside with nogil; stream.view/_stream.view and mr.get_mr remain allowed in nogil.
+
+python/pylibcudf/pylibcudf/strings/convert/convert_booleans.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=2
+    line 61: mr.get_mr()
+    line 116: mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/convert/convert_datetime.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=3
+    line 65: mr.get_mr()
+    line 115: mr.get_mr()
+    line 159: mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/convert/convert_durations.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=2
+    line 66: mr.get_mr()
+    line 115: mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/convert/convert_fixed_point.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=3
+    line 56: mr.get_mr()
+    line 91: c_input, _cs, mr.get_mr()
+    line 139: mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/convert/convert_floats.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=3
+    line 58: mr.get_mr()
+    line 94: c_floats, _cs, mr.get_mr()
+    line 128: c_input, _cs, mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/convert/convert_integers.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=7
+    line 63: mr.get_mr()
+    line 103: mr.get_mr()
+    line 152: mr.get_mr()
+    line 162: mr.get_mr()
+    line 206: mr.get_mr()
+    line 244: mr.get_mr()
+    line 284: mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/convert/convert_ipv4.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=3
+    line 45: c_input, _cs, mr.get_mr()
+    line 80: c_integers, _cs, mr.get_mr()
+    line 113: c_result = cpp_convert_ipv4.is_ipv4(c_input, _cs, mr.get_mr())
+
+python/pylibcudf/pylibcudf/strings/convert/convert_lists.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=1
+    line 86: mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/convert/convert_urls.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=2
+    line 44: c_input, _cs, mr.get_mr()
+    line 77: c_input, _cs, mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/split/partition.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=2
+    line 70: mr.get_mr()
+    line 121: mr.get_mr()
+
+python/pylibcudf/pylibcudf/strings/split/split.pyx
+  DISALLOWED_VIEW_INSIDE_NOGIL=0
+  ALLOWED_RMM_VIEW_INSIDE_NOGIL=0
+  MR_GET_MR_INSIDE_NOGIL=9
+    line 80: mr.get_mr()
+    line 134: mr.get_mr()
+    line 183: mr.get_mr()
+    line 234: mr.get_mr()
+    line 282: mr.get_mr()
+    line 330: mr.get_mr()
+    line 377: mr.get_mr()
+    line 421: mr.get_mr()
+    line 446: mr.get_mr()
+
+TOTAL_DISALLOWED=0
+TOTAL_ALLOWED_RMM_VIEW=0
+TOTAL_MR_GET_MR_INSIDE_NOGIL=37
