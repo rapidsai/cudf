@@ -562,12 +562,11 @@ void reader_impl::read_compressed_data()
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
                                            : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
-  rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
-  // `count_page_headers` is an upper bound; the decode kernel does not write the
-  // over-allocated tail slots. `sort_pages` later copies the whole array, so zero
-  // it first to avoid reading those uninitialized slots.
-  CUDF_CUDA_TRY(cudaMemsetAsync(
-    unsorted_pages.data(), 0, unsorted_pages.size() * sizeof(PageInfo), _stream.value()));
+
+  // Zero out the `PageInfo` vector as the struct has padding which remains uninitialized after
+  // `decode_page_headers` but `sort_pages` copies each PageInfo as a whole.
+  auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+    total_pages, _stream, cudf::get_current_device_resource_ref());
 
   // decoding of column/page information
   decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);
