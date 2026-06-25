@@ -68,11 +68,8 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
   parquet_reader_options const& options)
 {
-  auto const has_cols_from_mismatched_srcs =
-    (options.get_column_names().has_value() or options.get_column_field_ids().has_value()) and
-    options.is_enabled_allow_mismatched_pq_schemas();
   _metadata = std::make_unique<aggregate_reader_metadata>(
-    footer_bytes, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_srcs);
+    footer_bytes, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_sources(options));
 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
@@ -80,11 +77,10 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<FileMetaData const> parquet_metadatas, parquet_reader_options const& options)
 {
-  auto const has_cols_from_mismatched_srcs =
-    (options.get_column_names().has_value() or options.get_column_field_ids().has_value()) and
-    options.is_enabled_allow_mismatched_pq_schemas();
-  _metadata = std::make_unique<aggregate_reader_metadata>(
-    parquet_metadatas, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_srcs);
+  _metadata =
+    std::make_unique<aggregate_reader_metadata>(parquet_metadatas,
+                                                options.is_enabled_use_arrow_schema(),
+                                                has_cols_from_mismatched_sources(options));
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 

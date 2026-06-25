@@ -363,10 +363,26 @@ class reader_impl {
    */
   void compute_output_chunks_for_subpass();
 
+  /**
+   * @brief Check if there is more work to be done
+   */
   [[nodiscard]] bool has_more_work() const
   {
     return _file_itm_data.num_passes() > 0 &&
            _file_itm_data._current_input_pass < _file_itm_data.num_passes();
+  }
+
+  /**
+   * @brief Check if the user has specified columns from mismatched sources
+   *
+   * @param options Reader options
+   * @return True if the user has specified columns from mismatched sources
+   */
+  [[nodiscard]] inline bool has_cols_from_mismatched_sources(parquet_reader_options const& options)
+  {
+    return (options.get_column_names().has_value() or
+            options.get_column_field_ids().has_value()) and
+           options.is_enabled_allow_mismatched_pq_schemas();
   }
 
  protected:

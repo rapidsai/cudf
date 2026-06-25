@@ -522,16 +522,14 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
 
-  auto const has_cols_from_mismatched_srcs =
-    (options.get_column_names().has_value() or options.get_column_field_ids().has_value()) and
-    options.is_enabled_allow_mismatched_pq_schemas();
-  _metadata = file_metadatas.empty()
-                ? std::make_unique<aggregate_reader_metadata>(
-                    _sources, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_srcs)
-                : std::make_unique<aggregate_reader_metadata>(
-                    std::forward<std::vector<FileMetaData>>(file_metadatas),
-                    options.is_enabled_use_arrow_schema(),
-                    has_cols_from_mismatched_srcs);
+  _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
+                                         _sources,
+                                         options.is_enabled_use_arrow_schema(),
+                                         has_cols_from_mismatched_sources(options))
+                                     : std::make_unique<aggregate_reader_metadata>(
+                                         std::forward<std::vector<FileMetaData>>(file_metadatas),
+                                         options.is_enabled_use_arrow_schema(),
+                                         has_cols_from_mismatched_sources(options));
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -832,12 +830,9 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
                  max_allowed_col_selection_modes,
                "Parquet reader encountered more than one column selection mode");
 
-  // No column selection specified. Return nullopt indicating all columns to be selected
-  if (not has_column_names and not has_column_indices and not has_column_field_ids) {
-    return std::nullopt;
-  } else if (has_column_names) {
-    return options.get_column_names();
-  } else if (has_column_indices) {
+  if (has_column_names) { return options.get_column_names(); }
+
+  if (has_column_indices) {
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
     for (auto const index : options.get_column_indices().value()) {
@@ -850,7 +845,9 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
       }
     }
     return std::make_optional(std::move(col_names));
-  } else {
+  }
+
+  if (has_column_field_ids) {
     std::vector<std::string> col_names;
     auto const& schema_tree = _metadata->get_schema_tree();
     for (auto const field_id : options.get_column_field_ids().value()) {
@@ -868,6 +865,9 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
     }
     return std::make_optional(std::move(col_names));
   }
+
+  // No column selection specified. Return nullopt indicating all columns to be selected.
+  return std::nullopt;
 }
 
 void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>& out_columns)
