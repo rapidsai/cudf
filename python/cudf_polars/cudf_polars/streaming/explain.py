@@ -14,10 +14,15 @@ from collections.abc import Mapping, Sequence
 from itertools import groupby
 from typing import TYPE_CHECKING, Any, Self, TypeAlias
 
-import cudf_polars.dsl.expressions.binaryop
-import cudf_polars.dsl.expressions.literal
-from cudf_polars.dsl.expressions.base import NamedExpr
+import pylibcudf as plc
+
+from cudf_polars.dsl.expressions.base import Col, ColRef, Expr, NamedExpr
+from cudf_polars.dsl.expressions.binaryop import BinOp
+from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.expressions.ternary import Ternary
+from cudf_polars.dsl.expressions.unary import Cast, UnaryFunction
 from cudf_polars.dsl.ir import (
+    ConditionalJoin,
     Filter,
     GroupBy,
     HStack,
@@ -257,6 +262,51 @@ def _(ir: Join, *, offset: str = "") -> str:
     return _repr_header(offset, f"JOIN {ir.options[0]} {left_on} {right_on}", ir.schema)
 
 
+_BinaryOperator = plc.binaryop.BinaryOperator
+_BINOP_SYMBOLS: dict[_BinaryOperator, str] = {
+    _BinaryOperator.EQUAL: "==",
+    _BinaryOperator.NOT_EQUAL: "!=",
+    _BinaryOperator.LESS: "<",
+    _BinaryOperator.LESS_EQUAL: "<=",
+    _BinaryOperator.GREATER: ">",
+    _BinaryOperator.GREATER_EQUAL: ">=",
+    _BinaryOperator.LOGICAL_AND: "AND",
+    _BinaryOperator.NULL_LOGICAL_AND: "AND",
+    _BinaryOperator.LOGICAL_OR: "OR",
+    _BinaryOperator.NULL_LOGICAL_OR: "OR",
+}
+
+
+def _predicate_to_str(expr: Expr) -> str:
+    if isinstance(expr, Col):
+        return expr.name
+    if isinstance(expr, ColRef):
+        col = expr.children[0]
+        assert isinstance(col, Col)
+        return col.name
+    if isinstance(expr, Literal):
+        return repr(expr.value)
+    if isinstance(expr, Cast):
+        return _predicate_to_str(expr.children[0])
+    if isinstance(expr, BinOp):
+        left, right = expr.children
+        op = _BINOP_SYMBOLS.get(expr.op, expr.op.name)
+        return f"({_predicate_to_str(left)} {op} {_predicate_to_str(right)})"
+    if isinstance(expr, UnaryFunction):
+        (child,) = expr.children
+        return f"{expr.name}({_predicate_to_str(child)})"
+    if isinstance(expr, Ternary):
+        when, then, otherwise = expr.children
+        return f"when({_predicate_to_str(when)}).then({_predicate_to_str(then)}).otherwise({_predicate_to_str(otherwise)})"
+    return type(expr).__name__
+
+
+@_repr_ir.register
+def _(ir: ConditionalJoin, *, offset: str = "") -> str:
+    pred = _predicate_to_str(ir.predicate)
+    return _repr_header(offset, f"CONDITIONALJOIN {pred}", ir.schema)
+
+
 @_repr_ir.register
 def _(ir: Sort, *, offset: str = "") -> str:
     by = tuple(ne.name for ne in ir.by)
@@ -344,11 +394,11 @@ def _serialize_expr(expr: Expr | NamedExpr) -> dict[str, Serializable]:
     match expr:
         case NamedExpr(name=name, value=value):
             return {"type": "NamedExpr", "name": name, "value": _serialize_expr(value)}
-        case cudf_polars.dsl.expressions.base.Col(name=name):
+        case Col(name=name):
             return {"type": "Col", "name": name}
-        case cudf_polars.dsl.expressions.literal.Literal(value=value):
+        case Literal(value=value):
             return {"type": "Literal", "value": _serialize_literal(value)}
-        case cudf_polars.dsl.expressions.binaryop.BinOp():
+        case BinOp():
             return {
                 "op": expr.op.name,
                 "left": _serialize_expr(expr.children[0]),
