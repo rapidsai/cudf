@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from libc.stdint cimport int64_t
 from libcpp.memory cimport unique_ptr
@@ -46,4 +46,8 @@ cdef extern from "cudf/io/parquet_metadata.hpp" namespace "cudf::io" nogil:
 
     cdef vector[FileMetaData] read_parquet_footers(
         host_span[const_unique_ptr_datasource] sources
+    ) except +libcudf_exception_handler
+
+    cdef unordered_map[string, vector[int64_t]] columnchunk_metadata(
+        vector[FileMetaData]&& parquet_metadatas
     ) except +libcudf_exception_handler

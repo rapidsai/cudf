@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.types import SourceInfo
@@ -18,6 +18,7 @@ __all__ = [
     "ParquetSchema",
     "RowGroup",
     "SortingColumn",
+    "columnchunk_metadata",
     "read_parquet_footers",
     "read_parquet_metadata",
 ]
@@ -109,3 +110,6 @@ class RowGroup:
 
 def read_parquet_metadata(src_info: SourceInfo) -> ParquetMetadata: ...
 def read_parquet_footers(src_info: SourceInfo) -> list[FileMetaData]: ...
+def columnchunk_metadata(
+    parquet_metadatas: list[FileMetaData],
+) -> dict[str, list[int]]: ...
