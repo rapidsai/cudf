@@ -255,6 +255,20 @@ def test_groupby_filtered_item_nested_agg_raises(engine: pl.GPUEngine):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
+def test_groupby_item_nested_agg_raises(engine: pl.GPUEngine):
+    lf = pl.LazyFrame(
+        {
+            "bucket": [1, 1],
+            "value": [10.0, 20.0],
+        }
+    )
+    q = lf.group_by("bucket").agg(
+        pl.col("value").sum().item(allow_empty=True),
+    )
+
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
 def test_item_decomposition_outside_groupby_raises():
     dtype = DataType(pl.Int64())
     allow_empty = True
