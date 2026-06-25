@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import hashlib
 import json
 import sys
 import traceback
@@ -8,6 +9,64 @@ from collections import defaultdict
 from functools import wraps
 
 import pytest
+
+
+def positive_int(value):
+    value = int(value)
+    if value < 0:
+        raise ValueError(f"Argument {value} must be non-negative")
+    return value
+
+
+def pytest_addoption(parser):
+    """Add options to split the test suite into deterministic shards.
+
+    Adapted from https://github.com/AdamGleave/pytest-shard so a single
+    pandas-tests job can be parallelized across multiple CI runners. With the
+    defaults (``--num-shards 1``) the full suite runs, so existing
+    (non-sharded) invocations are unaffected.
+    """
+    group = parser.getgroup("shard")
+    group.addoption(
+        "--shard-id",
+        dest="shard_id",
+        type=positive_int,
+        default=0,
+        help="Zero-based index of this shard.",
+    )
+    group.addoption(
+        "--num-shards",
+        dest="num_shards",
+        type=positive_int,
+        default=1,
+        help="Total number of shards.",
+    )
+
+
+def _sha256_hash(value: str) -> int:
+    return int.from_bytes(hashlib.sha256(value.encode()).digest(), "little")
+
+
+def filter_items_by_shard(items, shard_id, num_shards):
+    """Return the subset of ``items`` assigned to ``shard_id``.
+
+    Assignment is by a stable hash of each item's node id, so every pytest
+    worker (and every shard) partitions the suite identically and the shards
+    are disjoint and collectively exhaustive.
+    """
+    return [
+        item
+        for item in items
+        if _sha256_hash(item.nodeid) % num_shards == shard_id
+    ]
+
+
+def pytest_report_collectionfinish(config, items):
+    if config.getoption("num_shards") > 1:
+        return (
+            f"Running {len(items)} items in shard "
+            f"{config.getoption('shard_id')}/{config.getoption('num_shards')}"
+        )
 
 
 def replace_kwargs(new_kwargs):
@@ -5607,6 +5666,17 @@ def pytest_configure(config):
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_modifyitems(session, config, items):
+    num_shards = config.getoption("num_shards")
+    if num_shards > 1:
+        shard_id = config.getoption("shard_id")
+        if shard_id >= num_shards:
+            raise ValueError(
+                f"--shard-id ({shard_id}) must be less than "
+                f"--num-shards ({num_shards})"
+            )
+        # Keep only this shard's items before applying skip/xfail markers so
+        # the markers are only attached to the tests this shard will run.
+        items[:] = filter_items_by_shard(items, shard_id, num_shards)
     for item in items:
         if any(
             substr in item.nodeid for substr in NODEIDS_TOLERANT_INDEX_COMPARE
