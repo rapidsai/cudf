@@ -20,7 +20,6 @@ from rapidsmpf import bootstrap
 from rapidsmpf.communicator.ucxx import barrier, get_root_ucxx_address, new_communicator
 from rapidsmpf.config import Options
 from rapidsmpf.progress_thread import ProgressThread
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
@@ -45,6 +44,7 @@ if TYPE_CHECKING:
 
     from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -182,8 +182,12 @@ class RankActor:
         memory_resource_config = (
             memory_resource_config or MemoryResourceConfig.default()
         )
-        base_mr = memory_resource_config.create_memory_resource()
-        self._mr = RmmResourceAdaptor(base_mr)
+        self._base_mr: rmm.mr.DeviceMemoryResource | None = (
+            memory_resource_config.create_memory_resource()
+        )
+        self._mr: RmmResourceAdaptor | None = (
+            None  # set after `Context` is built (below).
+        )
         self._rapidsmpf_options: Options = Options.deserialize(
             rapidsmpf_options_as_bytes
         )
@@ -245,13 +249,17 @@ class RankActor:
         barrier(self._comm)
         self._ctx = Context.from_options(
             self._comm.logger,
-            self._mr,
+            self._base_mr,
             self._rapidsmpf_options,
             self._rapidsmpf_statistics,
         )
-        # Set the current RMM device resource so all temporary allocations
-        # in libcudf also use the same memory resource.
-        rmm.mr.set_current_device_resource(self._ctx.br().device_mr)
+        # Replace the plain base MR with the Context's internal tracking
+        # adaptor so subsequent uses of `self._mr` (including the next
+        # `Context.from_options` call in `reset`) share the same tracking
+        # adaptor; also install it as the current RMM device resource so
+        # libcudf temporary allocations use the same memory resource.
+        self._mr = self._ctx.br().device_mr_adaptor()
+        rmm.mr.set_current_device_resource(self._mr)
 
     def reset(self, *, rapidsmpf_options_as_bytes: bytes) -> None:
         """
@@ -275,12 +283,18 @@ class RankActor:
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
         self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
+        assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
-            self._mr,
+            self._base_mr,
             self._rapidsmpf_options,
             self._rapidsmpf_statistics,
         )
+        # Refresh `self._mr` and the current RMM device resource to point at
+        # the new Context's tracking adaptor; the previous adaptor was tied
+        # to the now-shutdown Context.
+        self._mr = self._ctx.br().device_mr_adaptor()
+        rmm.mr.set_current_device_resource(self._mr)
 
     def shutdown(self) -> None:
         """
@@ -299,6 +313,7 @@ class RankActor:
             self._ctx = None
             self._comm = None
             self._mr = None
+            self._base_mr = None
             ray.actor.exit_actor()
 
     def get_info(self) -> ClusterInfo:
