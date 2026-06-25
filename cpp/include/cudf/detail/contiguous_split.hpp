@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cstdint>
 
 namespace cudf {
 namespace detail {
@@ -108,6 +110,11 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
                                    uint8_t const* contiguous_buffer,
                                    size_t buffer_size,
                                    metadata_builder& builder);
+
+/**
+ * @brief Version of the packed metadata layout produced by `pack`/`pack_metadata`.
+ */
+inline constexpr std::int32_t packed_metadata_version = 1;
 
 }  // namespace detail
 }  // namespace cudf

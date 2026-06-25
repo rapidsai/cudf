@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -207,6 +207,30 @@ TEST_F(CudftableTest, InvalidHeaderVersion)
   file.seekp(sizeof(uint32_t));  // Skip magic
   uint32_t bad_version = 999;
   file.write(reinterpret_cast<char*>(&bad_version), sizeof(uint32_t));
+  file.close();
+
+  EXPECT_THROW(
+    cudf::io::experimental::read_cudftable(
+      cudf::io::experimental::cudftable_reader_options::builder(cudf::io::source_info{filepath})
+        .build()),
+    cudf::logic_error);
+}
+
+TEST_F(CudftableTest, InvalidMetadataVersion)
+{
+  auto const filepath = temp_env->get_temp_filepath("invalid_metadata_version.cudftbl");
+  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3});
+  auto const expected = cudf::table_view{{col}};
+  cudf::io::experimental::write_cudftable(cudf::io::experimental::cudftable_writer_options::builder(
+                                            cudf::io::sink_info{filepath}, expected)
+                                            .build());
+
+  // Corrupt the embedded packed-metadata version (the third 4-byte field, after
+  // the magic and the file format version).
+  std::fstream file(filepath, std::ios::in | std::ios::out | std::ios::binary);
+  file.seekp(2 * sizeof(uint32_t));
+  int32_t bad_metadata_version = 999;
+  file.write(reinterpret_cast<char*>(&bad_metadata_version), sizeof(bad_metadata_version));
   file.close();
 
   EXPECT_THROW(
