@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -362,11 +362,6 @@ def make_final_proxy_type(
         final_type_map[fast_type] = cls
     final_type_map[slow_type] = cls
 
-    # Proxy type fully constructed: from here on, class-level attribute writes
-    # are genuine runtime monkeypatches and should be mirrored onto the
-    # underlying "slow" (real) type.
-    type.__setattr__(cls, "_fsproxy_mirror_slow_overrides", True)
-
     return cls
 
 
@@ -496,11 +491,6 @@ def make_intermediate_proxy_type(
         intermediate_type_map[fast_type] = cls
     intermediate_type_map[slow_type] = cls
 
-    # Proxy type fully constructed: from here on, class-level attribute writes
-    # are genuine runtime monkeypatches and should be mirrored onto the
-    # underlying "slow" (real) type.
-    type.__setattr__(cls, "_fsproxy_mirror_slow_overrides", True)
-
     return cls
 
 
@@ -550,22 +540,6 @@ def get_registered_functions():
     return dict()
 
 
-_NO_SLOW_ATTR = object()
-
-
-def _setattr_fsproxy_no_mirror(cls: type, name: str, value: Any) -> None:
-    """Set ``cls.name = value`` on a proxy type *without* mirroring to slow.
-
-    ``_FastSlowProxyMeta.__setattr__`` mirrors class-level attribute writes
-    onto the underlying "slow" (real) type so that runtime monkeypatches stay
-    visible to the pandas fallback path. cudf.pandas itself installs a handful
-    of custom methods (e.g. ``DataFrame.query``/``DataFrame.eval``) onto the
-    proxy classes that must *not* clobber pandas' genuine implementations; use
-    this helper for those (rare) assignments.
-    """
-    type.__setattr__(cls, name, value)
-
-
 class _FastSlowProxyMeta(type):
     """
     Metaclass used to dynamically find class attributes and
@@ -583,88 +557,6 @@ class _FastSlowProxyMeta(type):
     @property
     def _fsproxy_fast(self) -> type:
         return self._fsproxy_fast_type
-
-    def __init__(cls, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Per-proxy-type switch controlling whether class-level attribute
-        # writes are mirrored onto the underlying "slow" (real) type (see
-        # ``__setattr__``/``__delattr__``). It starts disabled so that the
-        # attributes installed while the proxy type is being built are not
-        # forwarded to the real type; ``make_*_proxy_type`` enables it once
-        # construction is complete.
-        type.__setattr__(cls, "_fsproxy_mirror_slow_overrides", False)
-
-    def _fsproxy_restore_slow_attr(cls, name):
-        # Undo a previously-mirrored class-level patch: revert the underlying
-        # "slow" (real) type to whatever it had before we touched ``name``.
-        slow = cls.__dict__.get("_fsproxy_slow_type")
-        stash = cls.__dict__.get("_fsproxy_slow_overrides")
-        if slow is None or stash is None or name not in stash:
-            return
-        original = stash.pop(name)
-        try:
-            if original is _NO_SLOW_ATTR:
-                if name in slow.__dict__:
-                    delattr(slow, name)
-            else:
-                setattr(slow, name, original)
-        except (AttributeError, TypeError):
-            pass
-
-    def __setattr__(cls, name, value):
-        # Class-level attribute assignments on a proxy type (e.g.
-        # ``monkeypatch.setattr(pd.ExcelFile, "parse", fn)``) must also be
-        # mirrored onto the underlying "slow" (real) type. Code that runs
-        # under ``disable_module_accelerator()`` (e.g. the pandas fallback
-        # path of ``pd.read_excel``) resolves attributes from the real
-        # class, not the proxy, so a patch applied only to the proxy would
-        # otherwise be invisible to that code.
-        type.__setattr__(cls, name, value)
-        if not cls.__dict__.get("_fsproxy_mirror_slow_overrides", False):
-            # The proxy type is still being constructed (or this is a
-            # non-pandas proxy): only mirror user/runtime monkeypatches,
-            # never the custom methods cudf.pandas installs on the proxy
-            # classes itself.
-            return
-        if name.startswith("_"):
-            return
-        slow = cls.__dict__.get("_fsproxy_slow_type")
-        if slow is None:
-            return
-        if isinstance(
-            value, (_MethodProxy, _FastSlowAttribute, _FastSlowProxy)
-        ):
-            # Restoring the proxy's own machinery (e.g. ``monkeypatch``
-            # teardown re-setting a previously-unpatched attribute, whose
-            # saved value is a ``_MethodProxy``/``_FastSlowAttribute``).
-            # Revert the real type to whatever it had before we touched it
-            # rather than shadowing its genuine implementation.
-            cls._fsproxy_restore_slow_attr(name)
-            return
-        # Real value being patched in: remember the real type's original
-        # so it can be restored later, then forward the patch.
-        stash = cls.__dict__.get("_fsproxy_slow_overrides")
-        if stash is None:
-            stash = {}
-            type.__setattr__(cls, "_fsproxy_slow_overrides", stash)
-        if name not in stash:
-            stash[name] = slow.__dict__.get(name, _NO_SLOW_ATTR)
-        try:
-            setattr(slow, name, value)
-        except (AttributeError, TypeError):
-            pass
-
-    def __delattr__(cls, name):
-        # Mirror class-level attribute *deletions* onto the underlying "slow"
-        # (real) type as well. ``monkeypatch`` teardown deletes a proxy
-        # attribute that did not exist before the patch; restore the real
-        # type to whatever it had before the matching ``__setattr__``.
-        type.__delattr__(cls, name)
-        if not cls.__dict__.get("_fsproxy_mirror_slow_overrides", False):
-            return
-        if name.startswith("_"):
-            return
-        cls._fsproxy_restore_slow_attr(name)
 
     def __dir__(self):
         # Try to return the cached dir of the slow object, but if it
