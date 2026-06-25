@@ -26,6 +26,7 @@
 #include <thrust/iterator/zip_iterator.h>
 
 #include <cmath>
+#include <cstdint>
 #include <format>
 #include <functional>
 #include <future>
@@ -112,6 +113,118 @@ cuda::std::optional<LogicalType> converted_to_logical_type(SchemaElement const& 
   }
   return cuda::std::nullopt;
 }
+
+/**
+ * @brief Lookup schema children by name or field ID across multiple sources.
+ */
+struct schema_child_lookup {
+  using get_schema_fn = std::function<SchemaElement const&(int, int)>;
+
+  schema_child_lookup(get_schema_fn&& schema_fn,
+                      bool case_sensitive_names,
+                      bool match_schema_by_field_id)
+    : schema_fn{std::move(schema_fn)},
+      case_sensitive_names{case_sensitive_names},
+      match_schema_by_field_id{match_schema_by_field_id}
+  {
+  }
+
+  /**
+   * @brief Cache of schema indices of all children of a schema element in the specified source
+   */
+  struct schema_idx_cache {
+    column_path_map<size_type> by_name;
+    std::unordered_map<int32_t, size_type> by_field_id;
+
+    explicit schema_idx_cache(get_schema_fn const& schema_fn,
+                              bool case_sensitive_names,
+                              int const schema_idx,
+                              int const src_idx)
+      : by_name{make_column_path_map<size_type>(
+          case_sensitive_names, schema_fn(schema_idx, src_idx).children_idx.size())},
+        by_field_id{schema_fn(schema_idx, src_idx).children_idx.size()}
+    {
+      // Cache all children schema indices of the specified schema element by name and field ID
+      auto const& schema_elem = schema_fn(schema_idx, src_idx);
+      for (auto const child_schema_idx : schema_elem.children_idx) {
+        auto const& child_schema = schema_fn(child_schema_idx, src_idx);
+        by_name.emplace(child_schema.name, static_cast<size_type>(child_schema_idx));
+        if (child_schema.field_id.has_value()) {
+          by_field_id.emplace(child_schema.field_id.value(),
+                              static_cast<size_type>(child_schema_idx));
+        }
+      }
+    }
+  };
+
+  /**
+   * @brief Find child schema index by name in the specified source
+   */
+  [[nodiscard]] size_type find_schema_child_by_name(int const schema_idx,
+                                                    std::string_view name,
+                                                    int const src_idx = 0)
+  {
+    auto const& cache     = get_schema_idx_cache(schema_idx, src_idx);
+    auto const child_iter = cache.by_name.find(name);
+    return child_iter != cache.by_name.end() ? child_iter->second : -1;
+  }
+
+  /**
+   * @brief Find matching child schema index in the target source by field ID or name
+   */
+  [[nodiscard]] size_type find_target_schema_child(int const src_schema_idx,
+                                                   int const dst_schema_idx,
+                                                   std::string_view name,
+                                                   int const src_idx)
+  {
+    if (match_schema_by_field_id) {
+      auto const src_child_idx = find_schema_child_by_name(src_schema_idx, name);
+      CUDF_EXPECTS(src_child_idx != -1,
+                   "Column name not found in the source schema tree",
+                   std::invalid_argument);
+
+      auto const& src_child = schema_fn(src_child_idx, 0);
+      CUDF_EXPECTS(src_child.field_id.has_value(),
+                   "Column field ID not found in the source schema tree",
+                   std::invalid_argument);
+
+      return find_schema_child_by_field_id(dst_schema_idx, src_child.field_id.value(), src_idx);
+    } else {
+      return find_schema_child_by_name(dst_schema_idx, name, src_idx);
+    }
+  }
+
+ private:
+  /**
+   * @brief Find child schema index by field ID in the specified source
+   */
+  [[nodiscard]] size_type find_schema_child_by_field_id(int const schema_idx,
+                                                        int32_t field_id,
+                                                        int const src_idx = 0)
+  {
+    auto const& cache     = get_schema_idx_cache(schema_idx, src_idx);
+    auto const child_iter = cache.by_field_id.find(field_id);
+    return child_iter != cache.by_field_id.end() ? child_iter->second : -1;
+  }
+
+  /**
+   * @brief Get or build cached child lookup maps for the specified schema element
+   */
+  [[nodiscard]] schema_idx_cache const& get_schema_idx_cache(int const schema_idx,
+                                                             int const src_idx = 0)
+  {
+    auto const cache_key =
+      (static_cast<std::uint64_t>(src_idx) << 32) | static_cast<std::uint32_t>(schema_idx);
+    auto [cache_iter, inserted] = schema_idx_caches.try_emplace(
+      cache_key, schema_fn, case_sensitive_names, schema_idx, src_idx);
+    return cache_iter->second;
+  }
+
+  get_schema_fn schema_fn;
+  bool case_sensitive_names;
+  bool match_schema_by_field_id;
+  std::unordered_map<std::uint64_t, schema_idx_cache> schema_idx_caches;
+};
 
 }  // namespace
 
@@ -1684,51 +1797,12 @@ aggregate_reader_metadata::select_columns(
   bool case_sensitive_names,
   bool match_schema_by_field_id)
 {
-  auto const find_schema_child =
-    [&](SchemaElement const& schema_elem, std::string_view name, int const src_idx = 0) {
-      auto const& col_schema_idx =
-        std::find_if(schema_elem.children_idx.cbegin(),
-                     schema_elem.children_idx.cend(),
-                     [&](size_t col_schema_idx) {
-                       return are_column_paths_equal(
-                         get_schema(col_schema_idx, src_idx).name, name, case_sensitive_names);
-                     });
-
-      return (col_schema_idx != schema_elem.children_idx.end())
-               ? static_cast<size_type>(*col_schema_idx)
-               : -1;
-    };
-
-  auto const find_schema_child_by_field_id =
-    [&](SchemaElement const& schema_elem, int32_t field_id, int const src_idx = 0) {
-      auto const& col_schema_idx = std::find_if(
-        schema_elem.children_idx.cbegin(),
-        schema_elem.children_idx.cend(),
-        [&](size_t col_schema_idx) {
-          auto const& child_schema = get_schema(col_schema_idx, src_idx);
-          return child_schema.field_id.has_value() and child_schema.field_id.value() == field_id;
-        });
-
-      return (col_schema_idx != schema_elem.children_idx.end())
-               ? static_cast<size_type>(*col_schema_idx)
-               : -1;
-    };
-
-  auto const find_schema_child_for_mapping = [&](SchemaElement const& src_schema_elem,
-                                                 SchemaElement const& dst_schema_elem,
-                                                 std::string_view name,
-                                                 int const src_idx) {
-    auto const src_child_idx = find_schema_child(src_schema_elem, name);
-    if (match_schema_by_field_id and src_child_idx != -1) {
-      auto const& src_child = get_schema(src_child_idx);
-      if (src_child.field_id.has_value()) {
-        auto const dst_child_idx =
-          find_schema_child_by_field_id(dst_schema_elem, src_child.field_id.value(), src_idx);
-        if (dst_child_idx != -1) { return dst_child_idx; }
-      }
-    }
-    return find_schema_child(dst_schema_elem, name, src_idx);
-  };
+  auto schema_lookup =
+    schema_child_lookup{[&](int const schema_idx, int const src_idx) -> SchemaElement const& {
+                          return get_schema(schema_idx, src_idx);
+                        },
+                        case_sensitive_names,
+                        match_schema_by_field_id};
 
   std::vector<cudf::io::detail::inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
@@ -1785,10 +1859,11 @@ aggregate_reader_metadata::select_columns(
         }
       } else {
         for (const auto& idx : col_name_info->children) {
-          path_is_valid |= build_column(&idx,
-                                        find_schema_child(schema_elem, idx.name),
-                                        output_col.children,
-                                        has_list_parent || col_type == type_id::LIST);
+          path_is_valid |=
+            build_column(&idx,
+                         schema_lookup.find_schema_child_by_name(schema_idx, idx.name),
+                         output_col.children,
+                         has_list_parent || col_type == type_id::LIST);
         }
       }
 
@@ -1904,8 +1979,8 @@ aggregate_reader_metadata::select_columns(
                      std::out_of_range);
 
         for (auto const& child_idx : src_schema_elem.children_idx) {
-          auto const dst_child_idx = find_schema_child_for_mapping(
-            src_schema_elem, dst_schema_elem, get_schema(child_idx).name, src_idx);
+          auto const dst_child_idx = schema_lookup.find_target_schema_child(
+            src_schema_idx, dst_schema_idx, get_schema(child_idx).name, src_idx);
           CUDF_EXPECTS(dst_child_idx != -1,
                        "Encountered mismatching schema tree depths across data sources",
                        std::out_of_range);
@@ -1918,9 +1993,10 @@ aggregate_reader_metadata::select_columns(
         for (auto const& child_col_name_info : col_name_info->children) {
           // Ensure that each named child column exists in the destination schema tree for the
           // paths to align up. An out_of_range error otherwise.
-          auto const src_child_idx = find_schema_child(src_schema_elem, child_col_name_info.name);
-          auto const dst_child_idx = find_schema_child_for_mapping(
-            src_schema_elem, dst_schema_elem, child_col_name_info.name, src_idx);
+          auto const src_child_idx =
+            schema_lookup.find_schema_child_by_name(src_schema_idx, child_col_name_info.name);
+          auto const dst_child_idx = schema_lookup.find_target_schema_child(
+            src_schema_idx, dst_schema_idx, child_col_name_info.name, src_idx);
           CUDF_EXPECTS(dst_child_idx != -1,
                        "Encountered mismatching schema tree depths across data sources",
                        std::out_of_range);
@@ -2068,27 +2144,28 @@ aggregate_reader_metadata::select_columns(
       }
     }
     for (auto& col : selected_columns) {
-      auto const& top_level_col_schema_idx = find_schema_child(root, col.name);
+      auto constexpr root_idx = 0;
+      auto const& top_level_col_schema_idx =
+        schema_lookup.find_schema_child_by_name(root_idx, col.name);
       bool const valid_column = build_column(&col, top_level_col_schema_idx, output_columns, false);
       if (valid_column) {
         output_column_schemas.push_back(top_level_col_schema_idx);
 
         // Map the column's schema_idx across the rest of the data sources if required.
         if (per_file_metadata.size() > 1 and not schema_idx_maps.empty()) {
-          std::for_each(cuda::counting_iterator{static_cast<size_t>(1)},
-                        cuda::counting_iterator{per_file_metadata.size()},
-                        [&](auto const src_idx) {
-                          auto const& dst_root = get_schema(0, src_idx);
-                          // Ensure that each top level column exists in the destination schema
-                          // tree. An out_of_range error is thrown otherwise.
-                          auto const dst_col_schema_idx =
-                            find_schema_child_for_mapping(root, dst_root, col.name, src_idx);
-                          CUDF_EXPECTS(
-                            dst_col_schema_idx != -1,
-                            "Encountered mismatching schema tree depths across data sources",
-                            std::out_of_range);
-                          map_column(&col, top_level_col_schema_idx, dst_col_schema_idx, src_idx);
-                        });
+          std::for_each(
+            cuda::counting_iterator{static_cast<size_t>(1)},
+            cuda::counting_iterator{per_file_metadata.size()},
+            [&](auto const src_idx) {
+              // Ensure that each top level column exists in the destination schema
+              // tree. An out_of_range error is thrown otherwise.
+              auto const dst_col_schema_idx =
+                schema_lookup.find_target_schema_child(root_idx, root_idx, col.name, src_idx);
+              CUDF_EXPECTS(dst_col_schema_idx != -1,
+                           "Encountered mismatching schema tree depths across data sources",
+                           std::out_of_range);
+              map_column(&col, top_level_col_schema_idx, dst_col_schema_idx, src_idx);
+            });
         }
       }
     }
