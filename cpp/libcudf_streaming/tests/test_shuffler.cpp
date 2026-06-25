@@ -256,22 +256,22 @@ TEST(Shuffler, SpillOnInsertAndExtraction)
   cudf::hash_id const hash_fn                            = cudf::hash_id::HASH_MURMUR3;
   auto stream                                            = cudf::get_default_stream();
 
-  // Use RapidsMPF's memory resource adaptor so the test can observe per-rank
-  // allocation counts via `get_main_record().num_current_allocs()`.
-  rapidsmpf::RmmResourceAdaptor mr{cudf::get_current_device_resource_ref()};
-
   // Control spilling by adjusting the DEVICE memory limit at runtime.
   // `memory_available(DEVICE)` is computed as `limit - current_allocated()`, so a
   // sufficiently large positive limit reliably keeps available memory > 0 (no spill),
   // while a sufficiently large negative limit reliably keeps available memory < 0
-  // (force spill), regardless of how many bytes are currently allocated from `mr`.
+  // (force spill), regardless of how many bytes are currently allocated.
   constexpr std::int64_t k_no_spill_limit    = (1LL << 40);
   constexpr std::int64_t k_force_spill_limit = -(1LL << 40);
-  auto br                                    = rapidsmpf::BufferResource::create(mr,
+  // `BufferResource` wraps the supplied resource in its own tracking adaptor,
+  // exposed via `device_mr_adaptor()`, so the test can observe per-rank
+  // allocation counts via `get_main_record().num_current_allocs()`.
+  auto br        = rapidsmpf::BufferResource::create(cudf::get_current_device_resource_ref(),
                                               rapidsmpf::PinnedMemoryResource::Disabled,
-                                                                                 {{rapidsmpf::MemoryType::DEVICE, k_no_spill_limit}},
+                                                     {{rapidsmpf::MemoryType::DEVICE, k_no_spill_limit}},
                                               std::nullopt  // disable periodic spill check
   );
+  auto const& mr = br->device_mr_adaptor();
 
   // Create a communicator of size 1, such that each shuffler will run locally.
   auto comm = GlobalEnvironment->split_comm();
