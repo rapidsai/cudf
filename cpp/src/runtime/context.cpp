@@ -106,9 +106,13 @@ void context::initialize_components(init_flags flags)
  */
 std::filesystem::path get_cudf_kernel_cache_dir()
 {
-  auto has_rwx = [](std::filesystem::path const& p) -> bool {
+  static constexpr auto has_rwx = [](std::filesystem::path const& p) -> bool {
     // check if the process has read, write, and execute permissions on the directory
     return ::access(p.c_str(), R_OK | W_OK | X_OK) == 0;
+  };
+
+  static constexpr auto is_accessible_dir = [](std::filesystem::path const& p) -> bool {
+    return std::filesystem::is_directory(p) && has_rwx(p);
   };
 
   if (auto path = detail::getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH");
@@ -119,7 +123,7 @@ std::filesystem::path get_cudf_kernel_cache_dir()
     // to next option
     std::error_code ec;
     std::filesystem::create_directories(*path, ec);
-    if ((!ec || ec == std::errc::file_exists) && has_rwx(*path)) {
+    if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(*path)) {
       return *path;
     } else {
       CUDF_LOG_WARN(
@@ -135,23 +139,23 @@ std::filesystem::path get_cudf_kernel_cache_dir()
 
   for (auto env_var : base_dir_env_vars) {
     if (auto env_path = detail::getenv_optional<std::string>(env_var); env_path.has_value()) {
-      if (!has_rwx(*env_path)) { continue; }
+      if (!is_accessible_dir(*env_path)) { continue; }
       // attempt to create the subdirectory if non-existent
       auto path = std::filesystem::path(*env_path) / ".libcudf";
       std::error_code ec;
       std::filesystem::create_directory(path, ec);
-      if ((!ec || ec == std::errc::file_exists) && has_rwx(path)) { return path; }
+      if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
     }
   }
 
   static constexpr std::array<std::string_view, 2> tmp_dirs = {"/var/tmp", "/tmp"};
 
   for (auto dir : tmp_dirs) {
-    if (!has_rwx(dir)) { continue; }
+    if (!is_accessible_dir(dir)) { continue; }
     auto path = std::filesystem::path(dir) / ".libcudf";
     std::error_code ec;
     std::filesystem::create_directory(path, ec);
-    if ((!ec || ec == std::errc::file_exists) && has_rwx(path)) { return path; }
+    if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
   }
 
   CUDF_FAIL(
