@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import io
-from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -250,128 +249,6 @@ def test_hybrid_scan_secondary_filters_byte_ranges(
     # These should be lists of ByteRangeInfo
     assert isinstance(bloom_ranges, list)
     assert isinstance(dict_ranges, list)
-
-
-@pytest.mark.parametrize(
-    "fixture_name,column_name,query_value",
-    [
-        (
-            "bloom_filter_alignment.parquet",
-            "r_reason_desc",
-            "Did not like the color",
-        ),
-        (
-            "mixed_card_ndv_100_bf_fpp0.1_nostats.snappy.parquet",
-            "str",
-            "tbRpIyVJZX",
-        ),
-    ],
-)
-def test_hybrid_scan_bloom_filter_matches_read_parquet(
-    fixture_name, column_name, query_value
-):
-    """A/B test hybrid scan bloom filtering vs read_parquet.
-
-    A: read_parquet path (libcudf strips the BloomFilterHeader before probing)
-    B: hybrid-scan path (fetch_bloom_filters_to_device_async strips the header,
-       returning header-free, 32-byte-aligned bitsets)
-
-    The hybrid path must keep the same row groups as read_parquet.
-    """
-    fixture = (
-        Path(__file__).parents[4]
-        / "python/cudf/cudf/tests/data/parquet"
-        / fixture_name
-    )
-    if not fixture.exists():
-        pytest.skip(f"bloom fixture not found: {fixture}")
-    data = fixture.read_bytes()
-    expected_row_groups = list(range(pq.ParquetFile(fixture).metadata.num_row_groups))
-
-    literal_value = plc.Scalar.from_arrow(pa.scalar(query_value))
-    literal = Literal(literal_value)
-    column_ref = ColumnNameReference(column_name)
-    bloom_filter = Operation(ASTOperator.EQUAL, column_ref, literal)
-
-    def make_options():
-        options = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo([io.BytesIO(data)])
-        ).build()
-        options.set_filter(bloom_filter)
-        return options
-
-    def make_path_options():
-        options = plc.io.parquet.ParquetReaderOptions.builder(
-            plc.io.SourceInfo([fixture])
-        ).build()
-        options.set_filter(bloom_filter)
-        return options
-
-    # A: standard read_parquet keeps the only row group after bloom filtering.
-    print(
-        f"\n[bloom-demo] fixture={fixture.name} predicate={column_name} == {query_value!r}\n",
-        flush=True,
-    )
-    print(
-        "[bloom-demo] A: read_parquet path (libcudf strips the "
-        "BloomFilterHeader before probing)",
-        flush=True,
-    )
-    table_w_meta = plc.io.parquet.read_parquet(make_path_options())
-    print(
-        "[bloom-demo] A result: "
-        f"rows={table_w_meta.tbl.num_rows()} "
-        f"num_input_row_groups={table_w_meta.num_input_row_groups} "
-        f"num_row_groups_after_bloom_filter="
-        f"{table_w_meta.num_row_groups_after_bloom_filter}\n",
-        flush=True,
-    )
-    assert table_w_meta.num_input_row_groups == len(expected_row_groups)
-    assert table_w_meta.num_row_groups_after_bloom_filter == len(
-        expected_row_groups
-    )
-
-    # B: hybrid scan should keep the same row group.
-    print(
-        "[bloom-demo] B: hybrid-scan path "
-        "(fetch_bloom_filters_to_device_async strips the header)",
-        flush=True,
-    )
-    options = make_options()
-    suffix = 8  # 4-byte footer length + "PAR1"
-    mv = memoryview(data)
-    footer_size = int.from_bytes(mv[-suffix:-4], byteorder="little")
-    reader = HybridScanReader(mv[-suffix - footer_size : -suffix], options)
-
-    row_groups = reader.all_row_groups(options)
-    bloom_ranges, _ = reader.secondary_filters_byte_ranges(row_groups, options)
-    assert bloom_ranges  # the equality predicate makes r_reason_desc bloom-eligible
-    for idx, r in enumerate(bloom_ranges):
-        raw = data[r.offset : r.offset + r.size]
-        print(
-            f"[bloom-demo] B fetched range[{idx}]: "
-            f"offset={r.offset} size={r.size} raw={raw.hex()}",
-            flush=True,
-        )
-
-    stream = plc.utils._get_stream(None)
-    # The fix: fetch header-stripped, 32-byte-aligned bitsets via the IO helper
-    # (this is what the C++ hybrid-scan callers now use), instead of copying the
-    # whole BloomFilterHeader+bitset range to device.
-    bloom_data = plc.io.experimental.hybrid_scan.fetch_bloom_filters_to_device_async(
-        plc.io.SourceInfo([io.BytesIO(data)]), bloom_ranges, stream
-    )
-    synchronize_stream(None)
-    # The bloom filter probe requires 32-byte-aligned bitsets.
-    for bitset in bloom_data:
-        assert bitset.ptr % 32 == 0
-    surviving = reader.filter_row_groups_with_bloom_filters(
-        bloom_data, row_groups, options
-    )
-    print(f"[bloom-demo] B result: surviving_row_groups={surviving}", flush=True)
-
-    # The queried value is present, so the hybrid path must match read_parquet.
-    assert surviving == row_groups == expected_row_groups
 
 
 def test_hybrid_scan_column_chunk_byte_ranges(

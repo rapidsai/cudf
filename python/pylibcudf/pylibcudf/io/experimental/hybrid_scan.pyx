@@ -18,20 +18,10 @@ from pylibcudf.io.text cimport ByteRangeInfo
 from pylibcudf.io.types cimport TableWithMetadata
 from pylibcudf.libcudf.column.column cimport column
 from pylibcudf.libcudf.column.column_view cimport column_view, mutable_column_view
-from pylibcudf.gpumemoryview cimport gpumemoryview
-from pylibcudf.io.types cimport SourceInfo
-from pylibcudf.libcudf.io.datasource cimport datasource, make_datasources
 from pylibcudf.libcudf.io.hybrid_scan cimport (
-    bloom_fetch_get_buffers,
-    bloom_fetch_get_future,
-    bloom_fetch_get_spans,
-    bloom_filter_fetch_result,
-    const_byte_range_info,
     const_device_span_const_uint8_t,
     const_size_type,
     const_uint8_t,
-    device_span_u8,
-    fetch_bloom_filters_to_device_async as cpp_fetch_bloom_filters_to_device_async,
     hybrid_scan_reader as cpp_hybrid_scan_reader,
     use_data_page_mask as cpp_use_data_page_mask,
 )
@@ -40,7 +30,6 @@ from pylibcudf.libcudf.io.types cimport table_with_metadata
 from pylibcudf.libcudf.types cimport size_type
 from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 from pylibcudf.utils cimport _get_memory_resource, _get_stream
-from rmm.librmm.device_buffer cimport device_buffer
 
 from pylibcudf.span import is_span
 from pylibcudf.io.parquet_metadata import FileMetaData
@@ -49,12 +38,7 @@ import pylibcudf.libcudf.io.hybrid_scan
 
 UseDataPageMask = pylibcudf.libcudf.io.hybrid_scan.use_data_page_mask
 
-__all__ = [
-    "FileMetaData",
-    "HybridScanReader",
-    "UseDataPageMask",
-    "fetch_bloom_filters_to_device_async",
-]
+__all__ = ["FileMetaData", "HybridScanReader", "UseDataPageMask"]
 
 
 cdef device_span[const_uint8_t] _get_device_span(object obj) except *:
@@ -66,125 +50,6 @@ cdef device_span[const_uint8_t] _get_device_span(object obj) except *:
     return device_span[const_uint8_t](<const_uint8_t*>
                                       <uintptr_t>obj.ptr,
                                       <size_t>obj.size)
-
-
-cdef class _BloomFilterBitsetBuffers:
-    """Owns the packed device buffer(s) backing fetched bloom filter bitsets.
-
-    The bitset views handed to Python are non-owning, so this holder keeps the
-    underlying device memory alive for as long as any view references it.
-    """
-    cdef vector[device_buffer] buffers
-
-
-cdef class _BloomFilterBitsetView:
-    """Non-owning device view of a single bloom filter bitset.
-
-    Exposes the CUDA array interface (and hence the Span protocol via
-    :class:`gpumemoryview`) over one bitset while keeping its backing buffers
-    alive through ``_owner``.
-    """
-    cdef readonly uintptr_t ptr
-    cdef readonly size_t nbytes
-    cdef object _owner
-
-    @property
-    def size(self):
-        return self.nbytes
-
-    @property
-    def __cuda_array_interface__(self):
-        return {
-            "shape": (int(self.nbytes),),
-            "typestr": "|u1",
-            "data": (int(self.ptr), False),
-            "version": 3,
-        }
-
-
-def fetch_bloom_filters_to_device_async(
-    SourceInfo source_info,
-    list bloom_filter_byte_ranges,
-    object stream=None,
-    object mr=None,
-):
-    """Fetch header-stripped, 32-byte-aligned bloom filter bitsets to device.
-
-    Each input byte range must span a complete bloom filter (its Thrift
-    ``BloomFilterHeader`` followed by the bitset), as returned by
-    :meth:`HybridScanReader.secondary_filters_byte_ranges`. The headers are read
-    to host and parsed to locate each bitset; only the header-free bitsets are
-    fetched to device, at 32-byte-aligned addresses as required by the bloom
-    filter probe.
-
-    For details, see
-    :cpp:func:`cudf::io::parquet::fetch_bloom_filters_to_device_async`
-
-    Parameters
-    ----------
-    source_info : SourceInfo
-        Source describing the Parquet file to read bloom filters from. Must
-        describe a single source.
-    bloom_filter_byte_ranges : list[ByteRangeInfo]
-        Byte ranges of complete bloom filters (header + bitset) to fetch.
-    stream : Stream, optional
-        CUDA stream.
-    mr : DeviceMemoryResource, optional
-        Device memory resource used to allocate the returned buffers.
-
-    Returns
-    -------
-    list[gpumemoryview]
-        One device view per input range, each holding a header-free bitset.
-    """
-    cdef Stream _stream = _get_stream(stream)
-    cdef DeviceMemoryResource _mr = _get_memory_resource(mr)
-
-    cdef vector[unique_ptr[datasource]] datasources = \
-        make_datasources(source_info.c_obj)
-    if datasources.size() != 1:
-        raise ValueError(
-            "fetch_bloom_filters_to_device_async expects a single source, got "
-            f"{datasources.size()}"
-        )
-
-    cdef vector[byte_range_info] c_ranges
-    cdef ByteRangeInfo br
-    for obj in bloom_filter_byte_ranges:
-        br = <ByteRangeInfo?>obj
-        c_ranges.push_back(br.c_obj)
-
-    cdef bloom_filter_fetch_result result = \
-        cpp_fetch_bloom_filters_to_device_async(
-            datasources[0].get()[0],
-            host_span[const_byte_range_info](
-                <const_byte_range_info*>c_ranges.data(),
-                <size_type>c_ranges.size(),
-            ),
-            _stream.view(),
-            _mr.get_mr(),
-        )
-    # Block until the device reads launched by the helper complete.
-    bloom_fetch_get_future(result).get()
-
-    # Take ownership of the packed device buffer(s); the views below are
-    # non-owning and must keep this alive.
-    cdef _BloomFilterBitsetBuffers owner = \
-        _BloomFilterBitsetBuffers.__new__(_BloomFilterBitsetBuffers)
-    owner.buffers = move(bloom_fetch_get_buffers(result))
-
-    # The bitset spans are lightweight views into the buffers above.
-    cdef vector[device_span_u8] spans = bloom_fetch_get_spans(result)
-    cdef size_t i
-    cdef _BloomFilterBitsetView view
-    bloom_data = []
-    for i in range(spans.size()):
-        view = _BloomFilterBitsetView.__new__(_BloomFilterBitsetView)
-        view.ptr = <uintptr_t>spans[i].data()
-        view.nbytes = spans[i].size()
-        view._owner = owner
-        bloom_data.append(gpumemoryview(view))
-    return bloom_data
 
 
 cdef class HybridScanReader:

@@ -6,11 +6,10 @@ from enum import IntEnum
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
-from pylibcudf.gpumemoryview import gpumemoryview
 from pylibcudf.io.parquet import ParquetReaderOptions
 from pylibcudf.io.parquet_metadata import FileMetaData
 from pylibcudf.io.text import ByteRangeInfo
-from pylibcudf.io.types import SourceInfo, TableWithMetadata
+from pylibcudf.io.types import TableWithMetadata
 from pylibcudf.utils import CudaStreamLike
 
 try:
@@ -143,10 +142,3 @@ class HybridScanReader:
         pass_read_limit: int,
     ) -> list[list[int]]: ...
     def has_next_table_chunk(self) -> bool: ...
-
-def fetch_bloom_filters_to_device_async(
-    source_info: SourceInfo,
-    bloom_filter_byte_ranges: list[ByteRangeInfo],
-    stream: CudaStreamLike | None = None,
-    mr: DeviceMemoryResource | None = None,
-) -> list[gpumemoryview]: ...

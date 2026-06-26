@@ -19,15 +19,11 @@
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
-#include <rmm/aligned.hpp>
-#include <rmm/mr/aligned_resource_adaptor.hpp>
-
 #include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
-#include <string>
 #include <vector>
 
 namespace {
