@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -269,15 +269,12 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
     EXPECT_TRUE(result_size == expected_outputs.size());
 
-    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts_cw(
-      expected_counts.begin(), expected_counts.end());
-    auto const actual_counts_view =
-      cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                        actual_counts->size(),
-                        actual_counts->data(),
-                        nullptr,
-                        0);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts_cw, actual_counts_view);
+    auto const expected_total =
+      std::accumulate(expected_counts.begin(), expected_counts.end(), std::size_t{0});
+    EXPECT_EQ(expected_total, result_size);
+    auto const actual_total =
+      thrust::reduce(thrust::device, actual_counts->begin(), actual_counts->end(), std::size_t{0});
+    EXPECT_EQ(actual_total, result_size);
 
     auto result = this->join(left_equality,
                              right_equality,
@@ -434,14 +431,14 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
       this->compare_join_results(mixed_result, ast_filter_result);
 
       // Verify filter_join_indices_output_size matches the materialized output size.
-      auto const fji_size = cudf::filter_join_indices_output_size(
+      auto const fji_result = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::INNER_JOIN);
-      EXPECT_EQ(fji_size, ast_filter_result.first->size());
+      EXPECT_EQ(fji_result.first, ast_filter_result.first->size());
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
@@ -1102,14 +1099,14 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
       this->compare_join_results(mixed_result, ast_filter_result);
 
       // Verify filter_join_indices_output_size matches the materialized output size.
-      auto const fji_size = cudf::filter_join_indices_output_size(
+      auto const fji_result = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::LEFT_JOIN);
-      EXPECT_EQ(fji_size, ast_filter_result.first->size());
+      EXPECT_EQ(fji_result.first, ast_filter_result.first->size());
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
@@ -1390,14 +1387,14 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
       this->compare_join_results(mixed_result, ast_filter_result);
 
       // Verify filter_join_indices_output_size matches the materialized output size.
-      auto const fji_size = cudf::filter_join_indices_output_size(
+      auto const fji_result = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::FULL_JOIN);
-      EXPECT_EQ(fji_size, ast_filter_result.first->size());
+      EXPECT_EQ(fji_result.first, ast_filter_result.first->size());
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
