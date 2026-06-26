@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -111,9 +111,8 @@ std::unique_ptr<column> matches_re(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  // check for potential fast-paths (all types call starts_with)
   auto [fp, literal] = prog.get_literal_fast_path();
-  if (fp != literal_fast_path::NONE) {
+  if (fp == literal_fast_path::LITERAL_ONLY or fp == literal_fast_path::STARTS_WITH) {
     auto const target =
       cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
     return starts_with(input, target, stream, mr);
