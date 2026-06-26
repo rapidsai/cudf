@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -7,9 +7,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/types.hpp>
 
-namespace CUDF_EXPORT cudf {
-
-namespace detail {
+namespace cudf {
 
 /**
  * @brief Given a column_device_view, an instance of this class provides a
@@ -71,6 +69,4 @@ class structs_column_device_view : private column_device_view {
   }
 };
 
-}  // namespace detail
-
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
