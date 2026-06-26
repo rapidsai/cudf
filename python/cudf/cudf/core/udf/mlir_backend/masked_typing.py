@@ -35,7 +35,7 @@ class MaskedType(types.Type):
     column.
     """
 
-    def __init__(self, value):
+    def __init__(self, value: types.Type) -> None:
         if isinstance(value, types.Literal):
             value = unliteral(value)
         if isinstance(value, _SUPPORTED_MASKED_VALUE_TYPE_CLASSES):
@@ -44,7 +44,7 @@ class MaskedType(types.Type):
             self.value_type = types.Poison(value)
         super().__init__(name=f"Masked({self.value_type})")
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         # Two MaskedType instances compare equal (and hash equal) iff their
         # parameter ``value_type`` matches, so numba can cache them by repr.
         return hash(repr(self))
@@ -64,14 +64,14 @@ class MaskedConstructor(ConcreteTemplate):
 class MaskedTypeAttrs(AttributeTemplate):
     key = MaskedType
 
-    def resolve_value(self, typ):
+    def resolve_value(self, typ: MaskedType) -> types.Type:
         return typ.value_type
 
-    def resolve_valid(self, typ):
+    def resolve_valid(self, typ: MaskedType) -> types.Type:
         return types.boolean
 
 
-def _register():
+def _register() -> None:
     """Register typing for ``Masked`` and ``MaskedType`` attributes with
     ``numba_cuda_mlir``. Called once at module import.
     """

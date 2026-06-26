@@ -3,8 +3,6 @@
 
 from __future__ import annotations
 
-import warnings
-
 import cupy as cp
 import numpy as np
 import pytest
@@ -15,10 +13,6 @@ from numba_cuda_mlir import (
     cuda,
     types,
 )
-from numba_cuda_mlir.numba_cuda.core.errors import (
-    NumbaPerformanceWarning,
-    NumbaWarning,
-)
 
 import cudf.core.udf.mlir_backend.masked_lowering
 import cudf.core.udf.mlir_backend.masked_typing  # noqa: F401
@@ -26,46 +20,30 @@ from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import DEPRECATED_SM_REGEX
 from cudf.utils._numba import _CUDFNumbaConfig
 
+pytestmark = [
+    pytest.mark.filterwarnings(f"ignore:{DEPRECATED_SM_REGEX}:UserWarning"),
+    pytest.mark.filterwarnings(
+        "ignore:Linking LTOIR with optimization_level:"
+        "numba_cuda_mlir.numba_cuda.core.errors.NumbaWarning"
+    ),
+    pytest.mark.filterwarnings(
+        "ignore::numba_cuda_mlir.numba_cuda.core.errors.NumbaPerformanceWarning"
+    ),
+]
+
 
 def _jit(sig):
-    """Compile a small kernel suppressing the deprecated-SM warning."""
+    """Compile a small kernel for the given signature."""
 
     def deco(fn):
-        with warnings.catch_warnings():
-            warnings.filterwarnings(
-                "ignore",
-                message=DEPRECATED_SM_REGEX,
-                category=UserWarning,
-                module=r"^numba\.cuda(\.|$)",
-            )
-            # Advisory warning raised while linking LTOIR at opt>0; harmless
-            # for these tests and otherwise promoted to an error.
-            warnings.filterwarnings(
-                "ignore",
-                message="Linking LTOIR with optimization_level",
-                category=NumbaWarning,
-            )
-            return cuda.jit(sig)(fn)
+        return cuda.jit(sig)(fn)
 
     return deco
 
 
 def _launch(kernel, *args):
-    """Launch ``kernel[1, 1](*args)``.
-
-    These unit kernels run on a 1x1 grid by design, so suppress the
-    low-occupancy performance warning (which numba_cuda_mlir raises on its
-    own config, independent of ``_CUDFNumbaConfig``) and the advisory LTO
-    linking warning. Both are otherwise promoted to errors by the project's
-    ``filterwarnings = error``.
-    """
-    with _CUDFNumbaConfig(), warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
-        warnings.filterwarnings(
-            "ignore",
-            message="Linking LTOIR with optimization_level",
-            category=NumbaWarning,
-        )
+    """Launch ``kernel[1, 1](*args)`` (a 1x1 grid, by design)."""
+    with _CUDFNumbaConfig():
         kernel[1, 1](*args)
     cuda.synchronize()
 
@@ -76,6 +54,7 @@ _DTYPE_SAMPLES = [
     (types.int32, np.int32, np.int32(123_456)),
     (types.int64, np.int64, np.int64(-9_999_999)),
     (types.uint8, np.uint8, np.uint8(255)),
+    (types.uint16, np.uint16, np.uint16(60_000)),
     (types.uint32, np.uint32, np.uint32(4_000_000_000)),
     (types.uint64, np.uint64, np.uint64(9_223_372_036_854_775_808)),
     (types.float32, np.float32, np.float32(3.5)),

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from numba_cuda_mlir import types
 from numba_cuda_mlir._mlir import ir as mlir_ir
 from numba_cuda_mlir._mlir.dialects import llvm
@@ -12,8 +14,20 @@ from numba_cuda_mlir.models import PrimitiveModel, register_model
 from cudf.core.udf.api import Masked
 from cudf.core.udf.mlir_backend.masked_typing import MaskedType
 
+if TYPE_CHECKING:
+    from numba_cuda_mlir.mlir_lowering import MLIRLower
+    from numba_cuda_mlir.numba_cuda.core.ir import Var
+    from numba_cuda_mlir.numba_cuda.datamodel.manager import (
+        DataModelManager,
+    )
 
-def _pack_masked(builder, target_type, value, valid):
+
+def _pack_masked(
+    builder: MLIRLower,
+    target_type: MaskedType,
+    value: mlir_ir.Value,
+    valid: mlir_ir.Value,
+) -> mlir_ir.Value:
     """Build a ``MaskedType`` struct value from a ``value`` and a ``valid`` bit.
 
     Used by the constructor lowering and by ``pack_return`` for plain
@@ -35,7 +49,9 @@ def _pack_masked(builder, target_type, value, valid):
 
 
 class MaskedTypeModel(PrimitiveModel):
-    def __init__(self, data_model_manager, masked_type):
+    def __init__(
+        self, data_model_manager: DataModelManager, masked_type: MaskedType
+    ) -> None:
         value_mlir = data_model_manager.lookup(
             masked_type.value_type
         ).get_value_type()
@@ -46,7 +62,9 @@ class MaskedTypeModel(PrimitiveModel):
         super().__init__(data_model_manager, masked_type, struct_type)
 
 
-def _lower_masked_constructor(builder, target, args, kwargs):
+def _lower_masked_constructor(
+    builder: MLIRLower, target: Var, args: list[Var], kwargs: list
+) -> None:
     if kwargs:
         raise TypeError(
             "Masked(value, valid) does not accept keyword arguments; "
@@ -62,13 +80,13 @@ def _lower_masked_constructor(builder, target, args, kwargs):
     value_mlir = convert(builder.load_var(val_var), value_mlir_ty)
     valid_mlir = convert(builder.load_var(valid_var), valid_mlir_ty)
 
-    struct_val = _pack_masked(
-        builder, target_type, value_mlir, valid_mlir
-    )
+    struct_val = _pack_masked(builder, target_type, value_mlir, valid_mlir)
     builder.store_var(target, struct_val)
 
 
-def _lower_masked_getattr(context, builder, target, value, attr):
+def _lower_masked_getattr(
+    context, builder: MLIRLower, target: Var, value: Var, attr: str
+) -> None:
     struct_value = builder.load_var(value)
     if attr == "value":
         field_index = 0
@@ -83,13 +101,11 @@ def _lower_masked_getattr(context, builder, target, value, attr):
         container=struct_value,
         position=mlir_ir.DenseI64ArrayAttr.get([field_index]),
     )
-    target_mlir_ty = builder.get_mlir_type(
-        builder.get_numba_type(target.name)
-    )
+    target_mlir_ty = builder.get_mlir_type(builder.get_numba_type(target.name))
     builder.store_var(target, convert(field_value, target_mlir_ty))
 
 
-def _register():
+def _register() -> None:
     """Register the data model and lowerings with ``numba_cuda_mlir``.
 
     Called once at module import; deferred from module top-level so the
