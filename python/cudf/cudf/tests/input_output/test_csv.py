@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import codecs
@@ -2308,7 +2308,7 @@ def test_to_csv_quoting_unsupported(quoting):
     """Test that unsupported quoting styles raise NotImplementedError."""
     df = cudf.DataFrame({"a": [1, 2, 3], "b": ["x", "y", "z"]})
     with pytest.raises(
-        NotImplementedError, match="quoting=.* is not supported"
+        NotImplementedError, match=r"quoting=.* is not supported"
     ):
         df.to_csv(quoting=quoting)
 
