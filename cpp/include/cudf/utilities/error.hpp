@@ -105,7 +105,6 @@ struct data_type_error : std::invalid_argument {
    */
   explicit data_type_error(std::string const& message) : std::invalid_argument(message) {}
 };
-/** @} */
 
 /**
  * @brief Exception type thrown when evaluating an operator function results in an error (e.g.
@@ -140,6 +139,8 @@ struct evaluation_error : public std::exception {
   errc max_error_;       //< The maximum error code that occurred during evaluation
   std::string message_;  //< An error message describing the evaluation error
 };
+
+/** @} */
 
 }  // namespace CUDF_EXPORT cudf
 
