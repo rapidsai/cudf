@@ -564,4 +564,31 @@ fetch_bloom_filters_to_device_async(
   return {std::move(buffers), std::move(fetched_byte_ranges.front()), std::move(fut)};
 }
 
+std::tuple<std::vector<rmm::device_buffer>,
+           std::vector<std::vector<cudf::device_span<uint8_t const>>>,
+           std::future<void>>
+fetch_bloom_filters_to_device_async(
+  cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
+  cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>
+    bloom_filter_byte_ranges_per_source,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  CUDF_FUNC_RANGE();
+
+  // Convert input vectors into host spans for the implementation
+  std::vector<cudf::host_span<cudf::io::text::byte_range_info const>>
+    bloom_filter_byte_range_spans_per_source;
+  bloom_filter_byte_range_spans_per_source.reserve(bloom_filter_byte_ranges_per_source.size());
+  for (auto const& ranges : bloom_filter_byte_ranges_per_source) {
+    bloom_filter_byte_range_spans_per_source.emplace_back(ranges);
+  }
+  return fetch_bloom_filters_to_device_async_impl(
+    datasources,
+    {bloom_filter_byte_range_spans_per_source.data(),
+     bloom_filter_byte_range_spans_per_source.size()},
+    stream,
+    mr);
+}
+
 }  // namespace cudf::io::parquet
