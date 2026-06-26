@@ -1497,14 +1497,12 @@ def _(
     ):
         # Dynamic join - decide strategy at runtime
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
-        # Join uses up to 4 collective IDs: size allgather, one
-        # strategy-specific allgather/bloom prefilter, left shuffle, and
-        # right shuffle.
+        # Join uses up to 4 collective IDs: allgather, left shuffle, right
+        # shuffle, and bloom filter.
         if len(collective_ids) < 4:
             raise ValueError(
                 "Dynamic join requires 4 reserved collective IDs "
-                "(size allgather + strategy allgather/bloom prefilter "
-                "+ left shuffle + right shuffle); got "
+                "(allgather + left shuffle + right shuffle + bloom filter); got "
                 f"{len(collective_ids)} for this Join. "
                 "Ensure ReserveOpIDs is run with dynamic_planning enabled."
             )
