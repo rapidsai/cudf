@@ -563,8 +563,8 @@ void reader_impl::read_compressed_data()
                                            : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
 
-  // Zero out the vector before `decode_page_headers` as `sort_pages` copies each
-  // `PageInfo` as a whole object
+  // Zero out the vector before `decode_page_headers` as it may not write every byte of the buffer,
+  // and`sort_pages` copies `PageInfo` as whole objects.
   auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
     total_pages, _stream, cudf::get_current_device_resource_ref());
 
