@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,7 +29,6 @@
 #include <cuda/iterator>
 #include <thrust/tabulate.h>
 
-#include <cstdio>
 #include <future>
 #include <numeric>
 #include <optional>
@@ -528,25 +527,6 @@ std::optional<std::vector<std::vector<size_type>>> aggregate_reader_metadata::ap
                                              parquet_types,
                                              static_cast<std::size_t>(total_row_groups),
                                              bloom_filter_col_schemas.size()};
-
-  // [bloom-dbg] dev-only: remove before merge. Hexdump the exact bytes each path feeds bloom
-  // filter construction. read_parquet strips the BloomFilterHeader; hybrid scan currently does not,
-  // so its spans are 16 bytes longer (header + bitset) and the caster misreads the header as a
-  // filter block.
-  for (std::size_t dbg_i = 0; dbg_i < bloom_filter_data.size(); ++dbg_i) {
-    auto const& dbg_span = bloom_filter_data[dbg_i];
-    std::vector<std::uint8_t> dbg_host(dbg_span.size());
-    if (not dbg_span.empty()) {
-      cudaMemcpyAsync(
-        dbg_host.data(), dbg_span.data(), dbg_span.size(), cudaMemcpyDeviceToHost, stream.value());
-      stream.synchronize();
-    }
-    std::fprintf(stderr, "[bloom-dbg] bloom span[%zu] size=%zu raw=", dbg_i, dbg_span.size());
-    for (auto const byte : dbg_host) {
-      std::fprintf(stderr, "%02x", static_cast<unsigned>(byte));
-    }
-    std::fprintf(stderr, "\n");
-  }
 
   // Converts bloom filter membership for equality predicate columns to a table
   // containing a column for each `col[i] == literal` predicate to be evaluated.

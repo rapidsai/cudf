@@ -93,71 +93,6 @@ auto dispatch_fetch_tasks(std::size_t num_sources, Task fetch_task)
 }
 
 /**
- * @brief Dispatches a grouped fetch task for each `(group_idx, item_idx)` and collects the results
- *        based on the total number of items across all groups.
- *
- * @tparam Task Callable invocable as `fetch_task(std::size_t group_idx, std::size_t item_idx)`
- * @param items_per_group Number of items in each group
- * @param fetch_task Task to run for each `(group_idx, item_idx)`
- * @return Vector (one per group) of vectors of results, in input order
- */
-template <typename Task>
-auto dispatch_fetch_tasks(cudf::host_span<std::size_t const> items_per_group, Task fetch_task)
-{
-  using result_type = std::invoke_result_t<Task, std::size_t, std::size_t>;
-
-  auto constexpr parallel_threshold = 32;
-
-  auto const num_groups = items_per_group.size();
-  auto const total_items =
-    std::accumulate(items_per_group.begin(), items_per_group.end(), std::size_t{0});
-
-  std::vector<std::vector<result_type>> results(num_groups);
-
-  if (total_items < parallel_threshold) {
-    // Run sequentially to avoid task dispatch overhead
-    std::for_each(cuda::counting_iterator<std::size_t>(0),
-                  cuda::counting_iterator<std::size_t>(num_groups),
-                  [&](std::size_t group_idx) {
-                    results[group_idx].reserve(items_per_group[group_idx]);
-                    std::for_each(
-                      cuda::counting_iterator<std::size_t>(0),
-                      cuda::counting_iterator<std::size_t>(items_per_group[group_idx]),
-                      [&](std::size_t item_idx) {
-                        results[group_idx].emplace_back(fetch_task(group_idx, item_idx));
-                      });
-                  });
-  } else {
-    // Dispatch every item to the host worker pool, keeping futures grouped to preserve input order
-    std::vector<std::vector<std::future<result_type>>> tasks(num_groups);
-    std::for_each(
-      cuda::counting_iterator<std::size_t>(0),
-      cuda::counting_iterator<std::size_t>(num_groups),
-      [&](std::size_t group_idx) {
-        tasks[group_idx].reserve(items_per_group[group_idx]);
-        std::for_each(cuda::counting_iterator<std::size_t>(0),
-                      cuda::counting_iterator<std::size_t>(items_per_group[group_idx]),
-                      [&](std::size_t item_idx) {
-                        tasks[group_idx].emplace_back(cudf::detail::host_worker_pool().submit_task(
-                          [&fetch_task, group_idx, item_idx]() {
-                            return fetch_task(group_idx, item_idx);
-                          }));
-                      });
-      });
-    std::for_each(cuda::counting_iterator<std::size_t>(0),
-                  cuda::counting_iterator<std::size_t>(num_groups),
-                  [&](std::size_t group_idx) {
-                    results[group_idx].reserve(items_per_group[group_idx]);
-                    std::transform(tasks[group_idx].begin(),
-                                   tasks[group_idx].end(),
-                                   std::back_inserter(results[group_idx]),
-                                   [](auto& task) { return task.get(); });
-                  });
-  }
-  return results;
-}
-
-/**
  * @copydoc cudf::io::parquet::fetch_footers_to_host
  */
 std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host_impl(
@@ -456,18 +391,8 @@ fetch_bloom_filters_to_device_async_impl(
   rmm::device_async_resource_ref mr)
 {
   auto const num_sources = datasources.size();
-  CUDF_EXPECTS(
-    num_sources == bloom_filter_byte_ranges_per_source.size(),
-    "Encountered mismatch in number of datasources and bloom filter byte range spans");
-
-  // Number of bloom filters per source (no input flattening needed). The grouped dispatch below
-  // decides sequential vs. host-worker-pool execution from the TOTAL count across sources, so reads
-  // parallelize even within a single source (the common case).
-  std::vector<std::size_t> bloom_filters_per_source(num_sources);
-  std::transform(bloom_filter_byte_ranges_per_source.begin(),
-                 bloom_filter_byte_ranges_per_source.end(),
-                 bloom_filters_per_source.begin(),
-                 [](auto const& ranges) { return ranges.size(); });
+  CUDF_EXPECTS(num_sources == bloom_filter_byte_ranges_per_source.size(),
+               "Encountered mismatch in number of datasources and bloom filter byte range spans");
 
   // Read + parse a single bloom filter header to host and return its bitset-only byte range
   // `(offset + header_size, num_bytes)`. The reader emits an empty `{0, 0}` placeholder for a chunk
@@ -480,7 +405,7 @@ fetch_bloom_filters_to_device_async_impl(
     if (bloom_range.is_empty()) { return {0, 0}; }
     auto const header_read_size =
       std::min<int64_t>(bloom_range.size(), detail::bloom_filter_header_max_size);
-    auto const header = datasource.host_read(static_cast<std::size_t>(bloom_range.offset()),
+    auto const header      = datasource.host_read(static_cast<std::size_t>(bloom_range.offset()),
                                              static_cast<std::size_t>(header_read_size));
     auto const header_info = detail::parse_bloom_filter_header({header->data(), header->size()});
     CUDF_EXPECTS(header_info.has_value(), "Encountered an invalid bloom filter header");
@@ -488,11 +413,26 @@ fetch_bloom_filters_to_device_async_impl(
     return {bloom_range.offset() + header_size, static_cast<int64_t>(bitset_size)};
   };
 
-  // Read + parse headers per `(source, bloom filter)`; results come back grouped per source.
-  auto const bitset_byte_ranges_per_source = dispatch_fetch_tasks(
-    bloom_filters_per_source, [&](std::size_t source_idx, std::size_t bloom_idx) {
-      return fetch_bitset_range(datasources[source_idx].get(),
-                                bloom_filter_byte_ranges_per_source[source_idx][bloom_idx]);
+  // Parse each source's bloom filter headers with one task per source, reusing the shared
+  // `dispatch_fetch_tasks` (sequential for few sources, host worker pool for many).
+  //
+  // Trade-off of reusing the per-source dispatcher: a source's bloom-filter header reads are issued
+  // one at a time within its task - we do NOT split them into separate per-(source, bloom filter)
+  // `host_read` tasks, so the individual header reads of a single source are not parallelized. Each
+  // task also reads only its own datasource, so there are no concurrent reads on a single
+  // datasource.
+  auto const bitset_byte_ranges_per_source =
+    dispatch_fetch_tasks(num_sources, [&](std::size_t source_idx) {
+      auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
+      auto& datasource         = datasources[source_idx].get();
+      std::vector<cudf::io::text::byte_range_info> bitset_ranges;
+      bitset_ranges.reserve(bloom_ranges.size());
+      std::transform(
+        bloom_ranges.begin(),
+        bloom_ranges.end(),
+        std::back_inserter(bitset_ranges),
+        [&](auto const& bloom_range) { return fetch_bitset_range(datasource, bloom_range); });
+      return bitset_ranges;
     });
 
   // Fetch only the header-free bitsets to device. Delegate to the multi-source

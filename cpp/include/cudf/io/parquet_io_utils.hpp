@@ -157,7 +157,8 @@ fetch_byte_ranges_to_device_async(
  * @ingroup io_utils
  *
  * @param datasource Input datasource
- * @param bloom_filter_byte_ranges Byte ranges of complete bloom filters to fetch, must span a complete bloom filter
+ * @param bloom_filter_byte_ranges Byte ranges of complete bloom filters to fetch, must span a
+ * complete bloom filter
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
