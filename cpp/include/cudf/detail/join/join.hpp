@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/join/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
