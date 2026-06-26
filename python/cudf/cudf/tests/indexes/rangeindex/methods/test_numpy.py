@@ -33,5 +33,3 @@ def test_rangeindex_to_numpy_copy_true_returns_new_array():
 
     assert copied is not base
     np.testing.assert_array_equal(copied, base)
-
-
