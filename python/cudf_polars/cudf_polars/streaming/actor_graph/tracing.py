@@ -86,7 +86,11 @@ class ActorTracer:
         self.duplicated = duplicated
 
     def set_extra(self, key: str, value: Any) -> None:
-        """Attach structured metadata to the actor trace event."""
+        """Attach structured metadata to the current actor trace event.
+
+        This is useful for nested runtime decisions that do not have a
+        separate IR node, but should still be logged with their parent actor.
+        """
         self.extra[key] = value
 
 
