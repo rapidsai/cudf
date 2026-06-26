@@ -26,6 +26,7 @@ from cudf_polars.quent._types import (
     Port,
     Query,
     Worker,
+    _deserialize_value,
 )
 from cudf_polars.utils.config import ConfigOptions
 
@@ -94,6 +95,22 @@ def test_attribute_serialization_uses_quent_value_envelope() -> None:
         "key": "enabled",
         "value": {"U8": 1},
     }
+
+
+def test_deserialize_value_requires_single_variant() -> None:
+    with pytest.raises(
+        ValueError,
+        match=r"Expected Quent attribute value envelope with exactly one variant, got '2' instead.",
+    ):
+        _deserialize_value({"U8": 1, "I8": -1})
+
+
+def test_deserialize_value_raises_on_unknown_variant() -> None:
+    with pytest.raises(
+        ValueError,
+        match="Unsupported Quent custom attribute variant: 'UnsupportedVariant'",
+    ):
+        _deserialize_value({"UnsupportedVariant": "x"})
 
 
 @pytest.fixture

@@ -479,9 +479,10 @@ def _serialize_value(value: Value | None) -> dict[str, Any] | None:
 def _deserialize_value(value: dict[str, Any] | None) -> Value | None:
     if value is None:
         return None
-    if len(value) != 1:
+    n = len(value)
+    if n != 1:
         raise ValueError(
-            "Expected Quent attribute value envelope with exactly one variant."
+            f"Expected Quent attribute value envelope with exactly one variant, got '{n}' instead."
         )
 
     variant, deserialized = next(iter(value.items()))
@@ -491,4 +492,4 @@ def _deserialize_value(value: dict[str, Any] | None) -> Value | None:
         return float(deserialized)
     if variant == "String":
         return str(deserialized)
-    raise ValueError(f"Unsupported Quent custom attribute variant: {variant}")
+    raise ValueError(f"Unsupported Quent custom attribute variant: '{variant}'")
