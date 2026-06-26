@@ -395,13 +395,10 @@ fetch_bloom_filters_to_device_async_impl(
                "Encountered mismatch in number of datasources and bloom filter byte range spans");
 
   // Read + parse a single bloom filter header to host and return its bitset-only byte range
-  // `(offset + header_size, num_bytes)`. The reader emits an empty `{0, 0}` placeholder for a chunk
-  // whose column has no bloom filter written (to keep the per-source ranges aligned with the row
-  // group x column grid), so empty ranges pass through unchanged. Only the header prefix is read to
-  // host so a (potentially large) bitset is never staged on the host.
   auto const fetch_bitset_range =
     [](cudf::io::datasource& datasource,
        cudf::io::text::byte_range_info const& bloom_range) -> cudf::io::text::byte_range_info {
+    // placeholder for a chunk whose column has no bloom filter written
     if (bloom_range.is_empty()) { return {0, 0}; }
     auto const header_read_size =
       std::min<int64_t>(bloom_range.size(), detail::bloom_filter_header_max_size);
@@ -413,14 +410,7 @@ fetch_bloom_filters_to_device_async_impl(
     return {bloom_range.offset() + header_size, static_cast<int64_t>(bitset_size)};
   };
 
-  // Parse each source's bloom filter headers with one task per source, reusing the shared
-  // `dispatch_fetch_tasks` (sequential for few sources, host worker pool for many).
-  //
-  // Trade-off of reusing the per-source dispatcher: a source's bloom-filter header reads are issued
-  // one at a time within its task - we do NOT split them into separate per-(source, bloom filter)
-  // `host_read` tasks, so the individual header reads of a single source are not parallelized. Each
-  // task also reads only its own datasource, so there are no concurrent reads on a single
-  // datasource.
+  // Parse each source's bloom filter headers with one task per source
   auto const bitset_byte_ranges_per_source =
     dispatch_fetch_tasks(num_sources, [&](std::size_t source_idx) {
       auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
@@ -435,11 +425,7 @@ fetch_bloom_filters_to_device_async_impl(
       return bitset_ranges;
     });
 
-  // Fetch only the header-free bitsets to device. Delegate to the multi-source
-  // `fetch_byte_ranges_to_device_async`, which already performs the `vector -> host_span`
-  // conversion, so the grouped ranges are passed through directly. cuco's bloom filter probe
-  // requires a 32-byte-aligned bitset; the rmm buffer base is 256-byte aligned and bitset sizes are
-  // multiples of 32, so each bitset lands at a 32-byte-aligned address.
+  // Fetch only the header-free bitsets to device
   auto result =
     fetch_byte_ranges_to_device_async(datasources, bitset_byte_ranges_per_source, stream, mr);
 
