@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
@@ -127,8 +128,20 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    _supported_math_fns = frozenset(
+        {
+            "cot",
+            "degrees",
+            "radians",
+            "log1p",
+            "sign",
+        }
+    )
     _supported_fns = frozenset().union(
-        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+        _supported_misc_fns,
+        _supported_cum_aggs,
+        _supported_math_fns,
+        _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
@@ -138,7 +151,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
         }
-    ).union(_OP_MAPPING.keys())
+    ).union(_supported_math_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -536,6 +549,85 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            operand = column.obj
+            if self.name == "sign":
+                is_float = plc.traits.is_floating_point(out_type)
+                zero = plc.Scalar.from_py(
+                    0.0 if is_float else 0, out_type, stream=df.stream
+                )
+                positive = plc.binaryop.binary_operation(
+                    operand,
+                    zero,
+                    plc.binaryop.BinaryOperator.GREATER,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
+                negative = plc.binaryop.binary_operation(
+                    operand,
+                    zero,
+                    plc.binaryop.BinaryOperator.LESS,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
+                signed = plc.copying.copy_if_else(
+                    plc.Scalar.from_py(
+                        1.0 if is_float else 1, out_type, stream=df.stream
+                    ),
+                    operand,
+                    positive,
+                    stream=df.stream,
+                )
+                signed = plc.copying.copy_if_else(
+                    plc.Scalar.from_py(
+                        -1.0 if is_float else -1, out_type, stream=df.stream
+                    ),
+                    signed,
+                    negative,
+                    stream=df.stream,
+                )
+                return Column(signed, dtype=self.dtype)
+            if operand.type().id() != out_type.id():
+                operand = plc.unary.cast(operand, out_type, stream=df.stream)
+            if self.name in ("degrees", "radians"):
+                factor = 180.0 / math.pi if self.name == "degrees" else math.pi / 180.0
+                return Column(
+                    plc.binaryop.binary_operation(
+                        operand,
+                        plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                        plc.binaryop.BinaryOperator.MUL,
+                        out_type,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+            )
+            column_ref = plc.expressions.ColumnReference(0)
+            if self.name == "cot":
+                expression = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV,
+                    one,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.TAN, column_ref
+                    ),
+                )
+            else:
+                expression = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.LOG,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.ADD, column_ref, one
+                    ),
+                )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([operand]), expression, stream=df.stream
+                ),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
