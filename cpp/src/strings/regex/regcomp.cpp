@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1293,7 +1293,7 @@ match_flags reprog::compute_match_flags() const
 }
 
 #ifndef NDEBUG
-void reprog::print()
+void reprog::print() const
 {
   printf("Flags = 0x%08x\n", static_cast<uint32_t>(_flags));
   printf("Instructions:\n");
