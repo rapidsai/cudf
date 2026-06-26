@@ -1320,8 +1320,28 @@ dependencies:
     #       other packages with -cu{nn}x suffixes in this file.
     #       All RAPIDS wheel builds (including in devcontainers) expect cupy to be suffixed.
     specific:
-      - output_types: [requirements, pyproject]
+      - output_types: requirements
         matrices:
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - cupy-cuda12x>=14.0.1,!=14.1.0
+          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
+          - matrix:
+            packages:
+              - cupy-cuda13x>=14.0.1,!=14.1.0
+      - output_types: pyproject
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              use_cuda_wheels: "false"
+            packages:
+              - cupy-cuda12x>=14.0.1,!=14.1.0
+          - matrix:
+              cuda: "13.*"
+              use_cuda_wheels: "false"
+            packages:
+              - cupy-cuda13x>=14.0.1,!=14.1.0
           - matrix:
               cuda: "12.*"
             packages:
