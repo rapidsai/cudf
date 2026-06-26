@@ -2734,8 +2734,8 @@ class RangeIndex(Index):
             ``to_numpy()`` is no-copy. Rather, ``copy=True`` ensures that
             a copy is made, even if not strictly necessary.
         na_value : Any, default None
-            Must be ``None``. ``RangeIndex`` cannot contain missing values,
-            so any other value will raise a ``ValueError``.
+            Value to use for missing values. Since ``RangeIndex`` cannot
+            contain missing values, this parameter has no effect.
 
         Returns
         -------
