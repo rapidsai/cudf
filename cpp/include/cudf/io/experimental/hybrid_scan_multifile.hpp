@@ -310,6 +310,124 @@ class hybrid_scan_multifile {
     rmm::device_async_resource_ref mr) const;
 
   /**
+   * @brief Setup chunking information for filter columns and preprocess the input data pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row group indices, one inner vector per source
+   * @param row_mask Boolean column spanning all selected rows across all sources and indicating
+   * which rows need to be read. All rows read if empty
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask
+   * @param column_chunk_data Flattened device spans of filter column chunk data returned in the
+   * same order as `filter_column_chunks_byte_ranges`
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
+   */
+  void setup_chunking_for_filter_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Materializes a chunk of filter columns and updates the corresponding range of input row
+   * mask to only the rows that exist in the output table
+   *
+   * @param[in,out] row_mask Mutable boolean column spanning all selected rows across all sources
+   * and indicating surviving rows from page pruning
+   *
+   * @return Table chunk of materialized filter columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
+    cudf::mutable_column_view& row_mask) const;
+
+  /**
+   * @brief Setup chunking information for payload columns and preprocess the input data pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row group indices, one inner vector per source
+   * @param row_mask Boolean column spanning all selected rows across all sources and indicating
+   * which rows need to be read. All rows read if empty
+   * @param mask_data_pages Whether to build and use a data page mask using the row mask
+   * @param column_chunk_data Flattened device spans of payload column chunk data returned in the
+   * same order as `payload_column_chunks_byte_ranges`
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
+   */
+  void setup_chunking_for_payload_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::column_view const& row_mask,
+    use_data_page_mask mask_data_pages,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Materializes a chunk of payload columns and applies the corresponding range of input row
+   * mask to the output table chunk
+   *
+   * @param row_mask Boolean column spanning all selected rows across all sources and indicating
+   * which rows need to be read. All rows read if empty
+   *
+   * @return Table chunk of materialized payload columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
+    cudf::column_view const& row_mask) const;
+
+  /**
+   * @brief Setup chunking information for all (or selected) columns and preprocess the input data
+   * pages
+   *
+   * @param chunk_read_limit Limit on total number of bytes to be returned per table chunk. `0` if
+   * there is no limit
+   * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
+   * there is no limit
+   * @param row_group_indices Input row group indices, one inner vector per source
+   * @param column_chunk_data Flattened device spans of column chunk data returned in the same order
+   * as `all_column_chunks_byte_ranges`
+   * @param options Parquet reader options
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the device memory for the output table chunks
+   */
+  void setup_chunking_for_all_columns(
+    std::size_t chunk_read_limit,
+    std::size_t pass_read_limit,
+    cudf::host_span<std::vector<size_type> const> row_group_indices,
+    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    parquet_reader_options const& options,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @brief Materializes a chunk of all (or selected) columns and returns the output table chunk
+   *
+   * @return Table chunk of materialized all (or selected) columns and metadata
+   */
+  [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
+
+  /**
+   * @brief Check if there is any parquet data left to read for the current chunked setup
+   *
+   * @return Boolean indicating if there is any data left to read
+   */
+  [[nodiscard]] bool has_next_table_chunk() const;
+
+  /**
    * @brief Partition row groups into passes such that the amount of GPU memory required to read,
    * decompress and decode a pass is bounded by the specified limit
    *

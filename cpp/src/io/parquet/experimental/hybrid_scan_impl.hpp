@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -161,7 +161,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                    parquet_reader_options const& options);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::materialize_filter_columns
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -185,7 +185,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                     parquet_reader_options const& options);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::materialize_payload_columns
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::materialize_payload_columns
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -214,7 +214,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_filter_columns
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::setup_chunking_for_filter_columns
    */
   void setup_chunking_for_filter_columns(
     std::size_t chunk_read_limit,
@@ -228,13 +228,13 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::materialize_filter_columns_chunk
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::materialize_filter_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
     cudf::mutable_column_view& row_mask);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_payload_columns
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::setup_chunking_for_payload_columns
    */
   void setup_chunking_for_payload_columns(
     std::size_t chunk_read_limit,
@@ -248,13 +248,13 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::materialize_payload_columns_chunk
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::materialize_payload_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
     cudf::column_view const& row_mask);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::setup_chunking_for_all_columns
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::setup_chunking_for_all_columns
    */
   void setup_chunking_for_all_columns(
     std::size_t chunk_read_limit,
@@ -266,7 +266,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::materialize_all_columns_chunk
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::materialize_all_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk();
 
@@ -290,26 +290,9 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                              std::size_t pass_read_limit) const;
 
   /**
-   * @copydoc cudf::io::experimental::hybrid_scan::has_next_table_chunk
+   * @copydoc cudf::io::experimental::hybrid_scan_multifile::has_next_table_chunk
    */
   [[nodiscard]] bool has_next_table_chunk();
-
-  /**
-   * @brief Updates the output row mask such that such that out_row_mask[i + out_row_mask_offset] =
-   * true if and only if in_row_mask[i] is valid and true
-   *
-   * Updates the output row mask to reflect the final valid and surviving rows from the input row
-   * mask. This is inline with the masking behavior of cudf::detail::apply_boolean_mask
-   *
-   * @param in_row_mask Input row mask column
-   * @param out_row_mask Output row mask column
-   * @param out_row_mask_offset Offset into the output row mask column
-   * @param stream CUDA stream
-   */
-  static void update_row_mask(cudf::column_view const& in_row_mask,
-                              cudf::mutable_column_view& out_row_mask,
-                              cudf::size_type out_row_mask_offset,
-                              rmm::cuda_stream_view stream);
 
  private:
   /**
@@ -526,6 +509,23 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
                                           RowMaskView row_mask);
 
   /**
+   * @brief Updates the output row mask such that out_row_mask[i + out_row_mask_offset] = true if
+   * and only if in_row_mask[i] is valid and true
+   *
+   * Updates the output row mask to reflect the final valid and surviving rows from the input row
+   * mask. This is inline with the masking behavior of cudf::detail::apply_boolean_mask
+   *
+   * @param in_row_mask Input row mask column
+   * @param out_row_mask Output row mask column
+   * @param out_row_mask_offset Offset into the output row mask column
+   * @param stream CUDA stream
+   */
+  static void update_row_mask(cudf::column_view const& in_row_mask,
+                              cudf::mutable_column_view& out_row_mask,
+                              cudf::size_type out_row_mask_offset,
+                              rmm::cuda_stream_view stream);
+
+  /**
    * @brief Check if this is the first output chunk
    *
    * @return True if this is the first output chunk
@@ -535,7 +535,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     return _file_itm_data._output_chunk_count == 0 and not _output_chunk_produced;
   }
 
- private:
   aggregate_reader_metadata* _extended_metadata;
 
   std::optional<std::vector<std::string>> _filter_columns_names;

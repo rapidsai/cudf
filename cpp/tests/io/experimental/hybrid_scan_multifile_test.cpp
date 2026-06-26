@@ -87,13 +87,23 @@ void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
   auto const all_table = hybrid_scan_multifile_single_step(
     source_info, filter_expression, {}, case_sensitive_names, stream, mr);
 
+  auto const [chunked_filter_table, chunked_payload_table] = chunked_hybrid_scan_multifile(
+    source_info, filter_expression, {}, case_sensitive_names, stream, mr);
+
+  auto const chunked_all_table = chunked_hybrid_scan_multifile_single_step(
+    source_info, filter_expression, {}, case_sensitive_names, stream, mr);
+
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select({0}), filter_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select({0}), chunked_filter_table->view());
 
   auto payload_column_indices = std::vector<cudf::size_type>(columns.size() - 1);
   std::iota(payload_column_indices.begin(), payload_column_indices.end(), 1);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select(payload_column_indices),
                                      payload_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select(payload_column_indices),
+                                     chunked_payload_table->view());
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->view(), all_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->view(), chunked_all_table->view());
 }
 
 }  // namespace

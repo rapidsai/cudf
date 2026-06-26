@@ -10,17 +10,25 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/concatenate.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/traits.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/iterator>
 
+#include <algorithm>
 #include <format>
+#include <iterator>
+#include <memory>
 #include <random>
 #include <string>
 #include <utility>
@@ -234,4 +242,29 @@ auto create_parquet_with_stats(
   cudf::io::write_parquet(out_opts);
 
   return std::pair{std::move(table), std::move(buffer)};
+}
+
+/**
+ * @brief Concatenate a vector of tables and return the resultant table
+ *
+ * @param tables Vector of tables to concatenate
+ * @param stream CUDA stream to use
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ *
+ * @return Unique pointer to the resultant concatenated table
+ */
+inline std::unique_ptr<cudf::table> concatenate_tables(
+  std::vector<std::unique_ptr<cudf::table>>&& tables,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  auto table_views = std::vector<cudf::table_view>{};
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [](auto const& tbl) {
+      return tbl->view();
+    });
+  return cudf::concatenate(table_views, stream, mr);
 }
