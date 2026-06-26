@@ -24,7 +24,19 @@ using cudf::io::parquet::experimental::use_data_page_mask;
 
 namespace {
 
-std::vector<std::vector<cudf::io::text::byte_range_info>> column_chunks_byte_ranges_per_source(
+/**
+ * @brief Device buffers and spans from multiple input sources
+ */
+struct multisource_device_data {
+  std::vector<rmm::device_buffer> buffers;
+  std::vector<std::vector<cudf::device_span<uint8_t const>>> per_source_spans;
+  std::vector<cudf::device_span<uint8_t const>> flat_spans;
+};
+
+/**
+ * @brief Groups a flat byte range list by source using the specified source map
+ */
+std::vector<std::vector<cudf::io::text::byte_range_info>> group_byte_ranges_by_source(
   std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
     byte_ranges_and_source_map,
   std::size_t num_sources)
@@ -46,21 +58,18 @@ std::vector<std::vector<cudf::io::text::byte_range_info>> column_chunks_byte_ran
   return byte_ranges_per_source;
 }
 
-struct column_chunk_data {
-  std::vector<rmm::device_buffer> buffers;
-  std::vector<std::vector<cudf::device_span<uint8_t const>>> per_source_spans;
-  std::vector<cudf::device_span<uint8_t const>> flat_spans;
-};
-
-column_chunk_data fetch_column_chunks(
+/**
+ * @brief Fetches byte ranges from multiple sources and returns per-source and flattened spans
+ */
+multisource_device_data fetch_multisource_device_data(
   multifile_inputs const& inputs,
   std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
     byte_ranges_and_source_map,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto byte_ranges_per_source =
-    column_chunks_byte_ranges_per_source(byte_ranges_and_source_map, inputs.datasources.size());
+  auto const byte_ranges_per_source =
+    group_byte_ranges_by_source(byte_ranges_and_source_map, inputs.datasources.size());
   auto [buffers, per_source_spans, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
     inputs.datasource_refs,
     cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{byte_ranges_per_source},
@@ -101,7 +110,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
   auto const row_groups = reader.filter_row_groups_with_stats(input_row_groups, options, stream);
   auto row_mask = reader.build_row_mask_with_page_index_stats(row_groups, options, stream, mr);
 
-  auto filter_column_chunks = fetch_column_chunks(
+  auto filter_column_chunks = fetch_multisource_device_data(
     inputs, reader.filter_column_chunks_byte_ranges(row_groups, options), stream, mr);
   auto row_mask_view = row_mask->mutable_view();
   auto filter_result = reader.materialize_filter_columns(row_groups,
@@ -112,7 +121,7 @@ std::tuple<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::table>> hybrid_sc
                                                          stream,
                                                          mr);
 
-  auto payload_column_chunks = fetch_column_chunks(
+  auto payload_column_chunks = fetch_multisource_device_data(
     inputs, reader.payload_column_chunks_byte_ranges(row_groups, options), stream, mr);
   auto payload_result = reader.materialize_payload_columns(row_groups,
                                                            payload_column_chunks.flat_spans,
@@ -147,7 +156,7 @@ std::unique_ptr<cudf::table> hybrid_scan_multifile_single_step(
   auto const input_row_groups = reader.all_row_groups(options);
   auto const row_groups = reader.filter_row_groups_with_stats(input_row_groups, options, stream);
 
-  auto all_column_chunks = fetch_column_chunks(
+  auto all_column_chunks = fetch_multisource_device_data(
     inputs, reader.all_column_chunks_byte_ranges(row_groups, options), stream, mr);
   return reader
     .materialize_all_columns(row_groups, all_column_chunks.flat_spans, options, stream, mr)
