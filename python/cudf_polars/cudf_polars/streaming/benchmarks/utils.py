@@ -264,6 +264,7 @@ class QueryRunResult:
     plan: SerializablePlan | None
     iteration_failures: list[tuple[int, int]]
     validation_failed: bool
+    partition_plan_rows: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -1000,6 +1001,16 @@ def run_polars_query(
 
         plan = serialize_query(q, engine)
 
+    part_plan_rows = []
+    if (
+        getattr(args, "explain_partition_plan", False)
+        and engine is not None
+        and run_config.frontend in _STREAMING_FRONTENDS
+    ):
+        from cudf_polars.streaming.explain import collect_partition_plan
+
+        part_plan_rows = collect_partition_plan(q, engine, q_id)
+
     casts = benchmark.EXPECTED_CASTS.get(q_id, [])
     if numeric_type == "decimal":
         casts.extend(benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, []))
@@ -1104,6 +1115,7 @@ def run_polars_query(
         plan=plan,
         iteration_failures=iteration_failures,
         validation_failed=validation_failed,
+        partition_plan_rows=part_plan_rows,
     )
 
 
@@ -1126,6 +1138,7 @@ def _run_query_loop(
     plans: dict[int, SerializablePlan] = {}
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
+    all_partition_plan_rows: list = []
 
     for q_id in run_config.queries:
         if engine is not None:
@@ -1170,6 +1183,12 @@ def _run_query_loop(
         query_failures.extend(result.iteration_failures)
         if result.validation_failed:
             validation_failures.append(q_id)
+        all_partition_plan_rows.extend(result.partition_plan_rows)
+
+    if all_partition_plan_rows and getattr(args, "explain_partition_plan", False):
+        from cudf_polars.streaming.explain import format_partition_plan_table
+
+        print(format_partition_plan_table(all_partition_plan_rows), flush=True)
 
     return records, plans, validation_failures, query_failures
 
@@ -1997,6 +2016,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--explain-logical",
         action=argparse.BooleanOptionalAction,
         help="Print an outline of the logical plan.",
+        default=False,
+    )
+    parser.add_argument(
+        "--explain-partition-plan",
+        action=argparse.BooleanOptionalAction,
+        help="Print a combined partition plan summary table across all queries.",
         default=False,
     )
     parser.add_argument(
