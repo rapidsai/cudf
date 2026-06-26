@@ -149,8 +149,8 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
                  "Streaming groupby does not support MIN/MAX on variable-width types "
                  "(internally decomposed to ARGMIN/ARGMAX).",
                  std::invalid_argument);
-    CUDF_EXPECTS(k != aggregation::SUM_WITH_OVERFLOW,
-                 "Streaming groupby does not support SUM_WITH_OVERFLOW "
+    CUDF_EXPECTS(k != aggregation::SUM_OVERFLOW,
+                 "Streaming groupby does not support SUM_OVERFLOW "
                  "(struct intermediate cannot be merged across batches).",
                  std::invalid_argument);
   }

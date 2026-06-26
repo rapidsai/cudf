@@ -159,7 +159,7 @@ ConfigureTest(
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/sum_with_overflow_tests.cpp
+  groupby/sum_overflow_tests.cpp
   groupby/tdigest_tests.cpp
   groupby/topk_tests.cpp
   groupby/var_tests.cpp

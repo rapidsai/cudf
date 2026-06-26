@@ -79,8 +79,16 @@ public final class GroupByAggregation {
    * unspecified; the boolean flag is the source of truth. Only hash-based
    * groupby is supported; sort-based groupby will throw.
    */
+  public static GroupByAggregation sumOverflow() {
+    return new GroupByAggregation(Aggregation.sumOverflow());
+  }
+
+  /**
+   * @deprecated Use {@link #sumOverflow()} instead.
+   */
+  @Deprecated
   public static GroupByAggregation sumWithOverflow() {
-    return new GroupByAggregation(Aggregation.sumWithOverflow());
+    return sumOverflow();
   }
 
   /**

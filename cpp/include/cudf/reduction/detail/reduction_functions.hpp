@@ -55,7 +55,7 @@ std::unique_ptr<scalar> sum(column_view const& col,
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Struct scalar with sum and overflow flag
  */
-std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
+std::unique_ptr<scalar> sum_overflow(column_view const& col,
                                           data_type const output_type,
                                           std::optional<std::reference_wrapper<scalar const>> init,
                                           rmm::cuda_stream_view stream,

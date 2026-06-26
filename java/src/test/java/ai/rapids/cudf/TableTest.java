@@ -7848,7 +7848,7 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private static void assertSumWithOverflowResult(Table results,
+  private static void assertSumOverflowResult(Table results,
                                                   int[] expectedKeys,
                                                   long[] expectedSums,
                                                   boolean[] expectedOvf) {
@@ -7872,43 +7872,43 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testGroupByHashSumWithOverflow() {
+  void testGroupByHashSumOverflow() {
     try (Table input = new Table.TestBuilder()
              .column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
              .column(10L, 20L, 30L, 11L, 21L, 22L, 12L, 31L, 32L, 23L)
              .build();
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1));
+             GroupByAggregation.sumOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
       assertEquals(2, sorted.getNumberOfColumns());
       assertEquals(3, sorted.getRowCount());
-      assertSumWithOverflowResult(sorted,
+      assertSumOverflowResult(sorted,
           new int[]{1, 2, 3}, new long[]{33L, 86L, 93L}, new boolean[]{false, false, false});
     }
   }
 
   @Test
-  void testGroupByHashSumWithOverflowDetectsOverflow() {
+  void testGroupByHashSumOverflowDetectsOverflow() {
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
              .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
              .build();
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1));
+             GroupByAggregation.sumOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
-      assertSumWithOverflowResult(sorted, new int[]{1, 2}, null, new boolean[]{true, false});
+      assertSumOverflowResult(sorted, new int[]{1, 2}, null, new boolean[]{true, false});
     }
   }
 
   @Test
-  void testGroupByHashSumWithOverflowInt32() {
+  void testGroupByHashSumOverflowInt32() {
     // Int32 input: hash groupby supports it (reduction does not).
     try (Table input = new Table.TestBuilder()
              .column(1, 2, 1, 2)
              .column(1, 10, 2, 20)
              .build();
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1));
+             GroupByAggregation.sumOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
       ColumnVector structCol = sorted.getColumn(1);
       assertEquals(DType.STRUCT, structCol.getType());
@@ -7926,49 +7926,49 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testGroupBySortSumWithOverflow() {
+  void testGroupBySortSumOverflow() {
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
              .column(1L, 2L, 3L, 4L)
              .build();
          // median() is sort-only, so it forces the sort-based groupby path
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1),
+             GroupByAggregation.sumOverflow().onColumn(1),
              GroupByAggregation.median().onColumn(1))) {
-      assertSumWithOverflowResult(results,
+      assertSumOverflowResult(results,
           new int[]{1, 2}, new long[]{3L, 7L}, new boolean[]{false, false});
     }
   }
 
   @Test
-  void testGroupBySortSumWithOverflowDetectsOverflow() {
+  void testGroupBySortSumOverflowDetectsOverflow() {
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
              .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
              .build();
          // median() is sort-only, so it forces the sort-based groupby path
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1),
+             GroupByAggregation.sumOverflow().onColumn(1),
              GroupByAggregation.median().onColumn(1))) {
-      assertSumWithOverflowResult(results, new int[]{1, 2}, null, new boolean[]{true, false});
+      assertSumOverflowResult(results, new int[]{1, 2}, null, new boolean[]{true, false});
     }
   }
 
-  // For SUM_WITH_OVERFLOW on fixed-point inputs, cudf's hash groupby produces a
+  // For SUM_OVERFLOW on fixed-point inputs, cudf's hash groupby produces a
   // STRUCT whose sum-child has the same decimal type AND scale as the input
-  // (target_type_impl<fixed_point, SUM_WITH_OVERFLOW> uses Source as the sum
+  // (target_type_impl<fixed_point, SUM_OVERFLOW> uses Source as the sum
   // type at cpp/include/cudf/detail/aggregation/aggregation.hpp). The three
   // tests below assert both the values and that scale is preserved end-to-end
   // through the JNI struct-column extraction path.
   @Test
-  void testGroupByHashSumWithOverflowDecimal32() {
+  void testGroupByHashSumOverflowDecimal32() {
     final int scale = -2;
     try (Table input = new Table.TestBuilder()
              .column(1, 2, 1, 2, 1)
              .decimal32Column(scale, 100, 200, 150, 250, 50)  // 1.00, 2.00, 1.50, 2.50, 0.50
              .build();
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1));
+             GroupByAggregation.sumOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
       ColumnVector keyCol = sorted.getColumn(0);
       ColumnVector structCol = sorted.getColumn(1);
@@ -7991,14 +7991,14 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testGroupByHashSumWithOverflowDecimal64() {
+  void testGroupByHashSumOverflowDecimal64() {
     final int scale = -4;
     try (Table input = new Table.TestBuilder()
              .column(1, 2, 1, 2)
              .decimal64Column(scale, 10000L, 20000L, 30000L, 40000L)  // 1.0000, 2.0000, ...
              .build();
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1));
+             GroupByAggregation.sumOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
       ColumnVector structCol = sorted.getColumn(1);
       assertEquals(DType.STRUCT, structCol.getType());
@@ -8018,7 +8018,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testGroupByHashSumWithOverflowDecimal128() {
+  void testGroupByHashSumOverflowDecimal128() {
     final int scale = -10;
     BigInteger v1 = BigInteger.valueOf(123456789L).multiply(BigInteger.TEN.pow(10));
     BigInteger v2 = BigInteger.valueOf(987654321L).multiply(BigInteger.TEN.pow(10));
@@ -8029,7 +8029,7 @@ public class TableTest extends CudfTestBase {
              .decimal128Column(scale, RoundingMode.UNNECESSARY, v1, v2, v3, v4)
              .build();
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1));
+             GroupByAggregation.sumOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
       ColumnVector structCol = sorted.getColumn(1);
       assertEquals(DType.STRUCT, structCol.getType());
@@ -8050,7 +8050,7 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testGroupByHashSumWithOverflowDecimal128DetectsOverflow() {
+  void testGroupByHashSumOverflowDecimal128DetectsOverflow() {
     // Pick a value with at most 38 significant digits (the MathContext cap in
     // Table.TestBuilder.decimal128Column) that still overflows int128_max when
     // summed with itself. 10^38 - 1 is 38 nines; 2 * (10^38 - 1) ~= 2e38 which
@@ -8064,7 +8064,7 @@ public class TableTest extends CudfTestBase {
                  nearMax, nearMax, BigInteger.valueOf(3), BigInteger.valueOf(4))
              .build();
          Table results = input.groupBy(0).aggregate(
-             GroupByAggregation.sumWithOverflow().onColumn(1));
+             GroupByAggregation.sumOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
       ColumnVector structCol = sorted.getColumn(1);
       assertEquals(DType.STRUCT, structCol.getType());

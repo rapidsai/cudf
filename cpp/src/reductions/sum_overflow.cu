@@ -61,7 +61,7 @@ std::unique_ptr<cudf::scalar> make_sum_overflow_struct_scalar(
 }
 
 template <typename Source>
-std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
+std::unique_ptr<cudf::scalar> sum_overflow_impl(
   column_view const& col,
   std::optional<std::reference_wrapper<scalar const>> init,
   rmm::cuda_stream_view stream,
@@ -114,14 +114,14 @@ std::unique_ptr<cudf::scalar> sum_with_overflow_impl(
     result.sum, result.wraps != 0, true, col.type(), stream, mr);
 }
 
-struct sum_with_overflow_dispatcher {
+struct sum_overflow_dispatcher {
   template <cudf::detail::sum_overflow_supported Source>
   std::unique_ptr<cudf::scalar> operator()(column_view const& col,
                                            std::optional<std::reference_wrapper<scalar const>> init,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr) const
   {
-    return sum_with_overflow_impl<Source>(col, init, stream, mr);
+    return sum_overflow_impl<Source>(col, init, stream, mr);
   }
 
   template <typename Source>
@@ -131,14 +131,14 @@ struct sum_with_overflow_dispatcher {
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref) const
   {
-    CUDF_FAIL("SUM_WITH_OVERFLOW reduction supports only signed integer and decimal types.",
+    CUDF_FAIL("SUM_OVERFLOW reduction supports only signed integer and decimal types.",
               std::invalid_argument);
   }
 };
 
 }  // namespace
 
-std::unique_ptr<cudf::scalar> sum_with_overflow(
+std::unique_ptr<cudf::scalar> sum_overflow(
   column_view const& col,
   cudf::data_type const output_dtype,
   std::optional<std::reference_wrapper<scalar const>> init,
@@ -147,9 +147,9 @@ std::unique_ptr<cudf::scalar> sum_with_overflow(
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,
-               "SUM_WITH_OVERFLOW output dtype must be STRUCT.",
+               "SUM_OVERFLOW output dtype must be STRUCT.",
                std::invalid_argument);
-  return cudf::type_dispatcher(col.type(), sum_with_overflow_dispatcher{}, col, init, stream, mr);
+  return cudf::type_dispatcher(col.type(), sum_overflow_dispatcher{}, col, init, stream, mr);
 }
 
 }  // namespace cudf::reduction::detail

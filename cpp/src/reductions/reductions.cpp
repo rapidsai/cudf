@@ -96,16 +96,16 @@ struct reduction_function<Source, cudf::aggregation::SUM> : public base_reductio
 };
 
 template <cudf::detail::sum_overflow_supported Source>
-struct reduction_function<Source, cudf::aggregation::SUM_WITH_OVERFLOW>
+struct reduction_function<Source, cudf::aggregation::SUM_OVERFLOW>
   : public base_reduction_function {
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const
   {
-    return sum_with_overflow(
+    return sum_overflow(
       params.col, params.output_dtype, params.init, params.stream, params.mr);
   }
   [[nodiscard]] std::unique_ptr<scalar> reduce_no_data(reduction_parameters const& params) const
   {
-    return sum_with_overflow(
+    return sum_overflow(
       params.col, params.output_dtype, std::nullopt, params.stream, params.mr);
   }
 };
@@ -484,12 +484,12 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                "column and initial value must be the same type",
                cudf::data_type_error);
   if (init.has_value() &&
-      !(agg.kind == aggregation::SUM || agg.kind == aggregation::SUM_WITH_OVERFLOW ||
+      !(agg.kind == aggregation::SUM || agg.kind == aggregation::SUM_OVERFLOW ||
         agg.kind == aggregation::PRODUCT || agg.kind == aggregation::MIN ||
         agg.kind == aggregation::MAX || agg.kind == aggregation::ANY ||
         agg.kind == aggregation::ALL || agg.kind == aggregation::HOST_UDF)) {
     CUDF_FAIL(
-      "Initial value is only supported for SUM, SUM_WITH_OVERFLOW, PRODUCT, MIN, MAX, ANY, ALL, "
+      "Initial value is only supported for SUM, SUM_OVERFLOW, PRODUCT, MIN, MAX, ANY, ALL, "
       "and HOST_UDF aggregation types",
       std::invalid_argument);
   }

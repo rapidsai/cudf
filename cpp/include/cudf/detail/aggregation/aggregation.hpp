@@ -79,15 +79,15 @@ class sum_aggregation final
 };
 
 /**
- * @brief Derived class for specifying a sum_with_overflow aggregation
+ * @brief Derived class for specifying a sum_overflow aggregation
  */
-class sum_with_overflow_aggregation final
-  : public clonable<sum_with_overflow_aggregation>::derived_from<groupby_aggregation,
+class sum_overflow_aggregation final
+  : public clonable<sum_overflow_aggregation>::derived_from<groupby_aggregation,
                                                                  groupby_scan_aggregation,
                                                                  reduce_aggregation,
                                                                  segmented_reduce_aggregation> {
  public:
-  sum_with_overflow_aggregation() : aggregation(SUM_WITH_OVERFLOW) {}
+  sum_overflow_aggregation() : aggregation(SUM_OVERFLOW) {}
 };
 
 /**
@@ -987,11 +987,11 @@ concept sum_overflow_supported =
   (cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
   cudf::is_fixed_point<Source>();
 
-// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where the sum matches the input
+// SUM_OVERFLOW outputs a struct {sum: Source, overflow: bool} where the sum matches the input
 // type
 template <sum_overflow_supported Source>
-struct target_type_impl<Source, aggregation::SUM_WITH_OVERFLOW> {
-  using type = struct_view;  // SUM_WITH_OVERFLOW outputs a struct with sum and overflow fields
+struct target_type_impl<Source, aggregation::SUM_OVERFLOW> {
+  using type = struct_view;  // SUM_OVERFLOW outputs a struct with sum and overflow fields
 };
 
 // Always use `double` for M2
@@ -1196,8 +1196,8 @@ CUDF_HOST_DEVICE inline decltype(auto) aggregation_dispatcher(aggregation::Kind 
   switch (k) {
     case aggregation::SUM:
       return f.template operator()<aggregation::SUM>(std::forward<Ts>(args)...);
-    case aggregation::SUM_WITH_OVERFLOW:
-      return f.template operator()<aggregation::SUM_WITH_OVERFLOW>(std::forward<Ts>(args)...);
+    case aggregation::SUM_OVERFLOW:
+      return f.template operator()<aggregation::SUM_OVERFLOW>(std::forward<Ts>(args)...);
     case aggregation::PRODUCT:
       return f.template operator()<aggregation::PRODUCT>(std::forward<Ts>(args)...);
     case aggregation::MIN:
