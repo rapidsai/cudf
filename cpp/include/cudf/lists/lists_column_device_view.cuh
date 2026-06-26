@@ -16,6 +16,8 @@ namespace cudf {
  * @brief Given a column_device_view, an instance of this class provides a
  * wrapper on this compound column for list operations.
  * Analogous to list_column_view.
+ *
+ * @ingroup column_classes
  */
 class lists_column_device_view : private column_device_view {
  public:
