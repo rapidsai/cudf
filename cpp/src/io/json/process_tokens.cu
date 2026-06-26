@@ -113,7 +113,7 @@ void validate_token_stream(device_span<char const> d_input,
         if (is_nonnumeric) { return true; }
       }
       auto c = data[start];
-      if ('-' == c || c <= '9' && 'c' >= '0') {
+      if ('-' == c || (c <= '9' && c >= '0')) {
         // number
         auto num_state = number_state::START;
         for (auto at = start; at < end; at++) {

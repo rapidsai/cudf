@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import expect_warning_if
 
@@ -133,25 +132,19 @@ def test_any_all_axis_none(data, op):
     assert expected == actual
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Warning not given on older versions of pandas",
-)
-def test_reductions_axis_none_warning(request, reduction_methods):
+def test_reductions_axis_none(request, reduction_methods):
     if reduction_methods == "quantile":
         pytest.skip(f"pandas {reduction_methods} doesn't support axis=None")
+    if reduction_methods in {"std", "var"}:
+        request.applymarker(
+            pytest.mark.xfail(
+                reason=f"cuDF result incorrect for {reduction_methods}"
+            )
+        )
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [10, 2, 3]})
     pdf = df.to_pandas()
-    with expect_warning_if(
-        reduction_methods in {"sum", "product", "std", "var"},
-        FutureWarning,
-    ):
-        actual = getattr(df, reduction_methods)(axis=None)
-    with expect_warning_if(
-        reduction_methods in {"sum", "product", "std", "var"},
-        FutureWarning,
-    ):
-        expected = getattr(pdf, reduction_methods)(axis=None)
+    actual = getattr(df, reduction_methods)(axis=None)
+    expected = getattr(pdf, reduction_methods)(axis=None)
     assert_eq(expected, actual, check_dtype=False)
 
 
@@ -251,7 +244,7 @@ def test_dataframe_axis1_unsupported_ops(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
 
     with pytest.raises(
-        NotImplementedError, match="Only axis=0 is currently supported."
+        NotImplementedError, match=r"Only axis=0 is currently supported."
     ):
         getattr(df, op)(axis=1)
 
@@ -345,7 +338,7 @@ def test_dataframe_reductions(request, data, axis, func, skipna):
                 RuntimeWarning,
             ):
                 got = getattr(gdf, func)(axis=axis, skipna=skipna, **kwargs)
-            assert_eq(got, expect, check_dtype=False)
+            assert_eq(got, expect)
 
 
 @pytest.mark.parametrize(

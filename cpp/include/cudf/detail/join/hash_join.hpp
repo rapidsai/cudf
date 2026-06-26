@@ -149,6 +149,33 @@ class hash_join {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
+  /**
+   * @copydoc cudf::hash_join::partitioned_inner_join
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_inner_join(cudf::join_partition_context const& context,
+                         rmm::cuda_stream_view stream,
+                         rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::partitioned_left_join
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_left_join(cudf::join_partition_context const& context,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr) const;
+
+  /**
+   * @copydoc cudf::hash_join::partitioned_full_join
+   */
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_full_join(cudf::join_partition_context const& context,
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr) const;
+
  private:
   bool const _is_empty;   ///< true if `_hash_table` is empty
   bool const _has_nulls;  ///< true if nulls are present in either right table or any left table
@@ -164,10 +191,17 @@ class hash_join {
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
+  [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+                          std::unique_ptr<rmm::device_uvector<size_type>>>
+  partitioned_join_retrieve(join_kind join,
+                            cudf::join_partition_context const& context,
+                            rmm::cuda_stream_view stream,
+                            rmm::device_async_resource_ref mr) const;
+
   template <join_kind Join>
   [[nodiscard]] std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                           std::unique_ptr<rmm::device_uvector<size_type>>>
-  join_retrieve(cudf::table_view const& left,
+  join_retrieve(cudf::table_view const& probe,
                 std::optional<std::size_t> output_size,
                 rmm::cuda_stream_view stream,
                 rmm::device_async_resource_ref mr) const;

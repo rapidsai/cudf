@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import copy
 import itertools
 from typing import TYPE_CHECKING, Any
 
@@ -392,6 +393,17 @@ class Merge:
             result = self._sort_result(result)
         if self._return_rangeindex:
             result = result.reset_index(drop=True)
+        # Mirror pandas' merge `__finalize__` with `input_objs`: propagate
+        # attrs only when both inputs have equal non-empty attrs, and AND
+        # ``allows_duplicate_labels`` across inputs.
+        lhs_attrs = self.lhs.attrs
+        rhs_attrs = self.rhs.attrs
+        if lhs_attrs and rhs_attrs and lhs_attrs == rhs_attrs:
+            result._attrs = copy.deepcopy(lhs_attrs)
+        result.flags["allows_duplicate_labels"] = (
+            self.lhs.flags.allows_duplicate_labels
+            and self.rhs.flags.allows_duplicate_labels
+        )
         return result
 
     def _merge_results(self, left_result: DataFrame, right_result: DataFrame):

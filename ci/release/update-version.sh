@@ -137,13 +137,14 @@ fi
 
 # Centralized version file update
 echo "${NEXT_FULL_TAG}" > VERSION
+# The cudf version file must be a copy, see https://github.com/rapidsai/cudf/pull/18198
 echo "${NEXT_FULL_TAG}" > python/cudf/cudf/VERSION
 echo "${RAPIDS_BRANCH_NAME}" > RAPIDS_BRANCH
 
 DEPENDENCIES=(
   cudf
-  cudf_kafka
   cudf-polars
+  cudf_kafka
   cugraph
   cuml
   custreamz
@@ -152,8 +153,8 @@ DEPENDENCIES=(
   kvikio
   libcudf
   libcudf-example
-  libcudf_kafka
   libcudf-tests
+  libcudf_kafka
   libkvikio
   librmm
   pylibcudf

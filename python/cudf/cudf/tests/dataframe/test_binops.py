@@ -8,7 +8,7 @@ import pytest
 
 import cudf
 from cudf.testing import assert_eq
-from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.testing._utils import assert_exceptions_equal
 
 
 @pytest.mark.parametrize(
@@ -34,6 +34,9 @@ def test_dataframe_series_dot():
     actual = gser @ gser
 
     assert_eq(expected, actual)
+    # 1-D dot/matmul on Series produces a 0-D scalar; cudf must return a
+    # numpy scalar (e.g. ``np.int64``) to match pandas, not a Python int.
+    assert type(actual) is type(expected)
 
     pdf = pd.DataFrame([[1, 2], [3, 4]], columns=list("ab"))
     gdf = cudf.from_pandas(pdf)
@@ -382,12 +385,12 @@ def test_df_sr_binop(psr, colnames, binary_op):
     data = [[3.0, 2.0, 5.0], [3.0, None, 5.0], [6.0, 7.0, np.nan]]
     data = dict(zip(colnames, data, strict=True))
 
-    gsr = cudf.Series(psr).astype("float64")
+    gsr = cudf.Series(psr).astype("Float64")
 
-    gdf = cudf.DataFrame(data)
-    pdf = gdf.to_pandas(nullable=True)
+    gdf = cudf.DataFrame(data).astype("Float64")
+    pdf = gdf.to_pandas()
 
-    psr = gsr.to_pandas(nullable=True)
+    psr = gsr.to_pandas()
 
     try:
         expect = binary_op(pdf, psr)
@@ -399,12 +402,12 @@ def test_df_sr_binop(psr, colnames, binary_op):
         with pytest.raises(ValueError):
             binary_op(gsr, gdf)
     else:
-        got = binary_op(gdf, gsr).to_pandas(nullable=True)
-        assert_eq(expect, got, check_dtype=False, check_like=True)
+        got = binary_op(gdf, gsr)
+        assert_eq(expect, got)
 
         expect = binary_op(psr, pdf)
-        got = binary_op(gsr, gdf).to_pandas(nullable=True)
-        assert_eq(expect, got, check_dtype=False, check_like=True)
+        got = binary_op(gsr, gdf)
+        assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -437,19 +440,7 @@ def test_df_sr_binop_col_order(op):
     gsr = cudf.Series([1, 2, 3, 4, 5], index=["a", "b", "d", "0", "12"])
     psr = gsr.to_pandas()
 
-    with expect_warning_if(
-        op
-        in {
-            operator.eq,
-            operator.lt,
-            operator.le,
-            operator.gt,
-            operator.ge,
-            operator.ne,
-        },
-        FutureWarning,
-    ):
-        expect = op(pdf, psr).astype("float")
+    expect = op(pdf, psr).astype("float")
     out = op(gdf, gsr).astype("float")
     got = out[expect.columns]
 
@@ -634,16 +625,19 @@ def test_logical_operator_func_dataframe(comparison_op_method, nulls, other):
 @pytest.mark.parametrize("data", [None, [-9, 7], [12, 18]])
 @pytest.mark.parametrize("scalar", [1, 3, 12, np.nan])
 def test_empty_column(binary_op, data, scalar):
-    gdf = cudf.DataFrame(columns=["a", "b"])
+    pdf = pd.DataFrame(columns=["a", "b"])
     if data is not None:
-        gdf["a"] = data
+        pdf["a"] = data
 
-    pdf = gdf.to_pandas()
-
+    gdf = cudf.DataFrame(pdf)
     got = binary_op(gdf, scalar)
     expected = binary_op(pdf, scalar)
 
-    assert_eq(expected, got)
+    if data is not None:
+        expected = expected.fillna(None)
+    # pandas can still hold an all NA columns with object dtype,
+    # cuDF cannot, and uses StringDtype instead.
+    assert_eq(expected, got, check_dtype=False)
 
 
 @pytest.mark.parametrize(

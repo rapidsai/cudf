@@ -235,7 +235,9 @@ def _generate_table_data(types, nrows, seed=42):
 
 
 @pytest.fixture(scope="session", params=[0, 100])
-def table_data(request):
+def table_data(
+    request: pytest.FixtureRequest,
+) -> tuple[plc.io.types.TableWithMetadata, pa.Table]:
     """
     Returns (TableWithMetadata, pa_table).
 
@@ -292,7 +294,9 @@ def source_or_sink(request, tmp_path):
 @pytest.fixture(
     params=["a.txt", pathlib.Path("a.txt"), io.BytesIO],
 )
-def binary_source_or_sink(request, tmp_path):
+def binary_source_or_sink(
+    request: pytest.FixtureRequest, tmp_path: pathlib.Path
+) -> str | pathlib.Path | io.BytesIO:
     fp_or_buf = request.param
     if isinstance(fp_or_buf, str):
         return f"{tmp_path}/{fp_or_buf}"

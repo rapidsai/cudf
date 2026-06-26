@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Device-aware assertions."""
@@ -33,7 +33,6 @@ def assert_gpu_result_equal(
     engine: GPUEngine,
     collect_kwargs: CollectKwargs | None = None,
     polars_collect_kwargs: CollectKwargs | None = None,
-    cudf_collect_kwargs: CollectKwargs | None = None,
     check_row_order: bool = True,
     check_column_order: bool = True,
     check_dtypes: bool = True,
@@ -59,10 +58,6 @@ def assert_gpu_result_equal(
         Keyword arguments to pass to collect for execution on polars CPU.
         Overrides kwargs in collect_kwargs.
         Useful for controlling optimization settings.
-    cudf_collect_kwargs
-        Keyword arguments to pass to collect for execution on cudf-polars.
-        Overrides kwargs in collect_kwargs.
-        Useful for controlling optimization settings.
     check_row_order
         Expect rows to be in same order
     check_column_order
@@ -86,20 +81,19 @@ def assert_gpu_result_equal(
     NotImplementedError
         If GPU collection failed in some way.
     """
-    final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
-        collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
-    )
+    gpu_kwargs = collect_kwargs or {}
+    cpu_kwargs = gpu_kwargs | (polars_collect_kwargs or {})
 
     # These keywords are correct, but mypy doesn't see that.
     # the 'misc' is for 'error: Keywords must be strings'
-    expect = lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[misc, call-overload]
-    got = lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
+    expect = lazydf.collect(**cpu_kwargs)  # type: ignore[call-overload]  # (kwargs assembled dynamically)
+    got = lazydf.collect(**gpu_kwargs, engine=engine)  # type: ignore[call-overload]  # (kwargs assembled dynamically)
     # In multi-rank SPMD mode each rank holds only its local slice; gather the
     # full result on every rank so each rank can compare against the CPU result.
     if (
         engine.config.get("executor_options", {}).get("cluster") == "spmd"
     ):  # pragma: no cover
-        from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+        from cudf_polars.engine.spmd import (
             SPMDEngine,
             allgather_polars_dataframe,
         )
@@ -124,7 +118,9 @@ def assert_gpu_result_equal(
     assert_frame_equal(expect, got, **assert_kwargs_bool, **tol_kwargs)  # type: ignore[arg-type]
 
 
-def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) -> None:
+def assert_ir_translation_raises(
+    q: pl.LazyFrame, engine: pl.GPUEngine, *exceptions: type[Exception]
+) -> None:
     """
     Assert that translation of a query raises an exception.
 
@@ -132,6 +128,8 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     ----------
     q
         Query to translate.
+    engine
+        GPU engine configuration to use during translation.
     exceptions
         Exceptions that one expects might be raised.
 
@@ -145,7 +143,7 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
     AssertionError
        If the specified exceptions were not raised.
     """
-    translator = Translator(q._ldf.visit(), GPUEngine())
+    translator = Translator(q._ldf.visit(), engine)
     translator.translate_ir()
     if errors := translator.errors:
         for err in errors:
@@ -156,102 +154,6 @@ def assert_ir_translation_raises(q: pl.LazyFrame, *exceptions: type[Exception]) 
         return
     else:
         raise AssertionError(f"Translation DID NOT RAISE {exceptions}")
-
-
-def _process_kwargs(
-    collect_kwargs: CollectKwargs | None,
-    polars_collect_kwargs: CollectKwargs | None,
-    cudf_collect_kwargs: CollectKwargs | None,
-) -> tuple[CollectKwargs, CollectKwargs]:
-    if collect_kwargs is None:
-        collect_kwargs = {}
-    final_polars_collect_kwargs = collect_kwargs.copy()
-    final_cudf_collect_kwargs = collect_kwargs.copy()
-    if polars_collect_kwargs is not None:  # pragma: no cover; not currently used
-        final_polars_collect_kwargs.update(polars_collect_kwargs)
-    if cudf_collect_kwargs is not None:  # pragma: no cover; not currently used
-        final_cudf_collect_kwargs.update(cudf_collect_kwargs)
-    return final_polars_collect_kwargs, final_cudf_collect_kwargs
-
-
-def assert_collect_raises(
-    lazydf: pl.LazyFrame,
-    *,
-    polars_except: type[Exception] | tuple[type[Exception], ...],
-    cudf_except: type[Exception] | tuple[type[Exception], ...],
-    collect_kwargs: CollectKwargs | None = None,
-    polars_collect_kwargs: CollectKwargs | None = None,
-    cudf_collect_kwargs: CollectKwargs | None = None,
-) -> None:
-    """
-    Assert that collecting the result of a query raises the expected exceptions.
-
-    Parameters
-    ----------
-    lazydf
-        frame to collect.
-    collect_kwargs
-        Common keyword arguments to pass to collect for both polars CPU and
-        cudf-polars.
-        Useful for controlling optimization settings.
-    polars_except
-        Exception or exceptions polars CPU is expected to raise. If
-        an empty tuple ``()``, CPU is expected to succeed without raising.
-    cudf_except
-        Exception or exceptions polars GPU is expected to raise. If
-        an empty tuple ``()``, GPU is expected to succeed without raising.
-    collect_kwargs
-        Common keyword arguments to pass to collect for both polars CPU and
-        cudf-polars.
-        Useful for controlling optimization settings.
-    polars_collect_kwargs
-        Keyword arguments to pass to collect for execution on polars CPU.
-        Overrides kwargs in collect_kwargs.
-        Useful for controlling optimization settings.
-    cudf_collect_kwargs
-        Keyword arguments to pass to collect for execution on cudf-polars.
-        Overrides kwargs in collect_kwargs.
-        Useful for controlling optimization settings.
-
-    Returns
-    -------
-    None
-        If both sides raise the expected exceptions.
-
-    Raises
-    ------
-    AssertionError
-        If either side did not raise the expected exceptions.
-    """
-    final_polars_collect_kwargs, final_cudf_collect_kwargs = _process_kwargs(
-        collect_kwargs, polars_collect_kwargs, cudf_collect_kwargs
-    )
-
-    try:
-        lazydf.collect(**final_polars_collect_kwargs)  # type: ignore[misc, call-overload]
-    except polars_except:
-        pass
-    except Exception as e:
-        raise AssertionError(
-            f"CPU execution RAISED {type(e)}, EXPECTED {polars_except}"
-        ) from e
-    else:
-        if polars_except != ():
-            raise AssertionError(f"CPU execution DID NOT RAISE {polars_except}")
-
-    # TODO: https://github.com/rapidsai/cudf/issues/22346
-    engine = GPUEngine(executor="in-memory", raise_on_fail=True)
-    try:
-        lazydf.collect(**final_cudf_collect_kwargs, engine=engine)  # type: ignore[misc, call-overload]
-    except cudf_except:
-        pass
-    except Exception as e:
-        raise AssertionError(
-            f"GPU execution RAISED {type(e)}, EXPECTED {cudf_except}"
-        ) from e
-    else:
-        if cudf_except != ():
-            raise AssertionError(f"GPU execution DID NOT RAISE {cudf_except}")
 
 
 def _resolve_sink_format(path: Path) -> str:
@@ -333,6 +235,7 @@ def assert_sink_result_equal(
 def assert_sink_ir_translation_raises(
     lazydf: pl.LazyFrame,
     path: str | Path,
+    engine: pl.GPUEngine,
     write_kwargs: dict,
     *exceptions: type[Exception],
 ) -> None:
@@ -345,6 +248,8 @@ def assert_sink_ir_translation_raises(
         The LazyFrame to sink.
     path
         The file path. Must have one of the supported suffixes.
+    engine
+        GPU engine configuration to use during translation.
     write_kwargs
         Keyword arguments to pass to the `sink_*` method.
     *exceptions
@@ -364,7 +269,7 @@ def assert_sink_ir_translation_raises(
     try:
         lazy_sink = getattr(lazydf, f"sink_{fmt}")(
             path,
-            engine="gpu",
+            engine=engine,
             lazy=True,
             **write_kwargs,
         )
@@ -373,4 +278,4 @@ def assert_sink_ir_translation_raises(
             f"Sink function raised an exception before translation: {e}"
         ) from e
 
-    assert_ir_translation_raises(lazy_sink, *exceptions)
+    assert_ir_translation_raises(lazy_sink, engine, *exceptions)
