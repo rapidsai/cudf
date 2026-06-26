@@ -43,7 +43,7 @@ class writer::impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param sink data_sink's for storing dataset
+   * @param sinks data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -56,7 +56,7 @@ class writer::impl {
   /**
    * @brief Constructor with chunked writer options.
    *
-   * @param sink data_sink's for storing dataset
+   * @param sinks data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -104,9 +104,11 @@ class writer::impl {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
-   * `column_chunks_file_path` is provided, else null.
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output
+   * metadata
+   * @return A parquet-compatible blob that contains the file header and footer metadata. If
+   * `column_chunks_file_path` is non-empty, the output metadata blob will also have row group file
+   * paths set.
    */
   std::unique_ptr<std::vector<uint8_t>> close(
     std::vector<std::string> const& column_chunks_file_path = {});

@@ -1,14 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
 import calendar
+import datetime
 import functools
 import locale
 import os
 import re
-import warnings
 import zoneinfo
 from locale import nl_langinfo
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -25,21 +25,30 @@ from cudf.core._internals.timezones import (
     get_compatible_timezone,
 )
 from cudf.core.column import as_column, column_empty
-from cudf.core.column.column import ColumnBase
-from cudf.core.column.temporal_base import TemporalBaseColumn
+from cudf.core.column.column import (
+    ColumnBase,
+    PylibcudfFunction,
+    bool_same_kind_policy,
+    int16_same_kind_policy,
+    pylibcudf_result_dtype_policy,
+    same_dtype_policy,
+)
+from cudf.core.column.temporal_base import (
+    TemporalBaseColumn,
+    _raise_on_invalid_ordering_scalar,
+)
+from cudf.core.dtype.validators import is_dtype_obj_datetime_tz
 from cudf.utils.dtypes import (
-    CUDF_STRING_DTYPE,
     _get_base_dtype,
     cudf_dtype_from_pa_type,
-    cudf_dtype_to_pa_type,
     dtype_from_pylibcudf_column,
+    dtype_to_pylibcudf_type,
     get_dtype_of_same_kind,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
 from cudf.utils.utils import _EQUALITY_OPS, is_na_like
 
 if TYPE_CHECKING:
-    import datetime
     from collections.abc import Callable
     from typing import Self
 
@@ -57,6 +66,10 @@ _dtype_to_format_conversion = {
     "datetime64[us]": "%Y-%m-%d %H:%M:%S.%6f",
     "datetime64[ms]": "%Y-%m-%d %H:%M:%S.%3f",
     "datetime64[s]": "%Y-%m-%d %H:%M:%S",
+    "timestamp[ns][pyarrow]": "%Y-%m-%d %H:%M:%S.%9f",
+    "timestamp[us][pyarrow]": "%Y-%m-%d %H:%M:%S.%6f",
+    "timestamp[ms][pyarrow]": "%Y-%m-%d %H:%M:%S.%3f",
+    "timestamp[s][pyarrow]": "%Y-%m-%d %H:%M:%S",
 }
 
 
@@ -225,11 +238,10 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def quarter(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.extract_quarter(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
-            )
+        return PylibcudfFunction(
+            plc.datetime.extract_quarter,
+            int16_same_kind_policy,
+        ).execute_with_args(self)
 
     @functools.cached_property
     def year(self) -> ColumnBase:
@@ -276,15 +288,28 @@ class DatetimeColumn(TemporalBaseColumn):
 
     @functools.cached_property
     def day_of_year(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.day_of_year(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
+        result = PylibcudfFunction(
+            plc.datetime.day_of_year,
+            pylibcudf_result_dtype_policy,
+        ).execute_with_args(self)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            # pyarrow temporal kernels return int64; match pandas.
+            result = result.astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
             )
+        return result
+
+    def _maybe_fillna_false(self, col: ColumnBase) -> ColumnBase:
+        # For nullable extension dtype sources (e.g. ArrowDtype), preserve
+        # nulls in the result to match pandas. Otherwise fill with False
+        # so the result is a plain bool column.
+        if isinstance(self.dtype, pd.ArrowDtype):
+            return col
+        return col.fillna(False)
 
     @functools.cached_property
     def is_month_start(self) -> ColumnBase:
-        return (self.day == 1).fillna(False)
+        return self._maybe_fillna_false(self.day == 1)
 
     @functools.cached_property
     def is_month_end(self) -> ColumnBase:
@@ -297,17 +322,19 @@ class DatetimeColumn(TemporalBaseColumn):
                 plc_result,
                 dtype_from_pylibcudf_column(plc_result),
             )
-        return (self.day == cast("Self", last_day_col).day).fillna(False)
+        return self._maybe_fillna_false(
+            self.day == cast("Self", last_day_col).day
+        )
 
     @functools.cached_property
     def is_quarter_end(self) -> ColumnBase:
         last_month = self.month.isin([3, 6, 9, 12])
-        return (self.is_month_end & last_month).fillna(False)
+        return self._maybe_fillna_false(self.is_month_end & last_month)
 
     @functools.cached_property
     def is_quarter_start(self) -> ColumnBase:
         first_month = self.month.isin([1, 4, 7, 10])
-        return (self.is_month_start & first_month).fillna(False)
+        return self._maybe_fillna_false(self.is_month_start & first_month)
 
     @functools.cached_property
     def is_year_end(self) -> ColumnBase:
@@ -316,27 +343,33 @@ class DatetimeColumn(TemporalBaseColumn):
 
         leap = day_of_year == 366
         non_leap = day_of_year == 365
-        return leap.copy_if_else(non_leap, leap_dates).fillna(False)
+        return self._maybe_fillna_false(
+            leap.copy_if_else(non_leap, leap_dates)
+        )
 
     @functools.cached_property
     def is_leap_year(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.is_leap_year(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.bool_)),
-            )
+        return PylibcudfFunction(
+            plc.datetime.is_leap_year,
+            bool_same_kind_policy,
+        ).execute_with_args(self)
 
     @functools.cached_property
     def is_year_start(self) -> ColumnBase:
-        return (self.day_of_year == 1).fillna(False)
+        return self._maybe_fillna_false(self.day_of_year == 1)
 
     @functools.cached_property
     def days_in_month(self) -> ColumnBase:
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                plc.datetime.days_in_month(self.plc_column),
-                get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
+        result = PylibcudfFunction(
+            plc.datetime.days_in_month,
+            pylibcudf_result_dtype_policy,
+        ).execute_with_args(self)
+        if isinstance(self.dtype, pd.ArrowDtype):
+            # pyarrow temporal kernels return int64; match pandas.
+            result = result.astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
             )
+        return result
 
     @functools.cached_property
     def day_of_week(self) -> ColumnBase:
@@ -402,7 +435,13 @@ class DatetimeColumn(TemporalBaseColumn):
                 ),
                 get_dtype_of_same_kind(self.dtype, np.dtype(np.int16)),
             )
-            if result.dtype == np.dtype("int16"):
+            if isinstance(self.dtype, pd.ArrowDtype):
+                # pyarrow's temporal compute kernels return int64; match that
+                # when the source is an ArrowDtype.
+                result = result.astype(
+                    get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
+                )
+            elif result.dtype == np.dtype("int16"):
                 result = result.astype(np.dtype("int32"))
             return result
 
@@ -441,23 +480,7 @@ class DatetimeColumn(TemporalBaseColumn):
         ],
         freq: str,
     ) -> ColumnBase:
-        # https://pandas.pydata.org/pandas-docs/version/2.3.3/reference/api/pandas.Timedelta.resolution_string.html
-        old_to_new_freq_map = {
-            "H": "h",
-            "N": "ns",
-            "T": "min",
-            "L": "ms",
-            "U": "us",
-            "S": "s",
-        }
-        if freq in old_to_new_freq_map:
-            warnings.warn(
-                f"{freq} is deprecated and will be "
-                "removed in a future version, please use "
-                f"{old_to_new_freq_map[freq]} instead.",
-                FutureWarning,
-            )
-            freq = old_to_new_freq_map[freq]
+        # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
         rounding_fequency_map = {
             "D": plc.datetime.RoundingFrequency.DAY,
             "h": plc.datetime.RoundingFrequency.HOUR,
@@ -470,14 +493,9 @@ class DatetimeColumn(TemporalBaseColumn):
         if (plc_freq := rounding_fequency_map.get(freq)) is None:
             raise ValueError(f"Invalid resolution: '{freq}'")
 
-        with self.access(mode="read", scope="internal"):
-            return ColumnBase.create(
-                round_func(
-                    self.plc_column,
-                    plc_freq,
-                ),
-                self.dtype,
-            )
+        return PylibcudfFunction(
+            round_func, same_dtype_policy
+        ).execute_with_args(self, plc_freq)
 
     def ceil(self, freq: str) -> ColumnBase:
         return self._round_dt(plc.datetime.ceil_datetimes, freq)
@@ -489,12 +507,23 @@ class DatetimeColumn(TemporalBaseColumn):
         return self._round_dt(plc.datetime.round_datetimes, freq)
 
     def isocalendar(self) -> dict[str, ColumnBase]:
-        return {
-            field: self.strftime(format=directive).astype(np.dtype(np.uint32))
+        # pyarrow's isocalendar returns int64 fields and fills nulls with 0;
+        # pandas' isocalendar for datetime64 returns UInt32 with NA preserved.
+        is_arrow = isinstance(self.dtype, pd.ArrowDtype)
+        target_dtype: DtypeObj = (
+            np.dtype(np.int64) if is_arrow else np.dtype(np.uint32)
+        )
+        result = {
+            field: self.strftime(
+                format=directive, dtype=np.dtype("object")
+            ).astype(get_dtype_of_same_kind(self.dtype, target_dtype))
             for field, directive in zip(
                 ["year", "week", "day"], ["%G", "%V", "%u"], strict=True
             )
         }
+        if is_arrow:
+            result = {field: col.fillna(0) for field, col in result.items()}
+        return result
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:
         if dtype == self.dtype:
@@ -562,9 +591,9 @@ class DatetimeColumn(TemporalBaseColumn):
             ]
         )
 
-    def strftime(self, format: str) -> StringColumn:
+    def strftime(self, format: str, dtype: DtypeObj) -> StringColumn:
         if len(self) == 0:
-            return super().strftime(format)
+            return super().strftime(format, dtype)
         if re.search("%[aAbB]", format):
             names = self._strftime_names
         else:
@@ -573,14 +602,14 @@ class DatetimeColumn(TemporalBaseColumn):
             )
         with self.access(mode="read", scope="internal"):
             return cast(
-                cudf.core.column.string.StringColumn,
+                "cudf.core.column.string.StringColumn",
                 ColumnBase.create(
                     plc.strings.convert.convert_datetime.from_timestamps(
                         self.plc_column,
                         format,
                         names,
                     ),
-                    CUDF_STRING_DTYPE,
+                    dtype,
                 ),
             )
 
@@ -623,16 +652,82 @@ class DatetimeColumn(TemporalBaseColumn):
                     format = format.split(" ")[0]
             elif not (has_seconds or has_minutes or has_hours):
                 format = format.split(" ")[0]
-        return self.strftime(format)
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
+        return self.strftime(format, dtype)
 
     def _binaryop(self, other: ColumnBinaryOperand, op: str) -> ColumnBase:
         reflect, op = self._check_reflected_op(op)
 
+        if isinstance(
+            other, (pd.tseries.offsets.Tick, pd.tseries.offsets.Week)
+        ):
+            other = cudf.DateOffset._from_pandas_ticks_or_weeks(other)
         if isinstance(other, cudf.DateOffset):
             return other._datetime_binop(self, op, reflect=reflect)
+
+        pandas_compatible = cudf.get_option("mode.pandas_compatible")
+
+        # pandas raises TypeError on inequality ops against None / NaN
+        # (which are not datetime-like). Equality ops still allow these
+        # by returning False/True.
+        if (
+            pandas_compatible
+            and op in {"__lt__", "__le__", "__gt__", "__ge__"}
+            and (
+                other is None or (isinstance(other, float) and np.isnan(other))
+            )
+        ):
+            raise TypeError(
+                f"Invalid comparison between dtype={self.dtype} and "
+                f"{type(other).__name__}"
+            )
+
+        _raise_on_invalid_ordering_scalar(self.dtype, other, op)
+        # pandas treats a bare ``datetime.date`` as not comparable with a
+        # datetime64 column — ``==`` yields all False, ``!=`` yields all
+        # True. Short-circuit here so cudf doesn't implicitly promote the
+        # date to a midnight datetime and produce a spurious match.
+        if (
+            op in {"__eq__", "__ne__"}
+            and isinstance(other, datetime.date)
+            and not isinstance(other, datetime.datetime)
+        ):
+            fill_value = op == "__ne__"
+            result = self._all_bools_with_nulls(
+                self, bool_fill_value=fill_value
+            )
+            return result.fillna(fill_value)
         other = self._normalize_binop_operand(other)
         if other is NotImplemented:
             return NotImplemented
+
+        # tz-mismatch detection: pandas raises TypeError when comparing or
+        # adding/subtracting tz-naive vs tz-aware datetime-like operands.
+        if pandas_compatible:
+            self_is_tz = isinstance(self, DatetimeTZColumn)
+            # Ternary (True/False/None) is required here: True/False
+            # differentiate tz-aware vs tz-naive datetime-like operands, while
+            # None means the operand is not datetime-like at all (and so the
+            # tz-mismatch check should be skipped).
+            other_is_tz_dt: bool | None = None
+            if isinstance(other, DatetimeColumn):
+                other_is_tz_dt = isinstance(other, DatetimeTZColumn)
+            elif isinstance(other, pa.Scalar) and pa.types.is_timestamp(
+                other.type
+            ):
+                other_is_tz_dt = other.type.tz is not None
+            if other_is_tz_dt is not None and self_is_tz != other_is_tz_dt:
+                if op in {"__lt__", "__le__", "__gt__", "__ge__"}:
+                    raise TypeError(
+                        f"Invalid comparison between dtype={self.dtype} and "
+                        f"{type(other).__name__}"
+                    )
+                if op in {"__sub__"}:
+                    raise TypeError(
+                        "Cannot subtract tz-naive and tz-aware "
+                        "datetime-like objects"
+                    )
 
         other_is_null_scalar = False
         if reflect:
@@ -661,7 +756,49 @@ class DatetimeColumn(TemporalBaseColumn):
         other_is_timedelta = other_dtype.kind == "m"
         other_is_datetime64 = other_dtype.kind == "M"
 
+        # Determine tz awareness of each operand. pandas raises for any
+        # datetime-datetime operation (subtraction, ordering comparison)
+        # that mixes a tz-aware and a tz-naive operand, and preserves the
+        # tz when adding/subtracting a timedelta.
+        self_is_tz = is_dtype_obj_datetime_tz(self.dtype)
+        other_is_tz = is_dtype_obj_datetime_tz(other_dtype)
+        if (
+            other_is_datetime64
+            and self_is_tz != other_is_tz
+            and not other_is_null_scalar
+            and op in {"__sub__", "__lt__", "__le__", "__gt__", "__ge__"}
+        ):
+            raise TypeError(
+                "Invalid comparison between tz-naive and tz-aware "
+                "datetime-like objects."
+            )
+
+        def _preserve_tz(result_dtype: np.dtype) -> DtypeObj:
+            # When the operation should yield another datetime and self
+            # is tz-aware, carry the tz forward with the resolved unit.
+            if self_is_tz and result_dtype.kind == "M":
+                tz_dtype = cast("pd.DatetimeTZDtype", self.dtype)
+                unit = np.datetime_data(
+                    cast("np.dtype[np.datetime64]", result_dtype)
+                )[0]
+                return pd.DatetimeTZDtype(unit, tz_dtype.tz)
+            return result_dtype
+
         out_dtype = None
+        if (
+            other_is_datetime64
+            and self_is_tz != other_is_tz
+            and not other_is_null_scalar
+            and op in {"__eq__", "__ne__"}
+        ):
+            # pandas treats tz-aware and tz-naive datetimes as unequal;
+            # short-circuit instead of byte-comparing the UTC values.
+            fill_value = op == "__ne__"
+            other_col = other if isinstance(other, ColumnBase) else self
+            result = self._all_bools_with_nulls(
+                other_col, bool_fill_value=fill_value
+            )
+            return result.fillna(fill_value)
         if (
             op
             in {
@@ -680,8 +817,10 @@ class DatetimeColumn(TemporalBaseColumn):
             # `timedelta + datetime`. Both result in DatetimeColumns.
             out_dtype = get_dtype_of_same_kind(
                 self.dtype,
-                np.dtype(
-                    f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                _preserve_tz(
+                    np.dtype(
+                        f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                    )
                 ),
             )
             if other_is_null_scalar:
@@ -705,8 +844,10 @@ class DatetimeColumn(TemporalBaseColumn):
             elif other_is_timedelta and not reflect:
                 out_dtype = get_dtype_of_same_kind(
                     self.dtype,
-                    np.dtype(
-                        f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                    _preserve_tz(
+                        np.dtype(
+                            f"datetime64[{_resolve_binop_resolution(lhs_unit, rhs_unit)}]"  # type: ignore[arg-type]
+                        )
                     ),
                 )
                 if other_is_null_scalar:
@@ -816,12 +957,13 @@ class DatetimeColumn(TemporalBaseColumn):
         tz: str | None,
         ambiguous: Literal["NaT"] = "NaT",
         nonexistent: Literal["NaT"] = "NaT",
-    ) -> DatetimeColumn:
+    ) -> DatetimeColumn | DatetimeTZColumn:
         if tz is None:
             return self.copy()
         ambiguous, nonexistent = _check_ambiguous_and_nonexistent(
             ambiguous, nonexistent
         )
+        is_arrow = isinstance(self.dtype, pd.ArrowDtype)
         dtype = get_compatible_timezone(pd.DatetimeTZDtype(self.time_unit, tz))
         tzname = dtype.tz.key
         ambiguous_col, nonexistent_col = self._find_ambiguous_and_nonexistent(
@@ -829,8 +971,8 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         localized = self._scatter_by_column(
             self.isnull() | (ambiguous_col | nonexistent_col),
-            pa_scalar_to_plc_scalar(
-                pa.scalar(None, type=cudf_dtype_to_pa_type(self.dtype))
+            plc.Scalar.from_py(
+                None, dtype=dtype_to_pylibcudf_type(self.dtype)
             ),
         )
 
@@ -843,9 +985,14 @@ class DatetimeColumn(TemporalBaseColumn):
         )
         offsets_to_utc = offsets.take(indices, nullify=True)
         gmt_data = localized - offsets_to_utc
-        return cast(
-            DatetimeColumn, ColumnBase.create(gmt_data.plc_column, dtype)
+        if is_arrow:
+            dtype = pd.ArrowDtype(pa.timestamp(self.time_unit, tz))  # type: ignore[call-overload]
+        result = cast(
+            "DatetimeTZColumn", ColumnBase.create(gmt_data.plc_column, dtype)
         )
+        # Avoid re-computing local times from UTC times
+        result._local_time = localized
+        return result
 
     def tz_convert(self, tz: str | None) -> DatetimeColumn:
         raise TypeError(
@@ -860,19 +1007,31 @@ class DatetimeTZColumn(DatetimeColumn):
         nullable: bool = False,
         arrow_type: bool = False,
     ) -> pd.Index:
-        if arrow_type or nullable or isinstance(self.dtype, pd.ArrowDtype):
+        if arrow_type or isinstance(self.dtype, pd.ArrowDtype):
             return super().to_pandas(nullable=nullable, arrow_type=arrow_type)
-        else:
-            return self._local_time.to_pandas().tz_localize(
-                self.tz,
-                ambiguous="NaT",
-                nonexistent="NaT",
+        elif nullable and not arrow_type:
+            raise NotImplementedError(
+                "There is no nullable pandas type for datetime with timezone."
             )
-
-    def to_arrow(self) -> pa.Array:
-        # Cast to expected timestamp array type for assume_timezone
-        local_array = cast(pa.TimestampArray, self._local_time.to_arrow())
-        return pa.compute.assume_timezone(local_array, str(self.tz))
+        else:
+            # TODO: Using self._utc_time.to_pandas().tz_localize("UTC").tz_convert(self.tz)
+            # would be the more definitive conversion
+            if "_local_time" in self.__dict__:
+                # _local_time was explicitly cached (e.g., by tz_localize) and holds
+                # the original naive timestamps; re-localizing with pandas is correct.
+                return self._local_time.to_pandas().tz_localize(
+                    self.tz,
+                    ambiguous="NaT",
+                    nonexistent="NaT",
+                )
+            # When _local_time is not cached, computing it via searchsorted on the
+            # timezone transition table can return wrong results due to the table
+            # not being globally sorted.  Use UTC directly instead.
+            return (
+                self._utc_time.to_pandas()
+                .tz_localize("UTC")
+                .tz_convert(self.tz)
+            )
 
     @functools.cached_property
     def time_unit(self) -> str:
@@ -883,10 +1042,16 @@ class DatetimeTZColumn(DatetimeColumn):
     @property
     def _utc_time(self) -> DatetimeColumn:
         """Return UTC time as naive timestamps."""
+        if isinstance(self.dtype, pd.ArrowDtype):
+            target_dtype: DtypeObj = pd.ArrowDtype(
+                pa.timestamp(self.time_unit)  # type: ignore[call-overload]
+            )
+        else:
+            target_dtype = _get_base_dtype(self.dtype)
         return cast(
             "DatetimeColumn",
             DatetimeColumn.create(
-                self.plc_column, _get_base_dtype(self.dtype), validate=False
+                self.plc_column, target_dtype, validate=False
             ),
         )
 
@@ -897,20 +1062,42 @@ class DatetimeTZColumn(DatetimeColumn):
         base_dtype = _get_base_dtype(self.dtype)
         indices = (
             transition_times.astype(base_dtype).searchsorted(
-                self.astype(base_dtype), side="right"
+                self._utc_time.astype(base_dtype), side="right"
             )
             - 1
         )
         offsets_from_utc = offsets.take(indices, nullify=True)
-        return self + offsets_from_utc
+        # Perform the add on the tz-naive UTC view so the result is naive
+        # (``self + offsets`` now preserves tz by default). The local-time
+        # column must be tz-naive to represent the wall-clock values.
+        return cast("DatetimeColumn", self._utc_time + offsets_from_utc)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         return self._local_time.as_string_column(dtype)
 
+    def strftime(self, format: str, dtype: DtypeObj) -> StringColumn:
+        if len(self) == 0:
+            return super().strftime(format, dtype)
+        if re.search(r"(?<!%)%[zZ]", format):
+            # The cudf strftime kernel operates on raw timestamps and has no
+            # knowledge of the column's timezone, so it would format ``%z`` as
+            # ``+0000`` and ``%Z`` as ``UTC``. Materialize through pandas to
+            # get correct local times with timezone designators. This is the
+            # slow path but it matches pandas semantics including DST.
+            pd_result = self.to_pandas().strftime(format)
+            return cast(
+                "StringColumn",
+                as_column(pd_result, dtype=dtype),
+            )
+        # No tz designator in the format; formatting on the local-time view
+        # (wall-clock, tz-naive) produces the right answer.
+        return self._local_time.strftime(format, dtype)
+
     def as_datetime_column(
-        self, dtype: np.dtype | pd.DatetimeTZDtype
+        self, dtype: pd.ArrowDtype | pd.DatetimeTZDtype
     ) -> DatetimeColumn:
-        if isinstance(dtype, pd.DatetimeTZDtype) and dtype != self.dtype:
+        if isinstance(dtype, pd.DatetimeTZDtype):
+            dtype = get_compatible_timezone(dtype)
             if dtype.unit != self.time_unit:
                 casted_plc = (
                     super()
@@ -918,12 +1105,32 @@ class DatetimeTZColumn(DatetimeColumn):
                     .plc_column
                 )
                 casted = cast(
-                    DatetimeTZColumn, ColumnBase.create(casted_plc, dtype)
+                    "DatetimeTZColumn", ColumnBase.create(casted_plc, dtype)
                 )
             else:
                 casted = self
             return casted.tz_convert(str(dtype.tz))
-        return super().as_datetime_column(dtype)
+        elif isinstance(dtype, pd.ArrowDtype):
+            if dtype.pyarrow_dtype.unit != self.time_unit:
+                casted_plc = (
+                    super()
+                    .as_datetime_column(_get_base_dtype(dtype))
+                    .plc_column
+                )
+                casted = cast(
+                    "DatetimeTZColumn", ColumnBase.create(casted_plc, dtype)
+                )
+            else:
+                casted = self
+            if dtype.pyarrow_dtype.tz != self.tz:
+                raise NotImplementedError(
+                    "Casting to a different timezone with ArrowDtype is not supported."
+                )
+            return casted
+        raise TypeError(
+            "Cannot use .astype to convert from timezone-aware dtype to timezone-naive dtype. "
+            "Use tz_localize(None) instead."
+        )
 
     def _get_dt_field(
         self, field: plc.datetime.DatetimeComponent
@@ -939,7 +1146,9 @@ class DatetimeTZColumn(DatetimeColumn):
                 plc_result, dtype_from_pylibcudf_column(plc_result)
             )
             # cast to int32 for pandas compatibility (no-op if already int32)
-            result = result.astype(np.dtype("int32"))
+            result = result.astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype("int32"))
+            )
             return result
 
     def __repr__(self) -> str:
@@ -968,16 +1177,21 @@ class DatetimeTZColumn(DatetimeColumn):
             "Use `tz_convert` to convert between time zones."
         )
 
-    def tz_convert(self, tz: str | None) -> DatetimeColumn:
+    def tz_convert(self, tz: str | None) -> DatetimeColumn | DatetimeTZColumn:
         if tz is None:
             return self._utc_time
         elif tz == str(self.tz):
             return self.copy()
 
-        utc_time = self._utc_time
+        if isinstance(self.dtype, pd.ArrowDtype):
+            target_dtype: DtypeObj = pd.ArrowDtype(
+                pa.timestamp(self.time_unit, tz)  # type: ignore[call-overload]
+            )
+        else:
+            target_dtype = get_compatible_timezone(
+                pd.DatetimeTZDtype(self.time_unit, tz)
+            )
         return cast(
-            DatetimeColumn,
-            ColumnBase.create(
-                utc_time.plc_column, pd.DatetimeTZDtype(utc_time.time_unit, tz)
-            ),
+            "DatetimeTZColumn",
+            ColumnBase.create(self.plc_column, target_dtype),
         )

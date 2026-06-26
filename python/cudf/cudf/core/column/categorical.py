@@ -1,9 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, Self, cast
 
@@ -17,9 +16,12 @@ import cudf
 from cudf.api.types import is_scalar
 from cudf.core.column.column import (
     ColumnBase,
+    ColumnList,
+    PylibcudfFunction,
     as_column,
     column_empty,
     concat_columns,
+    same_dtype_policy,
 )
 from cudf.core.column.utils import access_columns
 from cudf.core.dtypes import CategoricalDtype, IntervalDtype
@@ -60,14 +62,15 @@ _DEFAULT_CATEGORICAL_VALUE = np.int8(-1)
 
 def _sort_column(col: ColumnBase) -> ColumnBase:
     """Sort a column in ascending order with nulls after."""
-    with col.access(mode="read", scope="internal"):
-        table = plc.Table([col.plc_column])
-        sorted_table = plc.sorting.sort(
-            table,
-            column_order=[plc.types.Order.ASCENDING],
-            null_precedence=[plc.types.NullOrder.AFTER],
-        )
-    return ColumnBase.create(sorted_table.columns()[0], col.dtype)
+    return PylibcudfFunction(
+        plc.sorting.sort,
+        same_dtype_policy,
+        result_index=0,
+    ).execute_with_args(
+        ColumnList(col),
+        column_order=[plc.types.Order.ASCENDING],
+        null_precedence=[plc.types.NullOrder.AFTER],
+    )
 
 
 class CategoricalColumn(ColumnBase):
@@ -95,7 +98,7 @@ class CategoricalColumn(ColumnBase):
         return encoded in self.codes
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         # Convert values to categorical dtype like self
         return self, as_column(values, dtype=self.dtype)
@@ -251,7 +254,7 @@ class CategoricalColumn(ColumnBase):
             )
             plc_col = plc.Column.from_scalar(plc_scalar, len(self))
             other = cast(
-                CategoricalColumn,
+                "CategoricalColumn",
                 ColumnBase.create(plc_col, self.dtype),
             )
         equality_ops = {"__eq__", "__ne__", "NULL_EQUALS", "NULL_NOT_EQUALS"}
@@ -277,9 +280,9 @@ class CategoricalColumn(ColumnBase):
 
     def element_indexing(self, index: int) -> ScalarLike:
         val = super().element_indexing(index)
-        if val is self._PANDAS_NA_VALUE:
-            return val
-        return self._decode(val.as_py())
+        if isinstance(val, int):
+            return self._decode(val)
+        return val
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -300,18 +303,20 @@ class CategoricalColumn(ColumnBase):
         if arrow_type:
             raise NotImplementedError(f"{arrow_type=} is not supported.")
 
-        if self.categories.dtype.kind == "f":
-            new_mask, null_count = self.notnull().fillna(False).as_mask()
-            col = self.set_mask(new_mask, null_count)
-        else:
-            col = self
-
-        signed_dtype = min_signed_type(len(col.categories))
+        signed_dtype = min_signed_type(len(self.categories))
         codes = (
-            col.codes.astype(signed_dtype)
+            self.codes.astype(signed_dtype)
             .fillna(_DEFAULT_CATEGORICAL_VALUE)
             .to_numpy()
         )
+
+        if self.categories.dtype.kind == "f":
+            # NaN categories need to be mapped to "missing" (-1) in pandas.
+            codes[~self.notnull().fillna(False).to_numpy()] = (
+                _DEFAULT_CATEGORICAL_VALUE
+            )
+
+        col = self
 
         cats = col.categories.nans_to_nulls()
         if not isinstance(cats.dtype, IntervalDtype):
@@ -325,18 +330,19 @@ class CategoricalColumn(ColumnBase):
         return pd.Index(data)
 
     def to_arrow(self) -> pa.Array:
-        """Convert to PyArrow Array."""
-        # pyarrow.Table doesn't support unsigned codes
+        # match pandas which uses signed codes
         signed_type = (
             min_signed_type(self.codes.max())
             if self.size > 0
             else np.dtype(np.int8)
         )
+        assert self.ordered is not None, (
+            "Categorical 'ordered' attribute must be set to convert to Arrow"
+        )
         return pa.DictionaryArray.from_arrays(
             self.codes.astype(signed_type).to_arrow(),
             self.categories.to_arrow(),
-            # TODO: Investigate if self.ordered can actually be None here
-            ordered=self.ordered if self.ordered is not None else False,
+            ordered=self.ordered,
         )
 
     def clip(self, lo: ScalarLike, hi: ScalarLike) -> Self:
@@ -428,6 +434,25 @@ class CategoricalColumn(ColumnBase):
                 plc.Table([old_plc, new_plc]), [0], 1
             ).columns()
 
+        if old_plc.size() == 0:
+            if replaced.dtype != self.dtype:
+                raise TypeError(
+                    f"Cannot setitem on a Categorical with a new"
+                    f" category ({replaced.dtype}), set the"
+                    " categories first"
+                )
+            return replaced.copy()
+
+        remaining_to_replace = ColumnBase.create(old_plc, to_replace_col.dtype)
+        if not replaced.categories.isin(remaining_to_replace).any():
+            if replaced.dtype != self.dtype:
+                raise TypeError(
+                    f"Cannot setitem on a Categorical with a new"
+                    f" category ({replaced.dtype}), set the"
+                    " categories first"
+                )
+            return replaced.copy()
+
         if new_plc.null_count() > 0:
             # Any value mapped to null is dropped in the result
             new_isnull_plc = plc.unary.is_null(new_plc)
@@ -439,7 +464,7 @@ class CategoricalColumn(ColumnBase):
             )
             cur_categories = replaced.categories
             new_categories = cur_categories.apply_boolean_mask(
-                cur_categories.isin(drop_values).unary_operator("not")  # type: ignore[arg-type]
+                cur_categories.isin(drop_values).unary_operator("not")
             )
             replaced = replaced._set_categories(new_categories)
 
@@ -526,13 +551,8 @@ class CategoricalColumn(ColumnBase):
         new_cats_col = ColumnBase.create(new_cats_plc, cats_col.dtype)
         result_dtype = CategoricalDtype(new_cats_col, self.dtype.ordered)
         if result_dtype != self.dtype:
-            warnings.warn(
-                "The behavior of replace with "
-                "CategoricalDtype is deprecated. In a future version, replace "
-                "will only be used for cases that preserve the categories. "
-                "To change the categories, use ser.cat.rename_categories "
-                "instead.",
-                FutureWarning,
+            raise TypeError(
+                f"Cannot setitem on a Categorical with a new category ({result_dtype}), set the categories first"
             )
         return cast("Self", ColumnBase.create(new_codes, result_dtype))
 
@@ -645,9 +665,19 @@ class CategoricalColumn(ColumnBase):
         )
 
     def as_numerical_column(self, dtype: np.dtype) -> NumericalColumn:
+        if (
+            isinstance(dtype, np.dtype)
+            and dtype.kind in "iu"
+            and self.null_count > 0
+        ):
+            # pandas promotes a null-containing Categorical's categories to
+            # float, so converting to a non-nullable integer dtype raises.
+            raise ValueError("Cannot convert float NaN to integer")
         return self._get_decategorized_column().as_numerical_column(dtype)
 
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
+        if isinstance(dtype, np.dtype) and dtype.kind == "U":
+            dtype = np.dtype("object")
         return self._get_decategorized_column().as_string_column(dtype)
 
     def as_datetime_column(self, dtype: np.dtype) -> DatetimeColumn:

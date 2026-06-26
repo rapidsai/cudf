@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -380,15 +380,6 @@ if(NOT DEFINED CUDF_VERSION_Arrow)
 endif()
 
 # Default to static arrow builds
-if(NOT DEFINED CUDF_USE_ARROW_STATIC)
-  set(CUDF_USE_ARROW_STATIC ON)
-endif()
-
-# Default to excluding from installation since we generally privately and statically link Arrow.
-if(NOT DEFINED CUDF_EXCLUDE_ARROW_FROM_ALL)
-  set(CUDF_EXCLUDE_ARROW_FROM_ALL OFF)
-endif()
-
 if(NOT DEFINED CUDF_ENABLE_ARROW_PARQUET)
   set(CUDF_ENABLE_ARROW_PARQUET OFF)
 endif()
@@ -397,7 +388,19 @@ if(NOT DEFINED CUDF_ENABLE_ARROW_COMPUTE)
   set(CUDF_ENABLE_ARROW_COMPUTE OFF)
 endif()
 
+# Derive arrow build mode from CUDF_BUILD_STATIC_DEPS
+if(CUDF_BUILD_STATIC_DEPS STREQUAL "OFF")
+  set(_cudf_arrow_static OFF)
+else()
+  set(_cudf_arrow_static ON)
+endif()
+if(CUDF_INSTALL_LIBRARY_DEPS)
+  set(_cudf_arrow_exclude_from_all OFF)
+else()
+  set(_cudf_arrow_exclude_from_all ON)
+endif()
+
 find_and_configure_arrow(
-  ${CUDF_VERSION_Arrow} ${CUDF_USE_ARROW_STATIC} ${CUDF_EXCLUDE_ARROW_FROM_ALL}
+  ${CUDF_VERSION_Arrow} ${_cudf_arrow_static} ${_cudf_arrow_exclude_from_all}
   ${CUDF_ENABLE_ARROW_PARQUET} ${CUDF_ENABLE_ARROW_COMPUTE}
 )

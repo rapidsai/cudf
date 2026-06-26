@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -16,9 +17,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
-
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <functional>
 #include <numeric>
@@ -293,8 +291,8 @@ std::unique_ptr<column> superimpose_nulls(bitmask_type const* null_mask,
  *  2. Applying the nulls in a segmented batch operation
  *  3. Then updating all the columns with their new null masks
  *
- * @param null_mask Vector of null masks to be applied to the input column
- * @param input Vector of input column to apply the null mask to
+ * @param null_masks Vector of null masks to be applied to the input column
+ * @param inputs Vector of input column to apply the null mask to
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate new device memory
  * @return A new column with potentially new null mask
@@ -319,9 +317,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
 
   // This recursive function navigates the column hierarchy and for each path in the tree, it
   // collects all null masks that need to be combined for each column in the hierarchy
-  std::function<void(mutable_column_view input)> populate_segmented_sources =
-    [&populate_segmented_sources, &path, &sources, &segment_offsets](
-      mutable_column_view input) -> void {
+  std::function<void(column_view input)> populate_segmented_sources =
+    [&populate_segmented_sources, &path, &sources, &segment_offsets](column_view input) -> void {
     if (input.type().id() != cudf::type_id::EMPTY) {
       // EMPTY columns should not have a null mask,
       // so don't superimpose null mask on empty columns.
@@ -352,7 +349,7 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
     path.push_back(null_masks[c]);
 
     // Collect all null masks for this column and its descendants
-    populate_segmented_sources(inputs[c]->mutable_view());
+    populate_segmented_sources(inputs[c]->view());
     path.pop_back();
   }
 
@@ -363,18 +360,8 @@ std::vector<std::unique_ptr<column>> superimpose_nulls(
     segment_offsets.push_back(total_sum);
   }
 
-  // All masks start at bit position 0
-  std::vector<size_type> sources_begin_bits(sources.size(), 0);
-
-  // Perform the segmented bitwise AND operation across all collected masks
-  auto [result_null_masks, result_null_counts] = cudf::detail::segmented_bitmask_binop(
-    [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
-    sources,
-    sources_begin_bits,
-    num_rows,
-    segment_offsets,
-    stream,
-    mr);
+  auto [result_null_masks, result_null_counts] =
+    cudf::detail::segmented_bitmask_and(sources, segment_offsets, num_rows, stream, mr);
 
   // Create new struct column and its descendants with updated null masks
   // Recursively updates each column and its children with their new null masks
@@ -468,7 +455,7 @@ std::pair<column_view, temporary_nullable_data> push_down_nulls_no_sanitize(
   };
 
   auto const child_begin =
-    thrust::make_transform_iterator(thrust::make_counting_iterator(0), child_with_new_mask);
+    cudf::detail::make_counting_transform_iterator(cudf::size_type{0}, child_with_new_mask);
   auto const child_end = child_begin + structs_view.num_children();
   auto ret_children    = std::vector<column_view>{};
 

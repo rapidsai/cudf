@@ -11,7 +11,7 @@ context:
   head_rev: '${{ git.head_rev(".")[:8] }}'
   py_abi_min: ${{ env.get("RAPIDS_PY_VERSION") }}
   py_buildstring : ${{ py_abi_min | version_to_buildstring }}
-  py_runtime_latest: "3.13"
+  py_runtime_latest: "3.14"
 
 package:
   name: cudf
@@ -69,7 +69,7 @@ requirements:
     - cuda-version =${{ cuda_version }}
     - ${{ stdlib("c") }}
   host:
-    - cython >=3.0.3,<3.2.0
+    - cython >=3.2.2
     - pip
     - python =${{ py_abi_min }}
     - python-abi3 ${{ py_abi_min }}.*
@@ -88,18 +88,19 @@ requirements:
     - cuda-version =${{ cuda_version }}
   run:
     - python
-    - typing_extensions >=4.0.0
-    - pandas >=2.0,<2.4.0
-    - cupy >=13.6.0,!=14.0.0
+    - pandas >=3.0.0,<3.1.0
+    - cupy >=13.6.0,!=14.0.0,!=14.1.0
     - numba-cuda >=0.22.2
+    # TODO: add `numba-cuda-mlir >=0.3.0` here once it is published to a conda
+    # channel. Currently only available via PyPI; the pip-only declaration
+    # lives in `dependencies.yaml::depends_on_numba_cuda_mlir`.
     - numba >=0.60.0,<0.65.0
-    - numpy >=1.23,<3.0
+    - numpy >=1.26,<3.0
     - pyarrow>=19.0.0
     - libcudf =${{ version }}
     - pylibcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - fsspec >=0.6.0
-    - cuda-cudart
     - if: cuda_major == "12"
       then: cuda-python >=12.9.2,<13.0
       else: cuda-python >=13.0.1,<14.0

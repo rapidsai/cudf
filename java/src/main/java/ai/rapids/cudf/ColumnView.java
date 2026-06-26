@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -3419,6 +3419,36 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a new strings column where, for each row {@code i}, all occurrences of
+   * {@code targets[i]} within {@code input[i]} are replaced with {@code repls[i]}.
+   *
+   * Unlike {@link #stringReplace(ColumnView, ColumnView)}, which searches every row for a
+   * shared list of target strings, this method pairs each input row with its own
+   * target/replacement pair.
+   *
+   * The {@code targets} and {@code repls} columns must have the same number of rows as this
+   * column. Output row {@code i} is null if any of {@code input[i]}, {@code targets[i]},
+   * or {@code repls[i]} is null. If {@code targets[i]} is an empty string, {@code input[i]}
+   * is copied unchanged.
+   *
+   * @param targets Per-row strings to search for within each input string.
+   * @param repls Per-row replacement strings used when the corresponding target is found.
+   * @return A new column vector containing the replaced strings.
+   */
+  public final ColumnVector stringReplacePerRow(ColumnView targets, ColumnView repls) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets != null : "targets column may not be null";
+    assert targets.getType().equals(DType.STRING) : "targets column must be a string column";
+    assert repls != null : "repls column may not be null";
+    assert repls.getType().equals(DType.STRING) : "repls column must be a string column";
+    assert targets.getRowCount() == getRowCount() : "targets must have the same number of rows as this column";
+    assert repls.getRowCount() == getRowCount() : "repls must have the same number of rows as this column";
+
+    return new ColumnVector(stringReplacePerRow(getNativeView(), targets.getNativeView(),
+        repls.getNativeView()));
+  }
+
+  /**
    * For each string, replaces any character sequence matching the given pattern using the
    * replacement string scalar.
    *
@@ -3473,19 +3503,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert regexProg != null : "regex program may not be null";
     return new ColumnVector(replaceRegex(getNativeView(), regexProg.pattern(), regexProg.combinedFlags(),
                                          regexProg.capture().nativeId, repl.getScalarHandle(), maxRepl));
-  }
-
-  /**
-   * For each string, replaces any character sequence matching any of the regular expression
-   * patterns with the corresponding replacement strings.
-   *
-   * @param patterns The regular expression patterns to search within each string.
-   * @param repls The string scalars to replace for each corresponding pattern match.
-   * @return A new column vector containing the string results.
-   */
-  public final ColumnVector replaceMultiRegex(String[] patterns, ColumnView repls) {
-    return new ColumnVector(replaceMultiRegex(getNativeView(), patterns,
-        repls.getNativeView()));
   }
 
   /**
@@ -3725,6 +3742,36 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     assert targets.getRowCount() > 0 : "targets must not be empty";
     long[] resultPointers = stringContainsMulti(getNativeView(), targets.getNativeView());
     return Arrays.stream(resultPointers).mapToObj(ColumnVector::new).toArray(ColumnVector[]::new);
+  }
+
+  /**
+   * For each row {@code i}, returns whether {@code input[i]} contains the literal substring
+   * {@code targets[i]} (UTF-8 byte sequence, not regex).
+   *
+   * <p>This column and {@code targets} must have the same row count. Null {@code targets[i]} yields
+   * {@code false} for that row; null {@code input[i]} yields null in the output.
+   *
+   * <p>Contrast with {@link #stringContains(Scalar)} (one needle for all rows) and
+   * {@link #stringContains(ColumnView)} ({@code contains_multiple}: each needle checked against
+   * every row, returning multiple boolean columns).
+   *
+   * <p>Example:
+   * <pre>{@code
+   * // input   = ["apple", "banana", null, "date"], DType = STRING
+   * // targets = ["pl",    "xyz",    "a",  null],   DType = STRING
+   * ColumnVector result = input.stringContainsPerRow(targets);
+   * // result  = [true,    false,    null, false],   DType = BOOL8
+   * }</pre>
+   *
+   * @param targets string column aligned row-for-row with this column
+   * @return a new BOOL8 column
+   */
+  public final ColumnVector stringContainsPerRow(ColumnView targets) {
+    assert type.equals(DType.STRING) : "column type must be a String";
+    assert targets.getType().equals(DType.STRING) : "targets type must be a string";
+    assert getRowCount() == targets.getRowCount()
+        : "column and targets must have the same number of rows";
+    return new ColumnVector(stringContainsPerRow(getNativeView(), targets.getNativeView()));
   }
 
   /**
@@ -4262,7 +4309,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Segmented sort of the elements within a list in each row of a list column.
-   * NOTICE: list columns with nested child are NOT supported yet.
+   * The list child may be of any type whose leaf elements are relationally comparable, including
+   * arbitrarily nested LIST and STRUCT children.
    *
    * @param isDescending   whether sorting each row with descending order (or ascending order)
    * @param isNullSmallest whether to regard the null value as the min value (or the max value)
@@ -4725,6 +4773,14 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long stringReplaceMulti(long inputCV, long targetsCV, long replsCV) throws CudfException;
 
   /**
+   * Native method for per-row string replacement.
+   * @param inputCV native handle of the cudf::column_view being operated on.
+   * @param targetsCV handle of column containing the per-row target strings.
+   * @param replsCV handle of column containing the per-row replacement strings.
+   */
+  private static native long stringReplacePerRow(long inputCV, long targetsCV, long replsCV) throws CudfException;
+
+  /**
    * Native method for replacing each regular expression pattern match with the specified
    * replacement string.
    * @param columnView native handle of the cudf::column_view being operated on.
@@ -4737,16 +4793,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long replaceRegex(long columnView, String pattern, int flags, int capture,
                                           long repl, long maxRepl) throws CudfException;
-
-  /**
-   * Native method for multiple instance regular expression replacement.
-   * @param columnView native handle of the cudf::column_view being operated on.
-   * @param patterns native handle of the cudf::column_view containing the regex patterns.
-   * @param repls The replacement template for creating the output string.
-   * @return native handle of the resulting cudf column containing the string results.
-   */
-  private static native long replaceMultiRegex(long columnView, String[] patterns,
-                                               long repls) throws CudfException;
 
   /**
    * Native method for replacing any character sequence matching the given regex program
@@ -4823,6 +4869,12 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @return native handle of the resulting cudf column containing the boolean results.
    */
   private static native long stringContains(long cudfViewHandle, long compString) throws CudfException;
+
+  /**
+   * Row-aligned substring contains: row {@code i} searches for {@code targets[i]} in {@code input[i]}.
+   */
+  private static native long stringContainsPerRow(long cudfViewHandle, long targetsViewHandle)
+      throws CudfException;
 
   /**
    * Native method for searching for the given target strings within each string in the provided column.
@@ -5387,6 +5439,41 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   // DATA MOVEMENT
   /////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Drain {@code stream} and clean up host-side resources after a failure in
+   * {@link #copyToHostAsync} or {@link #copyToHostAsyncNestedHelper}. Sync
+   * failures and close failures are recorded as suppressed on {@code primary}
+   * so the original cause is preserved.
+   *
+   * <p>If the recovery sync itself fails, the CUDA stream is in an error state
+   * and pending DMA writes into the host buffers may not have completed.
+   * Closing them then would risk a use-after-free (the DMA engine writing into
+   * freed memory), so the host buffers are intentionally leaked — the process
+   * is already in a broken state (sticky CUDA error usually requires a
+   * restart), and a leak beats silent corruption.
+   */
+  private static void syncAndCleanup(Cuda.Stream stream, Throwable primary,
+      List<HostColumnVectorCore> children,
+      HostMemoryBuffer hostData, HostMemoryBuffer hostOffsets, HostMemoryBuffer hostValid) {
+    try {
+      stream.sync();
+    } catch (Throwable syncFailure) {
+      // Stream is in an error state; pending DMA writes may not have landed.
+      // Intentionally leak the host buffers rather than risk closing them while
+      // the DMA engine could still write into freed memory.
+      primary.addSuppressed(syncFailure);
+      return;
+    }
+    if (children != null) {
+      for (HostColumnVectorCore child : children) {
+        CleanupHelpers.closeAndSuppress(child, primary);
+      }
+    }
+    CleanupHelpers.closeAndSuppress(hostData, primary);
+    CleanupHelpers.closeAndSuppress(hostOffsets, primary);
+    CleanupHelpers.closeAndSuppress(hostValid, primary);
+  }
+
   private static HostColumnVectorCore copyToHostAsyncNestedHelper(
       Cuda.Stream stream, ColumnView deviceCvPointer, HostMemoryAllocator hostMemoryAllocator) {
     if (deviceCvPointer == null) {
@@ -5400,7 +5487,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     BaseDeviceMemoryBuffer currOffsets = null;
     BaseDeviceMemoryBuffer currValidity = null;
     long currNullCount = 0l;
-    boolean needsCleanup = true;
     try {
       long currRows = deviceCvPointer.getRowCount();
       DType currType = deviceCvPointer.getType();
@@ -5427,12 +5513,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       currNullCount = deviceCvPointer.getNullCount();
       Optional<Long> nullCount = Optional.of(currNullCount);
-      HostColumnVectorCore ret =
-          new HostColumnVectorCore(currType, currRows, nullCount, hostData,
-              hostValid, hostOffsets, children);
-      needsCleanup = false;
-      return ret;
+      return new HostColumnVectorCore(currType, currRows, nullCount, hostData,
+          hostValid, hostOffsets, children);
+    } catch (Throwable t) {
+      syncAndCleanup(stream, t, children, hostData, hostOffsets, hostValid);
+      throw t;
     } finally {
+      // These are refcount handles to the parent ColumnView's device memory;
+      // closing them only decrements a refcount and does not deallocate, so
+      // they're safe to close regardless of stream state and do not need the
+      // sync-then-suppress treatment applied to host buffers above.
       if (currData != null) {
         currData.close();
       }
@@ -5441,17 +5531,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       }
       if (currValidity != null) {
         currValidity.close();
-      }
-      if (needsCleanup) {
-        if (hostData != null) {
-          hostData.close();
-        }
-        if (hostOffsets != null) {
-          hostOffsets.close();
-        }
-        if (hostValid != null) {
-          hostValid.close();
-        }
       }
     }
   }
@@ -5473,6 +5552,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       HostMemoryBuffer hostDataBuffer = null;
       HostMemoryBuffer hostValidityBuffer = null;
       HostMemoryBuffer hostOffsetsBuffer = null;
+      List<HostColumnVectorCore> children = null;
       BaseDeviceMemoryBuffer valid = getValid();
       BaseDeviceMemoryBuffer offsets = getOffsets();
       BaseDeviceMemoryBuffer data = null;
@@ -5481,7 +5561,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       if (!type.isNestedType()) {
         data = getData();
       }
-      boolean needsCleanup = true;
       try {
         // We don't have a good way to tell if it is cached on the device or recalculate it on
         // the host for now, so take the hit here.
@@ -5500,10 +5579,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
             hostDataBuffer.copyFromDeviceBufferAsync(data, stream);
           }
-          HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
+          return new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer);
-          needsCleanup = false;
-          return ret;
         } else {
           if (data != null) {
             hostDataBuffer = hostMemoryAllocator.allocate(data.length);
@@ -5518,18 +5595,23 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
             hostOffsetsBuffer = hostMemoryAllocator.allocate(offsets.getLength());
             hostOffsetsBuffer.copyFromDeviceBufferAsync(offsets, stream);
           }
-          List<HostColumnVectorCore> children = new ArrayList<>();
+          children = new ArrayList<>();
           for (int i = 0; i < getNumChildren(); i++) {
             try (ColumnView childDevPtr = getChildColumnView(i)) {
               children.add(copyToHostAsyncNestedHelper(stream, childDevPtr, hostMemoryAllocator));
             }
           }
-          HostColumnVector ret = new HostColumnVector(type, rows, Optional.of(nullCount),
+          return new HostColumnVector(type, rows, Optional.of(nullCount),
               hostDataBuffer, hostValidityBuffer, hostOffsetsBuffer, children);
-          needsCleanup = false;
-          return ret;
         }
+      } catch (Throwable t) {
+        syncAndCleanup(stream, t, children, hostDataBuffer, hostOffsetsBuffer, hostValidityBuffer);
+        throw t;
       } finally {
+        // These are refcount handles to this ColumnView's device memory;
+        // closing them only decrements a refcount and does not deallocate, so
+        // they're safe to close regardless of stream state and do not need the
+        // sync-then-suppress treatment applied to host buffers above.
         if (data != null) {
           data.close();
         }
@@ -5538,17 +5620,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         }
         if (valid != null) {
           valid.close();
-        }
-        if (needsCleanup) {
-          if (hostOffsetsBuffer != null) {
-            hostOffsetsBuffer.close();
-          }
-          if (hostDataBuffer != null) {
-            hostDataBuffer.close();
-          }
-          if (hostValidityBuffer != null) {
-            hostValidityBuffer.close();
-          }
         }
       }
     }

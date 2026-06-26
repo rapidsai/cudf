@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -115,7 +115,7 @@ TYPED_TEST(TypedTraitsTest, NotEqualityComparableWithList)
   bool comparable = cudf::is_equality_comparable<TypeParam, cudf::list_view>();
   EXPECT_FALSE(comparable);
 
-  cudf::is_equality_comparable<cudf::list_view, cudf::list_view>();
+  comparable = cudf::is_equality_comparable<cudf::list_view, cudf::list_view>();
   EXPECT_FALSE(comparable);
 }
 

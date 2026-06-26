@@ -182,8 +182,15 @@ __device__ inline void decode_fixed_width_split_values(
   int const leaf_level_index = s->col.max_nesting_depth - 1;
   auto const data_out        = s->nesting_info[leaf_level_index].data_out;
 
-  Type const dtype      = s->col.physical_type;
-  auto const data_len   = cuda::std::distance(s->data_start, s->data_end);
+  Type const dtype    = s->col.physical_type;
+  auto const data_len = cuda::std::distance(s->data_start, s->data_end);
+
+  // Check malformed BYTE_STREAM_SPLIT pages
+  if (s->dtype_len_in <= 0 or data_len <= 0) {
+    if (t == 0) { s->set_error_code(decode_error::INVALID_BYTE_STREAM_SPLIT_SIZE); }
+    return;
+  }
+
   auto const num_values = data_len / s->dtype_len_in;
 
   int const skipped_leaf_values = s->page.skipped_leaf_values;
@@ -272,11 +279,11 @@ __device__ inline void decode_fixed_width_split_values(
  *
  * @tparam decode_block_size Size of the thread block
  * @tparam level_t Definition level type
- * @tparam is_nested Whether the type is nested
  *
  * @param target_value_count The target value count to process
  * @param s Pointer to page state
  * @param def Pointer to the definition levels
+ * @param is_nested Whether the column is nested
  * @param t Thread index
  *
  * @return Maximum depth valid count after skipping
@@ -548,9 +555,10 @@ __device__ int update_validity_and_row_indices_flat(
  * @tparam state_buf State buffer type
  *
  * @param target_value_count The target value count to process
- * @param s Pointer to  page state
- * @param sb Pointer to  state buffer
+ * @param s Pointer to page state
+ * @param sb Pointer to state buffer
  * @param def Pointer to the definition levels
+ * @param rep Repetition level decoder
  * @param t Thread index
  *
  * @return Maximum depth valid count after processing
@@ -898,7 +906,7 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
 }
 
 template <decode_kernel_mask kernel_mask_t>
-constexpr bool has_dict()
+CUDF_HOST_DEVICE constexpr bool has_dict()
 {
   return (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT) ||
          (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
@@ -909,7 +917,7 @@ constexpr bool has_dict()
 }
 
 template <decode_kernel_mask kernel_mask_t>
-constexpr bool has_bools()
+CUDF_HOST_DEVICE constexpr bool has_bools()
 {
   return (kernel_mask_t == decode_kernel_mask::BOOLEAN) ||
          (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
@@ -917,7 +925,7 @@ constexpr bool has_bools()
 }
 
 template <decode_kernel_mask kernel_mask_t>
-constexpr bool has_nesting()
+CUDF_HOST_DEVICE constexpr bool has_nesting()
 {
   return (kernel_mask_t == decode_kernel_mask::BOOLEAN_NESTED) ||
          (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_NESTED) ||
@@ -929,7 +937,7 @@ constexpr bool has_nesting()
 }
 
 template <decode_kernel_mask kernel_mask_t>
-constexpr bool has_lists()
+CUDF_HOST_DEVICE constexpr bool has_lists()
 {
   return (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST) ||
          (kernel_mask_t == decode_kernel_mask::FIXED_WIDTH_DICT_LIST) ||
@@ -941,7 +949,7 @@ constexpr bool has_lists()
 }
 
 template <decode_kernel_mask kernel_mask_t>
-constexpr bool is_split_decode()
+CUDF_HOST_DEVICE constexpr bool is_split_decode()
 {
   return (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_FLAT) ||
          (kernel_mask_t == decode_kernel_mask::BYTE_STREAM_SPLIT_FIXED_WIDTH_NESTED) ||
@@ -1097,8 +1105,6 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   int valid_count                 = 0;
   size_t string_output_offset     = 0;
   int const init_valid_map_offset = s->nesting_info[s->col.max_nesting_depth - 1].valid_map_offset;
-  uint32_t* const str_offsets =
-    s->col.column_string_offset_base + page_string_offset_indices[page_idx];
 
   // Skip ahead in the decoding so that we don't repeat work
   skip_ahead_in_decoding<decode_block_size_t,
@@ -1179,6 +1185,8 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
 
     auto decode_values = [&]<copy_mode copy_mode_t>() {
       if constexpr (has_strings_t) {
+        uint32_t* const str_offsets =
+          s->col.column_string_offset_base + page_string_offset_indices[page_idx];
         string_output_offset =
           decode_strings<decode_block_size_t, has_dict_t, has_lists_t, split_decode_t, copy_mode_t>(
             s, sb, valid_count, next_valid_count, t, str_offsets, string_output_offset);
@@ -1288,6 +1296,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      initial_str_offsets,
                                                      page_string_offset_indices,
                                                      error_code);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       decode_page_data_generic<uint16_t, decode_block_size, mask>
         <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
@@ -1298,6 +1307,7 @@ void decode_page_data(cudf::detail::hostdevice_span<PageInfo> pages,
                                                      initial_str_offsets,
                                                      page_string_offset_indices,
                                                      error_code);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   };
 

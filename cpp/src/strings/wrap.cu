@@ -20,8 +20,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf {
 namespace strings {
@@ -112,8 +112,8 @@ std::unique_ptr<column> wrap(strings_column_view const& strings,
 
   device_execute_functor d_execute_fctr{d_column, d_new_offsets, d_chars, width};
 
-  thrust::for_each_n(rmm::exec_policy_nosync(stream),
-                     thrust::make_counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      strings_count,
                      d_execute_fctr);
 

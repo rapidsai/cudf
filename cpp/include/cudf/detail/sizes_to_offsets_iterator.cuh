@@ -191,12 +191,15 @@ struct sizes_to_offsets_iterator {
  * @code{.pseudo}
  *  auto begin = // begin input iterator
  *  auto end = // end input iterator
- *  auto result = rmm::device_uvector(std::distance(begin,end), stream);
+ *  auto result = rmm::device_uvector(std::distance(begin, end), stream);
  *  auto last = cudf::detail::device_scalar<int64_t>(0, stream);
  *  auto itr = make_sizes_to_offsets_iterator(result.begin(),
  *                                            result.end(),
  *                                            last.data());
- *  thrust::exclusive_scan(rmm::exec_policy_nosync(stream), begin, end, itr, int64_t{0});
+ *  thrust::exclusive_scan(
+ *    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+ *    begin, end, itr, int64_t{0}
+ *  );
  *  // last contains the value of the final element in the scan result
  * @endcode
  *
@@ -245,6 +248,7 @@ static sizes_to_offsets_iterator<ScanIterator, LastType> make_sizes_to_offsets_i
  * @param end End of the input iterator
  * @param result Output iterator for scan result
  * @param initial_offset Initial offset to add to scan
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @return The last element of the scan
  */
 template <typename SizesIterator, typename OffsetsIterator>
@@ -258,14 +262,18 @@ auto sizes_to_offsets(SizesIterator begin,
   static_assert(std::is_integral_v<SizeType>,
                 "Only numeric types are supported by sizes_to_offsets");
 
-  using LastType    = std::conditional_t<std::is_signed_v<SizeType>, int64_t, uint64_t>;
-  auto last_element = cudf::detail::device_scalar<LastType>(0, stream);
+  using LastType = std::conditional_t<std::is_signed_v<SizeType>, int64_t, uint64_t>;
+  auto last_element =
+    cudf::detail::device_scalar<LastType>(0, stream, cudf::get_current_device_resource_ref());
   auto output_itr =
     make_sizes_to_offsets_iterator(result, result + std::distance(begin, end), last_element.data());
   // This function uses the type of the initialization parameter as the accumulator type
   // when computing the individual scan output elements.
-  thrust::exclusive_scan(
-    rmm::exec_policy_nosync(stream), begin, end, output_itr, static_cast<LastType>(initial_offset));
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         begin,
+                         end,
+                         output_itr,
+                         static_cast<LastType>(initial_offset));
   return last_element.value(stream);
 }
 

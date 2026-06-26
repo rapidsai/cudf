@@ -93,10 +93,11 @@ struct contains_scalar_dispatch {
     // In addition, haystack and needle structure compatibility will be checked later on by
     // constructor of the table comparator.
 
-    auto const haystack_tv   = table_view{{haystack}};
-    auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
-    auto const needle_tv     = table_view{{needle_as_col->view()}};
-    auto const has_nulls     = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
+    auto const haystack_tv = table_view{{haystack}};
+    auto const needle_as_col =
+      make_column_from_scalar(needle, 1, stream, cudf::get_current_device_resource_ref());
+    auto const needle_tv = table_view{{needle_as_col->view()}};
+    auto const has_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
 
     auto const comparator =
       cudf::detail::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
@@ -115,7 +116,7 @@ struct contains_scalar_dispatch {
     // runtime performance over using the comparator in a transform iterator with thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(haystack.size(), stream);
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       begin,
       end,
       d_results.begin(),
@@ -126,8 +127,10 @@ struct contains_scalar_dispatch {
         return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
       });
 
-    return thrust::count(
-             rmm::exec_policy_nosync(stream), d_results.begin(), d_results.end(), true) > 0;
+    return thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         d_results.begin(),
+                         d_results.end(),
+                         true) > 0;
   }
 };
 

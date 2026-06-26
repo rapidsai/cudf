@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -25,8 +25,11 @@ namespace detail {
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
  * tables have been flipped, meaning the output indices should also be flipped
+ * @param binary_predicate The predicate expression to evaluate
  * @param JoinKind The type of join to be performed
+ * @param output_size Optional pre-computed output size
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  *
  * @return Join output indices vector pair
  */
@@ -47,8 +50,10 @@ conditional_join(table_view const& left,
  * @param left  Table of left columns to join
  * @param right Table of right  columns to join
  * tables have been flipped, meaning the output indices should also be flipped
+ * @param binary_predicate The predicate expression to evaluate
  * @param JoinKind The type of join to be performed
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device memory
  *
  * @return Join output indices vector pair
  */

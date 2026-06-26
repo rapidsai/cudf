@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "common.hpp"
@@ -34,9 +34,8 @@ int main(int argc, char const** argv)
 
   auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
-  auto stats_mr =
-    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  auto stats_mr      = rmm::mr::statistics_resource_adaptor{resource};
+  rmm::mr::set_current_device_resource(stats_mr);
   auto stream = cudf::get_default_stream();
 
   auto start = std::chrono::steady_clock::now();

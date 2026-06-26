@@ -28,7 +28,7 @@ requirements:
     - pip
     - rapids-build-backend >=0.4.0,<0.5.0
     - setuptools>=77.0.0
-    - python-confluent-kafka >=2.8.0,<2.9.0
+    - python-confluent-kafka
     - cudf_kafka =${{ version }}
   run:
     - python
@@ -36,7 +36,7 @@ requirements:
     - cudf =${{ version }}
     - cudf_kafka =${{ version }}
     - rapids-dask-dependency =${{ minor_version }}
-    - python-confluent-kafka >=2.8.0,<2.9.0
+    - python-confluent-kafka
 
 tests:
   - python:

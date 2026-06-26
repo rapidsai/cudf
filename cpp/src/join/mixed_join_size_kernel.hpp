@@ -30,28 +30,28 @@ namespace detail {
  * evaluates to true between the left/right tables when a match is found
  * between probe and build rows.
  *
- * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] probe The table with which to probe the hash table for matches.
- * @param[in] build The table with which the hash table was built.
- * @param[in] hash_probe The hasher used for the probe table.
- * @param[in] equality_probe The equality comparator used when probing the hash table.
- * @param[in] join_type The type of join to be performed
- * @param[in] hash_table_view The hash table built from `build`.
- * @param[in] device_expression_data Container of device data required to evaluate the desired
- * expression.
+ * @param[in] is_outer_join Whether this is an outer join
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
- * @param[out] output_size The resulting output size
+ * @param[in] equality_probe The equality comparator used when probing the hash table.
+ * @param[in] hash_table_storage Device span of the hash table storage
+ * @param[in] input_pairs Precomputed input pairs for probing
+ * @param[in] hash_indices Precomputed hash indices for efficient probing
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
+ * expression.
  * @param[out] matches_per_row The number of matches in one pair of
  * equality/conditional tables for each row in the other pair of tables. If
  * swap_tables is true, matches_per_row corresponds to the right_table,
  * otherwise it corresponds to the left_table. Note that corresponding swap of
  * left/right tables to determine which is the build table and which is the
  * probe table has already happened on the host.
+ * @param[in] config Grid configuration for the kernel launch
+ * @param[in] shmem_size_per_block Shared memory size per block
+ * @param[in] stream CUDA stream to use
  */
 
 template <bool has_nulls>

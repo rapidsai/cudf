@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 ci:
@@ -9,6 +9,9 @@ ci:
   autoupdate_schedule: quarterly
   skip: ["mypy", "verify-alpha-spec"]
   submodules: false
+
+# Agent skill artifacts are validated and signed by the NVIDIA skills pipeline.
+exclude: ^skills/
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -26,21 +29,23 @@ repos:
             ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/vocab.txt
           )
+      - id: check-xml
   - repo: https://github.com/MarcoGorelli/cython-lint
-    rev: v0.18.1
+    rev: v0.19.0
     hooks:
       - id: cython-lint
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: 'v1.13.0'
+    rev: 'v2.1.0'
     hooks:
       - id: mypy
         additional_dependencies: [
-          polars,
-          "numpy",
+          "polars>=1.35,<1.39",
+          "numpy>=1.26",
           pyarrow-stubs,
+          "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
           pytest,
           types-cachetools,
-          "rmm-cu12==26.2.*,>=0.0.0a0; sys_platform=='linux'",
+          "rmm-cu12==26.8.*,>=0.0.0a0; sys_platform=='linux'",
           "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
         ]
         args: ["--config-file=pyproject.toml",
@@ -53,7 +58,7 @@ repos:
                "python/dask_cudf/dask_cudf"]
         pass_filenames: false
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v20.1.4
+    rev: v20.1.8
     hooks:
       - id: clang-format
         types_or: [c, c++, cuda]
@@ -104,6 +109,42 @@ repos:
         entry: 'rmm::exec_policy\('
         language: pygrep
         types_or: [c, c++, cuda]
+      - id: exec-policy-nosync-memory-resource
+        name: exec-policy-nosync-memory-resource
+        description: 'Enforce that rmm::exec_policy_nosync is always passed a memory resource as its second argument'
+        entry: 'rmm::exec_policy_nosync\([^,)]+\)'
+        language: pygrep
+        types_or: [c, c++, cuda]
+        files: '^cpp/(src|include)/'
+      - id: use-cudf-memcpy-async
+        name: use-cudf-memcpy-async
+        description: 'Enforce that cudf::detail::memcpy_async or memcpy_batch_async is used instead of cudaMemcpyAsync (see developer guide)'
+        entry: 'cudaMemcpyAsync'
+        language: pygrep
+        types_or: [c, c++, cuda]
+        files: '^cpp/(src|include)/'
+        exclude: |
+          (?x)^(
+            cpp/src/utilities/host_memory\.cpp|
+            cpp/src/utilities/cuda_memcpy\.cu|
+            cpp/src/io/utilities/data_sink\.cpp|
+            cpp/include/cudf/contiguous_split\.hpp|
+            cpp/include/cudf/utilities/pinned_memory\.hpp|
+            cpp/include/cudf/utilities/error\.hpp|
+            cpp/include/cudf/detail/utilities/cuda_memcpy\.hpp
+          )$
+      # C++ Core Guidelines SF.21 forbids unnamed namespaces in header files:
+      # https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines#rs-unnamed
+      - id: no-anonymous-namespaces-in-headers
+        name: no-anonymous-namespaces-in-headers
+        description: 'Forbid anonymous namespaces in C++ header files'
+        entry: '^\s*namespace\s*(?:/\*.*\*/\s*)?\{'
+        language: pygrep
+        files: '.*[.](h|hpp|cuh)$'
+        exclude: |
+          (?x)^(
+            cpp/include/cudf_test/cxxopts[.]hpp
+          )$
       - id: no-unseeded-default-rng
         name: no-unseeded-default-rng
         description: 'Enforce that no non-seeded default_rng is used and default_rng is used instead of np.random.seed'
@@ -118,7 +159,7 @@ repos:
         name: cudf-polars-ir-signatures
         description: 'Validate cudf-polars IR.do_evaluate signatures.'
         entry: ./ci/check_cudf_polars_ir.py
-        language: python
+        language: script
         files: ^python/cudf_polars/cudf_polars/(dsl/ir|experimental/(shuffle|io|sort))\.py$
         pass_filenames: true
         verbose: true
@@ -128,6 +169,10 @@ repos:
         entry: ./cpp/scripts/run-cmake-format.sh cmake-format
         language: python
         types: [cmake]
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
+        exclude: |
+          (?x)
+            ^cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
         # Note that pre-commit autoupdate does not update the versions
         # of dependencies, so we'll have to update this manually.
         additional_dependencies:
@@ -139,6 +184,10 @@ repos:
         entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
         language: python
         types: [cmake]
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
+        exclude: |
+          (?x)
+            ^cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
         # Note that pre-commit autoupdate does not update the versions
         # of dependencies, so we'll have to update this manually.
         additional_dependencies:
@@ -154,7 +203,7 @@ repos:
         pass_filenames: false
         verbose: true
   - repo: https://github.com/codespell-project/codespell
-    rev: v2.4.1
+    rev: v2.4.2
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
@@ -165,13 +214,13 @@ repos:
             ^CHANGELOG.md$
           )
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.3
+    rev: v0.15.17
     hooks:
       - id: ruff
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.4.1
+    rev: v1.5.1
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -195,6 +244,7 @@ repos:
             pytest[.]ini$|
             ^[.]pre-commit-config[.]yaml$|
             Makefile$
+        # TODO: Remove FindCUDAToolkit once we require CMake 4.4
         exclude: |
           (?x)^(
             cpp/include/cudf_test/cxxopts[.]hpp$|
@@ -208,7 +258,8 @@ repos:
             cpp/src/io/comp/unbz2[.]hpp$|
             cpp/src/io/comp/gpuinflate[.]cu$|
             cpp/src/io/utilities/base64_utilities[.]cpp$|
-            cpp/src/io/utilities/base64_utilities[.]hpp$
+            cpp/src/io/utilities/base64_utilities[.]hpp$|
+            cpp/cmake/Modules/FindCUDAToolkit[.]cmake$
           )
       - id: verify-copyright
         name: verify-copyright-brotli
@@ -256,7 +307,9 @@ repos:
             (^|/)pom[.]xml$|
             ^[.]pre-commit-config[.]yaml$|
             ^conda/environments/|
+            RAPIDS_BRANCH$|
             [.](md|rst|avro|parquet|png|orc|gz|pkl|sas7bdat)$|
+            ^python/cudf/cudf/tests|
             ^python/cudf/cudf/VERSION$
       - id: verify-pyproject-license
         # ignore the top-level pyproject.toml, which doesn't
@@ -265,7 +318,7 @@ repos:
           (?x)
             ^pyproject[.]toml$
   - repo: https://github.com/rapidsai/dependency-file-generator
-    rev: v1.20.2
+    rev: v1.20.3
     hooks:
       - id: rapids-dependency-file-generator
         args: ["--clean", "--warn-all", "--strict"]
@@ -274,6 +327,10 @@ repos:
     hooks:
       - id: shellcheck
         args: ["--severity=warning"]
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.25.2
+    hooks:
+      - id: zizmor
 
 default_language_version:
       python: python3

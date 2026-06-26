@@ -104,6 +104,38 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Partitions rows from the input table into multiple output tables.
+ *
+ * Partitions rows of `input` into `num_partitions` bins based on the hash
+ * value of the rows specified by the `keys` table. Rows partitioned into
+ * the same bin are grouped consecutively in the output table. Returns a vector
+ * of `num_partitions + 1` offsets, where partition `i` contains rows in the range
+ * `[offsets[i], offsets[i+1])`. The last offset is always equal to the total
+ * number of rows in the output table.
+ *
+ * @throw std::invalid_argument if `keys` is not empty and does not have the same number of rows as
+ * `input`.
+ *
+ * @param input The table to partition
+ * @param keys The table of keys to hash defining the partitioning
+ * @param num_partitions The number of partitions to use
+ * @param hash_function Optional hash id that chooses the hash function to use
+ * @param seed Optional seed value to the hash function
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ *
+ * @returns An output table and a vector of `num_partitions + 1` row offsets to each partition
+ */
+std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition(
+  table_view const& input,
+  table_view const& keys,
+  int num_partitions,
+  hash_id hash_function             = hash_id::HASH_MURMUR3,
+  uint32_t seed                     = DEFAULT_HASH_SEED,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Round-robin partition.
  *
  * Returns a new table with rows re-arranged into partition groups and

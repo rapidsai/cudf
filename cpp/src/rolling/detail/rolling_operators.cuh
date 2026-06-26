@@ -25,10 +25,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
 #include <thrust/count.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/reduce.h>
 
 #include <memory>
@@ -204,8 +204,8 @@ struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_vi
 
     auto const valid_count =
       has_nulls ? thrust::count_if(thrust::seq,
-                                   thrust::make_counting_iterator(start_index),
-                                   thrust::make_counting_iterator(end_index),
+                                   cuda::counting_iterator{start_index},
+                                   cuda::counting_iterator{end_index},
                                    [&input](size_type idx) { return input.is_valid_nocheck(idx); })
                 : end_index - start_index;
 
@@ -213,8 +213,8 @@ struct DeviceRollingArgMinMaxStruct : DeviceRollingArgMinMaxBase<cudf::struct_vi
     // gathering for Min and Max.
     output.element<OutputType>(current_index) =
       (valid_count >= min_periods) ? thrust::reduce(thrust::seq,
-                                                    thrust::make_counting_iterator(start_index),
-                                                    thrust::make_counting_iterator(end_index),
+                                                    cuda::counting_iterator{start_index},
+                                                    cuda::counting_iterator{end_index},
                                                     size_type{start_index},
                                                     comp)
                                    : default_output;
@@ -238,7 +238,7 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
 
   struct keys_dispatch_fn {
     template <typename T>
-      requires(cudf::is_relationally_comparable<T, T>() and not cudf::is_dictionary<T>())
+      requires(cudf::is_dictionary_key<T>())
     size_type __device__ operator()(column_device_view const& dict,
                                     bool has_nulls,
                                     size_type start_index,
@@ -263,7 +263,7 @@ struct DeviceRollingArgMinMaxDictionary : DeviceRollingArgMinMaxBase<cudf::dicti
       return count >= min_periods ? index : -1;
     }
     template <typename T>
-      requires(!cudf::is_relationally_comparable<T, T>() or cudf::is_dictionary<T>())
+      requires(not cudf::is_dictionary_key<T>())
     size_type __device__
     operator()(column_device_view const&, bool, size_type, size_type, size_type)
     {
@@ -331,8 +331,8 @@ struct DeviceRollingCountValid {
         count = end_index - start_index;
       } else {
         count = thrust::count_if(thrust::seq,
-                                 thrust::make_counting_iterator(start_index),
-                                 thrust::make_counting_iterator(end_index),
+                                 cuda::counting_iterator{start_index},
+                                 cuda::counting_iterator{end_index},
                                  [&input](auto i) { return input.is_valid_nocheck(i); });
       }
       output.element<OutputType>(current_index) = count;
@@ -410,8 +410,8 @@ struct DeviceRollingVariance {
     // valid counts in the window
     cudf::size_type const count =
       has_nulls ? thrust::count_if(thrust::seq,
-                                   thrust::make_counting_iterator(start_index),
-                                   thrust::make_counting_iterator(end_index),
+                                   cuda::counting_iterator{start_index},
+                                   cuda::counting_iterator{end_index},
                                    [&input](auto i) { return input.is_valid_nocheck(i); })
                 : end_index - start_index;
 

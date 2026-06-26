@@ -32,7 +32,7 @@ namespace cudf::detail {
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
  * @param init Initial value for the reduction
- * @param op Binary reduction operator
+ * @param binary_op Binary reduction operator
  * @param stream CUDA stream to use
  * @return The reduction result
  */
@@ -309,7 +309,6 @@ bool any_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_st
  *
  * @param begin Device-accessible iterator to start of input values
  * @param end Device-accessible iterator to end of input values
- * @param init Initial value (unused, for API compatibility)
  * @param op Predicate operator to apply to each element
  * @param stream CUDA stream to use
  * @return true if the predicate is false for all elements, false otherwise

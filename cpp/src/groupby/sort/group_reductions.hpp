@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -304,6 +304,7 @@ std::unique_ptr<column> group_var(column_view const& values,
  * @param values Grouped and sorted (within group) values to get quantiles from
  * @param group_sizes Number of valid elements per group
  * @param group_offsets Offsets of groups' starting points within @p values
+ * @param num_groups Number of groups
  * @param quantiles List of quantiles q where q lies in [0,1]
  * @param interp Method to use when desired value lies between data points
  * @param stream CUDA stream used for device memory operations and kernel launches.

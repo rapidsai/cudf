@@ -30,14 +30,13 @@
 #include <cuda/std/optional>
 #include <cuda/std/type_traits>
 #include <cuda/std/utility>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
 namespace detail {
 /**
  * @brief Convenience wrapper for creating a `thrust::transform_iterator` over a
- * `thrust::counting_iterator` within the range [0, INT_MAX].
+ * `cuda::counting_iterator` within the range [0, INT_MAX].
  *
  *
  * Example:
@@ -66,7 +65,7 @@ CUDF_HOST_DEVICE inline auto make_counting_transform_iterator(CountingIterType s
         cuda::std::numeric_limits<cudf::size_type>::digits,
     "The `start` for the counting_transform_iterator must be size_type or smaller type");
 
-  return thrust::make_transform_iterator(thrust::make_counting_iterator(start), f);
+  return thrust::make_transform_iterator(cuda::counting_iterator{start}, f);
 }
 
 /**
@@ -93,7 +92,7 @@ struct null_replaced_value_accessor {
    * @throws cudf::logic_error if `has_nulls` is true but `col` does not have a validity mask.
    *
    * @param[in] col column device view of cudf column
-   * @param[in] null_replacement The value to return for null elements
+   * @param[in] null_val The value to return for null elements
    * @param[in] has_nulls Must be set to true if `col` has nulls.
    */
   null_replaced_value_accessor(column_device_view const& col,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,8 +10,13 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <functional>
 #include <memory>
+#include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -24,9 +29,9 @@ namespace {
  * @brief The data that is stored as anonymous bytes in the `packed_columns` metadata
  * field.
  *
- * The metadata field of the `packed_columns` struct is simply an array of these.
- * This struct is exposed here because it is needed by both contiguous_split, pack
- * and unpack.
+ * The metadata field of the `packed_columns` struct stores a `serialized_table_header`
+ * followed by an array of these entries. This struct is exposed here because it is needed
+ * by both contiguous_split, pack and unpack.
  */
 struct serialized_column {
   serialized_column() = default;
@@ -57,6 +62,87 @@ struct serialized_column {
   // comparable
   int pad{};
 };
+
+/**
+ * @brief Table-level metadata stored before the serialized column entries.
+ */
+struct alignas(8) serialized_table_header {
+  serialized_table_header() = default;
+  explicit serialized_table_header(size_type _num_columns) : num_columns(_num_columns) {}
+
+  int32_t version{packed_metadata_version};
+  size_type num_columns{};
+};
+
+// The header is serialized with memcpy, so it must not contain padding bytes
+// (which the value constructor would leave uninitialized in the output).
+static_assert(std::has_unique_object_representations_v<serialized_table_header>);
+
+/**
+ * @brief Read the table header at `ptr`.
+ *
+ * @param ptr Pointer to the start of the header in the metadata buffer.
+ * @param buffer_end One past the end of the metadata buffer. When non-null, the
+ *        read is bounds-checked against it; when null the check is skipped.
+ * @return The deserialized table header
+ */
+serialized_table_header read_header(std::uint8_t const* ptr,
+                                    std::uint8_t const* buffer_end = nullptr)
+{
+  if (buffer_end) {
+    CUDF_EXPECTS(std::cmp_greater_equal(buffer_end - ptr, sizeof(serialized_table_header)),
+                 "packed metadata access is out of bounds");
+  }
+  serialized_table_header header;
+  std::memcpy(&header, ptr, sizeof(serialized_table_header));
+  CUDF_EXPECTS(header.version == packed_metadata_version,
+               "packed metadata has an unsupported format version");
+  CUDF_EXPECTS(header.num_columns >= 0, "packed metadata header has negative column count");
+  return header;
+}
+
+// Read a serialized_column entry at `ptr`, optionally checking that the read
+// stays within [ptr, buffer_end).  When buffer_end is nullptr the check is
+// skipped (used by the internal unpack path which has its own validation).
+serialized_column read_entry(std::uint8_t const* ptr, std::uint8_t const* buffer_end = nullptr)
+{
+  if (buffer_end) {
+    CUDF_EXPECTS(std::cmp_greater_equal(buffer_end - ptr, sizeof(serialized_column)),
+                 "packed metadata access is out of bounds");
+  }
+  serialized_column entry;
+  std::memcpy(&entry, ptr, sizeof(serialized_column));
+  CUDF_EXPECTS(entry.num_children >= 0, "packed metadata column has negative child count");
+  return entry;
+}
+
+// Returns the total number of serialized_column entries in the subtree
+// rooted at the entry at `ptr` (including that entry itself).
+size_type subtree_size(std::uint8_t const* ptr, std::uint8_t const* buffer_end = nullptr)
+{
+  auto entry          = read_entry(ptr, buffer_end);
+  size_type count     = 1;
+  size_type remaining = entry.num_children;
+  while (remaining > 0) {
+    ptr += sizeof(serialized_column);
+    entry = read_entry(ptr, buffer_end);
+    ++count;
+    remaining += entry.num_children - 1;
+  }
+  return count;
+}
+
+// Advance past `n` consecutive subtrees starting at `ptr`, returning
+// a pointer to the first byte after the skipped subtrees.
+uint8_t const* skip_subtrees(std::uint8_t const* ptr,
+                             size_type n,
+                             std::uint8_t const* buffer_end = nullptr)
+{
+  for (size_type i = 0; i < n; ++i) {
+    ptr += subtree_size(ptr, buffer_end) * sizeof(serialized_column);
+  }
+  return ptr;
+}
 
 /**
  * @brief Deserialize a single column into a column_view
@@ -135,18 +221,18 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
 {
   // gpu data can be null if everything is empty but the metadata must always be valid
   CUDF_EXPECTS(metadata != nullptr, "Encountered invalid packed column input");
-  auto serialized_columns = reinterpret_cast<serialized_column const*>(metadata);
   uint8_t const* base_ptr = gpu_data;
-  // first entry is a stub where size == the total # of top level columns (see pack_metadata above)
-  auto const num_columns = serialized_columns[0].size;
-  size_t current_index   = 1;
+  auto const header       = read_header(metadata);
+  auto const num_columns  = header.num_columns;
+  // current_ptr tracks position in the metadata byte buffer
+  auto const* current_ptr = metadata + sizeof(serialized_table_header);
 
   std::function<std::vector<column_view>(size_type)> get_columns;
-  get_columns = [&serialized_columns, &current_index, base_ptr, &get_columns](size_t num_columns) {
+  get_columns = [&current_ptr, base_ptr, &get_columns](size_t num_columns) {
     std::vector<column_view> cols;
     for (size_t i = 0; i < num_columns; i++) {
-      auto serial_column = serialized_columns[current_index];
-      current_index++;
+      auto serial_column = read_entry(current_ptr);
+      current_ptr += sizeof(serialized_column);
 
       std::vector<column_view> const children = get_columns(serial_column.num_children);
 
@@ -189,7 +275,11 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
 
 class metadata_builder_impl {
  public:
-  metadata_builder_impl(size_type const num_root_columns) { metadata.reserve(num_root_columns); }
+  metadata_builder_impl(size_type const num_root_columns) : _num_root_columns(num_root_columns)
+  {
+    // Lower bound: exact for flat tables but nested children add more entries and grow the vector.
+    _columns.reserve(num_root_columns);
+  }
 
   void add_column_info_to_meta(data_type const col_type,
                                size_type const col_size,
@@ -198,35 +288,36 @@ class metadata_builder_impl {
                                int64_t const null_mask_offset,
                                size_type const num_children)
   {
-    metadata.emplace_back(
+    _columns.emplace_back(
       col_type, col_size, col_null_count, data_offset, null_mask_offset, num_children);
   }
 
   [[nodiscard]] std::vector<uint8_t> build() const
   {
-    auto output = std::vector<uint8_t>(metadata.size() * sizeof(detail::serialized_column));
-    std::memcpy(output.data(), metadata.data(), output.size());
+    auto const header = serialized_table_header{_num_root_columns};
+    auto output       = std::vector<uint8_t>(sizeof(serialized_table_header) +
+                                       _columns.size() * sizeof(serialized_column));
+    std::memcpy(output.data(), &header, sizeof(serialized_table_header));
+    if (!_columns.empty()) {
+      std::memcpy(output.data() + sizeof(serialized_table_header),
+                  _columns.data(),
+                  _columns.size() * sizeof(serialized_column));
+    }
     return output;
   }
 
-  void clear()
-  {
-    // Clear all, except the first metadata entry storing the number of top level columns that
-    // was added upon object construction.
-    metadata.resize(1);
-  }
+  void clear() { _columns.clear(); }
 
  private:
-  std::vector<detail::serialized_column> metadata;
+  // Number of top-level columns (excludes nested children) stored in the header.
+  size_type const _num_root_columns;
+  // Serialized column entries, depth-first with each column written before its children.
+  std::vector<serialized_column> _columns;
 };
 
 metadata_builder::metadata_builder(size_type const num_root_columns)
-  : impl(std::make_unique<metadata_builder_impl>(num_root_columns +
-                                                 1 /*one more extra metadata entry as below*/))
+  : impl(std::make_unique<metadata_builder_impl>(num_root_columns))
 {
-  // first metadata entry is a stub indicating how many total (top level) columns
-  // there are
-  impl->add_column_info_to_meta(data_type{type_id::EMPTY}, num_root_columns, 0, -1, -1, 0);
 }
 
 metadata_builder::~metadata_builder() = default;
@@ -244,9 +335,73 @@ void metadata_builder::add_column_info_to_meta(data_type const col_type,
 
 std::vector<uint8_t> metadata_builder::build() const { return impl->build(); }
 
-void metadata_builder::clear() { return impl->clear(); }
+void metadata_builder::clear() { impl->clear(); }
 
 }  // namespace detail
+
+packed_metadata_view::column_view::column_view(std::span<uint8_t const> buffer) : _buffer(buffer)
+{
+  auto const entry = detail::read_entry(_buffer.data(), _buffer.data() + _buffer.size());
+  _type            = entry.type;
+  _size            = entry.size;
+  _null_count      = entry.null_count;
+  _num_children    = entry.num_children;
+}
+
+data_type packed_metadata_view::column_view::type() const { return _type; }
+
+size_type packed_metadata_view::column_view::num_rows() const { return _size; }
+
+size_type packed_metadata_view::column_view::null_count() const { return _null_count; }
+
+size_type packed_metadata_view::column_view::num_children() const { return _num_children; }
+
+packed_metadata_view::column_view packed_metadata_view::column_view::child(size_type i) const
+{
+  CUDF_EXPECTS(i >= 0 && i < _num_children, "child index out of range", std::out_of_range);
+  auto const* end = _buffer.data() + _buffer.size();
+  // Children start immediately after this entry in pre-order layout.
+  auto const* child_ptr =
+    detail::skip_subtrees(_buffer.data() + sizeof(detail::serialized_column), i, end);
+  return packed_metadata_view::column_view{{child_ptr, end}};
+}
+
+packed_metadata_view::packed_metadata_view(std::span<uint8_t const> buffer)
+{
+  CUDF_EXPECTS(!buffer.empty(), "metadata buffer must not be empty");
+  CUDF_EXPECTS(buffer.size() >= sizeof(detail::serialized_table_header),
+               "metadata buffer too small");
+  CUDF_EXPECTS(
+    (buffer.size() - sizeof(detail::serialized_table_header)) % sizeof(detail::serialized_column) ==
+      0,
+    "metadata buffer size is not a valid header plus column entry size");
+  auto const* end     = buffer.data() + buffer.size();
+  auto const* entries = buffer.data() + sizeof(detail::serialized_table_header);
+  auto const header   = detail::read_header(buffer.data(), end);
+  _num_columns        = header.num_columns;
+  // Validate that the column tree exactly fills the buffer.
+  auto const* past_last = detail::skip_subtrees(entries, _num_columns, end);
+  CUDF_EXPECTS(past_last == end,
+               "packed metadata buffer size does not match the encoded column tree");
+  _entries = {entries, end};
+}
+
+size_type packed_metadata_view::num_columns() const { return _num_columns; }
+
+size_type packed_metadata_view::num_rows() const
+{
+  if (_num_columns == 0) { return 0; }
+  return detail::read_entry(_entries.data(), _entries.data() + sizeof(detail::serialized_column))
+    .size;
+}
+
+packed_metadata_view::column_view packed_metadata_view::column(size_type i) const
+{
+  CUDF_EXPECTS(i >= 0 && i < _num_columns, "column index out of range", std::out_of_range);
+  auto const* end    = _entries.data() + _entries.size();
+  auto const* target = detail::skip_subtrees(_entries.data(), i, end);
+  return packed_metadata_view::column_view{{target, end}};
+}
 
 /**
  * @copydoc cudf::pack

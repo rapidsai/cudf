@@ -16,20 +16,21 @@ namespace cudf::join::jit {
  * @brief JIT kernel for filtering join indices based on predicate
  *
  * @tparam has_user_data Whether the predicate function requires user data
- * @tparam InputAccessors Variadic template for input column accessors
+ * @tparam is_null_aware Whether the expression needs input validity as part of its computation
+ * @tparam Accessors type list of accessors for columns used in the predicate
+ * @param num_rows Number of rows to process
  * @param left_indices Device span of left table indices
  * @param right_indices Device span of right table indices
- * @param left_tables Device view of left table columns
- * @param right_tables Device view of right table columns
+ * @param columns Device view of all columns involved in the predicate
  * @param predicate_results Output array for predicate evaluation results
  * @param user_data Optional user data for predicate function
  */
-template <bool has_user_data, typename... InputAccessors>
-CUDF_KERNEL void filter_join_kernel(cudf::jit::device_span<cudf::size_type const> left_indices,
-                                    cudf::jit::device_span<cudf::size_type const> right_indices,
-                                    cudf::column_device_view_core const* left_tables,
-                                    cudf::column_device_view_core const* right_tables,
-                                    bool* predicate_results,
-                                    void* user_data);
+template <bool has_user_data, null_aware is_null_aware, typename Accessors>
+CUDF_KERNEL void filter_join_kernel(cudf::size_type num_rows,
+                                    cudf::size_type const* __restrict__ left_indices,
+                                    cudf::size_type const* __restrict__ right_indices,
+                                    cudf::column_device_view_core const* __restrict__ columns,
+                                    bool* __restrict__ predicate_results,
+                                    void* __restrict__ user_data);
 
 }  // namespace cudf::join::jit

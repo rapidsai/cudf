@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -80,7 +80,7 @@ class SingleSymbolSmemLUT {
    *
    * @param symbol_strings Array of strings, where the i-th string holds all symbols
    * (characters!) that correspond to the i-th symbol group index
-   * @param stream The stream that shall be used to cudaMemcpyAsync the lookup table
+   * @param pre_map_op Function object that transforms a symbol to a symbol group id
    * @return
    */
   template <typename SymbolGroupItT>
@@ -863,7 +863,7 @@ class Dfa {
    * output symbols is written
    * @tparam OffsetT A type large enough to index into either of both: (a) the input symbols and
    * (b) the output symbols
-   * @param d_chars Pointer to the input string of symbols
+   * @param d_chars_it Pointer to the input string of symbols
    * @param num_chars The total number of input symbols to process
    * @param d_out_it Random-access output iterator to which the transduced output is
    * written

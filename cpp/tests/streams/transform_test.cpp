@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/default_stream.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/ast/expressions.hpp>
@@ -16,9 +17,12 @@
 class TransformTest : public cudf::test::BaseFixture {};
 
 template <class dtype, class Data>
-void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx)
+void test_udf(char const* udf,
+              Data data_init,
+              cudf::size_type size,
+              cudf::udf_source_type source_type)
 {
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::test::iterators::no_nulls();
   auto data_iter = cudf::detail::make_counting_transform_iterator(0, data_init);
   cudf::test::fixed_width_column_wrapper<dtype, typename decltype(data_iter)::value_type> in(
     data_iter, data_iter + size, all_valid);
@@ -28,7 +32,7 @@ void test_udf(char const* udf, Data data_init, cudf::size_type size, bool is_ptx
   cudf::transform_extended(inputs,
                            udf,
                            cudf::data_type(cudf::type_to_id<dtype>()),
-                           is_ptx,
+                           source_type,
                            std::nullopt,
                            cudf::null_aware::NO,
                            std::nullopt,
@@ -89,8 +93,8 @@ __device__ inline void    fdsf   (
 )***";
 
   auto data_init = [](cudf::size_type row) { return row % 3; };
-  test_udf<float>(cuda, data_init, 500, false);
-  test_udf<float>(ptx, data_init, 500, true);
+  test_udf<float>(cuda, data_init, 500, cudf::udf_source_type::CUDA);
+  test_udf<float>(ptx, data_init, 500, cudf::udf_source_type::PTX);
 }
 
 TEST_F(TransformTest, ComputeColumn)

@@ -8,7 +8,6 @@
 #include <benchmarks/io/cuio_common.hpp>
 #include <benchmarks/io/nvbench_helpers.hpp>
 
-#include <cudf/detail/utilities/default_stream.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/io/csv.hpp>
 
@@ -63,7 +62,7 @@ void BM_csv_read_varying_options(
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
-               try_drop_l3_cache();  // Drop L3 cache for accurate measurement
+               drop_page_cache_if_enabled(read_options.get_source().filepaths());
                cudf::size_type num_rows_read = 0;
                timer.start();
                for (auto chunk = 0u; chunk < num_chunks; ++chunk) {

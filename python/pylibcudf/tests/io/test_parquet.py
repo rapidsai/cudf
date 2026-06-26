@@ -1,11 +1,13 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import io
+import os
 
 import pyarrow as pa
 import pyarrow.compute as pc
+import pyarrow.parquet as pq
 import pytest
-from pyarrow.parquet import read_table
+from pyarrow.parquet import read_table, write_table
 from utils import (
     assert_table_and_meta_eq,
     get_bytes_from_source,
@@ -27,6 +29,24 @@ from pylibcudf.expressions import (
 
 # Shared kwargs to pass to make_source
 _COMMON_PARQUET_SOURCE_KWARGS = {"format": "parquet"}
+
+
+def _extract_footer_bytes_with_suffix(
+    file_bytes: bytes,
+) -> tuple[memoryview, memoryview]:
+    """Return footer bytes with and without the parquet footer suffix."""
+    parquet_suffix_size = 8  # 4-byte footer length + 4-byte magic bytes (PAR1)
+    file_memoryview = memoryview(file_bytes)
+    footer_size = int.from_bytes(
+        file_memoryview[-parquet_suffix_size:-4], byteorder="little"
+    )
+    footer_start = len(file_memoryview) - parquet_suffix_size - footer_size
+    footer_stop = len(file_memoryview)
+    footer_with_suffix = file_memoryview[footer_start:footer_stop]
+    footer_without_suffix = file_memoryview[
+        footer_start : footer_stop - parquet_suffix_size
+    ]
+    return footer_without_suffix, footer_with_suffix
 
 
 @pytest.mark.parametrize("stream", [None, Stream()])
@@ -93,23 +113,23 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
     max_element = max(col_list)
     tbl1 = pa.Table.from_pydict({"a": col_list})
     path1 = tmp_path / "tbl1.parquet"
-    pa.parquet.write_table(tbl1, path1)
+    write_table(tbl1, path1)
     source = plc.io.SourceInfo([path1])
     options = plc.io.parquet.ParquetReaderOptions.builder(source).build()
 
     if if_prune_rowgroup:
         # Prune the only row group since the filter aims to find elements larger than the max
         filter = Operation(
-            ASTOperator.GREATER,
-            ColumnNameReference("a"),
+            ASTOperator.LESS,
             Literal(plc.Scalar.from_arrow(pa.scalar(max_element))),
+            ColumnNameReference("a"),
         )
     else:
         # No real pruning
         filter = Operation(
-            ASTOperator.GREATER,
-            ColumnNameReference("a"),
+            ASTOperator.LESS,
             Literal(plc.Scalar.from_arrow(pa.scalar(min_element))),
+            ColumnNameReference("a"),
         )
     options.set_filter(filter)
     plc_table_w_meta = plc.io.parquet.read_parquet(options)
@@ -140,9 +160,9 @@ def test_read_parquet_filters_metadata(tmp_path, if_prune_rowgroup, result):
                     Literal(plc.Scalar.from_arrow(pa.scalar(10))),
                 ),
                 Operation(
-                    ASTOperator.LESS,
-                    ColumnNameReference("col_double"),
+                    ASTOperator.GREATER,
                     Literal(plc.Scalar.from_arrow(pa.scalar(0.0))),
+                    ColumnNameReference("col_double"),
                 ),
             ),
         ),
@@ -251,6 +271,234 @@ def test_read_parquet_from_device_buffers(
     assert_table_and_meta_eq(expected, res, check_field_nullability=False)
 
 
+def test_read_parquet_with_pre_materialized_metadata(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_info = plc.io.SourceInfo([source])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
+
+    parquet_metadatas = plc.io.parquet_metadata.read_parquet_footers(
+        source_info
+    )
+    result = plc.io.parquet.read_parquet(
+        options, parquet_metadatas=parquet_metadatas
+    )
+
+    assert_table_and_meta_eq(pa_table, result, check_field_nullability=False)
+
+
+def test_read_parquet_with_pre_materialized_metadata_len_mismatch(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_info = plc.io.SourceInfo([source])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
+
+    with pytest.raises(
+        ValueError,
+        match=r"Length of 'parquet_metadatas' \(0\) must match the number of input sources \(1\)",
+    ):
+        plc.io.parquet.read_parquet(options, parquet_metadatas=[])
+
+
+def test_chunked_parquet_reader_with_pre_materialized_metadata(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_info = plc.io.SourceInfo([source])
+    options = plc.io.parquet.ParquetReaderOptions.builder(source_info).build()
+    parquet_metadatas = plc.io.parquet_metadata.read_parquet_footers(
+        source_info
+    )
+
+    default_reader = plc.io.parquet.ChunkedParquetReader(
+        options,
+        chunk_read_limit=512,
+    )
+    default_chunks: list[pa.Table] = []
+    while default_reader.has_next():
+        default_chunks.append(default_reader.read_chunk().tbl.to_arrow())
+
+    metadata_reader = plc.io.parquet.ChunkedParquetReader(
+        options,
+        chunk_read_limit=512,
+        parquet_metadatas=parquet_metadatas,
+    )
+    metadata_chunks: list[pa.Table] = []
+    while metadata_reader.has_next():
+        metadata_chunks.append(metadata_reader.read_chunk().tbl.to_arrow())
+
+    if default_chunks:
+        expected = pa.concat_tables(default_chunks)
+    else:
+        expected = pa_table.slice(0, 0)
+    if metadata_chunks:
+        result = pa.concat_tables(metadata_chunks)
+    else:
+        result = pa_table.slice(0, 0)
+
+    assert result.equals(expected)
+
+
+def test_file_metadata_from_bytes(
+    table_data: tuple[plc.io.types.TableWithMetadata, pa.Table],
+    binary_source_or_sink: str | os.PathLike[str] | io.BytesIO,
+) -> None:
+    _, pa_table = table_data
+    source = make_source(
+        binary_source_or_sink, pa_table, **_COMMON_PARQUET_SOURCE_KWARGS
+    )
+    source_bytes = get_bytes_from_source(source)
+    footer_without_suffix, footer_with_suffix = (
+        _extract_footer_bytes_with_suffix(source_bytes)
+    )
+
+    metadata_from_footer_only = (
+        plc.io.parquet_metadata.FileMetaData.from_bytes(footer_without_suffix)
+    )
+    metadata_from_footer_with_suffix = (
+        plc.io.parquet_metadata.FileMetaData.from_bytes(footer_with_suffix)
+    )
+    assert (
+        metadata_from_footer_only.version
+        == metadata_from_footer_with_suffix.version
+    )
+    assert (
+        metadata_from_footer_only.num_rows
+        == metadata_from_footer_with_suffix.num_rows
+    )
+    assert (
+        metadata_from_footer_only.created_by
+        == metadata_from_footer_with_suffix.created_by
+    )
+    assert metadata_from_footer_only.num_rows == pa_table.num_rows
+
+
+def test_file_metadata_from_bytes_empty() -> None:
+    with pytest.raises(RuntimeError, match="Cannot initialize schema"):
+        plc.io.parquet_metadata.FileMetaData.from_bytes(memoryview(b""))
+
+
+def test_file_metadata_row_groups_and_column_chunks() -> None:
+    table = pa.table(
+        {
+            "a": list(range(100)),
+            "b": [x * 10 for x in range(100)],
+        }
+    )
+    sink = io.BytesIO()
+    write_table(table, sink, row_group_size=25)
+    sink.seek(0)
+    parquet_file = pq.ParquetFile(sink)
+    sink.seek(0)
+
+    source_info = plc.io.SourceInfo([sink])
+    file_metadata = plc.io.parquet_metadata.read_parquet_footers(source_info)[
+        0
+    ]
+
+    assert (
+        len(file_metadata.row_groups) == parquet_file.metadata.num_row_groups
+    )
+
+    for rg_idx, row_group in enumerate(file_metadata.row_groups):
+        pa_row_group = parquet_file.metadata.row_group(rg_idx)
+        assert row_group.num_rows == pa_row_group.num_rows
+        assert row_group.total_byte_size == pa_row_group.total_byte_size
+        assert row_group.total_compressed_size is None or (
+            row_group.total_compressed_size >= 0
+        )
+        assert row_group.file_offset is None or row_group.file_offset >= 0
+        assert row_group.ordinal is None or row_group.ordinal == rg_idx
+
+        assert len(row_group.columns) == pa_row_group.num_columns
+        for col_idx, column_chunk in enumerate(row_group.columns):
+            pa_col_chunk = pa_row_group.column(col_idx)
+            meta_data = column_chunk.meta_data
+            assert column_chunk.file_path == ""
+            assert column_chunk.file_offset == 0
+            assert isinstance(column_chunk.offset_index_offset, int)
+            assert isinstance(column_chunk.offset_index_length, int)
+            assert isinstance(column_chunk.column_index_offset, int)
+            assert isinstance(column_chunk.column_index_length, int)
+            assert isinstance(column_chunk.schema_idx, int)
+            assert meta_data.num_values == pa_col_chunk.num_values
+            assert (
+                meta_data.total_uncompressed_size
+                == pa_col_chunk.total_uncompressed_size
+            )
+            assert (
+                meta_data.total_compressed_size
+                == pa_col_chunk.total_compressed_size
+            )
+            assert meta_data.path_in_schema[-1] == pa_col_chunk.path_in_schema
+
+
+def test_file_metadata_wrappers_not_directly_constructible() -> None:
+    with pytest.raises(
+        ValueError, match="SortingColumn cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.SortingColumn()
+    with pytest.raises(
+        ValueError, match="ColumnChunk cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.ColumnChunk()
+    with pytest.raises(
+        ValueError, match="ColumnChunkMetaData cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.ColumnChunkMetaData()
+    with pytest.raises(
+        ValueError, match="RowGroup cannot be constructed directly"
+    ):
+        plc.io.parquet_metadata.RowGroup()
+
+
+def test_file_metadata_row_group_sorting_columns(tmp_path) -> None:
+    table = pa.table({"a": list(range(50)), "b": [x * 10 for x in range(50)]})
+    sorting_columns = pq.SortingColumn.from_ordering(
+        table.schema, [("a", "ascending")]
+    )
+
+    parquet_path = tmp_path / "sorted.parquet"
+    write_table(
+        table, parquet_path, row_group_size=25, sorting_columns=sorting_columns
+    )
+
+    parquet_file = pq.ParquetFile(parquet_path)
+    source_info = plc.io.SourceInfo([parquet_path])
+    file_metadata = plc.io.parquet_metadata.read_parquet_footers(source_info)[
+        0
+    ]
+
+    for rg_idx, row_group in enumerate(file_metadata.row_groups):
+        pa_sorting_columns = parquet_file.metadata.row_group(
+            rg_idx
+        ).sorting_columns
+        assert pa_sorting_columns is not None
+        assert row_group.sorting_columns is not None
+        assert len(row_group.sorting_columns) == len(pa_sorting_columns)
+
+        for sorting_column, pa_sorting_column in zip(
+            row_group.sorting_columns, pa_sorting_columns, strict=True
+        ):
+            assert sorting_column.column_idx == pa_sorting_column.column_index
+            assert sorting_column.descending == pa_sorting_column.descending
+            assert sorting_column.nulls_first == pa_sorting_column.nulls_first
+
+
 # TODO: Test these options
 # list row_groups = None,
 # ^^^ This one is not tested since it's not in pyarrow/pandas, deprecate?
@@ -346,10 +594,10 @@ def test_write_parquet(
             pc.field("col_str") == "foo",
             Operation(
                 ASTOperator.EQUAL,
-                ColumnNameReference("col_str"),
                 Literal(
                     plc.Scalar.from_arrow(pa.scalar("foo", type=pa.string()))
                 ),
+                ColumnNameReference("col_str"),
             ),
         ),
     ],

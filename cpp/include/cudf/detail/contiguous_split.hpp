@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,13 +12,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-namespace CUDF_EXPORT cudf {
+#include <cstdint>
+
+namespace cudf {
 namespace detail {
 
 /**
  * @copydoc cudf::contiguous_split
- *
- * @param stream CUDA stream used for device memory operations and kernel launches.
  **/
 std::vector<packed_table> contiguous_split(cudf::table_view const& input,
                                            std::vector<size_type> const& splits,
@@ -27,8 +27,6 @@ std::vector<packed_table> contiguous_split(cudf::table_view const& input,
 
 /**
  * @copydoc cudf::pack
- *
- * @param stream Optional CUDA stream on which to execute kernels
  **/
 packed_columns pack(cudf::table_view const& input,
                     rmm::cuda_stream_view stream,
@@ -113,5 +111,10 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
                                    size_t buffer_size,
                                    metadata_builder& builder);
 
+/**
+ * @brief Version of the packed metadata layout produced by `pack`/`pack_metadata`.
+ */
+constexpr std::int32_t packed_metadata_version = 1;
+
 }  // namespace detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

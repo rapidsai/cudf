@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
@@ -26,22 +26,22 @@ from cudf.testing import assert_eq
             codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
             names=["x", "y"],
         ),
-        pytest.param(
-            pd.MultiIndex(
-                levels=[[None, "b", "c", "a"], ["1", None, "5"]],
-                codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-                names=["x", "y"],
-            ),
-            marks=[
-                pytest.mark.xfail(
-                    reason="https://github.com/pandas-dev/pandas/issues/35584"
-                )
-            ],
+        pd.MultiIndex(
+            levels=[[None, "b", "c", "a"], ["1", None, "5"]],
+            codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+            names=["x", "y"],
         ),
     ],
 )
 @pytest.mark.parametrize("ascending", [True, False])
-def test_multiindex_argsort(pdi, ascending):
+def test_multiindex_argsort(pdi, ascending, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            not ascending
+            and any(pd.isna(level).any() for level in pdi.levels),
+            reason=f"argsort with {ascending=} with NA levels is incorrect.",
+        )
+    )
     gdi = cudf.from_pandas(pdi)
 
     if not ascending:

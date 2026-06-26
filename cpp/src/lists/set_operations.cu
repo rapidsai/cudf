@@ -105,8 +105,11 @@ std::unique_ptr<column> have_overlap(lists_column_view const& lhs,
   // `overlap_results` only stores the results of non-empty lists.
   // We need to initialize `false` for the entire output array then scatter these results over.
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), result_begin, result_begin + num_rows, false);
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    result_begin,
+    result_begin + num_rows,
+    false);
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   overlap_results.begin(),
                   overlap_results.begin() + num_non_empty_segments,
                   list_indices.begin(),
@@ -169,9 +172,7 @@ std::unique_ptr<column> intersect_distinct(lists_column_view const& lhs,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
+                                  std::move(null_mask));
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
     return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);
@@ -257,9 +258,7 @@ std::unique_ptr<column> difference_distinct(lists_column_view const& lhs,
                                   std::move(out_offsets),
                                   std::move(out_table->release().back()),
                                   null_count,
-                                  std::move(null_mask),
-                                  stream,
-                                  mr);
+                                  std::move(null_mask));
 
   if (auto const output_cv = output->view(); cudf::detail::has_nonempty_nulls(output_cv, stream)) {
     return cudf::detail::purge_nonempty_nulls(output_cv, stream, mr);

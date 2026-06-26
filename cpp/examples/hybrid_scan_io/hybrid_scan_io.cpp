@@ -10,7 +10,6 @@
 
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <filesystem>
@@ -112,9 +111,8 @@ int main(int argc, char const** argv)
   auto constexpr is_pool_used = false;
   auto stream                 = cudf::get_default_stream();
   auto resource               = create_memory_resource(is_pool_used);
-  auto stats_mr =
-    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  auto stats_mr               = rmm::mr::statistics_resource_adaptor{resource};
+  rmm::mr::set_current_device_resource(stats_mr);
 
   // Create filter expression
   auto const column_reference = cudf::ast::column_name_reference(column_name);

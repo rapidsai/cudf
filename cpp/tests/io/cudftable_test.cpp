@@ -1,18 +1,21 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/experimental/cudftable.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -122,14 +125,13 @@ TEST_F(CudftableTest, MultiColumnCompound)
   cudf::test::strings_column_wrapper string_col({"Lorem", "ipsum", "dolor", "sit"},
                                                 {true, false, true, true});
 
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::lists_column_wrapper<int32_t> list_col{
     {{1, 2, 3}, valids}, {4, 5}, {}, {{6, 7, 8, 9}, valids}};
 
   cudf::test::fixed_width_column_wrapper<int32_t> struct_col1{{1, 2, 3, 4},
                                                               {true, false, true, true}};
-  cudf::test::strings_column_wrapper struct_col2{{"a", "b", "c", "d"}, {true, true, false, true}};
+  cudf::test::strings_column_wrapper struct_col2{{"a", "b", "", "d"}, {true, true, false, true}};
   cudf::test::structs_column_wrapper struct_col{{struct_col1, struct_col2},
                                                 {true, true, true, false}};
 
@@ -141,18 +143,17 @@ TEST_F(CudftableTest, LargeTable)
 {
   constexpr int num_rows = 23'456'789;
 
-  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i; });
-  cudf::test::fixed_width_column_wrapper<int32_t> col1(sequence, sequence + num_rows);
-  cudf::test::fixed_width_column_wrapper<double> col2(sequence, sequence + num_rows);
+  auto col1 = cudf::sequence(num_rows, cudf::numeric_scalar<int32_t>(0));
+  auto col2 = cudf::sequence(num_rows, cudf::numeric_scalar<double>(0.0));
 
-  auto const expected = cudf::table_view{{col1, col2}};
+  auto const expected = cudf::table_view{{col1->view(), col2->view()}};
   run_test(expected);
 }
 
 TEST_F(CudftableTest, AllNullColumn)
 {
-  auto all_nulls = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return false; });
-  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5}, all_nulls);
+  cudf::test::fixed_width_column_wrapper<int32_t> col({1, 2, 3, 4, 5},
+                                                      cudf::test::iterators::all_nulls());
 
   auto const expected = cudf::table_view{{col}};
   run_test(expected);
@@ -512,8 +513,12 @@ TEST_F(CudftableTest, DeviceBufferSource)
                                             .build());
 
   rmm::device_buffer device_buffer(buffer.size(), cudf::get_default_stream());
-  CUDF_CUDA_TRY(
-    cudaMemcpy(device_buffer.data(), buffer.data(), buffer.size(), cudaMemcpyHostToDevice));
+  auto const stream = cudf::get_default_stream();
+  CUDF_CUDA_TRY(cudaMemcpyAsync(
+    device_buffer.data(), buffer.data(), buffer.size(), cudaMemcpyHostToDevice, stream.value()));
+  // Ensure the data is copied to the device before the host read, because the host read does not
+  // take the stream
+  stream.synchronize();
 
   auto device_span = cudf::device_span<std::byte const>(
     static_cast<std::byte const*>(device_buffer.data()), device_buffer.size());

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Iterable, Sequence
@@ -6,12 +6,12 @@ from typing import Any, Protocol, TypedDict
 
 from rmm.pylibrmm.device_buffer import DeviceBuffer
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf._interop_helpers import ArrowLike, ColumnMetadata
 from pylibcudf.scalar import Scalar
 from pylibcudf.span import Span
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 class ArrayInterfaceBase(TypedDict):
     shape: tuple[int, ...]
@@ -28,13 +28,18 @@ class CudaArrayInterface(ArrayInterfaceBase):
     stream: None | int
     mask: None | "SupportsCudaArrayInterface"
 
+# Numpy doesn't use a typed dict for their type stubs, they just annotate
+# as dict[str, Any]. So do the same here but with a union type so it's
+# clearer.
 class SupportsCudaArrayInterface(Protocol):
     @property
-    def __cuda_array_interface__(self) -> CudaArrayInterface: ...
+    def __cuda_array_interface__(
+        self,
+    ) -> CudaArrayInterface | dict[str, Any]: ...
 
 class SupportsArrayInterface(Protocol):
     @property
-    def __array_interface__(self) -> ArrayInterface: ...
+    def __array_interface__(self) -> ArrayInterface | dict[str, Any]: ...
 
 class Column:
     def __init__(
@@ -59,7 +64,7 @@ class Column:
     def num_children(self) -> int: ...
     def copy(
         self,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     def device_buffer_size(self) -> int: ...
@@ -72,19 +77,19 @@ class Column:
     def from_scalar(
         scalar: Scalar,
         size: int,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     def to_scalar(
         self,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Scalar: ...
     @staticmethod
     def all_null_like(
         like: Column,
         size: int,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     @staticmethod
@@ -94,32 +99,34 @@ class Column:
     def to_arrow(
         self,
         metadata: ColumnMetadata | str | None = None,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
     ) -> ArrowLike: ...
     # Private methods below are included because polars is currently using them,
     # but we want to remove stubs for these private methods eventually
     def _to_schema(self, metadata: Any = None) -> Any: ...
-    def _to_host_array(self, stream: Stream) -> Any: ...
+    def _to_host_array(self, stream: CudaStreamLike) -> Any: ...
     @staticmethod
     def from_arrow(
         obj: ArrowLike,
         dtype: DataType | None = None,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
         mr: DeviceMemoryResource | None = None,
     ) -> Column: ...
     @classmethod
     def from_cuda_array_interface(
-        cls, obj: SupportsCudaArrayInterface, stream: Stream | None = None
+        cls,
+        obj: SupportsCudaArrayInterface,
+        stream: CudaStreamLike | None = None,
     ) -> Column: ...
     @classmethod
     def from_array_interface(
-        cls, obj: SupportsArrayInterface, stream: Stream | None = None
+        cls, obj: SupportsArrayInterface, stream: CudaStreamLike | None = None
     ) -> Column: ...
-    @staticmethod
+    @classmethod
     def from_array(
         cls,
         obj: SupportsCudaArrayInterface | SupportsArrayInterface,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
     ) -> Column: ...
     @staticmethod
     def struct_from_children(children: Sequence[Column]) -> Column: ...
@@ -127,21 +134,24 @@ class Column:
     def from_iterable_of_py(
         obj: Iterable,
         dtype: DataType | None = None,
-        stream: Stream | None = None,
+        stream: CudaStreamLike | None = None,
     ) -> Column: ...
+    def to_pylist(self) -> list: ...
 
 class ListsColumnView:
     def __init__(self, column: Column): ...
     def child(self) -> Column: ...
     def offsets(self) -> Column: ...
-    def get_sliced_child(self, stream: Stream | None = None) -> Column: ...
+    def get_sliced_child(
+        self, stream: CudaStreamLike | None = None
+    ) -> Column: ...
 
 class StructsColumnView:
     def __init__(self, column: Column): ...
     def child(self) -> Column: ...
     def offsets(self) -> Column: ...
     def get_sliced_child(
-        self, index: int, stream: Stream | None = None
+        self, index: int, stream: CudaStreamLike | None = None
     ) -> Column: ...
 
 def is_c_contiguous(

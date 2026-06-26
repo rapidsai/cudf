@@ -8,11 +8,11 @@
 #include "common_internal.hpp"
 #include "cudf/utilities/memory_resource.hpp"
 #include "gpuinflate.hpp"
-#include "io/utilities/getenv_or.hpp"
 #include "nvcomp_adapter.hpp"
 #include "unbz2.hpp"  // bz2 uncompress
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/detail/utilities/host_worker_pool.hpp>
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -597,7 +597,7 @@ void host_decompress(compression_type compression,
   if (not has_device_support) { return host_engine_state::ON; }
 
   // If both host and device compression are supported, dispatch based on the environment variable
-  auto const env_var = getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"});
+  auto const env_var = cudf::detail::getenv_or("LIBCUDF_HOST_DECOMPRESSION", std::string{"OFF"});
 
   if (env_var == "AUTO") {
     return host_engine_state::AUTO;
@@ -655,10 +655,9 @@ size_t get_uncompressed_size(compression_type compression, host_span<uint8_t con
   auto const nvcomp_disabled = nvcomp_type.has_value()
                                  ? nvcomp::is_decompression_disabled(*nvcomp_type)
                                  : "invalid compression type";
-  if (nvcomp_disabled) {
-    CUDF_FAIL("Cannot compute decompression scratch size for " +
-              compression_type_name(compression));
-  }
+  CUDF_EXPECTS(
+    !nvcomp_disabled,
+    "Cannot compute decompression scratch size for " + compression_type_name(compression));
   return nvcomp::batched_decompress_temp_size_ex(
     nvcomp_type.value(), inputs, max_uncomp_chunk_size, max_total_uncomp_size, stream);
 }
@@ -777,13 +776,15 @@ void decompress(compression_type compression,
   device_span<device_span<uint8_t const> const> inputs_view = sorted_inputs;
   device_span<device_span<uint8_t> const> outputs_view      = sorted_outputs;
 
-  auto const split_idx = split_decompression_tasks(
-    inputs_view,
-    outputs_view,
-    get_host_engine_state(compression),
-    getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD", default_host_decompression_auto_threshold),
-    getenv_or("LIBCUDF_HOST_DECOMPRESSION_RATIO", default_host_device_decompression_cost_ratio),
-    stream);
+  auto const split_idx =
+    split_decompression_tasks(inputs_view,
+                              outputs_view,
+                              get_host_engine_state(compression),
+                              cudf::detail::getenv_or("LIBCUDF_HOST_DECOMPRESSION_THRESHOLD",
+                                                      default_host_decompression_auto_threshold),
+                              cudf::detail::getenv_or("LIBCUDF_HOST_DECOMPRESSION_RATIO",
+                                                      default_host_device_decompression_cost_ratio),
+                              stream);
 
   auto tmp_results = cudf::detail::make_device_uvector_async<detail::codec_exec_result>(
     results, stream, cudf::get_current_device_resource_ref());

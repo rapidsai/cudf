@@ -24,11 +24,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/transform.h>
@@ -130,7 +129,7 @@ struct dispatch_compute_indices {
                                      size_type const* d_map_to_keys,
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
-    requires(cudf::is_relationally_comparable<Element, Element>())
+    requires(cudf::is_dictionary_key<Element>())
   {
     auto keys_view     = column_device_view::create(all_keys, stream);
     auto indices_view  = column_device_view::create(all_indices, stream);
@@ -141,7 +140,7 @@ struct dispatch_compute_indices {
     auto all_itr = thrust::make_permutation_iterator(
       keys_view->begin<Element>(),
       thrust::make_transform_iterator(
-        thrust::make_counting_iterator<size_type>(0),
+        cuda::counting_iterator<size_type>{0},
         cuda::proclaim_return_type<size_type>(
           [d_offsets, d_map_to_keys, d_all_indices, indices_itr] __device__(size_type idx) {
             if (d_all_indices.is_null(idx)) return 0;
@@ -159,7 +158,7 @@ struct dispatch_compute_indices {
     auto result_itr =
       cudf::detail::indexalator_factory::make_output_iterator(result->mutable_view());
     // new indices values are computed by matching the concatenated keys to the new key set
-    thrust::lower_bound(rmm::exec_policy_nosync(stream),
+    thrust::lower_bound(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         begin,
                         end,
                         all_itr,
@@ -171,7 +170,7 @@ struct dispatch_compute_indices {
 
   template <typename Element, typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
-    requires(!cudf::is_relationally_comparable<Element, Element>())
+    requires(not cudf::is_dictionary_key<Element>())
   {
     CUDF_FAIL("dictionary concatenate not supported for this column type");
   }
@@ -241,7 +240,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
     }));
   // the indices offsets (pair.second) are for building the map
   thrust::lower_bound(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     children_offsets.begin() + 1,
     children_offsets.end(),
     indices_itr,

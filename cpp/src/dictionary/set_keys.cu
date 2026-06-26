@@ -25,9 +25,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/permutation_iterator.h>
 #include <thrust/transform.h>
 
@@ -71,7 +72,7 @@ struct set_keys_dispatch_fn {
                                            cudf::column_view const& new_keys,
                                            rmm::cuda_stream_view stream,
                                            rmm::device_async_resource_ref mr)
-    requires(cudf::is_relationally_comparable<T, T>())
+    requires(cudf::is_dictionary_key<T>())
   {
     // compute sorted-order so the new_keys can be searched more quickly
     auto sorted_indices = cudf::detail::sorted_order(
@@ -83,14 +84,17 @@ struct set_keys_dispatch_fn {
     auto const d_new_keys = column_device_view::create(new_keys, stream);
     auto const keys_itr =
       thrust::make_permutation_iterator(d_new_keys->begin<T>(), d_sorted_indices);
-    auto const iota = thrust::make_counting_iterator<cudf::size_type>(0);
+    auto const iota = cuda::counting_iterator<cudf::size_type>{0};
 
     // create a map from the old key indices to the new ones
     auto indices_map = rmm::device_uvector<size_type>(old_keys.size(), stream);
     create_indices_map_fn<T, decltype(keys_itr)> map_fn{
       *d_old_keys, keys_itr, keys_itr + new_keys.size(), d_sorted_indices};
-    thrust::transform(
-      rmm::exec_policy_nosync(stream), iota, iota + old_keys.size(), indices_map.begin(), map_fn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      iota,
+                      iota + old_keys.size(),
+                      indices_map.begin(),
+                      map_fn);
 
     // map the old indices to the new set
     auto indices_column = cudf::make_numeric_column(
@@ -99,8 +103,11 @@ struct set_keys_dispatch_fn {
       cudf::detail::indexalator_factory::make_output_iterator(indices_column->mutable_view());
     auto d_input = cudf::column_device_view::create(input.parent(), stream);
     apply_indices_map_fn apply_fn{*d_input, indices_map.data()};
-    thrust::transform(
-      rmm::exec_policy_nosync(stream), iota, iota + input.size(), d_new_indices, apply_fn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      iota,
+                      iota + input.size(),
+                      d_new_indices,
+                      apply_fn);
 
     // compute the nulls (any indices < 0)
     auto d_indices = cudf::detail::indexalator_factory::make_input_iterator(indices_column->view());
@@ -121,7 +128,7 @@ struct set_keys_dispatch_fn {
                                            cudf::column_view const&,
                                            rmm::cuda_stream_view,
                                            rmm::device_async_resource_ref)
-    requires(not cudf::is_relationally_comparable<T, T>())
+    requires(not cudf::is_dictionary_key<T>())
   {
     CUDF_UNREACHABLE("not a valid dictionary key type");
   }

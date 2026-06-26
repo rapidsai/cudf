@@ -22,6 +22,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -62,8 +63,8 @@ namespace {
 __device__ bool list_has_nulls(list_device_view list)
 {
   return thrust::any_of(thrust::seq,
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(list.size()),
+                        cuda::counting_iterator{cudf::size_type{0}},
+                        cuda::counting_iterator{list.size()},
                         [&list](auto const idx) { return list.is_null(idx); });
 }
 
@@ -192,8 +193,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
     std::move(out_offsets),
     std::move(out_structs),
     input.null_count(),
-    cudf::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()),
-    stream);
+    cudf::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()));
 }
 
 }  // namespace cudf::jni

@@ -6,10 +6,11 @@ from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
 from libcpp.vector cimport vector
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
+from rmm.pylibrmm.stream cimport Stream
 
 from pylibcudf.expressions cimport Expression
+from pylibcudf.io.parquet_metadata cimport FileMetaData
 
 from pylibcudf.io.types cimport (
     compression_type,
@@ -32,7 +33,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options_builder,
 )
 
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type, type_id
 
 from pylibcudf.table cimport Table
 
@@ -51,6 +52,8 @@ cdef class ParquetReaderOptions:
     cpdef void set_filter(self, Expression filter)
     cpdef void set_source(self, SourceInfo src)
     cpdef bool is_enabled_use_jit_filter(self)
+    cpdef bool is_enabled_case_sensitive_names(self)
+    cpdef void enable_case_sensitive_names(self, bool val)
 
 
 cdef class ParquetReaderOptionsBuilder:
@@ -66,11 +69,13 @@ cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder column_names(self, list col_names)
     cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices)
     cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter)
+    cpdef ParquetReaderOptionsBuilder case_sensitive_names(self, bool val)
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width)
     cpdef build(self)
 
 
 cdef class ChunkedParquetReader:
-    cdef readonly Stream stream
+    cdef Stream _stream
     cdef DeviceMemoryResource mr
     cdef unique_ptr[cpp_chunked_parquet_reader] reader
 
@@ -79,7 +84,10 @@ cdef class ChunkedParquetReader:
 
 
 cpdef read_parquet(
-    ParquetReaderOptions options, Stream stream = *, DeviceMemoryResource mr=*
+    ParquetReaderOptions options,
+    object stream = *,
+    DeviceMemoryResource mr=*,
+    object parquet_metadatas=*,
 )
 
 
@@ -176,7 +184,7 @@ cdef class ParquetWriterOptionsBuilder:
 
     cpdef ParquetWriterOptions build(self)
 
-cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = *)
+cpdef memoryview write_parquet(ParquetWriterOptions options, object stream = *)
 
 cpdef bool is_supported_read_parquet(compression_type compression)
 
