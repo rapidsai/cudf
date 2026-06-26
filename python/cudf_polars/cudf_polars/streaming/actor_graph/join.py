@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 import pylibcudf as plc
@@ -116,20 +116,7 @@ class JoinPrefilterDecision:
 
     def trace_dict(self) -> dict[str, Any]:
         """Return structured trace metadata for this decision."""
-        metadata: dict[str, Any] = {
-            "considered": self.considered,
-            "estimated_left_rows": self.left_rows,
-            "estimated_right_rows": self.right_rows,
-            "threshold": self.threshold,
-            "filtered_side": self.filter_side,
-            "build_side": self.build_side,
-            "key_column_count": self.key_column_count,
-        }
-        if self.small_large_ratio is not None:
-            metadata["small_large_ratio"] = self.small_large_ratio
-        if self.reason_skipped is not None:
-            metadata["reason_skipped"] = self.reason_skipped
-        return metadata
+        return asdict(self)
 
 
 @define_actor()
