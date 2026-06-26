@@ -114,7 +114,7 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
 /**
  * @brief Version of the packed metadata layout produced by `pack`/`pack_metadata`.
  */
-inline constexpr std::int32_t packed_metadata_version = 1;
+constexpr std::int32_t packed_metadata_version = 1;
 
 }  // namespace detail
 }  // namespace cudf
