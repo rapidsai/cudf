@@ -86,8 +86,8 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
     nanoarrow::UniqueArray chunk;
     NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, chunk.get(), nullptr));
     if (chunk->release == nullptr) { break; }
-    chunks.push_back(from_arrow(&schema, chunk.get(), stream, mr));
     sources.push_back(std::move(chunk));
+    chunks.push_back(from_arrow(&schema, sources.back().get(), stream, mr));
   }
   input->release(input);
 
@@ -148,8 +148,8 @@ std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
     nanoarrow::UniqueArray chunk;
     NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, chunk.get(), nullptr));
     if (chunk->release == nullptr) { break; }
-    chunks.push_back(from_arrow_column(&schema, chunk.get(), stream, mr));
     sources.push_back(std::move(chunk));
+    chunks.push_back(from_arrow_column(&schema, sources.back().get(), stream, mr));
   }
   input->release(input);
 
