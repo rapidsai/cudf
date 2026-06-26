@@ -144,7 +144,6 @@ class Cluster(enum.StrEnum):
 
 
 T = TypeVar("T")
-_DEFAULT_JOIN_PREFILTER_MAX_KEY_COLUMNS: int | None = 1
 
 
 def _make_default_factory(
@@ -344,7 +343,7 @@ class DynamicPlanningOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__JOIN_PREFILTER_MAX_KEY_COLUMNS",
             _optional_int_converter,
-            default=_DEFAULT_JOIN_PREFILTER_MAX_KEY_COLUMNS,
+            default=1,
         )
     )
     join_prefilter_trace: bool = dataclasses.field(
