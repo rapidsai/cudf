@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
-import pytest
-
 import cudf
 from cudf.testing import assert_eq
 
@@ -37,18 +35,3 @@ def test_rangeindex_to_numpy_copy_true_returns_new_array():
     np.testing.assert_array_equal(copied, base)
 
 
-def test_rangeindex_to_numpy_na_value_raises():
-    gidx = cudf.RangeIndex(start=0, stop=10, step=1)
-    with pytest.raises(
-        ValueError, match="RangeIndex cannot contain missing values"
-    ):
-        gidx.to_numpy(na_value=0)
-
-
-def test_rangeindex_values_host_shares_to_numpy_cache():
-    gidx = cudf.RangeIndex(start=0, stop=10, step=1)
-
-    with pytest.warns(FutureWarning):
-        host_values = gidx.values_host
-
-    assert gidx.to_numpy(copy=False) is host_values

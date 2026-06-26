@@ -2715,29 +2715,6 @@ class RangeIndex(Index):
     def values(self) -> cupy.ndarray:
         return cupy.arange(self.start, self.stop, self.step)
 
-    @cached_property
-    @_performance_tracking
-    def _numpy_values(self) -> np.ndarray:
-        return np.arange(self.start, self.stop, self.step)
-
-    @cached_property
-    @_performance_tracking
-    def values_host(self) -> np.ndarray:
-        """
-        Return a numpy array from the RangeIndex.
-
-        .. deprecated:: 26.06
-            `values_host` is deprecated and will be removed in a future version.
-            Use `to_numpy()` instead.
-        """
-        warnings.warn(
-            "values_host is deprecated and will be removed in a future version. "
-            "Use to_numpy() instead.",
-            FutureWarning,
-            stacklevel=2,
-        )
-        return self.to_numpy()
-
     @_performance_tracking
     def to_numpy(
         self,
@@ -2764,14 +2741,15 @@ class RangeIndex(Index):
         -------
         numpy.ndarray
         """
-        if na_value is not None:
-            raise ValueError("RangeIndex cannot contain missing values")
-        result = self._numpy_values
-        if dtype is not None:
-            return result.astype(dtype, copy=copy)
-        if copy:
-            return result.copy()
-        return result
+        return (
+            self._to_numpy(dtype, na_value).copy()
+            if copy
+            else self._to_numpy(dtype, na_value)
+        )
+
+    @cache
+    def _to_numpy(self, dtype=None, na_value=None) -> np.ndarray:
+        return self.to_pandas().to_numpy(dtype=dtype, na_value=na_value)
 
     @_performance_tracking
     def to_cupy(self) -> cupy.ndarray:
