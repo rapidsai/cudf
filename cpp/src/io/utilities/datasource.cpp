@@ -366,6 +366,10 @@ kvikio::RemoteHandle open_remote_handle(char const* filepath, std::optional<std:
 
 /**
  * @brief Remote file source backed by KvikIO, which handles S3 filepaths seamlessly.
+ *
+ * Note that this datasource does not currently support anonymously reading a public
+ * 's3://'-style URL when 'known_size' is provided.
+ *
  */
 class remote_file_source : public kvikio_source<kvikio::RemoteHandle> {
  public:
