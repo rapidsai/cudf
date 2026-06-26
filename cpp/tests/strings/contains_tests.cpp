@@ -1141,3 +1141,129 @@ TEST_F(StringsContainsTests, CrlfDefaultLfOnlyNoExtNewline)
     cudf::test::fixed_width_column_wrapper<bool>({0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::contains_re(view, *prog), expected);
 }
+
+TEST_F(StringsContainsTests, AlternationNullableBranch)
+{
+  // "a(bc|de|fg|)h" has an explicit empty branch that makes 'h' directly reachable after 'a'.
+  auto input = cudf::test::strings_column_wrapper(
+    {"ah", "abch", "adeh", "afghh", "abcde", "a", "h", "", "abcdefgh", "xabchx"});
+  auto sv = cudf::strings_column_view(input);
+
+  auto prog = cudf::strings::regex_program::create("a(bc|de|fg|)h");
+  {
+    auto results = cudf::strings::contains_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 1, 0, 0, 0, 0, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto results = cudf::strings::count_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 1, 1, 1, 0, 0, 0, 0, 1, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsContainsTests, BoundedRepetitionGap)
+{
+  // "ab{0,4}cv" — 'b' may repeat 0–4 times; five or more b's yield no match.
+  auto input = cudf::test::strings_column_wrapper(
+    {"acv", "abcv", "abbcv", "abbbcv", "abbbbcv", "abbbbbcv", "av", "acvx", "xacvx", ""});
+  auto sv = cudf::strings_column_view(input);
+
+  auto prog    = cudf::strings::regex_program::create("ab{0,4}cv");
+  auto results = cudf::strings::contains_re(sv, *prog);
+  cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 1, 1, 0, 0, 1, 1, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsContainsTests, ExtNewlineDotAny)
+{
+  // DEFAULT mode excludes only \n from '.'.
+  // EXT_NEWLINE additionally excludes \r, U+0085 (NEL), U+2028 (LS), and U+2029 (PS).
+  auto input = cudf::test::strings_column_wrapper({"axb",
+                                                   "a\nb",
+                                                   "a\rb",
+                                                   "a\xc2\x85"
+                                                   "b",  // U+0085 NEL between 'a' and 'b'
+                                                   "a\xe2\x80\xa8"
+                                                   "b",  // U+2028 LINE SEPARATOR
+                                                   "a\xe2\x80\xa9"
+                                                   "b",  // U+2029 PARAGRAPH SEPARATOR
+                                                   "abc",
+                                                   ""});
+  auto sv    = cudf::strings_column_view(input);
+
+  // DEFAULT: only \n excluded — \r and extended newlines are matched by '.'
+  {
+    auto prog    = cudf::strings::regex_program::create("a.b");
+    auto results = cudf::strings::contains_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 1, 1, 1, 1, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  // EXT_NEWLINE: \r and all extended newlines also excluded
+  {
+    auto prog =
+      cudf::strings::regex_program::create("a.b", cudf::strings::regex_flags::EXT_NEWLINE);
+    auto results = cudf::strings::contains_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<bool> expected({1, 0, 0, 0, 0, 0, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  // A string composed entirely of extended newlines yields no '.+' match under EXT_NEWLINE
+  {
+    auto input2 = cudf::test::strings_column_wrapper(
+      {"hello",
+       "\xc2\x85\xe2\x80\xa8\xe2\x80\xa9",  // only extended newlines
+       "a\xc2\x85"
+       "b",
+       ""});
+    auto sv2  = cudf::strings_column_view(input2);
+    auto prog = cudf::strings::regex_program::create(".+", cudf::strings::regex_flags::EXT_NEWLINE);
+    auto results = cudf::strings::contains_re(sv2, *prog);
+    cudf::test::fixed_width_column_wrapper<bool> expected2({1, 0, 1, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
+  }
+}
+
+TEST_F(StringsContainsTests, AlternationPriorityCount)
+{
+  // Leftmost-first (first-alternative-wins): the shorter first branch is consumed, leaving
+  // subsequent characters available for the next match.
+  {
+    // "a|aa": "a" wins, so "aaaa" counts as 4 individual matches, not 2 "aa" matches.
+    auto input   = cudf::test::strings_column_wrapper({"aaaa", "aaaaaa", "aaab", "a", "b", ""});
+    auto sv      = cudf::strings_column_view(input);
+    auto prog    = cudf::strings::regex_program::create("a|aa");
+    auto results = cudf::strings::count_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({4, 6, 3, 1, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // "foo|foobar": "foo" wins when both alternatives start at the same position.
+    auto input   = cudf::test::strings_column_wrapper({"foo", "foobar", "foofoo", "bar", ""});
+    auto sv      = cudf::strings_column_view(input);
+    auto prog    = cudf::strings::regex_program::create("foo|foobar");
+    auto results = cudf::strings::count_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 1, 2, 0, 0});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
+
+TEST_F(StringsContainsTests, LazyQuantifiers)
+{
+  // Lazy star/plus in non-DOTALL mode: prefer the shortest match.
+  auto input = cudf::test::strings_column_wrapper(
+    {"ab", "abc", "xdefx", "xghix", "jkl", "abc xdefx xghix jkl"});
+  auto sv = cudf::strings_column_view(input);
+
+  {
+    auto prog    = cudf::strings::regex_program::create("x.*?x");
+    auto results = cudf::strings::contains_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 1, 1, 0, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto prog    = cudf::strings::regex_program::create("x.+?x");
+    auto results = cudf::strings::contains_re(sv, *prog);
+    cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 1, 1, 0, 1});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+}
