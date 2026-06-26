@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -851,6 +851,107 @@ TEST_F(ParquetWriterTest, Decimal128Stats)
 
   EXPECT_EQ(expected_min, stats.min_value);
   EXPECT_EQ(expected_max, stats.max_value);
+}
+
+TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmitted)
+{
+  // PARQUET-1246: a float/double column containing a NaN must not expose min/max, or a
+  // reader doing `= NaN` predicate pushdown skips the row group. NVIDIA/spark-rapids#15004.
+  auto constexpr nanf = std::numeric_limits<float>::quiet_NaN();
+  auto constexpr nand = std::numeric_limits<double>::quiet_NaN();
+
+  column_wrapper<float> col_f_nan{{1.0f, nanf, 3.0f, 2.0f}};     // NaN mixed with non-NaN
+  column_wrapper<double> col_d_nan{{1.0, 2.0, nand, 4.0}};       // double variant
+  column_wrapper<float> col_f_allnan{{nanf, nanf, nanf, nanf}};  // all NaN
+  column_wrapper<float> col_f_nonan{{1.0f, 2.0f, 3.0f, 4.0f}};   // control: no NaN
+  column_wrapper<float> col_f_nan_null{{1.0f, nanf, 3.0f, 5.0f},
+                                       {true, true, true, false}};  // NaN alongside a null
+
+  auto const expected =
+    table_view{{col_f_nan, col_d_nan, col_f_allnan, col_f_nonan, col_f_nan_null}};
+
+  auto const filepath = temp_env->get_temp_filepath("FloatingPointWithNaNStats.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  auto const stats_f_nan      = get_statistics(fmd.row_groups[0].columns[0]);
+  auto const stats_d_nan      = get_statistics(fmd.row_groups[0].columns[1]);
+  auto const stats_f_allnan   = get_statistics(fmd.row_groups[0].columns[2]);
+  auto const stats_f_nonan    = get_statistics(fmd.row_groups[0].columns[3]);
+  auto const stats_f_nan_null = get_statistics(fmd.row_groups[0].columns[4]);
+
+  // any column containing a NaN must not expose min/max
+  EXPECT_FALSE(stats_f_nan.min_value.has_value());
+  EXPECT_FALSE(stats_f_nan.max_value.has_value());
+  EXPECT_FALSE(stats_d_nan.min_value.has_value());
+  EXPECT_FALSE(stats_d_nan.max_value.has_value());
+  EXPECT_FALSE(stats_f_allnan.min_value.has_value());
+  EXPECT_FALSE(stats_f_allnan.max_value.has_value());
+
+  // a column with no NaN is unaffected and still carries min/max
+  EXPECT_TRUE(stats_f_nonan.min_value.has_value());
+  EXPECT_TRUE(stats_f_nonan.max_value.has_value());
+
+  // a null alongside the NaN does not interfere with NaN detection
+  EXPECT_FALSE(stats_f_nan_null.min_value.has_value());
+  EXPECT_FALSE(stats_f_nan_null.max_value.has_value());
+}
+
+TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmittedAcrossFragments)
+{
+  // A NaN in any page fragment must propagate through the fragment -> column-chunk statistics
+  // merge, so a multi-fragment column chunk with a single NaN still omits min/max.
+  // NVIDIA/spark-rapids#15004.
+  auto constexpr nanf     = std::numeric_limits<float>::quiet_NaN();
+  auto constexpr num_rows = 20000;  // > default 5000-row page fragment -> multiple fragments merged
+  std::vector<float> data(num_rows);
+  for (int i = 0; i < num_rows; ++i) {
+    data[i] = static_cast<float>(i);
+  }
+  data[num_rows / 2] = nanf;  // a single NaN in a middle fragment
+  column_wrapper<float> col(data.begin(), data.end());
+  auto const expected = table_view{{col}};
+
+  auto const filepath = temp_env->get_temp_filepath("FloatingPointNaNStatsFragments.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  ASSERT_EQ(fmd.row_groups.size(), 1);
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
+  EXPECT_FALSE(stats.min_value.has_value());
+  EXPECT_FALSE(stats.max_value.has_value());
+}
+
+TEST_F(ParquetWriterTest, FloatingPointWithNaNStatsOmittedNested)
+{
+  // NaN detection must reach a float leaf nested in a LIST column (rapidsai/cudf#22817).
+  auto constexpr nanf = std::numeric_limits<float>::quiet_NaN();
+  cudf::test::lists_column_wrapper<float> list_col{{1.0f, nanf, 3.0f}, {4.0f, 5.0f}};
+  auto const expected = table_view{{list_col}};
+
+  auto const filepath = temp_env->get_temp_filepath("FloatingPointNaNStatsNested.parquet");
+  cudf::io::parquet_writer_options const out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected);
+  cudf::io::write_parquet(out_opts);
+
+  auto const source = cudf::io::datasource::create(filepath);
+  cudf::io::parquet::FileMetaData fmd;
+  read_footer(source, &fmd);
+
+  // the leaf float column (list element) contains a NaN -> min/max omitted
+  auto const stats = get_statistics(fmd.row_groups[0].columns[0]);
+  EXPECT_FALSE(stats.min_value.has_value());
+  EXPECT_FALSE(stats.max_value.has_value());
 }
 
 TEST_F(ParquetWriterTest, CheckColumnIndexTruncation)
