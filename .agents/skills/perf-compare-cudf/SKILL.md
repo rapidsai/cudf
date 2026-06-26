@@ -39,6 +39,8 @@ Run the same selected libcudf NVBench benchmarks on the target (current WIP or c
   ```bash
   gh pr checkout <PR_NUMBER> --repo rapidsai/cudf
   ```
+- For PR targets: After switching, check if the PR branch is behind `<cudf-remote>/main` and add a merge commit. DO **NOT** push anything. If there are merge conflicts, stop and guide the user to fix them.
+
 - On the first build for a checkout, force CMake reconfiguration to enable benchmarks:
 
 ```bash
@@ -46,7 +48,7 @@ configure-cudf-cpp -DBUILD_BENCHMARKS=ON
 build-cudf-cpp
 ```
 - Re-run `configure-cudf-cpp -DBUILD_BENCHMARKS=ON` if the build directory is cleaned or CMake options may have changed.
-- If needed, refer to the `/build-test-cudf` skill for more instructions and troubleshooting.
+- If needed, refer to the `build-test-cudf` skill for instructions and troubleshooting.
 
 ## 3. Choose Benchmarks
 
@@ -107,9 +109,9 @@ PYTHONPATH="$NVBENCH_SCRIPTS" python "$NVBENCH_SCRIPTS/nvbench_compare.py" \
 ## 8. Restore and report
 
 - Return to the starting branch/state, pop any stash you created, delete temporary branches, and confirm `git status` matches the starting state.
-- Summarize chat with the headline result (regression, improvement, or within noise), relevant metrics, hardware used, branch SHAs, axis coverage, and generated files.
 - Remember to note if there were any end-of-suite segfaults or config throws and if the behavior was the same on both branches.
-- Use this template for `COMPARISON.md`, adapting the metric columns to the benchmark. GPU time is always useful, but other metrics such as output file size, throughput, compression ratio, or memory usage are also of interest when they change significantly in target vs main.
+- Use the below template for `COMPARISON.md`, adapting the metric columns to the benchmark. GPU time is always useful, but other metrics such as output file size, throughput, compression ratio, or memory usage are also of interest when they change significantly in target vs main.
+- Summarize chat with the headline result (regression, improvement, or within noise), relevant metrics, hardware used, branch SHAs, axis coverage, the summary table from the template, and generated files.
 
   ```markdown
   # Benchmark Comparison: <cudf-remote>/main vs target (`WIP` or `PR`)
