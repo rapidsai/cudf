@@ -15,6 +15,7 @@ from cudf_polars.quent._plan import (
     build_plan,
 )
 from cudf_polars.quent._types import (
+    Attribute,
     Engine,
     Implementation,
     Query,
@@ -69,8 +70,14 @@ class QuentContext:
         payload = {
             "engine": {
                 "id": int(self.engine.id),
-                "implementation": self.engine.implementation.to_dict(),
-                "custom_attributes": self.engine.implementation.custom_attributes,
+                "implementation": {
+                    "name": self.engine.implementation.name,
+                    "version": self.engine.implementation.version,
+                    "custom_attributes": [
+                        attribute.serialize()
+                        for attribute in self.engine.implementation.custom_attributes
+                    ],
+                },
             },
             "query_group": {
                 "id": int(self.query_group.id),
@@ -99,8 +106,11 @@ class QuentContext:
                 implementation=Implementation(
                     name=payload["engine"]["implementation"]["name"],
                     version=payload["engine"]["implementation"]["version"],
-                    custom_attributes=payload["engine"]["implementation"][
-                        "custom_attributes"
+                    custom_attributes=[
+                        Attribute.deserialize(attribute)
+                        for attribute in payload["engine"]["implementation"][
+                            "custom_attributes"
+                        ]
                     ],
                 ),
             ),

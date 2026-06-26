@@ -432,6 +432,10 @@ class Attribute:
     def serialize(self) -> dict[str, Any]:
         return {"key": self.name, "value": _serialize_value(self.value)}
 
+    @classmethod
+    def deserialize(cls, payload: dict[str, Any]) -> Attribute:
+        return cls(name=payload["key"], value=_deserialize_value(payload["value"]))
+
 
 def _serialize_value(value: Value | None) -> dict[str, Any] | None:
     match value:
@@ -470,3 +474,21 @@ def _serialize_value(value: Value | None) -> dict[str, Any] | None:
             raise NotImplementedError("List and dict attributes are not supported yet.")
         case _:  # pragma: no cover; should be exhaustive
             raise TypeError(f"Unsupported Quent custom attribute type: {type(value)}")
+
+
+def _deserialize_value(value: dict[str, Any] | None) -> Value | None:
+    if value is None:
+        return None
+    if len(value) != 1:
+        raise ValueError(
+            "Expected Quent attribute value envelope with exactly one variant."
+        )
+
+    variant, deserialized = next(iter(value.items()))
+    if variant in {"U8", "U16", "U32", "U64", "I8", "I16", "I32", "I64"}:
+        return int(deserialized)
+    if variant == "F64":
+        return float(deserialized)
+    if variant == "String":
+        return str(deserialized)
+    raise ValueError(f"Unsupported Quent custom attribute variant: {variant}")

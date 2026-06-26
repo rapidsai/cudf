@@ -610,6 +610,31 @@ def test_quent_context_serialization() -> None:
     assert new == quent_context
 
 
+def test_quent_context_serialization_with_custom_attributes() -> None:
+    engine = Engine(
+        implementation=Implementation(
+            name="test-impl",
+            version="1.2.3",
+            custom_attributes=[
+                Attribute("count", 3),
+                Attribute("ratio", 1.5),
+                Attribute("name", "demo"),
+                Attribute("optional", None),
+            ],
+        )
+    )
+    quent_context = cudf_polars.quent.QuentContext(
+        engine=engine,
+        query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
+        query=cudf_polars.quent.Query(instance_name="test_query"),
+    )
+
+    data = quent_context.serialize()
+    new = cudf_polars.quent.QuentContext.deserialize(data)
+
+    assert new == quent_context
+
+
 def test_quent_events(
     engine_with_quent_context: StreamingEngine, quent_context: QuentContext
 ) -> None:
