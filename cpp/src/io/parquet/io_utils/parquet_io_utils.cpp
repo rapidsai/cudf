@@ -583,12 +583,11 @@ fetch_bloom_filters_to_device_async(
   for (auto const& ranges : bloom_filter_byte_ranges_per_source) {
     bloom_filter_byte_range_spans_per_source.emplace_back(ranges);
   }
-  return fetch_bloom_filters_to_device_async_impl(
-    datasources,
-    {bloom_filter_byte_range_spans_per_source.data(),
-     bloom_filter_byte_range_spans_per_source.size()},
-    stream,
-    mr);
+  return fetch_bloom_filters_to_device_async_impl(datasources,
+                                                  {bloom_filter_byte_range_spans_per_source.data(),
+                                                   bloom_filter_byte_range_spans_per_source.size()},
+                                                  stream,
+                                                  mr);
 }
 
 }  // namespace cudf::io::parquet

@@ -162,8 +162,8 @@ fetch_byte_ranges_to_device_async(
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
- * @return A tuple containing the device buffers, the device spans of the bitset data (one per input
- * range; empty for ranges without a bloom filter), and a future to wait on the read tasks
+ * @return A tuple containing the device buffers, the device spans of the bitset data, and a future
+ * to wait on the read tasks
  */
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
@@ -184,8 +184,7 @@ fetch_bloom_filters_to_device_async(cudf::io::datasource& datasource,
  * @param stream CUDA stream
  * @param mr Device memory resource
  *
- * @return A tuple containing a vector of device buffers, a vector of vectors of device spans (one
- * bitset span per input range per datasource; empty for ranges without a bloom filter), and a
+ * @return A tuple containing a vector of device buffers, a vector of vectors of device spans, and a
  * future to wait on the read tasks
  */
 std::tuple<std::vector<rmm::device_buffer>,
