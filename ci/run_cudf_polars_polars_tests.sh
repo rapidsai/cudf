@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -61,7 +61,6 @@ DESELECTED_TESTS_STR=$(printf -- " --deselect %s" "${DESELECTED_TESTS[@]}")
 # shellcheck disable=SC2086
 echo "Run polars tests with injected in-memory GPU engine"
 python -m pytest \
-       -vv \
        --import-mode=importlib \
        --cache-clear \
        -m "" \
@@ -84,6 +83,7 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
        --import-mode=importlib \
        --cache-clear \
+       -v \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \
