@@ -101,7 +101,6 @@ class JoinPrefilterDecision:
     right_rows: int
     threshold: float
     filter_side: Literal["left", "right"] | None = None
-    build_side: Literal["left", "right"] | None = None
     build_indices: tuple[int, ...] = ()
     apply_indices: tuple[int, ...] = ()
     key_column_count: int = 0
@@ -620,18 +619,15 @@ def _select_join_prefilter(
     if max_key_columns is not None:
         key_column_count = min(key_column_count, max_key_columns)
 
-    build_side: Literal["left", "right"]
     filter_side: Literal["left", "right"]
     small_rows: int
     large_rows: int
 
     if join_type in ("Inner", "Semi"):
         if left_rows <= right_rows:
-            build_side = "left"
             filter_side = "right"
             small_rows, large_rows = left_rows, right_rows
         else:
-            build_side = "right"
             filter_side = "left"
             small_rows, large_rows = right_rows, left_rows
     elif join_type in ("Left", "Anti"):
@@ -645,7 +641,6 @@ def _select_join_prefilter(
                 key_column_count=key_column_count,
                 reason_skipped="no_legal_large_side",
             )
-        build_side = "left"
         filter_side = "right"
         small_rows, large_rows = left_rows, right_rows
     elif join_type == "Right":
@@ -659,7 +654,6 @@ def _select_join_prefilter(
                 key_column_count=key_column_count,
                 reason_skipped="no_legal_large_side",
             )
-        build_side = "right"
         filter_side = "left"
         small_rows, large_rows = right_rows, left_rows
     else:
@@ -691,7 +685,7 @@ def _select_join_prefilter(
             reason_skipped="ratio_above_threshold",
         )
 
-    if build_side == "left":
+    if filter_side == "right":
         build_indices = left_key_indices[:key_column_count]
         apply_indices = right_key_indices[:key_column_count]
     else:
@@ -703,7 +697,6 @@ def _select_join_prefilter(
         right_rows=right_rows,
         threshold=threshold,
         filter_side=filter_side,
-        build_side=build_side,
         build_indices=build_indices,
         apply_indices=apply_indices,
         key_column_count=key_column_count,
@@ -772,11 +765,11 @@ def make_filter_tasks(
        Of new left and right channels, coroutines to await, and new channels to shutdown on error.
     """
     assert decision.enabled
-    assert decision.build_side in ("left", "right")
+    assert decision.filter_side in ("left", "right")
     bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
     bloom_build_input: Channel[TableChunk] = context.create_channel()
     passthrough_output: Channel[TableChunk] = context.create_channel()
-    if decision.build_side == "left":
+    if decision.filter_side == "right":
         passthrough_input = ch_left
         ch_left = passthrough_output
         build_indices = decision.build_indices
