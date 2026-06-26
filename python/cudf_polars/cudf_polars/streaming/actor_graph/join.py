@@ -42,7 +42,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     NormalizedPartitioning,
     TableSizeStats,
-    _is_already_partitioned,
     _sample_chunks,
     allgather_reduce,
     chunk_to_frame,
@@ -895,19 +894,6 @@ async def _shuffle_join(
         max_key_columns=prefilter_max_key_columns,
     )
     prefilter_trace_stats = prefilter_decision.trace_dict()
-    if prefilter_decision.enabled:
-        apply_meta = (
-            strategy.right_meta
-            if prefilter_decision.filter_side == "right"
-            else strategy.left_meta
-        )
-        assert apply_meta is not None
-        prefilter_trace_stats["apply_side_prepartitioned"] = _is_already_partitioned(
-            apply_meta,
-            prefilter_decision.apply_indices,
-            strategy.shuffle_modulus,
-            comm.nranks,
-        )
 
     if tracer is not None:
         tracer.set_extra("join_prefilter", prefilter_trace_stats)
