@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -23,7 +23,14 @@ echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/l
 RAPIDS_PY_API="cp${RAPIDS_PY_VERSION//./}"
 export RAPIDS_PY_API
 
-./ci/build_wheel.sh pylibcudf ${package_dir} --stable
+./ci/build_wheel.sh pylibcudf ${package_dir} --stable 2>&1 | tee pylibcudf-wheel-build-output.log
+
+rapids-logger "Checking for Cython performance warnings"
+if grep -Fq "performance hint:" pylibcudf-wheel-build-output.log; then
+  echo "Cython performance hints found in pylibcudf build:"
+  grep -F "performance hint:" pylibcudf-wheel-build-output.log
+  exit 1
+fi
 
 # repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
