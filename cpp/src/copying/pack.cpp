@@ -16,6 +16,7 @@
 #include <functional>
 #include <memory>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -73,8 +74,9 @@ struct alignas(8) serialized_table_header {
   size_type num_columns{};
 };
 
-// Guard against accidental uninitialized padding.
-static_assert(sizeof(serialized_table_header) == 8);
+// The header is serialized with memcpy, so it must not contain padding bytes
+// (which the value constructor would leave uninitialized in the output).
+static_assert(std::has_unique_object_representations_v<serialized_table_header>);
 
 /**
  * @brief Read the table header at `ptr`.
