@@ -717,12 +717,30 @@ def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 def test_validate_join_prefilter_threshold() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"dynamic_planning": {"join_prefilter_threshold": 0}},
+        )
+    )
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.join_prefilter_threshold == 0.0
+
     with pytest.raises(TypeError, match="join_prefilter_threshold must be"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
                 executor="streaming",
                 executor_options={
                     "dynamic_planning": {"join_prefilter_threshold": "bad"}
+                },
+            )
+        )
+    with pytest.raises(TypeError, match="join_prefilter_threshold must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_prefilter_threshold": True}
                 },
             )
         )

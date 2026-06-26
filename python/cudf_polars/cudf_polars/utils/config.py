@@ -361,8 +361,12 @@ class DynamicPlanningOptions:
         if self.sample_chunk_count < 1:
             raise ValueError("sample_chunk_count must be at least 1")
         join_prefilter_threshold = self.join_prefilter_threshold
-        if not isinstance(join_prefilter_threshold, float):
-            raise TypeError("join_prefilter_threshold must be a float")
+        if isinstance(join_prefilter_threshold, bool) or not isinstance(
+            join_prefilter_threshold, (int, float)
+        ):
+            raise TypeError("join_prefilter_threshold must be a float or int")
+        join_prefilter_threshold = float(join_prefilter_threshold)
+        object.__setattr__(self, "join_prefilter_threshold", join_prefilter_threshold)
         if not 0.0 <= join_prefilter_threshold <= 1.0:
             raise ValueError("join_prefilter_threshold must be between 0 and 1")
         if self.join_prefilter_max_key_columns is not None:
