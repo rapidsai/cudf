@@ -83,9 +83,9 @@ class sum_aggregation final
  */
 class sum_overflow_aggregation final
   : public clonable<sum_overflow_aggregation>::derived_from<groupby_aggregation,
-                                                                 groupby_scan_aggregation,
-                                                                 reduce_aggregation,
-                                                                 segmented_reduce_aggregation> {
+                                                            groupby_scan_aggregation,
+                                                            reduce_aggregation,
+                                                            segmented_reduce_aggregation> {
  public:
   sum_overflow_aggregation() : aggregation(SUM_OVERFLOW) {}
 };

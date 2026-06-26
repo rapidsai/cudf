@@ -138,12 +138,11 @@ struct sum_overflow_dispatcher {
 
 }  // namespace
 
-std::unique_ptr<cudf::scalar> sum_overflow(
-  column_view const& col,
-  cudf::data_type const output_dtype,
-  std::optional<std::reference_wrapper<scalar const>> init,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::scalar> sum_overflow(column_view const& col,
+                                           cudf::data_type const output_dtype,
+                                           std::optional<std::reference_wrapper<scalar const>> init,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(output_dtype.id() == type_id::STRUCT,

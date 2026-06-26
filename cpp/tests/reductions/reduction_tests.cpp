@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -3548,12 +3548,12 @@ struct ReduceOverflowTest : public cudf::test::BaseFixture {
   }
 };
 using ReduceOverflowTypes = ::testing::Types<int8_t,
-                                                 int16_t,
-                                                 int32_t,
-                                                 int64_t,
-                                                 numeric::decimal32,
-                                                 numeric::decimal64,
-                                                 numeric::decimal128>;
+                                             int16_t,
+                                             int32_t,
+                                             int64_t,
+                                             numeric::decimal32,
+                                             numeric::decimal64,
+                                             numeric::decimal128>;
 TYPED_TEST_SUITE(ReduceOverflowTest, ReduceOverflowTypes);
 
 TYPED_TEST(ReduceOverflowTest, SumWithoutOverflow)
@@ -3808,8 +3808,7 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMAX));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMIN));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM));
-  EXPECT_TRUE(
-    cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM_OVERFLOW));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM_OVERFLOW));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::PRODUCT));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MIN));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MAX));
@@ -3837,8 +3836,7 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MERGE_TDIGEST));
 
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM));
-  EXPECT_TRUE(
-    cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM_OVERFLOW));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM_OVERFLOW));
   EXPECT_TRUE(
     cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM_OF_SQUARES));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::MEDIAN));
@@ -3855,8 +3853,7 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::ANY));
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::ALL));
 
-  EXPECT_FALSE(
-    cudf::reduction::is_valid_aggregation(float_type, cudf::aggregation::SUM_OVERFLOW));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(float_type, cudf::aggregation::SUM_OVERFLOW));
 
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ROW_NUMBER));
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::RANK));
