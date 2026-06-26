@@ -169,16 +169,18 @@ def _bool_converter(v: str) -> bool:
         raise ValueError(f"Invalid boolean value: '{v}'")
 
 
-def _optional_float_converter(v: str) -> float | None:
+def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
     if v.lower() in {"none", "null"}:
         return None
-    return float(v)
+    return parse(v)
+
+
+def _optional_float_converter(v: str) -> float | None:
+    return _optional_converter(v, float)
 
 
 def _optional_int_converter(v: str) -> int | None:
-    if v.lower() in {"none", "null"}:
-        return None
-    return int(v)
+    return _optional_converter(v, int)
 
 
 @dataclasses.dataclass(frozen=True)
