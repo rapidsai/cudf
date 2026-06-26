@@ -606,19 +606,15 @@ def _select_join_prefilter(
     join. The full join still runs afterward with the complete key set.
     """
     key_column_count = len(left_key_indices)
+    assert key_column_count == len(right_key_indices), (
+        "left and right join key counts must match"
+    )
     if threshold == 0.0:
         return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
             reason_skipped="disabled",
-        )
-    if key_column_count != len(right_key_indices):
-        return JoinPrefilterDecision(
-            left_rows=left_rows,
-            right_rows=right_rows,
-            threshold=threshold,
-            reason_skipped="mismatched_join_keys",
         )
 
     if max_key_columns is not None:

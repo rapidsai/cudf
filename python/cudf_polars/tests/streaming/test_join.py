@@ -414,6 +414,21 @@ def test_join_prefilter_skips_unsupported_cross_join() -> None:
     assert decision.reason_skipped == "unsupported_join_type"
 
 
+def test_join_prefilter_asserts_mismatched_key_count() -> None:
+    with pytest.raises(
+        AssertionError, match="left and right join key counts must match"
+    ):
+        _select_join_prefilter(
+            "Inner",
+            10,
+            1_000,
+            (0,),
+            (0, 1),
+            threshold=0.5,
+            max_key_columns=1,
+        )
+
+
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )
