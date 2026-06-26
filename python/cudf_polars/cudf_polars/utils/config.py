@@ -27,7 +27,7 @@ import functools
 import importlib.util
 import json
 import os
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
 
@@ -343,7 +343,7 @@ class DynamicPlanningOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__JOIN_PREFILTER_MAX_KEY_COLUMNS",
             _optional_int_converter,
-            default=1,
+            default=cast("int | None", 1),
         )
     )
     join_prefilter_trace: bool = dataclasses.field(
