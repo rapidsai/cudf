@@ -74,9 +74,7 @@ cpdef Column translate(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_translate.translate(
             c_input,
@@ -132,9 +130,7 @@ cpdef Column filter_characters(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_translate.filter_characters(
             c_input,

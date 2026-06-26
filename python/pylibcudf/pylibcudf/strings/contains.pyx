@@ -46,9 +46,7 @@ cpdef Column contains_re(
     if _stream is None:
         _stream = _get_stream(None)
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_contains.contains_re(
             c_input,
@@ -88,9 +86,7 @@ cpdef Column count_re(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_contains.count_re(
             c_input,
@@ -131,9 +127,7 @@ cpdef Column matches_re(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_contains.matches_re(
             c_input,

@@ -58,15 +58,11 @@ cpdef Column label_bins(
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-    cdef column_view c_left_edges
-    cdef column_view c_right_edges
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
-    c_left_edges = left_edges.view()
-    c_right_edges = right_edges.view()
+    cdef column_view c_input = input.view()
+    cdef column_view c_left_edges = left_edges.view()
+    cdef column_view c_right_edges = right_edges.view()
     with nogil:
         c_result = cpp_labeling.label_bins(
             c_input,

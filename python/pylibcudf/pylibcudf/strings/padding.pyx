@@ -51,9 +51,7 @@ cpdef Column pad(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_padding.pad(
             c_input,
@@ -92,9 +90,7 @@ cpdef Column zfill(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_padding.zfill(
             c_input,
@@ -131,11 +127,8 @@ cpdef Column zfill_by_widths(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-    cdef column_view c_widths
-
-    c_input = input.view()
-    c_widths = widths.view()
+    cdef column_view c_input = input.view()
+    cdef column_view c_widths = widths.view()
     with nogil:
         c_result = cpp_padding.zfill_by_widths(
             c_input,

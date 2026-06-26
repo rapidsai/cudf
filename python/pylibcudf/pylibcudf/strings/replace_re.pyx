@@ -112,10 +112,9 @@ cpdef Column replace_with_backrefs(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
     cdef string c_replacement = replacement.encode()
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_replace_re.replace_with_backrefs(
             c_input,

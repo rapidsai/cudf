@@ -37,9 +37,7 @@ cpdef Column count_characters(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_source_strings
-
-    c_source_strings = source_strings.view()
+    cdef column_view c_source_strings = source_strings.view()
     with nogil:
         c_result = cpp_attributes.count_characters(
             c_source_strings, _cs, mr.get_mr()
@@ -71,9 +69,7 @@ cpdef Column count_bytes(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_source_strings
-
-    c_source_strings = source_strings.view()
+    cdef column_view c_source_strings = source_strings.view()
     with nogil:
         c_result = cpp_attributes.count_bytes(
             c_source_strings, _cs, mr.get_mr()
@@ -105,9 +101,7 @@ cpdef Column code_points(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_source_strings
-
-    c_source_strings = source_strings.view()
+    cdef column_view c_source_strings = source_strings.view()
     with nogil:
         c_result = cpp_attributes.code_points(
             c_source_strings, _cs, mr.get_mr()

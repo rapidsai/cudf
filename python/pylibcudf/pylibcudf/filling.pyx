@@ -75,11 +75,9 @@ cpdef Column fill(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_destination
-
     mr = _get_memory_resource(mr)
 
-    c_destination = destination.view()
+    cdef column_view c_destination = destination.view()
     with nogil:
         result = cpp_fill(
             c_destination,
@@ -124,9 +122,7 @@ cpdef void fill_in_place(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
 
-    cdef mutable_column_view c_destination
-
-    c_destination = destination.mutable_view()
+    cdef mutable_column_view c_destination = destination.mutable_view()
     with nogil:
         cpp_fill_in_place(
             c_destination,

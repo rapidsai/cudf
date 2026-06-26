@@ -46,11 +46,8 @@ cpdef Column find_multiple(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-    cdef column_view c_targets
-
-    c_input = input.view()
-    c_targets = targets.view()
+    cdef column_view c_input = input.view()
+    cdef column_view c_targets = targets.view()
     with nogil:
         c_result = cpp_find_multiple.find_multiple(
             c_input,
@@ -92,11 +89,8 @@ cpdef Table contains_multiple(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-    cdef column_view c_targets
-
-    c_input = input.view()
-    c_targets = targets.view()
+    cdef column_view c_input = input.view()
+    cdef column_view c_targets = targets.view()
     with nogil:
         c_result = cpp_find_multiple.contains_multiple(
             c_input,

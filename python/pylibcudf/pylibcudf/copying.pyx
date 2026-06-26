@@ -97,13 +97,10 @@ cpdef Table gather(
     cdef unique_ptr[table] c_result
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_source_table
-    cdef column_view c_gather_map
-
     mr = _get_memory_resource(mr)
 
-    c_source_table = source_table.view()
-    c_gather_map = gather_map.view()
+    cdef table_view c_source_table = source_table.view()
+    cdef column_view c_gather_map = gather_map.view()
     with nogil:
         c_result = cpp_copying.gather(
             c_source_table,
@@ -268,11 +265,9 @@ cpdef Column allocate_like(
     cdef size_type c_size = size if size is not None else input_column.size()
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input_column
-
     mr = _get_memory_resource(mr)
 
-    c_input_column = input_column.view()
+    cdef column_view c_input_column = input_column.view()
     with nogil:
         c_result = cpp_copying.allocate_like(
                 c_input_column,
@@ -330,9 +325,7 @@ cpdef Column copy_range_in_place(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
 
-    cdef column_view c_input_column
-
-    c_input_column = input_column.view()
+    cdef column_view c_input_column = input_column.view()
     with nogil:
         cpp_copying.copy_range_in_place(
             c_input_column,
@@ -389,13 +382,10 @@ cpdef Column copy_range(
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input_column
-    cdef column_view c_target_column
-
     mr = _get_memory_resource(mr)
 
-    c_input_column = input_column.view()
-    c_target_column = target_column.view()
+    cdef column_view c_input_column = input_column.view()
+    cdef column_view c_target_column = target_column.view()
     with nogil:
         c_result = cpp_copying.copy_range(
             c_input_column,
@@ -447,11 +437,9 @@ cpdef Column shift(
     cdef unique_ptr[column] c_result
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_copying.shift(
                 c_input,
@@ -774,11 +762,9 @@ cpdef Scalar get_element(
     cdef unique_ptr[scalar] c_output
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input_column
-
     mr = _get_memory_resource(mr)
 
-    c_input_column = input_column.view()
+    cdef column_view c_input_column = input_column.view()
     with nogil:
         c_output = cpp_copying.get_element(
             c_input_column, index, _cs, mr.get_mr()

@@ -65,9 +65,7 @@ cpdef Column replace(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_replace(
             c_input,
@@ -117,13 +115,9 @@ cpdef Column replace_multiple(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-    cdef column_view c_target
-    cdef column_view c_repl
-
-    c_input = input.view()
-    c_target = target.view()
-    c_repl = repl.view()
+    cdef column_view c_input = input.view()
+    cdef column_view c_target = target.view()
+    cdef column_view c_repl = repl.view()
     with nogil:
         c_result = cpp_replace_multiple(
             c_input,

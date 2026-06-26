@@ -37,8 +37,7 @@ cpdef Column reverse(Column input, object stream=None, DeviceMemoryResource mr=N
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_reverse.reverse(c_input, _cs, mr.get_mr())
 

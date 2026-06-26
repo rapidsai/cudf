@@ -1400,10 +1400,8 @@ cdef class Column:
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
 
-        cdef column_view c_self
-
         mr = _get_memory_resource(mr)
-        c_self = self.view()
+        cdef column_view c_self = self.view()
         with nogil:
             c_result = make_unique[column](c_self, _cs, mr.get_mr())
         return Column.from_libcudf(move(c_result), _stream, mr)
@@ -1463,9 +1461,7 @@ cdef class Column:
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
 
-        cdef column_view c_self
-
-        c_self = self.view()
+        cdef column_view c_self = self.view()
         with nogil:
             raw_host_array_ptr = to_arrow_host_raw(c_self, _cs)
 
@@ -1474,9 +1470,7 @@ cdef class Column:
     def _to_device_array(self):
         cdef ArrowDeviceArray* raw_device_array_ptr
 
-        cdef column_view c_self
-
-        c_self = self.view()
+        cdef column_view c_self = self.view()
         with nogil:
             raw_device_array_ptr = to_arrow_device_raw(c_self, self)
 

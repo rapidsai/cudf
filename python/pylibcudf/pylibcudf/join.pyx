@@ -90,13 +90,10 @@ cpdef tuple inner_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
     with nogil:
         c_result = cpp_join.inner_join(
             c_left_keys,
@@ -141,13 +138,10 @@ cpdef tuple left_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
     with nogil:
         c_result = cpp_join.left_join(
             c_left_keys,
@@ -192,13 +186,10 @@ cpdef tuple full_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
     with nogil:
         c_result = cpp_join.full_join(
             c_left_keys,
@@ -242,15 +233,12 @@ cpdef Column left_semi_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_right_keys
-    cdef table_view c_left_keys
-
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[cpp_join.filtered_join] join_obj
 
-    c_right_keys = right_keys.view()
-    c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
+    cdef table_view c_left_keys = left_keys.view()
     with nogil:
         join_obj.reset(
             new cpp_join.filtered_join(
@@ -296,15 +284,12 @@ cpdef Column left_anti_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_right_keys
-    cdef table_view c_left_keys
-
     mr = _get_memory_resource(mr)
 
     cdef unique_ptr[cpp_join.filtered_join] join_obj
 
-    c_right_keys = right_keys.view()
-    c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
+    cdef table_view c_left_keys = left_keys.view()
     with nogil:
         join_obj.reset(
             new cpp_join.filtered_join(
@@ -348,13 +333,10 @@ cpdef Table cross_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left
-    cdef table_view c_right
-
     mr = _get_memory_resource(mr)
 
-    c_left = left.view()
-    c_right = right.view()
+    cdef table_view c_left = left.view()
+    cdef table_view c_right = right.view()
     with nogil:
         result = cpp_join.cross_join(
             c_left, c_right, _cs, mr.get_mr()
@@ -393,13 +375,10 @@ cpdef tuple conditional_inner_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left
-    cdef table_view c_right
-
     mr = _get_memory_resource(mr)
 
-    c_left = left.view()
-    c_right = right.view()
+    cdef table_view c_left = left.view()
+    cdef table_view c_right = right.view()
     with nogil:
         c_result = cpp_join.conditional_inner_join(
             c_left,
@@ -446,13 +425,10 @@ cpdef tuple conditional_left_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left
-    cdef table_view c_right
-
     mr = _get_memory_resource(mr)
 
-    c_left = left.view()
-    c_right = right.view()
+    cdef table_view c_left = left.view()
+    cdef table_view c_right = right.view()
     with nogil:
         c_result = cpp_join.conditional_left_join(
             c_left,
@@ -498,13 +474,10 @@ cpdef tuple conditional_full_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left
-    cdef table_view c_right
-
     mr = _get_memory_resource(mr)
 
-    c_left = left.view()
-    c_right = right.view()
+    cdef table_view c_left = left.view()
+    cdef table_view c_right = right.view()
     with nogil:
         c_result = cpp_join.conditional_full_join(
             c_left,
@@ -549,13 +522,10 @@ cpdef Column conditional_left_semi_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left
-    cdef table_view c_right
-
     mr = _get_memory_resource(mr)
 
-    c_left = left.view()
-    c_right = right.view()
+    cdef table_view c_left = left.view()
+    cdef table_view c_right = right.view()
     with nogil:
         c_result = cpp_join.conditional_left_semi_join(
             c_left,
@@ -598,13 +568,10 @@ cpdef Column conditional_left_anti_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left
-    cdef table_view c_right
-
     mr = _get_memory_resource(mr)
 
-    c_left = left.view()
-    c_right = right.view()
+    cdef table_view c_left = left.view()
+    cdef table_view c_right = right.view()
     with nogil:
         c_result = cpp_join.conditional_left_anti_join(
             c_left,
@@ -657,17 +624,12 @@ cpdef tuple mixed_inner_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-    cdef table_view c_left_conditional
-    cdef table_view c_right_conditional
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
-    c_left_conditional = left_conditional.view()
-    c_right_conditional = right_conditional.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
+    cdef table_view c_left_conditional = left_conditional.view()
+    cdef table_view c_right_conditional = right_conditional.view()
     with nogil:
         c_result = cpp_join.mixed_inner_join(
             c_left_keys,
@@ -726,17 +688,12 @@ cpdef tuple mixed_left_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-    cdef table_view c_left_conditional
-    cdef table_view c_right_conditional
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
-    c_left_conditional = left_conditional.view()
-    c_right_conditional = right_conditional.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
+    cdef table_view c_left_conditional = left_conditional.view()
+    cdef table_view c_right_conditional = right_conditional.view()
     with nogil:
         c_result = cpp_join.mixed_left_join(
             c_left_keys,
@@ -795,17 +752,12 @@ cpdef tuple mixed_full_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-    cdef table_view c_left_conditional
-    cdef table_view c_right_conditional
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
-    c_left_conditional = left_conditional.view()
-    c_right_conditional = right_conditional.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
+    cdef table_view c_left_conditional = left_conditional.view()
+    cdef table_view c_right_conditional = right_conditional.view()
     with nogil:
         c_result = cpp_join.mixed_full_join(
             c_left_keys,
@@ -862,17 +814,12 @@ cpdef Column mixed_left_semi_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-    cdef table_view c_left_conditional
-    cdef table_view c_right_conditional
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
-    c_left_conditional = left_conditional.view()
-    c_right_conditional = right_conditional.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
+    cdef table_view c_left_conditional = left_conditional.view()
+    cdef table_view c_right_conditional = right_conditional.view()
     with nogil:
         c_result = cpp_join.mixed_left_semi_join(
             c_left_keys,
@@ -925,17 +872,12 @@ cpdef Column mixed_left_anti_join(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef table_view c_left_keys
-    cdef table_view c_right_keys
-    cdef table_view c_left_conditional
-    cdef table_view c_right_conditional
-
     mr = _get_memory_resource(mr)
 
-    c_left_keys = left_keys.view()
-    c_right_keys = right_keys.view()
-    c_left_conditional = left_conditional.view()
-    c_right_conditional = right_conditional.view()
+    cdef table_view c_left_keys = left_keys.view()
+    cdef table_view c_right_keys = right_keys.view()
+    cdef table_view c_left_conditional = left_conditional.view()
+    cdef table_view c_right_conditional = right_conditional.view()
     with nogil:
         c_result = cpp_join.mixed_left_anti_join(
             c_left_keys,
@@ -988,9 +930,7 @@ cdef class FilteredJoin:
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
 
-        cdef table_view c_right
-
-        c_right = right.view()
+        cdef table_view c_right = right.view()
         with nogil:
             self.c_obj.reset(
                 new cpp_join.filtered_join(
@@ -1031,11 +971,9 @@ cdef class FilteredJoin:
 
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
-        cdef table_view c_left
-
         mr = _get_memory_resource(mr)
 
-        c_left = left.view()
+        cdef table_view c_left = left.view()
         with nogil:
             c_result = self.c_obj.get()[0].semi_join(
                 c_left,
@@ -1074,11 +1012,9 @@ cdef class FilteredJoin:
 
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
-        cdef table_view c_left
-
         mr = _get_memory_resource(mr)
 
-        c_left = left.view()
+        cdef table_view c_left = left.view()
         with nogil:
             c_result = self.c_obj.get()[0].anti_join(
                 c_left,

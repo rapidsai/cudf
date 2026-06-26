@@ -55,9 +55,7 @@ cpdef Column all_characters_of_type(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_source_strings
-
-    c_source_strings = source_strings.view()
+    cdef column_view c_source_strings = source_strings.view()
     with nogil:
         c_result = cpp_char_types.all_characters_of_type(
             c_source_strings,
@@ -107,9 +105,7 @@ cpdef Column filter_characters_of_type(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_source_strings
-
-    c_source_strings = source_strings.view()
+    cdef column_view c_source_strings = source_strings.view()
     with nogil:
         c_result = cpp_char_types.filter_characters_of_type(
             c_source_strings,

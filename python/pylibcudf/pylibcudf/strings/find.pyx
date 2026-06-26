@@ -130,8 +130,7 @@ cpdef Column rfind(
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
-    cdef column_view c_input
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_find.rfind(
             c_input,

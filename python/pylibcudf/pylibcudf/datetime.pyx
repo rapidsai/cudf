@@ -77,11 +77,9 @@ cpdef Column extract_datetime_component(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_extract_datetime_component(
             c_input, component, _cs, mr.get_mr()
@@ -117,11 +115,9 @@ cpdef Column ceil_datetimes(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_ceil_datetimes(c_input, freq, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)
@@ -155,11 +151,9 @@ cpdef Column floor_datetimes(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_floor_datetimes(c_input, freq, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)
@@ -193,11 +187,9 @@ cpdef Column round_datetimes(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_round_datetimes(c_input, freq, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)
@@ -280,11 +272,9 @@ cpdef Column day_of_year(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_day_of_year(c_input, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)
@@ -314,11 +304,9 @@ cpdef Column is_leap_year(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_is_leap_year(c_input, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)
@@ -348,11 +336,9 @@ cpdef Column last_day_of_month(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_last_day_of_month(c_input, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)
@@ -382,11 +368,9 @@ cpdef Column extract_quarter(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_extract_quarter(c_input, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)
@@ -415,11 +399,9 @@ cpdef Column days_in_month(
 
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
-    cdef column_view c_input
-
     mr = _get_memory_resource(mr)
 
-    c_input = input.view()
+    cdef column_view c_input = input.view()
     with nogil:
         result = cpp_days_in_month(c_input, _cs, mr.get_mr())
     return Column.from_libcudf(move(result), _stream, mr)

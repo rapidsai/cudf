@@ -326,10 +326,8 @@ cdef class GroupBy:
         cdef vector[replace_policy] c_replace_policies = replace_policies
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
-        cdef table_view c_value
-
         mr = _get_memory_resource(mr)
-        c_value = value.view()
+        cdef table_view c_value = value.view()
         with nogil:
             c_res = dereference(self.c_obj).replace_nulls(
                 c_value,

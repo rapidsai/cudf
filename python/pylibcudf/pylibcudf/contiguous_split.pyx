@@ -352,10 +352,8 @@ cpdef PackedColumns pack(Table input, object stream=None, DeviceMemoryResource m
     cdef Stream _stream = _get_stream(stream)
     cdef cudaStream_t _cs = _stream.view().value()
 
-    cdef table_view c_input
-
     mr = _get_memory_resource(mr)
-    c_input = input.view()
+    cdef table_view c_input = input.view()
     with nogil:
         pack = move(make_unique[packed_columns](
             cpp_pack(c_input, _cs, mr.get_mr())
