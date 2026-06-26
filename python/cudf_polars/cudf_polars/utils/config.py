@@ -175,10 +175,6 @@ def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
     return parse(v)
 
 
-def _optional_float_converter(v: str) -> float | None:
-    return _optional_converter(v, float)
-
-
 def _optional_int_converter(v: str) -> int | None:
     return _optional_converter(v, int)
 
@@ -319,15 +315,9 @@ class DynamicPlanningOptions:
     sample_chunk_count
         The maximum number of chunks to sample before deciding whether
         to shuffle. Default is 2.
-    bloom_filter_threshold
-        Row-count ratio (small / large) below which a bloom filter is applied
-        to pre-filter a join side. This is retained as the legacy default for
-        ``join_prefilter_threshold``. Set to 0 to disable join prefiltering
-        when ``join_prefilter_threshold`` is unset. Default is 0.5.
     join_prefilter_threshold
         Row-count ratio (small / large) below which a join key prefilter is
-        applied. When unset, ``bloom_filter_threshold`` is used. Default is
-        unset.
+        applied. Set to 0 to disable join prefiltering. Default is 0.5.
     join_prefilter_max_key_columns
         Maximum number of join-key columns to use for the prefilter. Set to
         ``None`` to use all join keys. Default is 1.
@@ -343,16 +333,11 @@ class DynamicPlanningOptions:
             f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
         )
     )
-    bloom_filter_threshold: float = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
-        )
-    )
-    join_prefilter_threshold: float | None = dataclasses.field(
+    join_prefilter_threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__JOIN_PREFILTER_THRESHOLD",
-            _optional_float_converter,
-            default=None,
+            float,
+            default=0.5,
         )
     )
     join_prefilter_max_key_columns: int | None = dataclasses.field(
@@ -375,18 +360,9 @@ class DynamicPlanningOptions:
             raise TypeError("sample_chunk_count must be an int")
         if self.sample_chunk_count < 1:
             raise ValueError("sample_chunk_count must be at least 1")
-        if not isinstance(self.bloom_filter_threshold, float):
-            raise TypeError("bloom_filter_threshold must be a float")
-        if not 0.0 <= self.bloom_filter_threshold <= 1.0:
-            raise ValueError("bloom_filter_threshold must be between 0 and 1")
         join_prefilter_threshold = self.join_prefilter_threshold
-        if join_prefilter_threshold is None:
-            join_prefilter_threshold = self.bloom_filter_threshold
-            object.__setattr__(
-                self, "join_prefilter_threshold", join_prefilter_threshold
-            )
-        elif not isinstance(join_prefilter_threshold, float):
-            raise TypeError("join_prefilter_threshold must be a float or None")
+        if not isinstance(join_prefilter_threshold, float):
+            raise TypeError("join_prefilter_threshold must be a float")
         if not 0.0 <= join_prefilter_threshold <= 1.0:
             raise ValueError("join_prefilter_threshold must be between 0 and 1")
         if self.join_prefilter_max_key_columns is not None:

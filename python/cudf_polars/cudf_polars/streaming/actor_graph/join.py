@@ -603,24 +603,6 @@ async def passthrough_split(
     await ch_out.drain(context)
 
 
-def use_bloom_filter(
-    join_type: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
-    left_rows: int,
-    right_rows: int,
-    threshold: float,
-) -> bool:
-    """Return True if bloom filter pre-filtering should be applied."""
-    if (
-        threshold == 0.0
-        or join_type not in ("Inner", "Semi", "Left", "Right")
-        or (join_type == "Left" and right_rows <= left_rows)
-        or (join_type == "Right" and left_rows <= right_rows)
-    ):
-        return False
-    small_rows, large_rows = sorted([left_rows, right_rows])
-    return large_rows > 0 and small_rows / large_rows < threshold
-
-
 def _skipped_prefilter(
     reason: str,
     *,
@@ -1472,7 +1454,6 @@ async def join_actor(
                 prefilter_threshold = (
                     dynamic_options.join_prefilter_threshold
                     if dynamic_options is not None
-                    and dynamic_options.join_prefilter_threshold is not None
                     else 0.0
                 )
                 prefilter_max_key_columns = (
