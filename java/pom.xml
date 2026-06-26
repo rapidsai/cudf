@@ -437,9 +437,21 @@
         <pluginManagement>
             <plugins>
                 <plugin>
-                    <groupId>org.codehaus.gmaven</groupId>
-                    <artifactId>gmaven-plugin</artifactId>
-                    <version>1.5</version>
+                    <groupId>org.codehaus.gmavenplus</groupId>
+                    <artifactId>gmavenplus-plugin</artifactId>
+                    <version>3.0.0</version>
+                    <dependencies>
+                        <dependency>
+                            <groupId>org.apache.groovy</groupId>
+                            <artifactId>groovy</artifactId>
+                            <version>4.0.21</version>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.apache.groovy</groupId>
+                            <artifactId>groovy-ant</artifactId>
+                            <version>4.0.21</version>
+                        </dependency>
+                    </dependencies>
                 </plugin>
                 <plugin>
                     <artifactId>maven-clean-plugin</artifactId>
@@ -553,8 +565,8 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.codehaus.gmaven</groupId>
-                <artifactId>gmaven-plugin</artifactId>
+                <groupId>org.codehaus.gmavenplus</groupId>
+                <artifactId>gmavenplus-plugin</artifactId>
                 <executions>
                     <execution>
                         <id>setproperty</id>
@@ -563,18 +575,19 @@
                             <goal>execute</goal>
                         </goals>
                         <configuration>
-                            <source>
+                            <scripts>
+                              <script><![CDATA[
                                 def sout = new StringBuffer(), serr = new StringBuffer()
                                 //This only works on linux
                                 def proc = 'ldd ${native.build.path}/libcudfjni.so'.execute()
                                 proc.consumeProcessOutput(sout, serr)
                                 proc.waitForOrKill(10000)
-                                def libcudf = ~/libcudf.*\\.so\\s+=>\\s+(.*)libcudf.*\\.so\\s+.*/
+                                def libcudf = ~/libcudf.*\.so\s+=>\s+(.*)libcudf.*\.so\s+.*/
                                 def cudfm = libcudf.matcher(sout)
                                 if (cudfm.find()) {
-                                    pom.properties['native.cudf.path'] = cudfm.group(1)
+                                    project.properties['native.cudf.path'] = cudfm.group(1)
                                 } else {
-                                    fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
+                                    throw new RuntimeException("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr matcher> $cudfm")
                                 }
 
                                 def nvccout = new StringBuffer(), nvccerr = new StringBuffer()
@@ -585,11 +598,12 @@
                                 def cm = cudaPattern.matcher(nvccout)
                                 if (cm.find()) {
                                     def classifier = 'cuda' + cm.group(1)
-                                    pom.properties['cuda.classifier'] = classifier
+                                    project.properties['cuda.classifier'] = classifier
                                 } else {
-                                    fail('could not find CUDA version')
+                                    throw new RuntimeException('could not find CUDA version')
                                 }
-                            </source>
+                              ]]></script>
+                            </scripts>
                         </configuration>
                     </execution>
                 </executions>
