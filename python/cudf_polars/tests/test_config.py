@@ -797,6 +797,15 @@ def test_validate_join_prefilter_max_key_columns() -> None:
                 },
             )
         )
+    with pytest.raises(TypeError, match="join_prefilter_max_key_columns must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_prefilter_max_key_columns": True}
+                },
+            )
+        )
     with pytest.raises(
         ValueError, match="join_prefilter_max_key_columns must be at least 1"
     ):

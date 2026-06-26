@@ -388,7 +388,9 @@ class DynamicPlanningOptions:
         if not 0.0 <= join_prefilter_threshold <= 1.0:
             raise ValueError("join_prefilter_threshold must be between 0 and 1")
         if self.join_prefilter_max_key_columns is not None:
-            if not isinstance(self.join_prefilter_max_key_columns, int):
+            if isinstance(
+                self.join_prefilter_max_key_columns, bool
+            ) or not isinstance(self.join_prefilter_max_key_columns, int):
                 raise TypeError("join_prefilter_max_key_columns must be an int or None")
             if self.join_prefilter_max_key_columns < 1:
                 raise ValueError(
