@@ -318,8 +318,8 @@ class DynamicPlanningOptions:
         Row-count ratio (small / large) below which a join key prefilter is
         applied. Set to 0 to disable join prefiltering. Default is 0.5.
     join_prefilter_max_key_columns
-        Maximum number of join-key columns to use for the prefilter. Set to
-        ``None`` to use all join keys. Default is 1.
+        Maximum number of columns from the join-key prefix to use for the
+        prefilter. Set to ``None`` to use the full join-key list. Default is 1.
     join_prefilter_trace
         Whether to collect input/output row counts around applied join
         prefilters. Default is False.
