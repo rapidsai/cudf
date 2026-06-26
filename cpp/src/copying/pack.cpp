@@ -65,7 +65,7 @@ struct serialized_column {
 /**
  * @brief Table-level metadata stored before the serialized column entries.
  */
-struct serialized_table_header {
+struct alignas(8) serialized_table_header {
   serialized_table_header() = default;
   explicit serialized_table_header(size_type _num_columns) : num_columns(_num_columns) {}
 
@@ -73,8 +73,8 @@ struct serialized_table_header {
   size_type num_columns{};
 };
 
-// Two 4-byte fields, no padding. Check to make sure we don't add padding by mistake.
-static_assert(sizeof(serialized_table_header) == 2 * sizeof(int32_t));
+// Guard against accidental uninitialized padding.
+static_assert(sizeof(serialized_table_header) == 8);
 
 /**
  * @brief Read the table header at `ptr`.
