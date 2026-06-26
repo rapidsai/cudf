@@ -11,9 +11,15 @@
 namespace CUDF_EXPORT cudf {
 
 /**
+ * @addtogroup utility_error
+ * @{
+ * @file
+ */
+
+/**
  * @brief An enumeration of error codes that can occur during operations.
  */
-enum class errc : cuda::std::int8_t {
+enum class [[nodiscard]] errc : cuda::std::int8_t {
   SUCCESS          = 0,
   OVERFLOW         = 1,
   DIVISION_BY_ZERO = 2,
@@ -33,5 +39,7 @@ enum class errc : cuda::std::int8_t {
     default: return "UNKNOWN_ERROR";
   }
 }
+
+/** @} */
 
 }  // namespace CUDF_EXPORT cudf
