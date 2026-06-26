@@ -97,7 +97,6 @@ class JoinStrategy:
 class JoinPrefilterDecision:
     """Decision for an optional join-key prefilter stage."""
 
-    considered: bool
     left_rows: int
     right_rows: int
     threshold: float
@@ -590,26 +589,6 @@ async def passthrough_split(
     await ch_out.drain(context)
 
 
-def _skipped_prefilter(
-    reason: str,
-    *,
-    left_rows: int,
-    right_rows: int,
-    threshold: float,
-    ratio: float | None = None,
-    key_column_count: int = 0,
-) -> JoinPrefilterDecision:
-    return JoinPrefilterDecision(
-        considered=True,
-        left_rows=left_rows,
-        right_rows=right_rows,
-        threshold=threshold,
-        key_column_count=key_column_count,
-        small_large_ratio=ratio,
-        reason_skipped=reason,
-    )
-
-
 def _select_join_prefilter(
     join_type: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
     left_rows: int,
@@ -628,25 +607,25 @@ def _select_join_prefilter(
     """
     key_column_count = len(left_key_indices)
     if threshold == 0.0:
-        return _skipped_prefilter(
-            "disabled",
+        return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
+            reason_skipped="disabled",
         )
     if key_column_count == 0:
-        return _skipped_prefilter(
-            "no_join_keys",
+        return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
+            reason_skipped="no_join_keys",
         )
     if key_column_count != len(right_key_indices):
-        return _skipped_prefilter(
-            "mismatched_join_keys",
+        return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
+            reason_skipped="mismatched_join_keys",
         )
 
     if max_key_columns is not None:
@@ -669,13 +648,13 @@ def _select_join_prefilter(
     elif join_type in ("Left", "Anti"):
         if left_rows >= right_rows:
             ratio = right_rows / left_rows if left_rows > 0 else None
-            return _skipped_prefilter(
-                "no_legal_large_side",
+            return JoinPrefilterDecision(
                 left_rows=left_rows,
                 right_rows=right_rows,
                 threshold=threshold,
-                ratio=ratio,
+                small_large_ratio=ratio,
                 key_column_count=key_column_count,
+                reason_skipped="no_legal_large_side",
             )
         build_side = "left"
         filter_side = "right"
@@ -683,44 +662,44 @@ def _select_join_prefilter(
     elif join_type == "Right":
         if right_rows >= left_rows:
             ratio = left_rows / right_rows if right_rows > 0 else None
-            return _skipped_prefilter(
-                "no_legal_large_side",
+            return JoinPrefilterDecision(
                 left_rows=left_rows,
                 right_rows=right_rows,
                 threshold=threshold,
-                ratio=ratio,
+                small_large_ratio=ratio,
                 key_column_count=key_column_count,
+                reason_skipped="no_legal_large_side",
             )
         build_side = "right"
         filter_side = "left"
         small_rows, large_rows = right_rows, left_rows
     else:
-        return _skipped_prefilter(
-            "unsupported_join_type",
+        return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
             key_column_count=key_column_count,
+            reason_skipped="unsupported_join_type",
         )
 
     if large_rows <= 0:
-        return _skipped_prefilter(
-            "no_large_side",
+        return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
             key_column_count=key_column_count,
+            reason_skipped="no_large_side",
         )
 
     ratio = small_rows / large_rows
     if ratio >= threshold:
-        return _skipped_prefilter(
-            "ratio_above_threshold",
+        return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
-            ratio=ratio,
+            small_large_ratio=ratio,
             key_column_count=key_column_count,
+            reason_skipped="ratio_above_threshold",
         )
 
     if build_side == "left":
@@ -731,7 +710,6 @@ def _select_join_prefilter(
         apply_indices = left_key_indices[:key_column_count]
 
     return JoinPrefilterDecision(
-        considered=True,
         left_rows=left_rows,
         right_rows=right_rows,
         threshold=threshold,
