@@ -8,6 +8,7 @@ import dataclasses
 import functools
 import itertools
 import math
+import os
 import statistics
 from collections import defaultdict
 from pathlib import Path
@@ -16,6 +17,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, overload
 import polars as pl
 
 import pylibcudf as plc
+from rapidsmpf.utils.string import parse_boolean
 
 from cudf_polars.dsl.ir import (
     IR,
@@ -88,22 +90,54 @@ def scan_partition_plan(
                 if (sz := source.column_storage_size(col)) is not None
             ]
             if (file_size := sum(column_sizes)) > 0:
-                if file_size > blocksize:
-                    # Split large files
-                    factor = math.ceil(file_size / blocksize)
-                    return IOPartitionPlan(
-                        factor,
-                        IOPartitionFlavor.SPLIT_FILES,
-                        estimated_chunk_bytes=file_size // factor,
-                    )
-                else:
-                    # Fuse small files
-                    factor = min(max(blocksize // int(file_size), 1), len(ir.paths))
+                if not parse_boolean(
+                    os.environ.get("CUDF_POLARS__NEAREST_PARTITION", "1")
+                ):
+                    if file_size > blocksize:
+                        factor = math.ceil(file_size / blocksize)
+                        return IOPartitionPlan(
+                            factor,
+                            IOPartitionFlavor.SPLIT_FILES,
+                            estimated_chunk_bytes=file_size // factor,
+                        )
+                    else:
+                        factor = min(max(blocksize // int(file_size), 1), len(ir.paths))
                     return IOPartitionPlan(
                         factor,
                         IOPartitionFlavor.FUSED_FILES,
                         estimated_chunk_bytes=file_size * factor,
                     )
+
+                if file_size > blocksize:
+                    k_lo = file_size // blocksize
+                    k_hi = k_lo + 1
+                    factor = (
+                        k_lo
+                        if abs(file_size / k_lo - blocksize)
+                        <= abs(file_size / k_hi - blocksize)
+                        else k_hi
+                    )
+                    if factor >= 2:
+                        return IOPartitionPlan(
+                            factor,
+                            IOPartitionFlavor.SPLIT_FILES,
+                            estimated_chunk_bytes=file_size // factor,
+                        )
+                else:
+                    k_lo = min(blocksize // int(file_size), len(ir.paths))
+                    k_hi = k_lo + 1
+                    factor = (
+                        k_hi
+                        if k_hi <= len(ir.paths)
+                        and abs(k_hi * file_size - blocksize)
+                        <= abs(k_lo * file_size - blocksize)
+                        else k_lo
+                    )
+                return IOPartitionPlan(
+                    factor,
+                    IOPartitionFlavor.FUSED_FILES,
+                    estimated_chunk_bytes=file_size * factor,
+                )
 
     # TODO: Use file sizes for csv and json
     return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -14,12 +14,18 @@ from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.engine.options import StreamingOptions
-from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
+from cudf_polars.streaming.base import (
+    DataSourceInfo,
+    IOPartitionFlavor,
+    IOPartitionPlan,
+    StatsCollector,
+)
 from cudf_polars.streaming.io import (
     FusedScan,
     SplitScan,
     StreamingScan,
     expand_scan_for_rank,
+    scan_partition_plan,
 )
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.statistics import collect_statistics
@@ -287,3 +293,69 @@ def test_streaming_scan_raises() -> None:
     ctx = IRExecutionContext()
     with pytest.raises(NotImplementedError, match=r"StreamingScan.do_evaluate"):
         StreamingScan.do_evaluate([fused], scan, context=ctx)
+
+
+class FooSource(DataSourceInfo):
+    def __init__(self, size: int):
+        self._size = size
+
+    @property
+    def type(self):  # type: ignore[override]
+        return "parquet"
+
+    @property
+    def row_count(self):
+        return None
+
+    def column_storage_size(self, _col: str) -> int:
+        return self._size
+
+    def serialize(self):
+        return {}
+
+    @classmethod
+    def deserialize(cls, data):
+        return cls(0)
+
+
+class FooStats(StatsCollector):
+    def __init__(self, ir: Scan, size: int):
+        super().__init__()
+        self.scan_stats = {ir: FooSource(size)}
+
+
+def _make_config(target: int) -> ConfigOptions:
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"target_partition_size": target},
+    )
+    return ConfigOptions.from_polars_engine(engine)
+
+
+@pytest.mark.parametrize(
+    "file_size,n_paths,expected_factor,expected_flavor",
+    [
+        (12, 1, 1, IOPartitionFlavor.FUSED_FILES),
+        (15, 1, 2, IOPartitionFlavor.SPLIT_FILES),
+        (20, 1, 2, IOPartitionFlavor.SPLIT_FILES),
+        (24, 1, 2, IOPartitionFlavor.SPLIT_FILES),
+        (25, 1, 3, IOPartitionFlavor.SPLIT_FILES),
+        (7, 3, 1, IOPartitionFlavor.FUSED_FILES),
+        (6, 3, 2, IOPartitionFlavor.FUSED_FILES),
+        (4, 4, 3, IOPartitionFlavor.FUSED_FILES),
+        (3, 4, 3, IOPartitionFlavor.FUSED_FILES),
+        (1, 3, 3, IOPartitionFlavor.FUSED_FILES),
+    ],
+)
+def test_scan_partition_plan_nearest(
+    file_size: int,
+    n_paths: int,
+    expected_factor: int,
+    expected_flavor: IOPartitionFlavor,
+) -> None:
+    paths = [f"f{i}.parquet" for i in range(n_paths)]
+    scan = _make_parquet_scan(paths)
+    plan = scan_partition_plan(scan, FooStats(scan, file_size), _make_config(10))
+    assert plan.factor == expected_factor
+    assert plan.flavor == expected_flavor
