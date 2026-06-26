@@ -431,14 +431,14 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
       this->compare_join_results(mixed_result, ast_filter_result);
 
       // Verify filter_join_indices_output_size matches the materialized output size.
-      auto const fji_result = cudf::filter_join_indices_output_size(
+      auto const filter_output_size_result = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::INNER_JOIN);
-      EXPECT_EQ(fji_result.first, ast_filter_result.first->size());
+      EXPECT_EQ(filter_output_size_result.first, ast_filter_result.first->size());
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
@@ -1099,14 +1099,14 @@ struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
       this->compare_join_results(mixed_result, ast_filter_result);
 
       // Verify filter_join_indices_output_size matches the materialized output size.
-      auto const fji_result = cudf::filter_join_indices_output_size(
+      auto const filter_output_size_result = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::LEFT_JOIN);
-      EXPECT_EQ(fji_result.first, ast_filter_result.first->size());
+      EXPECT_EQ(filter_output_size_result.first, ast_filter_result.first->size());
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
@@ -1387,14 +1387,14 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
       this->compare_join_results(mixed_result, ast_filter_result);
 
       // Verify filter_join_indices_output_size matches the materialized output size.
-      auto const fji_result = cudf::filter_join_indices_output_size(
+      auto const filter_output_size_result = cudf::filter_join_indices_output_size(
         left_conditional,
         right_conditional,
         cudf::device_span<cudf::size_type const>(*hash_join_result.first),
         cudf::device_span<cudf::size_type const>(*hash_join_result.second),
         predicate,
         cudf::join_kind::FULL_JOIN);
-      EXPECT_EQ(fji_result.first, ast_filter_result.first->size());
+      EXPECT_EQ(filter_output_size_result.first, ast_filter_result.first->size());
 
       // Verify JIT filter_join_indices if provided
       if (!jit_predicate.empty()) {
