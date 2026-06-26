@@ -9,34 +9,54 @@ Use this skill when the user asks to compare libcudf benchmark performance for:
 
 # Goal
 
-Run the same selected libcudf NVBench benchmarks on the target and then on `rapidsai/cudf` `main`, then report meaningful differences.
+Run the same selected libcudf NVBench benchmarks on the target (current WIP or cudf PR) and then on `rapidsai/cudf` `main`, then report meaningful differences.
 
 `<cudf-remote>` is the git remote for `https://github.com/rapidsai/cudf` (often `upstream`). Detect it with `git remote -v`.
 
 ## Prerequisites
 
-- **`gh` CLI** authenticated — run `gh auth status`. If not authenticated, guide the user to run:
+- For PR targets, **`gh` CLI** authenticated — run `gh auth status`. If not authenticated, guide the user to run:
    ```bash
    gh auth login
    ```
   The token needs `repo` scope. Do **not** run `gh auth token` from within the agent.
-- Ensure we are in cudf devcontainer. Otherwise ensure that the CUDA, compilers, and cudf build helpers are available.
+- Ensure we are in the cudf devcontainer (username `coder`). If not, stop and ask the user for instructions.
 
 ## 1. Prepare
 
 - Record the starting branch, `git status --short`, and the exact target (current WIP or cudf PR).
-- Before switching branches, stash unrelated user changes and record the stash name. If the target is the current WIP, keep changes applied for the target run, then stash them before switching to main.
-- Check out the PR with:
+- Run order: Target side first, then `main`.
+- Record current timestamp as `ts = <YYYYMMDD_HHMMSS>`
+- Create result directories:
+  ```bash
+  mkdir -p benchmark_compare/<ts>/{target,main}
+  ```
+
+## 2. Build Target
+
+- For current-branch or WIP targets: keep target changes applied for the target run.
+- For PR targets: Stash any unrelated local changes, record the stash name, and check out the PR:
   ```bash
   gh pr checkout <PR_NUMBER> --repo rapidsai/cudf
   ```
+- On the first build for a checkout, force CMake reconfiguration to enable benchmarks:
 
-## 2. Choose Benchmarks
+```bash
+configure-cudf-cpp -DBUILD_BENCHMARKS=ON
+build-cudf-cpp
+```
+- Re-run `configure-cudf-cpp -DBUILD_BENCHMARKS=ON` if the build directory is cleaned or CMake options may have changed.
+- If needed, refer to the `/build-test-cudf` skill for more instructions and troubleshooting.
+
+## 3. Choose Benchmarks
 
 - Fetch current main with `git fetch <cudf-remote> main`.
-- Infer candidates from `git diff --name-only <cudf-remote>/main...HEAD`.
-- Build outputs live under `cpp/build/latest/benchmarks/*_NVBENCH`.
-- Inspect a binary with:
+- Infer candidate benchmark suites from:
+  ```bash
+  git diff --name-only <cudf-remote>/main...HEAD
+  ```
+- Benchmark binaries live under `cpp/build/latest/benchmarks/*_NVBENCH`.
+- Inspect candidate binaries from the target build:
   ```bash
   cpp/build/latest/benchmarks/<BENCH> --list
   cpp/build/latest/benchmarks/<BENCH> --help-axes
@@ -44,37 +64,33 @@ Run the same selected libcudf NVBench benchmarks on the target and then on `rapi
 - Confirm benchmark binaries and axis coverage with the user. Use a small, representative axis subset by default; use full coverage only when requested or necessary.
 - Record exact `-b` and `-a` options. Reuse them unchanged on both branches.
 
-## 3. Build each side
+## 4. Run Target
 
-On both target and main, force CMake reconfiguration to enable benchmarks via `-DBUILD_BENCHMARKS=ON` before building:
-
-```bash
-configure-cudf-cpp -DBUILD_BENCHMARKS=ON
-build-cudf-cpp
-```
-
-Use `/build-test-cudf` skill for configure, build instructions and troubleshooting.
-
-## 4. Run each side
-
-- Pick an idle GPU with `nvidia-smi`. Re-check every time before running anything (target or main run); if the same GPU is no longer idle, pick another one, wait or ask before continuing.
-- Run one masked device only: `CUDA_VISIBLE_DEVICES=<idx>` and `-d 0`.
-- Write matching JSON and log files, for example:
+- Pick an idle GPU with `nvidia-smi`. Do this every time before running anything (target or main run); if the same GPU is no longer idle, pick another one, wait, or ask before continuing.
+- Run on one masked device only: `CUDA_VISIBLE_DEVICES=<idx>` and `-d 0`.
+- Write target JSON and log files under `benchmark_compare/<ts>/target/`, for example:
   ```bash
   CUDA_VISIBLE_DEVICES=<idx> cpp/build/latest/benchmarks/<BENCH> -d 0 \
     -b <bench_name> -a <axis=...> ... \
-    --json <out>/pr/<BENCH>.json 2>&1 | tee <out>/pr/<BENCH>.log
+    --json benchmark_compare/<ts>/target/<BENCH>.json 2>&1 | tee benchmark_compare/<ts>/target/<BENCH>.log
   ```
-- To switch to main, stash target WIP if needed, then use a clean branch:
+- If nvbench emits an end-of-suite segfault after writing results, note it and continue. If a config throws, verify that both branches (main and target) behave the same.
+
+## 5. Switch over to main
+
+- To switch to main, stash any target WIP if needed, record the stash name, and use a clean branch:
   ```bash
   git fetch <cudf-remote> main
   git checkout -B _bench_main <cudf-remote>/main
   ```
-  Do not apply target changes on `_bench_main`.
-- Repeat the identical command on main, writing to `<out>/main/`.
-- If nvbench emits an end-of-suite segfault after writing results, note it and continue. If a config throws, verify whether both branches behave the same.
+- Do not apply any WIP or target changes on `_bench_main`.
 
-## 5. Compare
+## 6. Build and run main
+
+Follow configure, build and benchmark run steps as for the target. Run the same set of benchmarks chosen above, but write JSON and log files to `benchmark_compare/<ts>/main/` instead.
+
+## 7. Compare
+
 Use NVBench's comparison script from the build tree:
 
 ```bash
@@ -82,17 +98,18 @@ NVBENCH_SCRIPTS=cpp/build/latest/_deps/nvbench-src/python/scripts
 test -f "$NVBENCH_SCRIPTS/nvbench_compare.py" || \
   NVBENCH_SCRIPTS=cpp/build/latest/_deps/nvbench-src/scripts
 PYTHONPATH="$NVBENCH_SCRIPTS" python "$NVBENCH_SCRIPTS/nvbench_compare.py" \
-  --threshold-diff 0.05 --no-color <out>/main <out>/pr \
-  | tee <out>/COMPARISON.md
+  --threshold-diff 0.05 --no-color benchmark_compare/<ts>/main benchmark_compare/<ts>/target \
+  | tee benchmark_compare/<ts>/COMPARISON.md
 ```
 
-The first path is the reference (`main`), the second is the comparison (`pr`). Re-run surprising failures once, especially small or noisy configs.
+- The first path is the reference (`main`), the second is the comparison (`target`). Re-run surprising failures once, especially small or noisy configs.
 
-## 6. Restore and report
+## 8. Restore and report
 
-- Return to the starting branch, pop any stash you created, delete temporary branches, and confirm `git status` matches the starting state.
+- Return to the starting branch/state, pop any stash you created, delete temporary branches, and confirm `git status` matches the starting state.
 - Summarize chat with the headline result (regression, improvement, or within noise), relevant metrics, hardware used, branch SHAs, axis coverage, and generated files.
-- Use this report shape for `COMPARISON.md`, adapting the metric columns to the benchmark. GPU time is always useful, but other metrics such as output file size, throughput, compression ratio, or memory usage are also of interest when they change significantly in target vs main.
+- Remember to note if there were any end-of-suite segfaults or config throws and if the behavior was the same on both branches.
+- Use this template for `COMPARISON.md`, adapting the metric columns to the benchmark. GPU time is always useful, but other metrics such as output file size, throughput, compression ratio, or memory usage are also of interest when they change significantly in target vs main.
 
   ```markdown
   # Benchmark Comparison: <cudf-remote>/main vs target (`WIP` or `PR`)
