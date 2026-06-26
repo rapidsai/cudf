@@ -32,15 +32,6 @@ pytestmark = [
 ]
 
 
-def _jit(sig):
-    """Compile a small kernel for the given signature."""
-
-    def deco(fn):
-        return cuda.jit(sig)(fn)
-
-    return deco
-
-
 def _launch(kernel, *args):
     """Launch ``kernel[1, 1](*args)`` (a 1x1 grid, by design)."""
     with _CUDFNumbaConfig():
@@ -67,7 +58,7 @@ _DTYPE_SAMPLES = [
 def test_masked_constructor_and_accessors_valid_true(nb_ty, np_dt, sample):
     """``Masked(v, True).value == v`` and ``.valid == True``, for every supported dtype."""
 
-    @_jit(types.void(nb_ty[::1], types.boolean[::1], nb_ty[::1]))
+    @cuda.jit(types.void(nb_ty[::1], types.boolean[::1], nb_ty[::1]))
     def k(out_value, out_valid, v):
         m = Masked(v[0], True)
         out_value[0] = m.value
@@ -85,7 +76,7 @@ def test_masked_constructor_and_accessors_valid_true(nb_ty, np_dt, sample):
 def test_masked_constructor_and_accessors_valid_false(nb_ty, np_dt, sample):
     """``Masked(v, False).valid == False`` (and ``.value`` is preserved)."""
 
-    @_jit(types.void(nb_ty[::1], types.boolean[::1], nb_ty[::1]))
+    @cuda.jit(types.void(nb_ty[::1], types.boolean[::1], nb_ty[::1]))
     def k(out_value, out_valid, v):
         m = Masked(v[0], False)
         out_value[0] = m.value
@@ -102,7 +93,7 @@ def test_masked_constructor_and_accessors_valid_false(nb_ty, np_dt, sample):
 def test_masked_constructor_with_runtime_valid_flag():
     """The validity flag can be a runtime value, not only a Python literal."""
 
-    @_jit(
+    @cuda.jit(
         types.void(
             types.int64[::1],
             types.boolean[::1],
