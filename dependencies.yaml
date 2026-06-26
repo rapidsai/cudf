@@ -1325,23 +1325,23 @@ dependencies:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x>=14.0.1,!=14.1.0
+              - &cupy_cu12 cupy-cuda12x>=14.0.1,!=14.1.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cupy-cuda13x>=14.0.1,!=14.1.0
+              - &cupy_cu13 cupy-cuda13x>=14.0.1,!=14.1.0
       - output_types: pyproject
         matrices:
           - matrix:
               cuda: "12.*"
               use_cuda_wheels: "false"
             packages:
-              - cupy-cuda12x>=14.0.1,!=14.1.0
+              - *cupy_cu12
           - matrix:
               cuda: "13.*"
               use_cuda_wheels: "false"
             packages:
-              - cupy-cuda13x>=14.0.1,!=14.1.0
+              - *cupy_cu13
           - matrix:
               cuda: "12.*"
             packages:
