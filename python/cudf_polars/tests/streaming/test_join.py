@@ -400,6 +400,20 @@ def test_join_prefilter_skips_unsupported_full_join() -> None:
     assert decision.reason_skipped == "unsupported_join_type"
 
 
+def test_join_prefilter_skips_unsupported_cross_join() -> None:
+    decision = _select_join_prefilter(
+        "Cross",
+        10,
+        1_000,
+        (),
+        (),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "unsupported_join_type"
+
+
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )

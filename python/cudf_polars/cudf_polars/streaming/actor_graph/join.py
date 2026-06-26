@@ -613,13 +613,6 @@ def _select_join_prefilter(
             threshold=threshold,
             reason_skipped="disabled",
         )
-    if key_column_count == 0:
-        return JoinPrefilterDecision(
-            left_rows=left_rows,
-            right_rows=right_rows,
-            threshold=threshold,
-            reason_skipped="no_join_keys",
-        )
     if key_column_count != len(right_key_indices):
         return JoinPrefilterDecision(
             left_rows=left_rows,
