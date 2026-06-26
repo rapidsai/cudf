@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,6 +24,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -238,7 +239,7 @@ struct dispatch_unary_cast_to {
 
     mutable_column_view output_mutable = *output;
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<TargetT>(),
@@ -265,7 +266,7 @@ struct dispatch_unary_cast_to {
     using DeviceT    = device_storage_type_t<SourceT>;
     auto const scale = numeric::scale_type{input.type().scale()};
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input.begin<DeviceT>(),
                       input.end<DeviceT>(),
                       output_mutable.begin<TargetT>(),
@@ -290,7 +291,7 @@ struct dispatch_unary_cast_to {
 
     auto const scale = numeric::scale_type{type.scale()};
 
-    thrust::transform(rmm::exec_policy(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input.begin<SourceT>(),
                       input.end<SourceT>(),
                       output_mutable.begin<DeviceT>(),
@@ -301,8 +302,8 @@ struct dispatch_unary_cast_to {
       // rows corresponding to NaN and inf in the input.
       auto const d_input_ptr = column_device_view::create(input, stream);
       auto [null_mask, null_count] =
-        cudf::detail::valid_if(thrust::make_counting_iterator(0),
-                               thrust::make_counting_iterator(size),
+        cudf::detail::valid_if(cuda::counting_iterator<cudf::size_type>{0},
+                               cuda::counting_iterator{size},
                                is_convertible_floating_point<SourceT>{*d_input_ptr},
                                stream,
                                mr);
@@ -350,7 +351,7 @@ struct dispatch_unary_cast_to {
 
       mutable_column_view output_mutable = *output;
 
-      thrust::transform(rmm::exec_policy(stream),
+      thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         input.begin<SourceDeviceT>(),
                         input.end<SourceDeviceT>(),
                         output_mutable.begin<TargetDeviceT>(),

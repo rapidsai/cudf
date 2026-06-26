@@ -1,5 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+import operator
 import re
 import weakref
 from contextlib import contextmanager
@@ -10,7 +11,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import PANDAS_CURRENT_SUPPORTED_VERSION, PANDAS_VERSION
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
 
@@ -627,12 +627,6 @@ def test_dataframe_loc(scalar):
     # Full slice
     assert_eq(df.loc[:, "c"], pdf.loc[:, "c"])
 
-    # Repeat with at[]
-    assert_eq(df.loc[:, ["a"]], df.at[:, ["a"]])
-    assert_eq(df.loc[:, "d"], df.at[:, "d"])
-    assert_eq(df.loc[scalar], df.at[scalar])
-    assert_eq(df.loc[:, "c"], df.at[:, "c"])
-
 
 @pytest.mark.parametrize("step", [1, 5])
 def test_dataframe_loc_slice(step):
@@ -671,16 +665,6 @@ def test_dataframe_loc_slice(step):
     assert_eq(
         df.loc[begin, "a":"a"], pdf.loc[begin, "a":"a"], check_dtype=False
     )
-
-    # Repeat with at[]
-    assert_eq(
-        df.loc[begin:end:step, ["c", "d", "a"]],
-        df.at[begin:end:step, ["c", "d", "a"]],
-    )
-    assert_eq(df.loc[begin:end, ["c", "d"]], df.at[begin:end, ["c", "d"]])
-    assert_eq(df.loc[begin:end:step, "a":"c"], df.at[begin:end:step, "a":"c"])
-    assert_eq(df.loc[begin:begin, "a"], df.at[begin:begin, "a"])
-    assert_eq(df.loc[begin, "a":"a"], df.at[begin, "a":"a"], check_dtype=False)
 
 
 def test_dataframe_loc_arraylike():
@@ -807,7 +791,13 @@ def test_sliced_indexing():
 )
 @pytest.mark.parametrize("is_dataframe", [True, False])
 def test_loc_datetime_index(sli, is_dataframe):
-    sli = slice(pd.to_datetime(sli.start), pd.to_datetime(sli.stop))
+    # Preserve None as None (not NaT) so pandas treats it as an open bound.
+    # pd.to_datetime(None) returns NaT, which pandas rejects as a slice
+    # bound on a non-monotonic datetime index.
+    sli = slice(
+        pd.to_datetime(sli.start) if sli.start is not None else None,
+        pd.to_datetime(sli.stop) if sli.stop is not None else None,
+    )
 
     if is_dataframe is True:
         pd_data = pd.DataFrame(
@@ -824,6 +814,28 @@ def test_loc_datetime_index(sli, is_dataframe):
     expect = pd_data.loc[sli]
     got = gd_data.loc[sli]
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "sli",
+    [
+        slice("2001", "2009"),
+        slice("2001", "2006"),
+        slice(None, "2009"),
+    ],
+)
+def test_loc_datetime_index_string_slice_non_monotonic(sli):
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3]},
+        index=pd.Series(["2001", "2009", "2002"], dtype="datetime64[ns]"),
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    with pytest.raises(KeyError, match="non-monotonic DatetimeIndexes"):
+        pdf.loc[sli]
+
+    with pytest.raises(KeyError, match="non-monotonic DatetimeIndexes"):
+        gdf.loc[sli]
 
 
 @pytest.mark.parametrize(
@@ -884,23 +896,18 @@ def test_dataframe_loc_iloc_inplace_update_with_RHS_dataframe():
     assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="No warning in older versions of pandas",
-)
 def test_dataframe_loc_inplace_update_with_invalid_RHS_df_columns():
-    gdf = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
+    # Use float columns so both cudf and pandas can hold NaN when aligning
+    # RHS columns that don't match the loc selection (int64 can't hold NaN).
+    gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [4.0, 5.0, 6.0]})
     pdf = gdf.to_pandas()
 
     actual = gdf.loc[[0, 2], ["x", "y"]] = cudf.DataFrame(
         {"b": [10, 20], "y": [30, 40]}, index=cudf.Index([0, 2])
     )
-    with pytest.warns(FutureWarning):
-        # Seems to be a false warning from pandas,
-        # but nevertheless catching it.
-        expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
-            {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
-        )
+    expected = pdf.loc[[0, 2], ["x", "y"]] = pd.DataFrame(
+        {"b": [10, 20], "y": [30, 40]}, index=pd.Index([0, 2])
+    )
 
     assert_eq(expected, actual)
 
@@ -1380,3 +1387,58 @@ def test_slice_empty_columns(indexer, column_slice):
     result = getattr(df_cudf, indexer)[:, column_slice]
     expected = getattr(df_pd, indexer)[:, column_slice]
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "key", [{1}, {1: 1}, ({1}, "a"), (1, {"a"}), (({1}, 2), "a")]
+)
+def test_loc_getitem_dict_or_set_indexer_disallowed(key):
+    # A set/dict (or a tuple nesting one, incl. nested MultiIndex keys) is
+    # not a valid indexer.
+    pdf = pd.DataFrame(
+        [[1, 2], [3, 4]],
+        columns=["a", "b"],
+        index=pd.MultiIndex.from_tuples([(1, 2), (3, 4)]),
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_exceptions_equal(
+        lfunc=operator.getitem,
+        rfunc=operator.getitem,
+        lfunc_args_and_kwargs=([pdf.loc, key],),
+        rfunc_args_and_kwargs=([gdf.loc, key],),
+    )
+
+
+def test_loc_getitem_boolean_series_misaligned():
+    # A boolean Series indexer carrying a reordered index is aligned by
+    # label rather than applied positionally.
+    pdf = pd.DataFrame({"a": [1, 4, 2, 3], "b": [5, 6, 7, 8]})
+    gdf = cudf.from_pandas(pdf)
+    pmask = (pdf["a"] >= 3)[::-1]
+    gmask = (gdf["a"] >= 3)[::-1]
+    assert_eq(pdf.loc[pmask], gdf.loc[gmask])
+
+
+def test_loc_getitem_list_of_tuples_multiindex():
+    # A list of full-length tuples selects those exact MultiIndex rows;
+    # a scalar column key downcasts the result to a Series.
+    pdf = pd.DataFrame(
+        {"c": [1, 2, 3, 4]},
+        index=pd.MultiIndex.from_arrays(
+            [[1, 2, 1, 2], [1, 2, 3, 4]], names=["i1", "i2"]
+        ),
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc[[(1, 1)], "c"], gdf.loc[[(1, 1)], "c"])
+    assert_eq(pdf.loc[[(1, 1)], ["c"]], gdf.loc[[(1, 1)], ["c"]])
+
+
+def test_loc_one_level_multiindex_keeps_frame():
+    # .loc on a single-level MultiIndex keeps the result a DataFrame with
+    # the MultiIndex preserved (no downcast to a Series).
+    pdf = pd.DataFrame(
+        [[0], [1]],
+        index=pd.MultiIndex.from_tuples([("a",), ("b",)], names=["first"]),
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.loc["a"], gdf.loc["a"])

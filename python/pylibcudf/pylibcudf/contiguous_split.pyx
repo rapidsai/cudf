@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
+from cpython.buffer cimport PyBuffer_FillInfo
 from cython.operator cimport dereference
 from libc.stdint cimport uint8_t
 from libc.stddef cimport size_t
@@ -14,6 +15,8 @@ from cuda.bindings.cyruntime cimport (
     cudaError_t,
     cudaMemcpyAsync,
     cudaMemcpyKind,
+    cudaStream_t,
+    cudaStreamSynchronize,
 )
 
 from pylibcudf.libcudf.contiguous_split cimport (
@@ -26,14 +29,15 @@ from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.utilities.span cimport device_span
 
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
 from rmm.pylibrmm.device_buffer cimport DeviceBuffer
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
 
 from .gpumemoryview cimport gpumemoryview
 from .table cimport Table
+from .span import is_span
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 
 __all__ = [
@@ -43,6 +47,14 @@ __all__ = [
     "unpack",
     "unpack_from_memoryviews",
 ]
+
+cdef device_span[uint8_t] _get_device_span(object obj) except *:
+    if not is_span(obj):
+        raise TypeError(
+            f"Object of type {type(obj)} does not implement the Span protocol"
+        )
+
+    return device_span[uint8_t](<uint8_t*><uintptr_t>obj.ptr, <size_t>obj.size)
 
 cdef class HostBuffer:
     """Owning host buffer that implements the buffer protocol"""
@@ -61,18 +73,15 @@ cdef class HostBuffer:
     __hash__ = None
 
     def __getbuffer__(self, Py_buffer *buffer, int flags):
-        # Empty vec produces empty buffer
-        buffer.buf = NULL if self.nbytes == 0 else dereference(self.c_obj).data()
-        buffer.format = NULL  # byte
-        buffer.internal = NULL
-        buffer.itemsize = 1
-        buffer.len = self.nbytes
-        buffer.ndim = 1
-        buffer.obj = self
-        buffer.readonly = 0
-        buffer.shape = self.shape
-        buffer.strides = self.strides
-        buffer.suboffsets = NULL
+        PyBuffer_FillInfo(
+            buffer,
+            self,
+            # Empty vec produces empty buffer
+            NULL if self.nbytes == 0 else dereference(self.c_obj).data(),
+            self.nbytes,
+            False,
+            flags
+        )
 
     def __releasebuffer__(self, Py_buffer *buffer):
         pass
@@ -98,7 +107,7 @@ cdef class PackedColumns:
     @staticmethod
     cdef PackedColumns from_libcudf(
         unique_ptr[packed_columns] data,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     ):
         """Create a Python PackedColumns from a libcudf packed_columns."""
@@ -156,7 +165,7 @@ cdef class ChunkedPack:
     def create(
         Table input,
         size_t user_buffer_size,
-        Stream stream,
+        object stream=None,
         DeviceMemoryResource temp_mr=None,
     ):
         """
@@ -177,15 +186,16 @@ cdef class ChunkedPack:
         -------
         New ChunkedPack object.
         """
+        cdef Stream _stream = _get_stream(stream)
         temp_mr = _get_memory_resource(temp_mr)
         cdef unique_ptr[chunked_pack] obj = chunked_pack.create(
-            input.view(), user_buffer_size, stream.view(), temp_mr.get_mr()
+            input.view(), user_buffer_size, _stream.view().value(), temp_mr.get_mr()
         )
 
         cdef ChunkedPack out = ChunkedPack.__new__(ChunkedPack)
         out.table = input
         out.mr = temp_mr
-        out.stream = stream
+        out.stream = _stream
         out.c_obj = move(obj)
         return out
 
@@ -211,13 +221,13 @@ cdef class ChunkedPack:
         with nogil:
             return dereference(self.c_obj).get_total_contiguous_size()
 
-    cpdef size_t next(self, DeviceBuffer buf):
+    cpdef size_t next(self, object buf):
         """
         Pack the next chunk into the provided device buffer.
 
         Parameters
         ----------
-        buf
+        buf : Span-like object
             The device buffer to use as a staging buffer, must be at
             least as large as the `user_buffer_size` used to construct the
             packer.
@@ -231,9 +241,8 @@ cdef class ChunkedPack:
         This is stream-ordered with respect to the stream used when
         creating the `ChunkedPack`.
         """
-        cdef device_span[uint8_t] d_span = device_span[uint8_t](
-            <uint8_t *>buf.c_data(), buf.c_size()
-        )
+        cdef device_span[uint8_t] d_span = _get_device_span(buf)
+
         with nogil:
             return dereference(self.c_obj).next(d_span)
 
@@ -250,16 +259,16 @@ cdef class ChunkedPack:
             metadata = move(dereference(self.c_obj).build_metadata())
         return memoryview(HostBuffer.from_unique_ptr(move(metadata)))
 
-    cpdef tuple pack_to_host(self, DeviceBuffer buf):
+    cpdef tuple pack_to_host(self, object buf):
         """
         Pack the entire table into a host buffer.
 
         Parameters
         ----------
-        buf
-           The device buffer to use as a staging buffer, must be at
-           least as large as the `user_buffer_size` used to construct the
-           packer.
+        buf : Span-like object
+        The device buffer to use as a staging buffer, must be at
+        least as large as the `user_buffer_size` used to construct the
+        packer.
 
         Returns
         -------
@@ -278,16 +287,15 @@ cdef class ChunkedPack:
         """
         cdef size_t offset = 0
         cdef size_t size
-        cdef device_span[uint8_t] d_span = device_span[uint8_t](
-            <uint8_t *>buf.c_data(), buf.c_size()
-        )
-        cdef cudaError_t err
+        cdef device_span[uint8_t] d_span = _get_device_span(buf)
+        cdef cudaError_t err = cudaError.cudaSuccess
         cdef unique_ptr[vector[uint8_t]] h_buf = (
             make_unique[vector[uint8_t]](
                 dereference(self.c_obj).get_total_contiguous_size()
             )
         )
-        cdef cuda_stream_view stream = self.stream.view()
+        cdef Stream py_stream = self.stream
+        cdef cudaStream_t stream = py_stream.view().value()
         with nogil:
             while dereference(self.c_obj).has_next():
                 size = dereference(self.c_obj).next(d_span)
@@ -296,22 +304,22 @@ cdef class ChunkedPack:
                     d_span.data(),
                     size,
                     cudaMemcpyKind.cudaMemcpyDeviceToHost,
-                    stream.value(),
+                    stream,
                 )
                 offset += size
                 if err != cudaError.cudaSuccess:
-                    stream.synchronize()
+                    cudaStreamSynchronize(stream)
                     raise RuntimeError(
                         f"Memcpy in pack_to_host failed error: {err}"
                     )
-        stream.synchronize()
+        cudaStreamSynchronize(stream)
         return (
             self.build_metadata(),
             memoryview(HostBuffer.from_unique_ptr(move(h_buf))),
         )
 
 
-cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource mr=None):
+cpdef PackedColumns pack(Table input, object stream=None, DeviceMemoryResource mr=None):
     """Deep-copy a table into a serialized contiguous memory format.
 
     Later use `unpack` or `unpack_from_memoryviews` to unpack the serialized
@@ -341,16 +349,17 @@ cpdef PackedColumns pack(Table input, Stream stream=None, DeviceMemoryResource m
     For details, see :cpp:func:`pack`.
     """
     cdef unique_ptr[packed_columns] pack
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
     with nogil:
         pack = move(make_unique[packed_columns](
-            cpp_pack(input.view(), stream.view(), mr.get_mr())
+            cpp_pack(input.view(), _cs, mr.get_mr())
         ))
-    return PackedColumns.from_libcudf(move(pack), stream, mr)
+    return PackedColumns.from_libcudf(move(pack), _stream, mr)
 
 
-cpdef Table unpack(PackedColumns input, Stream stream=None):
+cpdef Table unpack(PackedColumns input, object stream=None):
     """Deserialize the result of `pack`.
 
     Copies the result of a serialized table into a table.
@@ -370,16 +379,16 @@ cpdef Table unpack(PackedColumns input, Stream stream=None):
         Copy of the packed columns.
     """
     cdef table_view v
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
     with nogil:
         v = cpp_unpack(dereference(input.c_obj))
-    return Table.from_table_view_of_arbitrary(v, input, stream)
+    return Table.from_table_view_of_arbitrary(v, input, _stream)
 
 
 cpdef Table unpack_from_memoryviews(
     memoryview metadata,
-    gpumemoryview gpu_data,
-    Stream stream=None,
+    object gpu_data,
+    object stream=None,
 ):
     """Deserialize the result of `pack`.
 
@@ -391,7 +400,7 @@ cpdef Table unpack_from_memoryviews(
     ----------
     metadata : memoryview
         The packed metadata to unpack.
-    gpu_data : gpumemoryview
+    gpu_data : Span-like object
         The packed gpu_data to unpack.
     stream : Stream | None
         CUDA stream on which to perform the operation.
@@ -401,24 +410,26 @@ cpdef Table unpack_from_memoryviews(
     Table
         Copy of the packed columns.
     """
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef device_span[uint8_t] d_span = _get_device_span(gpu_data)
+
     if metadata.nbytes == 0:
-        if gpu_data.__cuda_array_interface__["data"][0] != 0:
+        if d_span.data() != NULL:
             raise ValueError("Expected an empty gpu_data from unpacking an empty table")
         # For an empty table we just attach the default mr since it will not be
         # used for any operations.
         return Table.from_libcudf(
             make_unique[table](table_view()),
-            stream,
+            _stream,
             _get_memory_resource(),
         )
 
     # Extract the raw data pointers
     cdef const uint8_t[::1] _metadata = metadata
     cdef const uint8_t* metadata_ptr = &_metadata[0]
-    cdef const uint8_t* gpu_data_ptr = <uint8_t*>gpu_data.ptr
+    cdef const uint8_t* gpu_data_ptr = d_span.data()
 
     cdef table_view v
     with nogil:
         v = cpp_unpack(metadata_ptr, gpu_data_ptr)
-    return Table.from_table_view_of_arbitrary(v, gpu_data, stream)
+    return Table.from_table_view_of_arbitrary(v, gpu_data, _stream)

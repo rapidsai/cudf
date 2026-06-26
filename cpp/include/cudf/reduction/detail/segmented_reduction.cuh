@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,13 +8,14 @@
 #include "reduction_operators.cuh"
 
 #include <cudf/detail/utilities/cast_functor.cuh>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_segmented_reduce.cuh>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -170,9 +171,9 @@ void segmented_reduce(InputIterator d_in,
 
   // compute the result value from intermediate value in device
   thrust::transform(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
-    thrust::make_counting_iterator<size_type>(num_segments),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{num_segments},
     d_out,
     [ir = intermediate_result.data(), op, d_valid_counts, ddof] __device__(auto idx) {
       auto const count = d_valid_counts[idx];

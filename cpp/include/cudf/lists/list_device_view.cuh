@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -9,10 +9,10 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/utility>
 #include <cuda_runtime.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/pair.h>
 
 namespace CUDF_EXPORT cudf {
 
@@ -144,17 +144,17 @@ class list_device_view {
   /// const pair iterator for the list
   template <typename T>
   using const_pair_iterator =
-    thrust::transform_iterator<pair_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
+    thrust::transform_iterator<pair_accessor<T>, cuda::counting_iterator<cudf::size_type>>;
 
   /// const pair iterator type for the list
   template <typename T>
   using const_pair_rep_iterator =
-    thrust::transform_iterator<pair_rep_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
+    thrust::transform_iterator<pair_rep_accessor<T>, cuda::counting_iterator<cudf::size_type>>;
 
   /**
    * @brief Fetcher for a pair iterator to the first element in the list_device_view.
    *
-   * Dereferencing the returned iterator yields a `thrust::pair<T, bool>`.
+   * Dereferencing the returned iterator yields a `cuda::std::pair<T, bool>`.
    *
    * If the element at index `i` is valid, then for `p = iter[i]`,
    *   1. `p.first` is the value of the element at `i`
@@ -170,7 +170,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_begin() const
   {
-    return const_pair_iterator<T>{thrust::counting_iterator<size_type>(0), pair_accessor<T>{*this}};
+    return const_pair_iterator<T>{cuda::counting_iterator<size_type>{0}, pair_accessor<T>{*this}};
   }
 
   /**
@@ -183,14 +183,14 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_end() const
   {
-    return const_pair_iterator<T>{thrust::counting_iterator<size_type>(size()),
+    return const_pair_iterator<T>{cuda::counting_iterator<size_type>{size()},
                                   pair_accessor<T>{*this}};
   }
 
   /**
    * @brief Fetcher for a pair iterator to the first element in the list_device_view.
    *
-   * Dereferencing the returned iterator yields a `thrust::pair<rep_type, bool>`,
+   * Dereferencing the returned iterator yields a `cuda::std::pair<rep_type, bool>`,
    * where `rep_type` is `device_storage_type_t<T>`, the type used to store the value
    * on the device.
    *
@@ -208,7 +208,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_begin() const
   {
-    return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(0),
+    return const_pair_rep_iterator<T>{cuda::counting_iterator<size_type>{0},
                                       pair_rep_accessor<T>{*this}};
   }
 
@@ -222,7 +222,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_end() const
   {
-    return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(size()),
+    return const_pair_rep_iterator<T>{cuda::counting_iterator<size_type>{size()},
                                       pair_rep_accessor<T>{*this}};
   }
 
@@ -259,7 +259,7 @@ class list_device_view {
      * @param i Index into the list_device_view
      * @return A pair of data element and its validity flag.
      */
-    __device__ inline thrust::pair<T, bool> operator()(cudf::size_type i) const
+    __device__ inline cuda::std::pair<T, bool> operator()(cudf::size_type i) const
     {
       return {list.element<T>(i), !list.is_null(i)};
     }
@@ -298,7 +298,7 @@ class list_device_view {
      * @param i Index into the list_device_view
      * @return A pair of data element and its validity flag.
      */
-    __device__ inline thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
+    __device__ inline cuda::std::pair<rep_type, bool> operator()(cudf::size_type i) const
     {
       return {get_rep<T>(i), !list.is_null(i)};
     }

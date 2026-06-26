@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,119 +8,116 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/std/cstddef>
+#include <cuda/std/tuple>
+#include <cuda/std/utility>
 
-#include <jit/accessors.cuh>
-#include <jit/span.cuh>
+#include <jit/column_accessor.cuh>
+#include <jit/column_device_view_wrappers.cuh>
+#include <jit/sync.cuh>
+#include <jit/type_list.cuh>
+
+#pragma nv_hdrstop  // The above headers are used by the kernel below and need to be included before
+                    // it. Each UDF will have a different operation_udf.cuh generated for it, so we
+                    // need to put this pragma before including it to avoid PCH mismatch.
 
 // clang-format off
-// This header is an inlined header that defines the GENERIC_FILTER_OP function. It is placed here
+// This header is an inlined header that defines the GENERIC_TRANSFORM_OP function. It is placed here
 // so the symbols in the headers above can be used by it.
-#include <cudf/detail/operation-udf.hpp>
+#include <cudf/detail/kernel_instance.cuh>
+#include <cudf/detail/operation_udf.cuh>
 // clang-format on
 
 namespace cudf {
-namespace transformation {
 namespace jit {
 
-template <bool has_user_data, bool is_null_aware, typename Out, typename... In>
-CUDF_KERNEL void kernel(cudf::mutable_column_device_view_core const* outputs,
-                        cudf::column_device_view_core const* inputs,
-                        void* user_data)
+/// @brief The generic transform kernel. Supports all types and nullability combinations.
+template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
+__device__ void transform_kernel(size_type row_size,
+                                 bitmask_type const* __restrict__ stencil,
+                                 void* __restrict__ user_data,
+                                 column_device_view_core const* __restrict__ input_cols,
+                                 mutable_column_device_view_core const* __restrict__ output_cols)
 {
-  // inputs to JITIFY kernels have to be either sized-integral types or pointers. Structs or
-  // references can't be passed directly/correctly as they will be crossing an ABI boundary
+  auto start  = detail::grid_1d::global_thread_id();
+  auto stride = detail::grid_1d::grid_stride();
 
-  auto const start  = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const size   = outputs[0].size();
-
-  for (auto i = start; i < size; i += stride) {
-    if constexpr (!is_null_aware) {
-      if (Out::is_null(outputs, i)) { continue; }
+  for (auto row = start; row < row_size; row += stride) {
+    auto operation = [&]<typename Args>(Args args) {
+      // TODO: static assert invocable
+      auto func = [&](auto... a) { GENERIC_TRANSFORM_OP(a...); };
 
       if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
+        return cuda::std::apply(func, cuda::std::tuple_cat(cuda::std::tuple{user_data, row}, args));
       } else {
-        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
+        return cuda::std::apply(func, args);
       }
-    } else {
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(
-          user_data, i, &Out::element(outputs, i), In::nullable_element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::nullable_element(inputs, i)...);
-      }
-    }
-  }
-}
-
-template <bool has_user_data, bool is_null_aware, typename Out, typename... In>
-CUDF_KERNEL void fixed_point_kernel(cudf::mutable_column_device_view_core const* outputs,
-                                    cudf::column_device_view_core const* inputs,
-                                    void* user_data)
-{
-  auto const start        = cudf::detail::grid_1d::global_thread_id();
-  auto const stride       = cudf::detail::grid_1d::grid_stride();
-  auto const size         = outputs[0].size();
-  auto const output_scale = static_cast<numeric::scale_type>(outputs[0].type().scale());
-
-  for (auto i = start; i < size; i += stride) {
-    typename Out::type result{numeric::scaled_integer<typename Out::type::rep>{0, output_scale}};
+    };
 
     if constexpr (!is_null_aware) {
-      if (Out::is_null(outputs, i)) { continue; }
+      if (stencil != nullptr && !bit_is_set(stencil, row)) { continue; }
 
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&result, In::element(inputs, i)...);
-      }
+      auto ins = InputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::element(input_cols, row)...}; });
+
+      auto outs = OutputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::output_arg(output_cols, row)...}; });
+
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
+
+      operation(cuda::std::tuple_cat(out_ptrs, ins));
+
+      OutputAccessors::map([&]<typename... A>() {
+        (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...);
+      });
 
     } else {
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &result, In::nullable_element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&result, In::nullable_element(inputs, i)...);
-      }
-    }
+      auto active_mask = __ballot_sync(__activemask(), row < row_size);
 
-    Out::assign(outputs, i, result);
-  }
-}
+      auto ins = InputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::nullable_element(input_cols, row)...}; });
 
-template <bool has_user_data, bool is_null_aware, typename Out, typename... In>
-CUDF_KERNEL void span_kernel(cudf::jit::device_optional_span<typename Out::type> const* outputs,
-                             cudf::column_device_view_core const* inputs,
-                             void* user_data)
-{
-  auto const start  = cudf::detail::grid_1d::global_thread_id();
-  auto const stride = cudf::detail::grid_1d::grid_stride();
-  auto const size   = outputs[0].size();
+      auto outs = OutputAccessors::map(
+        [&]<typename... A>() { return cuda::std::tuple{A::null_output_arg(output_cols, row)...}; });
 
-  for (auto i = start; i < size; i += stride) {
-    if constexpr (!is_null_aware) {
-      if (Out::is_null(outputs, i)) { continue; }
+      auto out_ptrs =
+        cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(user_data, i, &Out::element(outputs, i), In::element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::element(inputs, i)...);
-      }
-    } else {
-      if constexpr (has_user_data) {
-        GENERIC_TRANSFORM_OP(
-          user_data, i, &Out::element(outputs, i), In::nullable_element(inputs, i)...);
-      } else {
-        GENERIC_TRANSFORM_OP(&Out::element(outputs, i), In::nullable_element(inputs, i)...);
-      }
+      operation(cuda::std::tuple_cat(out_ptrs, ins));
+
+      OutputAccessors::map([&]<typename... A>() {
+        (A::assign(output_cols, row, *cuda::std::get<A::index>(outs)), ...);
+        (warp_compact_validity<A>(
+           active_mask, output_cols, row, cuda::std::get<A::index>(outs).has_value()),
+         ...);
+      });
     }
   }
 }
 
 }  // namespace jit
-}  // namespace transformation
 }  // namespace cudf
+
+// The entry point for the JIT compiled kernel. This is the C-ABI function that will be used to
+// retrieve the `CuFunction` for the kernel from the compiled module. This is because we don't want
+// to track the scope-dependent C++ mangled name of the kernel, and can just use a fixed name to
+// retrieve the `CuFunction` of the kernel.
+// A C++-mangled symbol has ambiguous and complex resolution rules, and can change based on the
+// scope of the function, the types of the arguments, and other factors that will not be known until
+// after compilation. By using a fixed C-ABI symbol name for the kernel entry point, we can avoid
+// these issues and ensure that we can always retrieve the correct `CuFunction` for the kernel
+// regardless of the context in which it was compiled or used.
+extern "C" __global__ void cudf_kernel_entry(
+  cudf::size_type row_size,
+  cudf::bitmask_type const* __restrict__ stencil,
+  void* __restrict__ user_data,
+  cudf::column_device_view_core const* __restrict__ input_cols,
+  cudf::mutable_column_device_view_core const* __restrict__ output_cols)
+{
+  CUDF_KERNEL_INSTANCE(row_size, stencil, user_data, input_cols, output_cols);
+}

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from copy import copy, deepcopy
 
@@ -112,21 +112,6 @@ def test_deep_copy_write_in_place():
     cp.asarray(sr._column)[1] = 42
 
     assert_neq(gdf, cdf)
-
-
-def test_shallow_copy_write_in_place():
-    pdf = pd.DataFrame(
-        [[1, 2, 3], [4, 5, 6], [7, 8, 9]], columns=["a", "b", "c"]
-    )
-    gdf = cudf.DataFrame(pdf)
-    cdf = gdf.copy(deep=False)
-    sr = gdf["a"]
-
-    # Write a value in-place on the shallow copy.
-    # This should change the copy and original.
-    cp.asarray(sr._column)[1] = 42
-
-    assert_eq(gdf, cdf)
 
 
 @pytest.mark.xfail(reason="cudf column-wise shallow copy is immutable")

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 
@@ -78,9 +78,9 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
 
   // build indices of the scan operation results
   rmm::device_uvector<size_type> result_map(input.size(), stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         thrust::counting_iterator<size_type>(0),
-                         thrust::counting_iterator<size_type>(input.size()),
+  thrust::inclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         cuda::counting_iterator<size_type>{0},
+                         cuda::counting_iterator<size_type>{input.size()},
                          result_map.begin(),
                          min_max_scan_operator<cudf::string_view, Op>{*d_input, input.has_nulls()});
 
@@ -88,11 +88,11 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
     // fill the null rows with out-of-bounds values so gather records them as null;
     // this prevents un-sanitized null entries in the output
     auto null_itr = cudf::detail::make_counting_transform_iterator(0, null_iterator{mask});
-    auto oob_val  = thrust::constant_iterator<size_type>(input.size());
-    thrust::scatter_if(rmm::exec_policy(stream),
+    auto oob_val  = cuda::constant_iterator<size_type>(input.size());
+    thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        oob_val,
                        oob_val + input.size(),
-                       thrust::counting_iterator<size_type>(0),
+                       cuda::counting_iterator<size_type>{0},
                        null_itr,
                        result_map.data());
   }
@@ -101,7 +101,7 @@ std::unique_ptr<column> scan_inclusive(column_view const& input,
   auto result_table = cudf::detail::gather(cudf::table_view({input}),
                                            result_map,
                                            cudf::out_of_bounds_policy::NULLIFY,
-                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                           cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
   return std::move(result_table->release().front());

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import re
 
@@ -121,7 +121,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -131,7 +131,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -141,7 +141,7 @@ def test_series_iter_error():
         TypeError,
         match=re.escape(
             f"{gs.__class__.__name__} object is not iterable. "
-            f"Consider using `.to_arrow()`, `.to_pandas()` or `.values_host` "
+            f"Consider using `.to_arrow()`, `.to_pandas()` or `.to_numpy()` "
             f"if you wish to iterate over the values."
         ),
     ):
@@ -229,12 +229,7 @@ def test_series_empty(ps):
     "data",
     [
         [1, 2, 3],
-        pytest.param(
-            [np.nan, 10, 15, 16],
-            marks=pytest.mark.xfail(
-                reason="https://github.com/pandas-dev/pandas/issues/49818"
-            ),
-        ),
+        [np.nan, 10, 15, 16],
         [np.nan, None, 10, 20],
         ["ab", "zx", "pq"],
         ["ab", "zx", None, "pq"],
@@ -397,23 +392,6 @@ def test_series_shape_empty():
         [1, 2, 4],
         [],
         [5.0, 7.0, 8.0],
-        pd.Categorical(["a", "b", "c"]),
-        ["m", "a", "d", "v"],
-    ],
-)
-def test_series_values_host_property(data):
-    pds = pd.Series(data=data, dtype=None if data else float)
-    gds = cudf.Series(data=data, dtype=None if data else float)
-
-    np.testing.assert_array_equal(pds.values, gds.values_host)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 4],
-        [],
-        [5.0, 7.0, 8.0],
         pytest.param(
             pd.Categorical(["a", "b", "c"]),
             marks=pytest.mark.xfail(raises=NotImplementedError),
@@ -432,7 +410,16 @@ def test_series_values_property(data):
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
 
 
-def test_series_data_property_deprecated():
-    s = cudf.Series([1, 2, 3])
-    with pytest.warns(FutureWarning, match="Series.data is deprecated"):
-        s.data
+@pytest.mark.parametrize("dtype", ["Int64", "Float64", "boolean"])
+def test_series_values_masked_dtype_with_nulls_raises(dtype):
+    # A pandas nullable/masked extension dtype with nulls cannot be
+    # losslessly represented as a numpy array, so cudf raises instead of
+    # silently downcasting the NA to NaN. pandas instead returns the
+    # ExtensionArray (deliberate cudf divergence), so the exceptions
+    # cannot be compared with assert_exceptions_equal here.
+    gs = cudf.Series([0, None], dtype=dtype)
+    with pytest.raises(ValueError, match="cannot convert"):
+        gs.values
+    # pandas returns the masked ExtensionArray without raising.
+    ps = pd.Series([0, pd.NA], dtype=dtype)
+    assert isinstance(ps.values, pd.api.extensions.ExtensionArray)

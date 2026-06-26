@@ -32,7 +32,7 @@ conda install cudf -c rapidsai-nightly -c conda-forge
 ```
 
 3. Build and view the docs locally following the instructions in the [Building
-documentation docs](https://docs.rapids.ai/api/cudf/stable/developer_guide/documentation/#building-and-viewing-docs)
+documentation docs](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/documentation/#building-and-viewing-docs)
 4. Follow steps 7-10 in the section [Your first issue](#your-first-issue)
 
 ## Code contributions
@@ -89,7 +89,7 @@ for a minimal build of libcudf without using conda are also listed below.
 Compilers:
 
 * `gcc` version 13.3+
-* `nvcc` version 12.2+
+* `nvcc` version 12.9+
 * `cmake` version 3.29.6+
 
 CUDA/GPU Runtime:
@@ -119,9 +119,7 @@ Instructions for a minimal build environment without conda are included below.
 
 ```bash
 # create the conda environment (assuming in base `cudf` directory)
-# note: RAPIDS currently doesn't support `channel_priority: strict`;
-# use `channel_priority: flexible` instead
-conda env create --name cudf_dev --file conda/environments/all_cuda-130_arch-x86_64.yaml
+conda env create --name cudf_dev --file conda/environments/all_cuda-133_arch-$(uname -m).yaml
 # activate the environment
 conda activate cudf_dev
 ```
@@ -142,26 +140,28 @@ conda activate cudf_dev
 
 ### Build cuDF from source
 
-- A `build.sh` script is provided in `$CUDF_HOME`. Running the script with no additional arguments
-  will install the `libcudf`, `cudf` and `dask_cudf` libraries. By default, the libraries are
-  installed to the `$CONDA_PREFIX` directory. To install into a different location, set the location
-  in `$INSTALL_PREFIX`. Finally, note that the script depends on the `nvcc` executable being on your
-  path, or defined in `$CUDACXX`.
+- A `build.sh` script is provided in `$CUDF_HOME`. Running the script without explicit targets
+  builds and installs the default targets: `libcudf`, `pylibcudf`, `cudf`, `libcudf_streaming`, `cudf_streaming`,
+  `cudf_polars`, and `dask_cudf`. By default, C++ libraries are installed to the `$CONDA_PREFIX` directory. To install
+  them into a different location, set `$INSTALL_PREFIX`. Python packages are installed into the
+  active Python environment. Finally, note that the script depends on the `nvcc` executable being on
+  your path, or defined in `$CUDACXX`.
 
 ```bash
 cd $CUDF_HOME
 
 # Choose one of the following commands, depending on whether
 # you want to build and install the libcudf C++ library only,
-# or include the cudf and/or dask_cudf Python libraries:
+# or include Python libraries:
 
-./build.sh  # libcudf, cudf and dask_cudf
+./build.sh  # libcudf, pylibcudf, cudf, libcudf_streaming, cudf_streaming, cudf_polars, and dask_cudf
 ./build.sh libcudf  # libcudf only
 ./build.sh libcudf cudf  # libcudf and cudf only
 ```
 
-- Other libraries like `cudf-kafka` and `custreamz` can be installed with this script. For the
-  complete list of libraries as well as details about the script usage, run the `help` command:
+- Other libraries like `cudf-kafka` and `custreamz` can be installed with this
+  script. For the complete list of libraries as well as details about the script usage, run the
+  `help` command:
 
 ```bash
 ./build.sh --help
@@ -174,7 +174,7 @@ To build C++ tests, you can also request that build.sh build the `tests` target.
 To build all libraries and tests, with Python packages in development mode, simply run
 
 ```bash
-./build.sh --pydevelop libcudf libcudf_kafka pylibcudf cudf dask_cudf cudf_kafka custreamz
+./build.sh --pydevelop tests libcudf libcudf_kafka libcudf_streaming pylibcudf cudf cudf_streaming cudf_polars dask_cudf cudf_kafka custreamz
 ```
 
 - **Note**: if Cython files (`*.pyx` or `*.pxd`) have changed, the Python build must be rerun.
@@ -184,6 +184,7 @@ To run the C++ tests, run
 ```bash
 ctest --test-dir ${CUDF_HOME}/cpp/build  # libcudf
 ctest --test-dir ${CUDF_HOME}/cpp/libcudf_kafka/build  # libcudf_kafka
+ctest --test-dir ${CUDF_HOME}/cpp/libcudf_streaming/build  # libcudf_streaming
 ```
 
 To run python tests, run
@@ -193,6 +194,7 @@ To run python tests, run
 cd $CUDF_HOME/python
 pytest -v ${CUDF_HOME}/python/cudf/cudf/tests
 pytest -v ${CUDF_HOME}/python/dask_cudf/dask_cudf/ # There are tests in both tests/ and io/tests/
+pytest -v ${CUDF_HOME}/python/cudf_streaming/cudf_streaming/tests
 pytest -v ${CUDF_HOME}/python/custreamz/custreamz/tests
 ```
 
@@ -322,7 +324,7 @@ This will bring up an interactive prompt to select which spelling fixes to apply
 
 The [C++ Developer Guide](cpp/doxygen/developer_guide/DEVELOPER_GUIDE.md) includes details on contributing to libcudf C++ code.
 
-The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/developer_guide/index.html) includes details on contributing to cuDF Python code.
+The [Python Developer Guide](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/index.html) includes details on contributing to cuDF Python code.
 
 
 ## Attribution

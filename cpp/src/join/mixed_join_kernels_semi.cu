@@ -1,8 +1,9 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "join/join_common_utils.hpp"
 #include "join/mixed_join_kernels_semi.cuh"
 
 #include <cudf/ast/detail/expression_evaluator.cuh>
@@ -85,6 +86,7 @@ void launch_mixed_join_semi(bool has_nulls,
         set_ref,
         left_table_keep_mask,
         device_expression_data);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     mixed_join_semi<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -96,6 +98,7 @@ void launch_mixed_join_semi(bool has_nulls,
         set_ref,
         left_table_keep_mask,
         device_expression_data);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 

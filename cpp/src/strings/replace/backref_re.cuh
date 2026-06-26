@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,15 +14,15 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/pair.h>
 
 namespace cudf {
 namespace strings {
 namespace detail {
 
-using backref_type = thrust::pair<size_type, size_type>;
+using backref_type = cuda::std::pair<size_type, size_type>;
 
 /**
  * @brief This functor handles replacing strings by applying the compiled regex pattern
@@ -102,8 +102,10 @@ struct backrefs_fn {
 
     // finally, copy remainder of input string
     if (out_ptr) {
-      thrust::copy_n(
-        thrust::seq, in_ptr + itr.byte_offset(), d_str.size_bytes() - itr.byte_offset(), out_ptr);
+      thrust::copy_n(thrust::seq,
+                     in_ptr + last_pos.byte_offset(),
+                     d_str.size_bytes() - last_pos.byte_offset(),
+                     out_ptr);
     } else {
       d_sizes[idx] = nbytes;
     }

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -6,8 +6,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from cudf.core.accessors.base_accessor import BaseAccessor
-from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import get_dtype_of_same_kind, is_dtype_obj_struct
+from cudf.core.dtype.validators import is_dtype_obj_struct
 
 if TYPE_CHECKING:
     from cudf.core.column.struct import StructColumn
@@ -30,7 +29,7 @@ class StructMethods(BaseAccessor):
             )
         super().__init__(parent=parent)
 
-    def field(self, key) -> Series | Index:
+    def field(self, key: int | str) -> Series | Index:
         """
         Extract children of the specified struct column
         in the Series
@@ -51,34 +50,14 @@ class StructMethods(BaseAccessor):
         >>> s.struct.field(0)
         0    1
         1    3
-        dtype: int64
+        Name: a, dtype: int64
         >>> s.struct.field('a')
         0    1
         1    3
-        dtype: int64
+        Name: a, dtype: int64
         """
-        struct_dtype_fields = StructDtype.from_struct_dtype(
-            self._column.dtype
-        ).fields
-        field_keys = list(struct_dtype_fields.keys())
-        if key in struct_dtype_fields:
-            pos = field_keys.index(key)
-            return self._return_or_inplace(
-                self._column.children[pos]._with_type_metadata(
-                    get_dtype_of_same_kind(
-                        self._column.dtype, struct_dtype_fields[key]
-                    )
-                )
-            )
-        elif isinstance(key, int):
-            try:
-                return self._return_or_inplace(self._column.children[key])
-            except IndexError as err:
-                raise IndexError(f"Index {key} out of range") from err
-        else:
-            raise KeyError(
-                f"Field '{key}' is not found in the set of existing keys."
-            )
+        result, result_name = self._column._get_sliced_child(key)
+        return self._return_or_inplace(result, replace_name=result_name)
 
     def explode(self) -> DataFrame:
         """
@@ -90,6 +69,7 @@ class StructMethods(BaseAccessor):
 
         Examples
         --------
+        >>> s = cudf.Series([{'a': 1, 'b': 'x'}, {'a': 2, 'b': 'y'}, {'a': 3, 'b': 'z'}, {'a': 4, 'b': 'a'}])
         >>> s
         0    {'a': 1, 'b': 'x'}
         1    {'a': 2, 'b': 'y'}
@@ -106,16 +86,16 @@ class StructMethods(BaseAccessor):
         """
         from cudf.core.column_accessor import ColumnAccessor
         from cudf.core.dataframe import DataFrame
+        from cudf.core.series import Series
 
         data = {
-            name: col.copy(deep=True)
-            for name, col in zip(
-                self._column.dtype.fields,  # type: ignore[arg-type]
-                self._column.children,
-                strict=True,
-            )
+            field: self._column._get_sliced_child(field)[0].copy(deep=True)
+            for field in self._column.fields
         }
         rangeindex = len(data) == 0
         return DataFrame._from_data(
-            ColumnAccessor(data, rangeindex=rangeindex)
+            ColumnAccessor(data, rangeindex=rangeindex),  # type: ignore[arg-type]
+            index=self._parent.index
+            if isinstance(self._parent, Series)
+            else None,
         )

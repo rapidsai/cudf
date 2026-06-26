@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
@@ -23,6 +24,7 @@ static void replace_nulls(nvbench::state& state)
   if (static_cast<std::size_t>(n_rows) * static_cast<std::size_t>(max_width) >=
       static_cast<std::size_t>(std::numeric_limits<cudf::size_type>::max())) {
     state.skip("Skip benchmarks greater than size_type limit");
+    return;
   }
 
   data_profile const table_profile = data_profile_builder().distribution(
@@ -38,8 +40,13 @@ static void replace_nulls(nvbench::state& state)
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);  // all bytes are read;
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
+
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch& launch) { auto result = cudf::replace_nulls(input, repl); });
+
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(replace_nulls)

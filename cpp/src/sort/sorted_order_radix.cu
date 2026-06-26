@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_radix_sort.cuh>
+#include <cuda/iterator>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -67,7 +68,10 @@ struct sorted_order_radix_fn {
     auto output = rmm::device_uvector<T>(input.size(), stream);
     auto d_out  = output.begin();  // not returned
     auto seqs   = rmm::device_uvector<cudf::size_type>(input.size(), stream);
-    thrust::sequence(rmm::exec_policy_nosync(stream), seqs.begin(), seqs.end(), 0);
+    thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     seqs.begin(),
+                     seqs.end(),
+                     0);
     auto dv_in  = seqs.begin();
     auto dv_out = indices.begin<cudf::size_type>();
 
@@ -106,9 +110,9 @@ struct sorted_order_radix_fn {
     auto dv_out   = indices.begin<cudf::size_type>();
 
     auto zip_out = thrust::make_zip_iterator(d_in, dv_in);
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::counting_iterator<size_type>(0),
-                      thrust::counting_iterator<size_type>(input.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{input.size()},
                       zip_out,
                       float_to_pair_and_seq<T>{input.begin<T>()});
 

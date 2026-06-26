@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
@@ -22,8 +23,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/count.h>
-#include <thrust/pair.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -71,11 +70,14 @@ struct contains_scalar_dispatch {
       d_haystack->optional_begin<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
     auto const end = d_haystack->optional_end<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
 
-    return thrust::count_if(
-             rmm::exec_policy(stream), begin, end, [d_needle] __device__(auto const val_pair) {
+    return cudf::detail::count_if(
+             begin,
+             end,
+             [d_needle] __device__(auto const val_pair) {
                auto needle = get_scalar_value<Element>(d_needle);
                return val_pair.has_value() && (needle == *val_pair);
-             }) > 0;
+             },
+             stream) > 0;
   }
 
   template <typename Element>
@@ -91,10 +93,11 @@ struct contains_scalar_dispatch {
     // In addition, haystack and needle structure compatibility will be checked later on by
     // constructor of the table comparator.
 
-    auto const haystack_tv   = table_view{{haystack}};
-    auto const needle_as_col = make_column_from_scalar(needle, 1, stream);
-    auto const needle_tv     = table_view{{needle_as_col->view()}};
-    auto const has_nulls     = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
+    auto const haystack_tv = table_view{{haystack}};
+    auto const needle_as_col =
+      make_column_from_scalar(needle, 1, stream, cudf::get_current_device_resource_ref());
+    auto const needle_tv = table_view{{needle_as_col->view()}};
+    auto const has_nulls = has_nested_nulls(haystack_tv) || has_nested_nulls(needle_tv);
 
     auto const comparator =
       cudf::detail::row::equality::two_table_comparator(haystack_tv, needle_tv, stream);
@@ -113,7 +116,7 @@ struct contains_scalar_dispatch {
     // runtime performance over using the comparator in a transform iterator with thrust::count_if.
     auto d_results = rmm::device_uvector<bool>(haystack.size(), stream);
     thrust::transform(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       begin,
       end,
       d_results.begin(),
@@ -124,7 +127,10 @@ struct contains_scalar_dispatch {
         return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
       });
 
-    return thrust::count(rmm::exec_policy(stream), d_results.begin(), d_results.end(), true) > 0;
+    return thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                         d_results.begin(),
+                         d_results.end(),
+                         true) > 0;
   }
 };
 

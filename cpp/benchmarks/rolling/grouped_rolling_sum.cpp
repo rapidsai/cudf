@@ -4,7 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/rolling.hpp>

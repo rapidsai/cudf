@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,5 +36,10 @@ public final class ColumnReference extends AstExpression {
     ExpressionType.COLUMN_REFERENCE.serialize(bb);
     tableSource.serialize(bb);
     bb.putInt(columnIndex);
+  }
+
+  @Override
+  public String toString() {
+    return tableSource.name() + " COLUMN(" + columnIndex + ")";
   }
 }

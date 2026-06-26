@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,7 @@
 #include <cudf/detail/groupby.hpp>
 #include <cudf/detail/row_operator/equality.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -23,47 +24,11 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
 namespace {
-/**
- * @brief List of aggregation operations that can be computed with a hash-based implementation.
- *
- * For single pass aggregations, the supported operations are the ones that can be atomically
- * updated: SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL.
- * For compound aggregations, the supported operations are the ones that depends on the single pass
- * aggregations above: ARGMIN(MIN), ARGMAX(MAX), MEAN(SUM, COUNT_VALID), M2/STD/VARIANCE(M2,
- * COUNT_VALID).
- */
-const auto hash_aggregations = std::unordered_set{// Single pass aggregations:
-                                                  aggregation::SUM,
-                                                  aggregation::SUM_WITH_OVERFLOW,
-                                                  aggregation::SUM_OF_SQUARES,
-                                                  aggregation::PRODUCT,
-                                                  aggregation::MIN,
-                                                  aggregation::MAX,
-                                                  aggregation::COUNT_VALID,
-                                                  aggregation::COUNT_ALL,
-                                                  // Compound aggregations:
-                                                  aggregation::ARGMIN,
-                                                  aggregation::ARGMAX,
-                                                  aggregation::MEAN,
-                                                  aggregation::M2,
-                                                  aggregation::STD,
-                                                  aggregation::VARIANCE};
-
-/**
- * @brief Indicates whether the specified aggregation operation can be computed
- * with a hash-based implementation.
- *
- * @param t The aggregation operation to verify
- * @return true `t` is valid for a hash based groupby
- * @return false `t` is invalid for a hash based groupby
- */
-bool is_hash_aggregation(aggregation::Kind t) { return hash_aggregations.contains(t); }
 
 std::unique_ptr<table> dispatch_groupby(table_view const& keys,
                                         host_span<aggregation_request const> requests,
@@ -114,6 +79,8 @@ struct can_use_hash_groupby_fn {
     requires(cudf::is_fixed_point<T>())
   bool operator()() const
   {
+    if constexpr (std::is_same_v<T, numeric::decimal128> && K == aggregation::SUM) { return true; }
+
     using TargetType       = cudf::detail::target_type_t<T, K>;
     using DeviceTargetType = std::
       conditional_t<uses_underlying_type<K>(), cudf::device_storage_type_t<TargetType>, TargetType>;

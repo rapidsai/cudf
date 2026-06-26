@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -53,14 +53,14 @@ struct pinned_allocator : public std::allocator<T> {
 
   T* allocate(std::size_t n)
   {
-    auto ptr = mr.allocate_async(n * sizeof(T), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    auto ptr = mr.allocate(stream, n * sizeof(T), alignof(T));
     stream.synchronize();
     return static_cast<T*>(ptr);
   }
 
   void deallocate(T* ptr, std::size_t n) noexcept
   {
-    mr.deallocate_async(ptr, n * sizeof(T), rmm::RMM_DEFAULT_HOST_ALIGNMENT, stream);
+    mr.deallocate(stream, ptr, n * sizeof(T), alignof(T));
   }
 
  private:

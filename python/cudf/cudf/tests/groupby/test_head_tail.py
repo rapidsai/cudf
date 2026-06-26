@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import itertools
@@ -67,7 +67,7 @@ def expected(df, n, take_head, preserve_order):
                     slice(-n, None) if n else slice(0)
                 )
             values_to_sort = np.hstack(
-                [df.values_host, np.arange(len(df)).reshape(-1, 1)]
+                [df.to_numpy(), np.arange(len(df)).reshape(-1, 1)]
             )
             expect_a, expect_b, index = zip(
                 *itertools.chain.from_iterable(

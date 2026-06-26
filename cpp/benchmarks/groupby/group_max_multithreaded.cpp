@@ -4,7 +4,7 @@
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/detail/utilities/stream_pool.hpp>
 #include <cudf/groupby.hpp>

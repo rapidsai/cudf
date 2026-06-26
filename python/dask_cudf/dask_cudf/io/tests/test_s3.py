@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import os
@@ -71,6 +71,7 @@ def s3_base(endpoint_ip, endpoint_port):
         # with an S3 endpoint on localhost
 
         endpoint_uri = f"http://{endpoint_ip}:{endpoint_port}/"
+        os.environ["AWS_ENDPOINT_URL"] = endpoint_uri
 
         server = ThreadedMotoServer(ip_address=endpoint_ip, port=endpoint_port)
         server.start()
@@ -107,6 +108,15 @@ def s3_context(s3_base, bucket, files=None):
                 pass
 
 
+@pytest.fixture(
+    params=[True, False],
+    ids=["kvikio=ON", "kvikio=OFF"],
+)
+def kvikio_remote_io(request):
+    with cudf.option_context("kvikio_remote_io", request.param):
+        yield request.param
+
+
 @pytest.fixture
 def pdf(scope="module"):
     return pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
@@ -133,17 +143,13 @@ def test_read_parquet_open_file_options_raises():
 @pytest.mark.parametrize(
     "filesystem",
     [
-        pytest.param(
-            "arrow",
-            marks=pytest.mark.skipif(
-                not dask_cudf.backends.PYARROW_GE_15,
-                reason="Not supported",
-            ),
-        ),
+        "arrow",
         "fsspec",
     ],
 )
-def test_read_parquet_filesystem(s3_base, s3so, pdf, filesystem):
+def test_read_parquet_filesystem(
+    s3_base, s3so, pdf, filesystem, kvikio_remote_io
+):
     fname = "test_parquet_filesystem.parquet"
     bucket = "parquet"
     buffer = BytesIO()

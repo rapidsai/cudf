@@ -1,9 +1,7 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
-
-#include <benchmarks/fixture/benchmark_fixture.hpp>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -14,9 +12,9 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 
 #include <nvbench/nvbench.cuh>
@@ -51,7 +49,7 @@ auto generate_column(cudf::size_type num_rows, cudf::size_type chars_per_row, do
 
   auto engine = thrust::default_random_engine{};
   thrust::for_each_n(thrust::device,
-                     thrust::counting_iterator<cudf::size_type>(0),
+                     cuda::counting_iterator<cudf::size_type>{0},
                      num_rows,
                      url_string_generator{*d_strings, esc_seq_chance, engine});
   return result_col;

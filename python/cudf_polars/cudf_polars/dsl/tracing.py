@@ -1,29 +1,30 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for tracing and monitoring IR execution."""
 
 from __future__ import annotations
 
+import contextlib
+import enum
 import functools
 import os
 import time
-from typing import TYPE_CHECKING, Any, Concatenate, Literal
+from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
 import pynvml
-from typing_extensions import ParamSpec
 
 import rmm
 import rmm.statistics
 
 from cudf_polars.utils.config import _bool_converter, get_device_handle
 
-try:
+try:  # pragma: no cover; requires structlog
     import structlog
-except ImportError:
+except ImportError:  # pragma: no cover; requires no structlog
     _HAS_STRUCTLOG = False
-else:
+else:  # pragma: no cover; requires structlog
     _HAS_STRUCTLOG = True
 
 
@@ -44,10 +45,18 @@ nvtx_annotate_cudf_polars = functools.partial(
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, Generator, Sequence
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
+
+
+class Scope(enum.StrEnum):
+    """Scope values for structured logging."""
+
+    PLAN = "plan"
+    ACTOR = "actor"
+    EVALUATE_IR_NODE = "evaluate_ir_node"
 
 
 @functools.cache
@@ -165,11 +174,11 @@ def log_do_evaluate(
             pid = _getpid()
             log = structlog.get_logger()
 
-            # By convention, all non-dataframe arguments (non_child) come first.
+            # By convention, all non-dataframe arguments (non-child) come first.
             # Anything remaining is a dataframe, except for 'context' kwarg.
             frames: list[cudf_polars.containers.DataFrame] = (
                 list(args) + [v for k, v in kwargs.items() if k != "context"]
-            )[len(cls._non_child) :]  # type: ignore[assignment]
+            )[cls._n_non_child_args :]  # type: ignore[assignment]
 
             before_start = time.monotonic_ns()
             before = make_snapshot(
@@ -199,8 +208,9 @@ def log_do_evaluate(
                 before
                 | after
                 | {
+                    "scope": Scope.EVALUATE_IR_NODE.value,
                     "overhead_duration": (before_end - before_start)
-                    + (after_end - after_start)
+                    + (after_end - after_start),
                 }
             )
             log.info("Execute IR", **record)
@@ -208,3 +218,20 @@ def log_do_evaluate(
             return result
 
         return wrapper
+
+
+@contextlib.contextmanager
+def bound_contextvars(**kwargs: Any) -> Generator[None, None, None]:
+    """Wrapper around structlog.contextvars.bound_contextvars."""
+    if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
+        with structlog.contextvars.bound_contextvars(**kwargs):
+            yield
+    else:
+        yield
+
+
+def log(message: str, **kwargs: Any) -> None:
+    """Wrapper around structlog.get_logger().info."""
+    if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
+        log = structlog.get_logger()
+        log.info(message, **kwargs)

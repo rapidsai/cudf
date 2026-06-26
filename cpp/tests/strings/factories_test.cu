@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -23,9 +23,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
@@ -34,7 +34,7 @@
 
 struct StringsFactoriesTest : public cudf::test::BaseFixture {};
 
-using string_pair = thrust::pair<char const*, cudf::size_type>;
+using string_pair = cuda::std::pair<char const*, cudf::size_type>;
 
 TEST_F(StringsFactoriesTest, CreateColumnFromPair)
 {
@@ -201,7 +201,7 @@ TEST_F(StringsFactoriesTest, EmptyStringsColumn)
 namespace {
 
 struct string_view_to_pair {
-  __device__ string_pair operator()(thrust::pair<cudf::string_view, bool> const& p)
+  __device__ string_pair operator()(cuda::std::pair<cudf::string_view, bool> const& p)
   {
     return (p.second) ? string_pair{p.first.data(), p.first.size_bytes()} : string_pair{nullptr, 0};
   }
@@ -216,7 +216,7 @@ TEST_F(StringsFactoriesTest, StringPairWithNullsAndEmpty)
 
   auto d_column = cudf::column_device_view::create(data);
   rmm::device_uvector<string_pair> pairs(d_column->size(), cudf::get_default_stream());
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                     d_column->pair_begin<cudf::string_view, true>(),
                     d_column->pair_end<cudf::string_view, true>(),
                     pairs.data(),
@@ -251,7 +251,7 @@ TEST_F(StringsBatchConstructionTest, AllNullsColumns)
   auto const stream          = cudf::get_default_stream();
 
   auto d_string_pairs = rmm::device_uvector<string_pair>{num_rows, stream};
-  thrust::uninitialized_fill_n(rmm::exec_policy(stream),
+  thrust::uninitialized_fill_n(rmm::exec_policy_nosync(stream),
                                d_string_pairs.data(),
                                d_string_pairs.size(),
                                string_pair{nullptr, 0});

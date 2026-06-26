@@ -73,6 +73,15 @@ cdef class gpumemoryview:
     def __cuda_array_interface__(self):
         return self.cai
 
+    @property
+    def size(self) -> int:
+        """
+        Size of the memory region in bytes (Span protocol).
+
+        This is an alias for nbytes to satisfy the Span protocol.
+        """
+        return self.nbytes
+
     def __len__(self):
         return self.obj.__cuda_array_interface__["shape"][0]
 

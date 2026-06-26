@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,7 +29,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <memory>
 #include <utility>
@@ -97,9 +97,9 @@ struct empty_column_constructor {
     using namespace cudf;
     using namespace cudf::detail;
 
-    if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
-      return make_lists_column(
-        0, make_empty_column(type_to_id<size_type>()), empty_like(values), 0, {}, stream, mr);
+    if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET ||
+                  k == aggregation::Kind::TOP_K) {
+      return make_lists_column(0, make_empty_column(type_id::INT32), empty_like(values), 0, {});
     }
 
     if constexpr (k == aggregation::Kind::HISTOGRAM) {
@@ -107,16 +107,15 @@ struct empty_column_constructor {
                                make_empty_column(type_to_id<size_type>()),
                                cudf::reduction::detail::make_empty_histogram_like(values),
                                0,
-                               {},
-                               stream,
-                               mr);
+                               {});
     }
     if constexpr (k == aggregation::Kind::MERGE_HISTOGRAM) { return empty_like(values); }
 
     if constexpr (k == aggregation::Kind::SUM_WITH_OVERFLOW) {
-      // SUM_WITH_OVERFLOW returns a struct with sum (int64_t) and overflow (bool) children
+      // SUM_WITH_OVERFLOW returns a struct with sum (same type as input) and overflow (bool)
+      // children
       std::vector<std::unique_ptr<cudf::column>> children;
-      children.push_back(make_empty_column(cudf::data_type{cudf::type_id::INT64}));
+      children.push_back(make_empty_column(values.type()));
       children.push_back(make_empty_column(cudf::data_type{cudf::type_id::BOOL8}));
       return make_structs_column(0, std::move(children), 0, {}, stream, mr);
     }
@@ -201,6 +200,18 @@ void verify_valid_requests(host_span<RequestType const> requests)
           });
       }),
     "Invalid type/aggregation combination.");
+
+  // Additional validation for SUM_WITH_OVERFLOW: only signed integers and decimals are supported
+  for (auto const& request : requests) {
+    for (auto const& agg : request.aggregations) {
+      if (agg->kind == aggregation::SUM_WITH_OVERFLOW) {
+        CUDF_EXPECTS(
+          cudf::detail::is_valid_aggregation(request.values.type(), aggregation::SUM_WITH_OVERFLOW),
+          "SUM_WITH_OVERFLOW aggregation only supports signed integer types and decimal types. "
+          "Unsigned integers, bool, dictionary columns, and other types are not supported.");
+      }
+    }
+  }
 }
 
 }  // namespace
@@ -261,7 +272,7 @@ groupby::groups groupby::get_groups(table_view values,
     auto grouped_values = cudf::detail::gather(values,
                                                helper().key_sort_order(stream),
                                                cudf::out_of_bounds_policy::DONT_CHECK,
-                                               cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                               cudf::negative_index_policy::NOT_ALLOWED,
                                                stream,
                                                mr);
     return groupby::groups{
@@ -289,8 +300,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls
   std::vector<std::unique_ptr<column>> results;
   results.reserve(values.num_columns());
   std::transform(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(values.num_columns()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{values.num_columns()},
     std::back_inserter(results),
     [&](auto i) {
       bool nullable       = values.column(i).nullable();
@@ -336,8 +347,8 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   std::vector<std::unique_ptr<column>> results;
   auto const& group_offsets = helper().group_offsets(stream);
   std::transform(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(values.num_columns()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{values.num_columns()},
     std::back_inserter(results),
     [&](size_type i) {
       auto grouped_values =

@@ -1,40 +1,93 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "join_common_utils.cuh"
 #include "join_common_utils.hpp"
+#include "mixed_join_common_utils.cuh"
 #include "mixed_join_kernel.hpp"
 #include "mixed_join_size_kernel.hpp"
 
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/ast/expressions.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/join/join.hpp>
 #include <cudf/join/mixed_join.hpp>
-#include <cudf/table/table.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
-#include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
+#include <cuda/iterator>
+#include <cuda/std/tuple>
 #include <thrust/fill.h>
 #include <thrust/scan.h>
 
+#include <memory>
 #include <optional>
-#include <utility>
+#include <vector>
 
 namespace cudf {
 namespace detail {
 
 namespace {
+/**
+ * @brief Builds the hash table based on the given `build_table`.
+ *
+ * @tparam HashTable The type of the hash table
+ *
+ * @param build Table of columns used to build join hash.
+ * @param preprocessed_build shared_ptr to cudf::detail::row::equality::preprocessed_table
+ * for build
+ * @param hash_table Build hash table.
+ * @param has_nested_nulls Flag to denote if build or probe tables have nested nulls
+ * @param nulls_equal Flag to denote nulls are equal or not.
+ * @param bitmask Bitmask to denote whether a row is valid.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+template <typename HashTable>
+void build_join_hash_table(
+  cudf::table_view const& build,
+  std::shared_ptr<detail::row::equality::preprocessed_table> const& preprocessed_build,
+  HashTable& hash_table,
+  bool has_nested_nulls,
+  null_equality nulls_equal,
+  [[maybe_unused]] bitmask_type const* bitmask,
+  rmm::cuda_stream_view stream)
+{
+  CUDF_EXPECTS(0 != build.num_columns(), "Selected build dataset is empty", std::invalid_argument);
+  CUDF_EXPECTS(0 != build.num_rows(), "Build side table has no rows", std::invalid_argument);
+
+  auto insert_rows = [&](auto const& build, auto const& d_hasher) {
+    auto const iter = cudf::detail::make_counting_transform_iterator(0, pair_fn{d_hasher});
+
+    if (nulls_equal == cudf::null_equality::EQUAL or not nullable(build)) {
+      hash_table.insert_async(iter, iter + build.num_rows(), stream.value());
+    } else {
+      auto const stencil = cuda::counting_iterator<size_type>{0};
+      auto const pred    = row_is_valid{bitmask};
+
+      hash_table.insert_if_async(iter, iter + build.num_rows(), stencil, pred, stream.value());
+    }
+  };
+
+  auto const nulls = nullate::DYNAMIC{has_nested_nulls};
+
+  auto const row_hash = detail::row::hash::row_hasher{preprocessed_build};
+  auto const d_hasher = row_hash.device_hasher(nulls);
+
+  insert_rows(build, d_hasher);
+}
+
 /**
  * @brief Precomputes double hashing indices and row hash values for mixed join operations.
  *
@@ -100,10 +153,10 @@ precompute_mixed_join_data(mixed_multiset_type const& hash_table,
 
   // Single transform to fill both arrays using zip iterator
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    thrust::counting_iterator<size_type>(0),
-    thrust::counting_iterator<size_type>(probe_table_num_rows),
-    thrust::make_zip_iterator(thrust::make_tuple(input_pairs.begin(), hash_indices.begin())),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
+    cuda::counting_iterator<size_type>{probe_table_num_rows},
+    thrust::make_zip_iterator(cuda::std::make_tuple(input_pairs.begin(), hash_indices.begin())),
     precompute_fn);
 
   return std::make_pair(std::move(input_pairs), std::move(hash_indices));
@@ -293,10 +346,11 @@ compute_mixed_join_matches_per_row(
                                    stream);
   }
 
-  std::size_t const size = thrust::reduce(rmm::exec_policy_nosync(stream),
-                                          matches_per_row_span.begin(),
-                                          matches_per_row_span.end(),
-                                          std::size_t{0});
+  std::size_t const size =
+    thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   matches_per_row_span.begin(),
+                   matches_per_row_span.end(),
+                   std::size_t{0});
 
   return {size, std::move(matches_per_row)};
 }
@@ -401,7 +455,7 @@ mixed_join(
   // Given the number of matches per row, we need to compute the offsets for insertion.
   auto join_result_offsets =
     rmm::device_uvector<size_type>{static_cast<std::size_t>(setup.outer_num_rows), stream, mr};
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          matches_per_row_span.begin(),
                          matches_per_row_span.end(),
                          join_result_offsets.begin());
@@ -469,9 +523,8 @@ mixed_join(
   // For full joins, get the indices in the right table that were not joined to
   // by any row in the left table.
   if (join_type == join_kind::FULL_JOIN) {
-    auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, left_num_rows, right_num_rows, stream, mr);
-    join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+    join_indices = detail::finalize_full_join(
+      std::move(join_indices), left_num_rows, right_num_rows, stream, mr);
   }
   return join_indices;
 }
@@ -508,13 +561,13 @@ compute_mixed_join_output_size(table_view const& left_equality,
       matches_per_row->begin(), static_cast<std::size_t>(outer_num_rows)};
 
     if (right_num_rows == 0 && join_type == join_kind::LEFT_JOIN) {
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    matches_per_row_span.begin(),
                    matches_per_row_span.end(),
                    1);
       return {left_num_rows, std::move(matches_per_row)};
     } else {
-      thrust::fill(rmm::exec_policy_nosync(stream),
+      thrust::fill(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    matches_per_row_span.begin(),
                    matches_per_row_span.end(),
                    0);
@@ -574,7 +627,7 @@ mixed_inner_join(
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::INNER_JOIN,
+                            join_kind::INNER_JOIN,
                             output_size_data,
                             stream,
                             mr);
@@ -597,7 +650,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
                                                 right_conditional,
                                                 binary_predicate,
                                                 compare_nulls,
-                                                detail::join_kind::INNER_JOIN,
+                                                join_kind::INNER_JOIN,
                                                 stream,
                                                 mr);
 }
@@ -621,7 +674,7 @@ mixed_left_join(table_view const& left_equality,
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::LEFT_JOIN,
+                            join_kind::LEFT_JOIN,
                             output_size_data,
                             stream,
                             mr);
@@ -644,7 +697,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
                                                 right_conditional,
                                                 binary_predicate,
                                                 compare_nulls,
-                                                detail::join_kind::LEFT_JOIN,
+                                                join_kind::LEFT_JOIN,
                                                 stream,
                                                 mr);
 }
@@ -668,7 +721,7 @@ mixed_full_join(table_view const& left_equality,
                             right_conditional,
                             binary_predicate,
                             compare_nulls,
-                            detail::join_kind::FULL_JOIN,
+                            join_kind::FULL_JOIN,
                             output_size_data,
                             stream,
                             mr);

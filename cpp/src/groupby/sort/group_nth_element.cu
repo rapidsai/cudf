@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
@@ -18,11 +19,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/reduce.h>
 #include <thrust/scan.h>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
@@ -49,13 +47,16 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
   auto nth_index = rmm::device_uvector<size_type>(num_groups, stream);
   // TODO: replace with async version
   thrust::uninitialized_fill_n(
-    rmm::exec_policy(stream), nth_index.begin(), num_groups, values.size());
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    nth_index.begin(),
+    num_groups,
+    values.size());
 
   // nulls_policy::INCLUDE (equivalent to pandas nth(dropna=None) but return nulls for n
   if (null_handling == null_policy::INCLUDE || !values.has_nulls()) {
     // Returns index of nth value.
     thrust::transform_if(
-      rmm::exec_policy(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       group_sizes.begin<size_type>(),
       group_sizes.end<size_type>(),
       group_offsets.begin(),
@@ -77,32 +78,34 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                                       }));
     rmm::device_uvector<size_type> intra_group_index(values.size(), stream);
     // intra group index for valids only.
-    thrust::exclusive_scan_by_key(rmm::exec_policy(stream),
-                                  group_labels.begin(),
-                                  group_labels.end(),
-                                  bitmask_iterator,
-                                  intra_group_index.begin());
+    thrust::exclusive_scan_by_key(
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      group_labels.begin(),
+      group_labels.end(),
+      bitmask_iterator,
+      intra_group_index.begin());
     // group_size to recalculate n if n<0
     rmm::device_uvector<size_type> group_count = [&] {
       if (n < 0) {
         rmm::device_uvector<size_type> group_count(num_groups, stream);
-        thrust::reduce_by_key(rmm::exec_policy(stream),
-                              group_labels.begin(),
-                              group_labels.end(),
-                              bitmask_iterator,
-                              thrust::make_discard_iterator(),
-                              group_count.begin());
+        cudf::detail::reduce_by_key_async(group_labels.begin(),
+                                          group_labels.end(),
+                                          bitmask_iterator,
+                                          cuda::make_discard_iterator(),
+                                          group_count.begin(),
+                                          cuda::std::plus<size_type>(),
+                                          stream);
         return group_count;
       } else {
         return rmm::device_uvector<size_type>(0, stream);
       }
     }();
     // gather the valid index == n
-    thrust::scatter_if(rmm::exec_policy(stream),
-                       thrust::make_counting_iterator<size_type>(0),
-                       thrust::make_counting_iterator<size_type>(values.size()),
-                       group_labels.begin(),                          // map
-                       thrust::make_counting_iterator<size_type>(0),  // stencil
+    thrust::scatter_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       cuda::counting_iterator<size_type>{0},
+                       cuda::counting_iterator<size_type>{values.size()},
+                       group_labels.begin(),                   // map
+                       cuda::counting_iterator<size_type>{0},  // stencil
                        nth_index.begin(),
                        [n,
                         bitmask_iterator,
@@ -117,7 +120,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
   auto output_table = cudf::detail::gather(table_view{{values}},
                                            nth_index,
                                            out_of_bounds_policy::NULLIFY,
-                                           cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                           cudf::negative_index_policy::NOT_ALLOWED,
                                            stream,
                                            mr);
   if (!output_table->get_column(0).has_nulls()) output_table->get_column(0).set_null_mask({}, 0);

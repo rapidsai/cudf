@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,11 +10,12 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/aggregation.hpp>
 #include <cudf/dictionary/update_keys.hpp>
 
 #include <limits>
 #include <numeric>
+#include <random>
 #include <unordered_set>
 #include <vector>
 
@@ -29,7 +30,7 @@ TYPED_TEST_SUITE(groupby_max_test, cudf::test::FixedWidthTypesWithoutFixedPoint)
 TYPED_TEST(groupby_max_test, basic)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
   cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -47,7 +48,7 @@ TYPED_TEST(groupby_max_test, basic)
 TYPED_TEST(groupby_max_test, empty_cols)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{};
   cudf::test::fixed_width_column_wrapper<V> vals{};
@@ -65,7 +66,7 @@ TYPED_TEST(groupby_max_test, empty_cols)
 TYPED_TEST(groupby_max_test, zero_valid_keys)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys({1, 2, 3}, all_nulls());
   cudf::test::fixed_width_column_wrapper<V> vals({3, 4, 5});
@@ -83,7 +84,7 @@ TYPED_TEST(groupby_max_test, zero_valid_keys)
 TYPED_TEST(groupby_max_test, zero_valid_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
   cudf::test::fixed_width_column_wrapper<V> vals({3, 4, 5}, all_nulls());
@@ -101,7 +102,7 @@ TYPED_TEST(groupby_max_test, zero_valid_values)
 TYPED_TEST(groupby_max_test, null_keys_and_values)
 {
   using V = TypeParam;
-  using R = cudf::detail::target_type_t<V, cudf::aggregation::MAX>;
+  using R = V;
 
   cudf::test::fixed_width_column_wrapper<K> keys(
     {1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
@@ -142,7 +143,7 @@ TEST_F(groupby_max_string_test, basic)
 TEST_F(groupby_max_string_test, zero_valid_values)
 {
   cudf::test::fixed_width_column_wrapper<K> keys{1, 1, 1};
-  cudf::test::strings_column_wrapper vals({"año", "bit", "₹1"}, all_nulls());
+  cudf::test::strings_column_wrapper vals({"", "", ""}, all_nulls());
 
   cudf::test::fixed_width_column_wrapper<K> expect_keys{1};
   cudf::test::strings_column_wrapper expect_vals({""}, all_nulls());
@@ -547,14 +548,19 @@ TYPED_TEST(groupby_max_floating_point_test, values_with_nan)
   EXPECT_EQ(result.first->num_rows(), 1);
 }
 
-// Test the fallback global memory kernel in hash-based groupby aggregations.
-struct groupby_max_hash_based_gmem_fallback_kernel_test : cudf::test::BaseFixture {};
+// Test the shared memory kernel in hash-based groupby aggregations.
+struct groupby_max_hash_based_shmem_kernel_test : cudf::test::BaseFixture {};
 
-TEST_F(groupby_max_hash_based_gmem_fallback_kernel_test, all_block_fallback)
+TEST_F(groupby_max_hash_based_shmem_kernel_test, all_unique_keys)
 {
-  // A thread block (of 128 threads) will fallback when it encounters at least 128 distinct keys.
-  // Thus, a series of all distinct keys input will make the block fallback.
-  std::vector<int> h_keys(128 * 2);
+  auto constexpr block_size      = 128;
+  auto constexpr size_multiplier = 4;
+
+  // Since the maximum number of thread blocks (128 threads each) can be 100+ depending on GPU
+  // architecture, while the number of rows is just 128*4, each thread block will process exactly
+  // 128 rows. Because all thread blocks encounter no more than 128 distinct keys, they will
+  // run using the shared memory kernel.
+  std::vector<int> h_keys(block_size * size_multiplier);
   std::iota(h_keys.begin(), h_keys.end(), 0);
 
   cudf::test::fixed_width_column_wrapper<int> keys(h_keys.begin(), h_keys.end());
@@ -565,28 +571,25 @@ TEST_F(groupby_max_hash_based_gmem_fallback_kernel_test, all_block_fallback)
   test_single_agg(keys, keys, expect_keys, expect_keys, std::move(agg));
 }
 
-TEST_F(groupby_max_hash_based_gmem_fallback_kernel_test, partial_fallback)
+TEST_F(groupby_max_hash_based_shmem_kernel_test, repeated_keys)
 {
-  // A thread block (of 128 threads) will fallback when it encounters at least 128 distinct keys.
-  // We create just a few blocks and duplicate keys in some of them to have these blocks fallback.
-  std::vector<int> h_keys(128 * 4);
-  std::iota(h_keys.begin(), h_keys.end(), 0);
+  auto constexpr block_size      = 128;
+  auto constexpr size_multiplier = 10000;
 
-  // Duplicate elements in the 1st and 3rd blocks.
-  std::iota(h_keys.begin() + 50, h_keys.begin() + 100, 0);
-  std::iota(h_keys.begin() + 256 + 50, h_keys.begin() + 256 + 100, 256);
+  // Repeat the keys for every 128 rows, thus we will have only 128 distinct keys in total.
+  // Because all thread blocks encounter no more than 128 distinct keys, they will run using the
+  // shared memory kernel.
+  std::vector<int> h_keys(block_size * size_multiplier);
+  auto it = h_keys.begin();
+  while (it != h_keys.end()) {
+    std::iota(it, it + block_size, 0);
+    it += block_size;
+  }
 
+  cudf::test::fixed_width_column_wrapper<int> expect_keys(h_keys.begin(),
+                                                          h_keys.begin() + block_size);
+  std::ranges::shuffle(h_keys.begin(), h_keys.end(), std::default_random_engine());
   cudf::test::fixed_width_column_wrapper<int> keys(h_keys.begin(), h_keys.end());
-
-  // Use a set to remove duplcate rows.
-  // We can't use the set directly to construct a column wrapper thus have to convert it back
-  // to a vector for doing so.
-  std::vector<int> h_expected_keys = [&] {
-    auto tmp = std::unordered_set<int>(h_keys.begin(), h_keys.end());
-    return std::vector<int>{tmp.begin(), tmp.end()};
-  }();
-  cudf::test::fixed_width_column_wrapper<int> expect_keys(h_expected_keys.begin(),
-                                                          h_expected_keys.end());
 
   auto agg = cudf::make_max_aggregation<cudf::groupby_aggregation>();
   // Keys are the same as values.

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -15,26 +15,27 @@ def test_df_series_dataframe_astype_copy(copy):
     gdf = cudf.DataFrame({"col1": [1, 2], "col2": [3, 4]})
     pdf = gdf.to_pandas()
 
-    assert_eq(
-        gdf.astype(dtype="float", copy=copy),
-        pdf.astype(dtype="float", copy=copy),
-    )
+    result = gdf.astype(dtype="float", copy=copy)
+    with pytest.warns(pd.errors.Pandas4Warning):
+        expected = pdf.astype(dtype="float", copy=copy)
+    assert_eq(result, expected)
     assert_eq(gdf, pdf)
 
     gsr = cudf.Series([1, 2])
     psr = gsr.to_pandas()
 
-    assert_eq(
-        gsr.astype(dtype="float", copy=copy),
-        psr.astype(dtype="float", copy=copy),
-    )
+    result = gsr.astype(dtype="float", copy=copy)
+    with pytest.warns(pd.errors.Pandas4Warning):
+        expected = psr.astype(dtype="float", copy=copy)
+    assert_eq(result, expected)
     assert_eq(gsr, psr)
 
     gsr = cudf.Series([1, 2])
     psr = gsr.to_pandas()
 
     actual = gsr.astype(dtype="int64", copy=copy)
-    expected = psr.astype(dtype="int64", copy=copy)
+    with pytest.warns(pd.errors.Pandas4Warning):
+        expected = psr.astype(dtype="int64", copy=copy)
     assert_eq(expected, actual)
     assert_eq(gsr, psr)
     actual[0] = 3
@@ -47,33 +48,34 @@ def test_df_series_dataframe_astype_dtype_dict(copy):
     gdf = cudf.DataFrame({"col1": [1, 2], "col2": [3, 4]})
     pdf = gdf.to_pandas()
 
-    assert_eq(
-        gdf.astype(dtype={"col1": "float"}, copy=copy),
-        pdf.astype(dtype={"col1": "float"}, copy=copy),
-    )
+    result = gdf.astype(dtype={"col1": "float"}, copy=copy)
+    with pytest.warns(pd.errors.Pandas4Warning):
+        expected = pdf.astype(dtype={"col1": "float"}, copy=copy)
+    assert_eq(result, expected)
     assert_eq(gdf, pdf)
 
     gsr = cudf.Series([1, 2])
     psr = gsr.to_pandas()
 
-    assert_eq(
-        gsr.astype(dtype={None: "float"}, copy=copy),
-        psr.astype(dtype={None: "float"}, copy=copy),
-    )
+    result = gsr.astype(dtype={None: "float"}, copy=copy)
+    with pytest.warns(pd.errors.Pandas4Warning):
+        expected = psr.astype(dtype={None: "float"}, copy=copy)
+    assert_eq(result, expected)
     assert_eq(gsr, psr)
 
     assert_exceptions_equal(
         lfunc=psr.astype,
         rfunc=gsr.astype,
-        lfunc_args_and_kwargs=([], {"dtype": {"a": "float"}, "copy": copy}),
-        rfunc_args_and_kwargs=([], {"dtype": {"a": "float"}, "copy": copy}),
+        lfunc_args_and_kwargs=([], {"dtype": {"a": "float"}}),
+        rfunc_args_and_kwargs=([], {"dtype": {"a": "float"}}),
     )
 
     gsr = cudf.Series([1, 2])
     psr = gsr.to_pandas()
 
     actual = gsr.astype({None: "int64"}, copy=copy)
-    expected = psr.astype({None: "int64"}, copy=copy)
+    with pytest.warns(pd.errors.Pandas4Warning):
+        expected = psr.astype({None: "int64"}, copy=copy)
     assert_eq(expected, actual)
     assert_eq(gsr, psr)
 
@@ -272,3 +274,13 @@ def test_empty_df_astype(all_supported_types_as_str):
     result = df.astype(dtype=all_supported_types_as_str)
     assert_eq(df, result)
     assert_eq(df.to_pandas().astype(dtype=all_supported_types_as_str), result)
+
+
+@pytest.mark.parametrize("copy", [True, False])
+def test_dataframe_astype_no_copy(copy):
+    gdf = cudf.DataFrame({"a": [1, 2], "b": [3, 4]})
+    result = gdf.astype("int64", copy=copy)
+    assert_eq(result, gdf)
+    # Under CoW, copy=False returns a shallow copy (distinct object) rather
+    # than self; identity is not guaranteed regardless of copy parameter.
+    assert result is not gdf

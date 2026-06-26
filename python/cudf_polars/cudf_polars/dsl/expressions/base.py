@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import enum
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import pylibcudf as plc
 
@@ -16,15 +16,11 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.nodebase import Node
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf_polars.containers import Column, DataFrame, DataType
 
-__all__ = ["AggInfo", "Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
-
-
-class AggInfo(NamedTuple):
-    requests: list[tuple[Expr | None, plc.aggregation.Aggregation, Expr]]
+__all__ = ["Col", "ColRef", "ExecutionContext", "Expr", "NamedExpr"]
 
 
 class ExecutionContext(IntEnum):

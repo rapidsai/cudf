@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,6 +35,8 @@ TEST_F(SHA224HashTest, MultiValue)
      "A 56 character string to test message padding algorithm.",
      "A 63 character string to test message padding algorithm, again.",
      "A 64 character string to test message padding algorithm, again!!",
+     "A 128 character string to test message padding algorithm for exact multiples of 64 bytes. "
+     "Let's be very sure that this works!!!!",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
      "the hash function being tested. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
@@ -58,6 +60,7 @@ TEST_F(SHA224HashTest, MultiValue)
      "5d1ed8373987e403482cefe1662a63fa3076c0a5331d141f41654bbe",
      "0662c91000b99de7a20c89097dd62f59120398d52499497489ccff95",
      "f9ea303770699483f3e53263b32a3b3c876d1b8808ce84df4b8ca1c4",
+     "5a2db111de8110fda407037b587af6bb05eec55761696b90bca05729",
      "2da6cd4bdaa0a99fd7236cd5507c52e12328e71192e83b32d2f110f9",
      "e7d0adb165079efc6c6343112f8b154aa3644ca6326f658aaa0f8e4a",
      "309cc09eaa051beea7d0b0159daca9b4e8a533cb554e8f382c82709e",
@@ -69,6 +72,7 @@ TEST_F(SHA224HashTest, MultiValue)
      "8e1955a473a149368dc0a931f99379b44b0bb752f206dbdf68629232",
      "8581001e08295b7884428c022378cfdd643c977aefe4512f0252dc30",
      "d5854dfe3c32996345b103a6a16c7bdfa924723d620b150737e77370",
+     "040e548e5e6e7affc27b39521c303a8030c119b9ba13d9739cf2c649",
      "dd56deac5f2caa579a440ee814fc04a3afaf805d567087ac3317beb3",
      "14fb559f6309604bedd89183f585f3b433932b5b0e675848feebf8ec",
      "d219eefea538491efcb69bc5bbef4177ad991d1b6e1367b5981b8c31",
@@ -76,9 +80,9 @@ TEST_F(SHA224HashTest, MultiValue)
 
   using limits = std::numeric_limits<int32_t>;
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
-    {0, -1, 100, -100, limits::min(), limits::max(), 1, 2, 3});
+    {0, -1, 100, -100, limits::min(), limits::max(), 42, 1, 2, 3});
 
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   // Test string inputs against known outputs
   auto const string_input1         = cudf::table_view({strings_col});

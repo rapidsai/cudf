@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <cuda/iterator>
 
 namespace cudf {
 namespace strings {
@@ -59,8 +61,8 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
   auto d_chars         = result->mutable_view().head<char>();
 
   auto const d_column = column_device_view::create(input.parent(), stream);
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::counting_iterator<size_type>(0),
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     cuda::counting_iterator<size_type>{0},
                      input.size(),
                      reverse_characters_fn{*d_column, d_offsets, d_chars});
 

@@ -1,27 +1,31 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/io/csv.hpp>
 #include <cudf/io/datasource.hpp>
+#include <cudf/reduction.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
 #include <cudf/strings/convert/convert_fixed_point.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
 #include <fstream>
@@ -94,6 +98,7 @@ struct CsvFixedPointReaderTest : public CsvReaderTest {
       cudf::io::csv_reader_options::builder(
         cudf::io::source_info{cudf::host_span<std::byte const>{
           reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+        .compression(cudf::io::compression_type::NONE)
         .dtypes({data_type{type_to_id<DecimalType>(), scale}})
         .header(-1);
 
@@ -110,7 +115,7 @@ TYPED_TEST_SUITE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
 namespace {
 // Generates a vector of uniform random values of type T
 template <typename T>
-inline auto random_values(size_t size)
+inline auto random_values(std::size_t size)
 {
   std::vector<T> values(size);
 
@@ -174,8 +179,8 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
   cudf::size_type nrows = h_lhs.size();
   EXPECT_TRUE(nrows == static_cast<cudf::size_type>(h_rhs.size()));
 
-  auto begin_count = thrust::make_counting_iterator<cudf::size_type>(0);
-  auto end_count   = thrust::make_counting_iterator<cudf::size_type>(nrows);
+  auto begin_count = cuda::counting_iterator<cudf::size_type>{0};
+  auto end_count   = cuda::counting_iterator<cudf::size_type>{nrows};
 
   auto* ptr_lhs = h_lhs.data();  // cannot capture host_vector in thrust,
                                  // not even in host lambda
@@ -194,7 +199,7 @@ void check_timestamp_column(cudf::column_view const& col_lhs,
 // helper to replace in `str`  _all_ occurrences of `from` with `to`
 std::string replace_all_helper(std::string str, std::string const& from, std::string const& to)
 {
-  size_t start_pos = 0;
+  std::size_t start_pos = 0;
   while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
     str.replace(start_pos, from.length(), to);
     start_pos += to.length();
@@ -347,8 +352,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   std::vector<std::string> reference_strings = {
     "1.23", "-8.76", "5.43", "-0.12", "0.25", "-0.23", "-0.27", "0.00", "0.00"};
 
-  auto validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
+  auto validity = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
@@ -356,7 +360,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   thrust::copy_if(thrust::host,
                   reference_strings.begin(),
                   reference_strings.end(),
-                  thrust::make_counting_iterator(0),
+                  cuda::counting_iterator<std::size_t>{0},
                   std::back_inserter(valid_reference_strings),
                   validity.functor());
   reference_strings = valid_reference_strings;
@@ -394,8 +398,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   std::vector<std::string> reference_strings = {
     "123000", "-876000", "543000", "-12000", "25000", "-23000", "-27000", "0000", "0000"};
 
-  auto validity =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2 == 0); });
+  auto validity = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::strings_column_wrapper strings(
     reference_strings.begin(), reference_strings.end(), validity);
 
@@ -403,7 +406,7 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   thrust::copy_if(thrust::host,
                   reference_strings.begin(),
                   reference_strings.end(),
-                  thrust::make_counting_iterator(0),
+                  cuda::counting_iterator<std::size_t>{0},
                   std::back_inserter(valid_reference_strings),
                   validity.functor());
   reference_strings = valid_reference_strings;
@@ -1099,6 +1102,7 @@ TEST_F(CsvReaderTest, ByteRangeStrings)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(input.c_str()), input.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"A"})
       .dtypes({dtype<cudf::string_view>()})
       .header(-1)
@@ -1214,11 +1218,139 @@ TEST_F(CsvReaderTest, StringInference)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .header(-1);
   auto const result = cudf::io::read_csv(in_opts);
 
   EXPECT_EQ(result.tbl->num_columns(), 1);
   EXPECT_EQ(result.tbl->get_column(0).type().id(), type_id::STRING);
+}
+
+TEST_F(CsvReaderTest, DelimWhitespaceNoHeaderLeadingTrailingDelimiter)
+{
+  std::string buffer = "  1   2  \n  3   4  \n";
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(-1);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "0");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "1");
+  ASSERT_EQ(result_view.num_columns(), 2);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::INT64);
+  expect_column_data_equal(std::vector<int64_t>{1, 3}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2, 4}, result_view.column(1));
+}
+
+// Exercises whitespace-shape variations (no padding, leading-only, trailing-only,
+// internal-runs-only, leading+trailing+internal, and quoted header names with and
+// without surrounding whitespace) that should all yield the same `(col_a, col_b)`
+// schema and `[(1,2),(3,4)]` data under `delim_whitespace=true` (pandas parity).
+class CsvDelimWhitespaceShapeTest : public CsvReaderTest,
+                                    public ::testing::WithParamInterface<std::string> {};
+
+TEST_P(CsvDelimWhitespaceShapeTest, ProducesTwoColumns)
+{
+  auto const buffer = GetParam();
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delim_whitespace(true)
+      .header(0);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result.metadata.schema_info.size(), 2);
+  EXPECT_EQ(result.metadata.schema_info[0].name, "col_a");
+  EXPECT_EQ(result.metadata.schema_info[1].name, "col_b");
+  ASSERT_EQ(result_view.num_columns(), 2);
+  expect_column_data_equal(std::vector<int64_t>{1, 3}, result_view.column(0));
+  expect_column_data_equal(std::vector<int64_t>{2, 4}, result_view.column(1));
+}
+
+INSTANTIATE_TEST_SUITE_P(CsvReaderTest,
+                         CsvDelimWhitespaceShapeTest,
+                         ::testing::Values(std::string{"col_a col_b\n1 2\n3 4\n"},
+                                           std::string{"  col_a col_b\n  1 2\n  3 4\n"},
+                                           std::string{"col_a col_b  \n1 2  \n3 4  \n"},
+                                           std::string{"col_a   col_b\n1   2\n3   4\n"},
+                                           std::string{"  col_a   col_b  \n  1   2  \n  3   4  \n"},
+                                           std::string{"\"col_a\" \"col_b\"\n1 2\n3 4\n"},
+                                           std::string{"  \"col_a\"   \"col_b\"  \n1 2\n3 4\n"}));
+
+TEST_F(CsvReaderTest, TypeInferenceEmptyDelimitedFields)
+{
+  std::string const buffer = "1,,3\n4,,6\n";
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .na_filter(false)
+      .header(-1);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result_view.num_columns(), 3);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::STRING);
+  EXPECT_EQ(result_view.column(2).type().id(), type_id::INT64);
+
+  expect_column_data_equal(std::vector<int64_t>{1, 4}, result_view.column(0));
+  expect_column_data_equal(std::vector<std::string>{"", ""}, result_view.column(1));
+  expect_column_data_equal(std::vector<int64_t>{3, 6}, result_view.column(2));
+}
+
+TEST_F(CsvReaderTest, MultiChunkRowCount)
+{
+  // TODO: add reader option to set chunk size and use it here
+  constexpr size_t chunk_threshold = 64ull * 1024 * 1024;
+  std::string const row            = "123,456,789\n";
+  size_t const num_rows            = (chunk_threshold / row.size()) + 1024;
+
+  std::string buffer;
+  buffer.reserve(num_rows * row.size());
+  for (size_t i = 0; i < num_rows; ++i) {
+    buffer.append(row);
+  }
+
+  cudf::io::csv_reader_options const in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .header(-1);
+  auto const result      = cudf::io::read_csv(in_opts);
+  auto const result_view = result.tbl->view();
+
+  ASSERT_EQ(result_view.num_columns(), 3);
+  EXPECT_EQ(static_cast<size_t>(result_view.num_rows()), num_rows);
+  EXPECT_EQ(result_view.column(0).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(1).type().id(), type_id::INT64);
+  EXPECT_EQ(result_view.column(2).type().id(), type_id::INT64);
+
+  // All rows are identical, so verifying min == max == expected
+  auto const i64       = cudf::data_type{cudf::type_id::INT64};
+  auto const min_agg   = cudf::make_min_aggregation<cudf::reduce_aggregation>();
+  auto const max_agg   = cudf::make_max_aggregation<cudf::reduce_aggregation>();
+  auto const all_equal = [&](cudf::column_view const& col, int64_t expected) {
+    using scalar_t = cudf::numeric_scalar<int64_t>;
+    auto const min = cudf::reduce(col, *min_agg, i64);
+    auto const max = cudf::reduce(col, *max_agg, i64);
+    return static_cast<scalar_t const&>(*min).value() == expected &&
+           static_cast<scalar_t const&>(*max).value() == expected;
+  };
+  EXPECT_TRUE(all_equal(result_view.column(0), 123));
+  EXPECT_TRUE(all_equal(result_view.column(1), 456));
+  EXPECT_TRUE(all_equal(result_view.column(2), 789));
 }
 
 TEST_F(CsvReaderTest, TypeInferenceThousands)
@@ -1228,6 +1360,7 @@ TEST_F(CsvReaderTest, TypeInferenceThousands)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .header(-1)
       .thousands('`');
   auto const result      = cudf::io::read_csv(in_opts);
@@ -1257,6 +1390,7 @@ TEST_F(CsvReaderTest, TypeInferenceWithDecimal)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .header(-1)
       .thousands('`')
       .decimal(';');
@@ -1284,6 +1418,7 @@ TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .header(-1)
       .skiprows(1);
   EXPECT_NO_THROW(cudf::io::read_csv(skiprows_options));
@@ -1292,6 +1427,7 @@ TEST_F(CsvReaderTest, SkipRowsXorSkipFooter)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .header(-1)
       .skipfooter(1);
   EXPECT_NO_THROW(cudf::io::read_csv(skipfooter_options));
@@ -1655,7 +1791,7 @@ TEST_F(CsvReaderTest, MultiColumnWithWriter)
   auto const result_sliced_view = result_table.select(non_float64s);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_sliced_view, result_sliced_view);
 
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto validity = cudf::test::iterators::no_nulls();
   double tol{1.0e-6};
   auto float64_col_idx = non_float64s.size();
   check_float_column(
@@ -1960,20 +2096,20 @@ class TestSource : public cudf::io::datasource {
   std::string const str;
 
   TestSource(std::string s) : str(std::move(s)) {}
-  std::unique_ptr<buffer> host_read(size_t offset, size_t size) override
+  std::unique_ptr<buffer> host_read(std::size_t offset, std::size_t size) override
   {
     size = std::min(size, str.size() - offset);
     return std::make_unique<non_owning_buffer>((uint8_t*)str.data() + offset, size);
   }
 
-  size_t host_read(size_t offset, size_t size, uint8_t* dst) override
+  std::size_t host_read(std::size_t offset, std::size_t size, uint8_t* dst) override
   {
     auto const read_size = std::min(size, str.size() - offset);
     memcpy(dst, str.data() + offset, size);
     return read_size;
   }
 
-  [[nodiscard]] size_t size() const override { return str.size(); }
+  [[nodiscard]] std::size_t size() const override { return str.size(); }
 };
 
 TEST_F(CsvReaderTest, UserImplementedSource)
@@ -1991,6 +2127,7 @@ TEST_F(CsvReaderTest, UserImplementedSource)
   TestSource source{csv_data.str()};
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(cudf::io::source_info{&source})
+      .compression(cudf::io::compression_type::NONE)
       .dtypes({dtype<int8_t>(), dtype<int16_t>(), dtype<int32_t>()})
       .header(-1);
   auto result = cudf::io::read_csv(in_opts);
@@ -2252,6 +2389,7 @@ TEST_F(CsvReaderTest, DtypesMap)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"A", "B"})
       .dtypes({{"B", dtype<int16_t>()}, {"A", dtype<int32_t>()}})
       .header(-1);
@@ -2270,6 +2408,7 @@ TEST_F(CsvReaderTest, DtypesMapPartial)
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{nullptr, 0}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"A", "B"})
       .dtypes({{"A", dtype<int16_t>()}});
   {
@@ -2296,6 +2435,7 @@ TEST_F(CsvReaderTest, DtypesArrayInvalid)
   cudf::io::csv_reader_options in_opts =
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{nullptr, 0}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"A", "B", "C"})
       .dtypes(std::vector<cudf::data_type>{dtype<int16_t>(), dtype<int8_t>()});
 
@@ -2338,6 +2478,7 @@ TEST_F(CsvReaderTest, UseColsValidation)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"a", "b"})
       .use_cols_indexes({0});
   EXPECT_THROW(cudf::io::read_csv(idx_cnt_options), cudf::logic_error);
@@ -2346,6 +2487,7 @@ TEST_F(CsvReaderTest, UseColsValidation)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"a", "b"})
       .use_cols_indexes({0, 0});
   EXPECT_THROW(cudf::io::read_csv(unique_idx_cnt_options), cudf::logic_error);
@@ -2354,6 +2496,7 @@ TEST_F(CsvReaderTest, UseColsValidation)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"a", "b", "c"})
       .use_cols_names({"nonexistent_name"});
   EXPECT_THROW(cudf::io::read_csv(bad_name_options), cudf::logic_error);
@@ -2367,6 +2510,7 @@ TEST_F(CsvReaderTest, CropColumns)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<float>()})
       .names({"a", "b"})
       .header(-1);
@@ -2388,6 +2532,7 @@ TEST_F(CsvReaderTest, CropColumnsUseColsNames)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<float>()})
       .names({"a", "b"})
       .use_cols_names({"b"})
@@ -2408,6 +2553,7 @@ TEST_F(CsvReaderTest, ExtraColumns)
       cudf::io::csv_reader_options::builder(
         cudf::io::source_info{cudf::host_span<std::byte const>{
           reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+        .compression(cudf::io::compression_type::NONE)
         .names({"a", "b", "c", "d"})
         .header(-1);
     auto result = cudf::io::read_csv(opts);
@@ -2422,6 +2568,7 @@ TEST_F(CsvReaderTest, ExtraColumns)
       cudf::io::csv_reader_options::builder(
         cudf::io::source_info{cudf::host_span<std::byte const>{
           reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+        .compression(cudf::io::compression_type::NONE)
         .names({"a", "b", "c", "d"})
         .dtypes({dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>(), dtype<float>()})
         .header(-1);
@@ -2443,6 +2590,7 @@ TEST_F(CsvReaderTest, ExtraColumnsUseCols)
       cudf::io::csv_reader_options::builder(
         cudf::io::source_info{cudf::host_span<std::byte const>{
           reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+        .compression(cudf::io::compression_type::NONE)
         .names({"a", "b", "c", "d"})
         .use_cols_names({"b", "d"})
         .header(-1);
@@ -2458,6 +2606,7 @@ TEST_F(CsvReaderTest, ExtraColumnsUseCols)
       cudf::io::csv_reader_options::builder(
         cudf::io::source_info{cudf::host_span<std::byte const>{
           reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+        .compression(cudf::io::compression_type::NONE)
         .names({"a", "b", "c", "d"})
         .use_cols_names({"b", "d"})
         .dtypes({dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>(), dtype<cudf::string_view>()})
@@ -2480,6 +2629,7 @@ TEST_F(CsvReaderTest, EmptyColumns)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .names({"a", "b", "c", "d"})
       .header(-1);
   // More elements in `names` than in the file; additional columns are filled with nulls
@@ -2503,6 +2653,7 @@ TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
       cudf::io::csv_reader_options::builder(
         cudf::io::source_info{cudf::host_span<std::byte const>{
           reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+        .compression(cudf::io::compression_type::NONE)
         .header(-1);
     // No header, getting column names/count from first row
     auto result = cudf::io::read_csv(no_header_opts);
@@ -2512,8 +2663,10 @@ TEST_F(CsvReaderTest, BlankLineAfterFirstRow)
   }
   {
     cudf::io::csv_reader_options header_opts =
-      cudf::io::csv_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
-        reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}});
+      cudf::io::csv_reader_options::builder(
+        cudf::io::source_info{cudf::host_span<std::byte const>{
+          reinterpret_cast<std::byte const*>(csv_in.c_str()), csv_in.size()}})
+        .compression(cudf::io::compression_type::NONE);
     // Getting column names/count from header
     auto result = cudf::io::read_csv(header_opts);
 
@@ -2529,6 +2682,7 @@ TEST_F(CsvReaderTest, NullCount)
     cudf::io::csv_reader_options::builder(
       cudf::io::source_info{cudf::host_span<std::byte const>{
         reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
       .header(-1);
   auto const result      = cudf::io::read_csv(in_opts);
   auto const result_view = result.tbl->view();
@@ -2543,8 +2697,10 @@ TEST_F(CsvReaderTest, UTF8BOM)
 {
   std::string buffer = "\xEF\xBB\xBFMonth,Day,Year\nJune,6,2023\nAugust,25,1990\nMay,1,2000\n";
   cudf::io::csv_reader_options in_opts =
-    cudf::io::csv_reader_options::builder(cudf::io::source_info{cudf::host_span<std::byte const>{
-      reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}});
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.c_str()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE);
   auto const result      = cudf::io::read_csv(in_opts);
   auto const result_view = result.tbl->view();
   EXPECT_EQ(result_view.num_rows(), 3);
@@ -2573,7 +2729,7 @@ TEST_F(CsvReaderTest, OutOfMapBoundsReads)
   auto const file_size = num_rows * row.size();
   {
     std::ofstream outfile(filepath, std::ofstream::out);
-    for (size_t i = 0; i < num_rows; ++i) {
+    for (std::size_t i = 0; i < num_rows; ++i) {
       outfile << row;
     }
   }
@@ -2614,6 +2770,179 @@ TEST(CsvWriterTypeSupportTest, UnsupportedTypes)
   EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::LIST}));
   EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::STRUCT}));
   EXPECT_FALSE(is_supported_write_csv(cudf::data_type{cudf::type_id::DICTIONARY32}));
+}
+
+TEST_F(CsvReaderTest, DoubleQuotesOddCount)
+{
+  std::string const content{R"(Monday" "Tuesday" Wednesday)"};
+  std::string const buffer = content + "\n";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .header(-1)
+      .dtypes({dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+  EXPECT_EQ(result.tbl->view().num_columns(), 1);
+
+  auto const expected = cudf::test::strings_column_wrapper({content});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
+}
+
+TEST_F(CsvReaderTest, UnquotedStringDoubledQuotes)
+{
+  // Tab delimiter makes the entire line a single unquoted field containing commas and quotes
+  std::string const buffer = R"(hello,"",world
+foo
+bar
+end
+)";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .header(-1)
+      .dtypes({dtype<cudf::string_view>()})
+      .delimiter('\t');
+  auto const result = cudf::io::read_csv(in_opts);
+  EXPECT_EQ(result.tbl->view().num_columns(), 1);
+  EXPECT_EQ(result.tbl->view().num_rows(), 4);
+
+  auto const expected =
+    cudf::test::strings_column_wrapper({R"(hello,"",world)", R"(foo)", R"(bar)", R"(end)"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), expected);
+}
+
+TEST_F(CsvReaderTest, QuotedFieldWithTrailingDelimiter)
+{
+  std::string const buffer = R"(a,b
+1,"trailing,"
+2,"normal"
+3,end
+)";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 3);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3});
+  auto const expected_col1 = cudf::test::strings_column_wrapper({"trailing,", "normal", "end"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
+}
+
+TEST_F(CsvReaderTest, EscapedQuotesWithSemicolonDelimiter)
+{
+  std::string const buffer = R"(a;b
+1;"hello""world"
+2;"test"
+3;"end"
+)";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delimiter(';')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 3);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3});
+  auto const expected_col1 = cudf::test::strings_column_wrapper({"hello\"world", "test", "end"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
+}
+
+TEST_F(CsvReaderTest, EscapedQuoteBeforeDelimiterInQuotedField)
+{
+  std::string const buffer =
+    "a;b\n"
+    "1;\"hello\"\";\"\n"  // hello"; escaped as "hello"";"
+    "2;\"test\"\n"
+    "3;\"end\"\n";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .delimiter(';')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 3);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+}
+
+TEST_F(CsvReaderTest, CommentLines)
+{
+  std::string const buffer =
+    "# This is a comment\n"
+    "a,b,c\n"
+    "1,2,3\n"
+    "# Another comment\n"
+    "4,5,6\n";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .comment('#')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<int32_t>(), dtype<int32_t>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 2);
+  EXPECT_EQ(result.tbl->view().num_columns(), 3);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 4});
+  auto const expected_col1 = cudf::test::fixed_width_column_wrapper<int32_t>({2, 5});
+  auto const expected_col2 = cudf::test::fixed_width_column_wrapper<int32_t>({3, 6});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(2), expected_col2);
+}
+
+TEST_F(CsvReaderTest, CommentLinesWithQuotedStrings)
+{
+  std::string const buffer =
+    "# comment\n"
+    "a,b\n"
+    "1,\"hello\"\"world\"\n"
+    "# another comment\n"
+    "2,\"test\"\n";
+
+  cudf::io::csv_reader_options in_opts =
+    cudf::io::csv_reader_options::builder(
+      cudf::io::source_info{cudf::host_span<std::byte const>{
+        reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+      .compression(cudf::io::compression_type::NONE)
+      .comment('#')
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  auto const result = cudf::io::read_csv(in_opts);
+
+  EXPECT_EQ(result.tbl->view().num_rows(), 2);
+  EXPECT_EQ(result.tbl->view().num_columns(), 2);
+
+  auto const expected_col0 = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2});
+  auto const expected_col1 = cudf::test::strings_column_wrapper({"hello\"world", "test"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0), expected_col0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(1), expected_col1);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

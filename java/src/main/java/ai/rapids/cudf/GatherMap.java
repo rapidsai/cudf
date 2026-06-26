@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,6 +22,11 @@ public class GatherMap implements AutoCloseable {
       throw new IllegalArgumentException("buffer length not a multiple of 4");
     }
     this.buffer = buffer;
+  }
+
+  @Override
+  public String toString() {
+    return "GatherMap(buffer=" + buffer + ")";
   }
 
   /** Return the number of rows in the gather map */
@@ -52,6 +57,25 @@ public class GatherMap implements AutoCloseable {
     DeviceMemoryBuffer result = buffer;
     buffer = null;
     return result;
+  }
+
+  /**
+   * Get the address of the underlying device buffer.
+   * This is to be used for JNI calls and with a lot of care.
+   */
+  public long getBufferAddress() {
+    ensureOpen();
+    return buffer.getAddress();
+  }
+
+  /**
+   * Get the length of the underlying device buffer.
+   * This is to be used for JNI calls and with a lot of care.
+   * @return the length of the buffer in bytes.
+   */
+  public long getBufferLength() {
+    ensureOpen();
+    return buffer.getLength();
   }
 
   /** Close the device buffer backing the gather map data. */

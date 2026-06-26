@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -255,6 +255,18 @@ TEST_F(StringsSliceTest, MaxPositions)
 
   results = cudf::strings::slice_strings(strings_column, -10, -19, -1);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, MixedTypePositions)
+{
+  auto input =
+    cudf::test::strings_column_wrapper({"a", "bc", "def", "ghij", "klmno", "pqrstu", "éuvwxyz"});
+  auto sv       = cudf::strings_column_view(input);
+  auto starts   = cudf::test::fixed_width_column_wrapper<int16_t>({0, 1, 2, 3, 4, 5, 6});
+  auto stops    = cudf::test::fixed_width_column_wrapper<int64_t>({1, 2, 3, 4, 5, 6, 7});
+  auto expected = cudf::test::strings_column_wrapper({"a", "c", "f", "j", "o", "u", "z"});
+  auto results  = cudf::strings::slice_strings(sv, starts, stops);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
 TEST_F(StringsSliceTest, MultiByteChars)

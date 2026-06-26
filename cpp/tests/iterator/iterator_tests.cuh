@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -9,7 +9,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/functional.hpp>
 #include <cudf/detail/utilities/transform_unary_functions.cuh>  // for meanvar
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/default_stream.hpp>
@@ -50,7 +49,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              cudf::detail::minimum{},
+                              cuda::minimum{},
                               init,
                               cudf::get_default_stream().value());
 
@@ -63,7 +62,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              cudf::detail::minimum{},
+                              cuda::minimum{},
                               init,
                               cudf::get_default_stream().value());
 
@@ -84,13 +83,13 @@ struct IteratorTest : public cudf::test::BaseFixture {
     // using a temporary vector and calling transform and all_of separately is
     // equivalent to thrust::equal but compiles ~3x faster
     auto dev_results = rmm::device_uvector<bool>(num_items, cudf::get_default_stream());
-    thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+    thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                       d_in,
                       d_in_last,
                       dev_expected.begin(),
                       dev_results.begin(),
                       cuda::std::equal_to{});
-    auto result = thrust::all_of(rmm::exec_policy(cudf::get_default_stream()),
+    auto result = thrust::all_of(rmm::exec_policy_nosync(cudf::get_default_stream()),
                                  dev_results.begin(),
                                  dev_results.end(),
                                  cuda::std::identity{});

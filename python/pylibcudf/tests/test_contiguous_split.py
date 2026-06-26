@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import string
@@ -57,8 +57,9 @@ def test_pack_and_unpack_from_memoryviews(arrow_tbl):
     assert_table_eq(arrow_tbl, res)
 
 
+@pytest.mark.parametrize("stream", [None, Stream()])
 @pytest.mark.parametrize("bufsize", [1024 * 1024, 3 * 1024 * 1000])
-def test_chunked_pack(bufsize):
+def test_chunked_pack(bufsize, stream):
     nprint = len(string.printable)
     h_table = pa.table(
         {
@@ -66,15 +67,31 @@ def test_chunked_pack(bufsize):
             "b": [string.printable[: i % nprint] for i in range(100_000)],
         }
     )
-    stream = Stream()
     temp_mr = rmm.mr.CudaMemoryResource()
     staging_buf = rmm.DeviceBuffer(size=bufsize)
     metadata, h_pack = plc.contiguous_split.ChunkedPack.create(
-        plc.Table.from_arrow(h_table), bufsize, stream, temp_mr
+        plc.Table.from_arrow(h_table),
+        bufsize,
+        stream,
+        temp_mr,
     ).pack_to_host(staging_buf)
 
     result = plc.contiguous_split.unpack_from_memoryviews(
-        metadata, plc.gpumemoryview(to_device(h_pack))
+        metadata,
+        plc.gpumemoryview(to_device(h_pack, plc.utils._get_stream(stream))),
     )
 
     assert_table_eq(h_table, result)
+
+
+def test_unpack_from_memoryviews_empty_metadata_non_empty_data():
+    empty_metadata = memoryview(b"")
+    non_empty_data = plc.gpumemoryview(rmm.DeviceBuffer(size=64))
+
+    with pytest.raises(
+        ValueError,
+        match="Expected an empty gpu_data from unpacking an empty table",
+    ):
+        plc.contiguous_split.unpack_from_memoryviews(
+            empty_metadata, non_empty_data
+        )

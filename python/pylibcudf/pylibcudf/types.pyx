@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from libc.stddef cimport size_t
@@ -20,6 +20,7 @@ from pylibcudf.libcudf.types import mask_state as MaskState  # no-cython-lint, i
 from pylibcudf.libcudf.types import nan_equality as NanEquality  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_equality as NullEquality  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_aware as NullAware  # no-cython-lint, isort:skip
+from pylibcudf.libcudf.types import output_nullability as OutputNullability  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import null_order as NullOrder  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import order as Order  # no-cython-lint, isort:skip
 from pylibcudf.libcudf.types import sorted as Sorted  # no-cython-lint, isort:skip
@@ -52,6 +53,7 @@ try:
         pa.bool_(): type_id.BOOL8,
         pa.string(): type_id.STRING,
         pa.large_string(): type_id.STRING,
+        pa.string_view(): type_id.STRING,
         pa.duration('s'): type_id.DURATION_SECONDS,
         pa.duration('ms'): type_id.DURATION_MILLISECONDS,
         pa.duration('us'): type_id.DURATION_MICROSECONDS,
@@ -64,14 +66,10 @@ try:
         pa.null(): type_id.EMPTY,
     }
 
-    # New in pyarrow 18.0.0
-    if (string_view := getattr(pa, "string_view", None)) is not None:
-        ARROW_TO_PYLIBCUDF_TYPES[string_view()] = type_id.STRING
-
     LIBCUDF_TO_ARROW_TYPES = {
         v: k for k, v in ARROW_TO_PYLIBCUDF_TYPES.items()
     }
-    # Because we map 2-3 pyarrow string types to type_id.STRING,
+    # Because we map 3 pyarrow string types to type_id.STRING,
     # just map type_id.STRING to pa.string
     LIBCUDF_TO_ARROW_TYPES[type_id.STRING] = pa.string()
 except ImportError as e:
@@ -90,6 +88,7 @@ __all__ = [
     "NullEquality",
     "NullOrder",
     "NullAware",
+    "OutputNullability",
     "NullPolicy",
     "Order",
     "SIZE_TYPE",
@@ -381,6 +380,7 @@ MaskState.__str__ = MaskState.__repr__
 NanEquality.__str__ = NanEquality.__repr__
 NullEquality.__str__ = NullEquality.__repr__
 NullAware.__str__ = NullAware.__repr__
+OutputNullability.__str__ = OutputNullability.__repr__
 NullOrder.__str__ = NullOrder.__repr__
 Order.__str__ = Order.__repr__
 Sorted.__str__ = Sorted.__repr__

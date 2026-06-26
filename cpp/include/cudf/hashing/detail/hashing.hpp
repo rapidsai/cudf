@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -11,9 +11,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace hashing::detail {
 
 std::unique_ptr<column> murmurhash3_x86_32(table_view const& input,
@@ -95,7 +96,7 @@ CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
  * http://www.boost.org/LICENSE_1_0.txt)
  */
 /**
- * @brief Combines two hash values into a single hash value.
+ * @brief Combines two 64-bit hash values into a single hash value.
  *
  * Adapted from Boost hash_combine function and modified for 64-bit.
  * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
@@ -104,14 +105,14 @@ CUDF_HOST_DEVICE constexpr uint32_t hash_combine(uint32_t lhs, uint32_t rhs)
  * @param rhs The second hash value
  * @return Combined hash value
  */
-constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
+CUDF_HOST_DEVICE constexpr uint64_t hash_combine(uint64_t lhs, uint64_t rhs)
 {
   return lhs ^ (rhs + 0x9e37'79b9'7f4a'7c15 + (lhs << 6) + (lhs >> 2));
 }
 // SPDX-SnippetEnd
 
 }  // namespace hashing::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf
 
 // specialization of std::hash for cudf::data_type
 namespace std {

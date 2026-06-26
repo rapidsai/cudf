@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -13,8 +13,8 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/std/optional>
+#include <cuda/std/utility>
 #include <cuda_runtime.h>
-#include <thrust/pair.h>
 
 #include <functional>
 #include <memory>
@@ -34,7 +34,7 @@ enum class positional : int8_t {
 template <positional P>
 struct reljunk;
 
-using match_pair   = thrust::pair<cudf::size_type, cudf::size_type>;
+using match_pair   = cuda::std::pair<cudf::size_type, cudf::size_type>;
 using match_result = cuda::std::optional<match_pair>;
 
 constexpr int32_t MAX_SHARED_MEM      = 2048;  ///< Memory size for storing prog instruction data
@@ -109,6 +109,14 @@ class reprog_device {
    * @brief Returns true if this is an empty program.
    */
   [[nodiscard]] __device__ inline bool is_empty() const;
+
+  /**
+   * @brief Returns true if the instructions in this program can match an empty string
+   */
+  [[nodiscard]] CUDF_HOST_DEVICE bool is_empty_match_possible() const
+  {
+    return _empty_match_possible;
+  }
 
   /**
    * @brief Returns the size needed for working memory for the given thread count.
@@ -258,9 +266,10 @@ class reprog_device {
   int32_t const* _startinst_ids{};    // array of start instruction ids
   reclass_device const* _classes{};   // array of regex classes
 
-  std::size_t _prog_size{};  // total size of this instance
-  void* _buffer{};           // working memory buffer
-  int32_t _thread_count{};   // threads available in working memory
+  std::size_t _prog_size{};      // total size of this instance
+  void* _buffer{};               // working memory buffer
+  int32_t _thread_count{};       // threads available in working memory
+  bool _empty_match_possible{};  // true if the regex can match an empty string
 };
 
 /**

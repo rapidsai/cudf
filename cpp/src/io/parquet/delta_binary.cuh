@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -91,6 +91,7 @@ struct delta_binary_decoder {
   uint32_t cur_mb;               // index of the current mini-block within the block
   uint8_t const* cur_mb_start;   // pointer to the start of the current mini-block data
   uint8_t const* cur_bitwidths;  // pointer to the bitwidth array in the block
+  bool error;                    // flag to catch malformed headers
 
   zigzag128_t value[delta_rolling_buf_size];  // circular buffer of delta values
 
@@ -148,7 +149,21 @@ struct delta_binary_decoder {
     last_value       = first_value;
 
     current_value_idx = 0;
-    values_per_mb     = block_size / mini_block_count;
+    error             = false;
+
+    // Validate header against the DELTA_BINARY_PACKED spec invariants
+    if (mini_block_count == 0 or block_size == 0 or (block_size % mini_block_count) != 0) {
+      error         = true;
+      value_count   = 0;
+      values_per_mb = 1;
+      block_start   = d_end;
+      cur_mb        = 0;
+      cur_mb_start  = d_end;
+      cur_bitwidths = d_end;
+      return;
+    }
+
+    values_per_mb = block_size / mini_block_count;
 
     // init the first mini-block
     block_start = d_start;
@@ -282,6 +297,9 @@ struct delta_binary_decoder {
     int const lane_id = t % warp_size;
 
     while (current_value_idx < skip && current_value_idx < num_encoded_values(true)) {
+      // calc_mini_block_values only runs in warp 0, but writes to current_value_idx,
+      // so everyone must sync before we diverge
+      __syncthreads();
       if (t < warp_size) {
         calc_mini_block_values(lane_id);
         if (lane_id == 0) { setup_next_mini_block(true); }

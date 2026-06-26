@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -242,18 +242,36 @@ aggregate_orc_metadata::select_stripes(
     per_file_metadata[mapping.source_idx].stripefooters.resize(mapping.stripe_info.size());
 
     for (size_t i = 0; i < mapping.stripe_info.size(); i++) {
-      auto const stripe         = mapping.stripe_info[i].stripe_info;
+      auto const stripe    = mapping.stripe_info[i].stripe_info;
+      auto const file_size = per_file_metadata[mapping.source_idx].source->size();
+      CUDF_EXPECTS(stripe->offset <= file_size,
+                   "Invalid stripe information: offset exceeds file size",
+                   std::out_of_range);
+      auto remaining = file_size - stripe->offset;
+      CUDF_EXPECTS(stripe->indexLength <= remaining,
+                   "Invalid stripe information: indexLength exceeds file size",
+                   std::out_of_range);
+      remaining -= stripe->indexLength;
+      CUDF_EXPECTS(stripe->dataLength <= remaining,
+                   "Invalid stripe information: dataLength exceeds file size",
+                   std::out_of_range);
+      remaining -= stripe->dataLength;
+      CUDF_EXPECTS(stripe->footerLength <= remaining,
+                   "Invalid stripe information: footerLength exceeds file size",
+                   std::out_of_range);
       auto const sf_comp_offset = stripe->offset + stripe->indexLength + stripe->dataLength;
       auto const sf_comp_length = stripe->footerLength;
-      CUDF_EXPECTS(
-        sf_comp_offset + sf_comp_length < per_file_metadata[mapping.source_idx].source->size(),
-        "Invalid stripe information");
       auto const buffer =
         per_file_metadata[mapping.source_idx].source->host_read(sf_comp_offset, sf_comp_length);
       auto sf_data = per_file_metadata[mapping.source_idx].decompressor->decompress_blocks(
         {buffer->data(), buffer->size()});
       protobuf_reader(sf_data.data(), sf_data.size())
         .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
+      auto const& stripe_footer = per_file_metadata[mapping.source_idx].stripefooters[i];
+      auto const num_types      = per_file_metadata[mapping.source_idx].ff.types.size();
+      CUDF_EXPECTS(stripe_footer.columns.size() >= num_types,
+                   "Invalid ColumnEncoding field in a stripe footer.",
+                   std::out_of_range);
       mapping.stripe_info[i].stripe_footer =
         &per_file_metadata[mapping.source_idx].stripefooters[i];
       if (stripe->indexLength == 0) { row_grp_idx_present = false; }

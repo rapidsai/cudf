@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -15,26 +16,22 @@
 
 struct DictionaryAddKeysTest : public cudf::test::BaseFixture {};
 
-TEST_F(DictionaryAddKeysTest, StringsColumn)
+TEST_F(DictionaryAddKeysTest, Strings)
 {
-  cudf::test::strings_column_wrapper strings(
+  auto input = cudf::test::strings_column_wrapper(
     {"fff", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "fff", "aaa"});
   cudf::test::strings_column_wrapper new_keys({"ddd", "bbb", "eee"});
 
-  auto dictionary = cudf::dictionary::encode(strings);
+  auto dictionary = cudf::dictionary::encode(input);
   auto result =
     cudf::dictionary::add_keys(cudf::dictionary_column_view(dictionary->view()), new_keys);
 
   cudf::dictionary_column_view view(result->view());
-
-  cudf::test::strings_column_wrapper keys_expected({"aaa", "bbb", "ccc", "ddd", "eee", "fff"});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
-
-  cudf::test::fixed_width_column_wrapper<int8_t> indices_expected({5, 0, 3, 1, 2, 2, 2, 5, 0});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), indices_expected);
+  auto decode = cudf::dictionary::decode(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, decode->view());
 }
 
-TEST_F(DictionaryAddKeysTest, FloatColumn)
+TEST_F(DictionaryAddKeysTest, Floats)
 {
   cudf::test::fixed_width_column_wrapper<float> input{4.25, 7.125, 0.5, -11.75, 7.125, 0.5};
   cudf::test::fixed_width_column_wrapper<float> new_keys{4.25, -11.75, 5.0};
@@ -43,12 +40,8 @@ TEST_F(DictionaryAddKeysTest, FloatColumn)
   auto result =
     cudf::dictionary::add_keys(cudf::dictionary_column_view(dictionary->view()), new_keys);
   cudf::dictionary_column_view view(result->view());
-
-  cudf::test::fixed_width_column_wrapper<float> keys_expected{-11.75, 0.5, 4.25, 5.0, 7.125};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
-
-  cudf::test::fixed_width_column_wrapper<int8_t> expected{2, 4, 1, 0, 4, 1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), expected);
+  auto decode = cudf::dictionary::decode(view);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(input, decode->view());
 }
 
 TEST_F(DictionaryAddKeysTest, WithNull)
@@ -60,8 +53,8 @@ TEST_F(DictionaryAddKeysTest, WithNull)
   auto dictionary = cudf::dictionary::encode(input);
   auto result =
     cudf::dictionary::add_keys(cudf::dictionary_column_view(dictionary->view()), new_keys);
+  cudf::dictionary_column_view view(result->view());
   auto decoded = cudf::dictionary::decode(result->view());
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(decoded->view(), input);  // new keys should not change anything
 }
 
@@ -73,7 +66,7 @@ TEST_F(DictionaryAddKeysTest, Errors)
   cudf::test::fixed_width_column_wrapper<float> new_keys{1.0, 2.0, 3.0};
   EXPECT_THROW(cudf::dictionary::add_keys(dictionary->view(), new_keys), cudf::data_type_error);
   cudf::test::fixed_width_column_wrapper<int64_t> null_keys{{1, 2, 3}, {1, 0, 1}};
-  EXPECT_THROW(cudf::dictionary::add_keys(dictionary->view(), null_keys), cudf::logic_error);
+  EXPECT_THROW(cudf::dictionary::add_keys(dictionary->view(), null_keys), std::invalid_argument);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

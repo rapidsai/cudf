@@ -281,23 +281,16 @@ TYPED_TEST_SUITE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
-  thrust::host_vector<TypeParam> h_integers(255);
+  std::vector<TypeParam> h_integers(255);
   std::iota(h_integers.begin(), h_integers.end(), -(TypeParam)(h_integers.size() / 2));
   h_integers.push_back(std::numeric_limits<TypeParam>::min());
   h_integers.push_back(std::numeric_limits<TypeParam>::max());
-  auto const d_integers = cudf::detail::make_device_uvector(
-    h_integers, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
-  auto integers      = cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<TypeParam>()},
-                                            (cudf::size_type)d_integers.size());
-  auto integers_view = integers->mutable_view();
-  CUDF_CUDA_TRY(cudaMemcpy(integers_view.data<TypeParam>(),
-                           d_integers.data(),
-                           d_integers.size() * sizeof(TypeParam),
-                           cudaMemcpyDefault));
-  integers_view.set_null_count(0);
+
+  auto integers =
+    cudf::test::fixed_width_column_wrapper<TypeParam>(h_integers.begin(), h_integers.end());
 
   // convert to strings
-  auto results_strings = cudf::strings::from_integers(integers->view());
+  auto results_strings = cudf::strings::from_integers(integers);
 
   std::vector<std::string> h_strings;
   for (auto itr = h_integers.begin(); itr != h_integers.end(); ++itr)
@@ -310,7 +303,7 @@ TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
   auto strings_view = cudf::strings_column_view(results_strings->view());
   auto results_integers =
     cudf::strings::to_integers(strings_view, cudf::data_type(cudf::type_to_id<TypeParam>()));
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results_integers, integers->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results_integers, integers);
 }
 
 //

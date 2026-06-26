@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/pair.h>
+#include <cuda/std/utility>
 
 #include <optional>
 
@@ -58,7 +58,7 @@ inline rmm::device_buffer create_data(data_type type,
   return create_data(type, size, true, stream, mr);
 }
 
-using string_index_pair = thrust::pair<char const*, size_type>;
+using string_index_pair = cuda::std::pair<char const*, size_type>;
 
 // forward declare friend functions
 template <typename string_policy>
@@ -161,6 +161,8 @@ class column_buffer_base {
   bool is_nullable{false};
   size_type size{0};
   uint32_t user_data{0};  // arbitrary user data
+  // Materialize a STRING/BYTE_ARRAY-backed buffer as a `list<uint8>` column
+  bool string_as_binary{false};
   std::string name;
 
   std::vector<string_policy> children;

@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "utilities.hpp"
 
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/common/nvtx_ranges.hpp>
 
 #include <cudf/ast/expressions.hpp>
@@ -147,14 +148,18 @@ struct q9_data {
   }
   )***";
 
-  return cudf::transform({discount, extendedprice, supplycost, quantity},
-                         udf,
-                         cudf::data_type{cudf::type_id::FLOAT64},
-                         false,
-                         std::nullopt,
-                         cudf::null_aware::NO,
-                         stream,
-                         mr);
+  cudf::transform_input transform_inputs[] = {discount, extendedprice, supplycost, quantity};
+
+  return cudf::transform_extended(transform_inputs,
+                                  udf,
+                                  cudf::data_type{cudf::type_id::FLOAT64},
+                                  cudf::udf_source_type::CUDA,
+                                  std::nullopt,
+                                  cudf::null_aware::NO,
+                                  std::nullopt,
+                                  cudf::output_nullability::PRESERVE,
+                                  stream,
+                                  mr);
 }
 
 [[nodiscard]] std::unique_ptr<cudf::column> compute_amount_ast(
@@ -240,9 +245,8 @@ std::unique_ptr<table_with_names> join_data(q9_data const& data)
 
   // Generating the `profit` table
   // Filter the part table using `p_name like '%green%'`
-  auto const p_name = data.part->table().column(1);
-  auto const mask =
-    cudf::strings::like(cudf::strings_column_view(p_name), cudf::string_scalar("%green%"));
+  auto const p_name        = data.part->table().column(1);
+  auto const mask          = cudf::strings::like(cudf::strings_column_view(p_name), "%green%");
   auto const part_filtered = apply_mask(data.part, mask);
 
   // Perform the joins
@@ -305,6 +309,7 @@ void ndsh_q9(nvbench::state& state)
   generate_parquet_data_sources(
     scale_factor, {"part", "supplier", "lineitem", "partsupp", "orders", "nation"}, sources);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     q9_data const data = load_data(sources);
     auto const result  = compute_profit(state,
@@ -314,6 +319,8 @@ void ndsh_q9(nvbench::state& state)
                                        cudf::get_current_device_resource_ref());
     result->to_parquet("q9.parquet");
   });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 void ndsh_q9_noio(nvbench::state& state)
@@ -329,6 +336,7 @@ void ndsh_q9_noio(nvbench::state& state)
 
   std::unique_ptr<table_with_names> result;
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     result = compute_profit(state,
                             engine,
@@ -336,6 +344,8 @@ void ndsh_q9_noio(nvbench::state& state)
                             launch.get_stream().get_stream(),
                             cudf::get_current_device_resource_ref());
   });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 
   if (result) { result->to_parquet("q9_noio.parquet"); }
 }
@@ -359,6 +369,7 @@ void ndsh_q9_amount(nvbench::state& state)
   state.add_global_memory_writes<double>(size);
   state.add_element_count(size);
 
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     auto amount = compute_amount(joined_table->column("l_discount"),
                                  joined_table->column("l_extendedprice"),
@@ -368,6 +379,8 @@ void ndsh_q9_amount(nvbench::state& state)
                                  launch.get_stream().get_stream(),
                                  cudf::get_current_device_resource_ref());
   });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(ndsh_q9)

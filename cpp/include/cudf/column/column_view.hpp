@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -10,6 +10,8 @@
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cuda/std/span>
 
 #include <limits>
 #include <type_traits>
@@ -467,7 +469,7 @@ class column_view : public detail::column_view_base {
 
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-};  // namespace cudf
+};
 
 /**
  * @brief A non-owning, mutable view of device data as a column of elements,

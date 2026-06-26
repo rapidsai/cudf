@@ -1,15 +1,15 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import copy
 import itertools
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
 from cudf.core._internals import sorting
-from cudf.core.buffer import acquire_spill_lock
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.join._join_helpers import (
@@ -22,15 +22,12 @@ from cudf.options import get_option
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from cudf.core.dataframe import DataFrame
     from cudf.core.index import Index
 
 
 class Merge:
     @staticmethod
-    @acquire_spill_lock()
     def _joiner(
         lhs: list[ColumnBase],
         rhs: list[ColumnBase],
@@ -41,15 +38,22 @@ class Merge:
         if (join_func := getattr(plc.join, f"{how}_join", None)) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        left_rows, right_rows = join_func(
-            plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-            plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-            plc.types.NullEquality.EQUAL,
-        )
-        return (
-            ColumnBase.from_pylibcudf(left_rows),
-            ColumnBase.from_pylibcudf(right_rows),
-        )
+        with access_columns(
+            *lhs, *rhs, mode="read", scope="internal"
+        ) as accessed:
+            # Split accessed tuple back into lhs and rhs
+            n_lhs = len(lhs)
+            lhs = accessed[:n_lhs]  # type: ignore[assignment]
+            rhs = accessed[n_lhs:]  # type: ignore[assignment]
+            left_rows, right_rows = join_func(
+                plc.Table([col.plc_column for col in lhs]),
+                plc.Table([col.plc_column for col in rhs]),
+                plc.types.NullEquality.EQUAL,
+            )
+            return (
+                ColumnBase.create(left_rows, SIZE_TYPE_DTYPE),
+                ColumnBase.create(right_rows, SIZE_TYPE_DTYPE),
+            )
 
     def __init__(
         self,
@@ -276,16 +280,16 @@ class Merge:
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
         key_order = [
-            as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
-                map_, nullify=null, check_bounds=False
-            )
+            ColumnBase.from_range(range(n))
+            .astype(SIZE_TYPE_DTYPE)
+            .take(map_, nullify=null, check_bounds=False)
             for map_, n, null in zip(maps, lengths, nullify, strict=True)
         ]
         if self.how == "right":
             # If how is right, right map is primary sort key.
             key_order = reversed(key_order)
         return [
-            ColumnBase.from_pylibcudf(col)
+            ColumnBase.create(col, SIZE_TYPE_DTYPE)
             for col in sorting.sort_by_key(
                 maps,
                 key_order,
@@ -325,37 +329,28 @@ class Merge:
 
         if self.how == "cross":
             lib_table = plc.join.cross_join(
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.lhs._columns
-                    ]
-                ),
-                plc.Table(
-                    [
-                        col.to_pylibcudf(mode="read")
-                        for col in self.rhs._columns
-                    ]
-                ),
+                plc.Table([col.plc_column for col in self.lhs._columns]),
+                plc.Table([col.plc_column for col in self.rhs._columns]),
             )
             columns = lib_table.columns()
-            left_names, right_names = (
-                self.lhs._column_names,
-                self.rhs._column_names,
-            )
+            num_left_cols = len(self.lhs._column_names)
             left_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
-                    for col, lib_col in zip(
-                        left_names, columns[: len(left_names)], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.lhs._dtypes,
+                        columns[:num_left_cols],
+                        strict=True,
                     )
                 }
             )
             right_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
-                    for col, lib_col in zip(
-                        right_names, columns[len(left_names) :], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.rhs._dtypes,
+                        columns[num_left_cols:],
+                        strict=True,
                     )
                 }
             )
@@ -398,6 +393,17 @@ class Merge:
             result = self._sort_result(result)
         if self._return_rangeindex:
             result = result.reset_index(drop=True)
+        # Mirror pandas' merge `__finalize__` with `input_objs`: propagate
+        # attrs only when both inputs have equal non-empty attrs, and AND
+        # ``allows_duplicate_labels`` across inputs.
+        lhs_attrs = self.lhs.attrs
+        rhs_attrs = self.rhs.attrs
+        if lhs_attrs and rhs_attrs and lhs_attrs == rhs_attrs:
+            result._attrs = copy.deepcopy(lhs_attrs)
+        result.flags["allows_duplicate_labels"] = (
+            self.lhs.flags.allows_duplicate_labels
+            and self.rhs.flags.allows_duplicate_labels
+        )
         return result
 
     def _merge_results(self, left_result: DataFrame, right_result: DataFrame):
@@ -521,12 +527,12 @@ class Merge:
         if by:
             keep_index = self._using_left_index or self._using_right_index
             if keep_index:
-                to_sort: Iterable[ColumnBase] = itertools.chain(
-                    result.index._columns, result._columns
+                to_sort = list(
+                    itertools.chain(result.index._columns, result._columns)
                 )
                 index_names = result.index.names
             else:
-                to_sort = result._columns
+                to_sort = list(result._columns)
                 index_names = None
             result_columns = sorting.sort_by_key(
                 to_sort,
@@ -536,7 +542,12 @@ class Merge:
                 stable=True,
             )
             result = result._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in result_columns],
+                [
+                    ColumnBase.create(col, original.dtype)
+                    for col, original in zip(
+                        result_columns, to_sort, strict=True
+                    )
+                ],
                 result._column_names,
                 index_names,
             )
@@ -674,7 +685,6 @@ class Merge:
 
 class MergeSemi(Merge):
     @staticmethod
-    @acquire_spill_lock()
     def _joiner(  # type: ignore[override]
         lhs: list[ColumnBase],
         rhs: list[ColumnBase],
@@ -687,13 +697,21 @@ class MergeSemi(Merge):
         ) is None:
             raise ValueError(f"Invalid join type {how}")
 
-        return ColumnBase.from_pylibcudf(
-            join_func(
-                plc.Table([col.to_pylibcudf(mode="read") for col in lhs]),
-                plc.Table([col.to_pylibcudf(mode="read") for col in rhs]),
-                plc.types.NullEquality.EQUAL,
-            )
-        ), None
+        with access_columns(
+            *lhs, *rhs, mode="read", scope="internal"
+        ) as accessed:
+            # Split accessed tuple back into lhs and rhs
+            n_lhs = len(lhs)
+            lhs = accessed[:n_lhs]  # type: ignore[assignment]
+            rhs = accessed[n_lhs:]  # type: ignore[assignment]
+            return ColumnBase.create(
+                join_func(
+                    plc.Table([col.plc_column for col in lhs]),
+                    plc.Table([col.plc_column for col in rhs]),
+                    plc.types.NullEquality.EQUAL,
+                ),
+                SIZE_TYPE_DTYPE,
+            ), None
 
     def _merge_results(self, lhs: DataFrame, rhs: DataFrame):
         # semi-join result includes only lhs columns

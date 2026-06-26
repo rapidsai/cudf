@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+
+#include <cuda/iterator>
 
 namespace cudf {
 namespace strings {
@@ -60,9 +62,9 @@ std::unique_ptr<column> strip(strings_column_view const& input,
   auto const d_column = column_device_view::create(input.parent(), stream);
 
   auto result = rmm::device_uvector<string_index_pair>(input.size(), stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::counting_iterator<size_type>(0),
-                    thrust::counting_iterator<size_type>(input.size()),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    cuda::counting_iterator<size_type>{0},
+                    cuda::counting_iterator<size_type>{input.size()},
                     result.begin(),
                     strip_transform_fn{*d_column, side, d_to_strip});
 

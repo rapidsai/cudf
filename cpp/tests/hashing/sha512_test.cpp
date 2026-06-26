@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -35,6 +35,9 @@ TEST_F(SHA512HashTest, MultiValue)
      "A 56 character string to test message padding algorithm.",
      "A 63 character string to test message padding algorithm, again.",
      "A 64 character string to test message padding algorithm, again!!",
+     "A 256 character string to test message padding algorithm for exact multiples of 64 bytes, "
+     "again. I ran this through python for a quick length check to ensure this string is exactly "
+     "256 chars, but feel free to count it yourself manually to be extra certain.",
      "A very long (greater than 128 bytes/char string) to execute a multi hash-step data point in "
      "the hash function being tested. This string needed to be longer.",
      "All work and no play makes Jack a dull boy",
@@ -63,6 +66,8 @@ TEST_F(SHA512HashTest, MultiValue)
      "cc3d2c789d2cf5960df648c78a765e6c27c",
      "9c436e24be60e17425a1a829642d97e7180b57485cf95db007cf5b32bbae1f2325b6874b3377e37806b15b739bffa"
      "412ea6d095b726487d70e7b50e92d56c750",
+     "c0b72e552c4026f6f3797281a92a124e4c83d1a901f58c7139dad5a5160e319324e002e7c8c5e64eabdb713b6006d"
+     "d06e7755244aff3861fd52f4ccb3c79b321",
      "6a25ca1f20f6e79faea2a0770075e4262beb66b40f59c22d3e8abdb6188ef8d8914faf5dbf6df76165bb61b81dfda"
      "46643f0d6366a39f7bd3d270312f9d3cf87",
      "bae9eb4b5c05a4c5f85750b70b2f0ce78e387f992f0927a017eb40bd180a13004f6252a6bbf9816f195fb7d86668c"
@@ -83,6 +88,8 @@ TEST_F(SHA512HashTest, MultiValue)
      "67911b49d951714decbdbfca1957be8ba10",
      "da7706221f8861ef522ab9555f57306382fb18c337536545d839e431dede4ff9f9affafb82ab5588734a8fc6631e6"
      "a0cd864634b62e24a42755c863c5d5c5848",
+     "7d7498241ad7aee2845a1f79d44115511853f7d1490da871f0aaeba05a4299dc256f267c0203db1d175bee97e3969"
+     "ba6f250a0d08ac037210aeced85f83a8412",
      "04dadc8fdf205fe535c8eb38f20882fc2a0e308081052d7588e74f6620aa207749039468c126db7407050def80415"
      "1d037cb188d5d4d459015032972a9e9f001",
      "aae2e742074847889a029a8d3170f9e17177d48ec0b9dabe572aa68dd3001af0c512f164ba84aa75b13950948170a"
@@ -94,9 +101,9 @@ TEST_F(SHA512HashTest, MultiValue)
 
   using limits = std::numeric_limits<int32_t>;
   cudf::test::fixed_width_column_wrapper<int32_t> const ints_col(
-    {0, -1, 100, -100, limits::min(), limits::max(), 1, 2, 3});
+    {0, -1, 100, -100, limits::min(), limits::max(), 42, 1, 2, 3});
 
-  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0, 1, 1, 1, 0});
+  cudf::test::fixed_width_column_wrapper<bool> const bools_col({0, 1, 1, 1, 0, 1, 1, 1, 1, 0});
 
   // Test string inputs against known outputs
   auto const string_input1         = cudf::table_view({strings_col});

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <tests/iterator/optional_iterator_test.cuh>
@@ -92,19 +92,21 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
 
   // GPU test
-  auto it_dev         = d_col->optional_begin<T>(cudf::nullate::YES{});
+  auto it_dev         = d_col->template optional_begin<T>(cudf::nullate::YES{});
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
 
   // this can be computed with a single reduce and without a temporary output vector
   // but the approach increases the compile time by ~2x
   auto results = rmm::device_uvector<T_output>(d_col->size(), cudf::get_default_stream());
-  thrust::transform(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::transform(rmm::exec_policy_nosync(cudf::get_default_stream()),
                     it_dev_squared,
                     it_dev_squared + d_col->size(),
                     results.begin(),
                     optional_to_meanvar<T_output>{});
-  auto result = thrust::reduce(
-    rmm::exec_policy(cudf::get_default_stream()), results.begin(), results.end(), T_output{});
+  auto result = thrust::reduce(rmm::exec_policy_nosync(cudf::get_default_stream()),
+                               results.begin(),
+                               results.end(),
+                               T_output{});
 
   if (not std::is_floating_point<T>()) {
     EXPECT_EQ(expected_value, result) << "optional iterator reduction sum";

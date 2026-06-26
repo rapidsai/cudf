@@ -6,8 +6,8 @@
 
 #include <cudf_test/random.hpp>
 
+#include <cuda/std/utility>
 #include <thrust/host_vector.h>
-#include <thrust/pair.h>
 
 using TestingTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;
 
@@ -27,12 +27,12 @@ TYPED_TEST(IteratorTest, scalar_iterator)
   std::unique_ptr<cudf::scalar> s(new ScalarType{init, true});
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> value_and_validity(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto v, auto b) { return thrust::pair<T, bool>{v, b}; });
+                 [](auto v, auto b) { return cuda::std::pair<T, bool>{v, b}; });
 
   // GPU test
   auto it_dev = cudf::detail::make_scalar_iterator<T>(*s);
@@ -56,12 +56,12 @@ TYPED_TEST(IteratorTest, null_scalar_iterator)
   std::unique_ptr<cudf::scalar> s(new ScalarType{init, true});
 
   // calculate the expected value by CPU.
-  thrust::host_vector<thrust::pair<T, bool>> value_and_validity(host_values.size());
+  thrust::host_vector<cuda::std::pair<T, bool>> value_and_validity(host_values.size());
   std::transform(host_values.begin(),
                  host_values.end(),
                  host_bools.begin(),
                  value_and_validity.begin(),
-                 [](auto v, auto b) { return thrust::pair<T, bool>{v, b}; });
+                 [](auto v, auto b) { return cuda::std::pair<T, bool>{v, b}; });
 
   // GPU test
   auto it_pair_dev = cudf::detail::make_pair_iterator<T>(*s);

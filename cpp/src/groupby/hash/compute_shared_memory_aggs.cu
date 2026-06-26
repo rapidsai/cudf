@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,7 @@
 namespace cudf::groupby::detail::hash {
 namespace {
 /// Shared memory data alignment
-CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 8;
+CUDF_HOST_DEVICE cudf::size_type constexpr ALIGNMENT = 16;
 
 // Allocates shared memory required for output columns. Exits if there is insufficient memory to
 // perform shared memory aggregation for the current output column.
@@ -145,7 +145,7 @@ __device__ void compute_final_aggregations(cooperative_groups::thread_block cons
   // Aggregates shared memory sources to global memory targets
   for (auto idx = block.thread_rank(); idx < num_agg_locations; idx += block.num_threads()) {
     auto const target_idx =
-      global_mapping_index[(block.group_index().x * GROUPBY_SHM_MAX_ELEMENTS) +
+      global_mapping_index[(block.group_index().x * GROUPBY_CARDINALITY_THRESHOLD) +
                            (idx % cardinality)];
     for (auto col_idx = col_start; col_idx < col_end; col_idx++) {
       auto target_col = target.column(col_idx);
@@ -182,7 +182,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
 {
   auto const block       = cooperative_groups::this_thread_block();
   auto const cardinality = block_cardinality[block.group_index().x];
-  if (cardinality >= GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
+  if (cardinality > GROUPBY_CARDINALITY_THRESHOLD or cardinality == 0) { return; }
 
   auto constexpr min_shmem_agg_locations = 32;
   auto const multiplication_factor       = min_shmem_agg_locations / cardinality;
@@ -205,10 +205,14 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
     col_start = 0;
     col_end   = 0;
   }
-  block.sync();
+  // Workaround: use __syncthreads() instead of block.sync() throughout this
+  // kernel. cooperative_groups::thread_block::sync() does not properly fence
+  // shared memory on sm_120 with CUDA 13.2, causing init stores to be
+  // invisible to subsequent phases.
+  __syncthreads();
 
   while (col_end < num_cols) {
-    block.sync();
+    __syncthreads();
     if (block.thread_rank() == 0) {
       calculate_columns_to_aggregate(col_start,
                                      col_end,
@@ -219,7 +223,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                      num_agg_locations,
                                      total_agg_size);
     }
-    block.sync();
+    __syncthreads();
 
     initialize_shmem_aggregations(block,
                                   col_start,
@@ -230,7 +234,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                                   shmem_agg_mask_offsets,
                                   num_agg_locations,
                                   d_agg_kinds);
-    block.sync();
+    __syncthreads();
 
     compute_pre_aggregations(col_start,
                              col_end,
@@ -243,7 +247,7 @@ CUDF_KERNEL void single_pass_shmem_aggs_kernel(cudf::size_type num_rows,
                              shmem_agg_mask_offsets,
                              d_agg_kinds,
                              agg_location_offset);
-    block.sync();
+    __syncthreads();
 
     compute_final_aggregations(block,
                                col_start,
@@ -311,5 +315,6 @@ void compute_shared_memory_aggs(cudf::size_type grid_size,
     d_agg_kinds,
     shmem_agg_size,
     offsets_size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 }  // namespace cudf::groupby::detail::hash

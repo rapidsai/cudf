@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
@@ -22,8 +22,7 @@ from cudf.testing._utils import (
         pd.CategoricalIndex(["a", "b", "c"]),
     ],
 )
-@pytest.mark.parametrize("copy_on_write", [True, False])
-def test_index_copy(data, deep, copy_on_write):
+def test_index_copy(data, deep):
     name = "x"
     cidx = cudf.Index(data)
     pidx = cidx.to_pandas()
@@ -33,19 +32,10 @@ def test_index_copy(data, deep, copy_on_write):
 
     assert_eq(pidx_copy, cidx_copy)
 
-    with cudf.option_context("copy_on_write", copy_on_write):
-        if not isinstance(cidx, cudf.RangeIndex):
-            if (
-                isinstance(cidx._column, cudf.core.column.StringColumn)
-                or not deep
-                or (copy_on_write and not deep)
-            ):
-                # StringColumn is immutable hence, deep copies of a
-                # Index with string dtype will share the same StringColumn.
-
-                # When `copy_on_write` is turned on, Index objects will
-                # have unique column object but they all point to same
-                # data pointers.
-                assert_column_memory_eq(cidx._column, cidx_copy._column)
-            else:
-                assert_column_memory_ne(cidx._column, cidx_copy._column)
+    if not isinstance(cidx, cudf.RangeIndex):
+        if not deep:
+            # Index objects will have unique column object but they
+            # all point to same data pointers via copy-on-write.
+            assert_column_memory_eq(cidx._column, cidx_copy._column)
+        else:
+            assert_column_memory_ne(cidx._column, cidx_copy._column)

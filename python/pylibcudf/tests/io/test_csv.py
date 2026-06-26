@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import io
 import os
@@ -11,6 +11,7 @@ from utils import (
     assert_table_and_meta_eq,
     make_source,
     sink_to_str,
+    synchronize_stream,
     write_source_str,
 )
 
@@ -25,6 +26,16 @@ _COMMON_CSV_SOURCE_KWARGS = {
     "format": "csv",
     "index": False,
 }
+
+
+def _replace_large_string_from_pandas(schema: pa.Schema) -> pa.Schema:
+    # pandas 3 strings use convert to pyarrow.large_string
+    return pa.schema(
+        {
+            name: pa.string() if pa.types.is_large_string(typ) else typ
+            for name, typ in zip(schema.names, schema.types, strict=True)
+        }
+    )
 
 
 @pytest.fixture(scope="module")
@@ -148,7 +159,11 @@ def test_read_csv_byte_range(table_data, chunk_size, tmp_path):
         plc.Table.from_arrow(full_tbl),
         tbls_w_meta[0].column_names(include_children=True),
     )
-    assert_table_and_meta_eq(pa.Table.from_pandas(exp), full_tbl_plc)
+    pa_table = pa.Table.from_pandas(exp)
+    expected = pa_table.cast(
+        _replace_large_string_from_pandas(pa_table.schema)
+    )
+    assert_table_and_meta_eq(expected, full_tbl_plc)
 
 
 @pytest.mark.parametrize("usecols", [None, ["col_int64", "col_bool"], [0, 1]])
@@ -168,7 +183,7 @@ def test_read_csv_dtypes(csv_table_data, source_or_sink, usecols):
 
     dtypes, new_fields = _convert_types(
         pa_table,
-        lambda t: (pa.types.is_unsigned_integer(t) or pa.types.is_integer(t)),
+        lambda t: pa.types.is_unsigned_integer(t) or pa.types.is_integer(t),
         pa.float64(),
     )
     # Extract the dtype out of the (name, type, child_types) tuple
@@ -231,7 +246,11 @@ def test_read_csv_parse_options(
         quotechar=quotechar,
         lineterminator=lineterminator,
     )
-    assert_table_and_meta_eq(pa.Table.from_pandas(df), plc_table_w_meta)
+    pa_table = pa.Table.from_pandas(df)
+    expected = pa_table.cast(
+        _replace_large_string_from_pandas(pa_table.schema)
+    )
+    assert_table_and_meta_eq(expected, plc_table_w_meta)
 
 
 @pytest.mark.parametrize("na_filter", [True, False])
@@ -262,7 +281,11 @@ def test_read_csv_na_values(
         na_values=na_values if na_filter else None,
         keep_default_na=keep_default_na,
     )
-    assert_table_and_meta_eq(pa.Table.from_pandas(df), plc_table_w_meta)
+    pa_table = pa.Table.from_pandas(df)
+    expected = pa_table.cast(
+        _replace_large_string_from_pandas(pa_table.schema)
+    )
+    assert_table_and_meta_eq(expected, plc_table_w_meta)
 
 
 @pytest.mark.parametrize("header", [0, 10, -1])
@@ -310,7 +333,11 @@ def test_read_csv_from_device_buffers(csv_table_data, stream):
     _, pa_table = csv_table_data
 
     csv_string = pa_table.to_pandas().to_csv(index=False)
-    buf = DeviceBuffer.to_device(csv_string.encode("utf-8"))
+    buf = DeviceBuffer.to_device(
+        csv_string.encode("utf-8"), plc.utils._get_stream(stream)
+    )
+
+    synchronize_stream(stream)
 
     options = plc.io.csv.CsvReaderOptions.builder(
         plc.io.SourceInfo([buf])
@@ -377,6 +404,8 @@ def test_write_csv(
         stream,
     )
 
+    synchronize_stream(stream)
+
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)
 
@@ -420,6 +449,8 @@ def test_write_csv_na_rep(na_rep):
             .build()
         )
     )
+
+    synchronize_stream()
 
     # Convert everything to string to make comparisons easier
     str_result = sink_to_str(sink)

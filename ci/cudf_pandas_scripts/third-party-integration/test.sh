@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 # Common setup steps shared by Python test jobs
@@ -24,8 +24,9 @@ main() {
 
     if [ "$RAPIDS_BUILD_TYPE" == "pull-request" ]; then
         rapids-logger "Downloading artifacts from this pr jobs"
-        CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
-        PYTHON_CHANNEL=$(rapids-download-conda-from-github python)
+        CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
+        PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
+        PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --cuda "$RAPIDS_CUDA_VERSION" --arch any)")
     fi
 
     ANY_FAILURES=0
@@ -44,7 +45,8 @@ main() {
                 --file-key "test_${lib}" \
                 --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
                 --prepend-channel "${CPP_CHANNEL}" \
-                --prepend-channel "${PYTHON_CHANNEL}" | tee env.yaml
+                --prepend-channel "${PYTHON_CHANNEL}" \
+                --prepend-channel "${PYTHON_NOARCH_CHANNEL}" | tee env.yaml
         else
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \
@@ -85,7 +87,10 @@ main() {
         trap "EXITCODE=1" ERR
         set +e
 
-        TEST_DIR=${TEST_DIR} NUM_PROCESSES=${NUM_PROCESSES} ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
+        TEST_DIR=${TEST_DIR} \
+        NUM_PROCESSES=${NUM_PROCESSES} \
+            timeout 45m \
+            ci/cudf_pandas_scripts/third-party-integration/run-library-tests.sh "${lib}"
 
         set -e
         rapids-logger "Test script exiting with value: ${EXITCODE}"

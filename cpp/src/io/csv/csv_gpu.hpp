@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -184,6 +184,7 @@ device_span<uint64_t> remove_blank_rows(cudf::io::parse_options_view const& opti
  * @param[in] data The row-column data
  * @param[in] column_flags Flags that control individual column parsing
  * @param[in] row_offsets List of row data start positions (offsets)
+ * @param[in] num_active_columns Number of active columns
  * @param[in] stream CUDA stream to use
  *
  * @return stats Histogram of each dtypes' occurrence for each column
@@ -207,6 +208,8 @@ cudf::detail::host_vector<column_type_histogram> detect_column_types(
  * @param[out] columns Device memory output of column data
  * @param[out] valids Device memory output of column valids bitmap data
  * @param[out] valid_counts Device memory output of the number of valid fields in each column
+ * @param[out] is_quoted Per-column boolean arrays indicating which rows were quoted fields
+ *                          (nullptr entries mean the column doesn't need quote tracking)
  * @param[in] stream CUDA stream to use
  */
 void decode_row_column_data(cudf::io::parse_options_view const& options,
@@ -217,6 +220,7 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
                             device_span<size_type> valid_counts,
+                            device_span<bool* const> is_quoted,
                             rmm::cuda_stream_view stream);
 
 }  // namespace gpu

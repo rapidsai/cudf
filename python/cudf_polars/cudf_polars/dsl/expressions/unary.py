@@ -1,13 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 """DSL nodes for unary operations."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
 
@@ -25,11 +23,12 @@ __all__ = ["Cast", "Len", "UnaryFunction"]
 class Cast(Expr):
     """Class representing a cast of an expression."""
 
-    __slots__ = ()
-    _non_child = ("dtype",)
+    __slots__ = ("strict",)
+    _non_child = ("dtype", "strict")
 
-    def __init__(self, dtype: DataType, value: Expr) -> None:
+    def __init__(self, dtype: DataType, strict: bool, value: Expr) -> None:  # noqa: FBT001
         self.dtype = dtype
+        self.strict = strict
         self.children = (value,)
         self.is_pointwise = True
         if not dtypes.can_cast(value.dtype.plc_type, self.dtype.plc_type):
@@ -43,7 +42,7 @@ class Cast(Expr):
         """Evaluate this expression given a dataframe for context."""
         (child,) = self.children
         column = child.evaluate(df, context=context)
-        return column.astype(self.dtype, stream=df.stream)
+        return column.astype(self.dtype, stream=df.stream, strict=self.strict)
 
 
 class Len(Expr):
@@ -113,6 +112,8 @@ class UnaryFunction(Expr):
             "rank",
             "round",
             "set_sorted",
+            "shift",
+            "shift_and_fill",
             "top_k",
             "unique",
             "value_counts",
@@ -129,6 +130,15 @@ class UnaryFunction(Expr):
     _supported_fns = frozenset().union(
         _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
     )
+    _pointwise_fns = frozenset(
+        {
+            "fill_null",
+            "fill_null_with_strategy",
+            "mask_nans",
+            "round",
+            "set_sorted",
+        }
+    ).union(_OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -137,20 +147,10 @@ class UnaryFunction(Expr):
         self.name = name
         self.options = options
         self.children = children
-        self.is_pointwise = self.name not in (
-            "as_struct",
-            "cum_max",
-            "cum_min",
-            "cum_prod",
-            "cum_sum",
-            "drop_nulls",
-            "rank",
-            "top_k",
-            "unique",
-        )
+        self.is_pointwise = self.name in UnaryFunction._pointwise_fns
 
         if self.name not in UnaryFunction._supported_fns:
-            raise NotImplementedError(f"Unary function {name=}")
+            raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover
         if self.name in UnaryFunction._supported_cum_aggs:
             (reverse,) = self.options
             if reverse:
@@ -242,21 +242,22 @@ class UnaryFunction(Expr):
             return column
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
-            (asc,) = self.options
+            if isinstance(self.options[0], str):
+                descending = self.options[0] == "descending"  # pragma: no cover
+            else:
+                descending, _ = self.options
             order = (
-                plc.types.Order.ASCENDING
-                if asc == "ascending"
-                else plc.types.Order.DESCENDING
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
             )
             null_order = plc.types.NullOrder.BEFORE
             if column.null_count > 0 and (n := column.size) > 1:
                 # PERF: This invokes four stream synchronisations!
                 has_nulls_first = not plc.copying.get_element(
                     column.obj, 0, stream=df.stream
-                ).is_valid()
+                ).is_valid(df.stream)
                 has_nulls_last = not plc.copying.get_element(
                     column.obj, n - 1, stream=df.stream
-                ).is_valid()
+                ).is_valid(df.stream)
                 if (order == plc.types.Order.DESCENDING and has_nulls_first) or (
                     order == plc.types.Order.ASCENDING and has_nulls_last
                 ):
@@ -416,7 +417,7 @@ class UnaryFunction(Expr):
                     1, dtype=column.dtype.plc_type, stream=df.stream
                 )
             else:
-                assert_never(strategy)  # pragma: no cover
+                assert_never(strategy)
 
             if strategy == "mean":
                 return Column(
@@ -495,19 +496,46 @@ class UnaryFunction(Expr):
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
-            (column, k) = (
+            (column, _k) = (
                 child.evaluate(df, context=context) for child in self.children
             )
             (reverse,) = self.options
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    cast(Literal, self.children[1]).value,
+                    cast("Literal", self.children[1]).value,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name in ("shift", "shift_and_fill"):
+            column = self.children[0].evaluate(df, context=context)
+            n_expr = self.children[1]
+            if isinstance(n_expr, Literal):
+                offset = n_expr.value
+            else:
+                n_col = n_expr.evaluate(df, context=context)
+                offset_py = n_col.obj_scalar(stream=df.stream).to_py(stream=df.stream)
+                assert isinstance(offset_py, int)
+                offset = offset_py
+            if self.name == "shift":
+                fill_scalar = plc.Scalar.from_py(
+                    None, column.dtype.plc_type, stream=df.stream
+                )
+            else:
+                fill_expr = self.children[2]
+                if isinstance(fill_expr, Literal):
+                    fill_scalar = plc.Scalar.from_py(
+                        fill_expr.value, column.dtype.plc_type, stream=df.stream
+                    )
+                else:
+                    fill_col = fill_expr.evaluate(df, context=context)
+                    fill_scalar = fill_col.obj_scalar(stream=df.stream)
+            return Column(
+                plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:

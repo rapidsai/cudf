@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,6 +7,8 @@
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cuda/iterator>
 
 template <typename T, typename InputIterator>
 cudf::test::fixed_width_column_wrapper<T> create_fixed_columns(cudf::size_type start,
@@ -215,12 +217,11 @@ inline std::unique_ptr<cudf::column> make_long_offsets_string_column()
   // manually specified long offsets, but < 2B chars
   auto const num_chars = 1024;
   std::vector<int8_t> chars(num_chars);
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<cudf::size_type>{0};
   std::transform(iter, iter + num_chars, chars.begin(), [](cudf::size_type i) {
     return static_cast<int8_t>('a' + (i % 26));
   });
-  rmm::device_buffer d_chars(
-    num_chars, cudf::get_default_stream(), rmm::mr::get_current_device_resource());
+  rmm::device_buffer d_chars(num_chars, cudf::get_default_stream());
   cudf::detail::cuda_memcpy(
     cudf::device_span<int8_t>{static_cast<int8_t*>(d_chars.data()), d_chars.size()},
     cudf::host_span<int8_t const>{chars.data(), chars.size()},
@@ -237,9 +238,7 @@ inline std::unique_ptr<cudf::column> make_long_offsets_string_column()
 
 inline std::unique_ptr<cudf::column> make_long_offsets_and_chars_string_column()
 {
-  rmm::device_buffer d_chars{size_t{3} * 1024 * 1024 * 1024,
-                             cudf::get_default_stream(),
-                             rmm::mr::get_current_device_resource()};
+  rmm::device_buffer d_chars{size_t{3} * 1024 * 1024 * 1024, cudf::get_default_stream()};
 
   int8_t* charp         = reinterpret_cast<int8_t*>(d_chars.data());
   auto const block_size = 100 * 1024 * 1024;

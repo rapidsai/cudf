@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_map.cuh>
 
@@ -307,7 +308,6 @@ void decode_nulls_and_string_dictionaries(column_desc* chunks,
  * @param[in] num_stripes Number of stripes
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
- * @param[in] tz_len Length of timezone translation table
  * @param[in] row_groups Optional row index data [rowgroup][column]
  * @param[in] num_rowgroups Number of row groups in row index data
  * @param[in] rowidx_stride Row index stride

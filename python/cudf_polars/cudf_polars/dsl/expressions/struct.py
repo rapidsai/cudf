@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document StructFunction to remove noqa
 # ruff: noqa: D101
@@ -8,17 +8,20 @@ from __future__ import annotations
 
 from enum import IntEnum, auto
 from io import StringIO
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, cast
+
+import polars as pl  # noqa: TC002 (used at runtime for pl.Struct, pl.Series etc.)
 
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
+from cudf_polars.utils.dtypes import make_empty_column
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
-    from polars.polars import _expr_nodes as pl_expr
+    from polars import polars  # type: ignore[attr-defined]
 
     from cudf_polars.containers import DataFrame, DataType
 
@@ -42,7 +45,7 @@ class StructFunction(Expr):
         )  # https://github.com/pola-rs/polars/pull/23022#issuecomment-2933910958
 
         @classmethod
-        def from_polars(cls, obj: pl_expr.StructFunction) -> Self:
+        def from_polars(cls, obj: polars._expr_nodes.StructFunction) -> Self:
             """Convert from polars' `StructFunction`."""
             try:
                 function, name = str(obj).split(".", maxsplit=1)
@@ -87,13 +90,14 @@ class StructFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
         (column,) = columns
-        # these type ignores are needed because the type checker doesn't
-        # know that polars only calls StructFunction with struct types.
+        # Type checker doesn't know polars only calls StructFunction with struct types
         if self.name == StructFunction.Name.FieldByName:
             field_index = next(
                 (
                     i
-                    for i, field in enumerate(self.children[0].dtype.polars_type.fields)
+                    for i, field in enumerate(
+                        cast("pl.Struct", self.children[0].dtype.polars_type).fields
+                    )
                     if field.name == self.options[0]
                 ),
                 None,
@@ -106,6 +110,14 @@ class StructFunction(Expr):
         elif self.name == StructFunction.Name.JsonEncode:
             # Once https://github.com/rapidsai/cudf/issues/19338 is implemented,
             # we can use do this conversion on host.
+            if column.size == 0:
+                # write_json emits no lines for an empty input, which makes
+                # from_iterable_of_py unable to infer a dtype. Skip the
+                # round-trip and return a typed empty column.
+                return Column(
+                    make_empty_column(self.dtype, df.stream),
+                    dtype=self.dtype,
+                )
             buff = StringIO()
             target = plc.io.SinkInfo([buff])
             table = plc.Table(column.obj.children())
@@ -113,7 +125,9 @@ class StructFunction(Expr):
                 table,
                 [
                     (field.name, [])
-                    for field in self.children[0].dtype.polars_type.fields
+                    for field in cast(
+                        "pl.Struct", self.children[0].dtype.polars_type
+                    ).fields
                 ],
             )
             options = (

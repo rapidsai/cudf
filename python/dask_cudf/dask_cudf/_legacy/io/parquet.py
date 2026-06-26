@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 import contextlib
 import itertools
@@ -162,14 +162,10 @@ class CudfEngine(ArrowDatasetEngine):
                 if len(partitions[i].keys):
                     # Build a categorical column from `codes` directly
                     # (since the category is often a larger dtype)
-                    codes = as_column(
-                        partitions[i].keys.get_loc(index2),
-                        length=len(df),
-                    )
-                    df[name] = codes._with_type_metadata(
-                        cudf.CategoricalDtype(
-                            categories=partitions[i].keys, ordered=False
-                        )
+                    df[name] = cudf.CategoricalIndex.from_codes(
+                        [partitions[i].keys.get_loc(index2)] * len(df),
+                        categories=partitions[i].keys,
+                        ordered=False,
                     )
                 elif name not in df.columns:
                     # Add non-categorical partition column

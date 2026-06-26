@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,8 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table_view.hpp>
+
+#include <cuda/iterator>
 
 namespace {
 
@@ -145,7 +147,7 @@ TEST_F(ParquetStringsTest, ChunkedReadNestedLargeStrings)
   auto constexpr num_rows = 100'000;
 
   std::vector<std::unique_ptr<cudf::column>> input_columns;
-  auto const int_iter = thrust::make_counting_iterator(0);
+  auto const int_iter = cuda::counting_iterator<int32_t>{0};
   input_columns.emplace_back(int32s_col(int_iter, int_iter + num_rows).release());
 
   auto const str_iter = cudf::detail::make_counting_transform_iterator(

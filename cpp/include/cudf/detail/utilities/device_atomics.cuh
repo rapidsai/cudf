@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,6 +27,7 @@
 #include <cudf/wrappers/timestamps.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/limits>
 #include <cuda/std/type_traits>
 
 namespace cudf {
@@ -149,7 +150,7 @@ struct typesAtomicCASImpl {
  * int8_t, int16_t, int32_t, int64_t, float, double
  *
  * @param address The address of old value in global or shared memory
- * @param val The value to be computed
+ * @param update_value The value to be computed
  * @param op  The binary operator used for compute
  *
  * @returns The old value at `address`
@@ -333,6 +334,78 @@ template <typename T>
 __forceinline__ __device__ T atomic_cas(T* address, T compare, T val)
 {
   return cudf::detail::typesAtomicCASImpl<T>()(address, compare, val);
+}
+
+/**
+ * @brief Helper function to calculate carry for 64-bit addition
+ *
+ * @param old_val The original 64-bit value
+ * @param add_val The value being added
+ * @param carry_in Carry from previous addition
+ * @return 1 if carry is generated, 0 otherwise
+ */
+__device__ __forceinline__ uint64_t calculate_carry_64(uint64_t old_val,
+                                                       uint64_t add_val,
+                                                       uint64_t carry_in)
+{
+  // Use __uint128_t to detect overflow beyond 64-bit range
+  __uint128_t sum = static_cast<__uint128_t>(old_val) + add_val + carry_in;
+  return sum > cuda::std::numeric_limits<uint64_t>::max();
+}
+
+/**
+ * @brief Atomic addition for __int128_t with architecture-specific optimization
+ *
+ * Uses native 128-bit CAS on Hopper+ GPUs (compute capability 9.0+) for optimal
+ * performance. Falls back to two 64-bit atomic CAS operations with carry propagation
+ * on older GPU architectures.
+ *
+ * @param address Pointer to the __int128_t value
+ * @param val Value to add
+ * @return The old value before addition
+ */
+__forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t val)
+{
+#if __CUDA_ARCH__ >= 900
+  __int128_t expected, desired;
+
+  do {
+    expected = *address;
+    desired  = expected + val;
+  } while (atomicCAS(address, expected, desired) != expected);
+
+  return expected;
+#else
+  uint64_t* const target_ptr         = reinterpret_cast<uint64_t*>(address);
+  __uint128_t const add_val_unsigned = static_cast<__uint128_t>(val);
+
+  // Split the 128-bit add value into two 64-bit parts
+  uint64_t const add_low  = static_cast<uint64_t>(add_val_unsigned);
+  uint64_t const add_high = static_cast<uint64_t>(add_val_unsigned >> 64);
+
+  uint64_t carry = 0;
+  uint64_t old_parts[2];
+  auto atomic_add_word = [&](int i, uint64_t current_add) {
+    uint64_t expected_part, new_part;
+    cuda::atomic_ref<uint64_t, cuda::thread_scope_device> atomic_part{target_ptr[i]};
+
+    do {
+      expected_part = atomic_part.load();
+      new_part      = expected_part + current_add + carry;
+    } while (
+      !atomic_part.compare_exchange_weak(expected_part, new_part, cuda::memory_order_relaxed));
+
+    old_parts[i] = expected_part;
+    carry        = calculate_carry_64(expected_part, current_add, carry);
+  };
+
+  atomic_add_word(0, add_low);
+  atomic_add_word(1, add_high);
+
+  __uint128_t const old_val_unsigned =
+    (static_cast<__uint128_t>(old_parts[1]) << 64) | old_parts[0];
+  return static_cast<__int128_t>(old_val_unsigned);
+#endif
 }
 
 }  // namespace detail

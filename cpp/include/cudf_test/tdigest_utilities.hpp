@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,15 +18,15 @@
 
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/tuple.h>
+#include <cuda/iterator>
+#include <cuda/std/tuple>
 
 // for use with groupby and reduction aggregation tests.
 
 namespace CUDF_EXPORT cudf {
 namespace test {
 
-using expected_value = thrust::tuple<size_type, double, double>;
+using expected_value = cuda::std::tuple<size_type, double, double>;
 
 /**
  * @brief Functor to generate a tdigest.
@@ -256,7 +256,7 @@ void tdigest_merge_simple(Func op, MergeFunc merge_op)
 
     // generate separate digests
     std::vector<std::unique_ptr<column>> parts;
-    auto iter = thrust::make_counting_iterator(0);
+    auto iter = cuda::counting_iterator<int>{0};
     std::transform(iter,
                    iter + split_values.size(),
                    std::back_inserter(parts),

@@ -5,11 +5,9 @@
 
 #include "compute_single_pass_aggs.cuh"
 #include "compute_single_pass_aggs.hpp"
+#include "single_pass_functors.cuh"
 
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
-
-#include <cub/device/device_select.cuh>
 
 namespace cudf::groupby::detail::hash {
 
@@ -37,39 +35,6 @@ std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Ki
       return data_buffer_size >= size * GROUPBY_CARDINALITY_THRESHOLD;
     });
   return {can_run_by_shared_mem_kernel, available_shmem_size};
-}
-
-std::pair<size_type, rmm::device_uvector<size_type>> find_fallback_blocks(
-  size_type grid_size, size_type const* block_cardinality, rmm::cuda_stream_view stream)
-{
-  rmm::device_uvector<size_type> fallback_block_ids(grid_size, stream);
-  rmm::device_scalar<size_type> d_num_fallback_blocks(stream);
-
-  std::size_t storage_bytes = 0;
-  auto const select_pred    = [block_cardinality] __device__(auto const idx) {
-    return block_cardinality[idx] >= GROUPBY_CARDINALITY_THRESHOLD;
-  };
-  auto const exec_copy_if = [&](auto const storage_ptr) {
-    cub::DeviceSelect::If(storage_ptr,
-                          storage_bytes,
-                          thrust::make_counting_iterator(0),
-                          fallback_block_ids.begin(),
-                          d_num_fallback_blocks.data(),
-                          grid_size,
-                          select_pred,
-                          stream.value());
-  };
-
-  exec_copy_if(nullptr);
-  rmm::device_buffer tmp_storage(storage_bytes, stream);
-  exec_copy_if(tmp_storage.data());
-
-  auto const num_fallback_blocks = d_num_fallback_blocks.value(stream);
-  if (num_fallback_blocks > 0) { fallback_block_ids.resize(num_fallback_blocks, stream); }
-
-  return {num_fallback_blocks,
-          num_fallback_blocks > 0 ? std::move(fallback_block_ids)
-                                  : rmm::device_uvector<size_type>{0, stream}};
 }
 
 template std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs<global_set_t>(

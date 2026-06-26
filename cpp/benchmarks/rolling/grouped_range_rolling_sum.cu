@@ -1,10 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
-#include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
@@ -22,7 +22,6 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
 #include <nvbench/nvbench.cuh>
@@ -65,7 +64,7 @@ void bench_grouped_range_rolling_sum(nvbench::state& state)
       cudf::make_numeric_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()}, num_rows);
     // Equally spaced rows separated by 1000 unit intervals
     thrust::tabulate(
-      rmm::exec_policy(cudf::get_default_stream()),
+      rmm::exec_policy_nosync(cudf::get_default_stream()),
       seq->mutable_view().begin<cudf::size_type>(),
       seq->mutable_view().end<cudf::size_type>(),
       [] __device__(cudf::size_type i) { return static_cast<cudf::size_type>(i) * 1000; });

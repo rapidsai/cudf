@@ -1,25 +1,29 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "cudf_jni_apis.hpp"
+#include "jni_cccl_any_resource.hpp"
 
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
 
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device/aligned_resource_adaptor.hpp>
-#include <rmm/mr/device/arena_memory_resource.hpp>
-#include <rmm/mr/device/cuda_async_memory_resource.hpp>
-#include <rmm/mr/device/cuda_memory_resource.hpp>
-#include <rmm/mr/device/limiting_resource_adaptor.hpp>
-#include <rmm/mr/device/logging_resource_adaptor.hpp>
-#include <rmm/mr/device/managed_memory_resource.hpp>
-#include <rmm/mr/device/owning_wrapper.hpp>
-#include <rmm/mr/device/pool_memory_resource.hpp>
+#include <rmm/mr/aligned_resource_adaptor.hpp>
+#include <rmm/mr/arena_memory_resource.hpp>
+#include <rmm/mr/cuda_async_memory_resource.hpp>
+#include <rmm/mr/cuda_memory_resource.hpp>
+#include <rmm/mr/limiting_resource_adaptor.hpp>
+#include <rmm/mr/logging_resource_adaptor.hpp>
+#include <rmm/mr/managed_memory_resource.hpp>
 #include <rmm/mr/pinned_host_memory_resource.hpp>
+#include <rmm/mr/pool_memory_resource.hpp>
+#include <rmm/mr/tracking_resource_adaptor.hpp>
+#include <rmm/resource_ref.hpp>
+
+#include <cuda/memory_resource>
 
 #include <atomic>
 #include <ctime>
@@ -27,99 +31,51 @@
 #include <iostream>
 #include <limits>
 #include <mutex>
-
-using rmm::mr::device_memory_resource;
-using rmm::mr::logging_resource_adaptor;
-using rmm_pinned_pool_t = rmm::mr::pool_memory_resource<rmm::mr::pinned_host_memory_resource>;
+#include <unordered_map>
 
 namespace {
+
+using cudf::jni::delete_jni_resource;
+using cudf::jni::get_resource;
+using cudf::jni::make_jni_resource;
 
 constexpr char const* RMM_EXCEPTION_CLASS = "ai/rapids/cudf/RmmException";
 
 /**
- * @brief Base class so we can template tracking_resource_adaptor but
- * still hold all instances of it without issues.
+ * @brief Implementation class for tracking resource adaptor.
+ * This class is not copyable due to atomic/mutex members.
+ * Owns the upstream resource via any_resource.
  */
-class base_tracking_resource_adaptor : public device_memory_resource {
+class tracking_resource_adaptor_impl {
  public:
-  virtual std::size_t get_total_allocated() = 0;
-
-  virtual std::size_t get_max_total_allocated() = 0;
-
-  virtual void reset_scoped_max_total_allocated(std::size_t initial_value) = 0;
-
-  virtual std::size_t get_scoped_max_total_allocated() = 0;
-};
-
-/**
- * @brief An RMM device memory resource that delegates to another resource
- * while tracking the amount of memory allocated.
- *
- * @tparam Upstream Type of memory resource that will be wrapped.
- * @tparam size_align The size to which all allocation requests are
- * aligned. Must be a value >= 1.
- */
-template <typename Upstream>
-class tracking_resource_adaptor final : public base_tracking_resource_adaptor {
- public:
-  /**
-   * @brief Constructs a new tracking resource adaptor that delegates to
-   * `mr` for all allocation operations while tracking the amount of memory
-   * allocated.
-   *
-   * @param mr The resource to use for memory allocation operations.
-   * @param size_alignment The alignment to which the `mr` resource will
-   * round up all memory allocation size requests.
-   */
-  tracking_resource_adaptor(Upstream* mr, std::size_t size_alignment)
-    : resource{mr}, size_align{size_alignment}
+  tracking_resource_adaptor_impl(cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+                                 std::size_t size_alignment)
+    : upstream_{std::move(upstream)}, size_align{size_alignment}
   {
   }
 
-  Upstream* get_wrapped_resource() { return resource; }
+  std::size_t get_total_allocated() { return total_allocated.load(); }
 
-  std::size_t get_total_allocated() override { return total_allocated.load(); }
+  std::size_t get_max_total_allocated() { return max_total_allocated; }
 
-  std::size_t get_max_total_allocated() override { return max_total_allocated; }
-
-  void reset_scoped_max_total_allocated(std::size_t initial_value) override
+  void reset_scoped_max_total_allocated(std::size_t initial_value)
   {
     std::scoped_lock lock(max_total_allocated_mutex);
     scoped_allocated           = initial_value;
     scoped_max_total_allocated = initial_value;
   }
 
-  std::size_t get_scoped_max_total_allocated() override
+  std::size_t get_scoped_max_total_allocated()
   {
     std::scoped_lock lock(max_total_allocated_mutex);
     return scoped_max_total_allocated;
   }
 
- private:
-  Upstream* const resource;
-  std::size_t const size_align;
-  // sum of what is currently allocated
-  std::atomic_size_t total_allocated{0};
-
-  // the maximum total allocated for the lifetime of this class
-  std::size_t max_total_allocated{0};
-
-  // the sum of what is currently outstanding from the last
-  // `reset_scoped_max_total_allocated` call. This can be negative.
-  std::atomic_long scoped_allocated{0};
-
-  // the maximum total allocated relative to the last
-  // `reset_scoped_max_total_allocated` call.
-  long scoped_max_total_allocated{0};
-
-  std::mutex max_total_allocated_mutex;
-
-  void* do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override
+  void* allocate(cuda::stream_ref stream,
+                 std::size_t num_bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
-    // adjust size of allocation based on specified size alignment
-    num_bytes = (num_bytes + size_align - 1) / size_align * size_align;
-
-    auto result = resource->allocate(num_bytes, stream);
+    auto const result = upstream_.allocate(stream, num_bytes, size_align);
     if (result) {
       total_allocated += num_bytes;
       scoped_allocated += num_bytes;
@@ -130,32 +86,133 @@ class tracking_resource_adaptor final : public base_tracking_resource_adaptor {
     return result;
   }
 
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
+  void deallocate(cuda::stream_ref stream,
+                  void* p,
+                  std::size_t size,
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
-    size = (size + size_align - 1) / size_align * size_align;
-
-    resource->deallocate(p, size, stream);
-
+    upstream_.deallocate(stream, p, size, size_align);
     if (p) {
       total_allocated -= size;
       scoped_allocated -= size;
     }
   }
+
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
+  }
+
+  void deallocate_sync(void* ptr,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, ptr, bytes, alignment);
+  }
+
+  bool operator==(tracking_resource_adaptor_impl const& other) const noexcept
+  {
+    return this == &other;
+  }
+
+  friend void get_property(tracking_resource_adaptor_impl const&,
+                           cuda::mr::device_accessible) noexcept
+  {
+  }
+
+ private:
+  cuda::mr::any_resource<cuda::mr::device_accessible> upstream_;
+  std::size_t const size_align;
+  // sum of what is currently allocated
+  std::atomic_size_t total_allocated{0};
+  // the maximum total allocated for the lifetime of this class
+  std::size_t max_total_allocated{0};
+  // the sum of what is currently outstanding from the last
+  // `reset_scoped_max_total_allocated` call. This can be negative.
+  std::atomic_long scoped_allocated{0};
+  // the maximum total allocated relative to the last
+  // `reset_scoped_max_total_allocated` call.
+  long scoped_max_total_allocated{0};
+  std::mutex max_total_allocated_mutex;
 };
+static_assert(cuda::mr::resource_with<tracking_resource_adaptor_impl, cuda::mr::device_accessible>);
 
 /**
- * @brief An RMM device memory resource adaptor that delegates to the wrapped resource
- * for most operations but will call Java to handle certain situations (e.g.: allocation failure).
+ * @brief Tracking resource adaptor with reference-counted shared ownership.
+ * This wrapper holds a shared_ptr to the impl and forwards resource operations.
+ * It satisfies the CCCL resource concept and is copyable for use with any_resource.
  */
-class java_event_handler_memory_resource : public device_memory_resource {
+class tracking_resource_adaptor {
  public:
-  java_event_handler_memory_resource(JNIEnv* env,
-                                     jobject jhandler,
-                                     jlongArray jalloc_thresholds,
-                                     jlongArray jdealloc_thresholds,
-                                     device_memory_resource* resource_to_wrap,
-                                     base_tracking_resource_adaptor* tracker)
-    : resource(resource_to_wrap), tracker(tracker)
+  tracking_resource_adaptor(cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+                            std::size_t size_alignment)
+    : impl_{std::make_shared<tracking_resource_adaptor_impl>(std::move(upstream), size_alignment)}
+  {
+  }
+
+  void* allocate(cuda::stream_ref stream,
+                 std::size_t bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return impl_->allocate(stream, bytes, alignment);
+  }
+
+  void deallocate(cuda::stream_ref stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    impl_->deallocate(stream, ptr, bytes, alignment);
+  }
+
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return impl_->allocate_sync(bytes, alignment);
+  }
+
+  void deallocate_sync(void* ptr,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    impl_->deallocate_sync(ptr, bytes, alignment);
+  }
+
+  bool operator==(tracking_resource_adaptor const& other) const noexcept
+  {
+    return impl_ == other.impl_;
+  }
+
+  friend void get_property(tracking_resource_adaptor const&, cuda::mr::device_accessible) noexcept
+  {
+  }
+
+  std::size_t get_total_allocated() { return impl_->get_total_allocated(); }
+  std::size_t get_max_total_allocated() { return impl_->get_max_total_allocated(); }
+  void reset_scoped_max_total_allocated(std::size_t initial_value)
+  {
+    impl_->reset_scoped_max_total_allocated(initial_value);
+  }
+  std::size_t get_scoped_max_total_allocated() { return impl_->get_scoped_max_total_allocated(); }
+
+ private:
+  std::shared_ptr<tracking_resource_adaptor_impl> impl_;
+};
+static_assert(cuda::mr::resource_with<tracking_resource_adaptor, cuda::mr::device_accessible>);
+
+/**
+ * @brief Implementation class for java event handler memory resource.
+ * This class holds all the non-copyable JNI state and is wrapped in a shared_ptr.
+ */
+class java_event_handler_memory_resource_impl {
+ public:
+  java_event_handler_memory_resource_impl(
+    JNIEnv* env,
+    jobject jhandler,
+    jlongArray jalloc_thresholds,
+    jlongArray jdealloc_thresholds,
+    cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+    tracking_resource_adaptor tracker)
+    : upstream_{std::move(upstream)}, tracker_(std::move(tracker))
   {
     if (env->GetJavaVM(&jvm) < 0) { throw std::runtime_error("GetJavaVM failed"); }
 
@@ -186,7 +243,7 @@ class java_event_handler_memory_resource : public device_memory_resource {
     handler_obj = cudf::jni::add_global_ref(env, jhandler);
   }
 
-  virtual ~java_event_handler_memory_resource()
+  virtual ~java_event_handler_memory_resource_impl()
   {
     // This should normally be called by a JVM thread. If the JVM environment is missing then this
     // is likely being triggered by the C++ runtime during shutdown. In that case the JVM may
@@ -198,19 +255,71 @@ class java_event_handler_memory_resource : public device_memory_resource {
     handler_obj = nullptr;
   }
 
-  device_memory_resource* get_wrapped_resource() { return resource; }
+  virtual void* allocate(cuda::stream_ref stream,
+                         std::size_t num_bytes,
+                         std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    std::size_t total_before;
+    void* result;
+    // a non-zero retry_count signifies that the `on_alloc_fail`
+    // callback is being invoked while re-attempting an allocation
+    // that had previously failed.
+    int retry_count = 0;
+    while (true) {
+      try {
+        total_before = tracker_.get_total_allocated();
+        result       = upstream_.allocate(stream, num_bytes, alignment);
+        break;
+      } catch (rmm::out_of_memory const& e) {
+        if (!on_alloc_fail(num_bytes, retry_count++)) { throw; }
+      }
+    }
+    auto total_after = tracker_.get_total_allocated();
 
- private:
-  device_memory_resource* const resource;
-  base_tracking_resource_adaptor* const tracker;
+    try {
+      check_for_threshold_callback(total_before,
+                                   total_after,
+                                   alloc_thresholds,
+                                   on_alloc_threshold_method,
+                                   "onAllocThreshold",
+                                   total_after);
+    } catch (std::exception const& e) {
+      // Free the allocation as app will think the exception means the memory was not allocated.
+      upstream_.deallocate(stream, result, num_bytes, alignment);
+      throw;
+    }
+
+    return result;
+  }
+
+  virtual void deallocate(cuda::stream_ref stream,
+                          void* p,
+                          std::size_t size,
+                          std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    auto total_before = tracker_.get_total_allocated();
+    upstream_.deallocate(stream, p, size, alignment);
+    auto total_after = tracker_.get_total_allocated();
+    check_for_threshold_callback(total_after,
+                                 total_before,
+                                 dealloc_thresholds,
+                                 on_dealloc_threshold_method,
+                                 "onDeallocThreshold",
+                                 total_after);
+  }
+
+ protected:
+  cuda::mr::any_resource<cuda::mr::device_accessible> upstream_;
+  tracking_resource_adaptor tracker_;
   jmethodID on_alloc_fail_method;
   bool use_old_alloc_fail_interface;
   jmethodID on_alloc_threshold_method;
   jmethodID on_dealloc_threshold_method;
-
   // sorted memory thresholds to trigger callbacks
   std::vector<std::size_t> alloc_thresholds{};
   std::vector<std::size_t> dealloc_thresholds{};
+  JavaVM* jvm;
+  jobject handler_obj;
 
   static void update_thresholds(JNIEnv* env,
                                 std::vector<std::size_t>& thresholds,
@@ -235,7 +344,6 @@ class java_event_handler_memory_resource : public device_memory_resource {
                                       on_alloc_fail_method,
                                       static_cast<jlong>(num_bytes),
                                       static_cast<jint>(retry_count));
-
     } else {
       result =
         env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
@@ -258,76 +366,33 @@ class java_event_handler_memory_resource : public device_memory_resource {
       auto it = std::find_if(thresholds.begin(), thresholds.end(), [=](std::size_t t) -> bool {
         return low < t && high >= t;
       });
-      if (it != thresholds.end()) {  // throw Java exception, but not C++ exception
+      if (it != thresholds.end()) {
         JNIEnv* env = cudf::jni::get_jni_env(jvm);
         env->CallVoidMethod(handler_obj, callback_method, current_total);
       }
     }
   }
-
- protected:
-  JavaVM* jvm;
-  jobject handler_obj;
-
-  void* do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override
-  {
-    std::size_t total_before;
-    void* result;
-    // a non-zero retry_count signifies that the `on_alloc_fail`
-    // callback is being invoked while re-attempting an allocation
-    // that had previously failed.
-    int retry_count = 0;
-    while (true) {
-      try {
-        total_before = tracker->get_total_allocated();
-        result       = resource->allocate(num_bytes, stream);
-        break;
-      } catch (rmm::out_of_memory const& e) {
-        if (!on_alloc_fail(num_bytes, retry_count++)) { throw; }
-      }
-    }
-    auto total_after = tracker->get_total_allocated();
-
-    try {
-      check_for_threshold_callback(total_before,
-                                   total_after,
-                                   alloc_thresholds,
-                                   on_alloc_threshold_method,
-                                   "onAllocThreshold",
-                                   total_after);
-    } catch (std::exception const& e) {
-      // Free the allocation as app will think the exception means the memory was not allocated.
-      resource->deallocate(result, num_bytes, stream);
-      throw;
-    }
-
-    return result;
-  }
-
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
-  {
-    auto total_before = tracker->get_total_allocated();
-    resource->deallocate(p, size, stream);
-    auto total_after = tracker->get_total_allocated();
-    check_for_threshold_callback(total_after,
-                                 total_before,
-                                 dealloc_thresholds,
-                                 on_dealloc_threshold_method,
-                                 "onDeallocThreshold",
-                                 total_after);
-  }
 };
 
-class java_debug_event_handler_memory_resource final : public java_event_handler_memory_resource {
+/**
+ * @brief Debug implementation that adds allocation/deallocation callbacks.
+ */
+class java_debug_event_handler_memory_resource_impl final
+  : public java_event_handler_memory_resource_impl {
  public:
-  java_debug_event_handler_memory_resource(JNIEnv* env,
-                                           jobject jhandler,
-                                           jlongArray jalloc_thresholds,
-                                           jlongArray jdealloc_thresholds,
-                                           device_memory_resource* resource_to_wrap,
-                                           base_tracking_resource_adaptor* tracker)
-    : java_event_handler_memory_resource(
-        env, jhandler, jalloc_thresholds, jdealloc_thresholds, resource_to_wrap, tracker)
+  java_debug_event_handler_memory_resource_impl(
+    JNIEnv* env,
+    jobject jhandler,
+    jlongArray jalloc_thresholds,
+    jlongArray jdealloc_thresholds,
+    cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+    tracking_resource_adaptor tracker)
+    : java_event_handler_memory_resource_impl(env,
+                                              jhandler,
+                                              jalloc_thresholds,
+                                              jdealloc_thresholds,
+                                              std::move(upstream),
+                                              std::move(tracker))
   {
     jclass cls = env->GetObjectClass(jhandler);
     if (cls == nullptr) { throw cudf::jni::jni_exception("class not found"); }
@@ -341,11 +406,29 @@ class java_debug_event_handler_memory_resource final : public java_event_handler
     }
   }
 
+  void* allocate(cuda::stream_ref stream,
+                 std::size_t num_bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) override
+  {
+    void* result = java_event_handler_memory_resource_impl::allocate(stream, num_bytes, alignment);
+    on_allocated_callback(num_bytes);
+    return result;
+  }
+
+  void deallocate(cuda::stream_ref stream,
+                  void* p,
+                  std::size_t size,
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept override
+  {
+    java_event_handler_memory_resource_impl::deallocate(stream, p, size, alignment);
+    on_deallocated_callback(size);
+  }
+
  private:
   jmethodID on_allocated_method;
   jmethodID on_deallocated_method;
 
-  void on_allocated_callback(std::size_t num_bytes, rmm::cuda_stream_view stream)
+  void on_allocated_callback(std::size_t num_bytes)
   {
     JNIEnv* env = cudf::jni::get_jni_env(jvm);
     env->CallVoidMethod(handler_obj, on_allocated_method, num_bytes);
@@ -354,267 +437,150 @@ class java_debug_event_handler_memory_resource final : public java_event_handler
     }
   }
 
-  void on_deallocated_callback(void* p, std::size_t size, rmm::cuda_stream_view stream)
+  void on_deallocated_callback(std::size_t size)
   {
     JNIEnv* env = cudf::jni::get_jni_env(jvm);
     env->CallVoidMethod(handler_obj, on_deallocated_method, size);
   }
-
-  void* do_allocate(std::size_t num_bytes, rmm::cuda_stream_view stream) override
-  {
-    void* result = java_event_handler_memory_resource::do_allocate(num_bytes, stream);
-    on_allocated_callback(num_bytes, stream);
-    return result;
-  }
-
-  void do_deallocate(void* p, std::size_t size, rmm::cuda_stream_view stream) noexcept override
-  {
-    java_event_handler_memory_resource::do_deallocate(p, size, stream);
-    on_deallocated_callback(p, size, stream);
-  }
 };
+
+/**
+ * @brief Copyable wrapper for java event handler that holds shared_ptr to impl.
+ * Satisfies CCCL resource concept for use with device_async_resource_ref.
+ */
+class java_event_handler_memory_resource {
+ public:
+  java_event_handler_memory_resource(JNIEnv* env,
+                                     jobject jhandler,
+                                     jlongArray jalloc_thresholds,
+                                     jlongArray jdealloc_thresholds,
+                                     cuda::mr::any_resource<cuda::mr::device_accessible> upstream,
+                                     tracking_resource_adaptor tracker,
+                                     bool enable_debug)
+    : impl_(enable_debug
+              ? std::make_shared<java_debug_event_handler_memory_resource_impl>(
+                  env, jhandler, jalloc_thresholds, jdealloc_thresholds, upstream, tracker)
+              : std::make_shared<java_event_handler_memory_resource_impl>(env,
+                                                                          jhandler,
+                                                                          jalloc_thresholds,
+                                                                          jdealloc_thresholds,
+                                                                          std::move(upstream),
+                                                                          std::move(tracker)))
+  {
+  }
+
+  void* allocate(cuda::stream_ref stream,
+                 std::size_t bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return impl_->allocate(stream, bytes, alignment);
+  }
+
+  void deallocate(cuda::stream_ref stream,
+                  void* ptr,
+                  std::size_t bytes,
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    impl_->deallocate(stream, ptr, bytes, alignment);
+  }
+
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
+  }
+
+  void deallocate_sync(void* ptr,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, ptr, bytes, alignment);
+  }
+
+  bool operator==(java_event_handler_memory_resource const& other) const noexcept
+  {
+    return impl_ == other.impl_;
+  }
+
+  friend void get_property(java_event_handler_memory_resource const&,
+                           cuda::mr::device_accessible) noexcept
+  {
+  }
+
+ private:
+  std::shared_ptr<java_event_handler_memory_resource_impl> impl_;
+};
+static_assert(
+  cuda::mr::resource_with<java_event_handler_memory_resource, cuda::mr::device_accessible>);
 
 inline auto& prior_cudf_pinned_mr()
 {
-  static rmm::host_device_async_resource_ref _prior_cudf_pinned_mr =
-    cudf::get_pinned_memory_resource();
+  static cuda::mr::resource_ref<cuda::mr::host_accessible, cuda::mr::device_accessible>
+    _prior_cudf_pinned_mr = cudf::get_pinned_memory_resource();
   return _prior_cudf_pinned_mr;
 }
 
 /**
- * This is a pinned fallback memory resource that will try to allocate `pool`
- * and if that fails, attempt to allocate from the prior resource used by cuDF
- * `prior_cudf_pinned_mr`.
+ * This is a pinned fallback memory resource that will try to allocate from the provided
+ * `pool` resource if the requested size is less than or equal to the pool size, otherwise it
+ * will fall back to the prior resource used by cuDF `prior_cudf_pinned_mr`.
  *
  * We detect whether a pointer to free is inside of the pool by checking its address (see
- * constructor)
+ * constructor).
  *
  * Most of this comes directly from `pinned_host_memory_resource` in RMM.
  */
 class pinned_fallback_host_memory_resource {
- private:
-  rmm_pinned_pool_t* _pool;
-  void* pool_begin_;
-  void* pool_end_;
-
  public:
-  pinned_fallback_host_memory_resource(rmm_pinned_pool_t* pool) : _pool(pool)
+  pinned_fallback_host_memory_resource(rmm::mr::pool_memory_resource pool_) : pool{pool_}
   {
-    // allocate from the pinned pool the full size to figure out
-    // our beginning and end address.
-    auto pool_size = pool->pool_size();
-    pool_begin_    = pool->allocate(pool_size);
-    pool_end_      = static_cast<void*>(static_cast<uint8_t*>(pool_begin_) + pool_size);
-    pool->deallocate(pool_begin_, pool_size);
+    auto pool_size = pool.pool_size();
+    pool_begin     = pool.allocate_sync(pool_size);
+    pool_end       = static_cast<void*>(static_cast<uint8_t*>(pool_begin) + pool_size);
+    pool.deallocate_sync(pool_begin, pool_size);
   }
 
-  // Disable clang-tidy complaining about the easily swappable size and alignment parameters
-  // of allocate and deallocate
-  // NOLINTBEGIN(bugprone-easily-swappable-parameters)
-
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes from either the
-   *        _pool argument provided, or prior_cudf_pinned_mr.
-   *
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * reason.
-   *
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   *
-   * @return Pointer to the newly allocated memory.
-   */
-  void* allocate(std::size_t bytes,
-                 [[maybe_unused]] std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT)
+  void* allocate(cuda::stream_ref stream,
+                 std::size_t bytes,
+                 std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
   {
-    try {
-      return _pool->allocate(bytes, alignment);
-    } catch (std::exception const& unused) {
-      // try to allocate using the underlying pinned resource
-      return prior_cudf_pinned_mr().allocate(bytes, alignment);
+    if (bytes <= pool.pool_size()) {
+      try {
+        return pool.allocate(stream, bytes, alignment);
+      } catch (...) {
+        // If the pool is exhausted, fall back to the upstream memory resource
+      }
     }
-    // we should not reached here
-    return nullptr;
+    return prior_cudf_pinned_mr().allocate(stream, bytes);
   }
 
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes. We attempt
-   *        to deallocate from _pool, if ptr is detected to be in the pool address range,
-   *        otherwise we deallocate from `prior_cudf_pinned_mr`.
-   *
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   */
-  void deallocate(void* ptr,
-                  std::size_t bytes,
-                  std::size_t alignment = rmm::RMM_DEFAULT_HOST_ALIGNMENT) noexcept
-  {
-    if (ptr >= pool_begin_ && ptr <= pool_end_) {
-      _pool->deallocate(ptr, bytes, alignment);
-    } else {
-      prior_cudf_pinned_mr().deallocate(ptr, bytes, alignment);
-    }
-  }
-
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes.
-   *
-   * @note Stream argument is ignored and behavior is identical to allocate.
-   *
-   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
-   * CUDA out of memory error.
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * error.
-   *
-   * @param bytes The size, in bytes, of the allocation.
-   * @param stream CUDA stream on which to perform the allocation (ignored).
-   * @return Pointer to the newly allocated memory.
-   */
-  void* allocate_async(std::size_t bytes, [[maybe_unused]] cuda::stream_ref stream)
-  {
-    return allocate(bytes);
-  }
-
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes and alignment \p alignment.
-   *
-   * @note Stream argument is ignored and behavior is identical to allocate.
-   *
-   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
-   * CUDA out of memory error.
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * error.
-   *
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes.
-   * @param stream CUDA stream on which to perform the allocation (ignored).
-   * @return Pointer to the newly allocated memory.
-   */
-  void* allocate_async(std::size_t bytes,
-                       std::size_t alignment,
-                       [[maybe_unused]] cuda::stream_ref stream)
-  {
-    return allocate(bytes, alignment);
-  }
-
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes.
-   *
-   * @note Stream argument is ignored and behavior is identical to deallocate.
-   *
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param stream CUDA stream on which to perform the deallocation (ignored).
-   */
-  void deallocate_async(void* ptr,
-                        std::size_t bytes,
-                        [[maybe_unused]] cuda::stream_ref stream) noexcept
-  {
-    return deallocate(ptr, bytes);
-  }
-
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes and alignment \p
-   * alignment bytes.
-   *
-   * @note Stream argument is ignored and behavior is identical to deallocate.
-   *
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes.
-   * @param stream CUDA stream on which to perform the deallocation (ignored).
-   */
-  void deallocate_async(void* ptr,
-                        std::size_t bytes,
-                        std::size_t alignment,
-                        [[maybe_unused]] cuda::stream_ref stream) noexcept
-  {
-    return deallocate(ptr, bytes, alignment);
-  }
-  // NOLINTEND(bugprone-easily-swappable-parameters)
-
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes.
-   *
-   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
-   * CUDA out of memory error.
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * reason.
-   *
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   *
-   * @return Pointer to the newly allocated memory.
-   */
-  void* allocate_sync(std::size_t bytes, std::size_t alignment)
-  {
-    return allocate(bytes, alignment);
-  }
-
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes.
-   *
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes. Default alignment is used if unspecified.
-   */
-  void deallocate_sync(void* ptr, std::size_t bytes, std::size_t alignment) noexcept
-  {
-    return deallocate(ptr, bytes, alignment);
-  }
-
-  /**
-   * @brief Allocates pinned host memory of size at least \p bytes bytes and alignment \p alignment.
-   *
-   * @note Stream argument is ignored and behavior is identical to allocate.
-   *
-   * @throws rmm::out_of_memory if the requested allocation could not be fulfilled due to to a
-   * CUDA out of memory error.
-   * @throws rmm::bad_alloc if the requested allocation could not be fulfilled due to any other
-   * error.
-   *
-   * @param stream CUDA stream on which to perform the allocation (ignored).
-   * @param bytes The size, in bytes, of the allocation.
-   * @param alignment Alignment in bytes.
-   * @return Pointer to the newly allocated memory.
-   */
-  void* allocate(rmm::cuda_stream_view stream, std::size_t bytes, std::size_t alignment)
-  {
-    return allocate_async(bytes, alignment, stream);
-  }
-
-  /**
-   * @brief Deallocate memory pointed to by \p ptr of size \p bytes bytes and alignment \p
-   * alignment bytes.
-   *
-   * @note Stream argument is ignored and behavior is identical to deallocate.
-   *
-   * @param stream CUDA stream on which to perform the deallocation (ignored).
-   * @param ptr Pointer to be deallocated.
-   * @param bytes Size of the allocation.
-   * @param alignment Alignment in bytes.
-   */
-  void deallocate(rmm::cuda_stream_view stream,
+  void deallocate(cuda::stream_ref stream,
                   void* ptr,
                   std::size_t bytes,
-                  std::size_t alignment) noexcept
+                  std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
   {
-    return deallocate_async(ptr, bytes, alignment, stream);
+    if (bytes <= pool.pool_size() && ptr >= pool_begin && ptr < pool_end) {
+      pool.deallocate(stream, ptr, bytes, alignment);
+    } else {
+      prior_cudf_pinned_mr().deallocate(stream, ptr, bytes);
+    }
   }
-#endif
 
-  /**
-   * @briefreturn{true if the specified resource is the same type as this resource.}
-   */
-  bool operator==(pinned_fallback_host_memory_resource const&) const { return true; }
+  void* allocate_sync(std::size_t bytes, std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT)
+  {
+    return allocate(cuda::stream_ref{cudaStream_t{nullptr}}, bytes, alignment);
+  }
 
-  /**
-   * @briefreturn{true if the specified resource is not the same type as this resource, otherwise
-   * false.}
-   */
-  bool operator!=(pinned_fallback_host_memory_resource const&) const { return false; }
+  void deallocate_sync(void* ptr,
+                       std::size_t bytes,
+                       std::size_t alignment = rmm::CUDA_ALLOCATION_ALIGNMENT) noexcept
+  {
+    deallocate(cuda::stream_ref{cudaStream_t{nullptr}}, ptr, bytes, alignment);
+  }
+
+  bool operator==(pinned_fallback_host_memory_resource const& other) const noexcept
+  {
+    return pool == other.pool;
+  }
 
   /**
    * @brief Enables the `cuda::mr::device_accessible` property
@@ -635,18 +601,17 @@ class pinned_fallback_host_memory_resource {
                            cuda::mr::host_accessible) noexcept
   {
   }
+
+ private:
+  rmm::mr::pool_memory_resource pool;
+  void* pool_begin;
+  void* pool_end;
 };
 
 // carryover from RMM pinned_host_memory_resource
-#if CCCL_MAJOR_VERSION > 3 || (CCCL_MAJOR_VERSION == 3 && CCCL_MINOR_VERSION >= 1)
 static_assert(cuda::mr::resource_with<pinned_fallback_host_memory_resource,
                                       cuda::mr::device_accessible,
                                       cuda::mr::host_accessible>);
-#else
-static_assert(cuda::mr::async_resource_with<pinned_fallback_host_memory_resource,
-                                            cuda::mr::device_accessible,
-                                            cuda::mr::host_accessible>);
-#endif
 
 // we set this to our fallback resource if we have set it.
 std::unique_ptr<pinned_fallback_host_memory_resource> pinned_fallback_mr;
@@ -683,7 +648,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocInternal(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    void* ret     = mr.allocate_async(size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+    void* ret     = mr.allocate(c_stream, size);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH(env, 0);
@@ -698,7 +663,7 @@ Java_ai_rapids_cudf_Rmm_free(JNIEnv* env, jclass clazz, jlong ptr, jlong size, j
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref();
     void* cptr                        = reinterpret_cast<void*>(ptr);
     auto c_stream = rmm::cuda_stream_view(reinterpret_cast<cudaStream_t>(stream));
-    mr.deallocate_async(cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT, c_stream);
+    mr.deallocate(c_stream, cptr, size);
   }
   JNI_CATCH(env, );
 }
@@ -748,8 +713,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaMemoryResource(JNIEnv* en
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto ret = new rmm::mr::cuda_memory_resource();
-    return reinterpret_cast<jlong>(ret);
+    return make_jni_resource(rmm::mr::cuda_memory_resource{});
   }
   JNI_CATCH(env, 0);
 }
@@ -761,8 +725,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseCudaMemoryResource(JNIEnv*
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::cuda_memory_resource*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
@@ -772,8 +735,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newManagedMemoryResource(JNIEnv*
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto ret = new rmm::mr::managed_memory_resource();
-    return reinterpret_cast<jlong>(ret);
+    return make_jni_resource(rmm::mr::managed_memory_resource{});
   }
   JNI_CATCH(env, 0);
 }
@@ -785,8 +747,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseManagedMemoryResource(JNIE
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::managed_memory_resource*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
@@ -798,10 +759,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPoolMemoryResource(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
-    auto ret =
-      new rmm::mr::pool_memory_resource<rmm::mr::device_memory_resource>(wrapped, init, max);
-    return reinterpret_cast<jlong>(ret);
+    auto upstream = get_resource(child);
+    return make_jni_resource(rmm::mr::pool_memory_resource{
+      upstream, static_cast<std::size_t>(init), static_cast<std::size_t>(max)});
   }
   JNI_CATCH(env, 0);
 }
@@ -813,9 +773,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePoolMemoryResource(JNIEnv*
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::pool_memory_resource<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
@@ -827,10 +785,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newArenaMemoryResource(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
-    auto ret     = new rmm::mr::arena_memory_resource<rmm::mr::device_memory_resource>(
-      wrapped, init, dump_on_oom);
-    return reinterpret_cast<jlong>(ret);
+    auto upstream = get_resource(child);
+    return make_jni_resource(rmm::mr::arena_memory_resource{
+      upstream, static_cast<std::size_t>(init), static_cast<bool>(dump_on_oom)});
   }
   JNI_CATCH(env, 0);
 }
@@ -842,9 +799,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseArenaMemoryResource(JNIEnv
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::arena_memory_resource<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
@@ -860,9 +815,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newCudaAsyncMemoryResource(
       fabric ? std::optional{rmm::mr::cuda_async_memory_resource::allocation_handle_type::fabric}
              : std::nullopt;
 
-    auto ret = new rmm::mr::cuda_async_memory_resource(init, release, handle_type);
-
-    return reinterpret_cast<jlong>(ret);
+    return make_jni_resource(rmm::mr::cuda_async_memory_resource{init, release, handle_type});
   }
   JNI_CATCH(env, 0);
 }
@@ -874,8 +827,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseCudaAsyncMemoryResource(JN
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::cuda_async_memory_resource*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
@@ -887,10 +839,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLimitingResourceAdaptor(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
-    auto ret     = new rmm::mr::limiting_resource_adaptor<rmm::mr::device_memory_resource>(
-      wrapped, limit, align);
-    return reinterpret_cast<jlong>(ret);
+    auto upstream = get_resource(child);
+    return make_jni_resource(rmm::mr::limiting_resource_adaptor{
+      upstream, static_cast<std::size_t>(limit), static_cast<std::size_t>(align)});
   }
   JNI_CATCH(env, 0);
 }
@@ -902,9 +853,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLimitingResourceAdaptor(JN
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::limiting_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
@@ -916,27 +865,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
+    auto upstream = get_resource(child);
     switch (type) {
       case 1:  // File
       {
         cudf::jni::native_jstring path(env, jpath);
-        auto ret = new logging_resource_adaptor<rmm::mr::device_memory_resource>(
-          wrapped, path.get(), auto_flush);
-        return reinterpret_cast<jlong>(ret);
+        return make_jni_resource(
+          rmm::mr::logging_resource_adaptor{upstream, path.get(), static_cast<bool>(auto_flush)});
       }
       case 2:  // stdout
-      {
-        auto ret = new logging_resource_adaptor<rmm::mr::device_memory_resource>(
-          wrapped, std::cout, auto_flush);
-        return reinterpret_cast<jlong>(ret);
-      }
+        return make_jni_resource(
+          rmm::mr::logging_resource_adaptor{upstream, std::cout, static_cast<bool>(auto_flush)});
       case 3:  // stderr
-      {
-        auto ret = new logging_resource_adaptor<rmm::mr::device_memory_resource>(
-          wrapped, std::cerr, auto_flush);
-        return reinterpret_cast<jlong>(ret);
-      }
+        return make_jni_resource(
+          rmm::mr::logging_resource_adaptor{upstream, std::cerr, static_cast<bool>(auto_flush)});
       default: throw std::logic_error("unsupported logging location type");
     }
   }
@@ -950,12 +892,15 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseLoggingResourceAdaptor(JNI
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr =
-      reinterpret_cast<rmm::mr::logging_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
+
+// Map to store tracking adaptors for metrics access.
+// tracking_resource_adaptor is copyable (via shared_ptr to impl), so copies share state.
+std::mutex tracking_adaptor_map_mutex;
+std::unordered_map<jlong, tracking_resource_adaptor> tracking_adaptor_map;
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newTrackingResourceAdaptor(JNIEnv* env,
                                                                            jclass clazz,
@@ -966,9 +911,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newTrackingResourceAdaptor(JNIEn
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
-    auto ret     = new tracking_resource_adaptor<rmm::mr::device_memory_resource>(wrapped, align);
-    return reinterpret_cast<jlong>(ret);
+    auto upstream = get_resource(child);
+    auto adaptor  = tracking_resource_adaptor(upstream, static_cast<std::size_t>(align));
+    auto handle   = make_jni_resource(adaptor);
+    // Store a copy in map for metrics access (copies share impl via shared_ptr)
+    {
+      std::lock_guard<std::mutex> lock(tracking_adaptor_map_mutex);
+      tracking_adaptor_map.emplace(handle, adaptor);
+    }
+    return handle;
   }
   JNI_CATCH(env, 0);
 }
@@ -980,10 +931,24 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseTrackingResourceAdaptor(JN
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    delete mr;
+    {
+      std::lock_guard<std::mutex> lock(tracking_adaptor_map_mutex);
+      tracking_adaptor_map.erase(ptr);
+    }
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
+}
+
+// Helper to get tracking adaptor from the map
+inline tracking_resource_adaptor& get_tracking_adaptor(jlong handle)
+{
+  std::lock_guard<std::mutex> lock(tracking_adaptor_map_mutex);
+  auto it = tracking_adaptor_map.find(handle);
+  if (it == tracking_adaptor_map.end()) {
+    throw std::runtime_error("tracking adaptor not found for handle");
+  }
+  return it->second;
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetTotalBytesAllocated(JNIEnv* env,
@@ -994,8 +959,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetTotalBytesAllocated(JNI
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    return mr->get_total_allocated();
+    auto& mr = get_tracking_adaptor(ptr);
+    return mr.get_total_allocated();
   }
   JNI_CATCH(env, 0);
 }
@@ -1008,8 +973,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetMaxTotalBytesAllocated(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    return mr->get_max_total_allocated();
+    auto& mr = get_tracking_adaptor(ptr);
+    return mr.get_max_total_allocated();
   }
   JNI_CATCH(env, 0);
 }
@@ -1023,8 +988,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_nativeResetScopedMaxTotalBytesAll
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    mr->reset_scoped_max_total_allocated(init);
+    auto& mr = get_tracking_adaptor(ptr);
+    mr.reset_scoped_max_total_allocated(init);
   }
   JNI_CATCH(env, );
 }
@@ -1037,8 +1002,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_nativeGetScopedMaxTotalBytesAllo
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(ptr);
-    return mr->get_scoped_max_total_allocated();
+    auto& mr = get_tracking_adaptor(ptr);
+    return mr.get_scoped_max_total_allocated();
   }
   JNI_CATCH(env, 0);
 }
@@ -1057,17 +1022,10 @@ Java_ai_rapids_cudf_Rmm_newEventHandlerResourceAdaptor(JNIEnv* env,
   JNI_NULL_CHECK(env, tracker, "tracker is null", 0);
   JNI_TRY
   {
-    auto wrapped = reinterpret_cast<rmm::mr::device_memory_resource*>(child);
-    auto t = reinterpret_cast<tracking_resource_adaptor<rmm::mr::device_memory_resource>*>(tracker);
-    if (enable_debug) {
-      auto ret = new java_debug_event_handler_memory_resource(
-        env, handler_obj, jalloc_thresholds, jdealloc_thresholds, wrapped, t);
-      return reinterpret_cast<jlong>(ret);
-    } else {
-      auto ret = new java_event_handler_memory_resource(
-        env, handler_obj, jalloc_thresholds, jdealloc_thresholds, wrapped, t);
-      return reinterpret_cast<jlong>(ret);
-    }
+    auto upstream = get_resource(child);
+    auto t        = get_tracking_adaptor(tracker);
+    return make_jni_resource(java_event_handler_memory_resource(
+      env, handler_obj, jalloc_thresholds, jdealloc_thresholds, upstream, t, enable_debug));
   }
   JNI_CATCH(env, 0);
 }
@@ -1078,13 +1036,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releaseEventHandlerResourceAdapto
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    if (enable_debug) {
-      auto mr = reinterpret_cast<java_debug_event_handler_memory_resource*>(ptr);
-      delete mr;
-    } else {
-      auto mr = reinterpret_cast<java_event_handler_memory_resource*>(ptr);
-      delete mr;
-    }
+    delete_jni_resource(ptr);
   }
   JNI_CATCH(env, );
 }
@@ -1096,8 +1048,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCurrentDeviceResourceInternal(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto mr = reinterpret_cast<rmm::mr::device_memory_resource*>(new_handle);
-    cudf::set_current_device_resource(mr);
+    cudf::set_current_device_resource(get_resource(new_handle));
   }
   JNI_CATCH(env, );
 }
@@ -1110,7 +1061,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newPinnedPoolMemoryResource(JNIE
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = new rmm_pinned_pool_t(new rmm::mr::pinned_host_memory_resource(), init, max);
+    auto pool =
+      new rmm::mr::pool_memory_resource(rmm::mr::pinned_host_memory_resource{}, init, max);
     return reinterpret_cast<jlong>(pool);
   }
   JNI_CATCH(env, 0);
@@ -1123,10 +1075,10 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_setCudfPinnedPoolMemoryResource(J
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    auto pool = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
     // create a pinned fallback pool that will allocate pinned memory
     // if the regular pinned pool is exhausted
-    pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(pool));
+    pinned_fallback_mr.reset(new pinned_fallback_host_memory_resource(*pool));
     prior_cudf_pinned_mr() = cudf::set_pinned_memory_resource(*pinned_fallback_mr);
   }
   JNI_CATCH(env, );
@@ -1143,7 +1095,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_releasePinnedPoolMemoryResource(J
     // if we didn't overwrite it with setCudfPinnedPoolMemoryResource
     cudf::set_pinned_memory_resource(prior_cudf_pinned_mr());
     pinned_fallback_mr.reset();
-    delete reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    delete reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
   }
   JNI_CATCH(env, );
 }
@@ -1156,8 +1108,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromPinnedPool(JNIEnv* env,
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
-    void* ret = pool->allocate(size);
+    auto pool = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
+    void* ret = pool->allocate(cudf::get_default_stream(), size, rmm::CUDA_ALLOCATION_ALIGNMENT);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH_BEGIN(env, 0)
@@ -1173,9 +1125,9 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromPinnedPool(
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto pool  = reinterpret_cast<rmm_pinned_pool_t*>(pool_ptr);
+    auto pool  = reinterpret_cast<rmm::mr::pool_memory_resource*>(pool_ptr);
     void* cptr = reinterpret_cast<void*>(ptr);
-    pool->deallocate(cptr, size);
+    pool->deallocate(cudf::get_default_stream(), cptr, size, rmm::CUDA_ALLOCATION_ALIGNMENT);
   }
   JNI_CATCH(env, );
 }
@@ -1188,7 +1140,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_allocFromFallbackPinnedPool(JNIE
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    void* ret = cudf::get_pinned_memory_resource().allocate(size);
+    void* ret = cudf::get_pinned_memory_resource().allocate(cudf::get_default_stream(), size);
     return reinterpret_cast<jlong>(ret);
   }
   JNI_CATCH(env, 0);
@@ -1204,14 +1156,13 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_freeFromFallbackPinnedPool(JNIEnv
   {
     cudf::jni::auto_set_device(env);
     void* cptr = reinterpret_cast<void*>(ptr);
-    cudf::get_pinned_memory_resource().deallocate(cptr, size);
+    cudf::get_pinned_memory_resource().deallocate(cudf::get_default_stream(), cptr, size);
   }
   JNI_CATCH(env, );
 }
 
-JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSize(JNIEnv* env,
-                                                                                      jclass clazz,
-                                                                                      jlong size)
+JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Rmm_configureDefaultCudfPinnedPoolSizeImpl(
+  JNIEnv* env, jclass clazz, jlong size)
 {
   JNI_TRY
   {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -22,6 +22,8 @@ namespace CUDF_EXPORT nvtext {
 
 /**
  * @brief The table of merge pairs for the BPE encoder.
+ *
+ * @deprecated Since 26.04
  *
  * To create an instance, call @ref nvtext::load_merge_pairs
  */

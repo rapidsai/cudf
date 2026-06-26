@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -6,10 +6,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_VERSION,
-)
 from cudf.testing import assert_eq, assert_groupby_results_equal, assert_neq
 from cudf.testing._utils import assert_exceptions_equal
 
@@ -74,7 +70,7 @@ def test_groupby_cats():
         {"cats": pd.Categorical(list("aabaacaab")), "vals": rng.random(9)}
     )
 
-    cats = df["cats"].values_host
+    cats = df["cats"].to_numpy()
     vals = df["vals"].to_numpy()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
@@ -98,13 +94,7 @@ def test_series_groupby(groupby_reduction_methods):
     assert_groupby_results_equal(sa, ga)
 
 
-def test_groupby_level_zero(groupby_reduction_methods, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmin", "idxmax"],
-            reason="gather needed for idxmin/idxmax",
-        )
-    )
+def test_groupby_level_zero(groupby_reduction_methods):
     pdf = pd.DataFrame({"x": [1, 2, 3]}, index=[2, 5, 5])
     gdf = cudf.DataFrame(pdf)
     pdg = pdf.groupby(level=0)
@@ -117,13 +107,7 @@ def test_groupby_level_zero(groupby_reduction_methods, request):
     )
 
 
-def test_groupby_series_level_zero(groupby_reduction_methods, request):
-    request.applymarker(
-        pytest.mark.xfail(
-            groupby_reduction_methods in ["idxmin", "idxmax"],
-            reason="gather needed for idxmin/idxmax",
-        )
-    )
+def test_groupby_series_level_zero(groupby_reduction_methods):
     pdf = pd.Series([1, 2, 3], index=[2, 5, 5])
     gdf = cudf.Series(pdf)
     pdg = pdf.groupby(level=0)
@@ -355,6 +339,10 @@ def test_groupby_nulls_in_index():
 
 
 def test_groupby_all_nulls_index():
+    # cudf normalizes all-null group keys (e.g. coercing an all-null object key
+    # to float64), so an empty all-null-key result carries a float64 index
+    # rather than the original key dtype. The result is empty either way, so the
+    # index dtype is not meaningful here; skip the index-type check.
     gdf = cudf.DataFrame(
         {
             "a": cudf.Series([None, None, None, None], dtype="object"),
@@ -363,7 +351,9 @@ def test_groupby_all_nulls_index():
     )
     pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+        pdf.groupby("a").sum(),
+        gdf.groupby("a").sum(),
+        check_index_type=False,
     )
 
     gdf = cudf.DataFrame(
@@ -371,7 +361,9 @@ def test_groupby_all_nulls_index():
     )
     pdf = gdf.to_pandas()
     assert_groupby_results_equal(
-        pdf.groupby("a").sum(), gdf.groupby("a").sum()
+        pdf.groupby("a").sum(),
+        gdf.groupby("a").sum(),
+        check_index_type=False,
     )
 
 
@@ -436,7 +428,7 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert res.index.dtype == cudf.dtype("object")
+    assert res.index.dtype == cudf.dtype("str")
 
 
 @pytest.mark.parametrize(
@@ -444,15 +436,6 @@ def test_groupby_index_type():
 )
 @pytest.mark.parametrize("q", [0.25, 0.4, 0.5, 0.7, 1])
 def test_groupby_quantile(request, interpolation, q):
-    request.applymarker(
-        pytest.mark.xfail(
-            condition=(q == 0.5 and interpolation == "nearest"),
-            reason=(
-                "Pandas NaN Rounding will fail nearest interpolation at 0.5"
-            ),
-        )
-    )
-
     raw_data = {
         "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
         "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
@@ -469,6 +452,22 @@ def test_groupby_quantile(request, interpolation, q):
     gdresult = gdg.quantile(q, interpolation=interpolation)
 
     assert_groupby_results_equal(pdresult, gdresult)
+
+
+def test_groupby_quantile_array_multiple_levels():
+    pdf = pd.DataFrame(
+        {
+            "A": [0, 1, 2],
+            "B": [3, 4, 5],
+            "c": ["a", "a", "a"],
+            "d": ["a", "a", "b"],
+        }
+    )
+    gdf = cudf.DataFrame(pdf)
+
+    expected = pdf.groupby(["c", "d"]).quantile([0.25, 0.75])
+    result = gdf.groupby(["c", "d"]).quantile([0.25, 0.75])
+    assert_groupby_results_equal(expected, result)
 
 
 def test_groupby_std():
@@ -865,10 +864,6 @@ def test_group_by_pandas_sort_order(groups, sort):
         )
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Fails in older versions of pandas",
-)
 def test_group_by_empty_reduction(
     all_supported_types_as_str, groupby_reduction_methods, request
 ):
@@ -912,8 +907,14 @@ def test_group_by_empty_reduction(
     )
     request.applymarker(
         pytest.mark.xfail(
-            condition=all_supported_types_as_str in {"str", "category"}
-            and groupby_reduction_methods in {"sum", "prod", "mean"},
+            condition=(
+                all_supported_types_as_str in {"str", "category"}
+                and groupby_reduction_methods in {"prod", "mean"}
+            )
+            or (
+                all_supported_types_as_str == "category"
+                and groupby_reduction_methods == "sum"
+            ),
             raises=TypeError,
             reason=f"{all_supported_types_as_str} raises TypeError with {groupby_reduction_methods}",
         )
@@ -940,10 +941,6 @@ def test_group_by_empty_reduction(
     )
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < PANDAS_CURRENT_SUPPORTED_VERSION,
-    reason="Warning only given on newer versions.",
-)
 def test_categorical_grouping_pandas_compatibility():
     gdf = cudf.DataFrame(
         {
@@ -955,9 +952,7 @@ def test_categorical_grouping_pandas_compatibility():
 
     with cudf.option_context("mode.pandas_compatible", True):
         actual = gdf.groupby("key", sort=False).sum()
-    with pytest.warns(FutureWarning):
-        # observed param deprecation.
-        expected = pdf.groupby("key", sort=False).sum()
+    expected = pdf.groupby("key", sort=False).sum()
     assert_eq(actual, expected)
 
 
@@ -1196,3 +1191,258 @@ def test_string_groupby_key_index():
     got = gdf.groupby("a", sort=True).count()
 
     assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", ["all", "any"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [True, False, True, True, False, False],
+        [1, 0, 2, 3, 0, 0],
+        [1.0, 0.0, 2.5, 3.5, 0.0, 0.0],
+    ],
+)
+def test_groupby_all_any(op, data):
+    pdf = pd.DataFrame({"a": [1, 1, 2, 2, 3, 3], "b": data})
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_groupby_all_any_string(op):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3, 3], "b": ["x", "", "", "", "y", "z"]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["all", "any"])
+def test_groupby_all_any_empty(op):
+    pdf = pd.DataFrame(
+        {
+            "a": pd.array([], dtype="int64"),
+            "b": pd.array([], dtype="bool"),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got, check_index_type=False)
+
+
+@pytest.mark.parametrize("op", ["all", "any"])
+@pytest.mark.parametrize("key_is_categorical", [False, True])
+def test_groupby_all_any_as_index_false(op, key_is_categorical):
+    # With as_index=False the grouping key is reset as a column; it must not
+    # be coerced to bool along with the (reduced) value columns.
+    key = [2, 1, 2, 3]
+    if key_is_categorical:
+        key = pd.Categorical(key, categories=[1, 4, 3, 2], ordered=True)
+    pdf = pd.DataFrame({"a": key, "b": range(4)})
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a", as_index=False), op)()
+    expect = getattr(pdf.groupby("a", as_index=False), op)()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+@pytest.mark.parametrize("op", ["count", "nunique", "size"])
+def test_groupby_string_int_returning_aggs_dtype(string_dtype, op):
+    psr = pd.Series(
+        ["x", "y", "x", None, "z"],
+        dtype=string_dtype,
+        name="b",
+    )
+    pkeys = pd.Series([1, 1, 2, 2, 3], name="a")
+    gsr = cudf.from_pandas(psr)
+    gkeys = cudf.from_pandas(pkeys)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gsr.groupby(gkeys), op)()
+    expect = getattr(psr.groupby(pkeys), op)()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+def test_groupby_string_sum(string_dtype):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 3],
+            "b": pd.array(["x", "y", "", "z", "q"], dtype=string_dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby("a").sum()
+    expect = pdf.groupby("a").sum()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+@pytest.mark.parametrize("op", ["min", "max", "first", "last"])
+def test_groupby_string_min_max_preserves_dtype(string_dtype, op):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": pd.array(["x", "y", "a", "b"], dtype=string_dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+    assert got["b"].dtype == expect["b"].dtype
+
+
+@pytest.mark.parametrize(
+    "string_dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+    ],
+)
+@pytest.mark.parametrize("op", ["any", "all"])
+@pytest.mark.parametrize("skipna", [True, False])
+def test_groupby_any_all_string_nulls(string_dtype, op, skipna):
+    # any/all over string groups must treat nulls like pandas regardless of
+    # the StringDtype's na_value: an all-null group is empty under skipna
+    # (``all`` -> True, ``any`` -> False), and non-empty/empty strings map
+    # to True/False. Groups here are either all-null or all-valued so the
+    # result is unambiguous (no Kleene NA propagation).
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 3],
+            "b": pd.array([pd.NA, pd.NA, "x", ""], dtype=string_dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)(skipna=skipna)
+    expect = getattr(pdf.groupby("a"), op)(skipna=skipna)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["int64", "Int64", "UInt16", "Float64", "boolean", "int64[pyarrow]"],
+)
+@pytest.mark.parametrize("op", ["any", "all"])
+def test_groupby_any_all_result_dtype(dtype, op):
+    # any/all output dtype mirrors the input's flavor, matching pandas:
+    # numpy -> bool, masked-nullable -> boolean, pyarrow -> bool[pyarrow].
+    pdf = pd.DataFrame(
+        {"a": ["x", "y", "y"], "b": pd.array([1, 0, 1], dtype=dtype)}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)()
+    expect = getattr(pdf.groupby("a"), op)()
+    assert_eq(expect, got)
+    assert got["b"].dtype == expect["b"].dtype
+
+
+def test_groupby_series_identity_column_exclusion():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3, 3], "b": [10, 20, 30, 40, 50, 60]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby(gdf["a"]).sum()
+    expect = pdf.groupby(pdf["a"]).sum()
+    assert_eq(expect, got)
+
+
+def test_groupby_series_copy_no_column_exclusion():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3, 3], "b": [10, 20, 30, 40, 50, 60]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby(gdf["a"].copy()).sum()
+    expect = pdf.groupby(pdf["a"].copy()).sum()
+    assert_eq(expect, got)
+
+
+def test_groupby_series_self_does_not_exclude():
+    psr = pd.Series([1, 1, 2, 2, 3, 3], name="a")
+    gsr = cudf.from_pandas(psr)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gsr.groupby(gsr).count()
+    expect = psr.groupby(psr).count()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("key_cols", [["a"], ["a", "b"]])
+def test_groupby_multi_series_identity_column_exclusion(key_cols):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 3, 3],
+            "b": [10, 10, 20, 20, 30, 30],
+            "c": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gdf.groupby([gdf[c] for c in key_cols]).sum()
+    expect = pdf.groupby([pdf[c] for c in key_cols]).sum()
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["sum", "min", "max", "first", "last"])
+@pytest.mark.parametrize("min_count", [0, 1, 2, 3, 5])
+def test_groupby_reduce_min_count(op, min_count):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2, 2, 3], "b": [1.0, 2.0, 3.0, np.nan, 5.0]}
+    )
+    gdf = cudf.from_pandas(pdf)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = getattr(gdf.groupby("a"), op)(min_count=min_count)
+    expect = getattr(pdf.groupby("a"), op)(min_count=min_count)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("min_count", [0, 2, 3])
+def test_groupby_series_reduce_min_count(min_count):
+    psr = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
+    pkeys = pd.Series([1, 1, 2, 2, 3])
+    gsr = cudf.from_pandas(psr)
+    gkeys = cudf.from_pandas(pkeys)
+    with cudf.option_context("mode.pandas_compatible", True):
+        got = gsr.groupby(gkeys).sum(min_count=min_count)
+    expect = psr.groupby(pkeys).sum(min_count=min_count)
+    assert_eq(expect, got)

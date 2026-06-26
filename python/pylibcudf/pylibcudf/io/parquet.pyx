@@ -1,6 +1,7 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
+import warnings
 
 from libc.stdint cimport int64_t, uint8_t
 
@@ -22,7 +23,9 @@ from pylibcudf.io.types cimport (
     TableInputMetadata,
     TableWithMetadata,
 )
+from pylibcudf.io.parquet_metadata cimport FileMetaData
 from pylibcudf.libcudf.expressions cimport expression
+from pylibcudf.libcudf.io.datasource cimport datasource, make_datasources
 from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_reader as cpp_chunked_parquet_reader,
     parquet_reader_options,
@@ -35,6 +38,7 @@ from pylibcudf.libcudf.io.parquet cimport (
     chunked_parquet_writer_options,
     merge_row_group_metadata as cpp_merge_row_group_metadata,
 )
+from pylibcudf.libcudf.io.parquet_schema cimport FileMetaData as cpp_FileMetaData
 from pylibcudf.libcudf.io.types cimport (
     compression_type,
     dictionary_policy as dictionary_policy_t,
@@ -42,9 +46,10 @@ from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     table_with_metadata,
 )
-from pylibcudf.libcudf.types cimport size_type
+from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "ChunkedParquetReader",
@@ -61,6 +66,49 @@ __all__ = [
     "read_parquet",
     "write_parquet",
 ]
+
+
+def _warn_deprecated(api_name, new_api):
+    warnings.warn(
+        f"{api_name} is deprecated and will be removed in a "
+        f"future version of cudf. Use {new_api} instead.",
+        FutureWarning
+    )
+
+
+cdef vector[cpp_FileMetaData] _build_parquet_metadatas(
+    object parquet_metadatas,
+    size_t num_sources,
+) except *:
+    cdef vector[cpp_FileMetaData] c_metadatas
+    cdef vector[cpp_FileMetaData*] metadata_ptrs
+    cdef object metadata
+    cdef size_t i
+    if parquet_metadatas is None:
+        return c_metadatas
+
+    for metadata in parquet_metadatas:
+        if not isinstance(metadata, FileMetaData):
+            raise TypeError(
+                "parquet_metadatas must contain only FileMetaData objects"
+            )
+        metadata_ptrs.push_back(&(<FileMetaData>metadata).c_obj)
+
+    if metadata_ptrs.size() != num_sources:
+        raise ValueError(
+            f"Length of 'parquet_metadatas' ({metadata_ptrs.size()}) "
+            f"must match the number of input sources "
+            f"({num_sources})"
+        )
+
+    c_metadatas.reserve(metadata_ptrs.size())
+    with nogil:
+        # This copies the (potentially large) metadata object. We don't
+        # want to hold the GIL for that.
+        for i in range(metadata_ptrs.size()):
+            c_metadatas.push_back(dereference(metadata_ptrs[i]))
+
+    return c_metadatas
 
 
 cdef class ParquetReaderOptions:
@@ -97,8 +145,19 @@ cdef class ParquetReaderOptions:
 
         Parameters
         ----------
-        row_groups : list
-            List of row groups to read
+        row_groups : list[list[int]]
+            Row groups to read, one inner list per input source.
+
+        Notes
+        -----
+        Rows are emitted in input-source order; all rows selected from
+        source 0 are emitted before rows selected from source 1, and so on.
+        Within each source, row groups are read in the order provided;
+        indices are not sorted or deduplicated, and repeated indices are
+        emitted multiple times. Empty inner lists contribute no rows.
+        When unset, all row groups are read in source order, then in
+        on-disk order within each source. Predicate pushdown drops row
+        groups in place; remaining row groups keep their relative order.
 
         Returns
         -------
@@ -152,6 +211,23 @@ cdef class ParquetReaderOptions:
 
     cpdef void set_columns(self, list col_names):
         """
+        Sets names of the columns to be read. Deprecated and will be
+        removed in a future version. Use set_column_names instead.
+
+        Parameters
+        ----------
+        col_names : list
+            List of column names
+
+        Returns
+        -------
+        None
+        """
+        _warn_deprecated("set_columns", "set_column_names")
+        self.set_column_names(col_names)
+
+    cpdef void set_column_names(self, list col_names):
+        """
         Sets names of the columns to be read.
 
         Parameters
@@ -166,7 +242,25 @@ cdef class ParquetReaderOptions:
         cdef vector[string] vec
         for name in col_names:
             vec.push_back(<string>str(name).encode())
-        self.c_obj.set_columns(vec)
+        self.c_obj.set_column_names(vec)
+
+    cpdef void set_column_indices(self, list col_indices):
+        """
+        Sets indices of the top-level columns to be read.
+
+        Parameters
+        ----------
+        col_names : list
+            List of top-level column indices
+
+        Returns
+        -------
+        None
+        """
+        cdef vector[size_type] vec
+        for idx in col_indices:
+            vec.push_back(idx)
+        self.c_obj.set_column_indices(vec)
 
     cpdef void set_filter(self, Expression filter):
         """
@@ -198,6 +292,35 @@ cdef class ParquetReaderOptions:
         """
         self.c_obj.set_source(src.c_obj)
 
+    cpdef bool is_enabled_use_jit_filter(self):
+        """Returns whether to use JIT compilation for filtering."""
+        return self.c_obj.is_enabled_use_jit_filter()
+
+    cpdef void enable_case_sensitive_names(self, bool val):
+        """
+        Sets whether column names are matched case-sensitively.
+
+        Parameters
+        ----------
+        val : bool
+            Enables case-sensitive matching
+
+        Returns
+        -------
+        None
+        """
+        self.c_obj.enable_case_sensitive_names(val)
+
+    cpdef bool is_enabled_case_sensitive_names(self):
+        """
+        Returns whether column name matching is case sensitive.
+
+        Returns
+        -------
+        bool
+            Whether column names are matched case-sensitively
+        """
+        return self.c_obj.is_enabled_case_sensitive_names()
 
 cdef class ParquetReaderOptionsBuilder:
     cpdef ParquetReaderOptionsBuilder convert_strings_to_categories(self, bool val):
@@ -250,6 +373,23 @@ cdef class ParquetReaderOptionsBuilder:
         self.c_obj.allow_mismatched_pq_schemas(val)
         return self
 
+    cpdef ParquetReaderOptionsBuilder ignore_missing_columns(self, bool val):
+        """
+        Sets to enable/disable ignoring of non-existent projected columns while reading.
+
+        Parameters
+        ----------
+        val : bool
+            Boolean indicating whether to ignore non-existent projected columns
+            while reading.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.ignore_missing_columns(val)
+        return self
+
     cpdef ParquetReaderOptionsBuilder use_arrow_schema(self, bool val):
         """
         Sets to enable/disable use of arrow schema to read.
@@ -284,6 +424,23 @@ cdef class ParquetReaderOptionsBuilder:
 
     cpdef ParquetReaderOptionsBuilder columns(self, list col_names):
         """
+        Sets names of the columns to be read. Deprecated and will be
+        removed in a future version. Use column_names instead.
+
+        Parameters
+        ----------
+        col_names : list[str]
+            List of column names
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        _warn_deprecated("columns", "column_names")
+        return self.column_names(col_names)
+
+    cpdef ParquetReaderOptionsBuilder column_names(self, list col_names):
+        """
         Sets names of the columns to be read.
 
         Parameters
@@ -298,7 +455,76 @@ cdef class ParquetReaderOptionsBuilder:
         cdef vector[string] vec
         for name in col_names:
             vec.push_back(<string>str(name).encode())
-        self.c_obj.columns(vec)
+        self.c_obj.column_names(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder column_indices(self, list col_indices):
+        """
+        Sets indices of the top-level columns to be read.
+
+        Parameters
+        ----------
+        col_names : list[int]
+            List of top-level column indices
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        cdef vector[size_type] vec
+        for idx in col_indices:
+            vec.push_back(idx)
+        self.c_obj.column_indices(vec)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder use_jit_filter(self, bool use_jit_filter):
+        """
+        Sets whether to use JIT compilation for filtering.
+
+        Parameters
+        ----------
+        use_jit_filter : bool
+            Boolean value whether to use JIT filter
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.use_jit_filter(use_jit_filter)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder case_sensitive_names(self, bool val):
+        """
+        Sets whether column name matching is case sensitive.
+
+        Parameters
+        ----------
+        val : bool
+            ``True`` to enable case-sensitive matching (default),
+            ``False`` for case-insensitive matching.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.case_sensitive_names(val)
+        return self
+
+    cpdef ParquetReaderOptionsBuilder decimal_width(self, type_id width):
+        """
+        Sets the decimal width used to cast all decimal columns.
+
+        Parameters
+        ----------
+        width : TypeId
+            The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which
+            all decimal columns should be cast.
+
+        Returns
+        -------
+        ParquetReaderOptionsBuilder
+        """
+        self.c_obj.decimal_width(width)
         return self
 
     cpdef build(self):
@@ -321,33 +547,63 @@ cdef class ChunkedParquetReader:
     ----------
     options : ParquetReaderOptions
         Settings for controlling reading behavior
+    stream : Stream | None
+        CUDA stream used for device memory operations and kernel launches
+    mr : DeviceMemoryResource, optional
+        Device memory resource used to allocate the returned table's device memory.
     chunk_read_limit : size_t, default 0
         Limit on total number of bytes to be returned per read,
         or 0 if there is no limit.
     pass_read_limit : size_t, default 1024000000
         Limit on the amount of memory used for reading and decompressing data
         or 0 if there is no limit.
+    parquet_metadatas : list[FileMetaData], optional
+        Pre-materialized parquet footer metadata, one for each source. If not
+        provided, footers are read from the sources internally.
     """
     def __init__(
         self,
         ParquetReaderOptions options,
-        Stream stream = None,
+        object stream = None,
         DeviceMemoryResource mr = None,
         size_t chunk_read_limit=0,
         size_t pass_read_limit=1024000000,
+        object parquet_metadatas=None,
     ):
-        self.stream = _get_stream(stream)
+        self._stream = _get_stream(stream)
         self.mr = _get_memory_resource(mr)
-        with nogil:
-            self.reader.reset(
-                new cpp_chunked_parquet_reader(
-                    chunk_read_limit,
-                    pass_read_limit,
-                    options.c_obj,
-                    self.stream.view(),
-                    self.mr.get_mr()
+        cdef vector[unique_ptr[datasource]] sources
+        cdef vector[cpp_FileMetaData] c_metadatas
+        cdef cudaStream_t stream_view = self._stream.view().value()
+        if parquet_metadatas is None:
+            with nogil:
+                self.reader.reset(
+                    new cpp_chunked_parquet_reader(
+                        chunk_read_limit,
+                        pass_read_limit,
+                        options.c_obj,
+                        stream_view,
+                        self.mr.get_mr()
+                    )
                 )
+        else:
+            with nogil:
+                sources = make_datasources(options.c_obj.get_source())
+            c_metadatas = _build_parquet_metadatas(
+                parquet_metadatas, sources.size()
             )
+            with nogil:
+                self.reader.reset(
+                    new cpp_chunked_parquet_reader(
+                        chunk_read_limit,
+                        pass_read_limit,
+                        move(sources),
+                        move(c_metadatas),
+                        options.c_obj,
+                        stream_view,
+                        self.mr.get_mr()
+                    )
+                )
 
     __hash__ = None
 
@@ -384,11 +640,14 @@ cdef class ChunkedParquetReader:
         with nogil:
             c_result = move(self.reader.get()[0].read_chunk())
 
-        return TableWithMetadata.from_libcudf(c_result, self.stream, mr)
+        return TableWithMetadata.from_libcudf(c_result, self._stream, mr)
 
 
 cpdef read_parquet(
-    ParquetReaderOptions options, Stream stream = None, DeviceMemoryResource mr=None
+    ParquetReaderOptions options,
+    object stream = None,
+    DeviceMemoryResource mr=None,
+    object parquet_metadatas=None,
 ):
     """
     Read from Parquet format.
@@ -406,11 +665,33 @@ cpdef read_parquet(
         CUDA stream used for device memory operations and kernel launches
     mr : DeviceMemoryResource, optional
         Device memory resource used to allocate the returned table's device memory.
+    parquet_metadatas : list[FileMetaData], optional
+        Pre-materialized parquet footer metadata, one for each source. If not
+        provided, footers are read from the sources internally.
     """
     cdef Stream s = _get_stream(stream)
+    cdef cudaStream_t _cs = s.view().value()
+    cdef vector[unique_ptr[datasource]] sources
+    cdef vector[cpp_FileMetaData] c_metadatas
+    cdef table_with_metadata c_result
     mr = _get_memory_resource(mr)
-    with nogil:
-        c_result = move(cpp_read_parquet(options.c_obj, s.view(), mr.get_mr()))
+    if parquet_metadatas is None:
+        with nogil:
+            c_result = move(cpp_read_parquet(options.c_obj, _cs, mr.get_mr()))
+    else:
+        with nogil:
+            sources = make_datasources(options.c_obj.get_source())
+        c_metadatas = _build_parquet_metadatas(parquet_metadatas, sources.size())
+        with nogil:
+            c_result = move(
+                cpp_read_parquet(
+                    move(sources),
+                    move(c_metadatas),
+                    options.c_obj,
+                    _cs,
+                    mr.get_mr(),
+                )
+            )
 
     return TableWithMetadata.from_libcudf(c_result, s, mr)
 
@@ -464,7 +745,7 @@ cdef class ChunkedParquetWriter:
             self.c_obj.get()[0].write(table.view(), partitions)
 
     @staticmethod
-    def from_options(ChunkedParquetWriterOptions options, Stream stream = None):
+    def from_options(ChunkedParquetWriterOptions options, object stream = None):
         """
         Creates a chunked Parquet writer from options
 
@@ -483,8 +764,9 @@ cdef class ChunkedParquetWriter:
             ChunkedParquetWriter
         )
         cdef Stream s = _get_stream(stream)
+        cdef cudaStream_t _cs = s.view().value()
         parquet_writer.c_obj.reset(
-            new cpp_chunked_parquet_writer(options.c_obj, s.view())
+            new cpp_chunked_parquet_writer(options.c_obj, _cs)
         )
         return parquet_writer
 
@@ -942,6 +1224,26 @@ cdef class ParquetWriterOptionsBuilder:
         self.c_obj.write_v2_headers(enabled)
         return self
 
+    cpdef ParquetWriterOptionsBuilder page_level_compression(self, bool enabled):
+        """
+        Set to true to enable per-page compression decisions for V2 data pages.
+
+        When enabled, each V2 data page independently decides whether to compress
+        based on compression ratio. When disabled (default), all V2 data pages
+        in a chunk follow the same compression decision as dictionary pages.
+
+        Parameters
+        ----------
+        enabled : bool
+            Boolean value to enable/disable per-page compression decisions.
+
+        Returns
+        -------
+        Self
+        """
+        self.c_obj.page_level_compression(enabled)
+        return self
+
     cpdef ParquetWriterOptionsBuilder dictionary_policy(self, dictionary_policy_t val):
         """
         Sets the policy for dictionary use.
@@ -1039,7 +1341,7 @@ cdef class ParquetWriterOptionsBuilder:
         return parquet_options
 
 
-cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = None):
+cpdef memoryview write_parquet(ParquetWriterOptions options, object stream = None):
     """
     Writes a set of columns to parquet format.
 
@@ -1059,9 +1361,9 @@ cpdef memoryview write_parquet(ParquetWriterOptions options, Stream stream = Non
     """
     cdef unique_ptr[vector[uint8_t]] c_result
     cdef Stream s = _get_stream(stream)
-
+    cdef cudaStream_t _cs = s.view().value()
     with nogil:
-        c_result = cpp_write_parquet(move(options.c_obj), s.view())
+        c_result = cpp_write_parquet(move(options.c_obj), _cs)
 
     return memoryview(HostBuffer.from_unique_ptr(move(c_result)))
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "common.hpp"
@@ -12,7 +12,7 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <rmm/mr/device/statistics_resource_adaptor.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <chrono>
 #include <filesystem>
@@ -56,9 +56,8 @@ int main(int argc, char const** argv)
 
   auto const mr_name = std::string("pool");
   auto resource      = create_memory_resource(mr_name);
-  auto stats_mr =
-    rmm::mr::statistics_resource_adaptor<rmm::mr::device_memory_resource>(resource.get());
-  rmm::mr::set_current_device_resource(&stats_mr);
+  auto stats_mr      = rmm::mr::statistics_resource_adaptor{resource};
+  rmm::mr::set_current_device_resource(stats_mr);
   auto stream = cudf::get_default_stream();
 
   std::filesystem::path p = input_file;

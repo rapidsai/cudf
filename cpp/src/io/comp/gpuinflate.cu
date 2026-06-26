@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (C) 2002-2013 Mark Adler, all rights reserved
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
 
@@ -44,6 +44,9 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/algorithm>
+#include <cuda/std/cmath>
+#include <cuda/std/tuple>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
 #include <thrust/sort.h>
@@ -1023,10 +1026,10 @@ __device__ int parse_gzip_header(uint8_t const* src, size_t src_size)
  */
 template <int block_size>
 CUDF_KERNEL void __launch_bounds__(block_size)
-  inflate_kernel(device_span<device_span<uint8_t const> const> inputs,
-                 device_span<device_span<uint8_t> const> outputs,
-                 device_span<codec_exec_result> results,
-                 gzip_header_included parse_hdr)
+  inflate_kernel_no_racecheck(device_span<device_span<uint8_t const> const> inputs,
+                              device_span<device_span<uint8_t> const> outputs,
+                              device_span<codec_exec_result> results,
+                              gzip_header_included parse_hdr)
 {
   __shared__ __align__(16) inflate_state_s state_g;
 
@@ -1065,6 +1068,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
   __syncthreads();
   // Main loop decoding blocks
   while (!state->err) {
+    __syncthreads();
     if (!t) {
       // Thread0: read last flag, block type and custom huffman tables if any
       if (state->cur + (state->bitpos >> 3) >= state->end)
@@ -1119,7 +1123,6 @@ CUDF_KERNEL void __launch_bounds__(block_size)
       copy_stored(state, t);
     }
     if (state->blast) break;
-    __syncthreads();
   }
   __syncthreads();
   // Output decompression status and length
@@ -1215,7 +1218,8 @@ class cost_model {
                                              task_type task_type)
   {
     if (task_type == task_type::DECOMPRESSION) {
-      auto const compression_ratio = std::max(1., static_cast<double>(output_size) / input_size);
+      auto const compression_ratio =
+        cuda::std::max(1., static_cast<double>(output_size) / input_size);
       // When the compression ratio is one, the cost factor is the same as the copy cost ratio,
       // meaning that the cost of decompressing the block is the same as the cost of copying it. The
       // cost factor asymptotes to one as the compression ratio increases, meaning that the cost
@@ -1259,21 +1263,23 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
 {
   CUDF_FUNC_RANGE();
   rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
-  thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   order.begin(),
+                   order.end());
 
   // Precompute costs to avoid repeated computation during sorting
   rmm::device_uvector<double> costs(inputs.size(), stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     thrust::make_zip_iterator(inputs.begin(), outputs.begin()),
                     thrust::make_zip_iterator(inputs.end(), outputs.end()),
                     costs.begin(),
                     [task_type] __device__(auto const& input_output_pair) {
-                      auto const& input  = thrust::get<0>(input_output_pair);
-                      auto const& output = thrust::get<1>(input_output_pair);
+                      auto const& input  = cuda::std::get<0>(input_output_pair);
+                      auto const& output = cuda::std::get<1>(input_output_pair);
                       return cost_model::task_device_cost(input.size(), output.size(), task_type);
                     });
 
-  thrust::sort(rmm::exec_policy_nosync(stream),
+  thrust::sort(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                order.begin(),
                order.end(),
                [costs = costs.data()] __device__(std::size_t a, std::size_t b) {
@@ -1281,14 +1287,14 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                });
 
   auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  order.begin(),
                  order.end(),
                  inputs.begin(),
                  sorted_inputs.begin());
 
   auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  order.begin(),
                  order.end(),
                  outputs.begin(),
@@ -1362,8 +1368,9 @@ void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
 {
   constexpr int block_size = 128;  // Threads per block
   if (inputs.size() > 0) {
-    inflate_kernel<block_size>
+    inflate_kernel_no_racecheck<block_size>
       <<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs, results, parse_hdr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -1374,6 +1381,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   constexpr auto block_size = 1024;
   if (inputs.size() > 0) {
     copy_uncompressed_kernel<<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -1399,7 +1407,7 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                                     device_span<std::size_t const> order,
                                     rmm::cuda_stream_view stream)
 {
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   sorted_results.begin(),
                   sorted_results.end(),
                   order.begin(),

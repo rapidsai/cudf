@@ -1,15 +1,13 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 import itertools
-import pickle
 
 import msgpack
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from packaging import version
 
 import cudf
 from cudf.testing import assert_eq
@@ -59,18 +57,16 @@ from cudf.testing import assert_eq
         ),
         lambda: pd.Index([True, False] * 5),
         lambda: pd.CategoricalIndex(["a", "b", "a", "b"], ["a", "b", "c"]),
-        lambda: (
-            cudf.DataFrame(
-                {
-                    "a": [1, 2, 3],
-                    "b": ["c", "e", "g"],
-                    "d": [True, False, True],
-                },
-                index=cudf.MultiIndex.from_tuples(
-                    [("i1", "i2"), ("i3", "i4"), ("i5", "i6")],
-                    names=["foo", "bar"],
-                ),
-            )
+        lambda: cudf.DataFrame(
+            {
+                "a": [1, 2, 3],
+                "b": ["c", "e", "g"],
+                "d": [True, False, True],
+            },
+            index=cudf.MultiIndex.from_tuples(
+                [("i1", "i2"), ("i3", "i4"), ("i5", "i6")],
+                names=["foo", "bar"],
+            ),
         ),
         lambda: cudf.Index(
             cudf.date_range(start="2011-01-01", end="2012-01-01", periods=13)
@@ -117,6 +113,7 @@ from cudf.testing import assert_eq
                 "OGbssOJLUI",
             ]
         ),
+        lambda: cudf.date_range("2000-01-01", periods=12, freq="10s"),
     ],
     ids=itertools.count(),
 )
@@ -171,8 +168,8 @@ def test_serialize_dataframe():
     df = cudf.DataFrame()
     df["a"] = np.arange(100)
     df["b"] = np.arange(100, dtype=np.float32)
-    df["c"] = pd.Categorical(
-        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+    df["c"] = pd.Categorical.from_codes(
+        [0, 1, 2, -1, -1] * 20, categories=["a", "b", "c"]
     )
     outdf = cudf.DataFrame.deserialize(*df.serialize())
     assert_eq(df, outdf)
@@ -184,8 +181,8 @@ def test_serialize_dataframe_with_index():
         {
             "a": np.arange(100),
             "b": rng.random(100),
-            "c": pd.Categorical(
-                ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+            "c": pd.Categorical.from_codes(
+                [0, 1, 2, -1, -1] * 20, categories=["a", "b", "c"]
             ),
         }
     )
@@ -333,7 +330,7 @@ def test_serialize_string():
     ],
 )
 def test_serialize_empty(frames):
-    gdf, pdf = frames
+    gdf, _pdf = frames
 
     typ = type(gdf)
     res = typ.deserialize(*gdf.serialize())
@@ -379,30 +376,18 @@ def test_serialize_seriesresampler():
 def test_serialize_string_check_buffer_sizes():
     df = cudf.DataFrame({"a": ["a", "b", "cd", None]})
     expect = df.memory_usage(deep=True).loc["a"]
-    header, frames = df.serialize()
+    _header, frames = df.serialize()
+    # Frames can be either Buffer (on GPU, use .size) or memoryview
+    # (spilled to CPU, use .nbytes). See SpillableBuffer.serialize().
     got = sum(b.nbytes for b in frames)
     assert expect == got
-
-
-@pytest.mark.skipif(
-    version.parse(np.__version__) < version.parse("2.0.0"),
-    reason="The serialization of numpy 2.0 types is incompatible with numpy 1.x",
-)
-def test_deserialize_cudf_23_12(datadir):
-    fname = datadir / "pkl" / "stringColumnWithRangeIndex_cudf_23.12.pkl"
-
-    expected = cudf.DataFrame({"a": ["hi", "hello", "world", None]})
-    with open(fname, "rb") as f:
-        actual = pickle.load(f)
-
-    assert_eq(expected, actual)
 
 
 def test_serialize_sliced_string():
     # https://github.com/rapidsai/cudf/issues/7735
     data = ["hi", "hello", None]
     pd_series = pd.Series(data, dtype=pd.StringDtype())
-    gd_series = cudf.Series(data, dtype="str")
+    gd_series = cudf.Series(data, dtype=pd_series.dtype)
     sliced = gd_series[0:3]
     serialized_gd_series = gd_series.serialize()
     serialized_sliced = sliced.serialize()
@@ -486,3 +471,51 @@ def test_serialize_categorical_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+def test_sliced_column_serialization_efficiency():
+    """Test that sliced columns are compacted during serialization.
+
+    After PR #20961, column.data returns the base buffer instead of a sliced
+    view. This test ensures that sliced columns are automatically compacted
+    before serialization to avoid transferring entire base buffers over the
+    network.
+    """
+    pytest.importorskip("cupy")
+    import cupy as cp
+
+    # Create a large DataFrame
+    n_rows = 1_000_000
+    full_df = cudf.DataFrame({"data": cp.random.random(n_rows)})
+
+    # Create a sliced DataFrame (10% of original)
+    slice_size = 100_000
+    sliced_df = full_df.iloc[:slice_size]
+
+    # Get columns
+    sliced_col = sliced_df["data"]._column
+    full_col = full_df["data"]._column
+
+    # Serialize both columns
+    _, sliced_frames = sliced_col.serialize()
+    _, full_frames = full_col.serialize()
+
+    sliced_size = sum(f.size for f in sliced_frames)
+    full_size = sum(f.size for f in full_frames)
+
+    # The sliced column should serialize to approximately 10% of the full size
+    # (allowing for some overhead from metadata)
+    ratio = sliced_size / full_size
+    assert ratio < 0.15, (
+        f"Sliced column is {ratio:.1%} of full size, expected < 15%"
+    )
+
+    # Verify correctness: deserialized data should match original
+    from cudf.core.column import ColumnBase
+
+    recreated = ColumnBase.deserialize(*sliced_col.serialize())
+    assert_eq(
+        cudf.Series._from_column(recreated),
+        cudf.Series._from_column(sliced_col),
+        check_names=False,
+    )

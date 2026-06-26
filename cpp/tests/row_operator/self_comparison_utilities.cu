@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 // Including this declaration/defintion in two_table_comparison_utilities.cu causes
@@ -31,17 +31,17 @@ std::unique_ptr<cudf::column> self_comparison(cudf::table_view input,
     cudf::data_type(cudf::type_id::BOOL8), input.num_rows(), cudf::mask_state::UNALLOCATED);
 
   if (cudf::has_nested_columns(input)) {
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(input.num_rows()),
-                      thrust::make_counting_iterator(0),
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{input.num_rows()},
+                      cuda::counting_iterator<cudf::size_type>{0},
                       output->mutable_view().data<bool>(),
                       table_comparator.less<true>(cudf::nullate::NO{}, comparator));
   } else {
-    thrust::transform(rmm::exec_policy(stream),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(input.num_rows()),
-                      thrust::make_counting_iterator(0),
+    thrust::transform(rmm::exec_policy_nosync(stream),
+                      cuda::counting_iterator<cudf::size_type>{0},
+                      cuda::counting_iterator{input.num_rows()},
+                      cuda::counting_iterator<cudf::size_type>{0},
                       output->mutable_view().data<bool>(),
                       table_comparator.less<false>(cudf::nullate::NO{}, comparator));
   }

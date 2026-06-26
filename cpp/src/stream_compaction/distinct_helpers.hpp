@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,12 +14,11 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/mr/polymorphic_allocator.hpp>
 
 #include <cuco/static_set.cuh>
 #include <cuda/functional>
 #include <cuda/std/iterator>
-#include <thrust/copy.h>
-#include <thrust/iterator/counting_iterator.h>
 
 namespace cudf::detail {
 
@@ -74,7 +73,6 @@ using distinct_set_t =
  * @tparam RowEqual The type of row equality comparator
  *
  * @param set The auxiliary set to perform reduction
- * @param set_size The number of elements in set
  * @param num_rows The number of all input rows
  * @param keep The parameter to determine what type of reduction to perform
  * @param stream CUDA stream used for device memory operations and kernel launches

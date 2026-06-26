@@ -1,12 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from collections.abc import Mapping
-from typing import TypeAlias
-
-from typing_extensions import Self
+from typing import Self, TypeAlias
 
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
-from rmm.pylibrmm.stream import Stream
 
 from pylibcudf.column import Column
 from pylibcudf.io.types import (
@@ -19,6 +16,7 @@ from pylibcudf.io.types import (
 from pylibcudf.scalar import Scalar
 from pylibcudf.table import Table
 from pylibcudf.types import DataType
+from pylibcudf.utils import CudaStreamLike
 
 ChildNameToTypeMap: TypeAlias = Mapping[str, ChildNameToTypeMap]
 
@@ -75,8 +73,8 @@ class JsonReaderOptionsBuilder:
 
 def read_json(
     options: JsonReaderOptions,
-    stream: Stream = None,
-    mr: DeviceMemoryResource = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 def read_json_from_string_column(
     input: Column,
@@ -85,8 +83,8 @@ def read_json_from_string_column(
     dtypes: list | None = None,
     compression: CompressionType = CompressionType.NONE,
     recovery_mode: JSONRecoveryMode = JSONRecoveryMode.RECOVER_WITH_NULL,
-    stream: Stream = None,
-    mr: DeviceMemoryResource = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> TableWithMetadata: ...
 
 class JsonWriterOptions:
@@ -106,12 +104,14 @@ class JsonWriterOptionsBuilder:
     def utf8_escaped(self, val: bool) -> Self: ...
     def build(self) -> JsonWriterOptions: ...
 
-def write_json(options: JsonWriterOptions, stream: Stream = None) -> None: ...
+def write_json(
+    options: JsonWriterOptions, stream: CudaStreamLike | None = None
+) -> None: ...
 def chunked_read_json(
     options: JsonReaderOptions,
     chunk_size: int = 100_000_000,
-    stream: Stream = None,
-    mr: DeviceMemoryResource = None,
+    stream: CudaStreamLike | None = None,
+    mr: DeviceMemoryResource | None = None,
 ) -> tuple[list[Column], list[str], ChildNameToTypeMap]: ...
 def is_supported_write_json(type: DataType) -> bool: ...
 def _setup_json_reader_options(

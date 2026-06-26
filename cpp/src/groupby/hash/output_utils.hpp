@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,14 +15,25 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cstdint>
+#include <memory>
+#include <span>
+#include <vector>
+
 namespace cudf::groupby::detail::hash {
 
 /**
  * @brief Create the table containing columns for storing aggregation results.
  *
+ * For the aggregations that will be used only as temporary, intermediate result for
+ * computing other aggregations, we just create the results columns for them as non-nullable to
+ * avoid the extra nullmask update and null count computation overhead.
+ *
  * @param output_size Number of rows in the output table
  * @param values The values columns to be aggregated
  * @param agg_kinds The aggregation kinds corresponding to each input column
+ * @param is_agg_intermediate A binary values vector indicating if the corresponding aggregation
+ *        will be used only as temporary, intermediate result for computing other aggregations
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned table's device memory
  * @return The table containing columns for storing aggregation results
@@ -30,6 +41,7 @@ namespace cudf::groupby::detail::hash {
 std::unique_ptr<table> create_results_table(size_type output_size,
                                             table_view const& values,
                                             host_span<aggregation::Kind const> agg_kinds,
+                                            std::span<int8_t const> is_agg_intermediate,
                                             rmm::cuda_stream_view stream,
                                             rmm::device_async_resource_ref mr);
 

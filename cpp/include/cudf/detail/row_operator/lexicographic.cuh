@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,8 +8,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/detail/dremel.hpp>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
@@ -240,6 +240,43 @@ class device_row_comparator {
   {
   }
 
+  class dictionary_comparator {
+   public:
+    __device__ dictionary_comparator(column_device_view lhs,
+                                     column_device_view rhs,
+                                     PhysicalElementComparator comparator = {})
+      : _lhs{lhs}, _rhs{rhs}, _comparator{comparator}
+    {
+    }
+
+    template <typename KeyType>
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
+      size_type lhs_element_index, size_type rhs_element_index) const noexcept
+      requires(cudf::is_relationally_comparable<KeyType, KeyType>())
+    {
+      auto const lidx = _lhs.element<cudf::dictionary32>(lhs_element_index).value();
+      auto const ridx = _rhs.element<cudf::dictionary32>(rhs_element_index).value();
+      auto const lhs =
+        _lhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(lidx);
+      auto const rhs =
+        _rhs.child(cudf::dictionary_column_view::keys_column_index).element<KeyType>(ridx);
+      return cuda::std::pair(_comparator(lhs, rhs), cuda::std::numeric_limits<int>::max());
+    }
+
+    template <typename KeyType>
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
+      size_type const, size_type const) const noexcept
+      requires(not cudf::is_relationally_comparable<KeyType, KeyType>())
+    {
+      CUDF_UNREACHABLE("Key types are not comparable");
+    }
+
+   private:
+    column_device_view _lhs;
+    column_device_view _rhs;
+    PhysicalElementComparator _comparator;
+  };
+
   /**
    * @brief Performs a relational comparison between two elements in two columns.
    */
@@ -291,7 +328,8 @@ class device_row_comparator {
     template <typename Element>
     __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
       size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
-      requires(cudf::is_relationally_comparable<Element, Element>())
+      requires(cudf::is_relationally_comparable<Element, Element>() and
+               not cudf::is_dictionary<Element>())
     {
       if (_check_nulls) {
         bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
@@ -306,6 +344,31 @@ class device_row_comparator {
       return cuda::std::pair(_comparator(_lhs.element<Element>(lhs_element_index),
                                          _rhs.element<Element>(rhs_element_index)),
                              cuda::std::numeric_limits<int>::max());
+    }
+
+    template <typename Element>
+#ifndef NDEBUG
+    __attribute__((noinline))
+#endif
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+      requires(cudf::is_dictionary<Element>())
+    {
+      if (_check_nulls) {
+        bool const lhs_is_null{_lhs.is_null(lhs_element_index)};
+        bool const rhs_is_null{_rhs.is_null(rhs_element_index)};
+        if (lhs_is_null or rhs_is_null) {
+          return cuda::std::pair(
+            cudf::detail::null_compare(lhs_is_null, rhs_is_null, _null_precedence), _depth);
+        }
+      }
+
+      auto keys = _lhs.child(cudf::dictionary_column_view::keys_column_index);
+      return cudf::type_dispatcher<dispatch_void_if_nested>(
+        keys.type(),
+        dictionary_comparator{_lhs, _rhs, _comparator},
+        lhs_element_index,
+        rhs_element_index);
     }
 
     /**
@@ -333,8 +396,11 @@ class device_row_comparator {
      * with the depth at which a null value was encountered.
      */
     template <typename Element>
-    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
-      size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
+#ifndef NDEBUG
+    __attribute__((noinline))
+#endif
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
       requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::struct_view>)
     {
       column_device_view lcol = _lhs;
@@ -376,8 +442,11 @@ class device_row_comparator {
      * with the depth at which a null value was encountered.
      */
     template <typename Element>
-    __device__ cuda::std::pair<cudf::detail::weak_ordering, int> operator()(
-      size_type lhs_element_index, size_type rhs_element_index)
+#ifndef NDEBUG
+    __attribute__((noinline))
+#endif
+    __device__ cuda::std::pair<cudf::detail::weak_ordering, int>
+    operator()(size_type lhs_element_index, size_type rhs_element_index)
       requires(has_nested_columns and cuda::std::is_same_v<Element, cudf::list_view>)
     {
       auto const is_l_row_null = _lhs.is_null(lhs_element_index);
@@ -519,15 +588,15 @@ class device_row_comparator {
   }
 
  private:
-  table_device_view const _lhs;
-  table_device_view const _rhs;
-  device_span<detail::dremel_device_view const> const _l_dremel;
-  device_span<detail::dremel_device_view const> const _r_dremel;
-  Nullate const _check_nulls;
-  cuda::std::optional<device_span<int const>> const _depth;
-  cuda::std::optional<device_span<order const>> const _column_order;
-  cuda::std::optional<device_span<null_order const>> const _null_precedence;
-  PhysicalElementComparator const _comparator;
+  table_device_view _lhs;
+  table_device_view _rhs;
+  device_span<detail::dremel_device_view const> _l_dremel;
+  device_span<detail::dremel_device_view const> _r_dremel;
+  Nullate _check_nulls;
+  cuda::std::optional<device_span<int const>> _depth;
+  cuda::std::optional<device_span<order const>> _column_order;
+  cuda::std::optional<device_span<null_order const>> _null_precedence;
+  PhysicalElementComparator _comparator;
 };
 
 /**
@@ -555,7 +624,7 @@ struct weak_ordering_comparator_impl {
     cudf::detail::weak_ordering const result = comparator(lhs_index, rhs_index);
     return ((result == values) || ...);
   }
-  Comparator const comparator;
+  Comparator comparator;
 };
 
 /**
@@ -968,7 +1037,7 @@ struct strong_index_comparator_adapter {
     return cudf::detail::weak_ordering::EQUIVALENT;
   }
 
-  Comparator const comparator;
+  Comparator comparator;
 };
 // @endcond
 

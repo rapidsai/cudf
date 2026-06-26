@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -22,9 +23,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/execution_policy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
 #include <thrust/sequence.h>
@@ -55,8 +56,8 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
   // Concatenating the lists at the same row by converting the entry offsets from the child column
   // into row offsets of the root column. Those entry offsets are subtracted by the first entry
   // offset to output zero-based offsets.
-  auto const iter = thrust::make_counting_iterator<size_type>(0);
-  thrust::transform(rmm::exec_policy(stream),
+  auto const iter = cuda::counting_iterator<size_type>{0};
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     iter,
                     iter + num_rows + 1,
                     d_out_offsets,
@@ -95,9 +96,7 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
                            std::move(out_offsets),
                            std::move(out_entries),
                            null_count,
-                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
-                           stream,
-                           mr);
+                           null_count > 0 ? std::move(null_mask) : rmm::device_buffer{});
 }
 
 /**
@@ -134,7 +133,7 @@ generate_list_offsets_and_validities(column_view const& input,
         return size_type{0};
       }
       // The output row will not be null only if all lists on the input row are not null.
-      auto const iter = thrust::make_counting_iterator<size_type>(0);
+      auto const iter = cuda::counting_iterator<size_type>{0};
       auto const is_valid =
         thrust::all_of(thrust::seq,
                        iter + d_row_offsets[idx],
@@ -173,8 +172,8 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
 
   // Fill the gather map with indices of the lists from the child column of the input column.
   thrust::for_each_n(
-    rmm::exec_policy(stream),
-    thrust::make_counting_iterator<size_type>(0),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<size_type>{0},
     num_rows,
     [d_row_offsets,
      d_list_offsets,
@@ -194,7 +193,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
   auto result = cudf::detail::gather(table_view{{entry_col}},
                                      gather_map,
                                      out_of_bounds_policy::DONT_CHECK,
-                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                     cudf::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
   return std::move(result->release()[0]);
@@ -221,9 +220,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
                            std::move(list_offsets),
                            std::move(list_entries),
                            null_count,
-                           null_count ? std::move(null_mask) : rmm::device_buffer{},
-                           stream,
-                           mr);
+                           null_count ? std::move(null_mask) : rmm::device_buffer{});
 }
 
 }  // namespace
@@ -248,6 +245,28 @@ std::unique_ptr<column> concatenate_list_elements(column_view const& input,
                std::invalid_argument);
 
   if (input.size() == 0) { return cudf::empty_like(input); }
+
+  // Guard: when the inner list column has 0 rows, every outer row is either null or a
+  // valid-but-empty list.  The kernels below read the inner column's offsets buffer via
+  // a raw device pointer; for a 0-row list column that buffer may be unallocated (zero
+  // bytes), so the pointer is invalid and the read triggers cudaErrorIllegalAddress.
+  // Build the result directly: all-zero offsets, a 0-row child, and the outer null mask.
+  //
+  // null_policy need not be consulted: child.size() == 0 implies child.has_nulls() == false,
+  // so both policies would dispatch to concatenate_lists_ignore_null with build_null_mask=false,
+  // which simply copies the outer null mask — exactly what we do below.
+  if (child.size() == 0) {
+    auto const num_rows = input.size();
+    auto out_offsets    = cudf::make_column_from_scalar(
+      numeric_scalar<size_type>(0, true, stream, mr), num_rows + 1, stream, mr);
+    // Use the grandchild's schema (not child's) so out_entries has type T, not list<T>.
+    auto out_entries = cudf::empty_like(lists_column_view(child).child());
+    return make_lists_column(num_rows,
+                             std::move(out_offsets),
+                             std::move(out_entries),
+                             input.null_count(),
+                             cudf::detail::copy_bitmask(input, stream, mr));
+  }
 
   bool const has_null_list = child.has_nulls();
   return (null_policy == concatenate_null_policy::IGNORE || !has_null_list)

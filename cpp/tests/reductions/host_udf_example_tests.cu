@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,8 +17,9 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/std/tuple>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
 
@@ -98,9 +99,9 @@ struct host_udf_reduction_example : cudf::reduce_host_udf {
       }();
 
       auto const input_dv_ptr = cudf::column_device_view::create(input, stream);
-      auto const result       = thrust::transform_reduce(rmm::exec_policy(stream),
-                                                   thrust::make_counting_iterator(0),
-                                                   thrust::make_counting_iterator(input.size()),
+      auto const result       = thrust::transform_reduce(rmm::exec_policy_nosync(stream),
+                                                   cuda::counting_iterator<cudf::size_type>{0},
+                                                   cuda::counting_iterator{input.size()},
                                                    transform_fn{*input_dv_ptr},
                                                    static_cast<OutputType>(init_value),
                                                    cuda::std::plus<>{});
@@ -255,9 +256,9 @@ struct host_udf_segmented_reduction_example : cudf::segmented_reduce_host_udf {
       rmm::device_uvector<cudf::size_type> valid_idx(num_segments, stream);
 
       thrust::transform(
-        rmm::exec_policy(stream),
-        thrust::make_counting_iterator(0),
-        thrust::make_counting_iterator(num_segments),
+        rmm::exec_policy_nosync(stream),
+        cuda::counting_iterator<cudf::size_type>{0},
+        cuda::counting_iterator{num_segments},
         thrust::make_zip_iterator(output->mutable_view().begin<OutputType>(), valid_idx.begin()),
         transform_fn{*input_dv_ptr, offsets, static_cast<OutputType>(init_value), null_handling});
 
@@ -278,7 +279,7 @@ struct host_udf_segmented_reduction_example : cudf::segmented_reduce_host_udf {
       OutputType init_value;
       cudf::null_policy null_handling;
 
-      thrust::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
+      cuda::std::tuple<OutputType, cudf::size_type> __device__ operator()(cudf::size_type idx) const
       {
         auto const start = offsets[idx];
         auto const end   = offsets[idx + 1];

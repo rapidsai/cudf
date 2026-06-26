@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -116,7 +116,22 @@ void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& 
 {
   if (cache.has_result(values, agg)) return;
 
-  cache.add_result(values, agg, detail::count_scan(helper.group_labels(stream), stream, mr));
+  cache.add_result(
+    values,
+    agg,
+    detail::count_scan(values, null_policy::INCLUDE, helper.group_labels(stream), stream, mr));
+}
+
+template <>
+void scan_result_functor::operator()<aggregation::COUNT_VALID>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::count_scan(
+      get_grouped_values(), null_policy::EXCLUDE, helper.group_labels(stream), stream, mr));
 }
 
 template <>
@@ -131,10 +146,12 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   auto const group_labels_view = column_view(cudf::device_span<size_type const>(group_labels));
   auto const gather_map        = [&]() {
     if (is_presorted()) {  // assumes both keys and values are sorted, Spark does this.
-      return cudf::detail::sequence(group_labels.size(),
-                                    *cudf::make_fixed_width_scalar(size_type{0}, stream),
-                                    stream,
-                                    cudf::get_current_device_resource_ref());
+      return cudf::detail::sequence(
+        group_labels.size(),
+        *cudf::make_fixed_width_scalar(
+          size_type{0}, stream, cudf::get_current_device_resource_ref()),
+        stream,
+        cudf::get_current_device_resource_ref());
     } else {
       auto sort_order = (rank_agg._method == rank_method::FIRST ? cudf::detail::stable_sorted_order
                                                                        : cudf::detail::sorted_order);

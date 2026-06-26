@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,14 +28,14 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device/device_memory_resource.hpp>
 
 #include <cub/block/block_load.cuh>
 #include <cub/block/block_scan.cuh>
 #include <cuda/functional>
+#include <cuda/iterator>
+#include <cuda/std/utility>
 #include <thrust/copy.h>
 #include <thrust/find.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 #include <cstdint>
@@ -349,6 +349,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
       tile_multistates,
       tile_offsets,
       cudf::io::text::detail::scan_tile_status::oob);
+    CUDF_CUDA_TRY(cudaGetLastError());
 
     auto multistate_seed = multistate();
     multistate_seed.enqueue(0, 0);  // this represents the first state in the pattern.
@@ -370,8 +371,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
     reader->skip_bytes(chunk_offset);
     // amortize output chunk allocations over 8 worst-case outputs. This limits the overallocation
     constexpr auto max_growth = 8;
-    output_builder<byte_offset> row_offset_storage(ITEMS_PER_CHUNK, max_growth, stream);
-    output_builder<char> char_storage(ITEMS_PER_CHUNK, max_growth, stream);
+    output_builder<byte_offset> row_offset_storage(
+      ITEMS_PER_CHUNK, max_growth, stream, cudf::get_current_device_resource_ref());
+    output_builder<char> char_storage(
+      ITEMS_PER_CHUNK, max_growth, stream, cudf::get_current_device_resource_ref());
 
     auto streams = cudf::detail::fork_streams(stream, concurrency);
 
@@ -423,6 +426,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           delimiter[0],
           *chunk,
           row_offsets);
+        CUDF_CUDA_TRY(cudaGetLastError());
       } else {
         multibyte_split_kernel<<<tiles_in_launch,
                                  THREADS_PER_TILE,
@@ -436,6 +440,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           {device_delim.data(), static_cast<std::size_t>(device_delim.size())},
           *chunk,
           row_offsets);
+        CUDF_CUDA_TRY(cudaGetLastError());
       }
 
       // load the next chunk
@@ -450,14 +455,15 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           return new_offsets_unclamped;
         }
         // if we are in the last chunk, we need to find the first out-of-bounds offset
-        auto const it = thrust::make_counting_iterator(output_offset{});
-        auto const end_loc =
-          *thrust::find_if(rmm::exec_policy_nosync(scan_stream),
-                           it,
-                           it + new_offsets_unclamped,
-                           [row_offsets, byte_range_end] __device__(output_offset i) {
-                             return row_offsets[i] >= byte_range_end;
-                           });
+        auto const it      = cuda::counting_iterator<output_offset>{};
+        auto const end_loc = *thrust::find_if(
+          rmm::exec_policy_nosync(scan_stream, cudf::get_current_device_resource_ref()),
+          it,
+          it + new_offsets_unclamped,
+          cuda::proclaim_return_type<bool>(
+            [row_offsets, byte_range_end] __device__(output_offset i) {
+              return row_offsets[i] >= byte_range_end;
+            }));
         // if we had no out-of-bounds offset, we copy all offsets
         if (end_loc == new_offsets_unclamped) { return end_loc; }
         // otherwise we copy only up to (including) the first out-of-bounds delimiter
@@ -479,7 +485,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           chunk->data() + std::min<byte_offset>(sentinel - chunk_offset, chunk->size());
         auto const output_size = end - begin;
         auto char_output       = char_storage.next_output(scan_stream);
-        thrust::copy(rmm::exec_policy_nosync(scan_stream), begin, end, char_output.begin());
+        thrust::copy(rmm::exec_policy_nosync(scan_stream, cudf::get_current_device_resource_ref()),
+                     begin,
+                     end,
+                     char_output.begin());
         char_storage.advance_output(output_size, scan_stream);
       }
 
@@ -524,7 +533,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   };
   if (insert_begin) { set_offset_value(0, 0); }
   if (insert_end) { set_offset_value(offsets->size() - 1, chars_bytes); }
-  thrust::transform(rmm::exec_policy(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     global_offsets.begin(),
                     global_offsets.end(),
                     offsets_itr + insert_begin,
@@ -536,7 +545,7 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
   if (strip_delimiters) {
     auto it = cudf::detail::make_counting_transform_iterator(
       0,
-      cuda::proclaim_return_type<thrust::pair<char*, int32_t>>(
+      cuda::proclaim_return_type<cuda::std::pair<char*, int32_t>>(
         [ofs        = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view()),
          chars      = chars.data(),
          delim_size = static_cast<size_type>(delimiter.size()),
@@ -545,9 +554,10 @@ std::unique_ptr<cudf::column> multibyte_split(cudf::io::text::data_chunk_source 
           auto const begin = ofs[row];
           auto const len   = static_cast<size_type>(ofs[row + 1] - begin);
           if (row == last_row && insert_end) {
-            return thrust::make_pair(chars + begin, len);
+            return cuda::std::make_pair(chars + begin, len);
           } else {
-            return thrust::make_pair(chars + begin, cuda::std::max<size_type>(0, len - delim_size));
+            return cuda::std::make_pair(chars + begin,
+                                        cuda::std::max<size_type>(0, len - delim_size));
           };
         }));
     return cudf::strings::detail::make_strings_column(it, it + string_count, stream, mr);

@@ -1,7 +1,6 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-import pyarrow as pa
 import pytest
 
 import cudf
@@ -13,8 +12,9 @@ import cudf
 )
 def test_decimal_dtype_arrow_roundtrip(decimal_type):
     dt = decimal_type(4, 2)
-    assert dt.to_arrow() == pa.decimal128(4, 2)
-    assert dt == decimal_type.from_arrow(pa.decimal128(4, 2))
+    pa_type = decimal_type.PA_TYPE(4, 2)
+    assert dt.to_arrow() == pa_type
+    assert dt == decimal_type.from_arrow(pa_type)
 
 
 @pytest.mark.parametrize(

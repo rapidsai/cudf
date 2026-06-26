@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import re
@@ -64,3 +64,10 @@ def test_offset_no_fractional_periods(unit, period):
 def test_dateoffset_instance_subclass_check():
     assert not issubclass(pd.DateOffset, cudf.DateOffset)
     assert not isinstance(pd.DateOffset(), cudf.DateOffset)
+
+
+@pytest.mark.parametrize("freqstr", ["ME", "YE-DEC"])
+def test_dateoffset_freq_edgecases(freqstr):
+    expect = pd.tseries.frequencies.to_offset(freqstr)
+    got = cudf.DateOffset._from_freqstr(freqstr)
+    assert got == expect

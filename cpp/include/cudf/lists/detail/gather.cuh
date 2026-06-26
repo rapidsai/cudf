@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -18,8 +18,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -108,7 +106,7 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
   // generate the base offsets
   rmm::device_uvector<int32_t> base_offsets = rmm::device_uvector<int32_t>(output_count, stream);
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     gather_map,
     gather_map + output_count,
     base_offsets.data(),
@@ -266,7 +264,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
  *
  * @returns column with elements gathered based on `gather_data`
  */
-CUDF_EXPORT
 std::unique_ptr<column> gather_list_nested(lists_column_view const& list,
                                            gather_data& gd,
                                            rmm::cuda_stream_view stream,
@@ -284,7 +281,6 @@ std::unique_ptr<column> gather_list_nested(lists_column_view const& list,
  *
  * @returns column with elements gathered based on `gather_data`
  */
-CUDF_EXPORT
 std::unique_ptr<column> gather_list_leaf(column_view const& column,
                                          gather_data const& gd,
                                          rmm::cuda_stream_view stream,

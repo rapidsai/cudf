@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -912,7 +912,7 @@ TEST_F(SearchTest, non_null_column__nullable_values__find_last__nulls_as_largest
   cudf::test::strings_column_wrapper column({"N", "N", "N", "N", "Y", "Y", "Y", "Y"},
                                             {1, 1, 1, 1, 1, 1, 1, 1});
 
-  cudf::test::strings_column_wrapper values({"Y", "Z", "N"}, {1, 0, 1});
+  cudf::test::strings_column_wrapper values({"Y", "", "N"}, {1, 0, 1});
 
   fixed_width_column_wrapper<size_type> expect{8, 8, 4};
 
@@ -1813,7 +1813,7 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
-TEST_F(SearchTest, multi_contains_primitive_nan_unequal_bug)
+TEST_F(SearchTest, multi_contains_primitive_nan_unequal)
 {
   auto nan_val = std::numeric_limits<float>::quiet_NaN();
 
@@ -1827,12 +1827,8 @@ TEST_F(SearchTest, multi_contains_primitive_nan_unequal_bug)
                                        cudf::get_default_stream(),
                                        cudf::get_current_device_resource_ref());
 
-  thrust::host_vector<bool> result_host(result.size());
-  CUDF_CUDA_TRY(cudaMemcpy(
-    result_host.data(), result.data(), result.size() * sizeof(bool), cudaMemcpyDeviceToHost));
-
   // With nan_equality::UNEQUAL, NaN should not match NaN
-  EXPECT_FALSE(result_host[0]);
+  EXPECT_FALSE(result.front_element(cudf::get_default_stream()));
 }
 
 template <typename T>

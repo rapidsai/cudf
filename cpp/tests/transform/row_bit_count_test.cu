@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
@@ -16,9 +17,9 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/fill.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 #include <thrust/transform.h>
 
@@ -183,7 +184,7 @@ TYPED_TEST(RowBitCountTyped, SimpleTypes)
   // expect size of the type per row
   auto expected = make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, 16);
   cudf::mutable_column_view mcv(*expected);
-  thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::fill(rmm::exec_policy_nosync(cudf::get_default_stream()),
                mcv.begin<cudf::size_type>(),
                mcv.end<cudf::size_type>(),
                sizeof(cudf::device_storage_type_t<T>) * CHAR_BIT);
@@ -195,8 +196,8 @@ TYPED_TEST(RowBitCountTyped, SimpleTypesWithNulls)
 {
   using T = TypeParam;
 
-  auto iter   = thrust::make_counting_iterator(0);
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](int i) { return i % 2 == 0; });
+  auto iter   = cuda::counting_iterator<int>{0};
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
   cudf::test::fixed_width_column_wrapper<T> col(iter, iter + 16, valids);
 
   cudf::table_view t({col});
@@ -205,7 +206,7 @@ TYPED_TEST(RowBitCountTyped, SimpleTypesWithNulls)
   // expect size of the type + 1 bit per row
   auto expected = make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, 16);
   cudf::mutable_column_view mcv(*expected);
-  thrust::fill(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::fill(rmm::exec_policy_nosync(cudf::get_default_stream()),
                mcv.begin<cudf::size_type>(),
                mcv.end<cudf::size_type>(),
                (sizeof(cudf::device_storage_type_t<T>) * CHAR_BIT) + 1);
@@ -334,7 +335,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   // List child column = {0, 1, 2, 3, 4, ..., 2*num_rows};
   auto ints      = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows * 2);
   auto ints_view = ints->mutable_view();
-  thrust::tabulate(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::tabulate(rmm::exec_policy_nosync(cudf::get_default_stream()),
                    ints_view.begin<int32_t>(),
                    ints_view.end<int32_t>(),
                    cuda::std::identity{});
@@ -343,7 +344,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   auto list_offsets =
     cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows + 1);
   auto list_offsets_view = list_offsets->mutable_view();
-  thrust::tabulate(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::tabulate(rmm::exec_policy_nosync(cudf::get_default_stream()),
                    list_offsets_view.begin<cudf::size_type>(),
                    list_offsets_view.end<cudf::size_type>(),
                    times_2{});
@@ -361,7 +362,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   auto row_bit_counts = cudf::row_bit_count(cudf::table_view{{structs_column->view()}});
   auto expected_row_bit_counts =
     cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32}, num_rows);
-  thrust::fill_n(rmm::exec_policy(cudf::get_default_stream()),
+  thrust::fill_n(rmm::exec_policy_nosync(cudf::get_default_stream()),
                  expected_row_bit_counts->mutable_view().begin<int32_t>(),
                  num_rows,
                  CHAR_BIT * (2 * sizeof(int32_t) + sizeof(cudf::size_type)));
@@ -613,9 +614,9 @@ TEST_F(RowBitCount, Table)
     cudf::make_fixed_width_column(cudf::data_type{cudf::type_id::INT32}, t.num_rows());
   cudf::mutable_column_view mcv(*expected);
   thrust::transform(
-    rmm::exec_policy(cudf::get_default_stream()),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + t.num_rows(),
+    rmm::exec_policy_nosync(cudf::get_default_stream()),
+    cuda::counting_iterator<int>{0},
+    cuda::counting_iterator<int>{0} + t.num_rows(),
     mcv.begin<cudf::size_type>(),
     sum_functor{
       cv0.data<cudf::size_type>(), cv1.data<cudf::size_type>(), cv2.data<cudf::size_type>()});

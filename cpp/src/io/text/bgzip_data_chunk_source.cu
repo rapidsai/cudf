@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include "io/text/device_data_chunks.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -22,6 +23,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/tuple>
 #include <thrust/host_vector.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform.h>
@@ -41,17 +43,17 @@ struct bgzip_nvcomp_transform_functor {
   uint8_t const* compressed_ptr;
   uint8_t* decompressed_ptr;
 
-  __device__ thrust::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
-    thrust::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
+  __device__ cuda::std::tuple<device_span<uint8_t const>, device_span<uint8_t>> operator()(
+    cuda::std::tuple<std::size_t, std::size_t, std::size_t, std::size_t> t)
   {
-    auto const compressed_begin   = thrust::get<0>(t);
-    auto const compressed_end     = thrust::get<1>(t);
-    auto const decompressed_begin = thrust::get<2>(t);
-    auto const decompressed_end   = thrust::get<3>(t);
-    return thrust::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
-                                                         compressed_end - compressed_begin},
-                              device_span<uint8_t>{decompressed_ptr + decompressed_begin,
-                                                   decompressed_end - decompressed_begin});
+    auto const compressed_begin   = cuda::std::get<0>(t);
+    auto const compressed_end     = cuda::std::get<1>(t);
+    auto const decompressed_begin = cuda::std::get<2>(t);
+    auto const decompressed_end   = cuda::std::get<3>(t);
+    return cuda::std::make_tuple(device_span<uint8_t const>{compressed_ptr + compressed_begin,
+                                                            compressed_end - compressed_begin},
+                                 device_span<uint8_t>{decompressed_ptr + decompressed_begin,
+                                                      decompressed_end - decompressed_begin});
   }
 };
 
@@ -138,7 +140,7 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
       auto span_it =
         thrust::make_zip_iterator(d_compressed_spans.begin(), d_decompressed_spans.begin());
       thrust::transform(
-        rmm::exec_policy_nosync(stream),
+        rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
         offset_it,
         offset_it + num_blocks(),
         span_it,
@@ -292,12 +294,11 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     if (read_size <= _curr_blocks.remaining_size()) {
       _curr_blocks.decompress(stream);
       rmm::device_uvector<char> data(read_size, stream);
-      CUDF_CUDA_TRY(
-        cudaMemcpyAsync(data.data(),
-                        _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
-                        read_size,
-                        cudaMemcpyDefault,
-                        stream.value()));
+      CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+        data.data(),
+        _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
+        read_size,
+        stream));
       // record the host-to-device copy, decompression and device copy
       CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
       _curr_blocks.consume_bytes(read_size);
@@ -308,16 +309,16 @@ class bgzip_data_chunk_reader : public data_chunk_reader {
     _curr_blocks.decompress(stream);
     read_size = std::min(read_size, _prev_blocks.remaining_size() + _curr_blocks.remaining_size());
     rmm::device_uvector<char> data(read_size, stream);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(data.data(),
-                                  _prev_blocks.d_decompressed_blocks.data() + _prev_blocks.read_pos,
-                                  _prev_blocks.remaining_size(),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
-    CUDF_CUDA_TRY(cudaMemcpyAsync(data.data() + _prev_blocks.remaining_size(),
-                                  _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
-                                  read_size - _prev_blocks.remaining_size(),
-                                  cudaMemcpyDefault,
-                                  stream.value()));
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(data.data(),
+                                 _prev_blocks.d_decompressed_blocks.data() + _prev_blocks.read_pos,
+                                 _prev_blocks.remaining_size(),
+                                 stream));
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(data.data() + _prev_blocks.remaining_size(),
+                                 _curr_blocks.d_decompressed_blocks.data() + _curr_blocks.read_pos,
+                                 read_size - _prev_blocks.remaining_size(),
+                                 stream));
     // record the host-to-device copy, decompression and device copy
     CUDF_CUDA_TRY(cudaEventRecord(_curr_blocks.event, stream.value()));
     CUDF_CUDA_TRY(cudaEventRecord(_prev_blocks.event, stream.value()));

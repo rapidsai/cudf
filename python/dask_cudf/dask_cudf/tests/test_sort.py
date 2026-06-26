@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -80,6 +80,10 @@ def test_sort_repartition():
         {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
     ],
 )
+# This warning comes from pandas via dask, and is probably a consequence of
+# cudf's NA handling differing from pandas' default handling,
+# since we try to construct an int64 ndarray with NaNs.
+@pytest.mark.filterwarnings("ignore::RuntimeWarning:pandas")
 def test_sort_values_with_nulls(data, by, ascending, na_position):
     _ = np.random.default_rng(seed=0)
     cp.random.seed(0)
