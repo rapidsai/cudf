@@ -302,13 +302,6 @@ def _setup_worker(
         quent_worker=quent_worker,
         quent_logger=cudf_polars.quent._logging.QuentLogger(),
     )
-
-    setattr(
-        dask_worker,
-        attr,
-        mp_ctx,
-    )
-
     setattr(dask_worker, attr, mp_ctx)
     mp_ctx.quent_logger.emit(quent_worker._init())
 
