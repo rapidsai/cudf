@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -43,7 +43,14 @@ export PIP_NO_BUILD_ISOLATION=0
 RAPIDS_PY_API="cp${RAPIDS_PY_VERSION//./}"
 export RAPIDS_PY_API
 
-./ci/build_wheel.sh "${package_name}" "${package_dir}" --stable
+./ci/build_wheel.sh "${package_name}" "${package_dir}" --stable 2>&1 | tee cudf-streaming-wheel-build-output.log
+
+rapids-logger "Checking for Cython performance warnings"
+if grep -Fq "performance hint:" cudf-streaming-wheel-build-output.log; then
+  echo "Cython performance hints found in ${package_name} build:"
+  grep -F "performance hint:" cudf-streaming-wheel-build-output.log
+  exit 1
+fi
 
 # repair wheels and write to the location that artifact-uploading code expects to find them
 python -m auditwheel repair \
