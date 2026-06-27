@@ -3910,6 +3910,27 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCastTimestampAsStringCESU8() {
+    // U+1F642 ("🙂"): the surrogate-escape and character-literal forms are the same Java String.
+    final String format_surrogate = "\uD83D\uDE42"; // "🙂"
+    final String format_character = "🙂"; // U+1F642
+    assertEquals(format_surrogate, format_character);
+
+    try (ColumnVector s_string_times = ColumnVector.fromStrings(new String[]{format_character});
+         ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(new long[]{0});
+         ColumnVector timestampsAsStrings = s_timestamps.asStrings(format_character)) {
+      assertColumnsAreEqual(s_string_times, timestampsAsStrings);
+    }
+
+    final String format_surrogate_middle = "a\uD83D\uDE42b"; // "a🙂b"
+    try (ColumnVector s_string_times = ColumnVector.fromStrings(new String[]{format_surrogate_middle});
+         ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(new long[]{0});
+         ColumnVector timestampsAsStrings = s_timestamps.asStrings(format_surrogate_middle)) {
+      assertColumnsAreEqual(s_string_times, timestampsAsStrings);
+    }
+  }
+
+  @Test
   void testCastStringToByteList() {
     List<Byte> list1 = Arrays.asList((byte)0x54, (byte)0x68, (byte)0xc3, (byte)0xa9, (byte)0x73,
       (byte)0xc3, (byte)0xa9);
@@ -5160,6 +5181,55 @@ void testExtractReWithMultiLineDelimiters() {
         assertTablesAreEqual(expectedSplitLimit2, resultSplitLimit2);
         assertTablesAreEqual(expectedSplitAll, resultSplitAll);
       }
+    }
+  }
+
+  @Test
+  void testStringSplitSupplementaryDelimiter() {
+    // U+1F642 ("🙂"): the surrogate-escape and character-literal forms are the same Java String.
+    final String delimiter_surrogate = "\uD83D\uDE42"; // "🙂"
+    final String delimiter_character = "🙂"; // U+1F642
+    assertEquals(delimiter_surrogate, delimiter_character);
+
+    try (ColumnVector v = ColumnVector.fromStrings("a🙂b", "x🙂y");
+         Table expected = new Table.TestBuilder()
+         .column("a", "x")
+         .column("b", "y")
+         .build();
+         Table result = v.stringSplit(delimiter_character)) {
+      // Regression test for native_jstring's modified-UTF-8 -> UTF-8 conversion: without it the
+      // delimiter would arrive from GetStringUTFChars as CESU-8 (ED A0 BD ED B9 82) and never
+      // match the standard-UTF-8 column data (F0 9F 99 82), leaving the rows unsplit.
+      assertTablesAreEqual(expected, result);
+    }
+
+    final String delimiter_surrogate_middle = "l\uD83D\uDE42r"; // "l🙂r"
+    try (ColumnVector v = ColumnVector.fromStrings("al🙂rb", "xl🙂ry");
+         Table expected = new Table.TestBuilder()
+         .column("a", "x")
+         .column("b", "y")
+         .build();
+         Table result = v.stringSplit(delimiter_surrogate_middle)) {
+      // Regression test for native_jstring's modified-UTF-8 -> UTF-8 conversion: without it the
+      // delimiter would arrive from GetStringUTFChars as CESU-8 (ED A0 BD ED B9 82) and never
+      // match the standard-UTF-8 column data (F0 9F 99 82), leaving the rows unsplit.
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testStringSplitNulDelimiter() {
+    final String delimiter = "\u0000";
+    try (ColumnVector v = ColumnVector.fromStrings("a\u0000b", "x\u0000y");
+         Table expected = new Table.TestBuilder()
+         .column("a", "x")
+         .column("b", "y")
+         .build();
+        Table result = v.stringSplit(delimiter)) {
+      // Regression test for native_jstring's modified-UTF-8 -> UTF-8 conversion: without it the
+      // delimiter would arrive from GetStringUTFChars as modified UTF-8 (C0 80) and never
+      // match the standard-UTF-8 column data (00), leaving the rows unsplit.
+      assertTablesAreEqual(expected, result);
     }
   }
 
