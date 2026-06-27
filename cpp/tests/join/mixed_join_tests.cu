@@ -18,6 +18,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <rmm/exec_policy.hpp>
+
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
 #include <thrust/host_vector.h>
@@ -272,8 +274,10 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
     auto const expected_total =
       std::accumulate(expected_counts.begin(), expected_counts.end(), std::size_t{0});
     EXPECT_EQ(expected_total, result_size);
-    auto const actual_total =
-      thrust::reduce(thrust::device, actual_counts->begin(), actual_counts->end(), std::size_t{0});
+    auto const actual_total = thrust::reduce(rmm::exec_policy_nosync(cudf::get_default_stream()),
+                                             actual_counts->begin(),
+                                             actual_counts->end(),
+                                             std::size_t{0});
     EXPECT_EQ(actual_total, result_size);
 
     auto result = this->join(left_equality,
