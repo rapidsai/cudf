@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
 import warnings
@@ -46,6 +46,7 @@ from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     table_with_metadata,
 )
+from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
@@ -741,8 +742,9 @@ cdef class ChunkedParquetWriter:
                 partitions.push_back(
                     partition_info(part[0], part[1])
                 )
+        cdef table_view c_table = table.view()
         with nogil:
-            self.c_obj.get()[0].write(table.view(), partitions)
+            self.c_obj.get()[0].write(c_table, partitions)
 
     @staticmethod
     def from_options(ChunkedParquetWriterOptions options, object stream = None):
