@@ -116,6 +116,7 @@ class UnaryFunction(Expr):
             "null_count",
             "pct_change",
             "rank",
+            "reinterpret",
             "reverse",
             "round_sig_figs",
             "round",
@@ -156,6 +157,7 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "reinterpret",
             "round",
             "round_sig_figs",
             "set_sorted",
@@ -776,6 +778,9 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name == "reinterpret":
+            column = self.children[0].evaluate(df, context=context)
+            return column.astype(self.dtype, stream=df.stream)
         elif self.name == "round_sig_figs":
             column = self.children[0].evaluate(df, context=context)
             (digits,) = self.options
