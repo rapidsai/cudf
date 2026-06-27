@@ -93,15 +93,6 @@ void context::initialize_components(init_flags flags)
 
 /**
  * @brief Returns the path to the CUDF kernel cache directory.
- * The cache directory is determined by resolving in the following in order:
- * 1. ${LIBCUDF_KERNEL_CACHE_PATH}
- * 2. ${XDG_CACHE_HOME}/libcudf
- * 3. ${HOME}/.cache/libcudf
- * 4. ${TMPDIR}/libcudf
- * 5. /tmp/libcudf
- *
- * If all of the resolutions fail (e.g. the directories can not be created or are not accessible),
- * an exception is thrown.
  */
 std::filesystem::path get_cudf_kernel_cache_dir()
 {
@@ -114,15 +105,19 @@ std::filesystem::path get_cudf_kernel_cache_dir()
     return std::filesystem::is_directory(p) && has_rwx(p);
   };
 
+  static constexpr auto try_create_dirs = [](std::filesystem::path const& p) -> bool {
+    std::error_code ec;
+    std::filesystem::create_directories(p, ec);
+    return (!ec || ec == std::errc::file_exists) && is_accessible_dir(p);
+  };
+
   if (auto path = detail::getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH");
       path.has_value()) {
-    // - if $path exists, return it, otherwise create it
+    // - if $LIBCUDF_KERNEL_CACHE_PATH exists, return it, otherwise create it
     // - if creation fails, warn and continue to next option
     // - check that we have read/write permissions to the directory, otherwise warn and continue
     // to next option
-    std::error_code ec;
-    std::filesystem::create_directories(*path, ec);
-    if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(*path)) {
+    if (try_create_dirs(*path)) {
       return *path;
     } else {
       CUDF_LOG_WARN(
@@ -135,32 +130,28 @@ std::filesystem::path get_cudf_kernel_cache_dir()
 
   if (auto base = detail::getenv_optional<std::string>("XDG_CACHE_HOME"); base.has_value()) {
     auto path = std::filesystem::path(*base) / "libcudf";
-    std::error_code ec;
-    std::filesystem::create_directories(path, ec);
-    if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
+    if (try_create_dirs(path)) { return path; }
   }
 
-  static constexpr std::array<std::string_view, 2> base_dir_env_vars = {"HOME", "TMPDIR"};
-
-  for (auto env_var : base_dir_env_vars) {
-    if (auto base = detail::getenv_optional<std::string>(env_var); base.has_value()) {
-      if (!is_accessible_dir(*base)) { continue; }
-      // attempt to create the subdirectory if non-existent
+  if (auto base = detail::getenv_optional<std::string>("HOME"); base.has_value()) {
+    if (is_accessible_dir(*base)) {
+      // attempt to create the subdirectories if non-existent
       auto path = std::filesystem::path(*base) / ".cache" / "libcudf";
-      std::error_code ec;
-      std::filesystem::create_directories(path, ec);
-      if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
+      if (try_create_dirs(path)) { return path; }
     }
   }
 
-  static constexpr std::array<std::string_view, 1> tmp_dirs = {"/tmp"};
+  if (auto base = detail::getenv_optional<std::string>("TMPDIR"); base.has_value()) {
+    if (is_accessible_dir(*base)) {
+      // attempt to create the subdirectory if non-existent
+      auto path = std::filesystem::path(*base) / "libcudf";
+      if (try_create_dirs(path)) { return path; }
+    }
+  }
 
-  for (auto dir : tmp_dirs) {
-    if (!is_accessible_dir(dir)) { continue; }
-    auto path = std::filesystem::path(dir) / "libcudf";
-    std::error_code ec;
-    std::filesystem::create_directory(path, ec);
-    if ((!ec || ec == std::errc::file_exists) && is_accessible_dir(path)) { return path; }
+  if (is_accessible_dir("/tmp")) {
+    auto path = std::filesystem::path("/tmp") / "libcudf";
+    if (try_create_dirs(path)) { return path; }
   }
 
   CUDF_FAIL(
