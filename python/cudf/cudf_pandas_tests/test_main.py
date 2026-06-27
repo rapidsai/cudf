@@ -14,6 +14,7 @@ def _run_python(*, cudf_pandas, command):
         executable + command,
         shell=True,
         text=True,
+        encoding="utf-8",
     )
 
 
