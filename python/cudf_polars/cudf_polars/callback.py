@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -307,7 +307,7 @@ def _callback(
             else:
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
-            from cudf_polars.experimental.parallel import evaluate_streaming
+            from cudf_polars.streaming.parallel import evaluate_streaming
 
             if timer is not None:
                 msg = textwrap.dedent("""\
@@ -377,7 +377,7 @@ def execute_with_cudf(
                 f"\nThe errors were:\n{formatted_errors}"
             )
             exception = NotImplementedError(error_message, unique_errors)
-            if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+            if bool(int(os.environ.get("POLARS_VERBOSE", "0"))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
             if translator.config_options.raise_on_fail:
                 raise exception

@@ -1,9 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
 
-import sys
 from typing import cast
 
 import pytest
@@ -38,14 +37,14 @@ from cudf_polars.utils.config import (
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
-def test_polars_verbose_warns(engine, monkeypatch):
+def test_polars_verbose_warns(engine: pl.GPUEngine, monkeypatch: pytest.MonkeyPatch):
     def raise_unimplemented(self, *args):
         raise NotImplementedError("We don't support this")
 
     monkeypatch.setattr(DataFrameScan, "__init__", raise_unimplemented)
     q = pl.LazyFrame({})
     # Ensure that things raise
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
     with (
         pl.Config(verbose=True),
         pytest.raises(pl.exceptions.ComputeError),
@@ -371,12 +370,23 @@ def test_target_partition_from_env(
     monkeypatch: pytest.MonkeyPatch, recwarn: pytest.WarningsRecorder
 ) -> None:
     with monkeypatch.context() as m:
-        m.setitem(sys.modules, "pynvml", None)
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
 
         engine = pl.GPUEngine(executor="streaming")
         ConfigOptions.from_polars_engine(engine)  # no warning
         assert len(recwarn) == 0
+
+
+def test_target_partition_defaults_to_device_memory(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with monkeypatch.context() as m:
+        m.delenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", raising=False)
+        m.setattr(cudf_polars.utils.config, "get_total_device_memory", lambda: 32 << 30)
+
+        config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
+        assert config.executor.min_device_size == 32 << 30
+        assert config.executor.target_partition_size == int((32 << 30) * 0.025)
 
 
 def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -421,7 +431,7 @@ def test_validate_parquet_options(option: str) -> None:
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(
-            pl.GPUEngine(executor="streaming", raise_on_fail=cast(bool, object()))
+            pl.GPUEngine(executor="streaming", raise_on_fail=cast("bool", object()))
         )
 
 
@@ -621,7 +631,7 @@ def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -
 def test_cuda_stream_policy_pool_in_memory_unsupported() -> None:
     with pytest.raises(
         ValueError,
-        match="A stream pool is only supported by the streaming executor.",
+        match=r"A stream pool is only supported by the streaming executor.",
     ):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
@@ -750,7 +760,7 @@ def test_parse_memory_resource_config() -> None:
 def test_memory_resource_config_raises() -> None:
     with pytest.raises(
         ValueError,
-        match="MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
+        match=r"MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
     ):
         MemoryResourceConfig(qualname="foo")
 

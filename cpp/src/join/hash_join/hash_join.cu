@@ -259,4 +259,34 @@ cudf::join_match_context hash_join::full_join_match_context(cudf::table_view con
   return _impl->full_join_match_context(left, stream, mr);
 }
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join::partitioned_inner_join(cudf::join_partition_context const& context,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->partitioned_inner_join(context, stream, mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join::partitioned_left_join(cudf::join_partition_context const& context,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->partitioned_left_join(context, stream, mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+hash_join::partitioned_full_join(cudf::join_partition_context const& context,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::device_async_resource_ref mr) const
+{
+  CUDF_FUNC_RANGE();
+  return _impl->partitioned_full_join(context, stream, mr);
+}
+
 }  // namespace cudf

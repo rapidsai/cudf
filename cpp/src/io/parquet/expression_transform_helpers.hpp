@@ -1,9 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
+
+#include "column_path_helpers.hpp"
 
 #include <cudf/ast/detail/expression_transformer.hpp>
 #include <cudf/ast/expressions.hpp>
@@ -163,6 +165,9 @@ class names_from_expression : public ast::detail::expression_transformer {
  public:
   names_from_expression() = default;
 
+  // Bring base class visit(cast) into scope to avoid partial-override warning
+  using ast::detail::expression_transformer::visit;
+
   names_from_expression(std::optional<std::reference_wrapper<ast::expression const>> expr,
                         std::vector<std::string> const& skip_names,
                         cudf::io::parquet_reader_options const& options,
@@ -202,8 +207,7 @@ class names_from_expression : public ast::detail::expression_transformer {
 
   std::unordered_map<cudf::size_type, std::string> _column_indices_to_names;
   std::unordered_set<std::string> _column_names;
-  std::unordered_set<std::string> _skip_names;
-  bool _case_sensitive_names{true};
+  column_path_set _skip_names;
 };
 
 /**
@@ -212,6 +216,9 @@ class names_from_expression : public ast::detail::expression_transformer {
 class named_to_reference_converter : public ast::detail::expression_transformer {
  public:
   named_to_reference_converter() = default;
+
+  // Bring base class visit(cast) into scope to avoid partial-override warning
+  using ast::detail::expression_transformer::visit;
 
   named_to_reference_converter(std::optional<std::reference_wrapper<ast::expression const>> expr,
                                table_metadata const& metadata,
@@ -250,12 +257,11 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
   std::vector<std::reference_wrapper<ast::expression const>> visit_operands(
     cudf::host_span<std::reference_wrapper<ast::expression const> const> operands);
 
-  std::unordered_map<std::string, size_type> _column_name_to_index;
+  column_path_map<size_type> _column_name_to_index;
   std::optional<std::reference_wrapper<ast::expression const>> _converted_expr;
   // Using std::list or std::deque to avoid reference invalidation
   std::list<ast::column_reference> _col_ref;
   std::list<ast::operation> _operators;
-  bool _case_sensitive_names{true};
 };
 
 /**
@@ -265,6 +271,9 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
 class equality_literals_collector : public ast::detail::expression_transformer {
  public:
   equality_literals_collector() = default;
+
+  // Bring base class visit(cast) into scope to avoid partial-override warning
+  using ast::detail::expression_transformer::visit;
 
   equality_literals_collector(ast::expression const& expr,
                               cudf::host_span<cudf::data_type const> output_dtypes,

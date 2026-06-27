@@ -54,7 +54,7 @@ environment variable if set, otherwise let the underlying library apply its
 own built-in default.
 
 ```python
-from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
+from cudf_polars.engine.options import StreamingOptions
 
 opts = StreamingOptions(
     num_streaming_threads=8,
@@ -68,9 +68,9 @@ Pass the options object to `from_options()` on any engine — this is the
 recommended constructor for typical use:
 
 ```python
-from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
-from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.engine.dask import DaskEngine
+from cudf_polars.engine.ray import RayEngine
+from cudf_polars.engine.spmd import SPMDEngine
 
 with RayEngine.from_options(opts) as engine:
     result = df.lazy().collect(engine=engine)
@@ -148,7 +148,7 @@ Binding is controlled by the `hardware_binding` executor option, which accepts
 a `HardwareBindingPolicy` instance:
 
 ```python
-from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
 )
 ```
@@ -242,7 +242,7 @@ broadcasts it to all actors, so every rank always executes the same query.
 
 ### Running in Ray mode
 
-`RayEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.ray`. On construction it:
+`RayEngine` is imported from `cudf_polars.engine.ray`. On construction it:
 
 1. Calls `ray.init()` if Ray is not already running
 2. Creates one `RankActor` per GPU
@@ -255,8 +255,8 @@ The recommended way to construct a `RayEngine` is via `from_options()`:
 
 ```python
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.engine.ray import RayEngine
 
 opts = StreamingOptions(num_streaming_threads=8, fallback_mode="silent")
 
@@ -287,7 +287,7 @@ does not call `ray.shutdown()` on exit.
 ```python
 import ray
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.ray import RayEngine
+from cudf_polars.engine.ray import RayEngine
 
 ray.init(address="auto")
 
@@ -384,7 +384,7 @@ Conceptually the system looks like this:
 
 ### Running in Dask mode
 
-`DaskEngine` is imported from `cudf_polars.experimental.rapidsmpf.frontend.dask`. On construction it:
+`DaskEngine` is imported from `cudf_polars.engine.dask`. On construction it:
 
 1. If `dask_client` is `None`, creates a `distributed.LocalCluster` (one worker per visible GPU) and a `distributed.Client`
 2. Bootstraps a UCXX communicator across all workers
@@ -393,7 +393,7 @@ Conceptually the system looks like this:
 
 ```python
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+from cudf_polars.engine.dask import DaskEngine
 
 with DaskEngine() as engine:
     result = (
@@ -419,7 +419,7 @@ Bring-your-own-client variant:
 ```python
 from distributed import Client
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+from cudf_polars.engine.dask import DaskEngine
 
 with Client("scheduler-address:8786") as dc:
     with DaskEngine(dask_client=dc) as engine:
@@ -444,8 +444,8 @@ sets `CUDA_VISIBLE_DEVICES` per worker — disable the built-in binding to
 avoid conflicts:
 
 ```python
-from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
-from cudf_polars.experimental.rapidsmpf.frontend.hardware_binding import (
+from cudf_polars.engine.dask import DaskEngine
+from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
 )
 
@@ -467,14 +467,14 @@ built-in nanny preload to assign one GPU per worker. The preload sets
 ```bash
 # On each node — launch one worker per GPU with a single thread each:
 dask worker SCHEDULER:8786 --nworkers N --nthreads 1 \
-    --preload-nanny cudf_polars.experimental.rapidsmpf.frontend.dask
+    --preload-nanny cudf_polars.engine.dask
 ```
 
 Then connect from the client:
 
 ```python
 from distributed import Client
-from cudf_polars.experimental.rapidsmpf.frontend.dask import DaskEngine
+from cudf_polars.engine.dask import DaskEngine
 
 with Client("SCHEDULER:8786") as dc:
     with DaskEngine(dask_client=dc) as engine:
@@ -584,7 +584,7 @@ every rank, call `allgather_polars_dataframe()`.
 ### Running in SPMD mode
 
 `SPMDEngine` is the primary entry point for SPMD execution. It is a context
-manager imported from `cudf_polars.experimental.rapidsmpf.frontend.spmd`. On construction it:
+manager imported from `cudf_polars.engine.spmd`. On construction it:
 
 1. Bootstraps a communicator: UCXX when running under `rrun`, otherwise a
    single-rank communicator that requires no external library.
@@ -601,9 +601,9 @@ The recommended way to construct an `SPMDEngine` is via `from_options()`:
 # multi-GPU launch: rrun -n 4 python my_script.py
 # single-GPU (no rrun needed): python my_script.py
 import polars as pl
-from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
-from cudf_polars.experimental.rapidsmpf.frontend.options import StreamingOptions
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+from cudf_polars.streaming.collectives.common import reserve_op_id
+from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.engine.spmd import (
     SPMDEngine,
     allgather_polars_dataframe,
 )
@@ -686,8 +686,8 @@ with SPMDEngine() as engine:
 `allgather_polars_dataframe()` to gather all fragments:
 
 ```python
-from cudf_polars.experimental.rapidsmpf.collectives.common import reserve_op_id
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import (
+from cudf_polars.streaming.collectives.common import reserve_op_id
+from cudf_polars.engine.spmd import (
     SPMDEngine,
     allgather_polars_dataframe,
 )
@@ -723,7 +723,7 @@ retains ownership and can reuse it across multiple `SPMDEngine` lifetimes.
 ```python
 from rapidsmpf import bootstrap
 from rapidsmpf.progress_thread import ProgressThread
-from cudf_polars.experimental.rapidsmpf.frontend.spmd import SPMDEngine
+from cudf_polars.engine.spmd import SPMDEngine
 
 # Bootstrap once.
 comm = bootstrap.create_ucxx_comm(progress_thread=ProgressThread())

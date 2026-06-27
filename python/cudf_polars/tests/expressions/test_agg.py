@@ -113,12 +113,12 @@ def test_bool_agg(engine: pl.GPUEngine, agg):
 
 
 @pytest.mark.parametrize("cum_agg", sorted(expr.UnaryFunction._supported_cum_aggs))
-def test_cum_agg_reverse_unsupported(cum_agg):
+def test_cum_agg_reverse_unsupported(engine: pl.GPUEngine, cum_agg):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     expr = getattr(pl.col("a"), cum_agg)(reverse=True)
     q = df.select(expr)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("q", [0.5, pl.lit(0.5)])
@@ -129,22 +129,22 @@ def test_quantile(engine: pl.GPUEngine, df, q, interp, xfail_if_sorted):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
-def test_quantile_invalid_q(df):
+def test_quantile_invalid_q(engine: pl.GPUEngine, df):
     expr = pl.col("a").quantile(pl.col("a"))
     q = df.select(expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_quantile_equiprobable_unsupported(df):
+def test_quantile_equiprobable_unsupported(engine: pl.GPUEngine, df):
     expr = pl.col("a").quantile(0.5, interpolation="equiprobable")
     q = df.select(expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_quantile_duration_unsupported():
+def test_quantile_duration_unsupported(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": pl.Series([1, 2, 3, 4], dtype=pl.Duration("ns"))})
     q = df.select(pl.col("a").quantile(0.5))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -179,7 +179,7 @@ def test_sum_empty_zero(engine: pl.GPUEngine, data):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_implode_agg_unsupported():
+def test_implode_agg_unsupported(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "a": pl.Series([1, 2, 3], dtype=pl.Int64()),
@@ -189,10 +189,14 @@ def test_implode_agg_unsupported():
         }
     )
     q = df.select(pl.col("b").implode())
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_decimal_aggs(engine: pl.GPUEngine, decimal_df: pl.LazyFrame) -> None:
+def test_decimal_aggs(
+    engine: pl.GPUEngine,
+    decimal_df: pl.LazyFrame,
+    xfail_decimal_sum_precision_polars_140,
+) -> None:
     q = decimal_df.with_columns(
         sum=pl.col("a").sum(),
         min=pl.col("a").min(),
@@ -219,7 +223,7 @@ def test_decimal_std_var(engine: pl.GPUEngine, decimal_df):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_invalid_agg(request):
+def test_invalid_agg(engine: pl.GPUEngine, request):
     request.applymarker(
         pytest.mark.xfail(
             condition=not POLARS_VERSION_LT_136,
@@ -228,17 +232,48 @@ def test_invalid_agg(request):
     )
     df = pl.LazyFrame({"s": pl.Series(["a", "b", "c"], dtype=pl.String())})
     q = df.select(pl.col("s").sum())
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_sum_all_null_decimal_dtype(engine: pl.GPUEngine):
+def test_sum_all_null_decimal_dtype(
+    engine: pl.GPUEngine, xfail_decimal_sum_precision_polars_140
+):
     df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
     q = df.select(pl.col("foo").sum())
     assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("expr", [pl.col("a").median(), pl.col("a").quantile(0.5)])
-def test_temporal_quantile_median_not_supported(expr):
+def test_temporal_quantile_median_not_supported(engine: pl.GPUEngine, expr):
     df = pl.LazyFrame({"a": [date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)]})
     q = df.select(expr)
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a").mode(),
+        pl.col("a").entropy(),
+        pl.col("a").skew(),
+        pl.col("a").kurtosis(),
+        pl.col("a").arg_min(),
+        pl.col("a").arg_max(),
+        pl.col("a").arg_sort(),
+        pl.col("a").arg_unique(),
+    ],
+    ids=[
+        "mode",
+        "entropy",
+        "skew",
+        "kurtosis",
+        "arg_min",
+        "arg_max",
+        "arg_sort",
+        "arg_unique",
+    ],
+)
+def test_agg_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3, 2, 1]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)

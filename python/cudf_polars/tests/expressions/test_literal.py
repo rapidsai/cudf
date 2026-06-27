@@ -83,7 +83,7 @@ def test_timelike_literal(engine: pl.GPUEngine, timestamp, timedelta):
     ):
         assert_gpu_result_equal(q, engine=engine)
     else:
-        assert_ir_translation_raises(q, NotImplementedError)
+        assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_select_literal_series(engine: pl.GPUEngine):
@@ -101,12 +101,12 @@ def test_select_literal_series(engine: pl.GPUEngine):
 @pytest.mark.parametrize(
     "expr", [pl.lit(None), pl.lit(datetime.time(12, 0), dtype=pl.Time())]
 )
-def test_unsupported_literal_raises(expr):
+def test_unsupported_literal_raises(engine: pl.GPUEngine, expr):
     df = pl.LazyFrame({})
 
     q = df.select(expr)
 
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize(
@@ -122,7 +122,19 @@ def test_literal_hash(dtype, val):
     assert isinstance(hash(Literal(DataType(dtype), val)), int)
 
 
-def test_struct_literal_not_supported():
+def test_struct_literal_not_supported(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     q = df.select(pl.lit({"x": 1, "y": "foo"}))
-    assert_ir_translation_raises(q, NotImplementedError)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_coalesce_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [None, 2, None], "b": [1, None, 3]})
+    q = df.select(pl.coalesce("a", "b"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_concat_list_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [[1, 2], [3]], "b": [[4], [5, 6]]})
+    q = df.select(pl.concat_list("a", "b"))
+    assert_ir_translation_raises(q, engine, NotImplementedError)

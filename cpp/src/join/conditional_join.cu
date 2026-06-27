@@ -23,6 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
+#include <vector>
 
 namespace cudf {
 namespace detail {
@@ -80,10 +81,12 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table, *right_table, join_type, parser.device_expression_data, false, size.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table, *right_table, join_type, parser.device_expression_data, false, size.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
     join_size = size.value(stream);
   }
@@ -105,6 +108,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
         write_index.data(),
         parser.device_expression_data,
         join_size);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     conditional_join_anti_semi<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -115,6 +119,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_join_anti_semi(
         write_index.data(),
         parser.device_expression_data,
         join_size);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   return left_indices;
 }
@@ -203,6 +208,7 @@ conditional_join(table_view const& left,
           parser.device_expression_data,
           swap_tables,
           size.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -212,6 +218,7 @@ conditional_join(table_view const& left,
           parser.device_expression_data,
           swap_tables,
           size.data());
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
     join_size = size.value(stream);
   }
@@ -248,6 +255,7 @@ conditional_join(table_view const& left,
         parser.device_expression_data,
         join_size,
         swap_tables);
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -260,6 +268,7 @@ conditional_join(table_view const& left,
         parser.device_expression_data,
         join_size,
         swap_tables);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   auto join_indices = std::pair(std::move(left_indices), std::move(right_indices));
@@ -267,9 +276,8 @@ conditional_join(table_view const& left,
   // For full joins, get the indices in the right table that were not joined to
   // by any row in the left table.
   if (join_type == join_kind::FULL_JOIN) {
-    auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
-    join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
+    join_indices = detail::finalize_full_join(
+      std::move(join_indices), left.num_rows(), right.num_rows(), stream, mr);
   }
   return join_indices;
 }
@@ -353,6 +361,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
         parser.device_expression_data,
         swap_tables,
         size.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -362,6 +371,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
         parser.device_expression_data,
         swap_tables,
         size.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
   return size.value(stream);
 }

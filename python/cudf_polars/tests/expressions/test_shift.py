@@ -8,7 +8,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.mark.parametrize("n", [0, 1, 2, -1, -2, 5, -5])
@@ -121,3 +124,19 @@ def test_shift_by_expression_get(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "b": [2, 2, 2, 2, 2]})
     q = df.select(pl.col("a").shift(n=pl.col("b").get(2)))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a").diff(),
+        pl.col("a").pct_change(),
+        pl.col("a").interpolate(),
+        pl.col("a").ewm_mean(com=1),
+    ],
+    ids=["diff", "pct_change", "interpolate", "ewm_mean"],
+)
+def test_shift_like_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    df = pl.LazyFrame({"a": [1.0, 2.0, 4.0, 8.0]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)

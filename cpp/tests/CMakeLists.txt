@@ -154,6 +154,7 @@ ConfigureTest(
   groupby/replace_nulls_tests.cpp
   groupby/shift_tests.cpp
   groupby/std_tests.cpp
+  groupby/streaming_groupby_test.cpp
   groupby/structs_tests.cpp
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
@@ -348,10 +349,13 @@ ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
 )
+ConfigureTest(VARIANT_EXTRACT_TEST io/experimental/variant_extract_test.cpp)
 ConfigureTest(
   PARQUET_DELETION_VECTORS_TEST
   io/parquet_deletion_vectors_test.cpp

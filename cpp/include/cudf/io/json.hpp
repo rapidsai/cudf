@@ -924,6 +924,57 @@ table_with_metadata read_json(
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
+/**
+ * @brief Optional diagnostics produced by `read_json_with_diagnostics`.
+ *
+ * Reserved for signals that don't belong on the result `table_metadata` because
+ * they are reader-specific (and adding them to the shared `column_name_info` would
+ * change the public ABI for that struct, breaking downstream packages that have
+ * its destructor inlined into their binaries).
+ */
+struct json_reader_diagnostics {
+  /**
+   * @brief Top-level column names whose value tree contained at least one JSON node
+   * whose category (`NC_STRUCT` / `NC_LIST` / `NC_VAL`) did not match the requested
+   * schema type. Empty when the reader is invoked without a user-supplied schema or
+   * when no mismatches were observed.
+   *
+   * Consumers (e.g. spark-rapids-jni) can use this signal to implement their own
+   * per-column policy on schema mismatch (e.g. Spark's `JacksonParser` nulls the
+   * entire depth-1 ancestor field for such rows).
+   */
+  std::vector<std::string> top_level_columns_with_schema_mismatch;
+};
+
+/**
+ * @brief Result of `read_json_with_diagnostics`: the parsed table together with
+ * reader-specific diagnostics.
+ */
+struct json_reader_result {
+  table_with_metadata data;             ///< Parsed table and standard table metadata
+  json_reader_diagnostics diagnostics;  ///< Reader-specific diagnostics
+};
+
+/**
+ * @brief Reads a JSON dataset into a set of columns, additionally reporting reader
+ * diagnostics that do not belong on the standard `table_metadata`.
+ *
+ * Behaves identically to `read_json` for column construction. The additional
+ * `diagnostics` field carries reader-specific observations such as
+ * `top_level_columns_with_schema_mismatch`.
+ *
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * result.
+ *
+ * @return The parsed table, its metadata, and reader diagnostics
+ */
+json_reader_result read_json_with_diagnostics(
+  json_reader_options options,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
 /** @} */  // end of group
 
 /**

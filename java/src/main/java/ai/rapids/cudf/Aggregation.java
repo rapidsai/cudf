@@ -542,10 +542,12 @@ abstract class Aggregation {
 
     /**
      * Sum aggregation that also reports overflow. The result is a struct with
-     * children {sum, overflow: BOOL8}. For column reductions the input must be
-     * INT64. For hash-based groupby the input may be any signed integer type
-     * (INT8/16/32/64) or fixed-point decimal. Sort-based groupby, scan,
-     * segmented reduce, and rolling are not supported by cudf.
+     * children {sum: same type as input, overflow: BOOL8}. The input may be any
+     * signed integer type (INT8/16/32/64) or fixed-point decimal
+     * (DECIMAL32/64/128), for both column reductions and hash-based groupby.
+     * On overflow the sum value is unspecified; the boolean flag is the source of
+     * truth. Sort-based groupby, scan, segmented reduce, and rolling are not
+     * supported by cudf.
      */
     static SumWithOverflowAggregation sumWithOverflow() {
         return new SumWithOverflowAggregation();
@@ -803,7 +805,11 @@ abstract class Aggregation {
     }
 
     /**
-     * Get the nth, non-null, element in a group.
+     * Get the nth element in a group.
+     * <p>
+     * NULL values are included (i.e. a NULL element can be returned). Use
+     * {@link #nth(int, NullPolicy)} to control NULL policy.
+     *
      * @param offset the offset to look at. Negative numbers go from the end of the group. Any
      *               value outside of the group range results in a null.
      */

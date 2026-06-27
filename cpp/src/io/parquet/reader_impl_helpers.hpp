@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,8 +13,12 @@
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
 
+#include <cstddef>
+#include <functional>
+#include <string>
 #include <string_view>
 #include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -78,31 +82,6 @@ struct row_group_info {
 };
 
 /**
- * @brief Returns a normalized (lowercased) column name or path when case-insensitive matching is
- * enabled
- *
- * @param col_path The column name or path to normalize
- * @param case_sensitive_names Whether to normalize the column path case-insensitively
- *
- * @return The normalized column path
- */
-[[nodiscard]] std::string normalize_column_path(std::string_view col_path,
-                                                bool case_sensitive_names);
-
-/**
- * @brief Compares two column paths with specified case sensitivity
- *
- * @param lhs The left-hand side column path
- * @param rhs The right-hand side column path
- * @param case_sensitive Whether to compare the column paths case-sensitively
- *
- * @return Boolean indicating if the column paths are equal
- */
-[[nodiscard]] bool are_column_paths_equal(std::string_view lhs,
-                                          std::string_view rhs,
-                                          bool case_sensitive);
-
-/**
  * @brief Translates Parquet datatype to cuDF type enum
  */
 [[nodiscard]] type_id to_type_id(SchemaElement const& schema,
@@ -119,6 +98,14 @@ struct row_group_info {
            ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
            : data_type{t_id};
 }
+
+/**
+ * @brief Derives a bounded input `pass_read_limit` from a `chunk_read_limit`.
+ *
+ * @param chunk_read_limit The output chunk byte limit
+ * @return The derived input pass byte limit
+ */
+[[nodiscard]] std::size_t derive_pass_read_limit(std::size_t chunk_read_limit);
 
 /**
  * @brief Class for parsing dataset metadata
@@ -304,6 +291,25 @@ class aggregate_reader_metadata {
     size_t bytes_to_skip,
     std::optional<size_t> const& bytes_to_read) const;
 
+ private:
+  /**
+   * @brief Probe whether any filter column carries usable row-group statistics
+   *
+   * Returns true iff at least one column chunk referenced by `filter_column_schemas` in the first
+   * selected row group of any source carries any of `min` / `max` / `min_value` / `max_value` /
+   * `null_count`. Inspecting one row group per source is sufficient; see
+   * https://github.com/rapidsai/cudf/pull/22664#issuecomment-4557500237.
+   *
+   * @param input_row_group_indices Selected row group indices, one vector per source
+   * @param filter_column_schemas Zeroth-source schema indices of the columns referenced by the
+   *        filter
+   * @return True if any filter column carries row-group statistics
+   */
+  [[nodiscard]] bool any_row_group_stats_available(
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    host_span<int const> filter_column_schemas) const;
+
+ protected:
   /**
    * @brief Filters the row groups using stats filter
    *
@@ -431,6 +437,13 @@ class aggregate_reader_metadata {
    * @return Total number of row groups across all files
    */
   [[nodiscard]] auto get_num_row_groups() const { return num_row_groups; }
+
+  /**
+   * @brief Get total number of sources
+   *
+   * @return Total number of sources
+   */
+  [[nodiscard]] auto get_num_sources() const { return per_file_metadata.size(); }
 
   /**
    * @brief Get the number of row groups per file

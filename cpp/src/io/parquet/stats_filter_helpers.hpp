@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -306,6 +306,9 @@ class stats_caster_base {
 class stats_columns_collector : public ast::detail::expression_transformer {
  public:
   stats_columns_collector() = default;
+
+  // Bring base class visit(cast) into scope to avoid partial-override warning
+  using ast::detail::expression_transformer::visit;
 
   stats_columns_collector(ast::expression const& expr, cudf::size_type num_columns);
 

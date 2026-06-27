@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -245,11 +245,31 @@ struct cast_to_decimal_dispatch {
     if constexpr (cuda::std::is_floating_point_v<InputT>) {
       auto const multiplier = numeric::detail::exp10<double>(neg_scale);
       return static_cast<RepT>(val * multiplier);
+    } else if constexpr (cudf::is_fixed_point<InputT>()) {
+      // Decimal-to-decimal: rescale from source scale to target scale
+      // val.value() gives the raw rep at source scale; we need rep at target scale
+      auto const source_neg_scale = static_cast<int32_t>(-val.scale());
+      auto const combined_exp     = neg_scale - source_neg_scale;
+      if (combined_exp >= 0) {
+        auto const multiplier = numeric::detail::exp10<RepT>(combined_exp);
+        return static_cast<RepT>(val.value()) * multiplier;
+      } else {
+        auto const divisor = numeric::detail::exp10<RepT>(-combined_exp);
+        return static_cast<RepT>(val.value()) / divisor;
+      }
     } else if constexpr (cuda::std::is_integral_v<InputT>) {
-      auto const multiplier = numeric::detail::exp10<RepT>(neg_scale);
-      return static_cast<RepT>(val) * multiplier;
+      if (neg_scale >= 0) {
+        auto const multiplier = numeric::detail::exp10<RepT>(neg_scale);
+        return static_cast<RepT>(val) * multiplier;
+      } else {
+        // Positive scale means large units; divide to get the rep
+        auto const divisor = numeric::detail::exp10<RepT>(-neg_scale);
+        return static_cast<RepT>(val) / divisor;
+      }
     } else {
-      return static_cast<RepT>(val);
+      // Unsupported types (timestamps, durations, structs, etc.) - this branch is
+      // instantiated by type_dispatcher but never reached at runtime.
+      return RepT{};
     }
   }
 
@@ -285,11 +305,8 @@ struct cast_to_decimal_dispatch {
     }
   }
 
-  template <typename InputT,
-            typename ResultSubclass,
-            typename T,
-            bool result_has_nulls,
-            CUDF_ENABLE_IF(!cuda::std::is_void_v<InputT>)>
+  template <typename InputT, typename ResultSubclass, typename T, bool result_has_nulls>
+    requires(!cuda::std::is_void_v<InputT>)
   __device__ inline void operator()(
     possibly_null_value_t<InputT, has_nulls> const& input_val,
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
@@ -323,15 +340,12 @@ struct cast_to_decimal_dispatch {
                                            output_row_index,
                                            thread_intermediate_storage);
         break;
-      default: break;
+      default: CUDF_UNREACHABLE("Unsupported decimal target type");
     }
   }
 
-  template <typename InputT,
-            typename ResultSubclass,
-            typename T,
-            bool result_has_nulls,
-            CUDF_ENABLE_IF(cuda::std::is_void_v<InputT>)>
+  template <typename InputT, typename ResultSubclass, typename T, bool result_has_nulls>
+    requires(cuda::std::is_void_v<InputT>)
   __device__ inline void operator()(possibly_null_value_t<InputT, has_nulls> const&,
                                     expression_result<ResultSubclass, T, result_has_nulls>&,
                                     detail::device_data_reference const&,
@@ -356,8 +370,8 @@ struct cast_to_decimal_evaluator_dispatch {
             typename Evaluator,
             typename ResultSubclass,
             typename T,
-            bool result_has_nulls,
-            CUDF_ENABLE_IF(!cuda::std::is_void_v<InputT>)>
+            bool result_has_nulls>
+    requires(!cuda::std::is_void_v<InputT>)
   __device__ inline void operator()(
     Evaluator const& evaluator,
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
@@ -379,8 +393,8 @@ struct cast_to_decimal_evaluator_dispatch {
             typename Evaluator,
             typename ResultSubclass,
             typename T,
-            bool result_has_nulls,
-            CUDF_ENABLE_IF(cuda::std::is_void_v<InputT>)>
+            bool result_has_nulls>
+    requires(cuda::std::is_void_v<InputT>)
   __device__ inline void operator()(Evaluator const&,
                                     expression_result<ResultSubclass, T, result_has_nulls>&,
                                     detail::device_data_reference const&,
@@ -482,13 +496,37 @@ struct expression_evaluator {
       }
     } else {  // Assumes input_reference.reference_type ==
               // detail::device_data_reference_type::INTERMEDIATE
-      // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
-      // Using a temporary variable ensures that the compiler knows the result is aligned
       IntermediateDataType<has_nulls> intermediate =
         thread_intermediate_storage[input_reference.data_index];
-      ReturnType tmp;
-      memcpy(&tmp, &intermediate, sizeof(ReturnType));
-      return tmp;
+      if constexpr (cudf::is_fixed_point<Element>()) {
+        using rep        = typename Element::rep;
+        auto const scale = numeric::scale_type{input_reference.data_type.scale()};
+        if constexpr (has_nulls) {
+          if (!intermediate.has_value()) { return ReturnType{}; }
+          return ReturnType{
+            Element{numeric::scaled_integer<rep>{static_cast<rep>(*intermediate), scale}}};
+        } else {
+          rep rep_val;
+          memcpy(&rep_val, &intermediate, sizeof(rep));
+          return ReturnType{numeric::scaled_integer<rep>{rep_val, scale}};
+        }
+      } else {
+        if constexpr (has_nulls) {
+          // Mirror the explicit construction done in resolve_output: extract the
+          // int64_t value from optional<int64_t> and rebuild optional<Element>.
+          if (!intermediate.has_value()) { return ReturnType{}; }
+          Element val{};
+          auto const rep = *intermediate;
+          memcpy(&val, &rep, sizeof(Element));
+          return ReturnType{val};
+        } else {
+          // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing
+          // Using a temporary variable ensures that the compiler knows the result is aligned
+          ReturnType tmp;
+          memcpy(&tmp, &intermediate, sizeof(ReturnType));
+          return tmp;
+        }
+      }
     }
     // Unreachable return used to silence compiler warnings.
     return {};
@@ -810,11 +848,23 @@ struct expression_evaluator {
         output_object.template set_value<Element>(row_index, result);
       } else {  // Assumes device_data_reference.reference_type ==
                 // detail::device_data_reference_type::INTERMEDIATE
-        // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
-        // Using a temporary variable ensures that the compiler knows the result is aligned.
-        IntermediateDataType<has_nulls> tmp;
-        memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
-        thread_intermediate_storage[device_data_reference.data_index] = tmp;
+        if constexpr (has_nulls) {
+          if (result.has_value()) {
+            std::int64_t rep{};
+            memcpy(&rep, &(result.value()), sizeof(Element));
+            thread_intermediate_storage[device_data_reference.data_index] =
+              IntermediateDataType<has_nulls>{rep};
+          } else {
+            thread_intermediate_storage[device_data_reference.data_index] =
+              IntermediateDataType<has_nulls>{};
+          }
+        } else {
+          // Using memcpy instead of reinterpret_cast<Element*> for safe type aliasing.
+          // Using a temporary variable ensures that the compiler knows the result is aligned.
+          IntermediateDataType<has_nulls> tmp;
+          memcpy(&tmp, &result, sizeof(possibly_null_value_t<Element, has_nulls>));
+          thread_intermediate_storage[device_data_reference.data_index] = tmp;
+        }
       }
     }
 
@@ -829,18 +879,21 @@ struct expression_evaluator {
       possibly_null_value_t<Element, has_nulls> const& result) const
     {
       using RepType = typename Element::rep;
-      auto const v  = result.value();
-      auto const rv = [&v, &result] {
-        if constexpr (cuda::std::is_same_v<cuda::std::remove_cvref_t<decltype(v)>, RepType>) {
-          return v;  // no nulls path
-        } else {
-          // rewrap rep component value appropriately
-          using ResultType = possibly_null_value_t<RepType, has_nulls>;
-          return result.has_value() ? ResultType{v.value()} : ResultType{};
-        }
-      }();
-      resolve_output<RepType, ResultSubclass, T, result_has_nulls>(
-        output_object, device_data_reference, row_index, thread_intermediate_storage, rv);
+      if constexpr (has_nulls) {
+        // result is optional<Element>; must guard before calling .value() to avoid
+        // bad_optional_access when result is null.
+        using ResultType = possibly_null_value_t<RepType, true>;
+        auto const rv    = result.has_value() ? ResultType{result->value()} : ResultType{};
+        resolve_output<RepType, ResultSubclass, T, result_has_nulls>(
+          output_object, device_data_reference, row_index, thread_intermediate_storage, rv);
+      } else {
+        // result is Element; .value() is Element::value() which returns RepType.
+        resolve_output<RepType, ResultSubclass, T, result_has_nulls>(output_object,
+                                                                     device_data_reference,
+                                                                     row_index,
+                                                                     thread_intermediate_storage,
+                                                                     result.value());
+      }
     }
 
     template <typename Element, typename ResultSubclass, typename T, bool result_has_nulls>
@@ -883,7 +936,7 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              CUDF_ENABLE_IF(detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+              CUDF_ENABLE_IF(detail::is_valid_unary_op<detail::operator_functor<op>,
                                                        possibly_null_value_t<Input, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
@@ -894,19 +947,19 @@ struct expression_evaluator {
     {
       // The output data type is the same whether or not nulls are present, so
       // pull from the non-nullable operator.
-      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, Input>;
+      using Out = cuda::std::invoke_result_t<detail::operator_functor<op>, Input>;
       this->template resolve_output<Out>(output_object,
                                          output,
                                          output_row_index,
                                          thread_intermediate_storage,
-                                         detail::operator_functor<op, has_nulls>{}(input));
+                                         detail::operator_functor<op>{}(input));
     }
 
     template <ast_operator op,
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              CUDF_ENABLE_IF(!detail::is_valid_unary_op<detail::operator_functor<op, has_nulls>,
+              CUDF_ENABLE_IF(!detail::is_valid_unary_op<detail::operator_functor<op>,
                                                         possibly_null_value_t<Input, has_nulls>>)>
     __device__ inline void operator()(
       expression_result<ResultSubclass, T, result_has_nulls>& output_object,
@@ -945,7 +998,7 @@ struct expression_evaluator {
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              CUDF_ENABLE_IF(detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+              CUDF_ENABLE_IF(detail::is_valid_binary_op<detail::operator_functor<op>,
                                                         possibly_null_value_t<LHS, has_nulls>,
                                                         possibly_null_value_t<RHS, has_nulls>>)>
     __device__ inline void operator()(
@@ -958,19 +1011,19 @@ struct expression_evaluator {
     {
       // The output data type is the same whether or not nulls are present, so
       // pull from the non-nullable operator.
-      using Out = cuda::std::invoke_result_t<detail::operator_functor<op, false>, LHS, RHS>;
+      using Out = cuda::std::invoke_result_t<detail::operator_functor<op>, LHS, RHS>;
       this->template resolve_output<Out>(output_object,
                                          output,
                                          output_row_index,
                                          thread_intermediate_storage,
-                                         detail::operator_functor<op, has_nulls>{}(lhs, rhs));
+                                         detail::operator_functor<op>{}(lhs, rhs));
     }
 
     template <ast_operator op,
               typename ResultSubclass,
               typename T,
               bool result_has_nulls,
-              CUDF_ENABLE_IF(!detail::is_valid_binary_op<detail::operator_functor<op, has_nulls>,
+              CUDF_ENABLE_IF(!detail::is_valid_binary_op<detail::operator_functor<op>,
                                                          possibly_null_value_t<LHS, has_nulls>,
                                                          possibly_null_value_t<RHS, has_nulls>>)>
     __device__ inline void operator()(

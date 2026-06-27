@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 """DSL nodes for unary operations."""
@@ -240,15 +240,14 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
-        elif self.name == "set_sorted":  # pragma: no cover
-            # TODO: LazyFrame.set_sorted is proper IR concept (ie. FunctionIR::Hint)
-            # and is is currently not implemented. We should reimplement it as a MapFunction.
+        elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
-            (asc,) = self.options
+            if isinstance(self.options[0], str):
+                descending = self.options[0] == "descending"  # pragma: no cover
+            else:
+                descending, _ = self.options
             order = (
-                plc.types.Order.ASCENDING
-                if asc == "ascending"
-                else plc.types.Order.DESCENDING
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
             )
             null_order = plc.types.NullOrder.BEFORE
             if column.null_count > 0 and (n := column.size) > 1:
@@ -497,14 +496,14 @@ class UnaryFunction(Expr):
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
-            (column, k) = (
+            (column, _k) = (
                 child.evaluate(df, context=context) for child in self.children
             )
             (reverse,) = self.options
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    cast(Literal, self.children[1]).value,
+                    cast("Literal", self.children[1]).value,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,

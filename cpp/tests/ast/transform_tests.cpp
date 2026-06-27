@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/binaryop.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -1367,6 +1368,96 @@ TYPED_TEST(DecimalTests, DecimalDifferentScales)
   }
 }
 
+TYPED_TEST(DecimalTests, LessConsumesMulOfDecimals)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+  // Values at scale=-2:  col_a in {1, 2, 5, 10, 25, 50}.00,
+  // col_thresh = 0.20, col_avg = 25.00.  Expected: col_a < 5.00 → [1,1,0,0,0,0].
+  auto col_a =
+    cudf::test::fixed_point_column_wrapper<RepType>({100, 200, 500, 1000, 2500, 5000}, scale);
+  auto col_thresh =
+    cudf::test::fixed_point_column_wrapper<RepType>({20, 20, 20, 20, 20, 20}, scale);
+  auto col_avg =
+    cudf::test::fixed_point_column_wrapper<RepType>({2500, 2500, 2500, 2500, 2500, 2500}, scale);
+  auto table = cudf::table_view{{col_a, col_thresh, col_avg}};
+
+  // Path 1: single fused AST -- col_a < (col_thresh * col_avg)
+  auto ra         = cudf::ast::column_reference(0);
+  auto rt         = cudf::ast::column_reference(1);
+  auto rv         = cudf::ast::column_reference(2);
+  auto mul        = cudf::ast::operation(cudf::ast::ast_operator::MUL, rt, rv);
+  auto lt         = cudf::ast::operation(cudf::ast::ast_operator::LESS, ra, mul);
+  auto ast_result = cudf::compute_column(table, lt);
+
+  // Path 2: chained binary_operation, no AST intermediate
+  auto decimal_type = cudf::data_type{cudf::type_to_id<decimalXX>(), numeric::scale_type{-4}};
+  auto tmp = cudf::binary_operation(col_thresh, col_avg, cudf::binary_operator::MUL, decimal_type);
+  auto ref_result = cudf::binary_operation(
+    col_a, tmp->view(), cudf::binary_operator::LESS, cudf::data_type{cudf::type_id::BOOL8});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(ast_result->view(), ref_result->view());
+  ast_result = cudf::compute_column_jit(table, lt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(ast_result->view(), ref_result->view());
+}
+
+TEST_F(ComputeColumnTest, NullPropagatesViaSmallTypeIntermediate)
+{
+  auto a     = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4}, {1, 0, 1, 1}};
+  auto b     = cudf::test::fixed_width_column_wrapper<int32_t>{{10, 10, 10, 10}, {1, 1, 1, 1}};
+  auto c     = cudf::test::fixed_width_column_wrapper<int32_t>{{5, 5, 5, 5}, {1, 1, 0, 1}};
+  auto table = cudf::table_view{{a, b, c}};
+
+  auto ra  = cudf::ast::column_reference(0);
+  auto rb  = cudf::ast::column_reference(1);
+  auto rc  = cudf::ast::column_reference(2);
+  auto mul = cudf::ast::operation(cudf::ast::ast_operator::MUL, ra, rb);
+  auto add = cudf::ast::operation(cudf::ast::ast_operator::ADD, mul, rc);
+
+  // row 0: 1*10+5  = 15 (valid)
+  // row 1: null*10 = null → null+5 = null
+  // row 2: 3*10    = 30  → 30+null = null
+  // row 3: 4*10+5  = 45 (valid)
+  auto expected = column_wrapper<int32_t>{{15, 0, 0, 45}, {1, 0, 0, 1}};
+  auto result   = cudf::compute_column(table, add);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(DecimalTests, LessConsumesMulOfDecimalsWithNulls)
+{
+  using decimalXX = TypeParam;
+  using RepType   = cudf::device_storage_type_t<decimalXX>;
+
+  auto const scale = numeric::scale_type{-2};
+  // col_a  at scale=-2: {1.00, null, 5.00, 10.00}
+  // thresh at scale=-2: {0.20, 0.20, null, 0.20}
+  // avg    at scale=-2: {25.00, 25.00, 25.00, 25.00} (no nulls)
+  auto col_a =
+    cudf::test::fixed_point_column_wrapper<RepType>({100, 200, 500, 1000}, {1, 0, 1, 1}, scale);
+  auto col_thresh =
+    cudf::test::fixed_point_column_wrapper<RepType>({20, 20, 20, 20}, {1, 1, 0, 1}, scale);
+  auto col_avg = cudf::test::fixed_point_column_wrapper<RepType>({2500, 2500, 2500, 2500}, scale);
+  auto table   = cudf::table_view{{col_a, col_thresh, col_avg}};
+
+  auto ra  = cudf::ast::column_reference(0);
+  auto rt  = cudf::ast::column_reference(1);
+  auto rv  = cudf::ast::column_reference(2);
+  auto mul = cudf::ast::operation(cudf::ast::ast_operator::MUL, rt, rv);
+  auto lt  = cudf::ast::operation(cudf::ast::ast_operator::LESS, ra, mul);
+
+  // row 0: 1.00 < (0.20*25.00 = 5.00) → true
+  // row 1: col_a=null                  → null
+  // row 2: col_thresh=null → MUL=null  → null
+  // row 3: 10.00 < 5.00                → false
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0}, {1, 0, 0, 1});
+  auto result   = cudf::compute_column(table, lt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+  result = cudf::compute_column_jit(table, lt);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
 TYPED_TEST(TransformTest, NonDefaultStream)
 {
   // This test ensures that the algorithm is stream safe when a nondefault
@@ -1528,6 +1619,81 @@ TYPED_TEST(TransformTest, CastIntToDecimal64AllNulls)
 
   auto expected = cudf::test::fixed_point_column_wrapper<int64_t>(
     {0, 0, 0, 0}, {0, 0, 0, 0}, numeric::scale_type{-2});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastIntToDecimal64PositiveScale)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = column_wrapper<int32_t>{100, 200, 350, 450};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref = cudf::ast::column_reference(0);
+  // Positive scale means units of 10^scale (e.g., scale=2 means units of 100)
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, 2};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  // rep = value / 10^scale: 100/100=1, 200/100=2, 350/100=3 (truncated), 450/100=4 (truncated)
+  auto expected =
+    cudf::test::fixed_point_column_wrapper<int64_t>({1, 2, 3, 4}, numeric::scale_type{2});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastDecimalToDecimalSameScale)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = cudf::test::fixed_point_column_wrapper<int32_t>({1500, 2500, 3000, 4750},
+                                                             numeric::scale_type{-2});
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref   = cudf::ast::column_reference(0);
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, -2};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  auto expected = cudf::test::fixed_point_column_wrapper<int64_t>({1500, 2500, 3000, 4750},
+                                                                  numeric::scale_type{-2});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastDecimalToDecimalCrossScale)
+{
+  using Executor = TypeParam;
+
+  // Source: decimal32 with scale -1 (reps: 15, 25, 30, 47 => values: 1.5, 2.5, 3.0, 4.7)
+  auto c_0 =
+    cudf::test::fixed_point_column_wrapper<int32_t>({15, 25, 30, 47}, numeric::scale_type{-1});
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref = cudf::ast::column_reference(0);
+  // Target: decimal64 with scale -3 (values should keep same human value, different rep)
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, -3};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  // 1.5 * 10^3 = 1500, 2.5 * 10^3 = 2500, 3.0 * 10^3 = 3000, 4.7 * 10^3 = 4700
+  auto expected = cudf::test::fixed_point_column_wrapper<int64_t>({1500, 2500, 3000, 4700},
+                                                                  numeric::scale_type{-3});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
+}
+
+TYPED_TEST(TransformTest, CastFloatToDecimal64WithNulls)
+{
+  using Executor = TypeParam;
+
+  auto c_0   = column_wrapper<double>{{1.5, 2.25, 3.0, 4.75}, {1, 0, 1, 0}};
+  auto table = cudf::table_view{{c_0}};
+
+  auto col_ref   = cudf::ast::column_reference(0);
+  auto target    = cudf::data_type{cudf::type_id::DECIMAL64, -2};
+  auto cast_expr = cudf::ast::cast(col_ref, target);
+  auto result    = Executor::compute_column(table, cast_expr);
+
+  auto expected = cudf::test::fixed_point_column_wrapper<int64_t>(
+    {150, 0, 300, 0}, {1, 0, 1, 0}, numeric::scale_type{-2});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), verbosity);
 }
 
