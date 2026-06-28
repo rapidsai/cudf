@@ -16,8 +16,30 @@
 #include <cudf/types.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuda/iterator>
+
+namespace {
+
+template <typename Factory>
+void expect_list_output_uses_resource(Factory factory)
+{
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    auto column = factory(mr).release();
+    cudf::test::get_default_stream().synchronize();
+    auto const bytes = mr.get_bytes_counter();
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(bytes.value));
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(bytes.total));
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, mr.get_bytes_counter().value);
+}
+
+}  // namespace
 
 struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
 template <typename T>
@@ -32,6 +54,69 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_SUITE(ListColumnWrapperTestTyped, FixedWidthTypesNotBool);
+
+TEST_F(ListColumnWrapperTest, ExplicitMemoryResourceOverloadMatrix)
+{
+  using LCW = cudf::test::lists_column_wrapper<int32_t>;
+
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+
+  expect_list_output_uses_resource([](auto& mr) { return LCW(mr); });
+
+  expect_list_output_uses_resource(
+    [&](auto& mr) { return LCW(elements.begin(), elements.end(), mr); });
+
+  expect_list_output_uses_resource([](auto& mr) {
+    auto ref = rmm::device_async_resource_ref{mr};
+    return LCW({1, 2, 3, 4}, ref);
+  });
+
+  expect_list_output_uses_resource(
+    [&](auto& mr) { return LCW({1, 2, 3, 4}, validity.begin(), mr); });
+
+  expect_list_output_uses_resource(
+    [&](auto& mr) { return LCW(elements.begin(), elements.end(), validity.begin(), mr); });
+
+  expect_list_output_uses_resource(
+    [](auto& mr) { return LCW::make_one_empty_row_column(true, mr); });
+  expect_list_output_uses_resource(
+    [](auto& mr) { return LCW::make_one_empty_row_column(false, mr); });
+}
+
+TEST_F(ListColumnWrapperTest, StringLeavesUseExplicitMemoryResource)
+{
+  using LCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+
+  auto const validity = std::vector<bool>{true, false, true};
+
+  expect_list_output_uses_resource([](auto& mr) { return LCW({"one", "two", "three"}, mr); });
+
+  expect_list_output_uses_resource(
+    [&](auto& mr) { return LCW({"one", "two", "three"}, validity.begin(), mr); });
+}
+
+TEST_F(ListColumnWrapperTest, NestedOutputsUseExplicitMemoryResource)
+{
+  using LCW = cudf::test::lists_column_wrapper<int32_t>;
+
+  expect_list_output_uses_resource(
+    [](auto& mr) { return LCW(std::initializer_list<LCW>{LCW{1, 2}, LCW{}, LCW{3, 4, 5}}, mr); });
+
+  expect_list_output_uses_resource([](auto& mr) {
+    auto const validity = std::vector<bool>{true, false, true};
+    return LCW(std::initializer_list<LCW>{LCW{1, 2}, LCW{9, 10}, LCW{3, 4}}, validity.begin(), mr);
+  });
+
+  expect_list_output_uses_resource([](auto& mr) {
+    return LCW(
+      std::initializer_list<LCW>{
+        LCW(std::initializer_list<LCW>{LCW(std::initializer_list<LCW>{LCW{1, 2}})}),
+        LCW{},
+        LCW(std::initializer_list<LCW>{LCW{}})},
+      mr);
+  });
+}
 
 TYPED_TEST(ListColumnWrapperTestTyped, List)
 {
