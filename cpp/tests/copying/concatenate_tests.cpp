@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -803,8 +803,8 @@ TEST_F(StructsColumnTest, ConcatenateStructs)
   expected_children.push_back(cudf::concatenate(age_col_vec));
   expected_children.push_back(cudf::concatenate(is_human_col_vec));
   std::vector<bool> struct_validity({true, false, true, true, true, false});
-  auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(struct_validity.begin(), struct_validity.end());
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    struct_validity.begin(), struct_validity.end(), cudf::get_current_device_resource_ref());
   auto expected =
     make_structs_column(6, std::move(expected_children), null_count, std::move(null_mask));
 

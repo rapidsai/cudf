@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1470,8 +1470,9 @@ TEST_F(OrcWriterTest, TestMap)
   int32_col offsets(row_offsets.begin(), row_offsets.end());
 
   auto num_list_rows           = static_cast<cudf::column_view>(offsets).size() - 1;
-  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_list_rows);
-  auto list_col                = cudf::make_lists_column(
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    valids, valids + num_list_rows, cudf::get_current_device_resource_ref());
+  auto list_col = cudf::make_lists_column(
     num_list_rows, offsets.release(), std::move(s_col), null_count, std::move(null_mask));
 
   table_view expected({*list_col});

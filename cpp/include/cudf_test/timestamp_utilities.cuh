@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,11 +32,14 @@ using time_point_ms =
  * @param count The number of timestamps to create
  * @param start The first timestamp as a cuda::std::chrono::time_point
  * @param stop The last timestamp as a cuda::std::chrono::time_point
+ * @param mr Device memory resource used to allocate the returned column
  */
 template <typename T, bool nullable = false>
-inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(int32_t count,
-                                                                              time_point_ms start,
-                                                                              time_point_ms stop)
+inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(
+  int32_t count,
+  time_point_ms start,
+  time_point_ms stop,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   using Rep        = typename T::rep;
   using Period     = typename T::period;
@@ -57,10 +60,10 @@ inline cudf::test::fixed_width_column_wrapper<T, int64_t> generate_timestamps(in
   if (nullable) {
     auto mask =
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
-    return cudf::test::fixed_width_column_wrapper<T, int64_t>(iter, iter + count, mask);
+    return cudf::test::fixed_width_column_wrapper<T, int64_t>(iter, iter + count, mask, mr);
   } else {
     // This needs to be in an else to quash `statement_not_reachable` warnings
-    return cudf::test::fixed_width_column_wrapper<T, int64_t>(iter, iter + count);
+    return cudf::test::fixed_width_column_wrapper<T, int64_t>(iter, iter + count, mr);
   }
 }
 

@@ -66,7 +66,9 @@ auto write_file(std::vector<std::unique_ptr<cudf::column>>& input_columns,
     cudf::size_type offset{0};
     for (auto& col : input_columns) {
       auto const [null_mask, null_count] =
-        cudf::test::detail::make_null_mask(valid_iter + offset, valid_iter + col->size() + offset);
+        cudf::test::detail::make_null_mask(valid_iter + offset,
+                                           valid_iter + col->size() + offset,
+                                           cudf::get_current_device_resource_ref());
       col = cudf::structs::detail::superimpose_and_sanitize_nulls(
         static_cast<cudf::bitmask_type const*>(null_mask.data()),
         null_count,
@@ -1999,8 +2001,8 @@ TEST_F(ParquetReaderTest, BooleanList)
     auto offsets_iter = cuda::counting_iterator<cudf::size_type>{0};
     auto offsets_col  = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
       offsets_iter, offsets_iter + num_rows + 1);
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      list_valids, list_valids + num_rows, cudf::get_current_device_resource_ref());
     auto _col1 = cudf::make_lists_column(
       num_rows, offsets_col.release(), bools_col.release(), null_count, std::move(null_mask));
     auto col1 = cudf::purge_nonempty_nulls(*_col1);

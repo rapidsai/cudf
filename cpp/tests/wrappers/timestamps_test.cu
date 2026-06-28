@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,6 +22,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
@@ -63,6 +64,34 @@ struct compare_chrono_elements_to_primitive_representation {
   }
 };
 }  // namespace
+
+template <bool Nullable>
+void expect_timestamp_output_uses_resource()
+{
+  using namespace cuda::std::chrono;
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  {
+    auto column = cudf::test::generate_timestamps<cudf::timestamp_ms, Nullable>(
+                    100,
+                    cudf::test::time_point_ms{milliseconds{-1000}},
+                    cudf::test::time_point_ms{milliseconds{1000}},
+                    mr)
+                    .release();
+
+    cudf::test::get_default_stream().synchronize();
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(mr.get_bytes_counter().value));
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, mr.get_bytes_counter().value);
+}
+
+TEST(TimestampGeneratorMemoryResourceTest, ExplicitOutputResource)
+{
+  expect_timestamp_output_uses_resource<false>();
+  expect_timestamp_output_uses_resource<true>();
+}
 
 TYPED_TEST_SUITE(ChronoColumnTest, cudf::test::ChronoTypes);
 

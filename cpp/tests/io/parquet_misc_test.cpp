@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -91,7 +91,8 @@ TYPED_TEST(ParquetWriterDeltaTest, SupportedDeltaListSliced)
                                                                      c1_offset_iter + num_rows + 1);
   cudf::test::fixed_width_column_wrapper<T> c1_vals(
     values, values + (num_rows * vals_per_row), valids);
-  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    valids, valids + num_rows, cudf::get_current_device_resource_ref());
 
   auto _c1 = cudf::make_lists_column(
     num_rows, c1_offsets.release(), c1_vals.release(), null_count, std::move(null_mask));

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -525,8 +525,8 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   auto col1_offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto col1_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
     col1_offsets_iter, col1_offsets_iter + num_rows + 1);
-  auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    list_valids, list_valids + num_rows, cudf::get_current_device_resource_ref());
   auto col1 = cudf::make_lists_column(
     num_rows, col1_offsets_col.release(), std::move(struct1), null_count, std::move(null_mask));
 
@@ -554,8 +554,8 @@ TEST_F(HybridScanTest, MaterializeListsOfStructs)
   auto col2_offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto col2_offsets_col  = cudf::test::fixed_width_column_wrapper<int32_t>(
     col2_offsets_iter, col2_offsets_iter + num_rows + 1);
-  std::tie(null_mask, null_count) =
-    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
+    list_valids, list_valids + num_rows, cudf::get_current_device_resource_ref());
   auto col2 = cudf::make_lists_column(
     num_rows, col2_offsets_col.release(), std::move(struct2), null_count, std::move(null_mask));
 
@@ -598,8 +598,8 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   auto offsets_iter = cuda::counting_iterator<int32_t>{0};
   auto offsets_col =
     cudf::test::fixed_width_column_wrapper<int32_t>(offsets_iter, offsets_iter + num_rows + 1);
-  auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    list_valids, list_valids + num_rows, cudf::get_current_device_resource_ref());
   auto col2 = cudf::make_lists_column(
     num_rows, offsets_col.release(), bools_col.release(), null_count, std::move(null_mask));
   // list<list<bool(nullable)>(nullable)>(nullable)
@@ -617,7 +617,8 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
                                                                     offset_iter + num_rows + 1);
     auto [null_mask, null_count] = [&]() {
       if (is_nullable) {
-        return cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+        return cudf::test::detail::make_null_mask(
+          list_valids, list_valids + num_rows, cudf::get_current_device_resource_ref());
       } else {
         return std::make_pair(rmm::device_buffer{}, 0);
       }
@@ -666,7 +667,9 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> list_offsets(
     offset_iter, offset_iter + (num_rows * lists_per_list) + 1);
   std::tie(null_mask, null_count) =
-    cudf::test::detail::make_null_mask(list_valids, list_valids + (num_rows * lists_per_list));
+    cudf::test::detail::make_null_mask(list_valids,
+                                       list_valids + (num_rows * lists_per_list),
+                                       cudf::get_current_device_resource_ref());
 
   auto list_col = cudf::make_lists_column(num_rows * lists_per_list,
                                           list_offsets.release(),
@@ -680,8 +683,8 @@ TEST_F(HybridScanTest, MaterializeMixedPayloadColumns)
     list_list_offsets_iter, list_list_offsets_iter + num_rows + 1);
   auto list_list_valids =
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 80; });
-  std::tie(null_mask, null_count) =
-    cudf::test::detail::make_null_mask(list_list_valids, list_list_valids + num_rows);
+  std::tie(null_mask, null_count) = cudf::test::detail::make_null_mask(
+    list_list_valids, list_list_valids + num_rows, cudf::get_current_device_resource_ref());
 
   auto col9 = cudf::make_lists_column(
     num_rows, list_list_offsets.release(), std::move(list_col), null_count, std::move(null_mask));
