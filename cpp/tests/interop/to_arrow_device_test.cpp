@@ -19,9 +19,9 @@
 #include <cudf/types.hpp>
 
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, generated_test_data>
-get_nanoarrow_cudf_table(cudf::size_type length, rmm::device_async_resource_ref mr)
+get_nanoarrow_cudf_table(cudf::size_type length, cudf::memory_resources mr)
 {
-  auto const temporary_mr = cudf::get_current_device_resource_ref();
+  auto const temporary_mr = mr.get_temporary_mr();
   generated_test_data test_data(length);
 
   std::vector<std::unique_ptr<cudf::column>> columns;
@@ -39,7 +39,7 @@ get_nanoarrow_cudf_table(cudf::size_type length, rmm::device_async_resource_ref 
                                                               test_data.validity.begin(),
                                                               temporary_mr);
   columns.emplace_back(cudf::dictionary::encode(
-    col4, cudf::data_type{cudf::type_id::INT32}, cudf::get_default_stream(), mr));
+    col4, cudf::data_type{cudf::type_id::INT32}, cudf::get_default_stream(), mr.get_output_mr()));
   columns.emplace_back(
     cudf::test::fixed_width_column_wrapper<bool>(
       test_data.bool_data.begin(), test_data.bool_data.end(), test_data.bool_validity.begin(), mr)
@@ -53,7 +53,8 @@ get_nanoarrow_cudf_table(cudf::size_type length, rmm::device_async_resource_ref 
     test_data.list_offsets.begin(), test_data.list_offsets.end(), mr);
   auto list_validity = cudf::test::fixed_width_column_wrapper<bool>(
     test_data.list_validity.begin(), test_data.list_validity.end(), temporary_mr);
-  auto [list_mask, list_nulls] = cudf::bools_to_mask(list_validity, cudf::get_default_stream(), mr);
+  auto [list_mask, list_nulls] =
+    cudf::bools_to_mask(list_validity, cudf::get_default_stream(), mr.get_output_mr());
   columns.emplace_back(cudf::make_lists_column(length,
                                                list_offsets_column.release(),
                                                list_child_column.release(),
@@ -73,9 +74,13 @@ get_nanoarrow_cudf_table(cudf::size_type length, rmm::device_async_resource_ref 
   auto struct_validity = cudf::test::fixed_width_column_wrapper<bool>(
     test_data.bool_data_validity.begin(), test_data.bool_data_validity.end(), temporary_mr);
   auto [null_mask, null_count] =
-    cudf::bools_to_mask(struct_validity, cudf::get_default_stream(), mr);
-  columns.emplace_back(cudf::make_structs_column(
-    length, std::move(cols), null_count, std::move(*null_mask), cudf::get_default_stream(), mr));
+    cudf::bools_to_mask(struct_validity, cudf::get_default_stream(), mr.get_output_mr());
+  columns.emplace_back(cudf::make_structs_column(length,
+                                                 std::move(cols),
+                                                 null_count,
+                                                 std::move(*null_mask),
+                                                 cudf::get_default_stream(),
+                                                 mr.get_output_mr()));
 
   nanoarrow::UniqueSchema schema;
   ArrowSchemaInit(schema.get());
@@ -165,7 +170,7 @@ get_nanoarrow_cudf_table(cudf::size_type length, rmm::device_async_resource_ref 
 }
 
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
-get_nanoarrow_tables(cudf::size_type length, rmm::device_async_resource_ref mr)
+get_nanoarrow_tables(cudf::size_type length, cudf::memory_resources mr)
 {
   auto [table, schema, test_data] = get_nanoarrow_cudf_table(length, mr);
 

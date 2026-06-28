@@ -104,7 +104,7 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, bool>, void> populate_from_col(
   ArrowArray* arr,
   cudf::column_view view,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref())
 {
   arr->length     = view.size();
   arr->null_count = view.null_count();
@@ -115,7 +115,7 @@ std::enable_if_t<std::is_same_v<T, bool>, void> populate_from_col(
   ArrowArrayValidityBitmap(arr)->buffer.data =
     const_cast<uint8_t*>(reinterpret_cast<uint8_t const*>(view.null_mask()));
 
-  auto bitmask = cudf::bools_to_mask(view, cudf::get_default_stream(), mr);
+  auto bitmask = cudf::bools_to_mask(view, cudf::get_default_stream(), mr.get_output_mr());
   auto ptr     = reinterpret_cast<uint8_t*>(bitmask.first->data());
   NANOARROW_THROW_NOT_OK(ArrowBufferSetAllocator(
     ArrowArrayBuffer(arr, 1),
@@ -136,7 +136,7 @@ template <typename T>
 std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> populate_from_col(
   ArrowArray* arr,
   cudf::column_view view,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref())
 {
   arr->length     = view.size();
   arr->null_count = view.null_count();
@@ -156,17 +156,17 @@ std::enable_if_t<std::is_same_v<T, cudf::string_view>, void> populate_from_col(
     ArrowArrayBuffer(arr, 2)->size_bytes = sview.chars_size(cudf::get_default_stream());
     ArrowArrayBuffer(arr, 2)->data       = const_cast<uint8_t*>(view.data<uint8_t>());
   } else {
-    auto zero          = cudf::detail::device_scalar<int32_t>(0, cudf::get_default_stream(), mr);
+    auto zero =
+      cudf::detail::device_scalar<int32_t>(0, cudf::get_default_stream(), mr.get_output_mr());
     uint8_t const* ptr = reinterpret_cast<uint8_t*>(zero.data());
     nanoarrow::BufferInitWrapped(ArrowArrayBuffer(arr, 1), std::move(zero), ptr, 4);
   }
 }
 
 template <typename KEY_TYPE, typename IND_TYPE>
-void populate_dict_from_col(
-  ArrowArray* arr,
-  cudf::dictionary_column_view dview,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+void populate_dict_from_col(ArrowArray* arr,
+                            cudf::dictionary_column_view dview,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
 {
   arr->length     = dview.size();
   arr->null_count = dview.null_count();
@@ -194,23 +194,23 @@ using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
  * @brief Create equivalent cuDF and device-backed nanoarrow tables.
  *
  * @param length Number of rows to generate
- * @param mr Device memory resource used for returned device allocations
+ * @param mr Memory resources used for returned device allocations and helper temporaries
  * @return cuDF table, Arrow schema, and Arrow array
  */
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
-get_nanoarrow_tables(cudf::size_type length            = 10000,
-                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+get_nanoarrow_tables(cudf::size_type length    = 10000,
+                     cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 void populate_list_from_col(ArrowArray* arr, cudf::lists_column_view view);
 
 /**
  * @brief Create the standard cuDF table used by Arrow interop tests.
  *
- * @param mr Device memory resource used for returned table allocations
+ * @param mr Memory resources used for returned table allocations and helper temporaries
  * @return Generated cuDF table
  */
 std::unique_ptr<cudf::table> get_cudf_table(
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 template <typename T>
 struct nanoarrow_storage_type {};
@@ -420,25 +420,23 @@ nanoarrow::UniqueArray get_nanoarrow_list_array(std::initializer_list<T> data,
  * @brief Create a cuDF table, matching Arrow schema, and source host data.
  *
  * @param length Number of rows to generate
- * @param mr Device memory resource used for returned table allocations
+ * @param mr Memory resources used for returned table allocations and helper temporaries
  * @return cuDF table, Arrow schema, and generated host data
  */
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, generated_test_data>
-get_nanoarrow_cudf_table(
-  cudf::size_type length,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+get_nanoarrow_cudf_table(cudf::size_type length,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Create equivalent cuDF and host-backed nanoarrow tables.
  *
  * @param length Number of rows to generate
- * @param mr Device memory resource used for returned table allocations
+ * @param mr Memory resources used for returned table allocations and helper temporaries
  * @return cuDF table, Arrow schema, and Arrow array
  */
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
-get_nanoarrow_host_tables(
-  cudf::size_type length,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+get_nanoarrow_host_tables(cudf::size_type length,
+                          cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 void slice_host_nanoarrow(ArrowArray* arr, int64_t start, int64_t end);
 
@@ -492,9 +490,9 @@ void makeStreamFromArrays(std::vector<nanoarrow::UniqueArray> arrays,
  * @brief Create a cuDF table and equivalent nanoarrow stream.
  *
  * @param num_copies Number of record batches in the stream
- * @param mr Device memory resource used for returned table allocations
+ * @param mr Memory resources used for returned table allocations and helper temporaries
  * @return Concatenated cuDF table, Arrow schema, and Arrow stream
  */
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, ArrowArrayStream>
 get_nanoarrow_stream(int num_copies,
-                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                     cudf::memory_resources mr = cudf::get_current_device_resource_ref());

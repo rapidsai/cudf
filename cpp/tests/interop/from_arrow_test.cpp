@@ -27,9 +27,9 @@
 
 #include <arrow/c/bridge.h>
 
-std::unique_ptr<cudf::table> get_cudf_table(rmm::device_async_resource_ref mr)
+std::unique_ptr<cudf::table> get_cudf_table(cudf::memory_resources mr)
 {
-  auto const temporary_mr = cudf::get_current_device_resource_ref();
+  auto const temporary_mr = mr.get_temporary_mr();
   std::vector<std::unique_ptr<cudf::column>> columns;
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<int32_t>(
                          {1, 2, 5, 2, 7}, {true, false, true, true, true}, mr)
@@ -43,7 +43,8 @@ std::unique_ptr<cudf::table> get_cudf_table(rmm::device_async_resource_ref mr)
   auto keys = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 5, 7}, temporary_mr);
   auto indices =
     cudf::test::fixed_width_column_wrapper<int32_t>({0, 1, 2, 1, 3}, {1, 0, 1, 1, 1}, temporary_mr);
-  columns.emplace_back(cudf::make_dictionary_column(keys, indices, cudf::get_default_stream(), mr));
+  columns.emplace_back(
+    cudf::make_dictionary_column(keys, indices, cudf::get_default_stream(), mr.get_output_mr()));
 
   columns.emplace_back(cudf::test::fixed_width_column_wrapper<bool>(
                          {true, false, true, false, true}, {true, false, true, true, false}, mr)
