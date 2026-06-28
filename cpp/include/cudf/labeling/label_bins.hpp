@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -52,7 +52,7 @@ enum class inclusive { YES, NO };
  * @param right_edges Value of the right edge of each bin.
  * @param right_inclusive Whether or not the right edge is inclusive.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device.
+ * @param resources Memory resources used for the returned column and temporary allocations.
  * @return The integer labels of the elements in `input` according to the specified bins.
  */
 std::unique_ptr<column> label_bins(
@@ -61,8 +61,8 @@ std::unique_ptr<column> label_bins(
   inclusive left_inclusive,
   column_view const& right_edges,
   inclusive right_inclusive,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  rmm::cuda_stream_view stream     = cudf::get_default_stream(),
+  cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
 /** @} */  // end of group
 }  // namespace CUDF_EXPORT cudf
