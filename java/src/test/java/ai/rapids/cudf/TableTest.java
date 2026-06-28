@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -7848,9 +7848,31 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private static void assertSumWithOverflowResult(Table results,
+                                                  int[] expectedKeys,
+                                                  long[] expectedSums,
+                                                  boolean[] expectedOvf) {
+    ColumnVector structCol = results.getColumn(1);
+    assertEquals(DType.STRUCT, structCol.getType());
+    try (ColumnView ovfChild = structCol.getChildColumnView(1);
+         ColumnVector ovfCol = ovfChild.copyToColumnVector();
+         ColumnVector expectedKeyCol = ColumnVector.fromInts(expectedKeys);
+         ColumnVector expectedOvfCol = ColumnVector.fromBooleans(expectedOvf)) {
+      assertColumnsAreEqual(expectedKeyCol, results.getColumn(0));
+      assertColumnsAreEqual(expectedOvfCol, ovfCol);
+      if (expectedSums != null) {
+        try (ColumnView sumChild = structCol.getChildColumnView(0);
+             ColumnVector sumCol = sumChild.copyToColumnVector();
+             ColumnVector expectedSumCol = ColumnVector.fromLongs(expectedSums)) {
+          assertEquals(DType.INT64, sumCol.getType());
+          assertColumnsAreEqual(expectedSumCol, sumCol);
+        }
+      }
+    }
+  }
+
   @Test
   void testGroupByHashSumWithOverflow() {
-    // int64 keys 1, 2, 3 with values that fit comfortably in int64.
     try (Table input = new Table.TestBuilder()
              .column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
              .column(10L, 20L, 30L, 11L, 21L, 22L, 12L, 31L, 32L, 23L)
@@ -7860,28 +7882,13 @@ public class TableTest extends CudfTestBase {
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
       assertEquals(2, sorted.getNumberOfColumns());
       assertEquals(3, sorted.getRowCount());
-
-      ColumnVector keyCol = sorted.getColumn(0);
-      ColumnVector structCol = sorted.getColumn(1);
-      assertEquals(DType.STRUCT, structCol.getType());
-
-      try (ColumnView sumChild = structCol.getChildColumnView(0);
-           ColumnView ovfChild = structCol.getChildColumnView(1);
-           ColumnVector sumCol = sumChild.copyToColumnVector();
-           ColumnVector ovfCol = ovfChild.copyToColumnVector();
-           ColumnVector expectedKeys = ColumnVector.fromInts(1, 2, 3);
-           ColumnVector expectedSum = ColumnVector.fromLongs(33L, 86L, 93L);
-           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false, false)) {
-        assertColumnsAreEqual(expectedKeys, keyCol);
-        assertColumnsAreEqual(expectedSum, sumCol);
-        assertColumnsAreEqual(expectedOvf, ovfCol);
-      }
+      assertSumWithOverflowResult(sorted,
+          new int[]{1, 2, 3}, new long[]{33L, 86L, 93L}, new boolean[]{false, false, false});
     }
   }
 
   @Test
   void testGroupByHashSumWithOverflowDetectsOverflow() {
-    // Group 1 overflows (max + max), group 2 stays in range.
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
              .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
@@ -7889,12 +7896,7 @@ public class TableTest extends CudfTestBase {
          Table results = input.groupBy(0).aggregate(
              GroupByAggregation.sumWithOverflow().onColumn(1));
          Table sorted = results.orderBy(OrderByArg.asc(0))) {
-      ColumnVector structCol = sorted.getColumn(1);
-      try (ColumnView ovfChild = structCol.getChildColumnView(1);
-           ColumnVector ovfCol = ovfChild.copyToColumnVector();
-           ColumnVector expectedOvf = ColumnVector.fromBooleans(true, false)) {
-        assertColumnsAreEqual(expectedOvf, ovfCol);
-      }
+      assertSumWithOverflowResult(sorted, new int[]{1, 2}, null, new boolean[]{true, false});
     }
   }
 
@@ -7924,17 +7926,31 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testGroupBySortSumWithOverflowThrows() {
-    // Sort-based groupby (keysSorted=true forces the sort impl in cudf).
-    // SUM_WITH_OVERFLOW is hash-only, so cudf should throw.
-    GroupByOptions sortOpts = GroupByOptions.builder().withKeysSorted(true).build();
+  void testGroupBySortSumWithOverflow() {
     try (Table input = new Table.TestBuilder()
              .column(1, 1, 2, 2)
              .column(1L, 2L, 3L, 4L)
-             .build()) {
-      assertThrows(CudfException.class, () ->
-          input.groupBy(sortOpts, 0).aggregate(
-              GroupByAggregation.sumWithOverflow().onColumn(1)).close());
+             .build();
+         // median() is sort-only, so it forces the sort-based groupby path
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1),
+             GroupByAggregation.median().onColumn(1))) {
+      assertSumWithOverflowResult(results,
+          new int[]{1, 2}, new long[]{3L, 7L}, new boolean[]{false, false});
+    }
+  }
+
+  @Test
+  void testGroupBySortSumWithOverflowDetectsOverflow() {
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
+             .build();
+         // median() is sort-only, so it forces the sort-based groupby path
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumWithOverflow().onColumn(1),
+             GroupByAggregation.median().onColumn(1))) {
+      assertSumWithOverflowResult(results, new int[]{1, 2}, null, new boolean[]{true, false});
     }
   }
 

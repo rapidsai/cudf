@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -10,7 +10,7 @@ cdef class Table:
     # List[pylibcudf.Column]
     cdef public list _columns
 
-    cdef table_view view(self) nogil
+    cdef table_view view(self)
 
     cpdef int num_columns(self)
     cpdef int num_rows(self)
