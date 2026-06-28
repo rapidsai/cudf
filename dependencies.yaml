@@ -1036,7 +1036,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==3.0.*
+              - pandas==3.0.*,!=3.0.4
               - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
@@ -1682,7 +1682,7 @@ dependencies:
               pandas_compat_version: "3.0"
             packages:
               - numpy>=1.26,<2.0a0
-              - pandas==3.0.*
+              - pandas==3.0.*,!=3.0.4
           - matrix:
             packages:
       - output_types: requirements
