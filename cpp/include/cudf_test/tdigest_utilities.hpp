@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -65,12 +65,24 @@ inline T rand_range(T min, T max)
   return min + static_cast<T>(frand<T>() * (max - min));
 }
 
+/**
+ * @brief Generate a typed column from a bucketed percentile distribution.
+ *
+ * @param buckets Upper bound for each generated bucket
+ * @param sizes Number of values generated for each bucket
+ * @param t Data type of the returned column
+ * @param sorted Whether to sort the generated values before conversion
+ * @param mr Device memory resource used to allocate the returned column
+ * @return Generated column
+ */
 inline std::unique_ptr<column> generate_typed_percentile_distribution(
   std::vector<double> const& buckets,
   std::vector<int> const& sizes,
   data_type t,
-  bool sorted = false)
+  bool sorted                       = false,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  auto const temporary_mr = cudf::get_current_device_resource_ref();
   srand(0);
 
   std::vector<double> values;
@@ -87,8 +99,8 @@ inline std::unique_ptr<column> generate_typed_percentile_distribution(
 
   if (sorted) { std::sort(values.begin(), values.end()); }
 
-  cudf::test::fixed_width_column_wrapper<double> src(values.begin(), values.end());
-  return cudf::cast(src, t);
+  cudf::test::fixed_width_column_wrapper<double> src(values.begin(), values.end(), temporary_mr);
+  return cudf::cast(src, t, cudf::get_default_stream(), mr);
 }
 
 // "standardized" means the parameters sent into generate_typed_percentile_distribution. the intent
@@ -96,31 +108,56 @@ inline std::unique_ptr<column> generate_typed_percentile_distribution(
 // percentile_approx tests. std::vector<double>
 // buckets{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0}; std::vector<int>
 // sizes{50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
+/**
+ * @brief Generate the standardized percentile distribution used by T-digest tests.
+ *
+ * @param t Data type of the returned column
+ * @param sorted Whether to sort the generated values before conversion
+ * @param mr Device memory resource used to allocate the returned column
+ * @return Generated column
+ */
 inline std::unique_ptr<column> generate_standardized_percentile_distribution(
-  data_type t = data_type{type_id::FLOAT64}, bool sorted = false)
+  data_type t                       = data_type{type_id::FLOAT64},
+  bool sorted                       = false,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
   std::vector<double> buckets{10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0, 90.0f, 100.0f};
   std::vector<int> b_sizes{
     50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-  return generate_typed_percentile_distribution(buckets, b_sizes, t, sorted);
+  return generate_typed_percentile_distribution(buckets, b_sizes, t, sorted, mr);
 }
 
 /**
  * @brief Compare a tdigest column against a sampling of expected values.
+ *
+ * @param tdv T-digest column to validate
+ * @param h_expected Expected centroid index, mean, and weight tuples
+ * @param mr Device memory resource bridge for device allocations
  */
-void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
-                            std::vector<expected_value> const& h_expected);
+void tdigest_sample_compare(
+  cudf::tdigest::tdigest_column_view const& tdv,
+  std::vector<expected_value> const& h_expected,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Compare the min/max values of a tdigest against inputs.
+ *
+ * @tparam T Input element type
+ * @param tdv T-digest column to validate
+ * @param input_values Values whose extrema are expected in the T-digest
+ * @param mr Device memory resource bridge for device allocations
  */
 template <typename T>
-void tdigest_minmax_compare(cudf::tdigest::tdigest_column_view const& tdv,
-                            cudf::column_view const& input_values)
+void tdigest_minmax_compare(
+  cudf::tdigest::tdigest_column_view const& tdv,
+  cudf::column_view const& input_values,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
-  using ScalarType = cudf::scalar_type_t<T>;
+  static_cast<void>(mr);
+  auto const temporary_mr = cudf::get_current_device_resource_ref();
+  using ScalarType        = cudf::scalar_type_t<T>;
 
-  auto [col_min, col_max] = cudf::minmax(input_values);
+  auto [col_min, col_max] = cudf::minmax(input_values, cudf::get_default_stream(), temporary_mr);
 
   auto min_scalar   = static_cast<ScalarType*>(col_min.get());
   auto max_scalar   = static_cast<ScalarType*>(col_max.get());
@@ -148,13 +185,21 @@ struct expected_tdigest {
 
 /**
  * @brief Create an expected tdigest column given component inputs.
+ *
+ * @param groups T-digest component values for each output row
+ * @param mr Device memory resource used to allocate the returned column
+ * @return Expected T-digest column
  */
-std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdigest> const& groups);
+std::unique_ptr<column> make_expected_tdigest_column(
+  std::vector<expected_tdigest> const& groups,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 // shared test for groupby/reduction.
 template <typename T, typename Func>
-void tdigest_simple_aggregation(Func op)
+void tdigest_simple_aggregation(
+  Func op, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  auto const temporary_mr                     = cudf::get_current_device_resource_ref();
   bool is_cpu_cluster_computation_disabled[2] = {true, false};
   for (int idx = 0; idx < 2; idx++) {
     cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
@@ -162,29 +207,34 @@ void tdigest_simple_aggregation(Func op)
 
     // create a tdigest that has far fewer values in it than the delta value. this should result
     // in every value remaining uncompressed
-    cudf::test::fixed_width_column_wrapper<T> values{126, 15, 1, 99, 67};
+    cudf::test::fixed_width_column_wrapper<T> values({126, 15, 1, 99, 67}, temporary_mr);
     int const delta = 1000;
     auto result     = cudf::type_dispatcher(
       static_cast<column_view>(values).type(), tdigest_gen{}, op, values, delta);
 
-    cudf::test::fixed_width_column_wrapper<T> raw_mean({1, 15, 67, 99, 126});
-    cudf::test::fixed_width_column_wrapper<double> weight{1, 1, 1, 1, 1};
-    auto mean        = cudf::cast(raw_mean, data_type{type_id::FLOAT64});
+    cudf::test::fixed_width_column_wrapper<T> raw_mean({1, 15, 67, 99, 126}, temporary_mr);
+    cudf::test::fixed_width_column_wrapper<double> weight({1, 1, 1, 1, 1}, temporary_mr);
+    auto mean =
+      cudf::cast(raw_mean, data_type{type_id::FLOAT64}, cudf::get_default_stream(), temporary_mr);
     double const min = 1;
     double const max = 126;
     auto expected    = make_expected_tdigest_column({{*mean,
                                                       weight,
                                                       static_cast<double>(static_cast<T>(min)),
-                                                      static_cast<double>(static_cast<T>(max))}});
+                                                      static_cast<double>(static_cast<T>(max))}},
+                                                 temporary_mr);
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *result, *expected, cudf::test::debug_output_level::FIRST_ERROR, mr);
   }
 }
 
 // shared test for groupby/reduction.
 template <typename T, typename Func>
-void tdigest_simple_with_nulls_aggregation(Func op)
+void tdigest_simple_with_nulls_aggregation(
+  Func op, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  auto const temporary_mr                     = cudf::get_current_device_resource_ref();
   bool is_cpu_cluster_computation_disabled[2] = {true, false};
   for (int idx = 0; idx < 2; idx++) {
     cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
@@ -192,30 +242,35 @@ void tdigest_simple_with_nulls_aggregation(Func op)
 
     // create a tdigest that has far fewer values in it than the delta value. this should result
     // in every value remaining uncompressed
-    cudf::test::fixed_width_column_wrapper<T> values{{122, 15, 1, 99, 67, 101, 100, 84, 44, 2},
-                                                     {1, 0, 1, 0, 1, 0, 1, 0, 1, 0}};
+    cudf::test::fixed_width_column_wrapper<T> values(
+      {122, 15, 1, 99, 67, 101, 100, 84, 44, 2}, {1, 0, 1, 0, 1, 0, 1, 0, 1, 0}, temporary_mr);
     int const delta = 1000;
     auto result     = cudf::type_dispatcher(
       static_cast<column_view>(values).type(), tdigest_gen{}, op, values, delta);
 
-    cudf::test::fixed_width_column_wrapper<T> raw_mean({1, 44, 67, 100, 122});
-    cudf::test::fixed_width_column_wrapper<double> weight{1, 1, 1, 1, 1};
-    auto mean        = cudf::cast(raw_mean, data_type{type_id::FLOAT64});
+    cudf::test::fixed_width_column_wrapper<T> raw_mean({1, 44, 67, 100, 122}, temporary_mr);
+    cudf::test::fixed_width_column_wrapper<double> weight({1, 1, 1, 1, 1}, temporary_mr);
+    auto mean =
+      cudf::cast(raw_mean, data_type{type_id::FLOAT64}, cudf::get_default_stream(), temporary_mr);
     double const min = 1;
     double const max = 122;
     auto expected    = make_expected_tdigest_column({{*mean,
                                                       weight,
                                                       static_cast<double>(static_cast<T>(min)),
-                                                      static_cast<double>(static_cast<T>(max))}});
+                                                      static_cast<double>(static_cast<T>(max))}},
+                                                 temporary_mr);
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *result, *expected, cudf::test::debug_output_level::FIRST_ERROR, mr);
   }
 }
 
 // shared test for groupby/reduction.
 template <typename T, typename Func>
-void tdigest_simple_all_nulls_aggregation(Func op)
+void tdigest_simple_all_nulls_aggregation(
+  Func op, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  auto const temporary_mr                     = cudf::get_current_device_resource_ref();
   bool is_cpu_cluster_computation_disabled[2] = {true, false};
   for (int idx = 0; idx < 2; idx++) {
     cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
@@ -223,31 +278,37 @@ void tdigest_simple_all_nulls_aggregation(Func op)
 
     // create a tdigest that has far fewer values in it than the delta value. this should result
     // in every value remaining uncompressed
-    cudf::test::fixed_width_column_wrapper<T> values{{122, 15, 1, 99, 67, 101, 100, 84, 44, 2},
-                                                     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+    cudf::test::fixed_width_column_wrapper<T> values(
+      {122, 15, 1, 99, 67, 101, 100, 84, 44, 2}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, temporary_mr);
     int const delta = 1000;
     auto result     = cudf::type_dispatcher(
       static_cast<column_view>(values).type(), tdigest_gen{}, op, values, delta);
 
     // NOTE: an empty tdigest column still has 1 row.
     auto expected = cudf::tdigest::detail::make_empty_tdigests_column(
-      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      1, cudf::get_default_stream(), temporary_mr);
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *result, *expected, cudf::test::debug_output_level::FIRST_ERROR, mr);
   }
 }
 
 // Note: there is no need to test different types here as the internals of a tdigest are always
 // the same regardless of input.
 template <typename Func, typename MergeFunc>
-void tdigest_merge_simple(Func op, MergeFunc merge_op)
+void tdigest_merge_simple(
+  Func op,
+  MergeFunc merge_op,
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  auto const temporary_mr                     = cudf::get_current_device_resource_ref();
   bool is_cpu_cluster_computation_disabled[2] = {true, false};
   for (int idx = 0; idx < 2; idx++) {
     cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
       is_cpu_cluster_computation_disabled[idx];
 
-    auto values = generate_standardized_percentile_distribution(data_type{type_id::FLOAT64});
+    auto values = generate_standardized_percentile_distribution(
+      data_type{type_id::FLOAT64}, false, temporary_mr);
     CUDF_EXPECTS(values->size() == 750000, "Unexpected distribution size");
 
     auto split_values = cudf::split(*values, {250000, 500000});
@@ -272,7 +333,7 @@ void tdigest_merge_simple(Func op, MergeFunc merge_op)
       int const merge_delta = 1000;
 
       // merge them
-      auto merge_input = cudf::concatenate(part_views);
+      auto merge_input = cudf::concatenate(part_views, cudf::get_default_stream(), temporary_mr);
       auto result      = merge_op(*merge_input, merge_delta);
       cudf::tdigest::tdigest_column_view tdv(*result);
 
@@ -290,18 +351,20 @@ void tdigest_merge_simple(Func op, MergeFunc merge_op)
                                            {625, 98.20470345147104751504, 405},
                                            {700, 99.96818381983835877236, 56},
                                            {711, 99.99970905482754801596, 1}};
-      tdigest_sample_compare(tdv, expected);
+      tdigest_sample_compare(tdv, expected, mr);
 
       // verify min/max
-      tdigest_minmax_compare<double>(tdv, *values);
+      tdigest_minmax_compare<double>(tdv, *values, mr);
     }
   }
 }
 
 // shared test for groupby/reduction.
 template <typename MergeFunc>
-void tdigest_merge_empty(MergeFunc merge_op)
+void tdigest_merge_empty(
+  MergeFunc merge_op, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
 {
+  auto const temporary_mr                     = cudf::get_current_device_resource_ref();
   bool is_cpu_cluster_computation_disabled[2] = {true, false};
   for (int idx = 0; idx < 2; idx++) {
     cudf::tdigest::detail::is_cpu_cluster_computation_disabled =
@@ -309,24 +372,25 @@ void tdigest_merge_empty(MergeFunc merge_op)
 
     // 3 empty tdigests all in the same group
     auto a = cudf::tdigest::detail::make_empty_tdigests_column(
-      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      1, cudf::get_default_stream(), temporary_mr);
     auto b = cudf::tdigest::detail::make_empty_tdigests_column(
-      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      1, cudf::get_default_stream(), temporary_mr);
     auto c = cudf::tdigest::detail::make_empty_tdigests_column(
-      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      1, cudf::get_default_stream(), temporary_mr);
     std::vector<column_view> cols;
     cols.push_back(*a);
     cols.push_back(*b);
     cols.push_back(*c);
-    auto values = cudf::concatenate(cols);
+    auto values = cudf::concatenate(cols, cudf::get_default_stream(), temporary_mr);
 
     auto const delta = 1000;
     auto result      = merge_op(*values, delta);
 
     auto expected = cudf::tdigest::detail::make_empty_tdigests_column(
-      1, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+      1, cudf::get_default_stream(), temporary_mr);
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+      *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, mr);
   }
 }
 
