@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -359,19 +359,22 @@ class regex_parser {
       if (!is_quoted && chr == '-' && !literals.empty()) {
         auto [q, n_chr] = next_char();
         if (n_chr == 0) { return 0; }  // malformed: '[x-'
-
-        if (!q && n_chr == ']') {  // handles: '[x-]'
+        if (!q && n_chr == ']') {      // handles: '[x-]'
           literals.push_back(chr);
-          literals.push_back(chr);  // add '-' as literal
+          literals.push_back(0);
           break;
         }
-        // normal case: '[a-z]'
-        // update end-range character
-        literals.back() = n_chr;
+        if (0 == literals.back()) {
+          literals.back() = n_chr;  // normal case: '[a-z]' update end-range character
+        } else {
+          literals.push_back(chr);  // adds '-'
+          literals.push_back(chr);
+          literals.push_back(n_chr);  // adds new character
+          literals.push_back(0);
+        }
       } else {
-        // add single literal
         literals.push_back(chr);
-        literals.push_back(chr);
+        literals.push_back(0);
       }
       std::tie(is_quoted, chr) = next_char();
     }
@@ -382,8 +385,9 @@ class regex_parser {
                    counter + (literals.size() / 2),
                    std::back_inserter(ranges),
                    [&literals, this](auto idx) {
-                     auto const lhs = literals[idx * 2];
-                     auto const rhs = literals[idx * 2 + 1];
+                     auto const lhs  = literals[idx * 2];
+                     auto const next = literals[idx * 2 + 1];
+                     auto const rhs  = next == 0 ? lhs : next;
                      CUDF_EXPECTS(lhs <= rhs,
                                   "invalid character range in class at " +
                                     std::to_string(std::distance(_pattern_begin, _expr_ptr)));
@@ -1067,13 +1071,15 @@ reprog reprog::create_from(std::string_view pattern,
                            regex_flags const flags,
                            capture_groups const capture)
 {
-  reprog rtn;
+  reprog rtn(flags);
   auto pattern32 = string_to_char32_vector(pattern);
   regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
-  // for debugging, it can be helpful to call rtn.print(flags) here to dump
+  // for debugging, it can be helpful to call rtn.print() here to dump
   // out the instructions that have been created from the given pattern
   return rtn;
 }
+
+reprog::reprog(regex_flags flags) : _flags{flags} {}
 
 void reprog::optimize() { collapse_nops(); }
 
@@ -1243,9 +1249,9 @@ match_flags reprog::compute_match_flags() const
 }
 
 #ifndef NDEBUG
-void reprog::print(regex_flags const flags)
+void reprog::print() const
 {
-  printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
+  printf("Flags = 0x%08x\n", static_cast<uint32_t>(_flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
     reinst const& inst = _insts[i];

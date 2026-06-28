@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document StringFunction to remove noqa
 # ruff: noqa: D101
@@ -12,7 +12,7 @@ from datetime import datetime
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-from polars import Struct as pl_Struct
+from polars import Struct as pl_Struct  # noqa: TC002 (used in runtime cast())
 from polars.exceptions import InvalidOperationError
 
 import pylibcudf as plc
@@ -46,7 +46,7 @@ def _dtypes_for_json_decode(dtype: DataType) -> JsonDecodeType:
         return [
             (field.name, child.plc_type, _dtypes_for_json_decode(child))
             for field, child in zip(
-                cast(pl_Struct, dtype.polars_type).fields,
+                cast("pl_Struct", dtype.polars_type).fields,
                 dtype.children,
                 strict=True,
             )

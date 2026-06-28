@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -176,7 +176,7 @@ def _lexsorted_equal_range(
     )
     upper_bound = plc.copying.get_element(plc_upper_bound, 0).to_py()
 
-    return cast(int, lower_bound), cast(int, upper_bound), sort_inds
+    return cast("int", lower_bound), cast("int", upper_bound), sort_inds
 
 
 def _index_from_data(data: MutableMapping, name: Any = no_default):
@@ -835,12 +835,12 @@ class Index(SingleColumnFrame):
             common_dtype = find_common_type([self.dtype, other.dtype])
             res = self._get_reconciled_name_object(other).astype(common_dtype)
             if sort:
-                return res.sort_values()  # type: ignore[return-value]
+                return res.sort_values()
             return res
         elif not len(self):
             res = other._get_reconciled_name_object(self)
             if sort:
-                return res.sort_values()  # type: ignore[return-value]
+                return res.sort_values()
             return res
 
         result = self._union(other, sort=sort)
@@ -1049,7 +1049,7 @@ class Index(SingleColumnFrame):
         elif self.equals(other):
             res = self[:0]._get_reconciled_name_object(other).unique()
             if sort:
-                return res.sort_values()  # type: ignore[return-value]
+                return res.sort_values()
             return res
 
         res_name = _get_result_name(self.name, other.name)
@@ -1723,7 +1723,7 @@ class Index(SingleColumnFrame):
     def __sizeof__(self):
         return self.memory_usage(deep=True)
 
-    @cached_property  # type: ignore[explicit-override]
+    @cached_property
     @_performance_tracking
     def is_unique(self) -> bool:
         return self._column.is_unique
@@ -2481,7 +2481,7 @@ class RangeIndex(Index):
 
     @property
     @_performance_tracking
-    def _data(self) -> ColumnAccessor:
+    def _data(self) -> ColumnAccessor:  # type: ignore[override]  # (RangeIndex materializes data lazily)
         return ColumnAccessor({self.name: self._column}, verify=False)
 
     @property
@@ -2716,11 +2716,40 @@ class RangeIndex(Index):
         return cupy.arange(self.start, self.stop, self.step)
 
     @_performance_tracking
-    def to_numpy(self) -> np.ndarray:
+    def to_numpy(
+        self,
+        dtype: Dtype | None = None,
+        copy: bool = False,
+        na_value=None,
+    ) -> np.ndarray:
+        """Convert the RangeIndex to a NumPy array.
+
+        Parameters
+        ----------
+        dtype : str or :class:`numpy.dtype`, optional
+            The dtype to cast the result to. Defaults to the RangeIndex dtype.
+        copy : bool, default False
+            Whether to ensure that the returned value is not a view on
+            another array. Note that ``copy=False`` does not ensure that
+            ``to_numpy()`` is no-copy. Rather, ``copy=True`` ensures that
+            a copy is made, even if not strictly necessary.
+        na_value : Any, default None
+            Value to use for missing values. Since ``RangeIndex`` cannot
+            contain missing values, this parameter has no effect.
+
+        Returns
+        -------
+        numpy.ndarray
         """
-        Return a numpy array representation of the RangeIndex.
-        """
-        return np.arange(self.start, self.stop, self.step)
+        return (
+            self._to_numpy(dtype, na_value).copy()
+            if copy
+            else self._to_numpy(dtype, na_value)
+        )
+
+    @cache
+    def _to_numpy(self, dtype=None, na_value=None) -> np.ndarray:
+        return self.to_pandas().to_numpy(dtype=dtype, na_value=na_value)
 
     @_performance_tracking
     def to_cupy(self) -> cupy.ndarray:
@@ -3671,7 +3700,7 @@ class DatetimeIndex(Index):
 
     @property
     def freq(self) -> DateOffset | None:
-        return self._freq
+        return self._freq  # type: ignore[return-value]  # (validated setter stores DateOffset-compatible value)
 
     @freq.setter
     def freq(self, value) -> None:
@@ -5747,4 +5776,4 @@ def _validate_freq(freq: Any) -> DateOffset | MonthEnd | YearEnd | None:
         return freq
     elif freq is not None and not isinstance(freq, cudf.DateOffset):
         raise ValueError(f"Invalid frequency: {freq}")
-    return cast(cudf.DateOffset, freq)
+    return cast("cudf.DateOffset", freq)

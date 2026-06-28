@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Utility functions and classes for the RapidsMPF streaming runtime."""
 
@@ -18,14 +18,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import pylibcudf as plc
 import rmm.mr
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
@@ -69,6 +69,11 @@ if TYPE_CHECKING:
 
 InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
+
+# cuDF column/concatenate row limit (int32)
+CUDF_ROW_LIMIT = 2**31 - 1
+# Stay well below the cuDF row limit when forming a single table/partition.
+MAX_ROWS_PER_PARTITION = CUDF_ROW_LIMIT // 4
 
 
 class ChunkStore:
@@ -825,7 +830,7 @@ async def replay_buffered_channel(
 
 
 @dataclass(frozen=True)
-class NormalizedPartitioning:
+class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ even with custom __eq__)
     """
     Normalized view of channel partitioning for a set of key column indices.
 

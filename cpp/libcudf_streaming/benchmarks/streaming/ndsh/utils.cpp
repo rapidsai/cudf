@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,11 +8,12 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_metadata.hpp>
 
+#include <cudf_streaming/table_chunk.hpp>
+
 #include <rmm/aligned.hpp>
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/per_device_resource.hpp>
 
-#include <cudf_streaming/streaming/table_chunk.hpp>
 #include <getopt.h>
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
@@ -158,9 +159,8 @@ streaming::Actor consume_channel(std::shared_ptr<streaming::Context> ctx,
   while (true) {
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
-    if (msg.holds<cudf_streaming::streaming::TableChunk>()) {
-      auto chunk =
-        co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    if (msg.holds<cudf_streaming::table_chunk>()) {
+      auto chunk = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
       ctx->logger()->print("Consumed chunk with ",
                            chunk.table_view().num_rows(),
                            " rows and ",
