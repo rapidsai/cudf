@@ -50,6 +50,29 @@ void expect_complete_struct_output_uses_resource(Factory factory)
   EXPECT_EQ(0, mr.get_bytes_counter().value);
 }
 
+template <typename Factory>
+void expect_complete_struct_output_uses_distinct_resources(Factory factory)
+{
+  auto upstream     = cudf::get_current_device_resource_ref();
+  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
+  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
+
+  {
+    auto column = factory(cudf::memory_resources{output_mr, temporary_mr}).release();
+    cudf::test::get_default_stream().synchronize();
+    auto const output_bytes    = output_mr.get_bytes_counter();
+    auto const temporary_bytes = temporary_mr.get_bytes_counter();
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.value));
+    EXPECT_GE(output_bytes.total, output_bytes.value);
+    EXPECT_EQ(0, temporary_bytes.value);
+    EXPECT_EQ(0, temporary_bytes.total);
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
+}
+
 }  // namespace
 
 struct StructColumnWrapperTest : public cudf::test::BaseFixture {};
@@ -82,6 +105,16 @@ TEST_F(StructColumnWrapperTest, CopiedChildrenUseExplicitMemoryResource)
   expect_complete_struct_output_uses_resource([&](auto& mr) {
     return cudf::test::structs_column_wrapper({integers, strings}, validity.begin(), mr);
   });
+}
+
+TEST_F(StructColumnWrapperTest, CopiedChildrenUseDistinctResources)
+{
+  auto integers = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+  auto strings  = cudf::test::strings_column_wrapper{"one", "two", "three", "four"};
+  auto validity = std::vector<bool>{true, false, true, true};
+
+  expect_complete_struct_output_uses_distinct_resources(
+    [&](auto mr) { return cudf::test::structs_column_wrapper({integers, strings}, validity, mr); });
 }
 
 TEST_F(StructColumnWrapperTest, AdoptedChildrenRetainResourceProvenance)

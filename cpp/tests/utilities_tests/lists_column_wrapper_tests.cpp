@@ -39,6 +39,33 @@ void expect_list_output_uses_resource(Factory factory)
   EXPECT_EQ(0, mr.get_bytes_counter().value);
 }
 
+template <typename Factory>
+void expect_list_output_uses_distinct_resources(Factory factory, bool expect_temporary_allocations)
+{
+  auto upstream     = cudf::get_current_device_resource_ref();
+  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
+  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
+
+  {
+    auto column = factory(cudf::memory_resources{output_mr, temporary_mr}).release();
+    cudf::test::get_default_stream().synchronize();
+    auto const output_bytes    = output_mr.get_bytes_counter();
+    auto const temporary_bytes = temporary_mr.get_bytes_counter();
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.value));
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.total));
+    EXPECT_EQ(0, temporary_bytes.value);
+    if (expect_temporary_allocations) {
+      EXPECT_GT(temporary_bytes.total, 0);
+    } else {
+      EXPECT_EQ(0, temporary_bytes.total);
+    }
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
+}
+
 }  // namespace
 
 struct ListColumnWrapperTest : public cudf::test::BaseFixture {};
@@ -116,6 +143,32 @@ TEST_F(ListColumnWrapperTest, NestedOutputsUseExplicitMemoryResource)
         LCW(std::initializer_list<LCW>{LCW{}})},
       mr);
   });
+}
+
+TEST_F(ListColumnWrapperTest, FlatOutputUsesDistinctResources)
+{
+  using LCW = cudf::test::lists_column_wrapper<int32_t>;
+
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+
+  expect_list_output_uses_distinct_resources(
+    [&](auto mr) { return LCW(elements.begin(), elements.end(), validity.begin(), mr); }, false);
+}
+
+TEST_F(ListColumnWrapperTest, NormalizedHierarchyUsesTemporaryResource)
+{
+  using LCW = cudf::test::lists_column_wrapper<int32_t>;
+
+  expect_list_output_uses_distinct_resources(
+    [](auto mr) {
+      return LCW(
+        std::initializer_list<LCW>{
+          LCW(std::initializer_list<LCW>{LCW(std::initializer_list<LCW>{LCW{1, 2}})}),
+          LCW(std::initializer_list<LCW>{LCW{}})},
+        mr);
+    },
+    true);
 }
 
 TYPED_TEST(ListColumnWrapperTestTyped, List)

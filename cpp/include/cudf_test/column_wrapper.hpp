@@ -1480,11 +1480,11 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename Element = T, std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
   lists_column_wrapper(std::initializer_list<SourceElementT> elements,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1505,14 +1505,14 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param begin Beginning of the sequence
    * @param end End of the sequence
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename Element = T,
             typename InputIterator,
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
   lists_column_wrapper(InputIterator begin,
                        InputIterator end,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1533,16 +1533,16 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param v The validity iterator
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename Element = T,
-            typename ValidityIterator,
-            std::enable_if_t<
-              cudf::is_fixed_width<Element>() &&
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
+  template <
+    typename Element = T,
+    typename ValidityIterator,
+    std::enable_if_t<cudf::is_fixed_width<Element>() &&
+                     !std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
   lists_column_wrapper(std::initializer_list<SourceElementT> elements,
                        ValidityIterator v,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1565,18 +1565,18 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @param begin Beginning of the sequence
    * @param end End of the sequence
    * @param v The validity iterator
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename Element = T,
-            typename InputIterator,
-            typename ValidityIterator,
-            std::enable_if_t<
-              cudf::is_fixed_width<Element>() &&
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
+  template <
+    typename Element = T,
+    typename InputIterator,
+    typename ValidityIterator,
+    std::enable_if_t<cudf::is_fixed_width<Element>() &&
+                     !std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
   lists_column_wrapper(InputIterator begin,
                        InputIterator end,
                        ValidityIterator v,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1595,12 +1595,12 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename Element                                              = T,
             std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
   lists_column_wrapper(std::initializer_list<std::string> elements,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1621,16 +1621,16 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param v The validity iterator
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename Element = T,
-            typename ValidityIterator,
-            std::enable_if_t<
-              std::is_same_v<Element, cudf::string_view> &&
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
+  template <
+    typename Element = T,
+    typename ValidityIterator,
+    std::enable_if_t<std::is_same_v<Element, cudf::string_view> &&
+                     !std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
   lists_column_wrapper(std::initializer_list<std::string> elements,
                        ValidityIterator v,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
@@ -1657,10 +1657,10 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     std::vector<bool> valids;
@@ -1683,15 +1683,10 @@ class lists_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Construct an empty lists column on the specified resource
    *
-   * @tparam Resource Device memory resource type
-   * @param resource Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <
-    typename Resource,
-    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
-  explicit lists_column_wrapper(Resource&& resource) : column_wrapper{}
+  explicit lists_column_wrapper(cudf::memory_resources mr) : column_wrapper{}
   {
-    auto const mr = rmm::device_async_resource_ref{resource};
     build_from_non_nested(make_empty_column(cudf::type_to_id<T>()), mr);
   }
 
@@ -1719,14 +1714,14 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param v The validity iterator
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename ValidityIterator,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
+  template <
+    typename ValidityIterator,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
   lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
                        ValidityIterator v,
-                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+                       cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     std::vector<bool> validity;
@@ -1742,11 +1737,11 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @brief Construct a list column containing a single empty, optionally null row.
    *
    * @param valid Whether or not the empty row is also null
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    * @return A list column containing a single empty row
    */
   static lists_column_wrapper<T> make_one_empty_row_column(
-    bool valid = true, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    bool valid = true, cudf::memory_resources mr = cudf::get_current_device_resource_ref())
   {
     cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets({0, 0}, mr);
     cudf::test::fixed_width_column_wrapper<int> values(mr);
@@ -1755,9 +1750,10 @@ class lists_column_wrapper : public detail::column_wrapper {
       offsets.release(),
       values.release(),
       valid ? 0 : 1,
-      valid ? rmm::device_buffer{}
-            : cudf::create_null_mask(
-                1, cudf::mask_state::ALL_NULL, cudf::test::get_default_stream(), mr),
+      valid
+        ? rmm::device_buffer{}
+        : cudf::create_null_mask(
+            1, cudf::mask_state::ALL_NULL, cudf::test::get_default_stream(), mr.get_output_mr()),
       mr);
   }
 
@@ -1770,14 +1766,14 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @param values The column of values bounded by the offsets
    * @param null_count The number of null list entries
    * @param null_mask The bits specifying the null lists in device memory
-   * @param mr Device memory resource associated with the adopted constituent parts
+   * @param mr Memory resources associated with the adopted constituent parts
    */
   lists_column_wrapper(size_type num_rows,
                        std::unique_ptr<cudf::column>&& offsets,
                        std::unique_ptr<cudf::column>&& values,
                        size_type null_count,
                        rmm::device_buffer&& null_mask,
-                       rmm::device_async_resource_ref mr)
+                       cudf::memory_resources mr)
   {
     static_cast<void>(mr);
     // construct the list column
@@ -1799,12 +1795,12 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements Input columns to be wrapped
    * @param v The validity of each row
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    *
    */
   void build_from_nested(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
                          std::vector<bool> const& v,
-                         rmm::device_async_resource_ref mr)
+                         cudf::memory_resources mr)
   {
     auto valids = cudf::detail::make_counting_transform_iterator(
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
@@ -1821,7 +1817,7 @@ class lists_column_wrapper : public detail::column_wrapper {
     int32_t const expected_depth   = hierarchy_and_depth.second;
 
     // preprocess columns so that every column_view in 'cols' is an equivalent hierarchy
-    auto [cols, stubs] = preprocess_columns(elements, expected_hierarchy, expected_depth);
+    auto [cols, stubs] = preprocess_columns(elements, expected_hierarchy, expected_depth, mr);
 
     // generate offsets
     size_type count = 0;
@@ -1850,9 +1846,10 @@ class lists_column_wrapper : public detail::column_wrapper {
                     std::back_inserter(children),
                     cuda::std::identity{});
 
-    auto data = children.empty()
-                  ? cudf::empty_like(expected_hierarchy)
-                  : cudf::concatenate(children, cudf::test::get_default_stream(), mr);
+    auto data =
+      children.empty()
+        ? cudf::empty_like(expected_hierarchy)
+        : cudf::concatenate(children, cudf::test::get_default_stream(), mr.get_output_mr());
 
     // increment depth
     depth = expected_depth + 1;
@@ -1872,10 +1869,10 @@ class lists_column_wrapper : public detail::column_wrapper {
    * will be "unwrapped" when used in the nesting (list of lists) case.
    *
    * @param c Input column to be wrapped
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    *
    */
-  void build_from_non_nested(std::unique_ptr<column> c, rmm::device_async_resource_ref mr)
+  void build_from_non_nested(std::unique_ptr<column> c, cudf::memory_resources mr)
   {
     CUDF_EXPECTS(c->type().id() == type_id::EMPTY || !cudf::is_nested(c->type()),
                  "Unexpected type");
@@ -1929,11 +1926,13 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param col Input column to be normalized
    * @param expected_hierarchy Input column which represents the expected hierarchy
+   * @param mr Memory resources used for temporary normalized copies
    *
    * @return A new column representing a normalized copy of col
    */
   std::unique_ptr<column> normalize_column(column_view const& col,
-                                           column_view const& expected_hierarchy)
+                                           column_view const& expected_hierarchy,
+                                           cudf::memory_resources mr)
   {
     // if are at the bottom of the short column, it must be empty
     if (col.type().id() != type_id::LIST) {
@@ -1947,18 +1946,18 @@ class lists_column_wrapper : public detail::column_wrapper {
     return make_lists_column(
       col.size(),
       std::make_unique<column>(
-        lcv.offsets(), cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
-      normalize_column(lists_column_view(col).child(),
-                       lists_column_view(expected_hierarchy).child()),
+        lcv.offsets(), cudf::test::get_default_stream(), mr.get_temporary_mr()),
+      normalize_column(
+        lists_column_view(col).child(), lists_column_view(expected_hierarchy).child(), mr),
       col.null_count(),
-      cudf::copy_bitmask(
-        col, cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()));
+      cudf::copy_bitmask(col, cudf::test::get_default_stream(), mr.get_temporary_mr()));
   }
 
   std::pair<std::vector<column_view>, std::vector<std::unique_ptr<column>>> preprocess_columns(
     std::initializer_list<lists_column_wrapper<T, SourceElementT>> const& elements,
     column_view& expected_hierarchy,
-    int expected_depth)
+    int expected_depth,
+    cudf::memory_resources mr)
   {
     std::vector<std::unique_ptr<column>> stubs;
     std::vector<column_view> cols;
@@ -1990,7 +1989,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                          CUDF_EXPECTS(l.wrapped->size() == 0, "Mismatch in column types!");
                          stubs.push_back(empty_like(expected_hierarchy));
                        } else {
-                         stubs.push_back(normalize_column(l.get_view(), expected_hierarchy));
+                         stubs.push_back(normalize_column(l.get_view(), expected_hierarchy, mr));
                        }
                        return *(stubs.back());
                      }
@@ -2040,17 +2039,16 @@ class structs_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * The existing allocations in adopted child columns retain their original memory-resource
-   * provenance. The supplied resource controls the struct null mask and any child allocations
-   * created while sanitizing null struct rows.
+   * provenance. The supplied output resource controls the struct null mask and any child
+   * allocations created while sanitizing null struct rows.
    *
    * @param child_columns The vector of pre-constructed child columns
    * @param validity The vector of bools representing the column validity values
-   * @param mr Device memory resource used for new allocations owned by the returned column
+   * @param mr Memory resources used for new allocations owned by the returned column
    */
-  structs_column_wrapper(
-    std::vector<std::unique_ptr<cudf::column>>&& child_columns,
-    std::vector<bool> const& validity = {},
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
+                         std::vector<bool> const& validity = {},
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref())
   {
     init(std::move(child_columns), validity, mr);
   }
@@ -2058,17 +2056,12 @@ class structs_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Constructs a struct column by adopting child columns with no parent nulls.
    *
-   * @tparam Resource Device memory resource type
    * @param child_columns The vector of pre-constructed child columns
-   * @param resource Device memory resource used for new allocations owned by the returned column
+   * @param mr Memory resources used for new allocations owned by the returned column
    */
-  template <
-    typename Resource,
-    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
   structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
-                         Resource&& resource)
-    : structs_column_wrapper(
-        std::move(child_columns), std::vector<bool>{}, rmm::device_async_resource_ref{resource})
+                         cudf::memory_resources mr)
+    : structs_column_wrapper(std::move(child_columns), std::vector<bool>{}, mr)
   {
   }
 
@@ -2090,16 +2083,16 @@ class structs_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * Child wrappers are deep-copied, so all allocations in the returned children use the supplied
-   * resource. The source wrappers retain their original allocations.
+   * output resource. The source wrappers retain their original allocations.
    *
    * @param child_column_wrappers The list of child column wrappers
    * @param validity The vector of bools representing the column validity values
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
     std::vector<bool> const& validity = {},
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    cudf::memory_resources mr         = cudf::get_current_device_resource_ref())
   {
     std::vector<std::unique_ptr<cudf::column>> child_columns;
     child_columns.reserve(child_column_wrappers.size());
@@ -2108,7 +2101,7 @@ class structs_column_wrapper : public detail::column_wrapper {
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
                      return std::make_unique<cudf::column>(
-                       column_wrapper.get(), cudf::test::get_default_stream(), mr);
+                       column_wrapper.get(), cudf::test::get_default_stream(), mr.get_output_mr());
                    });
     init(std::move(child_columns), validity, mr);
   }
@@ -2116,18 +2109,13 @@ class structs_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Constructs a struct column by copying child wrappers with no parent nulls.
    *
-   * @tparam Resource Device memory resource type
    * @param child_column_wrappers The list of child column wrappers
-   * @param resource Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <
-    typename Resource,
-    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
-    Resource&& resource)
-    : structs_column_wrapper(
-        child_column_wrappers, std::vector<bool>{}, rmm::device_async_resource_ref{resource})
+    cudf::memory_resources mr)
+    : structs_column_wrapper(child_column_wrappers, std::vector<bool>{}, mr)
   {
   }
 
@@ -2150,14 +2138,14 @@ class structs_column_wrapper : public detail::column_wrapper {
    *
    * @param child_column_wrappers The list of child column wrappers
    * @param validity_iter Iterator returning the per-row validity bool
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename V,
-            std::enable_if_t<!std::is_convertible_v<V&, rmm::device_async_resource_ref>>* = nullptr>
+            std::enable_if_t<!std::is_convertible_v<V&, cudf::memory_resources>>* = nullptr>
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
     V validity_iter,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    cudf::memory_resources mr = cudf::get_current_device_resource_ref())
   {
     std::vector<std::unique_ptr<cudf::column>> child_columns;
     child_columns.reserve(child_column_wrappers.size());
@@ -2166,7 +2154,7 @@ class structs_column_wrapper : public detail::column_wrapper {
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
                      return std::make_unique<cudf::column>(
-                       column_wrapper.get(), cudf::test::get_default_stream(), mr);
+                       column_wrapper.get(), cudf::test::get_default_stream(), mr.get_output_mr());
                    });
     init(std::move(child_columns), validity_iter, mr);
   }
@@ -2174,7 +2162,7 @@ class structs_column_wrapper : public detail::column_wrapper {
  private:
   void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
             std::vector<bool> const& validity,
-            rmm::device_async_resource_ref mr)
+            cudf::memory_resources mr)
   {
     size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
@@ -2196,13 +2184,13 @@ class structs_column_wrapper : public detail::column_wrapper {
                                         null_count,
                                         std::move(null_mask),
                                         cudf::test::get_default_stream(),
-                                        mr);
+                                        mr.get_output_mr());
   }
 
   template <typename V>
   void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
             V validity_iterator,
-            rmm::device_async_resource_ref mr)
+            cudf::memory_resources mr)
   {
     size_type const num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
