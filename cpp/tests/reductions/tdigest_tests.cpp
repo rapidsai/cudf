@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/reduction.hpp>
+
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 template <typename T>
 struct ReductionTDigestAllTypes : public cudf::test::BaseFixture {};
@@ -75,6 +77,40 @@ struct ReductionTDigestMerge : public cudf::test::BaseFixture {};
 TEST_F(ReductionTDigestMerge, Simple)
 {
   cudf::test::tdigest_merge_simple(reduce_op{}, reduce_merge_op{});
+}
+
+TEST_F(ReductionTDigestMerge, TestUtilityMemoryResourceControl)
+{
+  auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    auto distribution = cudf::test::generate_typed_percentile_distribution(
+      {10.0}, {4}, cudf::data_type{cudf::type_id::FLOAT64}, false, output_mr);
+    cudf::test::get_default_stream().synchronize();
+    EXPECT_GT(output_mr.get_bytes_counter().value, 0);
+  }
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(output_mr.get_bytes_counter().value, 0);
+
+  cudf::test::fixed_width_column_wrapper<double> means{1.0, 2.0};
+  cudf::test::fixed_width_column_wrapper<double> weights{1.0, 1.0};
+  auto validation_mr =
+    rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    auto expected =
+      cudf::test::make_expected_tdigest_column({{means, weights, 1.0, 2.0}}, output_mr);
+    cudf::tdigest::tdigest_column_view tdv(*expected);
+    cudf::test::tdigest_sample_compare(tdv, {{0, 1.0, 1.0}, {1, 2.0, 1.0}}, validation_mr);
+    cudf::test::tdigest_minmax_compare<double>(tdv, means, validation_mr);
+
+    cudf::test::get_default_stream().synchronize();
+    EXPECT_GT(output_mr.get_bytes_counter().value, 0);
+    EXPECT_EQ(validation_mr.get_bytes_counter().value, 0);
+    EXPECT_EQ(validation_mr.get_bytes_counter().total, 0);
+  }
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(output_mr.get_bytes_counter().value, 0);
 }
 
 // tests an issue with the cluster generating code with a small number of centroids that have large
