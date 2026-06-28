@@ -413,6 +413,24 @@ cudf::test::structs_column_wrapper wrapper{
 auto struct_col {wrapper.release()};
 ```
 
+### Explicit memory resource control
+
+Reusable test utilities that allocate device memory accept a trailing `rmm::device_async_resource_ref`. The argument defaults to `cudf::get_current_device_resource_ref()`, so existing calls keep their behavior. Pass an explicit resource when a test needs to account for or isolate the device memory owned by generated inputs and expected results.
+
+The resource controls allocations that are part of the utility's returned object. Inputs created only for a nested operation and other intermediate allocations use the current device resource. Utilities that adopt existing child columns preserve those children's resource provenance; the explicit resource applies only to allocations the utility itself creates.
+
+```c++
+auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+cudf::test::fixed_width_column_wrapper<int32_t> expected({1, 2, 3}, output_mr);
+cudf::test::fixed_width_column_wrapper<int32_t> actual({1, 2, 3}, output_mr);
+
+CUDF_TEST_EXPECT_COLUMNS_EQUAL(
+  expected, actual, cudf::test::debug_output_level::FIRST_ERROR, output_mr);
+```
+
+Comparison, host-conversion, and debug utilities also accept a trailing resource bridge. They do not return device allocations, so their internal device scratch continues to use the current device resource. Metadata-only utilities that do not touch device memory do not accept a resource.
+
 ### Column Comparison Utilities
 
 A common operation in testing is verifying that two columns are equal, or equivalent, or that they

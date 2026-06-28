@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,6 +13,8 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_checks.hpp>
+
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 struct FromArrowStreamTest : public cudf::test::BaseFixture {};
 
@@ -29,14 +31,15 @@ void makeStreamFromArrays(std::vector<nanoarrow::UniqueArray> arrays,
 }
 
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, ArrowArrayStream>
-get_nanoarrow_stream(int num_copies)
+get_nanoarrow_stream(int num_copies, rmm::device_async_resource_ref mr)
 {
+  auto const temporary_mr = cudf::get_current_device_resource_ref();
   std::vector<std::unique_ptr<cudf::table>> tables;
   // The schema is unique across all tables.
   nanoarrow::UniqueSchema schema;
   std::vector<nanoarrow::UniqueArray> arrays;
   for (auto i = 0; i < num_copies; ++i) {
-    auto [tbl, sch, arr] = get_nanoarrow_host_tables(3);
+    auto [tbl, sch, arr] = get_nanoarrow_host_tables(3, temporary_mr);
     tables.push_back(std::move(tbl));
     arrays.push_back(std::move(arr));
     if (i == 0) { sch.move(schema.get()); }
@@ -45,7 +48,7 @@ get_nanoarrow_stream(int num_copies)
   for (auto const& table : tables) {
     table_views.push_back(table->view());
   }
-  auto expected = cudf::concatenate(table_views);
+  auto expected = cudf::concatenate(table_views, cudf::get_default_stream(), mr);
 
   ArrowArrayStream stream;
   makeStreamFromArrays(std::move(arrays), std::move(schema), &stream);
@@ -85,6 +88,27 @@ TEST_F(FromArrowStreamTest, BasicTest)
 
   auto result = cudf::from_arrow_stream(&stream);
   CUDF_TEST_EXPECT_TABLES_EQUAL(tbl->view(), result->view());
+}
+
+TEST_F(FromArrowStreamTest, TestUtilityMemoryResourceControl)
+{
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    auto direct_table                                   = get_cudf_table(mr);
+    auto [generated_table, generated_schema, test_data] = get_nanoarrow_cudf_table(3, mr);
+    auto [device_table, device_schema, device_array]    = get_nanoarrow_tables(0, mr);
+    auto [host_table, host_schema, host_array]          = get_nanoarrow_host_tables(3, mr);
+    auto [stream_table, stream_schema, stream]          = get_nanoarrow_stream(2, mr);
+
+    cudf::get_default_stream().synchronize();
+    EXPECT_GT(mr.get_bytes_counter().value, 0);
+
+    if (stream.release != nullptr) { stream.release(&stream); }
+  }
+
+  cudf::get_default_stream().synchronize();
+  EXPECT_EQ(mr.get_bytes_counter().value, 0);
 }
 
 TEST_F(FromArrowStreamTest, EmptyTest)
