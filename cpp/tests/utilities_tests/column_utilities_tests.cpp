@@ -6,16 +6,22 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/debug_utilities.hpp>
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
 #include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
+
+#include <sstream>
 
 template <typename T>
 struct ColumnUtilitiesTest : public cudf::test::BaseFixture {
@@ -139,6 +145,48 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
+}
+
+TEST_F(ColumnUtilitiesEquivalenceTest, ExplicitMemoryResourceBridge)
+{
+  cudf::test::fixed_width_column_wrapper<int32_t> lhs{1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<int32_t> rhs{1, 2, 3, 4};
+  cudf::test::fixed_width_column_wrapper<int32_t> nullable({1, 2, 3, 4}, {true, false, true, true});
+  cudf::test::strings_column_wrapper strings{"one", "two", "three", "four"};
+  cudf::test::fixed_point_column_wrapper<int32_t> decimals({123, 456}, numeric::scale_type{-2});
+  cudf::column_view const lhs_view = lhs;
+  cudf::column_view const rhs_view = rhs;
+  auto const sliced                = cudf::slice(nullable, {1, 4}).front();
+  auto const table                 = cudf::table_view{{lhs_view, rhs_view}};
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs, cudf::test::debug_output_level::QUIET, mr);
+  CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(
+    lhs, rhs, cudf::test::debug_output_level::QUIET, mr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(lhs, rhs, cudf::test::debug_output_level::QUIET, mr);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(
+    lhs, rhs, cudf::test::debug_output_level::QUIET, cudf::test::default_ulp, mr);
+  CUDF_TEST_EXPECT_EQUAL_BUFFERS(
+    lhs_view.data<int32_t>(), rhs_view.data<int32_t>(), lhs_view.size() * sizeof(int32_t), mr);
+
+  static_cast<void>(cudf::test::bitmask_to_host(sliced, mr));
+  static_cast<void>(cudf::test::to_host<int32_t>(sliced, mr));
+  static_cast<void>(cudf::test::to_host<std::string>(strings, mr));
+  static_cast<void>(cudf::test::to_host<numeric::decimal32>(decimals, mr));
+
+  CUDF_TEST_EXPECT_TABLE_PROPERTIES_EQUAL(table, table);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(table, table, mr);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(table, table, mr);
+
+  static_cast<void>(cudf::test::to_strings(sliced, mr));
+  static_cast<void>(cudf::test::to_string(sliced, ",", mr));
+  std::ostringstream output;
+  cudf::test::print(sliced, output, mr);
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, mr.get_bytes_counter().value);
+  EXPECT_EQ(0, mr.get_bytes_counter().total);
 }
 
 struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {};
