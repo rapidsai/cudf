@@ -34,12 +34,12 @@ namespace detail {
  * @param col The column view
  * @param delimiter The delimiter to put between strings
  * @param indent Indentation for all output
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  */
 std::string to_string(cudf::column_view const& col,
                       std::string const& delimiter,
-                      std::string const& indent         = "",
-                      rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+                      std::string const& indent = "",
+                      cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Formats a null mask as a string
@@ -82,12 +82,12 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
  *
  * @param col The column view
  * @param indent Indentation for all output
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  */
 std::vector<std::string> to_strings(
   cudf::column_view const& col,
-  std::string const& indent         = "",
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  std::string const& indent = "",
+  cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 }  // namespace detail
 
@@ -143,10 +143,9 @@ std::string get_nested_type_str(cudf::column_view const& view)
 
 template <typename NestedColumnView>
 std::string nested_offsets_to_string(NestedColumnView const& c,
-                                     rmm::device_async_resource_ref mr,
+                                     cudf::memory_resources mr,
                                      std::string const& delimiter = ", ")
 {
-  static_cast<void>(mr);
   column_view offsets = (c.parent()).child(NestedColumnView::offsets_column_index);
   CUDF_EXPECTS(offsets.type().id() == type_id::INT32,
                "Column does not appear to be an offsets column");
@@ -157,12 +156,12 @@ std::string nested_offsets_to_string(NestedColumnView const& c,
   size_type first =
     cudf::detail::get_value<size_type>(offsets, c.offset(), cudf::get_default_stream());
   rmm::device_uvector<size_type> shifted_offsets(
-    output_size, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+    output_size, cudf::get_default_stream(), mr.get_temporary_mr());
 
   // normalize the offset values for the column offset
   size_type const* d_offsets = offsets.head<size_type>() + c.offset();
   thrust::transform(
-    rmm::exec_policy_nosync(cudf::get_default_stream(), cudf::get_current_device_resource_ref()),
+    rmm::exec_policy_nosync(cudf::get_default_stream(), mr.get_temporary_mr()),
     d_offsets,
     d_offsets + output_size,
     shifted_offsets.begin(),
@@ -183,7 +182,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const&,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(is_numeric<Element>())
   {
     auto h_data = cudf::test::to_host<Element>(col, mr);
@@ -211,7 +210,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(is_timestamp<Element>())
   {
     //  For timestamps, convert timestamp column to column of strings, then
@@ -229,11 +228,8 @@ struct column_view_printer {
       return std::string{"%Y-%m-%d"};
     }();
 
-    auto col_as_strings = cudf::strings::from_timestamps(col,
-                                                         format,
-                                                         cudf::strings_column_view{},
-                                                         cudf::get_default_stream(),
-                                                         cudf::get_current_device_resource_ref());
+    auto col_as_strings = cudf::strings::from_timestamps(
+      col, format, cudf::strings_column_view{}, cudf::get_default_stream(), mr.get_temporary_mr());
     if (col_as_strings->size() == 0) { return; }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent, mr);
@@ -243,7 +239,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const&,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(cudf::is_fixed_point<Element>())
   {
     auto const h_data = cudf::test::to_host<Element>(col, mr);
@@ -268,7 +264,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const&,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(std::is_same_v<Element, cudf::string_view>)
   {
     //
@@ -310,7 +306,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const&,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(std::is_same_v<Element, cudf::dictionary32>)
   {
     cudf::dictionary_column_view dictionary(col);
@@ -337,7 +333,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const&,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(is_duration<Element>())
   {
     auto h_data = cudf::test::to_host<Element>(col, mr);
@@ -366,7 +362,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(std::is_same_v<Element, cudf::list_view>)
   {
     lists_column_view lcv(col);
@@ -397,7 +393,7 @@ struct column_view_printer {
   void operator()(cudf::column_view const& col,
                   std::vector<std::string>& out,
                   std::string const& indent,
-                  rmm::device_async_resource_ref mr)
+                  cudf::memory_resources mr)
     requires(std::is_same_v<Element, cudf::struct_view>)
   {
     structs_column_view view{col};
@@ -443,7 +439,7 @@ namespace detail {
  */
 std::vector<std::string> to_strings(cudf::column_view const& col,
                                     std::string const& indent,
-                                    rmm::device_async_resource_ref mr)
+                                    cudf::memory_resources mr)
 {
   std::vector<std::string> reply;
   cudf::type_dispatcher(col.type(), column_view_printer{}, col, reply, indent, mr);
@@ -458,7 +454,7 @@ std::vector<std::string> to_strings(cudf::column_view const& col,
 std::string to_string(cudf::column_view const& col,
                       std::string const& delimiter,
                       std::string const& indent,
-                      rmm::device_async_resource_ref mr)
+                      cudf::memory_resources mr)
 {
   std::ostringstream buffer;
   std::vector<std::string> h_data = to_strings(col, indent, mr);
@@ -492,14 +488,14 @@ std::string to_string(std::vector<bitmask_type> const& null_mask,
 
 }  // namespace detail
 
-std::vector<std::string> to_strings(cudf::column_view const& col, rmm::device_async_resource_ref mr)
+std::vector<std::string> to_strings(cudf::column_view const& col, cudf::memory_resources mr)
 {
   return detail::to_strings(col, "", mr);
 }
 
 std::string to_string(cudf::column_view const& col,
                       std::string const& delimiter,
-                      rmm::device_async_resource_ref mr)
+                      cudf::memory_resources mr)
 {
   return detail::to_string(col, delimiter, "", mr);
 }
@@ -509,7 +505,7 @@ std::string to_string(std::vector<bitmask_type> const& null_mask, size_type null
   return detail::to_string(null_mask, null_mask_size);
 }
 
-void print(cudf::column_view const& col, std::ostream& os, rmm::device_async_resource_ref mr)
+void print(cudf::column_view const& col, std::ostream& os, cudf::memory_resources mr)
 {
   os << to_string(col, ",", mr) << std::endl;
 }

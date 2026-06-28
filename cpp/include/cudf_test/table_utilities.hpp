@@ -32,12 +32,11 @@ void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs);
  *
  * @param lhs The first table
  * @param rhs The second table
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  */
-void expect_tables_equal(
-  cudf::table_view lhs,
-  cudf::table_view rhs,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+void expect_tables_equal(cudf::table_view lhs,
+                         cudf::table_view rhs,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Verifies the equivalency of two tables.
@@ -50,12 +49,11 @@ void expect_tables_equal(
  *
  * @param lhs The first table
  * @param rhs The second table
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  */
-void expect_tables_equivalent(
-  cudf::table_view lhs,
-  cudf::table_view rhs,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+void expect_tables_equivalent(cudf::table_view lhs,
+                              cudf::table_view rhs,
+                              cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 }  // namespace test::detail
 }  // namespace CUDF_EXPORT cudf
