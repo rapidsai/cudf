@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -2140,7 +2140,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv* 
       pattern,
       flags,
       idx == 0 ? cudf::strings::capture_groups::NON_CAPTURE
-               : static_cast<cudf::strings::capture_groups>(capture_groups));
+                   : static_cast<cudf::strings::capture_groups>(capture_groups));
     auto result = (idx == 0) ? cudf::strings::findall(strings_column, *regex_prog)
                              : cudf::strings::extract_all_record(strings_column, *regex_prog);
     return release_as_jlong(result);

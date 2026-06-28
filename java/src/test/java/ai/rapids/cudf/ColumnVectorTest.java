@@ -3928,6 +3928,21 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector timestampsAsStrings = s_timestamps.asStrings(format_surrogate_middle)) {
       assertColumnsAreEqual(s_string_times, timestampsAsStrings);
     }
+
+    // NUL (U+0000): JNI encodes it as 0xC0 0x80, so it must round-trip as a single 0x00 byte.
+    final String format_nul = "\u0000";
+    try (ColumnVector s_string_times = ColumnVector.fromStrings(new String[]{format_nul});
+         ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(new long[]{0});
+         ColumnVector timestampsAsStrings = s_timestamps.asStrings(format_nul)) {
+      assertColumnsAreEqual(s_string_times, timestampsAsStrings);
+    }
+
+    final String format_nul_middle = "a\u0000b";
+    try (ColumnVector s_string_times = ColumnVector.fromStrings(new String[]{format_nul_middle});
+         ColumnVector s_timestamps = ColumnVector.timestampSecondsFromLongs(new long[]{0});
+         ColumnVector timestampsAsStrings = s_timestamps.asStrings(format_nul_middle)) {
+      assertColumnsAreEqual(s_string_times, timestampsAsStrings);
+    }
   }
 
   @Test
@@ -5226,6 +5241,19 @@ void testExtractReWithMultiLineDelimiters() {
          .column("b", "y")
          .build();
         Table result = v.stringSplit(delimiter)) {
+      // Regression test for native_jstring's modified-UTF-8 -> UTF-8 conversion: without it the
+      // delimiter would arrive from GetStringUTFChars as modified UTF-8 (C0 80) and never
+      // match the standard-UTF-8 column data (00), leaving the rows unsplit.
+      assertTablesAreEqual(expected, result);
+    }
+
+    final String delimiter_middle = "l\u0000r";
+    try (ColumnVector v = ColumnVector.fromStrings("al\u0000rb", "xl\u0000ry");
+         Table expected = new Table.TestBuilder()
+         .column("a", "x")
+         .column("b", "y")
+         .build();
+         Table result = v.stringSplit(delimiter_middle)) {
       // Regression test for native_jstring's modified-UTF-8 -> UTF-8 conversion: without it the
       // delimiter would arrive from GetStringUTFChars as modified UTF-8 (C0 80) and never
       // match the standard-UTF-8 column data (00), leaving the rows unsplit.
