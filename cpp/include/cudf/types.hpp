@@ -270,6 +270,15 @@ enum class fallible : bool {
 };
 
 /**
+ * @brief Indicates whether a function nullifies its output on error.
+ *
+ */
+enum class error_policy : uint8_t {
+  PROPAGATE = 0,  ///< The function propagates errors
+  NULLIFY   = 1   ///< The function nullifies its output on error
+};
+
+/**
  * @brief Indicates the source language of a user defined function (UDF) to be used in JIT APIs.
  */
 enum class udf_source_type : uint8_t {

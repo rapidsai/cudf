@@ -18,33 +18,20 @@ namespace cudf::ast::jit::detail {
 
 struct operation : public ast::expression {
   /**
-   * @brief Construct a new operation object.
-   * @param op The opcode for this operation
-   * @param args The arguments for this operation
-   */
-  operation(cudf::detail::row_ir::opcode op,
-            std::vector<std::reference_wrapper<expression const>> args,
-            bool nullify_on_error = false)
-    : op_{op}, args_{std::move(args)}, nullify_on_error_{nullify_on_error}
-  {
-  }
-
-  /**
    * @brief Construct a new operation object with a target scale (for rescale and precision check
    * operations).
    * @param op The opcode for this operation
    * @param args The arguments for this operation
+   * @param error_policy The error policy for this operation (only applicable for fallible
+   * operations)
    * @param target_scale The target scale for this operation (only applicable for rescale and
    * precision check operations)
    */
   operation(cudf::detail::row_ir::opcode op,
             std::vector<std::reference_wrapper<expression const>> args,
-            int32_t target_scale,
-            bool nullify_on_error = false)
-    : op_{op},
-      args_{std::move(args)},
-      target_scale_{target_scale},
-      nullify_on_error_{nullify_on_error}
+            cudf::error_policy error_policy     = cudf::error_policy::PROPAGATE,
+            std::optional<int32_t> target_scale = std::nullopt)
+    : op_{op}, args_{std::move(args)}, error_policy_{error_policy}, target_scale_{target_scale}
   {
   }
 
@@ -82,9 +69,9 @@ struct operation : public ast::expression {
    * @brief Whether this operation should nullify the output on error (e.g. overflow, divide by
    * zero)
    *
-   * @return True if the operation should nullify on error, false otherwise
+   * @return The error policy for this operation
    */
-  [[nodiscard]] bool nullify_on_error() const { return nullify_on_error_; }
+  [[nodiscard]] cudf::error_policy get_error_policy() const { return error_policy_; }
 
   /**
    * @copydoc expression::accept
@@ -110,8 +97,8 @@ struct operation : public ast::expression {
  private:
   cudf::detail::row_ir::opcode op_;
   std::vector<std::reference_wrapper<expression const>> args_;
+  cudf::error_policy error_policy_     = cudf::error_policy::PROPAGATE;
   std::optional<int32_t> target_scale_ = std::nullopt;
-  bool nullify_on_error_;
 };
 
 }  // namespace cudf::ast::jit::detail

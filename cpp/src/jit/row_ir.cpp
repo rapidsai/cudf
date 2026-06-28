@@ -133,7 +133,7 @@ struct [[nodiscard]] opcode_info {
 /**
  * @brief Get the opcode information for a given operator
  */
-[[nodiscard]] opcode_info get_op_info(opcode op, bool nullify_on_error)
+[[nodiscard]] opcode_info get_op_info(opcode op, error_policy error_policy)
 {
   using enum null_output;
   using enum types;
@@ -227,7 +227,7 @@ struct [[nodiscard]] opcode_info {
                std::runtime_error);
 
   auto info = map[index];
-  if (nullify_on_error && info.is_fallible) {
+  if (error_policy == cudf::error_policy::NULLIFY && info.is_fallible) {
     info.is_fallible = false;
     info.null_policy = null_output::ALWAYS_NULLABLE;
   }
@@ -235,7 +235,10 @@ struct [[nodiscard]] opcode_info {
   return info;
 }
 
-[[nodiscard]] size_t get_op_arity(opcode op) { return get_op_info(op, false).arg_types.size(); }
+[[nodiscard]] size_t get_op_arity(opcode op)
+{
+  return get_op_info(op, cudf::error_policy::PROPAGATE).arg_types.size();
+}
 
 opcode as_opcode(ast::ast_operator op)
 {
@@ -376,7 +379,7 @@ data_type get_return_type(opcode op,
     arg_scales.emplace_back(type.scale());
   }
 
-  auto op_info  = get_op_info(op, false);
+  auto op_info  = get_op_info(op, error_policy::PROPAGATE);
   auto rescaled = get_op_output_scale(op, arg_scales, target_scale);
 
   for (size_t i = 0; i < args.size(); ++i) {
@@ -467,14 +470,11 @@ std::span<untyped_var_info const> instance_context::get_output_vars() const { re
 
 node::node(opcode op,
            std::optional<int32_t> target_scale,
-           bool nullify_on_error,
+           error_policy error_policy,
            std::vector<std::unique_ptr<node>> args)
-  : op_{op},
-    target_scale_{target_scale},
-    nullify_on_error_{nullify_on_error},
-    args_{std::move(args)}
+  : op_{op}, target_scale_{target_scale}, error_policy_{error_policy}, args_{std::move(args)}
 {
-  auto op_info = get_op_info(op_, false);
+  auto op_info = get_op_info(op_, error_policy_);
 
   CUDF_EXPECTS(op_ != opcode::GET_INPUT && op_ != opcode::SET_OUTPUT,
                std::format("Invalid opcode `{}` for operation node.", op_info.name),
@@ -530,7 +530,7 @@ bool node::is_null_aware() const
   if (op_ == opcode::GET_INPUT) { return false; }
 
   // to emit nulls for always-nullable operators, we  need to mark them as null-aware
-  auto op_info = get_op_info(op_, nullify_on_error_);
+  auto op_info = get_op_info(op_, error_policy_);
 
   if (op_info.null_policy == null_output::ALWAYS_NULLABLE) { return true; }
 
@@ -548,7 +548,7 @@ bool node::is_fallible() const
 {
   if (op_ == opcode::GET_INPUT) { return false; }
 
-  if (get_op_info(op_, nullify_on_error_).is_fallible) { return true; }
+  if (get_op_info(op_, error_policy_).is_fallible) { return true; }
 
   CUDF_EXPECTS(!args_.empty(),
                "Unexpectedly found an operator node with no arguments. All operator nodes should "
@@ -562,7 +562,7 @@ bool node::is_always_valid() const
 {
   if (op_ == opcode::GET_INPUT) { return false; }
 
-  if (get_op_info(op_, nullify_on_error_).null_policy == null_output::ALWAYS_VALID) { return true; }
+  if (get_op_info(op_, error_policy_).null_policy == null_output::ALWAYS_VALID) { return true; }
 
   CUDF_EXPECTS(!args_.empty(),
                "Unexpectedly found an operator node with no arguments. All operator nodes should "
@@ -643,7 +643,7 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
         } break;
 
         default: {
-          auto op_info   = get_op_info(op_, nullify_on_error_);
+          auto op_info   = get_op_info(op_, error_policy_);
           auto first_arg = std::format("{}", args_[0]->get_id());
           auto args_str  = (args_.size() == 1)
                              ? std::string{first_arg}
@@ -665,7 +665,8 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
             type,
             id_,
             op_info.name,
-            nullify_on_error_,
+            error_policy_ == cudf::error_policy::NULLIFY ? "cudf::error_policy::NULLIFY"
+                                                         : "cudf::error_policy::PROPAGATE",
             args_str));
 
           if (op_info.is_fallible) {
@@ -715,13 +716,15 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::operation const& e
     args.emplace_back(operand.get().accept(*this));
   }
   return std::make_unique<row_ir::node>(
-    as_opcode(expr.get_operator()), std::nullopt, false, std::move(args));
+    as_opcode(expr.get_operator()), std::nullopt, error_policy::PROPAGATE, std::move(args));
 }
 
 std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::detail::predicate const& expr)
 {
-  return std::make_unique<row_ir::node>(
-    row_ir::opcode::PREDICATE, std::nullopt, false, expr.get_operand().accept(*this));
+  return std::make_unique<row_ir::node>(row_ir::opcode::PREDICATE,
+                                        std::nullopt,
+                                        error_policy::PROPAGATE,
+                                        expr.get_operand().accept(*this));
 }
 
 std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::jit::detail::operation const& expr)
@@ -731,7 +734,7 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::jit::detail::opera
     args.emplace_back(arg.get().accept(*this));
   }
   return std::make_unique<row_ir::node>(
-    expr.get_opcode(), expr.get_target_scale(), expr.nullify_on_error(), std::move(args));
+    expr.get_opcode(), expr.get_target_scale(), expr.get_error_policy(), std::move(args));
 }
 
 bool is_nullable(scalar_input const& in) { return in.scalar_column->view().nullable(); }

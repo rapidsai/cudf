@@ -221,11 +221,12 @@ struct [[nodiscard]] node {
  private:
   std::variant<std::monostate, input_reference, output_reference> reference_ =
     std::monostate{};  ///< The index of the input/output variable
-  opcode op_                               = opcode::GET_INPUT;  ///< The operation code
-  std::optional<int32_t> target_scale_     = std::nullopt;       ///< The target scale for decimal
-  input_reference scale_reference_         = {};  ///< The index of the target scale as an IR input
-  bool nullify_on_error_                   = false;  ///< Whether to nullify output on error
-  std::vector<std::unique_ptr<node>> args_ = {};     ///< The arguments of the operation
+  opcode op_                           = opcode::GET_INPUT;  ///< The operation code
+  std::optional<int32_t> target_scale_ = std::nullopt;       ///< The target scale for decimal
+  input_reference scale_reference_     = {};  ///< The index of the target scale as an IR input
+  error_policy error_policy_ =
+    cudf::error_policy::PROPAGATE;                ///< The error policy for the operation
+  std::vector<std::unique_ptr<node>> args_ = {};  ///< The arguments of the operation
 
   data_type type_ = {};  ///< The resolved type information of the IR node
 
@@ -259,37 +260,43 @@ struct [[nodiscard]] node {
   /**
    * @brief Construct a new operation IR node
    * @param op The operation code
+   * @param target_scale The target scale for decimal rescaling if applicable
+   * @param error_policy The error policy for the operation
    * @param args The arguments of the operation
    */
   node(opcode op,
        std::optional<int32_t> target_scale,
-       bool nullify_on_error,
+       error_policy error_policy,
        std::vector<std::unique_ptr<node>> args);
 
   /**
    * @brief Construct a new operation IR node
    * @param op The operation code
+   * @param target_scale The target scale for decimal rescaling if applicable
+   * @param error_policy The error policy for the operation
    * @param args The arguments of the operation
    */
   template <typename... T>
     requires(std::is_same_v<node, T> && ...)
-  node(opcode op, std::optional<int32_t> target_scale, bool nullify_on_error, T... args)
-    : node(op, target_scale, nullify_on_error, arguments(std::move(args)...))
+  node(opcode op, std::optional<int32_t> target_scale, error_policy error_policy, T... args)
+    : node(op, target_scale, error_policy, arguments(std::move(args)...))
   {
   }
 
   /**
    * @brief Construct a new operation IR node
    * @param op The operation code
+   * @param target_scale The target scale for decimal rescaling if applicable
+   * @param error_policy The error policy for the operation
    * @param args The arguments of the operation
    */
   template <typename... T>
     requires(std::is_same_v<node, T> && ...)
   node(opcode op,
        std::optional<int32_t> target_scale,
-       bool nullify_on_error,
+       error_policy error_policy,
        std::unique_ptr<T>... args)
-    : node(op, target_scale, nullify_on_error, arguments(std::move(args)...))
+    : node(op, target_scale, error_policy, arguments(std::move(args)...))
   {
   }
 

@@ -139,36 +139,29 @@ namespace {
 expression const& jit::operation(ast::tree& tree,
                                  op operator_id,
                                  std::vector<std::reference_wrapper<expression const>> const& args,
-                                 bool nullify_on_error,
+                                 cudf::error_policy error_policy,
                                  std::optional<int32_t> target_scale)
 {
   auto ir_opcode = as_opcode(operator_id);
 
-  if (target_scale.has_value()) {
-    CUDF_EXPECTS(operator_id == op::RESCALE,
-                 "target_scale is only valid for jit::op::RESCALE",
-                 std::invalid_argument);
-    return tree.push(
-      detail::operation(ir_opcode, std::move(args), target_scale.value(), nullify_on_error));
-  }
-
-  CUDF_EXPECTS(operator_id != op::RESCALE,
-               "target_scale must be set for jit::op::RESCALE",
+  CUDF_EXPECTS((operator_id == op::RESCALE) == target_scale.has_value(),
+               "Target scale is only valid and required for jit::op::RESCALE",
                std::invalid_argument);
-  return tree.push(detail::operation(ir_opcode, std::move(args), nullify_on_error));
+
+  return tree.push(detail::operation(ir_opcode, std::move(args), error_policy, target_scale));
 }
 
 expression const& jit::operation(
   ast::tree& tree,
   op operator_id,
   std::initializer_list<std::reference_wrapper<expression const>> args,
-  bool nullify_on_error,
+  cudf::error_policy error_policy,
   std::optional<int32_t> target_scale)
 {
   return operation(tree,
                    operator_id,
                    std::vector<std::reference_wrapper<expression const>>(args),
-                   nullify_on_error,
+                   error_policy,
                    target_scale);
 }
 

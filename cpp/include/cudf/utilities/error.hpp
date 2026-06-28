@@ -115,13 +115,10 @@ struct evaluation_error : public std::exception {
   /**
    * @brief Construct a new evaluation error object.
    *
-   * @param error The maximum error code that occurred during evaluation
+   * @param error The error code that occurred during evaluation
    * @param message An error message describing the evaluation error
    */
-  evaluation_error(errc error, std::string message)
-    : max_error_(error), message_(std::move(message))
-  {
-  }
+  evaluation_error(errc error, std::string message) : error_(error), message_(std::move(message)) {}
 
   /**
    * @brief Get the error message.
@@ -130,13 +127,13 @@ struct evaluation_error : public std::exception {
   [[nodiscard]] char const* what() const noexcept override { return message_.c_str(); }
 
   /**
-   * @brief Get the maximum error code that occurred during evaluation.
-   * @return The maximum error code
+   * @brief Get the error code that occurred during evaluation.
+   * @return The error code
    */
-  [[nodiscard]] errc error_code() const { return max_error_; }
+  [[nodiscard]] errc error_code() const { return error_; }
 
  private:
-  errc max_error_;       //< The maximum error code that occurred during evaluation
+  errc error_;           //< The error code that occurred during evaluation
   std::string message_;  //< An error message describing the evaluation error
 };
 

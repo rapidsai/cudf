@@ -809,14 +809,14 @@ enum class op : uint8_t {
  * @param tree The expression tree to which this expression will be added.
  * @param operator_id The JIT operation kind.
  * @param args Operation arguments.
- * @param nullify_on_error If true, fallible operations return null on error.
+ * @param error_policy Specifies how fallible operations handle errors.
  * @param target_scale Required only for `op::RESCALE`.
  * @return A reference to the created operation expression.
  */
 expression const& operation(ast::tree& tree,
                             op operator_id,
                             std::vector<std::reference_wrapper<expression const>> const& args,
-                            bool nullify_on_error               = false,
+                            cudf::error_policy error_policy     = cudf::error_policy::PROPAGATE,
                             std::optional<int32_t> target_scale = std::nullopt);
 
 /**
@@ -825,14 +825,14 @@ expression const& operation(ast::tree& tree,
  * @param tree The expression tree to which this expression will be added.
  * @param operator_id The JIT operation kind.
  * @param args Operation arguments.
- * @param nullify_on_error If true, fallible operations return null on error.
+ * @param error_policy Specifies how fallible operations handle errors.
  * @param target_scale Required only for `op::RESCALE`.
  * @return A reference to the created operation expression.
  */
 expression const& operation(ast::tree& tree,
                             op operator_id,
                             std::initializer_list<std::reference_wrapper<expression const>> args,
-                            bool nullify_on_error               = false,
+                            cudf::error_policy error_policy     = cudf::error_policy::PROPAGATE,
                             std::optional<int32_t> target_scale = std::nullopt);
 
 }  // namespace jit

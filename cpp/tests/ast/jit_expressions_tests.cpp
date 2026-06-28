@@ -85,8 +85,8 @@ TYPED_TEST(JITIntegerArithmeticTest, AddOverflow)
   auto& add = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref});
   auto& add_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_add_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_add_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, add);
   auto result_fail = cudf::compute_column_jit(table, try_add_fail);
 
@@ -115,8 +115,8 @@ TYPED_TEST(JITDecimalArithmeticTest, AddOverflow)
   auto& add = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref});
   auto& add_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_add_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_add_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, add);
   auto result_fail = cudf::compute_column_jit(table, try_add_fail);
 
@@ -143,8 +143,8 @@ TYPED_TEST(JITSignedIntegerArithmeticTest, SubOverflow)
   auto& sub = cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_ref});
   auto& sub_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_sub_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_sub_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
 
   auto result      = cudf::compute_column_jit(table, sub);
   auto result_fail = cudf::compute_column_jit(table, try_sub_fail);
@@ -175,8 +175,8 @@ TYPED_TEST(JITDecimalArithmeticTest, SubOverflow)
   auto& sub = cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_ref});
   auto& sub_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_sub_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_sub_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::SUB_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, sub);
   auto result_fail = cudf::compute_column_jit(table, try_sub_fail);
 
@@ -203,8 +203,8 @@ TYPED_TEST(JITIntegerArithmeticTest, MulOverflow)
   auto& mul = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_ref});
   auto& mul_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_mul_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_mul_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, mul);
   auto result_fail = cudf::compute_column_jit(table, try_mul_fail);
 
@@ -234,8 +234,8 @@ TYPED_TEST(JITDecimalArithmeticTest, MulOverflow)
   auto& mul = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_ref});
   auto& mul_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_mul_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_mul_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, mul);
   auto result_fail = cudf::compute_column_jit(table, try_mul_fail);
 
@@ -262,8 +262,8 @@ TYPED_TEST(JITIntegerArithmeticTest, DivOverflow)
   auto& div = cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_ref});
   auto& div_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_div_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_div_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, div);
   auto result_fail = cudf::compute_column_jit(table, try_div_fail);
 
@@ -291,8 +291,8 @@ TYPED_TEST(JITDecimalArithmeticTest, DivOverflow)
   auto& div = cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_ref});
   auto& div_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_div_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_div_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::DIV_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, div);
   auto result_fail = cudf::compute_column_jit(table, try_div_fail);
 
@@ -319,8 +319,8 @@ TYPED_TEST(JITIntegerArithmeticTest, ModOverflow)
   auto& mod = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_ref});
   auto& mod_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_mod_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_mod_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, mod);
   auto result_fail = cudf::compute_column_jit(table, try_mod_fail);
 
@@ -348,8 +348,8 @@ TYPED_TEST(JITDecimalArithmeticTest, ModOverflow)
   auto& mod = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_ref});
   auto& mod_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref});
-  auto& try_mod_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref}, true);
+  auto& try_mod_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::MOD_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, mod);
   auto result_fail = cudf::compute_column_jit(table, try_mod_fail);
 
@@ -374,8 +374,8 @@ TYPED_TEST(JITSignedIntegerArithmeticTest, AbsOverflow)
   auto tree          = cudf::ast::tree{};
   auto& abs          = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_ref});
   auto& abs_fail = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref});
-  auto& try_abs_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref}, true);
+  auto& try_abs_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, abs);
   auto result_fail = cudf::compute_column_jit(table, try_abs_fail);
 
@@ -405,8 +405,8 @@ TYPED_TEST(JITDecimalArithmeticTest, AbsOverflow)
   auto tree       = cudf::ast::tree{};
   auto& abs       = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_ref});
   auto& abs_fail  = cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref});
-  auto& try_abs_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref}, true);
+  auto& try_abs_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::ABS_OVERFLOW, {a_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, abs);
   auto result_fail = cudf::compute_column_jit(table, try_abs_fail);
 
@@ -430,8 +430,8 @@ TYPED_TEST(JITSignedIntegerArithmeticTest, NegOverflow)
   auto tree          = cudf::ast::tree{};
   auto& neg          = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_ref});
   auto& neg_fail = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref});
-  auto& try_neg_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref}, true);
+  auto& try_neg_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, neg);
   auto result_fail = cudf::compute_column_jit(table, try_neg_fail);
 
@@ -460,8 +460,8 @@ TYPED_TEST(JITDecimalArithmeticTest, NegOverflow)
   auto tree       = cudf::ast::tree{};
   auto& neg       = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_ref});
   auto& neg_fail  = cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref});
-  auto& try_neg_fail =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref}, true);
+  auto& try_neg_fail = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::NEG_OVERFLOW, {a_fail_ref}, cudf::error_policy::NULLIFY);
   auto result      = cudf::compute_column_jit(table, neg);
   auto result_fail = cudf::compute_column_jit(table, try_neg_fail);
 
@@ -490,10 +490,12 @@ TYPED_TEST(JITDecimalArithmeticTest, CheckPrecision)
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::CHECK_PRECISION, {a_ref, precision});
   auto& check_precision_fail =
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::CHECK_PRECISION, {a_fail_ref, precision});
-  auto& try_check_precision = cudf::ast::jit::operation(
-    tree, cudf::ast::jit::op::CHECK_PRECISION, {a_fail_ref, precision}, true);
-  auto result      = cudf::compute_column_jit(table, check_precision);
-  auto result_fail = cudf::compute_column_jit(table, try_check_precision);
+  auto& try_check_precision = cudf::ast::jit::operation(tree,
+                                                        cudf::ast::jit::op::CHECK_PRECISION,
+                                                        {a_fail_ref, precision},
+                                                        cudf::error_policy::NULLIFY);
+  auto result               = cudf::compute_column_jit(table, check_precision);
+  auto result_fail          = cudf::compute_column_jit(table, try_check_precision);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 
@@ -689,8 +691,9 @@ TEST_F(JITExpressionTest, Rescale)
   auto table     = cudf::table_view{{a}};
   auto a_ref     = cudf::ast::column_reference(0);
   auto tree      = cudf::ast::tree{};
-  auto& rescaled = cudf::ast::jit::operation(tree, cudf::ast::jit::op::RESCALE, {a_ref}, false, -2);
-  auto result    = cudf::compute_column_jit(table, rescaled);
+  auto& rescaled = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::RESCALE, {a_ref}, cudf::error_policy::PROPAGATE, -2);
+  auto result = cudf::compute_column_jit(table, rescaled);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
@@ -709,10 +712,12 @@ TEST_F(JITExpressionTest, OverflowFused)
   auto b_ref             = cudf::ast::column_reference(1);
   auto c_ref             = cudf::ast::column_reference(2);
   auto d_ref             = cudf::ast::column_reference(3);
-  auto& add =
-    cudf::ast::jit::operation(tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref}, true);
-  auto& mul = cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {add, c_ref}, true);
-  auto& div = cudf::ast::jit::operation(tree, cudf::ast::jit::op::DIV_OVERFLOW, {mul, d_ref}, true);
+  auto& add              = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::ADD_OVERFLOW, {a_ref, b_ref}, cudf::error_policy::NULLIFY);
+  auto& mul = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::MUL_OVERFLOW, {add, c_ref}, cudf::error_policy::NULLIFY);
+  auto& div = cudf::ast::jit::operation(
+    tree, cudf::ast::jit::op::DIV_OVERFLOW, {mul, d_ref}, cudf::error_policy::NULLIFY);
   auto result = cudf::compute_column_jit(table, div);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);

@@ -220,11 +220,12 @@ template <opcode op, typename... T>
 concept evaluable = requires(T... args) { opcode_evaluator<op>::eval(args...); };
 
 // evaluation of non-nullable values
-template <opcode op, bool nullify_on_error, typename... T>
+template <opcode op, cudf::error_policy error_policy, typename... T>
 __device__ constexpr auto evaluate(cudf::errc* error, T... args)
   requires(!cudf::detail::ops::nullable<T> && ... && evaluable<op, T...>)
 {
-  static_assert(!nullify_on_error, "nullify_on_error=true is not supported for non-nullable types");
+  static_assert(error_policy != cudf::error_policy::NULLIFY,
+                "cudf::error_policy::NULLIFY is not supported for non-nullable types");
   using result_t = decltype(opcode_evaluator<op>::eval(args...));
 
   if constexpr (is_fallible_result<result_t>) {
@@ -242,7 +243,7 @@ __device__ constexpr auto evaluate(cudf::errc* error, T... args)
 }
 
 // evaluation of nullable values
-template <opcode op, bool nullify_on_error, typename... T>
+template <opcode op, cudf::error_policy error_policy, typename... T>
 __device__ constexpr auto evaluate(cudf::errc* error, cuda::std::optional<T>... args)
   requires((evaluable<op, cuda::std::optional<T>...> || evaluable<op, T...>))
 {
@@ -256,7 +257,7 @@ __device__ constexpr auto evaluate(cudf::errc* error, cuda::std::optional<T>... 
       using return_t = typename result_t::value_type;
       auto result    = opcode_evaluator<op>::eval(args...);
       if (!result.has_value()) {
-        if constexpr (nullify_on_error) {
+        if constexpr (error_policy == cudf::error_policy::NULLIFY) {
           *error = cudf::errc::SUCCESS;
           return return_t{};
         } else {
@@ -276,7 +277,7 @@ __device__ constexpr auto evaluate(cudf::errc* error, cuda::std::optional<T>... 
       using value_t  = typename result_t::value_type;
       using return_t = cuda::std::optional<value_t>;
 
-      // If any of the arguments are null, return null without calling the operator and set error to
+      // if any of the arguments are null, return null without calling the operator and set error to
       // SUCCESS.
       if ((!args.has_value() || ...)) {
         *error = cudf::errc::SUCCESS;
@@ -286,7 +287,7 @@ __device__ constexpr auto evaluate(cudf::errc* error, cuda::std::optional<T>... 
       auto result = opcode_evaluator<op>::eval(args.value()...);
 
       if (!result.has_value()) {
-        if constexpr (nullify_on_error) {
+        if constexpr (error_policy == cudf::error_policy::NULLIFY) {
           *error = cudf::errc::SUCCESS;
         } else {
           *error = result.error();

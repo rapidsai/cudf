@@ -129,14 +129,16 @@ TEST_F(RowIRCudaCodeGenTest, UnaryOperation)
     [[maybe_unused]] auto in1 = ctx.add_input(*f32);
 
     row_ir::code_sink sink;
-    row_ir::node op{
-      row_ir::opcode::IDENTITY, std::nullopt, false, row_ir::node{row_ir::input_reference{0}}};
+    row_ir::node op{row_ir::opcode::IDENTITY,
+                    std::nullopt,
+                    cudf::error_policy::PROPAGATE,
+                    row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx);
     op.emit_code(ctx, target_info, sink);
 
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
-int32_t tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, false>(&error_flag, tmp_0);
+int32_t tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -148,14 +150,16 @@ int32_t tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDE
     [[maybe_unused]] auto in0 = ctx.add_input(*i32);
     [[maybe_unused]] auto in1 = ctx.add_input(*d32);
     row_ir::code_sink sink;
-    row_ir::node op{
-      row_ir::opcode::IDENTITY, std::nullopt, false, row_ir::node{row_ir::input_reference{1}}};
+    row_ir::node op{row_ir::opcode::IDENTITY,
+                    std::nullopt,
+                    cudf::error_policy::PROPAGATE,
+                    row_ir::node{row_ir::input_reference{1}}};
     op.instantiate(ctx);
     op.emit_code(ctx, target_info, sink);
 
     auto expected_null_code =
       R"***(numeric::decimal32 tmp_0 = in_1;
-numeric::decimal32 tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, false>(&error_flag, tmp_0);
+numeric::decimal32 tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::IDENTITY, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_null_code);
@@ -174,7 +178,7 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
     row_ir::code_sink sink;
     row_ir::node op{row_ir::opcode::ADD,
                     std::nullopt,
-                    false,
+                    cudf::error_policy::PROPAGATE,
                     row_ir::node{row_ir::input_reference{0}},
                     row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx);
@@ -183,7 +187,7 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperation)
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_0;
-int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
+int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0, tmp_1);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -197,7 +201,7 @@ int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD
     row_ir::code_sink sink;
     row_ir::node op{row_ir::opcode::ADD,
                     std::nullopt,
-                    false,
+                    cudf::error_policy::PROPAGATE,
                     row_ir::node{row_ir::input_reference{1}},
                     row_ir::node{row_ir::input_reference{1}}};
     op.instantiate(ctx);
@@ -206,7 +210,7 @@ int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD
     auto expected_null_code =
       R"***(numeric::decimal32 tmp_0 = in_1;
 numeric::decimal32 tmp_1 = in_1;
-numeric::decimal32 tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
+numeric::decimal32 tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0, tmp_1);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_null_code);
@@ -225,7 +229,7 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperationOverflow)
     row_ir::code_sink sink;
     row_ir::node op{row_ir::opcode::ADD_OVERFLOW,
                     std::nullopt,
-                    false,
+                    cudf::error_policy::PROPAGATE,
                     row_ir::node{row_ir::input_reference{0}},
                     row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx);
@@ -234,7 +238,7 @@ TEST_F(RowIRCudaCodeGenTest, BinaryOperationOverflow)
     auto expected_code =
       R"***(int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_0;
-int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD_OVERFLOW, false>(&error_flag, tmp_0, tmp_1);
+int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD_OVERFLOW, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0, tmp_1);
 CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
 )***";
 
@@ -244,13 +248,13 @@ CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
   {
     row_ir::instance_context ctx{cudf::get_default_stream(),
                                  cudf::get_current_device_resource_ref()};
-    ctx.set_has_nulls(true);  // needed for nullify_on_error
+    ctx.set_has_nulls(true);  // needed for error_policy::NULLIFY
     [[maybe_unused]] auto in0 = ctx.add_input(*i32);
     [[maybe_unused]] auto in1 = ctx.add_input(*d32);
     row_ir::code_sink sink;
     row_ir::node op{row_ir::opcode::ADD_OVERFLOW,
                     std::nullopt,
-                    true,
+                    cudf::error_policy::NULLIFY,
                     row_ir::node{row_ir::input_reference{0}},
                     row_ir::node{row_ir::input_reference{0}}};
     op.instantiate(ctx);
@@ -259,7 +263,7 @@ CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
     auto expected_code =
       R"***(cuda::std::optional<int32_t> tmp_0 = in_0;
 cuda::std::optional<int32_t> tmp_1 = in_0;
-cuda::std::optional<int32_t> tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD_OVERFLOW, true>(&error_flag, tmp_0, tmp_1);
+cuda::std::optional<int32_t> tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD_OVERFLOW, cudf::error_policy::NULLIFY>(&error_flag, tmp_0, tmp_1);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -276,19 +280,24 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     // where v = (x, y) and v is a 2D vector.
     auto x2 = row_ir::node(row_ir::opcode::MUL,
                            std::nullopt,
-                           false,
+                           cudf::error_policy::PROPAGATE,
                            row_ir::node{row_ir::input_reference{input0}},
                            row_ir::node{row_ir::input_reference{input0}});
 
     auto y2 = row_ir::node(row_ir::opcode::MUL,
                            std::nullopt,
-                           false,
+                           cudf::error_policy::PROPAGATE,
                            row_ir::node{row_ir::input_reference{input1}},
                            row_ir::node{row_ir::input_reference{input1}});
 
-    auto sum = row_ir::node(row_ir::opcode::ADD, std::nullopt, false, std::move(x2), std::move(y2));
+    auto sum = row_ir::node(row_ir::opcode::ADD,
+                            std::nullopt,
+                            cudf::error_policy::PROPAGATE,
+                            std::move(x2),
+                            std::move(y2));
 
-    auto length = row_ir::node(row_ir::opcode::SQRT, std::nullopt, false, std::move(sum));
+    auto length = row_ir::node(
+      row_ir::opcode::SQRT, std::nullopt, cudf::error_policy::PROPAGATE, std::move(sum));
 
     return row_ir::node(row_ir::output_reference{0}, std::move(length));
   };
@@ -308,12 +317,12 @@ TEST_F(RowIRCudaCodeGenTest, VectorLengthOperation)
     auto expected_code =
       R"***(double tmp_0 = in_0;
 double tmp_1 = in_0;
-double tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, false>(&error_flag, tmp_0, tmp_1);
+double tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0, tmp_1);
 double tmp_3 = in_1;
 double tmp_4 = in_1;
-double tmp_5 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, false>(&error_flag, tmp_3, tmp_4);
-double tmp_6 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_2, tmp_5);
-double tmp_7 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::SQRT, false>(&error_flag, tmp_6);
+double tmp_5 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::MUL, cudf::error_policy::PROPAGATE>(&error_flag, tmp_3, tmp_4);
+double tmp_6 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, cudf::error_policy::PROPAGATE>(&error_flag, tmp_2, tmp_5);
+double tmp_7 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::SQRT, cudf::error_policy::PROPAGATE>(&error_flag, tmp_6);
 double tmp_8 = tmp_7;
 *out_0 = tmp_8;
 )***";
@@ -375,7 +384,7 @@ TEST_F(RowIRCudaCodeGenTest, AstConversionBasic)
 [[maybe_unused]] cudf::errc error_flag = cudf::errc::SUCCESS;
 int32_t tmp_0 = in_0;
 int32_t tmp_1 = in_1;
-int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, false>(&error_flag, tmp_0, tmp_1);
+int32_t tmp_2 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::ADD, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0, tmp_1);
 int32_t tmp_3 = tmp_2;
 *out_0 = tmp_3;
 return cudf::errc::SUCCESS;
@@ -404,13 +413,15 @@ TEST_F(RowIRCudaCodeGenTest, FilterPredicate)
                                  cudf::get_current_device_resource_ref()};
     [[maybe_unused]] auto in0 = ctx.add_input(*b8);
     row_ir::code_sink sink;
-    row_ir::node filter_predicate(
-      row_ir::opcode::PREDICATE, std::nullopt, false, row_ir::node{row_ir::input_reference{0}});
+    row_ir::node filter_predicate(row_ir::opcode::PREDICATE,
+                                  std::nullopt,
+                                  cudf::error_policy::PROPAGATE,
+                                  row_ir::node{row_ir::input_reference{0}});
     filter_predicate.instantiate(ctx);
     filter_predicate.emit_code(ctx, target_info, sink);
 
     auto expected_code = R"***(bool tmp_0 = in_0;
-bool tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, false>(&error_flag, tmp_0);
+bool tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
@@ -421,14 +432,16 @@ bool tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDIC
                                  cudf::get_current_device_resource_ref()};
     [[maybe_unused]] auto in0 = ctx.add_input(*b8);
     row_ir::code_sink sink;
-    row_ir::node filter_predicate(
-      row_ir::opcode::PREDICATE, std::nullopt, false, row_ir::node{row_ir::input_reference{0}});
+    row_ir::node filter_predicate(row_ir::opcode::PREDICATE,
+                                  std::nullopt,
+                                  cudf::error_policy::PROPAGATE,
+                                  row_ir::node{row_ir::input_reference{0}});
     ctx.set_has_nulls(true);
     filter_predicate.instantiate(ctx);
     filter_predicate.emit_code(ctx, target_info, sink);
 
     auto expected_code = R"***(cuda::std::optional<bool> tmp_0 = in_0;
-cuda::std::optional<bool> tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, false>(&error_flag, tmp_0);
+cuda::std::optional<bool> tmp_1 = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::PREDICATE, cudf::error_policy::PROPAGATE>(&error_flag, tmp_0);
 )***";
 
     EXPECT_EQ(sink.get_code(), expected_code);
