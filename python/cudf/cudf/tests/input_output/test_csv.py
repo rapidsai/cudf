@@ -2319,6 +2319,15 @@ def test_to_csv_quoting_empty_dataframe(quoting):
     df = cudf.DataFrame()
     pdf = df.to_pandas()
 
+    if quoting == csv.QUOTE_NONE:
+        assert_exceptions_equal(
+            lfunc=pdf.to_csv,
+            rfunc=df.to_csv,
+            lfunc_args_and_kwargs=([], {"quoting": quoting}),
+            rfunc_args_and_kwargs=([], {"quoting": quoting}),
+        )
+        return
+
     cudf_output = df.to_csv(quoting=quoting)
     pandas_output = pdf.to_csv(quoting=quoting)
 

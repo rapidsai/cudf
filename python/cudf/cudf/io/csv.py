@@ -386,6 +386,15 @@ def to_csv(
             "Only csv.QUOTE_MINIMAL (0) and csv.QUOTE_NONE (3) are supported."
         )
 
+    if (
+        quoting == csv.QUOTE_NONE
+        and header
+        and index
+        and len(df) == 0
+        and len(df._column_names) == 0
+    ):
+        raise csv.Error("single empty field record must be quoted")
+
     return_as_string = False
     if path_or_buf is None:
         path_or_buf = StringIO()
