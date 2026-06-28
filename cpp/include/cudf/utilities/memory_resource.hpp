@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,9 @@
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/memory_resource>
+
+#include <type_traits>
+#include <utility>
 
 namespace cudf {
 
@@ -28,6 +31,78 @@ inline rmm::device_async_resource_ref get_current_device_resource_ref()
 {
   return rmm::mr::get_current_device_resource_ref();
 }
+
+/**
+ * @brief Non-owning references to the memory resources used by a cuDF operation.
+ *
+ * The output resource allocates memory returned to the caller. The temporary resource allocates
+ * intermediate memory that is released before the operation returns. Both referenced resources
+ * must outlive every use of this object and any allocation made from them.
+ */
+class memory_resources {
+ public:
+  /**
+   * @brief Construct with an explicit output resource and capture the current resource for
+   * temporaries.
+   *
+   * This constructor is intentionally implicit so an existing resource object or resource ref can
+   * be passed directly to an API accepting `memory_resources`.
+   *
+   * @tparam Resource Type that can construct a device asynchronous resource ref
+   * @param output_mr Resource used for returned allocations
+   */
+  template <typename Resource,
+            std::enable_if_t<std::is_constructible_v<rmm::device_async_resource_ref, Resource&&>>* =
+              nullptr>
+  memory_resources(Resource&& output_mr)
+    : _output_mr{std::forward<Resource>(output_mr)},
+      _temporary_mr{cudf::get_current_device_resource_ref()}
+  {
+  }
+
+  /**
+   * @brief Construct with explicit output and temporary resources.
+   *
+   * This constructor does not query the current device resource.
+   *
+   * @tparam OutputResource Type that can construct the output resource ref
+   * @tparam TemporaryResource Type that can construct the temporary resource ref
+   * @param output_mr Resource used for returned allocations
+   * @param temporary_mr Resource used for intermediate allocations
+   */
+  template <
+    typename OutputResource,
+    typename TemporaryResource,
+    std::enable_if_t<
+      std::is_constructible_v<rmm::device_async_resource_ref, OutputResource&&> and
+      std::is_constructible_v<rmm::device_async_resource_ref, TemporaryResource&&>>* = nullptr>
+  memory_resources(OutputResource&& output_mr, TemporaryResource&& temporary_mr)
+    : _output_mr{std::forward<OutputResource>(output_mr)},
+      _temporary_mr{std::forward<TemporaryResource>(temporary_mr)}
+  {
+  }
+
+  /**
+   * @brief Return the resource used for allocations returned to the caller.
+   *
+   * @return Output device memory resource reference
+   */
+  [[nodiscard]] rmm::device_async_resource_ref get_output_mr() const noexcept { return _output_mr; }
+
+  /**
+   * @brief Return the resource used for intermediate allocations.
+   *
+   * @return Temporary device memory resource reference
+   */
+  [[nodiscard]] rmm::device_async_resource_ref get_temporary_mr() const noexcept
+  {
+    return _temporary_mr;
+  }
+
+ private:
+  rmm::device_async_resource_ref _output_mr;
+  rmm::device_async_resource_ref _temporary_mr;
+};
 
 /**
  * @brief Set the current device memory resource.
