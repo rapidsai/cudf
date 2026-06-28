@@ -7,6 +7,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -31,49 +32,14 @@
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
 
-namespace {
+using cudf::test::expect_output_uses_distinct_resources;
+using cudf::test::expect_output_uses_resource;
 
-template <typename Factory>
-void expect_complete_struct_output_uses_resource(Factory factory)
-{
-  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
-
-  {
-    auto column = factory(mr).release();
-    cudf::test::get_default_stream().synchronize();
-    auto const bytes = mr.get_bytes_counter();
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(bytes.value));
-    EXPECT_GE(bytes.total, bytes.value);
-  }
-
-  cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, mr.get_bytes_counter().value);
-}
-
-template <typename Factory>
-void expect_complete_struct_output_uses_distinct_resources(Factory factory)
-{
-  auto upstream     = cudf::get_current_device_resource_ref();
-  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
-  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
-
-  {
-    auto column = factory(cudf::memory_resources{output_mr, temporary_mr}).release();
-    cudf::test::get_default_stream().synchronize();
-    auto const output_bytes    = output_mr.get_bytes_counter();
-    auto const temporary_bytes = temporary_mr.get_bytes_counter();
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.value));
-    EXPECT_GE(output_bytes.total, output_bytes.value);
-    EXPECT_EQ(0, temporary_bytes.value);
-    EXPECT_EQ(0, temporary_bytes.total);
-  }
-
-  cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
-  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
-}
-
-}  // namespace
+constexpr auto output_may_include_released_allocations =
+  cudf::test::output_allocation_expectation::AT_LEAST_LIVE;
+constexpr auto struct_resource_expectations =
+  cudf::test::memory_resource_expectations{cudf::test::output_allocation_expectation::AT_LEAST_LIVE,
+                                           cudf::test::temporary_allocation_expectation::NONE};
 
 struct StructColumnWrapperTest : public cudf::test::BaseFixture {};
 
@@ -93,18 +59,22 @@ TEST_F(StructColumnWrapperTest, CopiedChildrenUseExplicitMemoryResource)
   auto strings  = cudf::test::strings_column_wrapper{"one", "two", "three", "four"};
   auto validity = std::vector<bool>{true, false, true, true};
 
-  expect_complete_struct_output_uses_resource([&](auto& mr) {
-    auto ref = rmm::device_async_resource_ref{mr};
-    return cudf::test::structs_column_wrapper({integers, strings}, ref);
-  });
+  expect_output_uses_resource(
+    [&](auto& mr) {
+      auto ref = rmm::device_async_resource_ref{mr};
+      return cudf::test::structs_column_wrapper({integers, strings}, ref);
+    },
+    output_may_include_released_allocations);
 
-  expect_complete_struct_output_uses_resource([&](auto& mr) {
-    return cudf::test::structs_column_wrapper({integers, strings}, validity, mr);
-  });
+  expect_output_uses_resource(
+    [&](auto& mr) { return cudf::test::structs_column_wrapper({integers, strings}, validity, mr); },
+    output_may_include_released_allocations);
 
-  expect_complete_struct_output_uses_resource([&](auto& mr) {
-    return cudf::test::structs_column_wrapper({integers, strings}, validity.begin(), mr);
-  });
+  expect_output_uses_resource(
+    [&](auto& mr) {
+      return cudf::test::structs_column_wrapper({integers, strings}, validity.begin(), mr);
+    },
+    output_may_include_released_allocations);
 }
 
 TEST_F(StructColumnWrapperTest, CopiedChildrenUseDistinctResources)
@@ -113,8 +83,9 @@ TEST_F(StructColumnWrapperTest, CopiedChildrenUseDistinctResources)
   auto strings  = cudf::test::strings_column_wrapper{"one", "two", "three", "four"};
   auto validity = std::vector<bool>{true, false, true, true};
 
-  expect_complete_struct_output_uses_distinct_resources(
-    [&](auto mr) { return cudf::test::structs_column_wrapper({integers, strings}, validity, mr); });
+  expect_output_uses_distinct_resources(
+    [&](auto mr) { return cudf::test::structs_column_wrapper({integers, strings}, validity, mr); },
+    struct_resource_expectations);
 }
 
 TEST_F(StructColumnWrapperTest, AdoptedChildrenRetainResourceProvenance)

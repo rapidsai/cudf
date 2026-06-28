@@ -242,19 +242,17 @@ std::unique_ptr<table> sort(table_view const& input);
 ## Memory Resources
 
 libcudf allocates all device memory via RMM memory resources (MR) or CUDA MRs. Resource refs
-provide non-owning access to either type. Allocating APIs should accept `cudf::memory_resources`,
-which carries separate output and temporary resource refs. During the module-by-module migration,
-legacy APIs may still expose only an `rmm::device_async_resource_ref` for output memory. See the
+provide access to either type. Allocating APIs accept `cudf::memory_resources`, which carries
+separate output and temporary resource refs. See the
 [RMM documentation](https://github.com/rapidsai/rmm/blob/main/README.md) for details.
 
 ### Current Device Memory Resource
 
 RMM provides a "default" memory resource for each device and functions to access and set it. libcudf
 provides wrappers for these functions in `cpp/include/cudf/utilities/memory_resource.hpp`. Public
-memory resource parameters should default to `cudf::get_current_device_resource_ref()`. For a
-`cudf::memory_resources` parameter, implicit one-resource construction uses that current resource
-for output and captures it for temporary allocation, preserving the behavior of APIs that have not
-yet exposed the two roles separately. Detail APIs must not default resource parameters.
+`cudf::memory_resources` parameters default to `cudf::get_current_device_resource_ref()`. Implicit
+one-resource construction uses that current resource for both output and temporary allocation.
+Detail APIs do not default resource parameters.
 
 ### Resource Refs
 
@@ -283,8 +281,8 @@ for more information.
 `cudf::memory_resources` is a cheap, non-owning value containing an output resource ref and a
 temporary resource ref. One-resource construction uses the supplied resource for output and captures
 the current cuDF resource for temporaries. Two-resource construction uses both supplied refs without
-consulting global resource state. Both referenced resources must outlive the operation and every
-allocation made from them.
+consulting global resource state. Objects that own allocated memory reify the selected resource ref
+into an owning `cuda::mr::any_resource`, retaining the resource needed to deallocate that memory.
 
 ## cudf::column
 
@@ -690,31 +688,30 @@ how device memory is allocated.
 
 ### Output Memory
 
-Any libcudf API that allocates memory returned to its caller should accept
-`cudf::memory_resources` as its final parameter once migrated. A public API defaults this parameter
-to `cudf::get_current_device_resource_ref()`; the corresponding detail API has the same parameter
-without a default. Every allocation owned by a returned column, table, scalar, buffer, or other
-object uses `resources.get_output_mr()`.
+Any libcudf API that allocates memory returned to its caller accepts `cudf::memory_resources` as its
+final parameter. A public API defaults this parameter to `cudf::get_current_device_resource_ref()`;
+the corresponding detail API has the same parameter without a default. Every allocation owned by a
+returned column, table, scalar, buffer, or other object uses `resources.get_output_mr()`.
 
 ```c++
+// The returned column contains newly allocated device memory,
+// therefore the API accepts memory_resources.
 std::unique_ptr<column> returns_output_memory(
   ...,
   rmm::cuda_stream_view stream = cudf::get_default_stream(),
   cudf::memory_resources resources = cudf::get_current_device_resource_ref());
 
+// This API does not allocate device memory,
+// therefore a memory_resources parameter is unnecessary.
 void does_not_allocate_device_memory(...);
 ```
-
-Legacy APIs that still accept one `rmm::device_async_resource_ref` are migrated module-by-module.
-When a signature is migrated, its existing source calls remain valid because a resource ref converts
-implicitly to `cudf::memory_resources`.
 
 ### Temporary Memory
 
 Memory released before an API returns uses `resources.get_temporary_mr()`. This includes scratch
 buffers, device-view metadata, device scalars, Thrust algorithm storage, and the output of a nested
-API call that the outer API consumes as an intermediate. Migrated code must name the appropriate
-accessor explicitly instead of consulting `cudf::get_current_device_resource_ref()`.
+API call that the outer API consumes as an intermediate. Code names the appropriate accessor
+explicitly instead of consulting `cudf::get_current_device_resource_ref()`.
 
 Allocation role is caller-relative. If `foo` calls `bar` and consumes `bar`'s result internally,
 then both roles passed to `bar` use `foo`'s temporary resource. If `bar`'s result becomes part of

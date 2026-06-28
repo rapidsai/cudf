@@ -6,6 +6,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/timestamp_utilities.cuh>
 #include <cudf_test/type_lists.hpp>
@@ -22,7 +23,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <thrust/logical.h>
 #include <thrust/sequence.h>
@@ -70,26 +70,13 @@ void expect_timestamp_output_uses_resource()
 {
   using namespace cuda::std::chrono;
 
-  auto upstream     = cudf::get_current_device_resource_ref();
-  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
-  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
-  {
-    auto column = cudf::test::generate_timestamps<cudf::timestamp_ms, Nullable>(
-                    100,
-                    cudf::test::time_point_ms{milliseconds{-1000}},
-                    cudf::test::time_point_ms{milliseconds{1000}},
-                    cudf::memory_resources{output_mr, temporary_mr})
-                    .release();
-
-    cudf::test::get_default_stream().synchronize();
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_mr.get_bytes_counter().value));
-    EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
-    EXPECT_EQ(0, temporary_mr.get_bytes_counter().total);
-  }
-
-  cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
-  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
+  cudf::test::expect_output_uses_distinct_resources([](auto resources) {
+    return cudf::test::generate_timestamps<cudf::timestamp_ms, Nullable>(
+      100,
+      cudf::test::time_point_ms{milliseconds{-1000}},
+      cudf::test::time_point_ms{milliseconds{1000}},
+      resources);
+  });
 }
 
 TEST(TimestampGeneratorMemoryResourceTest, DistinctOutputAndTemporaryResources)
