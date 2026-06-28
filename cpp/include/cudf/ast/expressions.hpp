@@ -386,6 +386,9 @@ class column_reference : public expression {
    */
   [[nodiscard]] cudf::data_type get_data_type(table_view const& table) const
   {
+    CUDF_EXPECTS(get_column_index() >= 0 && get_column_index() < table.num_columns(),
+                 "column index out of range",
+                 std::out_of_range);
     return table.column(get_column_index()).type();
   }
 
@@ -408,6 +411,9 @@ class column_reference : public expression {
         CUDF_FAIL("Column reference data type cannot be determined from unknown table.");
       }
     }();
+    CUDF_EXPECTS(get_column_index() >= 0 && get_column_index() < table.num_columns(),
+                 "column index out of range",
+                 std::out_of_range);
     return table.column(get_column_index()).type();
   }
 
