@@ -36,8 +36,9 @@ inline rmm::device_async_resource_ref get_current_device_resource_ref()
  * @brief Non-owning references to the memory resources used by a cuDF operation.
  *
  * The output resource allocates memory returned to the caller. The temporary resource allocates
- * intermediate memory that is released before the operation returns. Both referenced resources
- * must outlive every use of this object and any allocation made from them.
+ * intermediate memory that is released before the operation returns. Objects that own allocated
+ * memory reify the selected resource ref into an owning resource, retaining the resource needed for
+ * later deallocation.
  */
 class memory_resources {
  public:
