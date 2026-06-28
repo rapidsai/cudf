@@ -44,15 +44,15 @@ namespace detail {
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  *
  * @returns True if the column properties are equal, false otherwise
  */
 bool expect_column_properties_equal(
   cudf::column_view const& lhs,
   cudf::column_view const& rhs,
-  debug_output_level verbosity      = debug_output_level::FIRST_ERROR,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  debug_output_level verbosity = debug_output_level::FIRST_ERROR,
+  cudf::memory_resources mr    = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Verifies the property equivalence of two columns.
@@ -67,15 +67,15 @@ bool expect_column_properties_equal(
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  *
  * @returns True if the column properties are equivalent, false otherwise
  */
 bool expect_column_properties_equivalent(
   cudf::column_view const& lhs,
   cudf::column_view const& rhs,
-  debug_output_level verbosity      = debug_output_level::FIRST_ERROR,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  debug_output_level verbosity = debug_output_level::FIRST_ERROR,
+  cudf::memory_resources mr    = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Verifies the element-wise equality of two columns.
@@ -88,15 +88,14 @@ bool expect_column_properties_equivalent(
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  *
  * @returns True if the columns (and their properties) are equal, false otherwise
  */
-bool expect_columns_equal(
-  cudf::column_view const& lhs,
-  cudf::column_view const& rhs,
-  debug_output_level verbosity      = debug_output_level::FIRST_ERROR,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+bool expect_columns_equal(cudf::column_view const& lhs,
+                          cudf::column_view const& rhs,
+                          debug_output_level verbosity = debug_output_level::FIRST_ERROR,
+                          cudf::memory_resources mr    = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Verifies the element-wise equivalence of two columns.
@@ -112,16 +111,15 @@ bool expect_columns_equal(
  * @param verbosity Level of debug output verbosity
  * @param fp_ulps # of ulps of tolerance to allow when comparing
  * floating point values
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  *
  * @returns True if the columns (and their properties) are equivalent, false otherwise
  */
-bool expect_columns_equivalent(
-  cudf::column_view const& lhs,
-  cudf::column_view const& rhs,
-  debug_output_level verbosity      = debug_output_level::FIRST_ERROR,
-  size_type fp_ulps                 = cudf::test::default_ulp,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+bool expect_columns_equivalent(cudf::column_view const& lhs,
+                               cudf::column_view const& rhs,
+                               debug_output_level verbosity = debug_output_level::FIRST_ERROR,
+                               size_type fp_ulps            = cudf::test::default_ulp,
+                               cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.
@@ -131,13 +129,12 @@ bool expect_columns_equivalent(
  * @param lhs The first buffer
  * @param rhs The second buffer
  * @param size_bytes The number of bytes to check for equality
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  */
-void expect_equal_buffers(
-  void const* lhs,
-  void const* rhs,
-  std::size_t size_bytes,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+void expect_equal_buffers(void const* lhs,
+                          void const* rhs,
+                          std::size_t size_bytes,
+                          cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 }  // namespace detail
 
@@ -152,12 +149,11 @@ void expect_column_empty(cudf::column_view const& col);
  * @brief Copy the null bitmask from a column view to a host vector
  *
  * @param c      The column view
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  * @returns      Vector of bitmask_type elements
  */
 std::vector<bitmask_type> bitmask_to_host(
-  cudf::column_view const& c,
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  cudf::column_view const& c, cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Validates bitmask situated in host as per `number_of_elements`
@@ -179,13 +175,13 @@ bool validate_host_masks(std::vector<bitmask_type> const& expected_mask,
  *
  * @tparam T The data type of the elements of the `column_view`
  * @param c the `column_view` to copy from
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T, std::enable_if_t<not cudf::is_fixed_point<T>()>* = nullptr>
 std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(
-  column_view c, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  column_view c, cudf::memory_resources mr = cudf::get_current_device_resource_ref())
 {
   auto col_span  = cudf::device_span<T const>(c.data<T>(), c.size());
   auto host_data = cudf::detail::make_host_vector(col_span, cudf::get_default_stream());
@@ -203,13 +199,13 @@ std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(
  *
  * @tparam T The data type of the elements of the `column_view`
  * @param c the `column_view` to copy from
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  * @return std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> first is the
  *  `column_view`'s data, and second is the column's bitmask.
  */
 template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
 CUDF_EXPORT std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host(
-  column_view c, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  column_view c, cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Copies the data and bitmask of a `column_view` of strings
@@ -218,13 +214,13 @@ CUDF_EXPORT std::pair<thrust::host_vector<T>, std::vector<bitmask_type>> to_host
  * @throw cudf::logic_error if c is not strings column.
  *
  * @param c the `column_view` of strings to copy from
- * @param mr Device memory resource bridge for device allocations
+ * @param mr Memory resources used for temporary device allocations
  * @return std::pair first is `std::vector` of `std::string`
  * and second is the column's bitmask.
  */
 template <>
 CUDF_EXPORT std::pair<thrust::host_vector<std::string>, std::vector<bitmask_type>> to_host(
-  column_view c, rmm::device_async_resource_ref mr);
+  column_view c, cudf::memory_resources mr);
 //! @endcond
 
 /**

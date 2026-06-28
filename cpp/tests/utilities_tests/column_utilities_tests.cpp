@@ -147,7 +147,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(col1, col2);
 }
 
-TEST_F(ColumnUtilitiesEquivalenceTest, ExplicitMemoryResourceBridge)
+TEST_F(ColumnUtilitiesEquivalenceTest, DistinctMemoryResources)
 {
   cudf::test::fixed_width_column_wrapper<int32_t> lhs{1, 2, 3, 4};
   cudf::test::fixed_width_column_wrapper<int32_t> rhs{1, 2, 3, 4};
@@ -159,7 +159,10 @@ TEST_F(ColumnUtilitiesEquivalenceTest, ExplicitMemoryResourceBridge)
   auto const sliced                = cudf::slice(nullable, {1, 4}).front();
   auto const table                 = cudf::table_view{{lhs_view, rhs_view}};
 
-  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  auto upstream     = cudf::get_current_device_resource_ref();
+  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
+  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
+  auto mr           = cudf::memory_resources{output_mr, temporary_mr};
 
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUAL(lhs, rhs, cudf::test::debug_output_level::QUIET, mr);
   CUDF_TEST_EXPECT_COLUMN_PROPERTIES_EQUIVALENT(
@@ -185,8 +188,10 @@ TEST_F(ColumnUtilitiesEquivalenceTest, ExplicitMemoryResourceBridge)
   cudf::test::print(sliced, output, mr);
 
   cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, mr.get_bytes_counter().value);
-  EXPECT_EQ(0, mr.get_bytes_counter().total);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().total);
+  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
+  EXPECT_GT(temporary_mr.get_bytes_counter().total, 0);
 }
 
 struct ColumnUtilitiesStringsTest : public cudf::test::BaseFixture {};
