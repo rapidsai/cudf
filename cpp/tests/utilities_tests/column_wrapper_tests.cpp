@@ -7,6 +7,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/memory_resource_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -17,72 +18,8 @@
 
 #include <cuda/iterator>
 
-namespace {
-
-template <typename Factory>
-void expect_output_uses_resource(Factory factory)
-{
-  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
-
-  {
-    auto column = factory(mr).release();
-    cudf::test::get_default_stream().synchronize();
-    auto const bytes = mr.get_bytes_counter();
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(bytes.value));
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(bytes.total));
-  }
-
-  cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, mr.get_bytes_counter().value);
-}
-
-template <typename Factory>
-void expect_output_uses_distinct_resources(Factory factory)
-{
-  auto upstream     = cudf::get_current_device_resource_ref();
-  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
-  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
-
-  {
-    auto column = factory(cudf::memory_resources{output_mr, temporary_mr}).release();
-    cudf::test::get_default_stream().synchronize();
-    auto const output_bytes    = output_mr.get_bytes_counter();
-    auto const temporary_bytes = temporary_mr.get_bytes_counter();
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.value));
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.total));
-    EXPECT_EQ(0, temporary_bytes.value);
-    EXPECT_EQ(0, temporary_bytes.total);
-  }
-
-  cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
-  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
-}
-
-template <typename Factory>
-void expect_dictionary_uses_distinct_resources(Factory factory)
-{
-  auto upstream     = cudf::get_current_device_resource_ref();
-  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
-  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
-
-  {
-    auto column = factory(cudf::memory_resources{output_mr, temporary_mr}).release();
-    cudf::test::get_default_stream().synchronize();
-    auto const output_bytes    = output_mr.get_bytes_counter();
-    auto const temporary_bytes = temporary_mr.get_bytes_counter();
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.value));
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.total));
-    EXPECT_EQ(0, temporary_bytes.value);
-    EXPECT_GT(temporary_bytes.total, 0);
-  }
-
-  cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
-  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
-}
-
-}  // namespace
+using cudf::test::expect_output_uses_distinct_resources;
+using cudf::test::expect_output_uses_resource;
 
 TEST(FixedWidthColumnWrapperMemoryResourceTest, ExplicitResourceOverloadMatrix)
 {
@@ -294,10 +231,13 @@ TEST(DictionaryColumnWrapperMemoryResourceTest, FixedWidthDistinctOutputAndTempo
   auto const elements = std::vector<int32_t>{3, 1, 3, 2};
   auto const validity = std::vector<bool>{true, false, true, true};
 
-  expect_dictionary_uses_distinct_resources([&](auto mr) {
-    return cudf::test::dictionary_column_wrapper<int32_t>(
-      elements.begin(), elements.end(), validity.begin(), mr);
-  });
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<int32_t>(
+        elements.begin(), elements.end(), validity.begin(), mr);
+    },
+    cudf::test::memory_resource_expectations{cudf::test::output_allocation_expectation::EXACT,
+                                             cudf::test::temporary_allocation_expectation::SOME});
 }
 
 TEST(DictionaryColumnWrapperMemoryResourceTest, StringExplicitResourceOverloadMatrix)
@@ -350,10 +290,13 @@ TEST(DictionaryColumnWrapperMemoryResourceTest, StringDistinctOutputAndTemporary
   auto const strings  = std::vector<std::string>{"gamma", "alpha", "gamma", "beta"};
   auto const validity = std::vector<bool>{true, false, true, true};
 
-  expect_dictionary_uses_distinct_resources([&](auto mr) {
-    return cudf::test::dictionary_column_wrapper<std::string>(
-      strings.begin(), strings.end(), validity.begin(), mr);
-  });
+  expect_output_uses_distinct_resources(
+    [&](auto mr) {
+      return cudf::test::dictionary_column_wrapper<std::string>(
+        strings.begin(), strings.end(), validity.begin(), mr);
+    },
+    cudf::test::memory_resource_expectations{cudf::test::output_allocation_expectation::EXACT,
+                                             cudf::test::temporary_allocation_expectation::SOME});
 }
 
 template <typename T>

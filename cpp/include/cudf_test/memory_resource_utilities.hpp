@@ -19,6 +19,7 @@
 #include <cuda/memory_resource>
 
 #include <cstddef>
+#include <functional>
 #include <utility>
 
 namespace CUDF_EXPORT cudf {
@@ -58,6 +59,24 @@ class scoped_current_device_resource {
 
  private:
   cuda::mr::any_resource<cuda::mr::device_accessible> _previous;
+};
+
+/** @brief Expected relationship between live and total output-resource allocations. */
+enum class output_allocation_expectation {
+  EXACT,         ///< Total output-resource bytes equal the live result size
+  AT_LEAST_LIVE  ///< Total output-resource bytes may include released allocations
+};
+
+/** @brief Expected temporary-resource allocation activity. */
+enum class temporary_allocation_expectation {
+  NONE,  ///< No temporary-resource allocation is expected
+  SOME   ///< At least one temporary-resource allocation is expected
+};
+
+/** @brief Allocation expectations shared by reusable memory-resource tests. */
+struct memory_resource_expectations {
+  output_allocation_expectation output{output_allocation_expectation::EXACT};
+  temporary_allocation_expectation temporary{temporary_allocation_expectation::NONE};
 };
 
 /**
@@ -151,6 +170,36 @@ class memory_resource_test_harness {
   }
 
   /**
+   * @brief Assert output ownership and temporary allocation activity.
+   *
+   * @param expected_output_bytes Number of bytes owned by the live result
+   * @param expectations Expected output and temporary allocation behavior
+   * @param stream Stream to synchronize before inspecting counters
+   */
+  void expect_resource_usage(std::size_t expected_output_bytes,
+                             memory_resource_expectations expectations = {},
+                             rmm::cuda_stream_view stream = cudf::test::get_default_stream()) const
+  {
+    synchronize(stream);
+    auto const output_bytes    = _output_mr.get_bytes_counter();
+    auto const temporary_bytes = _temporary_mr.get_bytes_counter();
+
+    EXPECT_EQ(expected_output_bytes, static_cast<std::size_t>(output_bytes.value));
+    if (expectations.output == output_allocation_expectation::EXACT) {
+      EXPECT_EQ(expected_output_bytes, static_cast<std::size_t>(output_bytes.total));
+    } else {
+      EXPECT_GE(output_bytes.total, output_bytes.value);
+    }
+
+    EXPECT_EQ(temporary_bytes.value, 0);
+    if (expectations.temporary == temporary_allocation_expectation::SOME) {
+      EXPECT_GT(temporary_bytes.total, 0);
+    } else {
+      EXPECT_EQ(temporary_bytes.total, 0);
+    }
+  }
+
+  /**
    * @brief Assert that no output or temporary allocations remain after synchronizing `stream`.
    *
    * Setup allocations are intentionally excluded because test inputs may remain alive while result
@@ -170,6 +219,115 @@ class memory_resource_test_harness {
   rmm::mr::statistics_resource_adaptor _temporary_mr;
   rmm::mr::callback_memory_resource _failing_mr;
 };
+
+/**
+ * @brief Verify that an owning result uses one explicitly supplied output resource.
+ *
+ * `factory` receives a statistics resource and returns a column wrapper. The helper releases the
+ * wrapper into an owning column and compares its `alloc_size()` with the resource counters.
+ *
+ * @tparam Factory Callable type used to construct the result
+ * @param factory Callable invoked with the output resource
+ * @param output_expectation Expected relationship between live and total output bytes
+ * @param stream Stream to synchronize before inspecting allocation counters
+ */
+template <typename Factory>
+void expect_output_uses_resource(
+  Factory&& factory,
+  output_allocation_expectation output_expectation = output_allocation_expectation::EXACT,
+  rmm::cuda_stream_view stream                     = cudf::test::get_default_stream())
+{
+  auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    auto result = std::invoke(std::forward<Factory>(factory), output_mr).release();
+    stream.synchronize();
+    auto const output_bytes = output_mr.get_bytes_counter();
+    auto const result_bytes = result->alloc_size();
+
+    EXPECT_EQ(result_bytes, static_cast<std::size_t>(output_bytes.value));
+    if (output_expectation == output_allocation_expectation::EXACT) {
+      EXPECT_EQ(result_bytes, static_cast<std::size_t>(output_bytes.total));
+    } else {
+      EXPECT_GE(output_bytes.total, output_bytes.value);
+    }
+  }
+
+  stream.synchronize();
+  EXPECT_EQ(output_mr.get_bytes_counter().value, 0);
+}
+
+/**
+ * @brief Verify output and temporary routing for an owning result.
+ *
+ * `factory` receives distinct output and temporary resources and returns a column wrapper. The
+ * helper releases the wrapper into an owning column and compares its `alloc_size()` with the
+ * resource counters. This helper does not replace the current resource, so it is suitable for test
+ * utilities whose transitive production dependencies have not yet been migrated.
+ *
+ * @tparam Factory Callable type used to construct the result
+ * @param factory Callable invoked with distinct resources
+ * @param expectations Expected output and temporary allocation behavior
+ * @param stream Stream to synchronize before inspecting allocation counters
+ */
+template <typename Factory>
+void expect_output_uses_distinct_resources(
+  Factory&& factory,
+  memory_resource_expectations expectations = {},
+  rmm::cuda_stream_view stream              = cudf::test::get_default_stream())
+{
+  auto harness = memory_resource_test_harness{};
+
+  {
+    auto result = std::invoke(std::forward<Factory>(factory), harness.resources()).release();
+    harness.expect_resource_usage(result->alloc_size(), expectations, stream);
+  }
+
+  harness.expect_no_live_allocations(stream);
+}
+
+/**
+ * @brief Invoke an API with explicit resources and validate its allocation routing.
+ *
+ * The current resource is allocation-failing only while `factory` runs and `stream` synchronizes.
+ * Allocation accounting and `validate_result` run after the prior current resource is restored.
+ * `result_size` makes this helper usable with columns, tables, buffers, and compound result types.
+ *
+ * @tparam Factory Callable accepting `cudf::memory_resources` and returning an owning result
+ * @tparam ResultSize Callable returning the result's output allocation size in bytes
+ * @tparam ResultValidator Callable that validates the result outside the failing-resource scope
+ * @param harness Reusable setup, output, temporary, and failing-resource instrumentation
+ * @param factory API invocation accepting the harness resources
+ * @param result_size Callable returning the number of output bytes owned by the result
+ * @param validate_result Callable that validates the result after restoring the current resource
+ * @param expectations Expected output and temporary allocation behavior
+ * @param stream Stream used by the API invocation
+ */
+template <typename Factory, typename ResultSize, typename ResultValidator>
+void expect_api_uses_memory_resources(
+  memory_resource_test_harness& harness,
+  Factory&& factory,
+  ResultSize&& result_size,
+  ResultValidator&& validate_result,
+  memory_resource_expectations expectations = {},
+  rmm::cuda_stream_view stream              = cudf::test::get_default_stream())
+{
+  {
+    auto result = [&]() {
+      auto current_scope = harness.fail_on_current_device_resource_use();
+      auto api_result    = std::invoke(std::forward<Factory>(factory), harness.resources());
+      harness.synchronize(stream);
+      return api_result;
+    }();
+
+    auto const output_bytes =
+      static_cast<std::size_t>(std::invoke(std::forward<ResultSize>(result_size), result));
+    harness.expect_resource_usage(output_bytes, expectations, stream);
+    std::invoke(std::forward<ResultValidator>(validate_result), result);
+  }
+
+  harness.expect_no_live_allocations(stream);
+}
 
 }  // namespace test
 }  // namespace CUDF_EXPORT cudf

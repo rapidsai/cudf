@@ -483,8 +483,8 @@ std::string stringify_column_differences(cudf::device_span<int const> difference
                                          column_view const& lhs_row_indices,
                                          column_view const& rhs_row_indices,
                                          debug_output_level verbosity,
-                                         cudf::memory_resources mr,
-                                         int depth)
+                                         int depth,
+                                         cudf::memory_resources mr)
 {
   CUDF_EXPECTS(not differences.empty(), "Shouldn't enter this function if `differences` is empty");
   std::string const depth_str = depth > 0 ? "depth " + std::to_string(depth) + '\n' : "";
@@ -535,8 +535,8 @@ struct column_comparator_impl {
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  cudf::memory_resources mr,
-                  int depth)
+                  int depth,
+                  cudf::memory_resources mr)
   {
     auto d_lhs_row_indices = cudf::column_device_view::create(
       lhs_row_indices, cudf::test::get_default_stream(), mr.get_temporary_mr());
@@ -595,7 +595,7 @@ struct column_comparator_impl {
         // GTEST_FAIL() does a return that conflicts with our return type. so hide it in a lambda.
         [&]() {
           GTEST_FAIL() << stringify_column_differences(
-            differences, lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, mr, depth);
+            differences, lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, depth, mr);
         }();
       }
       return false;
@@ -617,8 +617,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  cudf::memory_resources mr,
-                  int depth)
+                  int depth,
+                  cudf::memory_resources mr)
   {
     lists_column_view lhs_l(lhs);
     lists_column_view rhs_l(rhs);
@@ -721,7 +721,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
         // GTEST_FAIL() does a return that conflicts with our return type. so hide it in a lambda.
         [&]() {
           GTEST_FAIL() << stringify_column_differences(
-            differences, lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, mr, depth);
+            differences, lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, depth, mr);
         }();
       }
       return false;
@@ -745,8 +745,8 @@ struct column_comparator_impl<list_view, check_exact_equality> {
                                    *rhs_child_indices,
                                    verbosity,
                                    fp_ulps,
-                                   mr,
-                                   depth + 1);
+                                   depth + 1,
+                                   mr);
     }
 
     return true;
@@ -761,8 +761,8 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  cudf::memory_resources mr,
-                  int depth)
+                  int depth,
+                  cudf::memory_resources mr)
   {
     structs_column_view l_scv(lhs);
     structs_column_view r_scv(rhs);
@@ -778,8 +778,8 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
                                  rhs_row_indices,
                                  verbosity,
                                  fp_ulps,
-                                 mr,
-                                 depth + 1)) {
+                                 depth + 1,
+                                 mr)) {
         return false;
       }
     }
@@ -796,8 +796,8 @@ struct column_comparator {
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
                   size_type fp_ulps,
-                  cudf::memory_resources mr,
-                  int depth = 0)
+                  int depth,
+                  cudf::memory_resources mr)
   {
     // compare properties
     if (!cudf::type_dispatcher(lhs.type(),
@@ -813,7 +813,7 @@ struct column_comparator {
 
     // compare values
     column_comparator_impl<T, check_exact_equality> comparator{};
-    return comparator(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, fp_ulps, mr, depth);
+    return comparator(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, fp_ulps, depth, mr);
   }
 };
 
@@ -893,6 +893,7 @@ bool expect_columns_equal(cudf::column_view const& lhs,
                                *rhs_indices,
                                verbosity,
                                cudf::test::default_ulp,
+                               0,
                                mr);
 }
 
@@ -916,6 +917,7 @@ bool expect_columns_equivalent(cudf::column_view const& lhs,
                                *rhs_indices,
                                verbosity,
                                fp_ulps,
+                               0,
                                mr);
 }
 
