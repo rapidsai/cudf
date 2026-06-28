@@ -2090,13 +2090,37 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {structs_col.release()};
    * @endcode
    *
+   * The existing allocations in adopted child columns retain their original memory-resource
+   * provenance. The supplied resource controls the struct null mask and any child allocations
+   * created while sanitizing null struct rows.
+   *
    * @param child_columns The vector of pre-constructed child columns
    * @param validity The vector of bools representing the column validity values
+   * @param mr Device memory resource used for new allocations owned by the returned column
    */
-  structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
-                         std::vector<bool> const& validity = {})
+  structs_column_wrapper(
+    std::vector<std::unique_ptr<cudf::column>>&& child_columns,
+    std::vector<bool> const& validity = {},
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
-    init(std::move(child_columns), validity);
+    init(std::move(child_columns), validity, mr);
+  }
+
+  /**
+   * @brief Constructs a struct column by adopting child columns with no parent nulls.
+   *
+   * @tparam Resource Device memory resource type
+   * @param child_columns The vector of pre-constructed child columns
+   * @param resource Device memory resource used for new allocations owned by the returned column
+   */
+  template <
+    typename Resource,
+    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
+  structs_column_wrapper(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
+                         Resource&& resource)
+    : structs_column_wrapper(
+        std::move(child_columns), std::vector<bool>{}, rmm::device_async_resource_ref{resource})
+  {
   }
 
   /**
@@ -2116,12 +2140,17 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {structs_col.release()};
    * @endcode
    *
+   * Child wrappers are deep-copied, so all allocations in the returned children use the supplied
+   * resource. The source wrappers retain their original allocations.
+   *
    * @param child_column_wrappers The list of child column wrappers
    * @param validity The vector of bools representing the column validity values
+   * @param mr Device memory resource used to allocate the returned column
    */
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
-    std::vector<bool> const& validity = {})
+    std::vector<bool> const& validity = {},
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
     std::vector<std::unique_ptr<cudf::column>> child_columns;
     child_columns.reserve(child_column_wrappers.size());
@@ -2129,10 +2158,28 @@ class structs_column_wrapper : public detail::column_wrapper {
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
-                     return std::make_unique<cudf::column>(column_wrapper.get(),
-                                                           cudf::test::get_default_stream());
+                     return std::make_unique<cudf::column>(
+                       column_wrapper.get(), cudf::test::get_default_stream(), mr);
                    });
-    init(std::move(child_columns), validity);
+    init(std::move(child_columns), validity, mr);
+  }
+
+  /**
+   * @brief Constructs a struct column by copying child wrappers with no parent nulls.
+   *
+   * @tparam Resource Device memory resource type
+   * @param child_column_wrappers The list of child column wrappers
+   * @param resource Device memory resource used to allocate the returned column
+   */
+  template <
+    typename Resource,
+    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
+  structs_column_wrapper(
+    std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
+    Resource&& resource)
+    : structs_column_wrapper(
+        child_column_wrappers, std::vector<bool>{}, rmm::device_async_resource_ref{resource})
+  {
   }
 
   /**
@@ -2154,11 +2201,14 @@ class structs_column_wrapper : public detail::column_wrapper {
    *
    * @param child_column_wrappers The list of child column wrappers
    * @param validity_iter Iterator returning the per-row validity bool
+   * @param mr Device memory resource used to allocate the returned column
    */
-  template <typename V>
+  template <typename V,
+            std::enable_if_t<!std::is_convertible_v<V&, rmm::device_async_resource_ref>>* = nullptr>
   structs_column_wrapper(
     std::initializer_list<std::reference_wrapper<detail::column_wrapper>> child_column_wrappers,
-    V validity_iter)
+    V validity_iter,
+    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
     std::vector<std::unique_ptr<cudf::column>> child_columns;
     child_columns.reserve(child_column_wrappers.size());
@@ -2166,15 +2216,16 @@ class structs_column_wrapper : public detail::column_wrapper {
                    child_column_wrappers.end(),
                    std::back_inserter(child_columns),
                    [&](auto const& column_wrapper) {
-                     return std::make_unique<cudf::column>(column_wrapper.get(),
-                                                           cudf::test::get_default_stream());
+                     return std::make_unique<cudf::column>(
+                       column_wrapper.get(), cudf::test::get_default_stream(), mr);
                    });
-    init(std::move(child_columns), validity_iter);
+    init(std::move(child_columns), validity_iter, mr);
   }
 
  private:
   void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
-            std::vector<bool> const& validity)
+            std::vector<bool> const& validity,
+            rmm::device_async_resource_ref mr)
   {
     size_type num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
@@ -2188,8 +2239,7 @@ class structs_column_wrapper : public detail::column_wrapper {
 
     auto [null_mask, null_count] = [&] {
       if (validity.size() <= 0) return std::make_pair(rmm::device_buffer{}, cudf::size_type{0});
-      return cudf::test::detail::make_null_mask(
-        validity.begin(), validity.end(), cudf::get_current_device_resource_ref());
+      return cudf::test::detail::make_null_mask(validity.begin(), validity.end(), mr);
     }();
 
     wrapped = cudf::make_structs_column(num_rows,
@@ -2197,11 +2247,13 @@ class structs_column_wrapper : public detail::column_wrapper {
                                         null_count,
                                         std::move(null_mask),
                                         cudf::test::get_default_stream(),
-                                        cudf::get_current_device_resource_ref());
+                                        mr);
   }
 
   template <typename V>
-  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns, V validity_iterator)
+  void init(std::vector<std::unique_ptr<cudf::column>>&& child_columns,
+            V validity_iterator,
+            rmm::device_async_resource_ref mr)
   {
     size_type const num_rows = child_columns.empty() ? 0 : child_columns[0]->size();
 
@@ -2213,7 +2265,7 @@ class structs_column_wrapper : public detail::column_wrapper {
     std::vector<bool> validity(num_rows);
     std::copy(validity_iterator, validity_iterator + num_rows, validity.begin());
 
-    init(std::move(child_columns), validity);
+    init(std::move(child_columns), validity, mr);
   }
 };
 
