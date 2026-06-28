@@ -18,6 +18,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 
 #include <cuda/iterator>
 
@@ -30,6 +31,27 @@
 using vector_of_columns = std::vector<std::unique_ptr<cudf::column>>;
 using cudf::size_type;
 
+namespace {
+
+template <typename Factory>
+void expect_complete_struct_output_uses_resource(Factory factory)
+{
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    auto column = factory(mr).release();
+    cudf::test::get_default_stream().synchronize();
+    auto const bytes = mr.get_bytes_counter();
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(bytes.value));
+    EXPECT_GE(bytes.total, bytes.value);
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, mr.get_bytes_counter().value);
+}
+
+}  // namespace
+
 struct StructColumnWrapperTest : public cudf::test::BaseFixture {};
 
 template <typename T>
@@ -41,6 +63,83 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::TimestampTypes>;
 
 TYPED_TEST_SUITE(TypedStructColumnWrapperTest, FixedWidthTypesNotBool);
+
+TEST_F(StructColumnWrapperTest, CopiedChildrenUseExplicitMemoryResource)
+{
+  auto integers = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4};
+  auto strings  = cudf::test::strings_column_wrapper{"one", "two", "three", "four"};
+  auto validity = std::vector<bool>{true, false, true, true};
+
+  expect_complete_struct_output_uses_resource([&](auto& mr) {
+    auto ref = rmm::device_async_resource_ref{mr};
+    return cudf::test::structs_column_wrapper({integers, strings}, ref);
+  });
+
+  expect_complete_struct_output_uses_resource([&](auto& mr) {
+    return cudf::test::structs_column_wrapper({integers, strings}, validity, mr);
+  });
+
+  expect_complete_struct_output_uses_resource([&](auto& mr) {
+    return cudf::test::structs_column_wrapper({integers, strings}, validity.begin(), mr);
+  });
+}
+
+TEST_F(StructColumnWrapperTest, AdoptedChildrenRetainResourceProvenance)
+{
+  auto child_mr  = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    vector_of_columns children;
+    children.push_back(
+      cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, child_mr).release());
+    children.push_back(
+      cudf::test::strings_column_wrapper({"one", "two", "three", "four"}, child_mr).release());
+    cudf::test::get_default_stream().synchronize();
+    auto const adopted_bytes = child_mr.get_bytes_counter().value;
+
+    auto column = cudf::test::structs_column_wrapper(std::move(children), output_mr).release();
+    cudf::test::get_default_stream().synchronize();
+
+    EXPECT_EQ(adopted_bytes, child_mr.get_bytes_counter().value);
+    EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+    EXPECT_EQ(column->alloc_size(),
+              static_cast<std::size_t>(child_mr.get_bytes_counter().value +
+                                       output_mr.get_bytes_counter().value));
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, child_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+}
+
+TEST_F(StructColumnWrapperTest, AdoptedNullableChildrenUseExplicitMemoryResource)
+{
+  auto child_mr  = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    vector_of_columns children;
+    children.push_back(
+      cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, child_mr).release());
+    children.push_back(
+      cudf::test::strings_column_wrapper({"one", "two", "three", "four"}, child_mr).release());
+
+    auto column = cudf::test::structs_column_wrapper(
+                    std::move(children), std::vector<bool>{true, false, true, true}, output_mr)
+                    .release();
+    cudf::test::get_default_stream().synchronize();
+
+    EXPECT_GT(output_mr.get_bytes_counter().value, 0);
+    EXPECT_EQ(column->alloc_size(),
+              static_cast<std::size_t>(child_mr.get_bytes_counter().value +
+                                       output_mr.get_bytes_counter().value));
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, child_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+}
 
 // Test simple struct construction without nullmask, through column factory.
 // Columns must retain their originally set values.
