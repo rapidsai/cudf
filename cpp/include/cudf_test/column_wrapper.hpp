@@ -1531,12 +1531,15 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
+   * @param mr Device memory resource used to allocate the returned column
    */
   template <typename Element = T, std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<SourceElementT> elements) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    : column_wrapper{}
   {
     build_from_non_nested(
-      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements).release());
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, mr).release(), mr);
   }
 
   /**
@@ -1553,14 +1556,18 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param begin Beginning of the sequence
    * @param end End of the sequence
+   * @param mr Device memory resource used to allocate the returned column
    */
   template <typename Element = T,
             typename InputIterator,
             std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(InputIterator begin, InputIterator end) : column_wrapper{}
+  lists_column_wrapper(InputIterator begin,
+                       InputIterator end,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    : column_wrapper{}
   {
     build_from_non_nested(
-      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end).release());
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, mr).release(), mr);
   }
 
   /**
@@ -1577,15 +1584,20 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param v The validity iterator
+   * @param mr Device memory resource used to allocate the returned column
    */
   template <typename Element = T,
             typename ValidityIterator,
-            std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(std::initializer_list<SourceElementT> elements, ValidityIterator v)
+            std::enable_if_t<
+              cudf::is_fixed_width<Element>() &&
+              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
+  lists_column_wrapper(std::initializer_list<SourceElementT> elements,
+                       ValidityIterator v,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
-      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v).release());
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(elements, v, mr).release(), mr);
   }
 
   /**
@@ -1604,16 +1616,22 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @param begin Beginning of the sequence
    * @param end End of the sequence
    * @param v The validity iterator
+   * @param mr Device memory resource used to allocate the returned column
    */
   template <typename Element = T,
             typename InputIterator,
             typename ValidityIterator,
-            std::enable_if_t<cudf::is_fixed_width<Element>()>* = nullptr>
-  lists_column_wrapper(InputIterator begin, InputIterator end, ValidityIterator v)
+            std::enable_if_t<
+              cudf::is_fixed_width<Element>() &&
+              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
+  lists_column_wrapper(InputIterator begin,
+                       InputIterator end,
+                       ValidityIterator v,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
-      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v).release());
+      cudf::test::fixed_width_column_wrapper<T, SourceElementT>(begin, end, v, mr).release(), mr);
   }
 
   /**
@@ -1628,13 +1646,16 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
+   * @param mr Device memory resource used to allocate the returned column
    */
   template <typename Element                                              = T,
             std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
-  lists_column_wrapper(std::initializer_list<std::string> elements) : column_wrapper{}
+  lists_column_wrapper(std::initializer_list<std::string> elements,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+    : column_wrapper{}
   {
     build_from_non_nested(
-      cudf::test::strings_column_wrapper(elements.begin(), elements.end()).release());
+      cudf::test::strings_column_wrapper(elements.begin(), elements.end(), mr).release(), mr);
   }
 
   /**
@@ -1651,15 +1672,20 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param v The validity iterator
+   * @param mr Device memory resource used to allocate the returned column
    */
   template <typename Element = T,
             typename ValidityIterator,
-            std::enable_if_t<std::is_same_v<Element, cudf::string_view>>* = nullptr>
-  lists_column_wrapper(std::initializer_list<std::string> elements, ValidityIterator v)
+            std::enable_if_t<
+              std::is_same_v<Element, cudf::string_view> &&
+              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
+  lists_column_wrapper(std::initializer_list<std::string> elements,
+                       ValidityIterator v,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     build_from_non_nested(
-      cudf::test::strings_column_wrapper(elements.begin(), elements.end(), v).release());
+      cudf::test::strings_column_wrapper(elements.begin(), elements.end(), v, mr).release(), mr);
   }
 
   /**
@@ -1682,12 +1708,14 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
+   * @param mr Device memory resource used to allocate the returned column
    */
-  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements)
+  lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     std::vector<bool> valids;
-    build_from_nested(elements, valids);
+    build_from_nested(elements, valids, mr);
   }
 
   /**
@@ -1701,9 +1729,21 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    */
-  lists_column_wrapper() : column_wrapper{}
+  lists_column_wrapper() : lists_column_wrapper(cudf::get_current_device_resource_ref()) {}
+
+  /**
+   * @brief Construct an empty lists column on the specified resource
+   *
+   * @tparam Resource Device memory resource type
+   * @param resource Device memory resource used to allocate the returned column
+   */
+  template <
+    typename Resource,
+    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
+  explicit lists_column_wrapper(Resource&& resource) : column_wrapper{}
   {
-    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()));
+    auto const mr = rmm::device_async_resource_ref{resource};
+    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()), mr);
   }
 
   /**
@@ -1730,10 +1770,14 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param v The validity iterator
+   * @param mr Device memory resource used to allocate the returned column
    */
-  template <typename ValidityIterator>
+  template <typename ValidityIterator,
+            std::enable_if_t<
+              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
   lists_column_wrapper(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
-                       ValidityIterator v)
+                       ValidityIterator v,
+                       rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     std::vector<bool> validity;
@@ -1742,25 +1786,30 @@ class lists_column_wrapper : public detail::column_wrapper {
                    v,
                    std::back_inserter(validity),
                    [](lists_column_wrapper const& l, bool valid) { return valid; });
-    build_from_nested(elements, validity);
+    build_from_nested(elements, validity, mr);
   }
 
   /**
    * @brief Construct a list column containing a single empty, optionally null row.
    *
    * @param valid Whether or not the empty row is also null
+   * @param mr Device memory resource used to allocate the returned column
    * @return A list column containing a single empty row
    */
-  static lists_column_wrapper<T> make_one_empty_row_column(bool valid = true)
+  static lists_column_wrapper<T> make_one_empty_row_column(
+    bool valid = true, rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
   {
-    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{0, 0};
-    cudf::test::fixed_width_column_wrapper<int> values{};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets({0, 0}, mr);
+    cudf::test::fixed_width_column_wrapper<int> values(mr);
     return lists_column_wrapper<T>(
       1,
       offsets.release(),
       values.release(),
       valid ? 0 : 1,
-      valid ? rmm::device_buffer{} : cudf::create_null_mask(1, cudf::mask_state::ALL_NULL));
+      valid ? rmm::device_buffer{}
+            : cudf::create_null_mask(
+                1, cudf::mask_state::ALL_NULL, cudf::test::get_default_stream(), mr),
+      mr);
   }
 
  private:
@@ -1772,13 +1821,16 @@ class lists_column_wrapper : public detail::column_wrapper {
    * @param values The column of values bounded by the offsets
    * @param null_count The number of null list entries
    * @param null_mask The bits specifying the null lists in device memory
+   * @param mr Device memory resource associated with the adopted constituent parts
    */
   lists_column_wrapper(size_type num_rows,
                        std::unique_ptr<cudf::column>&& offsets,
                        std::unique_ptr<cudf::column>&& values,
                        size_type null_count,
-                       rmm::device_buffer&& null_mask)
+                       rmm::device_buffer&& null_mask,
+                       rmm::device_async_resource_ref mr)
   {
+    static_cast<void>(mr);
     // construct the list column
     wrapped = make_lists_column(
       num_rows, std::move(offsets), std::move(values), null_count, std::move(null_mask));
@@ -1798,10 +1850,12 @@ class lists_column_wrapper : public detail::column_wrapper {
    *
    * @param elements Input columns to be wrapped
    * @param v The validity of each row
+   * @param mr Device memory resource used to allocate the returned column
    *
    */
   void build_from_nested(std::initializer_list<lists_column_wrapper<T, SourceElementT>> elements,
-                         std::vector<bool> const& v)
+                         std::vector<bool> const& v,
+                         rmm::device_async_resource_ref mr)
   {
     auto valids = cudf::detail::make_counting_transform_iterator(
       0, [&v](auto i) { return v.empty() ? true : v[i]; });
@@ -1836,7 +1890,8 @@ class lists_column_wrapper : public detail::column_wrapper {
     // add the final offset
     offsetv.push_back(count);
     auto offsets =
-      cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
+      cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end(), mr)
+        .release();
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
@@ -1846,18 +1901,16 @@ class lists_column_wrapper : public detail::column_wrapper {
                     std::back_inserter(children),
                     cuda::std::identity{});
 
-    auto data = children.empty() ? cudf::empty_like(expected_hierarchy)
-                                 : cudf::concatenate(children,
-                                                     cudf::test::get_default_stream(),
-                                                     cudf::get_current_device_resource_ref());
+    auto data = children.empty()
+                  ? cudf::empty_like(expected_hierarchy)
+                  : cudf::concatenate(children, cudf::test::get_default_stream(), mr);
 
     // increment depth
     depth = expected_depth + 1;
 
     auto [null_mask, null_count] = [&] {
       if (v.size() <= 0) return std::make_pair(rmm::device_buffer{}, cudf::size_type{0});
-      return cudf::test::detail::make_null_mask(
-        v.begin(), v.end(), cudf::get_current_device_resource_ref());
+      return cudf::test::detail::make_null_mask(v.begin(), v.end(), mr);
     }();
 
     // construct the list column
@@ -1870,9 +1923,10 @@ class lists_column_wrapper : public detail::column_wrapper {
    * will be "unwrapped" when used in the nesting (list of lists) case.
    *
    * @param c Input column to be wrapped
+   * @param mr Device memory resource used to allocate the returned column
    *
    */
-  void build_from_non_nested(std::unique_ptr<column> c)
+  void build_from_non_nested(std::unique_ptr<column> c, rmm::device_async_resource_ref mr)
   {
     CUDF_EXPECTS(c->type().id() == type_id::EMPTY || !cudf::is_nested(c->type()),
                  "Unexpected type");
@@ -1883,7 +1937,8 @@ class lists_column_wrapper : public detail::column_wrapper {
       offsetv.push_back(c->size());
     }
     auto offsets =
-      cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end()).release();
+      cudf::test::fixed_width_column_wrapper<size_type>(offsetv.begin(), offsetv.end(), mr)
+        .release();
 
     // construct the list column. mark this as a root
     root  = true;
@@ -1942,7 +1997,8 @@ class lists_column_wrapper : public detail::column_wrapper {
     lists_column_view lcv(col);
     return make_lists_column(
       col.size(),
-      std::make_unique<column>(lcv.offsets()),
+      std::make_unique<column>(
+        lcv.offsets(), cudf::test::get_default_stream(), cudf::get_current_device_resource_ref()),
       normalize_column(lists_column_view(col).child(),
                        lists_column_view(expected_hierarchy).child()),
       col.null_count(),
