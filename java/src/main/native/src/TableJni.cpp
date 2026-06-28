@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -4482,6 +4482,26 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
                   orderby_offsets.size() == values.size() + 1,
                   "orderby_offsets length must be one more than the number of aggregation columns",
                   nullptr);
+    JNI_ARG_CHECK(env,
+                  orderbys.size() == orderbys_ascending.size() &&
+                    orderbys.size() == orderbys_nulls_first.size(),
+                  "orderby column-index, ascending, and nulls-first arrays must have equal length",
+                  nullptr);
+    JNI_ARG_CHECK(env,
+                  orderby_offsets[values.size()] == orderbys.size(),
+                  "last orderby_offsets entry must equal the total number of order-by columns",
+                  nullptr);
+    // The CSR offsets must be non-decreasing and start at zero. Combined with the last-entry check
+    // above, this guarantees every per-op slice satisfies 0 <= ob_begin <= ob_end <=
+    // orderbys.size().
+    JNI_ARG_CHECK(
+      env, orderby_offsets[0] == 0, "first orderby_offsets entry must be zero", nullptr);
+    for (int i = 0; i < values.size(); ++i) {
+      JNI_ARG_CHECK(env,
+                    orderby_offsets[i] <= orderby_offsets[i + 1],
+                    "orderby_offsets must be non-decreasing",
+                    nullptr);
+    }
 
     // Extract table-view.
     cudf::table_view groupby_keys{
@@ -4497,12 +4517,11 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
 
     // Clone a (borrowed) rolling_aggregation into an owned unique_ptr, as required by
     // cudf::rolling_request. The Java side retains ownership of the original aggregation instances.
-    auto const clone_rolling =
-      [](cudf::rolling_aggregation const& agg) -> std::unique_ptr<cudf::rolling_aggregation> {
-      std::unique_ptr<cudf::aggregation> cloned = agg.clone();
-      auto* rolling = dynamic_cast<cudf::rolling_aggregation*>(cloned.get());
-      cloned.release();
-      return std::unique_ptr<cudf::rolling_aggregation>(rolling);
+    // Each agg is verified to be a rolling_aggregation before this is called, so clone() preserves
+    // its dynamic type and the cast succeeds, mirroring the groupby_aggregation clone idiom above.
+    auto const clone_rolling = [](cudf::rolling_aggregation const& agg) {
+      return std::unique_ptr<cudf::rolling_aggregation>(
+        dynamic_cast<cudf::rolling_aggregation*>(agg.clone().release()));
     };
 
     std::vector<std::unique_ptr<cudf::column>> result_columns;

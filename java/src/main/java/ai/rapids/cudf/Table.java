@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -4341,7 +4341,7 @@ public final class Table implements AutoCloseable {
 
             // Flatten this operation's order-by columns.
             int[] obIndices = windowOptions.getOrderByColumnIndices();
-            boolean[] obAscending = windowOptions.getOrderByOrderAscending();
+            boolean[] obAscending = windowOptions.getOrderByAscending();
             boolean[] obNullsFirst = windowOptions.getOrderByNullsFirst();
             // Multi-column RANGE supports only peer-frame bounds; reject bounded scalar ranges.
             if (obIndices.length > 1 &&

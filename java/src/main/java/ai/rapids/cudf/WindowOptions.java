@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -38,11 +38,10 @@ public class WindowOptions implements AutoCloseable {
   private final Scalar followingScalar;
   private final ColumnVector precedingCol;
   private final ColumnVector followingCol;
-  private final int orderByColumnIndex;
-  private final boolean orderByOrderAscending;
-  // Multi-column RANGE order-by state. Null when the single-column order-by methods were used.
-  // When set, these arrays are parallel and non-empty; element [0] mirrors the single-column
-  // fields above for compatibility and frame-type detection.
+  // Single internal representation of the order-by columns: three parallel, non-empty arrays.
+  // They are null only when no order-by was set, which selects a ROWS frame. The single-column
+  // builder setters normalize to length-1 arrays in build(), so both construction paths produce
+  // the same internal state.
   private final int[] orderByColumnIndices;
   private final boolean[] orderByAscendingFlags;
   private final boolean[] orderByNullsFirstFlags;
@@ -68,12 +67,10 @@ public class WindowOptions implements AutoCloseable {
     if (followingCol != null) {
       followingCol.incRefCount();
     }
-    this.orderByColumnIndex = builder.orderByColumnIndex;
-    this.orderByOrderAscending = builder.orderByOrderAscending;
-    this.orderByColumnIndices = builder.orderByColumnIndices;
-    this.orderByAscendingFlags = builder.orderByAscendingFlags;
-    this.orderByNullsFirstFlags = builder.orderByNullsFirstFlags;
-    this.frameType = orderByColumnIndex == -1? FrameType.ROWS : FrameType.RANGE;
+    this.orderByColumnIndices = builder.normalizedOrderByColumnIndices();
+    this.orderByAscendingFlags = builder.normalizedOrderByAscendingFlags();
+    this.orderByNullsFirstFlags = builder.normalizedOrderByNullsFirstFlags();
+    this.frameType = orderByColumnIndices != null ? FrameType.RANGE : FrameType.ROWS;
     this.precedingBoundsExtent = builder.precedingBoundsExtent;
     this.followingBoundsExtent = builder.followingBoundsExtent;
   }
@@ -85,8 +82,6 @@ public class WindowOptions implements AutoCloseable {
     } else if (other instanceof WindowOptions) {
       WindowOptions o = (WindowOptions) other;
       boolean ret = this.minPeriods == o.minPeriods &&
-              this.orderByColumnIndex == o.orderByColumnIndex &&
-              this.orderByOrderAscending == o.orderByOrderAscending &&
               Arrays.equals(this.orderByColumnIndices, o.orderByColumnIndices) &&
               Arrays.equals(this.orderByAscendingFlags, o.orderByAscendingFlags) &&
               Arrays.equals(this.orderByNullsFirstFlags, o.orderByNullsFirstFlags) &&
@@ -114,8 +109,6 @@ public class WindowOptions implements AutoCloseable {
   public int hashCode() {
     int ret = 7;
     ret = 31 * ret + minPeriods;
-    ret = 31 * ret + orderByColumnIndex;
-    ret = 31 * ret + Boolean.hashCode(orderByOrderAscending);
     ret = 31 * ret + Arrays.hashCode(orderByColumnIndices);
     ret = 31 * ret + Arrays.hashCode(orderByAscendingFlags);
     ret = 31 * ret + Arrays.hashCode(orderByNullsFirstFlags);
@@ -154,27 +147,31 @@ public class WindowOptions implements AutoCloseable {
   @Deprecated
   int getTimestampColumnIndex() { return getOrderByColumnIndex(); }
 
-  int getOrderByColumnIndex() { return this.orderByColumnIndex; }
+  int getOrderByColumnIndex() {
+    return orderByColumnIndices != null ? orderByColumnIndices[0] : -1;
+  }
 
   @Deprecated
-  boolean isTimestampOrderAscending() { return isOrderByOrderAscending(); }
+  boolean isTimestampOrderAscending() { return isOrderByAscending(); }
 
-  boolean isOrderByOrderAscending() { return this.orderByOrderAscending; }
+  boolean isOrderByAscending() {
+    return orderByAscendingFlags != null ? orderByAscendingFlags[0] : true;
+  }
 
   /**
-   * Order-by column indices for this RANGE window. Returns the multi-column array when the
-   * multi-column builder was used, otherwise a length-1 array holding the single-column index.
+   * Order-by column indices for this RANGE window. The single-column builder setters normalize
+   * to a length-1 array, so this is always non-null and non-empty for a RANGE window. Call only
+   * on a RANGE-frame WindowOptions; the backing array is null for a ROWS frame.
    */
   int[] getOrderByColumnIndices() {
-    return orderByColumnIndices != null ? orderByColumnIndices : new int[]{orderByColumnIndex};
+    return Arrays.copyOf(orderByColumnIndices, orderByColumnIndices.length);
   }
 
   /**
    * Per-order-by-column ascending flags, parallel to {@link #getOrderByColumnIndices()}.
    */
-  boolean[] getOrderByOrderAscending() {
-    return orderByAscendingFlags != null ? orderByAscendingFlags
-                                         : new boolean[]{orderByOrderAscending};
+  boolean[] getOrderByAscending() {
+    return Arrays.copyOf(orderByAscendingFlags, orderByAscendingFlags.length);
   }
 
   /**
@@ -183,7 +180,7 @@ public class WindowOptions implements AutoCloseable {
    * single-column path deduces null placement natively, so the returned value is unused there.
    */
   boolean[] getOrderByNullsFirst() {
-    return orderByNullsFirstFlags != null ? orderByNullsFirstFlags : new boolean[]{true};
+    return Arrays.copyOf(orderByNullsFirstFlags, orderByNullsFirstFlags.length);
   }
 
   boolean isUnboundedPreceding() { return this.precedingBoundsExtent == RangeExtentType.UNBOUNDED; }
@@ -206,8 +203,17 @@ public class WindowOptions implements AutoCloseable {
     private Scalar followingScalar = null;
     private ColumnVector precedingCol = null;
     private ColumnVector followingCol = null;
+    // Single-column order-by accumulators. orderByColumnIndex defaults to -1, but -1 alone does
+    // NOT mark the order-by as set; singleColumnOrderBySet (flipped only by the index setter) is
+    // the explicit RANGE discriminator, replacing the old "index == -1" sentinel. A bare
+    // direction call without an index keeps the ROWS frame, matching the prior behavior.
     private int orderByColumnIndex = -1;
     private boolean orderByOrderAscending = true;
+    private boolean singleColumnOrderBySet = false;
+    // Tracks whether ANY single-column order-by setter (index or direction) was used, so build()
+    // can reject mixing the single-column and multi-column APIs.
+    private boolean singleColumnSetterUsed = false;
+    // Multi-column order-by accumulators, populated only by orderByColumns().
     private int[] orderByColumnIndices = null;
     private boolean[] orderByAscendingFlags = null;
     private boolean[] orderByNullsFirstFlags = null;
@@ -276,6 +282,8 @@ public class WindowOptions implements AutoCloseable {
 
     public Builder orderByColumnIndex(int index) {
       this.orderByColumnIndex = index;
+      this.singleColumnOrderBySet = true;
+      this.singleColumnSetterUsed = true;
       return this;
     }
 
@@ -286,8 +294,8 @@ public class WindowOptions implements AutoCloseable {
      * <p>Multi-column RANGE windows support only peer-frame bounds ({@code UNBOUNDED} and
      * {@code CURRENT_ROW}); bounded scalar ranges are not supported across multiple order-by
      * columns. Unlike the single-column order-by methods, null placement is not deduced from the
-     * data and must be stated explicitly here. Element [0] also populates the single-column
-     * order-by state for compatibility.
+     * data and must be stated explicitly here. This API is mutually exclusive with the
+     * single-column order-by setters; mixing them in one builder is rejected by {@link #build()}.
      *
      * @param indices    input-table column indices of the order-by columns, in order.
      * @param ascending  per-column sort direction (true == ascending).
@@ -307,8 +315,6 @@ public class WindowOptions implements AutoCloseable {
       this.orderByColumnIndices = Arrays.copyOf(indices, indices.length);
       this.orderByAscendingFlags = Arrays.copyOf(ascending, ascending.length);
       this.orderByNullsFirstFlags = Arrays.copyOf(nullsFirst, nullsFirst.length);
-      this.orderByColumnIndex = this.orderByColumnIndices[0];
-      this.orderByOrderAscending = this.orderByAscendingFlags[0];
       return this;
     }
 
@@ -322,11 +328,13 @@ public class WindowOptions implements AutoCloseable {
 
     public Builder orderByAscending() {
       this.orderByOrderAscending = true;
+      this.singleColumnSetterUsed = true;
       return this;
     }
 
     public Builder orderByDescending() {
       this.orderByOrderAscending = false;
+      this.singleColumnSetterUsed = true;
       return this;
     }
 
@@ -400,7 +408,44 @@ public class WindowOptions implements AutoCloseable {
       return this;
     }
 
+    private boolean usesMultiColumnOrderBy() {
+      return orderByColumnIndices != null;
+    }
+
+    /**
+     * Normalize the order-by columns into a single internal representation: the three parallel
+     * arrays. Returns the multi-column arrays when {@code orderByColumns()} was used, length-1
+     * arrays when a single-column index was set, or null when no order-by was set (ROWS frame).
+     */
+    private int[] normalizedOrderByColumnIndices() {
+      if (usesMultiColumnOrderBy()) {
+        return orderByColumnIndices;
+      }
+      return singleColumnOrderBySet ? new int[]{orderByColumnIndex} : null;
+    }
+
+    private boolean[] normalizedOrderByAscendingFlags() {
+      if (usesMultiColumnOrderBy()) {
+        return orderByAscendingFlags;
+      }
+      return singleColumnOrderBySet ? new boolean[]{orderByOrderAscending} : null;
+    }
+
+    private boolean[] normalizedOrderByNullsFirstFlags() {
+      if (usesMultiColumnOrderBy()) {
+        return orderByNullsFirstFlags;
+      }
+      // The single-column path deduces null placement natively, so this value is unused; a
+      // length-1 default keeps the three arrays parallel.
+      return singleColumnOrderBySet ? new boolean[]{true} : null;
+    }
+
     public WindowOptions build() {
+      if (usesMultiColumnOrderBy() && singleColumnSetterUsed) {
+        throw new IllegalStateException(
+            "Cannot mix orderByColumns(...) with the single-column order-by setters " +
+            "(orderByColumnIndex/orderByAscending/orderByDescending); use one API or the other");
+      }
       return new WindowOptions(this);
     }
   }
