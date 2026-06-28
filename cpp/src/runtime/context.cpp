@@ -14,7 +14,6 @@
 
 #include <unistd.h>
 
-#include <array>
 #include <filesystem>
 #include <format>
 #include <memory>
