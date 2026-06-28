@@ -789,15 +789,10 @@ class strings_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Initializes an empty strings column on the specified resource
    *
-   * @tparam Resource Device memory resource type
-   * @param resource Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <
-    typename Resource,
-    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
-  explicit strings_column_wrapper(Resource&& resource)
-    : strings_column_wrapper(std::initializer_list<std::string>{},
-                             rmm::device_async_resource_ref{resource})
+  explicit strings_column_wrapper(cudf::memory_resources mr)
+    : strings_column_wrapper(std::initializer_list<std::string>{}, mr)
   {
   }
 
@@ -820,13 +815,12 @@ class strings_column_wrapper : public detail::column_wrapper {
    * dereferencing a `StringsIterator`.
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename StringsIterator>
-  strings_column_wrapper(
-    StringsIterator begin,
-    StringsIterator end,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  strings_column_wrapper(StringsIterator begin,
+                         StringsIterator end,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
@@ -836,10 +830,11 @@ class strings_column_wrapper : public detail::column_wrapper {
     }
     auto all_valid        = cuda::make_constant_iterator(true);
     auto [chars, offsets] = detail::make_chars_and_offsets(begin, end, all_valid);
-    auto d_chars =
-      cudf::detail::make_device_uvector_async(chars, cudf::test::get_default_stream(), mr);
+    auto d_chars          = cudf::detail::make_device_uvector_async(
+      chars, cudf::test::get_default_stream(), mr.get_output_mr());
     auto d_offsets = std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector(offsets, cudf::test::get_default_stream(), mr),
+      cudf::detail::make_device_uvector(
+        offsets, cudf::test::get_default_stream(), mr.get_output_mr()),
       rmm::device_buffer{},
       0);
     wrapped =
@@ -873,17 +868,16 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename StringsIterator,
-            typename ValidityIterator,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  strings_column_wrapper(
-    StringsIterator begin,
-    StringsIterator end,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename StringsIterator,
+    typename ValidityIterator,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  strings_column_wrapper(StringsIterator begin,
+                         StringsIterator end,
+                         ValidityIterator v,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     size_type num_strings = std::distance(begin, end);
@@ -893,14 +887,15 @@ class strings_column_wrapper : public detail::column_wrapper {
     }
     auto [chars, offsets]        = detail::make_chars_and_offsets(begin, end, v);
     auto [null_mask, null_count] = detail::make_null_mask_vector(v, v + num_strings);
-    auto d_chars =
-      cudf::detail::make_device_uvector_async(chars, cudf::test::get_default_stream(), mr);
+    auto d_chars                 = cudf::detail::make_device_uvector_async(
+      chars, cudf::test::get_default_stream(), mr.get_output_mr());
     auto d_offsets = std::make_unique<cudf::column>(
-      cudf::detail::make_device_uvector_async(offsets, cudf::test::get_default_stream(), mr),
+      cudf::detail::make_device_uvector_async(
+        offsets, cudf::test::get_default_stream(), mr.get_output_mr()),
       rmm::device_buffer{},
       0);
-    auto d_bitmask =
-      cudf::detail::make_device_uvector(null_mask, cudf::test::get_default_stream(), mr);
+    auto d_bitmask = cudf::detail::make_device_uvector(
+      null_mask, cudf::test::get_default_stream(), mr.get_output_mr());
     wrapped = cudf::make_strings_column(
       num_strings, std::move(d_offsets), d_chars.release(), null_count, d_bitmask.release());
   }
@@ -916,11 +911,10 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param strings The list of strings
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  strings_column_wrapper(
-    std::initializer_list<std::string> strings,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  strings_column_wrapper(std::initializer_list<std::string> strings,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), mr)
   {
   }
@@ -942,15 +936,14 @@ class strings_column_wrapper : public detail::column_wrapper {
    * convertible to `bool`
    * @param strings The list of strings
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename ValidityIterator,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  strings_column_wrapper(
-    std::initializer_list<std::string> strings,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename ValidityIterator,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  strings_column_wrapper(std::initializer_list<std::string> strings,
+                         ValidityIterator v,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), v, mr)
   {
   }
@@ -969,12 +962,11 @@ class strings_column_wrapper : public detail::column_wrapper {
    *
    * @param strings The list of strings
    * @param validity The list of validity indicator booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  strings_column_wrapper(
-    std::initializer_list<std::string> strings,
-    std::initializer_list<bool> validity,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  strings_column_wrapper(std::initializer_list<std::string> strings,
+                         std::initializer_list<bool> validity,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : strings_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity), mr)
   {
   }
@@ -998,11 +990,10 @@ class strings_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param strings The list of pairs of strings and validity booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  strings_column_wrapper(
-    std::initializer_list<std::pair<std::string, bool>> strings,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  strings_column_wrapper(std::initializer_list<std::pair<std::string, bool>> strings,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref())
   {
     auto begin =
       thrust::make_transform_iterator(strings.begin(), [](auto const& s) { return s.first; });
@@ -1039,15 +1030,11 @@ class dictionary_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Initializes an empty dictionary column on the specified resource
    *
-   * @tparam Resource Device memory resource type
-   * @param resource Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <
-    typename Resource,
-    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
-  explicit dictionary_column_wrapper(Resource&& resource) : column_wrapper{}
+  explicit dictionary_column_wrapper(cudf::memory_resources mr) : column_wrapper{}
   {
-    static_cast<void>(rmm::device_async_resource_ref{resource});
+    static_cast<void>(mr);
     wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
   }
 
@@ -1069,20 +1056,19 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename InputIterator>
-  dictionary_column_wrapper(
-    InputIterator begin,
-    InputIterator end,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  dictionary_column_wrapper(InputIterator begin,
+                            InputIterator end,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(
-                                         begin, end, cudf::get_current_device_resource_ref()),
-                                       cudf::data_type{type_id::INT32},
-                                       cudf::test::get_default_stream(),
-                                       mr);
+    wrapped = cudf::dictionary::encode(
+      fixed_width_column_wrapper<KeyElementTo, SourceElementT>(begin, end, mr.get_temporary_mr()),
+      cudf::data_type{type_id::INT32},
+      cudf::test::get_default_stream(),
+      mr.get_output_mr());
   }
 
   /**
@@ -1109,24 +1095,23 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename InputIterator,
-            typename ValidityIterator,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  dictionary_column_wrapper(
-    InputIterator begin,
-    InputIterator end,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename InputIterator,
+    typename ValidityIterator,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  dictionary_column_wrapper(InputIterator begin,
+                            InputIterator end,
+                            ValidityIterator v,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     wrapped = cudf::dictionary::encode(fixed_width_column_wrapper<KeyElementTo, SourceElementT>(
-                                         begin, end, v, cudf::get_current_device_resource_ref()),
+                                         begin, end, v, mr.get_temporary_mr()),
                                        cudf::data_type{type_id::INT32},
                                        cudf::test::get_default_stream(),
-                                       mr);
+                                       mr.get_output_mr());
   }
 
   /**
@@ -1141,12 +1126,11 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename ElementFrom>
-  dictionary_column_wrapper(
-    std::initializer_list<ElementFrom> elements,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  dictionary_column_wrapper(std::initializer_list<ElementFrom> elements,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : dictionary_column_wrapper(std::cbegin(elements), std::cend(elements), mr)
   {
   }
@@ -1168,13 +1152,12 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param validity The list of validity indicator booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename ElementFrom>
-  dictionary_column_wrapper(
-    std::initializer_list<ElementFrom> elements,
-    std::initializer_list<bool> validity,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  dictionary_column_wrapper(std::initializer_list<ElementFrom> elements,
+                            std::initializer_list<bool> validity,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : dictionary_column_wrapper(
         std::cbegin(elements), std::cend(elements), std::cbegin(validity), mr)
   {
@@ -1197,16 +1180,15 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
    * @param element_list The list of elements
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename ValidityIterator,
-            typename ElementFrom,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  dictionary_column_wrapper(
-    std::initializer_list<ElementFrom> element_list,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename ValidityIterator,
+    typename ElementFrom,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  dictionary_column_wrapper(std::initializer_list<ElementFrom> element_list,
+                            ValidityIterator v,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : dictionary_column_wrapper(std::cbegin(element_list), std::cend(element_list), v, mr)
   {
   }
@@ -1230,14 +1212,13 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param validity The list of validity indicator booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename InputIterator>
-  dictionary_column_wrapper(
-    InputIterator begin,
-    InputIterator end,
-    std::initializer_list<bool> const& validity,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  dictionary_column_wrapper(InputIterator begin,
+                            InputIterator end,
+                            std::initializer_list<bool> const& validity,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : dictionary_column_wrapper(begin, end, std::cbegin(validity), mr)
   {
   }
@@ -1287,15 +1268,10 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
   /**
    * @brief Initializes an empty string dictionary column on the specified resource
    *
-   * @tparam Resource Device memory resource type
-   * @param resource Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <
-    typename Resource,
-    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
-  explicit dictionary_column_wrapper(Resource&& resource)
-    : dictionary_column_wrapper(std::initializer_list<std::string>{},
-                                rmm::device_async_resource_ref{resource})
+  explicit dictionary_column_wrapper(cudf::memory_resources mr)
+    : dictionary_column_wrapper(std::initializer_list<std::string>{}, mr)
   {
   }
 
@@ -1318,20 +1294,18 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    *                         dereferencing a `StringsIterator`.
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename StringsIterator>
-  dictionary_column_wrapper(
-    StringsIterator begin,
-    StringsIterator end,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  dictionary_column_wrapper(StringsIterator begin,
+                            StringsIterator end,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(
-      strings_column_wrapper(begin, end, cudf::get_current_device_resource_ref()),
-      cudf::data_type{type_id::INT32},
-      cudf::test::get_default_stream(),
-      mr);
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, mr.get_temporary_mr()),
+                                       cudf::data_type{type_id::INT32},
+                                       cudf::test::get_default_stream(),
+                                       mr.get_output_mr());
   }
 
   /**
@@ -1361,24 +1335,22 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @param begin The beginning of the sequence
    * @param end The end of the sequence
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename StringsIterator,
-            typename ValidityIterator,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  dictionary_column_wrapper(
-    StringsIterator begin,
-    StringsIterator end,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename StringsIterator,
+    typename ValidityIterator,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  dictionary_column_wrapper(StringsIterator begin,
+                            StringsIterator end,
+                            ValidityIterator v,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
-    wrapped = cudf::dictionary::encode(
-      strings_column_wrapper(begin, end, v, cudf::get_current_device_resource_ref()),
-      cudf::data_type{type_id::INT32},
-      cudf::test::get_default_stream(),
-      mr);
+    wrapped = cudf::dictionary::encode(strings_column_wrapper(begin, end, v, mr.get_temporary_mr()),
+                                       cudf::data_type{type_id::INT32},
+                                       cudf::test::get_default_stream(),
+                                       mr.get_output_mr());
   }
 
   /**
@@ -1392,11 +1364,10 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @endcode
    *
    * @param strings The list of strings
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  dictionary_column_wrapper(
-    std::initializer_list<std::string> strings,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  dictionary_column_wrapper(std::initializer_list<std::string> strings,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : dictionary_column_wrapper(std::cbegin(strings), std::cend(strings), mr)
   {
   }
@@ -1418,15 +1389,14 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    * @tparam ValidityIterator Dereferencing a ValidityIterator must be convertible to `bool`
    * @param strings The list of strings
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename ValidityIterator,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  dictionary_column_wrapper(
-    std::initializer_list<std::string> strings,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename ValidityIterator,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  dictionary_column_wrapper(std::initializer_list<std::string> strings,
+                            ValidityIterator v,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : dictionary_column_wrapper(std::cbegin(strings), std::cend(strings), v, mr)
   {
   }
@@ -1445,12 +1415,11 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
    *
    * @param strings The list of strings
    * @param validity The list of validity indicator booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  dictionary_column_wrapper(
-    std::initializer_list<std::string> strings,
-    std::initializer_list<bool> validity,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  dictionary_column_wrapper(std::initializer_list<std::string> strings,
+                            std::initializer_list<bool> validity,
+                            cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : dictionary_column_wrapper(std::cbegin(strings), std::cend(strings), std::cbegin(validity), mr)
   {
   }
