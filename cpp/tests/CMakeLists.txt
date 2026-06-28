@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -445,6 +445,7 @@ ConfigureTest(
   utilities_tests/default_stream_tests.cpp
   utilities_tests/io_utilities_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
+  utilities_tests/memory_resource_tests.cpp
   utilities_tests/pinned_memory_tests.cpp
   utilities_tests/type_check_tests.cpp
   utilities_tests/type_list_tests.cpp
