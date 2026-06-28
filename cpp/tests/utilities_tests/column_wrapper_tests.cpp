@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,127 @@
 
 #include <cudf/detail/iterator.cuh>
 
+#include <rmm/mr/statistics_resource_adaptor.hpp>
+
 #include <cuda/iterator>
+
+namespace {
+
+template <typename Factory>
+void expect_output_uses_resource(Factory factory)
+{
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  {
+    auto column = factory(mr).release();
+    cudf::test::get_default_stream().synchronize();
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(mr.get_bytes_counter().value));
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, mr.get_bytes_counter().value);
+}
+
+}  // namespace
+
+TEST(FixedWidthColumnWrapperMemoryResourceTest, ExplicitResourceOverloadMatrix)
+{
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+
+  expect_output_uses_resource(
+    [](auto& mr) { return cudf::test::fixed_width_column_wrapper<int32_t>(mr); });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(elements.begin(), elements.end(), mr);
+  });
+
+  expect_output_uses_resource([](auto& mr) {
+    auto ref = rmm::device_async_resource_ref{mr};
+    return cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, ref);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), validity.begin(), mr);
+  });
+
+  expect_output_uses_resource([](auto& mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, {true, false, true, false}, mr);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4}, validity.begin(), mr);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), {true, false, true, false}, mr);
+  });
+
+  expect_output_uses_resource([](auto& mr) {
+    using pair_type = std::pair<int32_t, bool>;
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      {pair_type{1, true}, pair_type{2, false}, pair_type{3, true}}, mr);
+  });
+}
+
+TEST(FixedWidthColumnWrapperMemoryResourceTest, FixedPointElementPaths)
+{
+  using decimal32 = numeric::decimal32;
+
+  auto const reps     = std::vector<int32_t>{1, 2, 3, 4};
+  auto const decimals = std::vector<decimal32>{decimal32{1, numeric::scale_type{0}},
+                                               decimal32{2, numeric::scale_type{0}},
+                                               decimal32{3, numeric::scale_type{0}},
+                                               decimal32{4, numeric::scale_type{0}}};
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_width_column_wrapper<decimal32, int32_t>(reps.begin(), reps.end(), mr);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_width_column_wrapper<decimal32>(decimals.begin(), decimals.end(), mr);
+  });
+}
+
+TEST(FixedPointColumnWrapperMemoryResourceTest, ExplicitResourceOverloadMatrix)
+{
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+  auto const scale    = numeric::scale_type{-2};
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), scale, mr);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    auto ref = rmm::device_async_resource_ref{mr};
+    return cudf::test::fixed_point_column_wrapper<int32_t>({1, 2, 3, 4}, scale, ref);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), validity.begin(), scale, mr);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, {true, false, true, false}, scale, mr);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      {1, 2, 3, 4}, validity.begin(), scale, mr);
+  });
+
+  expect_output_uses_resource([&](auto& mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), {true, false, true, false}, scale, mr);
+  });
+}
 
 template <typename T>
 struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -219,9 +219,9 @@ TYPED_TEST(TypedRankScanTest, StructsWithNullPushdown)
   // Next, verify that if the structs column a null mask that is NOT pushed down to members,
   // the ranks are still correct.
   {
-    auto const null_iter = cudf::test::iterators::nulls_at({1, 2});
-    auto [null_mask, null_count] =
-      cudf::test::detail::make_null_mask(null_iter, null_iter + struct_col->size());
+    auto const null_iter         = cudf::test::iterators::nulls_at({1, 2});
+    auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+      null_iter, null_iter + struct_col->size(), cudf::get_current_device_resource_ref());
     struct_col->set_null_mask(std::move(null_mask), null_count);
     auto const expected_dense   = rank_result_col{1, 2, 2, 3, 4, 5, 6, 6, 7, 8, 8, 9};
     auto const expected_rank    = rank_result_col{1, 2, 2, 4, 5, 6, 7, 7, 9, 10, 10, 12};
