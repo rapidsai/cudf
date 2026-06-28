@@ -538,13 +538,15 @@ struct column_comparator_impl {
                   cudf::memory_resources mr,
                   int depth)
   {
-    auto d_lhs_row_indices =
-      cudf::column_device_view::create(lhs_row_indices, cudf::test::get_default_stream());
-    auto d_rhs_row_indices =
-      cudf::column_device_view::create(rhs_row_indices, cudf::test::get_default_stream());
+    auto d_lhs_row_indices = cudf::column_device_view::create(
+      lhs_row_indices, cudf::test::get_default_stream(), mr.get_temporary_mr());
+    auto d_rhs_row_indices = cudf::column_device_view::create(
+      rhs_row_indices, cudf::test::get_default_stream(), mr.get_temporary_mr());
 
-    auto d_lhs = cudf::column_device_view::create(lhs, cudf::test::get_default_stream());
-    auto d_rhs = cudf::column_device_view::create(rhs, cudf::test::get_default_stream());
+    auto d_lhs = cudf::column_device_view::create(
+      lhs, cudf::test::get_default_stream(), mr.get_temporary_mr());
+    auto d_rhs = cudf::column_device_view::create(
+      rhs, cudf::test::get_default_stream(), mr.get_temporary_mr());
 
     auto lhs_tview = table_view{{lhs}};
     auto rhs_tview = table_view{{rhs}};
