@@ -26,9 +26,9 @@ namespace test {
 
 void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
                             std::vector<expected_value> const& h_expected,
-                            rmm::device_async_resource_ref mr)
+                            cudf::memory_resources mr)
 {
-  auto const temporary_mr   = cudf::get_current_device_resource_ref();
+  auto const temporary_mr   = mr.get_temporary_mr();
   column_view result_mean   = tdv.means();
   column_view result_weight = tdv.weights();
 
@@ -81,9 +81,9 @@ void tdigest_sample_compare(cudf::tdigest::tdigest_column_view const& tdv,
 }
 
 std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdigest> const& groups,
-                                                     rmm::device_async_resource_ref mr)
+                                                     cudf::memory_resources mr)
 {
-  auto const temporary_mr = cudf::get_current_device_resource_ref();
+  auto const temporary_mr = mr.get_temporary_mr();
   std::vector<std::unique_ptr<column>> tdigests;
 
   // make an individual digest
@@ -126,7 +126,7 @@ std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdiges
                  std::back_inserter(views),
                  [](std::unique_ptr<column> const& c) { return c->view(); });
 
-  return cudf::concatenate(views, cudf::get_default_stream(), mr);
+  return cudf::concatenate(views, cudf::get_default_stream(), mr.get_output_mr());
 }
 
 }  // namespace test
