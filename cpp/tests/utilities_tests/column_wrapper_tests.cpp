@@ -36,6 +36,29 @@ void expect_output_uses_resource(Factory factory)
   EXPECT_EQ(0, mr.get_bytes_counter().value);
 }
 
+template <typename Factory>
+void expect_output_uses_distinct_resources(Factory factory)
+{
+  auto upstream     = cudf::get_current_device_resource_ref();
+  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
+  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
+
+  {
+    auto column = factory(cudf::memory_resources{output_mr, temporary_mr}).release();
+    cudf::test::get_default_stream().synchronize();
+    auto const output_bytes    = output_mr.get_bytes_counter();
+    auto const temporary_bytes = temporary_mr.get_bytes_counter();
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.value));
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_bytes.total));
+    EXPECT_EQ(0, temporary_bytes.value);
+    EXPECT_EQ(0, temporary_bytes.total);
+  }
+
+  cudf::test::get_default_stream().synchronize();
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
+}
+
 }  // namespace
 
 TEST(FixedWidthColumnWrapperMemoryResourceTest, ExplicitResourceOverloadMatrix)
@@ -78,6 +101,17 @@ TEST(FixedWidthColumnWrapperMemoryResourceTest, ExplicitResourceOverloadMatrix)
     using pair_type = std::pair<int32_t, bool>;
     return cudf::test::fixed_width_column_wrapper<int32_t>(
       {pair_type{1, true}, pair_type{2, false}, pair_type{3, true}}, mr);
+  });
+}
+
+TEST(FixedWidthColumnWrapperMemoryResourceTest, DistinctOutputAndTemporaryResources)
+{
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_width_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), validity.begin(), mr);
   });
 }
 
@@ -134,6 +168,18 @@ TEST(FixedPointColumnWrapperMemoryResourceTest, ExplicitResourceOverloadMatrix)
   expect_output_uses_resource([&](auto& mr) {
     return cudf::test::fixed_point_column_wrapper<int32_t>(
       elements.begin(), elements.end(), {true, false, true, false}, scale, mr);
+  });
+}
+
+TEST(FixedPointColumnWrapperMemoryResourceTest, DistinctOutputAndTemporaryResources)
+{
+  auto const elements = std::vector<int32_t>{1, 2, 3, 4};
+  auto const validity = std::vector<bool>{true, false, true, false};
+  auto const scale    = numeric::scale_type{-2};
+
+  expect_output_uses_distinct_resources([&](auto mr) {
+    return cudf::test::fixed_point_column_wrapper<int32_t>(
+      elements.begin(), elements.end(), validity.begin(), scale, mr);
   });
 }
 

@@ -147,24 +147,24 @@ struct fixed_width_type_converter {
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
- * @param mr Device memory resource used to allocate the returned buffer
+ * @param mr Memory resources used to allocate the returned buffer
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
  */
 template <typename ElementTo,
           typename ElementFrom,
           typename InputIterator,
           std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
-rmm::device_buffer make_elements(InputIterator begin,
-                                 InputIterator end,
-                                 rmm::device_async_resource_ref mr)
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end, cudf::memory_resources mr)
 {
   static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
   auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
   auto transform_begin = thrust::make_transform_iterator(begin, transformer);
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{
-    elements.data(), size * sizeof(ElementTo), cudf::test::get_default_stream(), mr};
+  return rmm::device_buffer{elements.data(),
+                            size * sizeof(ElementTo),
+                            cudf::test::get_default_stream(),
+                            mr.get_output_mr()};
 }
 
 // The two signatures below are identical to the above overload apart from
@@ -179,7 +179,7 @@ rmm::device_buffer make_elements(InputIterator begin,
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
- * @param mr Device memory resource used to allocate the returned buffer
+ * @param mr Memory resources used to allocate the returned buffer
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
  */
 template <typename ElementTo,
@@ -187,9 +187,7 @@ template <typename ElementTo,
           typename InputIterator,
           std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
                            cudf::is_fixed_point<ElementTo>()>* = nullptr>
-rmm::device_buffer make_elements(InputIterator begin,
-                                 InputIterator end,
-                                 rmm::device_async_resource_ref mr)
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end, cudf::memory_resources mr)
 {
   using RepType        = typename ElementTo::rep;
   auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
@@ -197,7 +195,7 @@ rmm::device_buffer make_elements(InputIterator begin,
   auto const size      = cudf::distance(begin, end);
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
   return rmm::device_buffer{
-    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream(), mr};
+    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream(), mr.get_output_mr()};
 }
 
 /**
@@ -208,7 +206,7 @@ rmm::device_buffer make_elements(InputIterator begin,
  * @tparam InputIterator Iterator type for `begin` and `end`
  * @param begin Beginning of the sequence of elements
  * @param end End of the sequence of elements
- * @param mr Device memory resource used to allocate the returned buffer
+ * @param mr Memory resources used to allocate the returned buffer
  * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
  */
 template <typename ElementTo,
@@ -216,9 +214,7 @@ template <typename ElementTo,
           typename InputIterator,
           std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
                            cudf::is_fixed_point<ElementTo>()>* = nullptr>
-rmm::device_buffer make_elements(InputIterator begin,
-                                 InputIterator end,
-                                 rmm::device_async_resource_ref mr)
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end, cudf::memory_resources mr)
 {
   using namespace numeric;
   using RepType = typename ElementTo::rep;
@@ -231,7 +227,7 @@ rmm::device_buffer make_elements(InputIterator begin,
   auto const size        = cudf::distance(begin, end);
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
   return rmm::device_buffer{
-    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream(), mr};
+    elements.data(), size * sizeof(RepType), cudf::test::get_default_stream(), mr.get_output_mr()};
 }
 //! @endcond
 
@@ -278,20 +274,20 @@ std::pair<std::vector<bitmask_type>, cudf::size_type> make_null_mask_vector(Vali
  * @tparam ValidityIterator
  * @param begin The beginning of the validity indicator sequence
  * @param end The end of the validity indicator sequence
- * @param mr Device memory resource used to allocate the returned buffer
+ * @param mr Memory resources used to allocate the returned buffer
  * @return rmm::device_buffer Contains a bitmask where bits are set for every
  * element in `[begin,end)` that evaluated to `true`.
  */
 template <typename ValidityIterator>
 std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(ValidityIterator begin,
                                                               ValidityIterator end,
-                                                              rmm::device_async_resource_ref mr)
+                                                              cudf::memory_resources mr)
 {
   auto [null_mask, null_count] = make_null_mask_vector(begin, end);
   auto d_mask                  = rmm::device_buffer{null_mask.data(),
                                    cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)),
                                    cudf::test::get_default_stream(),
-                                   mr};
+                                   mr.get_output_mr()};
   return {std::move(d_mask), null_count};
 }
 
@@ -349,15 +345,10 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
   /**
    * @brief Initializes an empty column with proper dtype on the specified resource
    *
-   * @tparam Resource Device memory resource type
-   * @param resource Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <
-    typename Resource,
-    std::enable_if_t<std::is_convertible_v<Resource&, rmm::device_async_resource_ref>>* = nullptr>
-  explicit fixed_width_column_wrapper(Resource&& resource) : column_wrapper{}
+  explicit fixed_width_column_wrapper(cudf::memory_resources mr) : column_wrapper{}
   {
-    auto mr = rmm::device_async_resource_ref{resource};
     std::vector<ElementTo> empty;
     wrapped.reset(new cudf::column{
       cudf::data_type{cudf::type_to_id<ElementTo>()},
@@ -384,13 +375,12 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename InputIterator>
-  fixed_width_column_wrapper(
-    InputIterator begin,
-    InputIterator end,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_width_column_wrapper(InputIterator begin,
+                             InputIterator end,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     auto const size = cudf::distance(begin, end);
@@ -423,17 +413,16 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename InputIterator,
-            typename ValidityIterator,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  fixed_width_column_wrapper(
-    InputIterator begin,
-    InputIterator end,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename InputIterator,
+    typename ValidityIterator,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  fixed_width_column_wrapper(InputIterator begin,
+                             InputIterator end,
+                             ValidityIterator v,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     auto const size              = cudf::distance(begin, end);
@@ -456,12 +445,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of elements
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename ElementFrom>
-  fixed_width_column_wrapper(
-    std::initializer_list<ElementFrom> elements,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_width_column_wrapper(std::cbegin(elements), std::cend(elements), mr)
   {
   }
@@ -482,13 +470,12 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    *
    * @param elements The list of elements
    * @param validity The list of validity indicator booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename ElementFrom>
-  fixed_width_column_wrapper(
-    std::initializer_list<ElementFrom> elements,
-    std::initializer_list<bool> validity,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements,
+                             std::initializer_list<bool> validity,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_width_column_wrapper(
         std::cbegin(elements), std::cend(elements), std::cbegin(validity), mr)
   {
@@ -510,16 +497,15 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * convertible to `bool`
    * @param element_list The list of elements
    * @param v The beginning of the sequence of validity indicators
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  template <typename ValidityIterator,
-            typename ElementFrom,
-            std::enable_if_t<
-              !std::is_convertible_v<ValidityIterator&, rmm::device_async_resource_ref>>* = nullptr>
-  fixed_width_column_wrapper(
-    std::initializer_list<ElementFrom> element_list,
-    ValidityIterator v,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  template <
+    typename ValidityIterator,
+    typename ElementFrom,
+    std::enable_if_t<!std::is_convertible_v<ValidityIterator&, cudf::memory_resources>>* = nullptr>
+  fixed_width_column_wrapper(std::initializer_list<ElementFrom> element_list,
+                             ValidityIterator v,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_width_column_wrapper(std::cbegin(element_list), std::cend(element_list), v, mr)
   {
   }
@@ -541,14 +527,13 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end The end of the sequence of elements
    * @param validity The list of validity indicator booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename InputIterator>
-  fixed_width_column_wrapper(
-    InputIterator begin,
-    InputIterator end,
-    std::initializer_list<bool> const& validity,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_width_column_wrapper(InputIterator begin,
+                             InputIterator end,
+                             std::initializer_list<bool> const& validity,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_width_column_wrapper(begin, end, std::cbegin(validity), mr)
   {
   }
@@ -569,12 +554,11 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * @endcode
    *
    * @param elements The list of pairs of element and validity booleans
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename ElementFrom>
-  fixed_width_column_wrapper(
-    std::initializer_list<std::pair<ElementFrom, bool>> elements,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_width_column_wrapper(std::initializer_list<std::pair<ElementFrom, bool>> elements,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
   {
     auto begin =
       thrust::make_transform_iterator(elements.begin(), [](auto const& e) { return e.first; });
@@ -608,14 +592,13 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @param begin The beginning of the sequence of elements
    * @param end   The end of the sequence of elements
    * @param scale The scale of the elements in the column
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename FixedPointRepIterator>
-  fixed_point_column_wrapper(
-    FixedPointRepIterator begin,
-    FixedPointRepIterator end,
-    numeric::scale_type scale,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             numeric::scale_type scale,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
@@ -628,7 +611,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::test::get_default_stream(), mr},
+      rmm::device_buffer{
+        elements.data(), size * sizeof(Rep), cudf::test::get_default_stream(), mr.get_output_mr()},
       rmm::device_buffer{},
       0});
   }
@@ -644,12 +628,11 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    *
    * @param values The initializer list of already shifted values
    * @param scale  The scale of the elements in the column
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  fixed_point_column_wrapper(
-    std::initializer_list<Rep> values,
-    numeric::scale_type scale,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_point_column_wrapper(std::initializer_list<Rep> values,
+                             numeric::scale_type scale,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_point_column_wrapper(std::cbegin(values), std::cend(values), scale, mr)
   {
   }
@@ -680,15 +663,14 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @param end   The end of the sequence of elements
    * @param v     The beginning of the sequence of validity indicators
    * @param scale The scale of the elements in the column
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename FixedPointRepIterator, typename ValidityIterator>
-  fixed_point_column_wrapper(
-    FixedPointRepIterator begin,
-    FixedPointRepIterator end,
-    ValidityIterator v,
-    numeric::scale_type scale,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             ValidityIterator v,
+                             numeric::scale_type scale,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : column_wrapper{}
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
@@ -701,7 +683,8 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
     wrapped.reset(new cudf::column{
       data_type,
       size,
-      rmm::device_buffer{elements.data(), size * sizeof(Rep), cudf::test::get_default_stream(), mr},
+      rmm::device_buffer{
+        elements.data(), size * sizeof(Rep), cudf::test::get_default_stream(), mr.get_output_mr()},
       std::move(null_mask),
       null_count});
   }
@@ -722,13 +705,12 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @param elements The initializer list of elements
    * @param validity The initializer list of validity indicator booleans
    * @param scale    The scale of the elements in the column
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
-  fixed_point_column_wrapper(
-    std::initializer_list<Rep> elements,
-    std::initializer_list<bool> validity,
-    numeric::scale_type scale,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_point_column_wrapper(std::initializer_list<Rep> elements,
+                             std::initializer_list<bool> validity,
+                             numeric::scale_type scale,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_point_column_wrapper(
         std::cbegin(elements), std::cend(elements), std::cbegin(validity), scale, mr)
   {
@@ -751,14 +733,13 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @param element_list The initializer list of elements
    * @param v            The beginning of the sequence of validity indicators
    * @param scale        The scale of the elements in the column
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename ValidityIterator>
-  fixed_point_column_wrapper(
-    std::initializer_list<Rep> element_list,
-    ValidityIterator v,
-    numeric::scale_type scale,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_point_column_wrapper(std::initializer_list<Rep> element_list,
+                             ValidityIterator v,
+                             numeric::scale_type scale,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_point_column_wrapper(std::cbegin(element_list), std::cend(element_list), v, scale, mr)
   {
   }
@@ -782,15 +763,14 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
    * @param end      The end of the sequence of elements
    * @param validity The initializer list of validity indicator booleans
    * @param scale    The scale of the elements in the column
-   * @param mr Device memory resource used to allocate the returned column
+   * @param mr Memory resources used to allocate the returned column
    */
   template <typename FixedPointRepIterator>
-  fixed_point_column_wrapper(
-    FixedPointRepIterator begin,
-    FixedPointRepIterator end,
-    std::initializer_list<bool> const& validity,
-    numeric::scale_type scale,
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
+  fixed_point_column_wrapper(FixedPointRepIterator begin,
+                             FixedPointRepIterator end,
+                             std::initializer_list<bool> const& validity,
+                             numeric::scale_type scale,
+                             cudf::memory_resources mr = cudf::get_current_device_resource_ref())
     : fixed_point_column_wrapper(begin, end, std::cbegin(validity), scale, mr)
   {
   }

@@ -70,24 +70,29 @@ void expect_timestamp_output_uses_resource()
 {
   using namespace cuda::std::chrono;
 
-  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+  auto upstream     = cudf::get_current_device_resource_ref();
+  auto output_mr    = rmm::mr::statistics_resource_adaptor(upstream);
+  auto temporary_mr = rmm::mr::statistics_resource_adaptor(upstream);
   {
     auto column = cudf::test::generate_timestamps<cudf::timestamp_ms, Nullable>(
                     100,
                     cudf::test::time_point_ms{milliseconds{-1000}},
                     cudf::test::time_point_ms{milliseconds{1000}},
-                    mr)
+                    cudf::memory_resources{output_mr, temporary_mr})
                     .release();
 
     cudf::test::get_default_stream().synchronize();
-    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(mr.get_bytes_counter().value));
+    EXPECT_EQ(column->alloc_size(), static_cast<std::size_t>(output_mr.get_bytes_counter().value));
+    EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
+    EXPECT_EQ(0, temporary_mr.get_bytes_counter().total);
   }
 
   cudf::test::get_default_stream().synchronize();
-  EXPECT_EQ(0, mr.get_bytes_counter().value);
+  EXPECT_EQ(0, output_mr.get_bytes_counter().value);
+  EXPECT_EQ(0, temporary_mr.get_bytes_counter().value);
 }
 
-TEST(TimestampGeneratorMemoryResourceTest, ExplicitOutputResource)
+TEST(TimestampGeneratorMemoryResourceTest, DistinctOutputAndTemporaryResources)
 {
   expect_timestamp_output_uses_resource<false>();
   expect_timestamp_output_uses_resource<true>();
