@@ -394,6 +394,8 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         raise NotImplementedError(
             "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
         )  # pragma: no cover
+    if not POLARS_VERSION_LT_142 and node.hive_parts is not None:
+        raise NotImplementedError("Hive-partitioned scans are not supported")
     config_options = translator.config_options
     parquet_options = config_options.parquet_options
 
