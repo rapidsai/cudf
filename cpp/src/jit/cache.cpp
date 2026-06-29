@@ -193,9 +193,15 @@ std::vector<std::string> jit_bundle_t::get_include_directories() const
 
 namespace {
 
-constexpr int MIN_CUDA_VERSION_PCH = 12800;  // minimum CUDA version for the "--pch" NVRTC flag
+constexpr int make_cuda_version(int major, int minor, int patch)
+{
+  return major * 1000 + minor * 10 + patch;
+}
+
+constexpr int MIN_CUDA_VERSION_PCH =
+  make_cuda_version(12, 8, 0);  // minimum CUDA version for the "--pch" NVRTC flag
 constexpr int MIN_CUDA_VERSION_MINIMAL =
-  12800;  // minimum CUDA version for the "--minimal" NVRTC flag
+  make_cuda_version(12, 8, 0);  // minimum CUDA version for the "--minimal" NVRTC flag
 
 int32_t get_driver_version()
 {
