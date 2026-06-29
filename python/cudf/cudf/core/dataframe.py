@@ -8607,22 +8607,44 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if len(diff) != 0:
                 raise KeyError(f"columns {diff} do not exist")
         columns = list(self._column_names) if subset is None else subset
+        name = "proportion" if normalize else "count"
+
+        df = self[columns].copy()
+        taken = set(df._column_names)
+
+        def _free_name(base: str) -> str:
+            while base in taken:
+                base = f"_{base}"
+            taken.add(base)
+            return base
+
+        cnt_col = _free_name("__count")
+        pos_col = _free_name("__pos")
+        # cudf's groupby does not preserve first-appearance order, so track the
+        # first row index of each unique row and order by it, matching pandas'
+        # stable handling of tied counts.
+        df[cnt_col] = 1
+        df[pos_col] = as_column(range(len(df)))
         result = (
-            self.groupby(
-                by=columns,
-                dropna=dropna,
-            )
-            .size()
-            .astype(np.dtype(np.int64))
+            df.groupby(by=columns, dropna=dropna, sort=False)
+            .agg({cnt_col: "count", pos_col: "min"})
+            .reset_index()
         )
+        result[cnt_col] = result[cnt_col].astype(np.dtype(np.int64))
+        result = result.sort_values(pos_col)
         if sort:
-            result = result.sort_values(ascending=ascending)
+            seq_col = _free_name("__seq")
+            result[seq_col] = as_column(range(len(result)))
+            result = result.sort_values(
+                [cnt_col, seq_col], ascending=[ascending, True]
+            )
+        result = result.set_index(columns)[cnt_col]
         if normalize:
             result = result / result._column.sum()
         # Pandas always returns MultiIndex even if only one column.
         if not isinstance(result.index, MultiIndex):
             result.index = MultiIndex._from_data(result.index._data)
-        result.name = "proportion" if normalize else "count"
+        result.name = name
         return result
 
     @_performance_tracking
