@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -113,7 +113,6 @@ def _register() -> None:
     the registry to be ready.
     """
     lower = lowering_registry.lower
-    lower_getattr_generic = lowering_registry.lower_getattr_generic
 
     register_model(MaskedType)(MaskedTypeModel)
 
@@ -122,7 +121,7 @@ def _register() -> None:
     # ``Literal[bool]``; accept that shape too.
     lower(Masked, types.Any, types.Literal)(_lower_masked_constructor)
 
-    lower_getattr_generic(MaskedType)(_lower_masked_getattr)
+    lowering_registry.lower_getattr_generic(MaskedType)(_lower_masked_getattr)
 
 
 _register()

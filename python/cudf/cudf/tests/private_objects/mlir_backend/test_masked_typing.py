@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -9,9 +9,7 @@ pytest.importorskip("numba_cuda_mlir")
 from numba_cuda_mlir import types
 
 from cudf.core.udf.mlir_backend.masked_typing import (
-    _SUPPORTED_MASKED_VALUE_TYPE_CLASSES,
     MaskedType,
-    _supported_value_type_instances,
 )
 
 
@@ -56,5 +54,3 @@ def test_masked_type_unsupported_value_becomes_poison():
     """
     masked = MaskedType(types.unicode_type)
     assert isinstance(masked.value_type, types.Poison)
-
-
