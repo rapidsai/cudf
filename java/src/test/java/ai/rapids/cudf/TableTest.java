@@ -7934,8 +7934,9 @@ public class TableTest extends CudfTestBase {
          // median() is sort-only, so it forces the sort-based groupby path
          Table results = input.groupBy(0).aggregate(
              GroupByAggregation.sumOverflow().onColumn(1),
-             GroupByAggregation.median().onColumn(1))) {
-      assertSumOverflowResult(results,
+             GroupByAggregation.median().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      assertSumOverflowResult(sorted,
           new int[]{1, 2}, new long[]{3L, 7L}, new boolean[]{false, false});
     }
   }
@@ -7949,8 +7950,9 @@ public class TableTest extends CudfTestBase {
          // median() is sort-only, so it forces the sort-based groupby path
          Table results = input.groupBy(0).aggregate(
              GroupByAggregation.sumOverflow().onColumn(1),
-             GroupByAggregation.median().onColumn(1))) {
-      assertSumOverflowResult(results, new int[]{1, 2}, null, new boolean[]{true, false});
+             GroupByAggregation.median().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      assertSumOverflowResult(sorted, new int[]{1, 2}, null, new boolean[]{true, false});
     }
   }
 

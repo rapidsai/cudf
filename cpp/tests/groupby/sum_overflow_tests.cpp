@@ -12,12 +12,18 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+
+#include <cuda/iterator>
+
+#include <algorithm>
+#include <vector>
 
 using namespace cudf::test::iterators;
 using namespace numeric;
@@ -32,7 +38,7 @@ using sum_overflow_supported_types =
 
 TYPED_TEST_SUITE(groupby_sum_overflow_test, sum_overflow_supported_types);
 
-TYPED_TEST(groupby_sum_overflow_test, basic)
+TYPED_TEST(groupby_sum_overflow_test, Basic)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -83,7 +89,7 @@ TYPED_TEST(groupby_sum_overflow_test, basic)
   }
 }
 
-TYPED_TEST(groupby_sum_overflow_test, sort_path_with_tdigest)
+TYPED_TEST(groupby_sum_overflow_test, SortPathWithTdigest)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -135,7 +141,7 @@ TYPED_TEST(groupby_sum_overflow_test, sort_path_with_tdigest)
   }
 }
 
-TYPED_TEST(groupby_sum_overflow_test, empty_cols)
+TYPED_TEST(groupby_sum_overflow_test, EmptyCols)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -158,7 +164,7 @@ TYPED_TEST(groupby_sum_overflow_test, empty_cols)
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_sum_overflow_test, zero_valid_keys)
+TYPED_TEST(groupby_sum_overflow_test, ZeroValidKeys)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -181,7 +187,7 @@ TYPED_TEST(groupby_sum_overflow_test, zero_valid_keys)
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 }
 
-TYPED_TEST(groupby_sum_overflow_test, zero_valid_values)
+TYPED_TEST(groupby_sum_overflow_test, ZeroValidValues)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -213,7 +219,7 @@ TYPED_TEST(groupby_sum_overflow_test, zero_valid_values)
     keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES);
 }
 
-TYPED_TEST(groupby_sum_overflow_test, null_keys_and_values)
+TYPED_TEST(groupby_sum_overflow_test, NullKeysAndValues)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -251,7 +257,7 @@ TYPED_TEST(groupby_sum_overflow_test, null_keys_and_values)
     keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES);
 }
 
-TYPED_TEST(groupby_sum_overflow_test, overflow_detection)
+TYPED_TEST(groupby_sum_overflow_test, OverflowDetection)
 {
   using K = int32_t;
   using V = TypeParam;
@@ -371,8 +377,123 @@ TYPED_TEST(groupby_sum_overflow_test, overflow_detection)
   }
 }
 
+TYPED_TEST(groupby_sum_overflow_test, SlicedInput)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  // Prepend one row to each column and slice it off, so the groupby sees a non-zero offset. The
+  // sliced view matches the `basic` test's data, so the expected result is the same.
+  cudf::test::fixed_width_column_wrapper<K> keys_full{0, 1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
+
+  auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{false, false, false};
+
+  if constexpr (cudf::is_fixed_point<V>()) {
+    using RepType    = cudf::device_storage_type_t<V>;
+    auto const scale = scale_type{0};
+    auto vals_full =
+      cudf::test::fixed_point_column_wrapper<RepType>{{99, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+    auto sum_col = cudf::test::fixed_point_column_wrapper<RepType>{{9, 19, 17}, scale};
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.push_back(sum_col.release());
+    children.push_back(overflow_col.release());
+    auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
+
+    auto const keys = cudf::slice(keys_full, {1, 11}).front();
+    auto const vals = cudf::slice(vals_full, {1, 11}).front();
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    *expect_vals,
+                    cudf::make_sum_overflow_aggregation<cudf::groupby_aggregation>());
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    *expect_vals,
+                    cudf::make_sum_overflow_aggregation<cudf::groupby_aggregation>(),
+                    force_use_sort_impl::YES);
+  } else {
+    cudf::test::fixed_width_column_wrapper<V> vals_full{99, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    auto sum_col = cudf::test::fixed_width_column_wrapper<V>{9, 19, 17};
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.push_back(sum_col.release());
+    children.push_back(overflow_col.release());
+    auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
+
+    auto const keys = cudf::slice(keys_full, {1, 11}).front();
+    auto const vals = cudf::slice(vals_full, {1, 11}).front();
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    *expect_vals,
+                    cudf::make_sum_overflow_aggregation<cudf::groupby_aggregation>());
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    *expect_vals,
+                    cudf::make_sum_overflow_aggregation<cudf::groupby_aggregation>(),
+                    force_use_sort_impl::YES);
+  }
+}
+
+TYPED_TEST(groupby_sum_overflow_test, MultiBlock)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  constexpr cudf::size_type num_groups     = 5000;
+  constexpr cudf::size_type rows_per_group = 10;
+  constexpr cudf::size_type num_rows       = num_groups * rows_per_group;
+
+  std::vector<K> h_keys(num_rows);
+  std::generate(h_keys.begin(), h_keys.end(), [n = cudf::size_type{0}]() mutable {
+    return static_cast<K>(n++ % num_groups);
+  });
+  cudf::test::fixed_width_column_wrapper<K> keys(h_keys.begin(), h_keys.end());
+
+  auto const expect_key_it = cuda::counting_iterator<K>{0};
+  cudf::test::fixed_width_column_wrapper<K> expect_keys(expect_key_it, expect_key_it + num_groups);
+
+  auto const overflow_it = cuda::make_constant_iterator(false);
+  auto overflow_col =
+    cudf::test::fixed_width_column_wrapper<bool>(overflow_it, overflow_it + num_groups);
+
+  std::vector<std::unique_ptr<cudf::column>> children;
+  if constexpr (cudf::is_fixed_point<V>()) {
+    using RepType     = cudf::device_storage_type_t<V>;
+    auto const scale  = scale_type{0};
+    auto const val_it = cuda::make_constant_iterator(RepType{1});
+    auto vals = cudf::test::fixed_point_column_wrapper<RepType>(val_it, val_it + num_rows, scale);
+    auto const sum_it = cuda::make_constant_iterator(static_cast<RepType>(rows_per_group));
+    auto sum_col =
+      cudf::test::fixed_point_column_wrapper<RepType>(sum_it, sum_it + num_groups, scale);
+    children.push_back(sum_col.release());
+    children.push_back(overflow_col.release());
+    auto expect_vals = cudf::create_structs_hierarchy(num_groups, std::move(children), 0, {});
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    *expect_vals,
+                    cudf::make_sum_overflow_aggregation<cudf::groupby_aggregation>());
+  } else {
+    auto const val_it = cuda::make_constant_iterator(V{1});
+    auto vals         = cudf::test::fixed_width_column_wrapper<V>(val_it, val_it + num_rows);
+    auto const sum_it = cuda::make_constant_iterator(static_cast<V>(rows_per_group));
+    auto sum_col      = cudf::test::fixed_width_column_wrapper<V>(sum_it, sum_it + num_groups);
+    children.push_back(sum_col.release());
+    children.push_back(overflow_col.release());
+    auto expect_vals = cudf::create_structs_hierarchy(num_groups, std::move(children), 0, {});
+    test_single_agg(keys,
+                    vals,
+                    expect_keys,
+                    *expect_vals,
+                    cudf::make_sum_overflow_aggregation<cudf::groupby_aggregation>());
+  }
+}
+
 // Test that SUM_OVERFLOW throws an error for bool type (which is not supported)
-TEST(groupby_sum_overflow_error_test, bool_type_not_supported)
+TEST(groupby_sum_overflow_error_test, BoolTypeNotSupported)
 {
   using K = int32_t;
   using V = bool;  // bool type should not be supported by SUM_OVERFLOW
@@ -394,7 +515,7 @@ TEST(groupby_sum_overflow_error_test, bool_type_not_supported)
 }
 
 // Test that SUM_OVERFLOW throws an error for unsigned integer types (which are not supported)
-TEST(groupby_sum_overflow_error_test, unsigned_types_not_supported)
+TEST(groupby_sum_overflow_error_test, UnsignedTypesNotSupported)
 {
   using K = int32_t;
 
