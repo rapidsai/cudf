@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
@@ -986,7 +986,8 @@ CUDF_HOST_DEVICE constexpr bool has_dict()
 }
 
 /**
- * @brief Check whether the kernel mask decodes parquet dictionary indices directly to an INT32 column.
+ * @brief Check whether the kernel mask decodes parquet dictionary indices directly to an INT32
+ * column.
  *
  * These masks back the Parquet-dict → DICTIONARY32 transcode path, where the decoded output is the
  * INT32 indices child of a DICTIONARY32 column rather than fully materialized values.
