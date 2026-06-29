@@ -101,8 +101,9 @@ order_scheme::order_scheme(std::vector<ordering> orderings) : orderings{std::mov
   RAPIDSMPF_EXPECTS(
     !this->orderings.empty(), "order_scheme: orderings must not be empty", std::invalid_argument);
   for (auto const& ordering : this->orderings) {
-    RAPIDSMPF_EXPECTS(
-      !ordering.keys.empty(), "order_scheme: orderings must not be empty", std::invalid_argument);
+    RAPIDSMPF_EXPECTS(!ordering.keys.empty(),
+                      "order_scheme: ordering entries must not be empty",
+                      std::invalid_argument);
   }
 }
 
