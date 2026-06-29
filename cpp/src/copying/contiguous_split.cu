@@ -1942,7 +1942,7 @@ struct contiguous_split_state {
 
     auto& h_dst_buf_info  = partition_buf_size_and_dst_buf_info->h_dst_buf_info;
     auto cur_dst_buf_info = h_dst_buf_info.data();
-    detail::metadata_builder mb{input.num_columns()};
+    detail::metadata_builder mb{input.num_columns(), std::nullopt};
 
     populate_metadata(input.begin(), input.end(), cur_dst_buf_info, mb);
 
@@ -2036,7 +2036,7 @@ struct contiguous_split_state {
     auto& h_dst_bufs     = src_and_dst_pointers->h_dst_bufs;
 
     auto cur_dst_buf_info = h_dst_buf_info.data();
-    detail::metadata_builder mb(input.num_columns());
+    detail::metadata_builder mb(input.num_columns(), std::nullopt);
 
     for (std::size_t idx = 0; idx < num_partitions; idx++) {
       // traverse the buffers and build the columns.

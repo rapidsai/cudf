@@ -56,7 +56,7 @@ class metadata_builder {
    *        must match the size of the table's columns (if any).
    */
   explicit metadata_builder(size_type const num_root_columns,
-                            std::optional<size_type> const num_rows = std::nullopt);
+                            std::optional<size_type> const num_rows);
 
   /**
    * @brief Destructor that will be implemented as default, required because metadata_builder_impl
