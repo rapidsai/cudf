@@ -308,10 +308,12 @@ class _SeriesLocIndexer(_FrameIndexer):
                 isinstance(arg, tuple)
                 and len(arg) == self._frame.index.nlevels
                 and all(is_scalar(x) for x in arg)
+                and len(result) == 1
             ):
                 # Only collapse to a scalar when every level was selected by a
-                # scalar label; a tuple containing list-likes/slices selects
-                # multiple rows and must stay a Series.
+                # scalar label and the key matched exactly one row; a tuple
+                # containing list-likes/slices, or a scalar key matching
+                # multiple rows of a non-unique MultiIndex, must stay a Series.
                 result = result.iloc[0]
             return result
         try:

@@ -780,6 +780,14 @@ class MultiIndex(Index):
     @_performance_tracking
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """Computes the valid set of indices of values in the lookup"""
+        # An all-wildcard per-level key (every component ``slice(None)``, e.g.
+        # ``df.loc[(slice(None), slice(None))]``) is an identity selection of
+        # all rows. Handle it directly: skipping every component below would
+        # build a 0-column lookup whose merge has no common columns and raises.
+        if isinstance(row_tuple, tuple) and all(
+            isinstance(row, slice) and row == slice(None) for row in row_tuple
+        ):
+            return ColumnBase.from_range(range(max_length))
         # The pandas-matching lookup semantics below (cartesian-product of the
         # per-level keys, de-duplicated indexer labels, deterministic
         # result ordering, and strict KeyError for missing labels/combinations)
@@ -994,6 +1002,10 @@ class MultiIndex(Index):
         if len(keep) == 0:
             # Every level was scalar-selected: collapse one dimension.
             if isinstance(result, cudf.DataFrame):
+                if len(result) > 1:
+                    # Duplicate full-key matches: pandas keeps every matched
+                    # row as a DataFrame rather than collapsing a dimension.
+                    return result
                 if len(result) == 1:
                     result = result.T
                     return result[result._column_names[0]]

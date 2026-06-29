@@ -308,7 +308,9 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 else:
                     col_is_single_label = False
                 if col_is_single_label:
-                    row_is_full_label = is_scalar(row_arg) or (
+                    row_is_full_label = (
+                        columns_df.index.nlevels == 1 and is_scalar(row_arg)
+                    ) or (
                         isinstance(row_arg, tuple)
                         and len(row_arg) == columns_df.index.nlevels
                         and all(is_scalar(x) for x in row_arg)
