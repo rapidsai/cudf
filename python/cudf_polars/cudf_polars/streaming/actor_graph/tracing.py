@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from rapidsmpf.streaming.core.message import Message
 
@@ -50,6 +50,7 @@ class ActorTracer:
         "chunk_count",
         "decision",
         "duplicated",
+        "extra",
         "ir_id",
         "ir_type",
         "row_count",
@@ -62,6 +63,7 @@ class ActorTracer:
         self.chunk_count: int = 0
         self.decision: str | None = None
         self.duplicated: bool = False
+        self.extra: dict[str, Any] = {}
 
     def add_chunk(self, *, chunk: TableChunk | None = None) -> None:
         """
@@ -82,6 +84,15 @@ class ActorTracer:
     def set_duplicated(self, *, duplicated: bool = True) -> None:
         """Mark output rows as duplicated across ranks."""
         self.duplicated = duplicated
+
+    def set_extra(self, key: str, value: Any) -> None:
+        """
+        Attach structured metadata to the current actor trace event.
+
+        This is useful for nested runtime decisions that do not have a
+        separate IR node, but should still be logged with their parent actor.
+        """
+        self.extra[key] = value
 
 
 async def send_chunk(
