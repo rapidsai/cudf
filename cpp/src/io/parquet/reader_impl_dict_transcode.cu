@@ -231,8 +231,9 @@ bool reader_impl::prepare_dict_transcode()
   if (not any_rewritten) { return false; }
 
   // Push the rewritten `kernel_mask`s back to device so subsequent decode kernels dispatch
-  // correctly. Then refresh the aggregated `subpass.kernel_mask` on the host by re-OR'ing all
-  // page kernel masks.
+  // correctly. The copy is enqueued on `_stream`, so no explicit synchronization is required. The host
+  // source buffer (`subpass.pages`) is owned by the subpass and is neither freed nor re-mutated
+  // before the copy completes.
   subpass.pages.host_to_device_async(_stream);
   subpass.kernel_mask = std::transform_reduce(
     subpass.pages.host_begin(),
@@ -240,7 +241,6 @@ bool reader_impl::prepare_dict_transcode()
     uint32_t{0},
     std::bit_or<>{},
     [](PageInfo const& page) { return static_cast<uint32_t>(page.kernel_mask); });
-  _stream.synchronize();
   return true;
 }
 
