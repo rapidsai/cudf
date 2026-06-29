@@ -1498,8 +1498,8 @@ TEST_F(ComputeColumnTest, Decimal128Unsupported)
   auto cr  = cudf::ast::column_reference(0);
   auto ast = cudf::ast::operation(cudf::ast::ast_operator::MUL, lr, cr);
   EXPECT_THROW(cudf::compute_column(table, ast), cudf::data_type_error);
-  ast = cudf::ast::operation(cudf::ast::ast_operator::MUL, cr, lr);
-  EXPECT_THROW(cudf::compute_column(table, ast), cudf::data_type_error);
+  auto ast2 = cudf::ast::operation(cudf::ast::ast_operator::MUL, cr, lr);
+  EXPECT_THROW(cudf::compute_column(table, ast2), cudf::data_type_error);
 
   auto result = cudf::compute_column_jit(table, ast);
   // Expected: 0.5 * 2000.00 = 1000.00  => rep 10000000 @ scale -4
