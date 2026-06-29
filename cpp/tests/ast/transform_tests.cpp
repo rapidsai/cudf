@@ -1494,10 +1494,11 @@ TEST_F(ComputeColumnTest, Decimal128Unsupported)
   auto half = numeric::decimal128{numeric::scaled_integer<numeric::decimal128::rep>{50, scale}};
   auto lit  = cudf::fixed_point_scalar<numeric::decimal128>(half, true);
 
-  auto lr        = cudf::ast::literal(lit);
-  auto cr        = cudf::ast::column_reference(0);
-  auto const ast = cudf::ast::operation(cudf::ast::ast_operator::MUL, lr, cr);
-
+  auto lr  = cudf::ast::literal(lit);
+  auto cr  = cudf::ast::column_reference(0);
+  auto ast = cudf::ast::operation(cudf::ast::ast_operator::MUL, lr, cr);
+  EXPECT_THROW(cudf::compute_column(table, ast), cudf::data_type_error);
+  ast = cudf::ast::operation(cudf::ast::ast_operator::MUL, cr, lr);
   EXPECT_THROW(cudf::compute_column(table, ast), cudf::data_type_error);
 
   auto result = cudf::compute_column_jit(table, ast);
