@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -68,9 +68,10 @@ cpdef tuple[gpumemoryview, int] nans_to_nulls(
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_transform.nans_to_nulls(
-            input.view(), _cs, mr.get_mr()
+            c_input, _cs, mr.get_mr()
         )
 
     return (
@@ -110,9 +111,10 @@ cpdef Column column_nans_to_nulls(
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_transform.column_nans_to_nulls(
-            input.view(), _cs, mr.get_mr()
+            c_input, _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -146,9 +148,10 @@ cpdef Column compute_column(
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_input = input.view()
     with nogil:
         c_result = cpp_transform.compute_column(
-            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
+            c_input, dereference(expr.c_obj.get()), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -184,9 +187,10 @@ cpdef Column compute_column_jit(
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_input = input.view()
     with nogil:
         c_result = cpp_transform.compute_column_jit(
-            input.view(), dereference(expr.c_obj.get()), _cs, mr.get_mr()
+            c_input, dereference(expr.c_obj.get()), _cs, mr.get_mr()
         )
 
     return Column.from_libcudf(move(c_result), _stream, mr)
@@ -219,9 +223,10 @@ cpdef tuple[gpumemoryview, int] bools_to_mask(
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_input = input.view()
     with nogil:
         c_result = cpp_transform.bools_to_mask(
-            input.view(), _cs, mr.get_mr()
+            c_input, _cs, mr.get_mr()
         )
 
     return (
@@ -375,8 +380,9 @@ cpdef tuple[Table, Column] encode(
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_input = input.view()
     with nogil:
-        c_result = cpp_transform.encode(input.view(), _cs, mr.get_mr())
+        c_result = cpp_transform.encode(c_input, _cs, mr.get_mr())
 
     return (
         Table.from_libcudf(move(c_result.first), _stream, mr),
@@ -416,10 +422,12 @@ cpdef Table one_hot_encode(
     cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_input = input.view()
+    cdef column_view c_categories = categories.view()
     with nogil:
         c_result = cpp_transform.one_hot_encode(
-            input.view(),
-            categories.view(),
+            c_input,
+            c_categories,
             _cs,
             mr.get_mr()
         )
