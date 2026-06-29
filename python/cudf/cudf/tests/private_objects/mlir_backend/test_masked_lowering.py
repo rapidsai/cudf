@@ -18,23 +18,24 @@ import cudf.core.udf.mlir_backend.masked_lowering
 import cudf.core.udf.mlir_backend.masked_typing  # noqa: F401
 from cudf.core.udf.api import Masked
 from cudf.core.udf.utils import DEPRECATED_SM_REGEX
-from cudf.utils._numba import _CUDFNumbaConfig
 
+from .utils import MLIRNumbaCudaConfig
+
+# The low-occupancy performance warning is suppressed via ``MLIRNumbaCudaConfig``
+# in ``_launch``; the filters here cover advisory warnings that aren't config
+# controlled (otherwise promoted to errors by ``filterwarnings = error``).
 pytestmark = [
     pytest.mark.filterwarnings(f"ignore:{DEPRECATED_SM_REGEX}:UserWarning"),
     pytest.mark.filterwarnings(
         "ignore:Linking LTOIR with optimization_level:"
         "numba_cuda_mlir.numba_cuda.core.errors.NumbaWarning"
     ),
-    pytest.mark.filterwarnings(
-        "ignore::numba_cuda_mlir.numba_cuda.core.errors.NumbaPerformanceWarning"
-    ),
 ]
 
 
 def _launch(kernel, *args):
     """Launch ``kernel[1, 1](*args)`` (a 1x1 grid, by design)."""
-    with _CUDFNumbaConfig():
+    with MLIRNumbaCudaConfig():
         kernel[1, 1](*args)
     cuda.synchronize()
 
