@@ -10,13 +10,12 @@
 
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/error.hpp>
 #include <rmm/mr/callback_memory_resource.hpp>
 #include <rmm/mr/statistics_resource_adaptor.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cuda/memory_resource>
+#include <cuda/stream_ref>
 
 #include <cstddef>
 #include <functional>
@@ -41,16 +40,9 @@ class scoped_current_device_resource {
    * @param resource Owning type-erased resource value to install
    */
   explicit scoped_current_device_resource(
-    cuda::mr::any_resource<cuda::mr::device_accessible> resource)
-    : _previous{cudf::set_current_device_resource(std::move(resource))}
-  {
-  }
+    cuda::mr::any_resource<cuda::mr::device_accessible> resource);
 
-  ~scoped_current_device_resource()
-  {
-    auto replaced = cudf::set_current_device_resource(std::move(_previous));
-    static_cast<void>(replaced);
-  }
+  ~scoped_current_device_resource();
 
   scoped_current_device_resource(scoped_current_device_resource const&)            = delete;
   scoped_current_device_resource& operator=(scoped_current_device_resource const&) = delete;
@@ -95,36 +87,21 @@ class memory_resource_test_harness {
    * @param upstream Resource used by each independent statistics adaptor
    */
   explicit memory_resource_test_harness(
-    rmm::device_async_resource_ref upstream = cudf::get_current_device_resource_ref())
-    : _setup_mr{upstream},
-      _output_mr{upstream},
-      _temporary_mr{upstream},
-      _failing_mr{[](std::size_t, rmm::cuda_stream_view, void*) -> void* {
-                    throw rmm::bad_alloc{"Unexpected allocation from the current device resource"};
-                  },
-                  [](void*, std::size_t, rmm::cuda_stream_view, void*) {}}
-  {
-  }
+    rmm::device_async_resource_ref upstream = cudf::get_current_device_resource_ref());
 
   /** @brief Return the statistics resource used to construct test inputs and expected results. */
-  [[nodiscard]] rmm::mr::statistics_resource_adaptor& setup_mr() noexcept { return _setup_mr; }
+  [[nodiscard]] rmm::mr::statistics_resource_adaptor& setup_mr() noexcept;
 
   /** @brief Return the statistics resource used for API output allocations. */
-  [[nodiscard]] rmm::mr::statistics_resource_adaptor& output_mr() noexcept { return _output_mr; }
+  [[nodiscard]] rmm::mr::statistics_resource_adaptor& output_mr() noexcept;
 
   /** @brief Return the statistics resource used for API temporary allocations. */
-  [[nodiscard]] rmm::mr::statistics_resource_adaptor& temporary_mr() noexcept
-  {
-    return _temporary_mr;
-  }
+  [[nodiscard]] rmm::mr::statistics_resource_adaptor& temporary_mr() noexcept;
 
   /**
    * @brief Return explicit output and temporary resources without consulting the current resource.
    */
-  [[nodiscard]] cudf::memory_resources resources() noexcept
-  {
-    return cudf::memory_resources{_output_mr, _temporary_mr};
-  }
+  [[nodiscard]] cudf::memory_resources resources() noexcept;
 
   /**
    * @brief Install an allocation-failing current resource for the returned scope's lifetime.
@@ -134,40 +111,22 @@ class memory_resource_test_harness {
    *
    * @return Scope that restores the prior current resource on destruction
    */
-  [[nodiscard]] scoped_current_device_resource fail_on_current_device_resource_use()
-  {
-    return scoped_current_device_resource{_failing_mr};
-  }
+  [[nodiscard]] scoped_current_device_resource fail_on_current_device_resource_use();
 
   /** @brief Synchronize `stream` before leaving a failing-resource API scope. */
-  void synchronize(rmm::cuda_stream_view stream = cudf::test::get_default_stream()) const
-  {
-    stream.synchronize();
-  }
+  void synchronize(cuda::stream_ref stream = cudf::test::get_default_stream()) const;
 
   /** @brief Assert that output allocations are live after synchronizing `stream`. */
   void expect_output_allocations_live(
-    rmm::cuda_stream_view stream = cudf::test::get_default_stream()) const
-  {
-    synchronize(stream);
-    EXPECT_GT(_output_mr.get_bytes_counter().value, 0);
-  }
+    cuda::stream_ref stream = cudf::test::get_default_stream()) const;
 
   /** @brief Assert that temporary allocations were made after synchronizing `stream`. */
   void expect_temporary_allocation_activity(
-    rmm::cuda_stream_view stream = cudf::test::get_default_stream()) const
-  {
-    synchronize(stream);
-    EXPECT_GT(_temporary_mr.get_bytes_counter().total, 0);
-  }
+    cuda::stream_ref stream = cudf::test::get_default_stream()) const;
 
   /** @brief Assert that no temporary allocations remain live after synchronizing `stream`. */
   void expect_temporary_allocations_released(
-    rmm::cuda_stream_view stream = cudf::test::get_default_stream()) const
-  {
-    synchronize(stream);
-    EXPECT_EQ(_temporary_mr.get_bytes_counter().value, 0);
-  }
+    cuda::stream_ref stream = cudf::test::get_default_stream()) const;
 
   /**
    * @brief Assert output ownership and temporary allocation activity.
@@ -178,26 +137,7 @@ class memory_resource_test_harness {
    */
   void expect_resource_usage(std::size_t expected_output_bytes,
                              memory_resource_expectations expectations = {},
-                             rmm::cuda_stream_view stream = cudf::test::get_default_stream()) const
-  {
-    synchronize(stream);
-    auto const output_bytes    = _output_mr.get_bytes_counter();
-    auto const temporary_bytes = _temporary_mr.get_bytes_counter();
-
-    EXPECT_EQ(expected_output_bytes, static_cast<std::size_t>(output_bytes.value));
-    if (expectations.output == output_allocation_expectation::EXACT) {
-      EXPECT_EQ(expected_output_bytes, static_cast<std::size_t>(output_bytes.total));
-    } else {
-      EXPECT_GE(output_bytes.total, output_bytes.value);
-    }
-
-    EXPECT_EQ(temporary_bytes.value, 0);
-    if (expectations.temporary == temporary_allocation_expectation::SOME) {
-      EXPECT_GT(temporary_bytes.total, 0);
-    } else {
-      EXPECT_EQ(temporary_bytes.total, 0);
-    }
-  }
+                             cuda::stream_ref stream = cudf::test::get_default_stream()) const;
 
   /**
    * @brief Assert that no output or temporary allocations remain after synchronizing `stream`.
@@ -205,13 +145,7 @@ class memory_resource_test_harness {
    * Setup allocations are intentionally excluded because test inputs may remain alive while result
    * allocation lifetimes are checked.
    */
-  void expect_no_live_allocations(
-    rmm::cuda_stream_view stream = cudf::test::get_default_stream()) const
-  {
-    synchronize(stream);
-    EXPECT_EQ(_output_mr.get_bytes_counter().value, 0);
-    EXPECT_EQ(_temporary_mr.get_bytes_counter().value, 0);
-  }
+  void expect_no_live_allocations(cuda::stream_ref stream = cudf::test::get_default_stream()) const;
 
  private:
   rmm::mr::statistics_resource_adaptor _setup_mr;
@@ -235,13 +169,13 @@ template <typename Factory>
 void expect_output_uses_resource(
   Factory&& factory,
   output_allocation_expectation output_expectation = output_allocation_expectation::EXACT,
-  rmm::cuda_stream_view stream                     = cudf::test::get_default_stream())
+  cuda::stream_ref stream                          = cudf::test::get_default_stream())
 {
   auto output_mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
 
   {
     auto result = std::invoke(std::forward<Factory>(factory), output_mr).release();
-    stream.synchronize();
+    stream.sync();
     auto const output_bytes = output_mr.get_bytes_counter();
     auto const result_bytes = result->alloc_size();
 
@@ -253,7 +187,7 @@ void expect_output_uses_resource(
     }
   }
 
-  stream.synchronize();
+  stream.sync();
   EXPECT_EQ(output_mr.get_bytes_counter().value, 0);
 }
 
@@ -274,7 +208,7 @@ template <typename Factory>
 void expect_output_uses_distinct_resources(
   Factory&& factory,
   memory_resource_expectations expectations = {},
-  rmm::cuda_stream_view stream              = cudf::test::get_default_stream())
+  cuda::stream_ref stream                   = cudf::test::get_default_stream())
 {
   auto harness = memory_resource_test_harness{};
 
@@ -304,13 +238,12 @@ void expect_output_uses_distinct_resources(
  * @param stream Stream used by the API invocation
  */
 template <typename Factory, typename ResultSize, typename ResultValidator>
-void expect_api_uses_memory_resources(
-  memory_resource_test_harness& harness,
-  Factory&& factory,
-  ResultSize&& result_size,
-  ResultValidator&& validate_result,
-  memory_resource_expectations expectations = {},
-  rmm::cuda_stream_view stream              = cudf::test::get_default_stream())
+void expect_api_uses_memory_resources(memory_resource_test_harness& harness,
+                                      Factory&& factory,
+                                      ResultSize&& result_size,
+                                      ResultValidator&& validate_result,
+                                      memory_resource_expectations expectations = {},
+                                      cuda::stream_ref stream = cudf::test::get_default_stream())
 {
   {
     auto result = [&]() {
