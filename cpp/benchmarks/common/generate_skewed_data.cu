@@ -18,6 +18,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <array>
+#include <format>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -47,16 +48,13 @@ constexpr auto template_strings = std::to_array<std::string_view>({
 constexpr cudf::size_type matching_template_length{
   static_cast<cudf::size_type>(template_strings[0].size())};
 
-constexpr bool templates_are_slice_aligned()
+constexpr bool templates_have_matching_length()
 {
-  return std::ranges::all_of(template_strings, [](std::string_view s) {
-    return s.size() % matching_template_length == 0 && std::ranges::all_of(s, [&s](char const& c) {
-             return ((&c - &s[0]) % matching_template_length != 0) || ((c & 0xC0) != 0x80);
-           });
-  });
+  return std::ranges::all_of(
+    template_strings, [](std::string_view s) { return s.size() == matching_template_length; });
 }
-static_assert(templates_are_slice_aligned(),
-              "template_strings cannot split UTF-8 characters over 16-byte boundaries");
+static_assert(templates_have_matching_length(),
+              "all elements in template_strings must have the same length");
 
 /**
  * @brief Repeat a string until it reaches the given width, then take `str[0:width]`.
@@ -158,17 +156,19 @@ std::unique_ptr<cudf::column> create_skewed_string_column(cudf::size_type num_ro
                                                           int32_t short_string_pct,
                                                           int32_t hit_rate)
 {
-  CUDF_EXPECTS(num_rows > 0, "num_rows must be greater than 0");
-  CUDF_EXPECTS(short_length > 0, "short_length must be greater than 0");
+  CUDF_EXPECTS(num_rows >= 0, "num_rows must be at least 0");
+  CUDF_EXPECTS(short_length >= 0, "short_length must be at least 0");
   CUDF_EXPECTS(short_string_pct >= 0 && short_string_pct <= 100,
                "short_string_pct must be in the range [0, 100]");
   CUDF_EXPECTS(hit_rate >= 0 && hit_rate <= 100, "hit_rate must be in the range [0, 100]");
   CUDF_EXPECTS(long_tail_length > short_length,
                "long_tail_length must be greater than short_length");
   CUDF_EXPECTS(short_length % matching_template_length == 0,
-               "short_length must be a multiple of the template length (16 bytes)");
+               std::format("short_length must be a multiple of the template length ({} bytes)",
+                           matching_template_length));
   CUDF_EXPECTS(long_tail_length % matching_template_length == 0,
-               "long_tail_length must be a multiple of the template length (16 bytes)");
+               std::format("long_tail_length must be a multiple of the template length ({} bytes)",
+                           matching_template_length));
 
   auto const short_templates = make_template_column(short_length);
   auto const long_templates  = make_template_column(long_tail_length);
