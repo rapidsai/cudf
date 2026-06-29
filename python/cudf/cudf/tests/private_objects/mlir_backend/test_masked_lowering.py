@@ -21,9 +21,7 @@ from cudf.core.udf.utils import DEPRECATED_SM_REGEX
 
 from .utils import MLIRNumbaCudaConfig
 
-# The low-occupancy performance warning is suppressed via ``MLIRNumbaCudaConfig``
-# in ``_launch``; the filters here cover advisory warnings that aren't config
-# controlled (otherwise promoted to errors by ``filterwarnings = error``).
+
 pytestmark = [
     pytest.mark.filterwarnings(f"ignore:{DEPRECATED_SM_REGEX}:UserWarning"),
     pytest.mark.filterwarnings(
@@ -34,7 +32,7 @@ pytestmark = [
 
 
 def _launch(kernel, *args):
-    """Launch ``kernel[1, 1](*args)`` (a 1x1 grid, by design)."""
+    # Launch over a 1x1 grid
     with MLIRNumbaCudaConfig():
         kernel[1, 1](*args)
     cuda.synchronize()
@@ -55,13 +53,14 @@ _DTYPE_SAMPLES = [
 ]
 
 
+@pytest.mark.parametrize("valid", [True, False])
 @pytest.mark.parametrize("nb_ty,np_dt,sample", _DTYPE_SAMPLES)
-def test_masked_constructor_and_accessors_valid_true(nb_ty, np_dt, sample):
-    """``Masked(v, True).value == v`` and ``.valid == True``, for every supported dtype."""
-
+def test_masked_constructor_and_accessors_literal_validity(
+    nb_ty, np_dt, sample, valid
+):
     @cuda.jit(types.void(nb_ty[::1], types.boolean[::1], nb_ty[::1]))
     def k(out_value, out_valid, v):
-        m = Masked(v[0], True)
+        m = Masked(v[0], valid)
         out_value[0] = m.value
         out_valid[0] = m.valid
 
@@ -70,30 +69,11 @@ def test_masked_constructor_and_accessors_valid_true(nb_ty, np_dt, sample):
     out_valid = cp.zeros(1, dtype=np.bool_)
     _launch(k, out_value, out_valid, in_v)
     assert out_value.get()[0] == sample
-    assert bool(out_valid.get()[0]) is True
+    assert bool(out_valid.get()[0]) is valid
 
 
-@pytest.mark.parametrize("nb_ty,np_dt,sample", _DTYPE_SAMPLES)
-def test_masked_constructor_and_accessors_valid_false(nb_ty, np_dt, sample):
-    """``Masked(v, False).valid == False`` (and ``.value`` is preserved)."""
-
-    @cuda.jit(types.void(nb_ty[::1], types.boolean[::1], nb_ty[::1]))
-    def k(out_value, out_valid, v):
-        m = Masked(v[0], False)
-        out_value[0] = m.value
-        out_valid[0] = m.valid
-
-    in_v = cp.array([sample], dtype=np_dt)
-    out_value = cp.zeros(1, dtype=np_dt)
-    out_valid = cp.zeros(1, dtype=np.bool_)
-    _launch(k, out_value, out_valid, in_v)
-    assert out_value.get()[0] == sample
-    assert bool(out_valid.get()[0]) is False
-
-
-def test_masked_constructor_with_runtime_valid_flag():
-    """The validity flag can be a runtime value, not only a Python literal."""
-
+@pytest.mark.parametrize("valid", [True, False])
+def test_masked_constructor_and_accessors_runtime_validity(valid):
     @cuda.jit(
         types.void(
             types.int64[::1],
@@ -102,15 +82,15 @@ def test_masked_constructor_with_runtime_valid_flag():
             types.boolean[::1],
         )
     )
-    def k(out_value, out_valid, v, valid):
-        m = Masked(v[0], valid[0])
+    def k(out_value, out_valid, v, valid_in):
+        m = Masked(v[0], valid_in[0])
         out_value[0] = m.value
         out_valid[0] = m.valid
 
     in_v = cp.array([42], dtype=np.int64)
-    in_valid = cp.array([False], dtype=np.bool_)
+    in_valid = cp.array([valid], dtype=np.bool_)
     out_value = cp.zeros(1, dtype=np.int64)
     out_valid = cp.zeros(1, dtype=np.bool_)
     _launch(k, out_value, out_valid, in_v, in_valid)
     assert int(out_value.get()[0]) == 42
-    assert bool(out_valid.get()[0]) is False
+    assert bool(out_valid.get()[0]) is valid
