@@ -300,7 +300,7 @@ class FooSource(DataSourceInfo):
         self._size = size
 
     @property
-    def type(self):  # type: ignore[override]
+    def type(self):
         return "parquet"
 
     @property
