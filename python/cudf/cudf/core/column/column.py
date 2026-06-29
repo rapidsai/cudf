@@ -585,7 +585,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
                 ]
             )
             # Only need validity buffer for structs
-            buffers = cast("Any", arrow_array.buffers()[:1])
+            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:1])
             return pa.StructArray.from_buffers(
                 new_struct_type,
                 len(arrow_array),
@@ -605,7 +605,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
         )
 
         if new_values is not values or has_non_nullable_field:
-            buffers = cast("Any", arrow_array.buffers()[:2])
+            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:2])
             list_type = pa.list_(
                 pa.field(value_field.name, new_values.type, nullable=True)
             )
