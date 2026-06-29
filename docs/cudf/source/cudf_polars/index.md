@@ -92,7 +92,8 @@ On a single GPU, you can run TB-scale workloads with significant speedups compar
           PDS-DS (SF3K)
 ```
 
-To reproduce these results, see {doc}`benchmarks`.
+<!-- TODO: replace this link with {doc}`benchmarks` once the published results are reproducible using those instructions -->
+For more information on the benchmarks being run, see the PDS queries in the [cuDF GitHub repository](https://github.com/rapidsai/cudf/tree/main/python/cudf_polars/cudf_polars/streaming/benchmarks).
 
 ## Learn More
 
