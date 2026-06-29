@@ -880,9 +880,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
-   * bitwise {@code mergeOp} of null masks in the columns given as arguments, AND-ed with this column's
-   * existing null mask.
+   * Replace the null mask of a column. The resultant null mask is the bitwise {@code mergeOp} of
+   * null masks in the columns given as arguments, AND-ed with this column's existing null mask.
+   *
+   * If applying the null mask would be a no-op, the original column is returned with incremented refcount.
+   * Otherwise, a deep copy of the column is made.
    *
    * For STRUCT columns the new mask is also pushed down into every descendant column, to
    * stay consistent with the parent. For LIST/STRING columns the resultant offsets are
@@ -906,7 +908,11 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
       columnViews[i] = columns[i].getNativeView();
     }
 
-    return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
+    long[] mergeOutput = bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId);
+    if (mergeOutput[1] == 0) {  // no-op, the current column is unchanged
+      return copyToColumnVector();
+    }
+    return new ColumnVector(mergeOutput[0]);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -5210,15 +5216,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
 
   /**
-   * Native method to deep copy a column while replacing the null mask. The null mask is the
+   * Native method to replace a column's null mask. The null mask is the
    * bitwise merge of the null masks in the columns given as arguments.
    *
-   * @param baseHandle column view of the column that is deep copied.
+   * @param baseHandle column view of the column whose null mask is being replaced.
    * @param viewHandles array of views whose null masks are merged, must have identical row counts.
-   * @return native handle of the copied cudf column with replaced null mask.
+   * @return two-element array: [native_handle, has_output].
+   *         has_output is 0 when the original is unchanged and no copied column was produced.
    */
-  private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
-                                                        int nullConfig) throws CudfException;
+  private static native long[] bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
+                                                          int nullConfig) throws CudfException;
 
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
