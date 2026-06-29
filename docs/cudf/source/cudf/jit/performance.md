@@ -15,7 +15,7 @@ libcudf also has a pre-compiled AST interpreter that can be used to evaluate exp
 - The dimensionality of the inputs it can handle (scalar vs columnar)
 - Register pressure and memory bandwidth usage for complex expressions
 - Intermediate results that are materialized in shared memory instead of registers, which can lead to lower performance for complex expressions
-- Increased AOT compilation times, thus increasing the overall build time of libcudf and its dependencies. This is because the pre-compiled AST interpreter needs to be compiled for all possible expressions and input types, which can lead to a combinatorial explosion of code paths and makes the compiler work harder to optimize the code. 
+- Increased AOT compilation times, thus increasing the overall build time of libcudf and its dependencies. This is because the pre-compiled AST interpreter needs to be compiled for all possible expressions and input types, which can lead to a combinatorial explosion of code paths and makes the compiler work harder to optimize the code.
 
 
 ### 2. Architecture-Specific Optimizations & Optimization Policies
@@ -107,7 +107,7 @@ This is same as `LIBCUDF_JIT_DUMP_TRACE` but dumps the trace as a perfetto json 
 
 ### `LIBCUDF_KERNEL_CACHE_LIMIT_PER_PROCESS:integer`
 
-This environment variable limits the number of cached kernels per process. This is useful to control the memory footprint of the kernel cache in multi-process environments. It can also be used to disable caching of kernels for benchmarking purposes. 
+This environment variable limits the number of cached kernels per process. This is useful to control the memory footprint of the kernel cache in multi-process environments. It can also be used to disable caching of kernels for benchmarking purposes.
 
 
 ### `cudf::enable_jit_cache(bool)`

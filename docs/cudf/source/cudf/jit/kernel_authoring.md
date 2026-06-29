@@ -39,9 +39,9 @@ extern "C" __device__ void cudf_kernel_entry(column_device_view const * inputs, 
 
 A few things to note:
 
-- The kernel template `unary_op_kernel` is templatized on the input and output types, allowing for instantiation and specialization of the kernel across each input and output type combination. 
+- The kernel template `unary_op_kernel` is templatized on the input and output types, allowing for instantiation and specialization of the kernel across each input and output type combination.
 - The `cudf_kernel_entry` function is the scope-independent entry point for the kernel, which is used to reference the kernel entry point and allows the entry point to be referenced independently of the kernel's template parameters as it is not tied to a complex mangling scheme.
-- The `CUDF_KERNEL_INSTANCE` macro is used to instantiate/specialize the kernel for each input and output type combination and it is not known or resolved until runtime, this represents the kernel configuration specialization. 
+- The `CUDF_KERNEL_INSTANCE` macro is used to instantiate/specialize the kernel for each input and output type combination and it is not known or resolved until runtime, this represents the kernel configuration specialization.
 - The `GENERIC_TRANSFORM_OP` macro is used to instantiate/specialize the kernel for each UDF and it is not known or resolved until runtime, representing the kernel UDF specialization.
 
 
@@ -107,7 +107,7 @@ __device__ void as_float(float * output, int input){
 ### 5. Kernel Compilation & Caching
 
 Given that the kernel UDF and the kernel templates have been resolved at runtime, the kernel can be compiled for execution on the GPU.
-The kernel compilation process involves a complex set of steps that authors need not worry about, this generally goes through the `cudf::get_udf_kernel` function, which is responsible for generating the specialized CUDA kernel source code, compiling the kernel, caching it, and returning a handle (`cudf::kernel`) to the compiled kernel. 
+The kernel compilation process involves a complex set of steps that authors need not worry about, this generally goes through the `cudf::get_udf_kernel` function, which is responsible for generating the specialized CUDA kernel source code, compiling the kernel, caching it, and returning a handle (`cudf::kernel`) to the compiled kernel.
 
 
 
@@ -129,5 +129,3 @@ kernel.launch_with(input, output, n);
 <!-- Generate NVIDIA-style diagram to illustrate the entire flow -->
 
 NOTE: As of 26.06 PTX UDFs are supported by converting them to CUDA C++ code by using the `asm` CUDA directive. This still pays the full CUDA C++ frontend compilation cost.
-
-

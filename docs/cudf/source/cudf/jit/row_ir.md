@@ -177,4 +177,3 @@ This analysis prevents over-allocation of resources and ensures predictable perf
 3. **Maintainability**: Clear separation of concerns (construction, resolution, code generation)
 4. **Extensibility**: New operations and attributes can be added to the IR without disrupting existing code paths
 5. **Performance**: Enables data-driven optimization decisions before CUDA code emission
- 
