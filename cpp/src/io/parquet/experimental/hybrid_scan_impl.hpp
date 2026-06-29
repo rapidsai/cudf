@@ -520,7 +520,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @param out_row_mask_offset Offset into the output row mask column
    * @param stream CUDA stream
    */
-  static void update_row_mask(cudf::column_view const& in_row_mask,
+  void update_row_mask(cudf::column_view const& in_row_mask,
                               cudf::mutable_column_view& out_row_mask,
                               cudf::size_type out_row_mask_offset,
                               rmm::cuda_stream_view stream);

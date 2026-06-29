@@ -4,8 +4,9 @@
  */
 
 #include "hybrid_scan_common.hpp"
-#include "hybrid_scan_multifile_common.hpp"
 #include "hybrid_scan_multifile_composer.hpp"
+
+#include "tests/io/parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/table_utilities.hpp>

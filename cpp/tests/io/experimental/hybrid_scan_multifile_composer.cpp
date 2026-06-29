@@ -6,7 +6,6 @@
 #include "hybrid_scan_multifile_composer.hpp"
 
 #include "hybrid_scan_common.hpp"
-#include "hybrid_scan_multifile_common.hpp"
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>

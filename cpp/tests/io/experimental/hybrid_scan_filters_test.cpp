@@ -5,6 +5,8 @@
 
 #include "hybrid_scan_common.hpp"
 
+#include "tests/io/parquet_common.hpp"
+
 #include <cudf_test/base_fixture.hpp>
 
 #include <cudf/io/experimental/hybrid_scan.hpp>
