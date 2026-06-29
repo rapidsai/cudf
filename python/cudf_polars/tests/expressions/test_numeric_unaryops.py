@@ -173,16 +173,9 @@ def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> No
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "expr",
-    [
-        pl.col("a").clip(0, 2),
-        pl.col("a").hash(),
-    ],
-    ids=["clip", "hash"],
-)
-def test_unary_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+def test_unary_hash_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3]})
+    expr = pl.col("a").hash()
     q = df.select(expr)
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
