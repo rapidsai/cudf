@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import io
 import os
@@ -111,11 +111,19 @@ class TableWithMetadata:
     @property
     def num_row_groups_after_bloom_filter(self) -> int | None: ...
 
+class FilepathSource:
+    def __init__(
+        self, path: str | os.PathLike[Any], size: int | None = None
+    ): ...
+    path: str
+    size: int | None
+
 class SourceInfo:
     def __init__(
         self,
         sources: Sequence[str]
         | Sequence[os.PathLike[Any]]
+        | Sequence[FilepathSource]
         | Sequence[Datasource],
     ) -> None: ...
     @staticmethod
