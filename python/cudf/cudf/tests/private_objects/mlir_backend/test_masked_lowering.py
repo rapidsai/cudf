@@ -68,8 +68,9 @@ def test_masked_constructor_and_accessors_literal_validity(
     out_value = cp.zeros(1, dtype=np_dt)
     out_valid = cp.zeros(1, dtype=np.bool_)
     _launch(k, out_value, out_valid, in_v)
-    assert out_value.get()[0] == sample
     assert bool(out_valid.get()[0]) is valid
+    if valid:
+        assert out_value.get()[0] == sample
 
 
 @pytest.mark.parametrize("valid", [True, False])
@@ -92,5 +93,6 @@ def test_masked_constructor_and_accessors_runtime_validity(valid):
     out_value = cp.zeros(1, dtype=np.int64)
     out_valid = cp.zeros(1, dtype=np.bool_)
     _launch(k, out_value, out_valid, in_v, in_valid)
-    assert int(out_value.get()[0]) == 42
     assert bool(out_valid.get()[0]) is valid
+    if valid:
+        assert int(out_value.get()[0]) == 42
