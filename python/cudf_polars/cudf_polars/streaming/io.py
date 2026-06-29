@@ -98,7 +98,7 @@ def scan_partition_plan(
                     )
                 else:
                     # Fuse small files
-                    factor = max(blocksize // int(file_size), 1)
+                    factor = min(max(blocksize // int(file_size), 1), len(ir.paths))
                     return IOPartitionPlan(
                         factor,
                         IOPartitionFlavor.FUSED_FILES,

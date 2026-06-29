@@ -54,8 +54,8 @@ cdef class Column:
         list _children
         size_type _num_children
 
-    cdef column_view view(self) nogil
-    cdef mutable_column_view mutable_view(self) nogil
+    cdef column_view view(self)
+    cdef mutable_column_view mutable_view(self)
 
     @staticmethod
     cdef Column from_libcudf(
@@ -107,11 +107,11 @@ cdef class ListsColumnView:
     cdef Column _column
     cpdef child(self)
     cpdef offsets(self)
-    cdef lists_column_view view(self) nogil
+    cdef lists_column_view view(self)
     cpdef Column get_sliced_child(self, object stream=*)
 
 
 cdef class StructsColumnView:
     cdef Column _column
-    cdef structs_column_view view(self) nogil
+    cdef structs_column_view view(self)
     cpdef Column get_sliced_child(self, int index, object stream=*)
