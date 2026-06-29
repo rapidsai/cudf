@@ -203,7 +203,6 @@ def _lower_masked_is_not_na(builder, target, args, kwargs):
     builder.store_var(target, valid)
 
 
-# --- Binary ops -----------------------------------------------------------
 # Shared helper: apply ``op(v1, v2)`` to two scalar MLIR values, convert the
 # result to the target Masked's value type, and pack it with the given
 # validity bit. Numeric/boolean only at this layer.

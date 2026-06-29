@@ -262,9 +262,6 @@ def test_na_is_not_masked_returns_valid(valid_in):
     assert bool(out.get()[0]) is valid_in
 
 
-# --- binary ops ------------------------------------------------------------
-
-
 _ARITH = [
     (operator.add, lambda a, b: a + b),
     (operator.sub, lambda a, b: a - b),
