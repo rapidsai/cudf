@@ -57,6 +57,16 @@ datetime_extract_fields = [
     "nanosecond",
 ]
 
+duration_extract_fields = [
+    "total_seconds",
+    "total_milliseconds",
+    "total_microseconds",
+    "total_nanoseconds",
+    "total_days",
+    "total_hours",
+    "total_minutes",
+]
+
 
 @pytest.fixture(
     ids=datetime_extract_fields,
@@ -169,6 +179,38 @@ def test_strftime_duration(engine: pl.GPUEngine, format):
 
     q = ldf.select(pl.col("durations").dt.strftime(format))
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize("field", duration_extract_fields)
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+def test_duration_total_component_extract(engine: pl.GPUEngine, field, dtype):
+    ldf = pl.LazyFrame(
+        {
+            "durations": pl.Series(
+                [
+                    0,
+                    1,
+                    15,
+                    -1500,
+                    1000,
+                    1111,
+                    1500,
+                    11111,
+                    -134234534,
+                    134234534,
+                    # values beyond float64's exact-integer range to guard
+                    # against precision loss in the unit conversion
+                    5857593848682946,
+                    -5857593848682946,
+                ],
+                dtype=dtype,
+            ),
+        }
+    )
+    q = ldf.select(getattr(pl.col("durations").dt, field)())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
