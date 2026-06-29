@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,6 +27,16 @@ template <typename T>
 class RoundRobinTest : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(RoundRobinTest, cudf::test::FixedWidthTypes);
+
+struct RoundRobinZeroColumnTest : public cudf::test::BaseFixture {};
+
+TEST_F(RoundRobinZeroColumnTest, PreservesRowCount)
+{
+  cudf::table_view input{std::vector<cudf::column_view>{}, 7};
+  auto const [result, offsets] = cudf::round_robin_partition(input, 3);
+  EXPECT_EQ(result->num_columns(), 0);
+  EXPECT_EQ(result->num_rows(), 7);
+}
 
 TYPED_TEST(RoundRobinTest, EmptyInput)
 {

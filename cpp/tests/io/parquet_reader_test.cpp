@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -122,6 +122,29 @@ TEST_F(ParquetReaderTest, UserBounds)
     EXPECT_EQ(result.tbl->view().num_columns(), 4);
     EXPECT_EQ(result.tbl->view().column(0).size(), 0);
   }
+}
+
+TEST_F(ParquetReaderTest, ZeroColumnsPreservesRowCount)
+{
+  GTEST_SKIP() << "Zero-column / N-row parquet reads are not yet supported. See "
+                  "https://github.com/rapidsai/cudf/issues/22935).";
+
+  srand(31337);
+  auto const num_rows = 8;
+  auto expected       = create_random_fixed_table<int>(4, num_rows, false);
+
+  auto filepath = temp_env->get_temp_filepath("ZeroColumns.parquet");
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, *expected));
+
+  // Project no columns: the result should be (num_rows, 0), not (0, 0).
+  auto read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                     .column_names(std::vector<std::string>{})
+                     .build();
+  auto result = cudf::io::read_parquet(read_opts);
+
+  EXPECT_EQ(result.tbl->view().num_columns(), 0);
+  EXPECT_EQ(result.tbl->view().num_rows(), num_rows);
 }
 
 TEST_F(ParquetReaderTest, UserBoundsWithNulls)

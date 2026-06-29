@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -39,7 +39,9 @@
 #include <thrust/transform_scan.h>
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
+#include <stdexcept>
 #include <utility>
 
 namespace cudf {
@@ -540,6 +542,20 @@ std::unique_ptr<table> concatenate(host_span<table_view const> tables_to_concat,
                              return t.num_columns() == first_table.num_columns();
                            }),
                "Mismatch in table columns to concatenate.");
+
+  // Zero-column tables carry only a row count; concatenation sums their rows.
+  if (first_table.num_columns() == 0) {
+    auto const total_rows = std::accumulate(
+      tables_to_concat.begin(),
+      tables_to_concat.end(),
+      std::size_t{0},
+      [](std::size_t acc, auto const& t) { return acc + static_cast<std::size_t>(t.num_rows()); });
+    CUDF_EXPECTS(total_rows <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
+                 "Total number of rows exceeds the column size limit",
+                 std::overflow_error);
+    return std::make_unique<table>(std::vector<std::unique_ptr<column>>{},
+                                   static_cast<size_type>(total_rows));
+  }
 
   std::vector<std::unique_ptr<column>> concat_columns;
   for (size_type i = 0; i < first_table.num_columns(); ++i) {

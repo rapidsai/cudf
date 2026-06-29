@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,13 +10,26 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
 #include <cuda/iterator>
 
+#include <functional>
 #include <stdexcept>
+#include <vector>
 
 class ScatterUntypedTests : public cudf::test::BaseFixture {};
+
+TEST_F(ScatterUntypedTests, ZeroColumnsPreservesRowCount)
+{
+  cudf::table_view source{std::vector<cudf::column_view>{}, 2};
+  cudf::table_view target{std::vector<cudf::column_view>{}, 5};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> scatter_map{{0, 3}};
+  auto result = cudf::scatter(source, scatter_map, target);
+  EXPECT_EQ(result->num_columns(), 0);
+  EXPECT_EQ(result->num_rows(), 5);
+}
 
 // Throw logic error if scatter map is longer than source
 TEST_F(ScatterUntypedTests, ScatterMapTooLong)
@@ -491,6 +504,35 @@ template <typename T>
 class BooleanMaskScatter : public cudf::test::BaseFixture {};
 
 TYPED_TEST_SUITE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
+
+struct BooleanMaskScatterZeroColumn : public cudf::test::BaseFixture {};
+
+TEST_F(BooleanMaskScatterZeroColumn, PreservesRowCount)
+{
+  cudf::table_view target{std::vector<cudf::column_view>{}, 4};
+  cudf::test::fixed_width_column_wrapper<bool> mask{{true, false, true, false}};
+
+  // Table overload: a zero-column input scattered into a zero-column target.
+  cudf::table_view input{std::vector<cudf::column_view>{}, 2};
+  auto table_result = cudf::boolean_mask_scatter(input, target, mask);
+  EXPECT_EQ(table_result->num_columns(), 0);
+  EXPECT_EQ(table_result->num_rows(), 4);
+
+  // Scalar overload: zero columns means no scalars to scatter.
+  std::vector<std::reference_wrapper<cudf::scalar const>> scalars{};
+  auto scalar_result = cudf::boolean_mask_scatter(scalars, target, mask);
+  EXPECT_EQ(scalar_result->num_columns(), 0);
+  EXPECT_EQ(scalar_result->num_rows(), 4);
+}
+
+TEST_F(BooleanMaskScatterZeroColumn, TooManyTrueValuesThrows)
+{
+  cudf::table_view input{std::vector<cudf::column_view>{}, 1};
+  cudf::table_view target{std::vector<cudf::column_view>{}, 3};
+  // 2 true values but only 1 input row.
+  cudf::test::fixed_width_column_wrapper<bool> mask{{true, true, false}};
+  EXPECT_THROW(cudf::boolean_mask_scatter(input, target, mask), cudf::logic_error);
+}
 
 TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
 {

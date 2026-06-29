@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,8 +50,9 @@ std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     host_span<size_type const> splits,
                                     rmm::cuda_stream_view stream)
 {
-  if (input.num_columns() == 0) { return {}; }
-  return split(input, input.column(0).size(), splits, stream);
+  // A genuinely empty table (no columns and no rows) has nothing to split.
+  if (input.num_columns() == 0 && input.num_rows() == 0) { return {}; }
+  return split(input, input.num_rows(), splits, stream);
 }
 
 std::vector<column_view> split(column_view const& input,

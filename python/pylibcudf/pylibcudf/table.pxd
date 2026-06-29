@@ -4,11 +4,13 @@
 from libcpp.memory cimport unique_ptr
 from pylibcudf.libcudf.table.table cimport table
 from pylibcudf.libcudf.table.table_view cimport table_view
+from pylibcudf.libcudf.types cimport size_type
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 cdef class Table:
     # List[pylibcudf.Column]
     cdef public list _columns
+    cdef public size_type _num_rows
 
     cdef table_view view(self)
 
