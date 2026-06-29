@@ -87,6 +87,16 @@ def test_table_num_rows_mismatch_raises():
         plc.Table([col3, col4], num_rows=3)
 
 
+def test_table_num_rows_tracks_column_mutation():
+    # A table populated after construction reports the row count of its columns,
+    # not a stale cached value.
+    tbl = plc.Table([])
+    assert tbl.num_rows() == 0
+    tbl.columns().append(plc.Column.from_arrow(pa.array([1, 2, 3])))
+    assert tbl.num_rows() == 3
+    assert tbl.shape() == (3, 1)
+
+
 def test_zero_column_table_concatenate_sums_rows():
     result = plc.concatenate.concatenate(
         [plc.Table([], num_rows=7), plc.Table([], num_rows=5)]

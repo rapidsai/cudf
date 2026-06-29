@@ -335,6 +335,11 @@ cdef class Table:
 
     cpdef int num_rows(self):
         """The number of rows in this table."""
+        # When columns are present the row count is derived from the first column so that
+        # mutating the column list stays consistent. The explicit ``_num_rows`` is only the
+        # source of truth for a zero-column table, which has no column to derive it from.
+        if len(self._columns):
+            return self._columns[0].size()
         return self._num_rows
 
     cpdef list columns(self):
