@@ -624,6 +624,20 @@ def test_join_domain_prefilter_options_from_env(
     assert config.executor.dynamic_planning.join_domain_prefilter_trace
 
 
+@pytest.mark.parametrize("value", ["none", "null"])
+def test_join_domain_prefilter_trace_inherits_from_env(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_TRACE", "1"
+    )
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_DOMAIN_PREFILTER_TRACE",
+        value,
+    )
+    assert DynamicPlanningOptions().join_domain_prefilter_trace
+
+
 @pytest.mark.parametrize("value, expected", [("none", None), ("null", None), ("2", 2)])
 def test_join_prefilter_max_key_columns_from_env(
     monkeypatch: pytest.MonkeyPatch, value: str, expected: int | None
