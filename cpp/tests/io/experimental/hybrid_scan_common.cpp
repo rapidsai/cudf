@@ -82,8 +82,8 @@ cudf::test::fixed_width_column_wrapper<T> descending_low_cardinality()
 }  // namespace
 
 std::unique_ptr<cudf::column> make_list_str_column(std::mt19937& gen,
-                                                  bool is_str_nullable,
-                                                  bool is_list_nullable)
+                                                   bool is_str_nullable,
+                                                   bool is_list_nullable)
 {
   auto constexpr num_rows        = num_ordered_rows;
   auto constexpr string_per_row  = 3;
@@ -117,6 +117,110 @@ std::unique_ptr<cudf::column> make_list_str_column(std::mt19937& gen,
   }();
   return cudf::make_lists_column(
     num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
+}
+
+multifile_inputs::multifile_inputs(cudf::io::source_info const& source_info)
+  : datasources{cudf::io::make_datasources(source_info)}
+{
+  datasource_refs.reserve(datasources.size());
+  footer_buffers.reserve(datasources.size());
+  footer_byte_spans.reserve(datasources.size());
+
+  for (auto const& datasource : datasources) {
+    datasource_refs.emplace_back(*datasource);
+    footer_buffers.emplace_back(cudf::io::parquet::fetch_footer_to_host(datasource_refs.back()));
+    footer_byte_spans.emplace_back(*footer_buffers.back());
+  }
+}
+
+cudf::io::source_info build_source_info(std::vector<std::vector<char>> const& file_buffers)
+{
+  std::vector<cudf::host_span<char const>> spans;
+  spans.reserve(file_buffers.size());
+  for (auto const& buf : file_buffers) {
+    spans.emplace_back(buf.data(), buf.size());
+  }
+  return cudf::io::source_info(cudf::host_span<cudf::host_span<char const>>{spans});
+}
+
+void setup_page_indexes(cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
+                        multifile_inputs const& inputs)
+{
+  auto const page_index_byte_ranges = reader.page_index_byte_ranges();
+  std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
+  page_index_byte_spans.reserve(page_index_byte_ranges.size());
+
+  auto const page_index_buffers = cudf::io::parquet::fetch_page_indexes_to_host(
+    cudf::host_span<std::reference_wrapper<cudf::io::datasource> const>{inputs.datasource_refs},
+    cudf::host_span<cudf::io::parquet::byte_range_info const>{page_index_byte_ranges});
+  std::transform(page_index_buffers.begin(),
+                 page_index_buffers.end(),
+                 std::back_inserter(page_index_byte_spans),
+                 [](auto const& buffer) { return cudf::host_span<uint8_t const>{*buffer}; });
+
+  reader.setup_page_indexes(
+    cudf::host_span<cudf::host_span<uint8_t const> const>{page_index_byte_spans});
+}
+
+std::vector<std::vector<cudf::io::text::byte_range_info>> group_byte_ranges_by_source(
+  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
+    byte_ranges_and_source_map,
+  std::size_t num_sources)
+{
+  auto const& [byte_ranges, source_map] = byte_ranges_and_source_map;
+  CUDF_EXPECTS(byte_ranges.size() == source_map.size(), "Invalid source map size");
+
+  auto byte_ranges_per_source =
+    std::vector<std::vector<cudf::io::text::byte_range_info>>(num_sources);
+  std::for_each(byte_ranges.begin(),
+                byte_ranges.end(),
+                [&, range_index = std::size_t{0}](auto const& range) mutable {
+                  auto const source_index = source_map[range_index++];
+                  CUDF_EXPECTS(source_index >= 0 and static_cast<std::size_t>(source_index) <
+                                                       byte_ranges_per_source.size(),
+                               "Invalid byte range source index");
+                  byte_ranges_per_source[source_index].push_back(range);
+                });
+  return byte_ranges_per_source;
+}
+
+multisource_device_data fetch_multisource_device_data(
+  multifile_inputs const& inputs,
+  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
+    byte_ranges_and_source_map,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const byte_ranges_per_source =
+    group_byte_ranges_by_source(byte_ranges_and_source_map, inputs.datasources.size());
+  auto [buffers, per_source_spans, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
+    inputs.datasource_refs,
+    cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{byte_ranges_per_source},
+    stream,
+    mr);
+  tasks.get();
+
+  auto flat_spans = std::vector<cudf::device_span<uint8_t const>>{};
+  for (auto const& source_spans : per_source_spans) {
+    flat_spans.insert(flat_spans.end(), source_spans.begin(), source_spans.end());
+  }
+
+  return {std::move(buffers), std::move(per_source_spans), std::move(flat_spans)};
+}
+
+std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>>&& tables,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr)
+{
+  if (tables.size() == 1) { return std::move(tables[0]); }
+
+  auto table_views = std::vector<cudf::table_view>{};
+  table_views.reserve(tables.size());
+  std::transform(
+    tables.begin(), tables.end(), std::back_inserter(table_views), [](auto const& tbl) {
+      return tbl->view();
+    });
+  return cudf::concatenate(table_views, stream, mr);
 }
 
 template <typename T, size_t NumTableConcats, bool IsConstantStrings, bool IsNullable>
@@ -204,117 +308,13 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
   return std::pair{std::move(table), std::move(buffer)};
 }
 
-std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf::table>>&& tables,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr)
-{
-  if (tables.size() == 1) { return std::move(tables[0]); }
-
-  auto table_views = std::vector<cudf::table_view>{};
-  table_views.reserve(tables.size());
-  std::transform(
-    tables.begin(), tables.end(), std::back_inserter(table_views), [](auto const& tbl) {
-      return tbl->view();
-    });
-  return cudf::concatenate(table_views, stream, mr);
-}
-
-multifile_inputs::multifile_inputs(cudf::io::source_info const& source_info)
-  : datasources{cudf::io::make_datasources(source_info)}
-{
-  datasource_refs.reserve(datasources.size());
-  footer_buffers.reserve(datasources.size());
-  footer_byte_spans.reserve(datasources.size());
-
-  for (auto const& datasource : datasources) {
-    datasource_refs.emplace_back(*datasource);
-    footer_buffers.emplace_back(cudf::io::parquet::fetch_footer_to_host(datasource_refs.back()));
-    footer_byte_spans.emplace_back(*footer_buffers.back());
-  }
-}
-
-cudf::io::source_info build_source_info(std::vector<std::vector<char>> const& file_buffers)
-{
-  std::vector<cudf::host_span<char const>> spans;
-  spans.reserve(file_buffers.size());
-  for (auto const& buf : file_buffers) {
-    spans.emplace_back(buf.data(), buf.size());
-  }
-  return cudf::io::source_info(cudf::host_span<cudf::host_span<char const>>{spans});
-}
-
-std::vector<std::vector<cudf::io::text::byte_range_info>> group_byte_ranges_by_source(
-  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
-    byte_ranges_and_source_map,
-  std::size_t num_sources)
-{
-  auto const& [byte_ranges, source_map] = byte_ranges_and_source_map;
-  CUDF_EXPECTS(byte_ranges.size() == source_map.size(), "Invalid source map size");
-
-  auto byte_ranges_per_source =
-    std::vector<std::vector<cudf::io::text::byte_range_info>>(num_sources);
-  std::for_each(byte_ranges.begin(),
-                byte_ranges.end(),
-                [&, range_index = std::size_t{0}](auto const& range) mutable {
-                  auto const source_index = source_map[range_index++];
-                  CUDF_EXPECTS(source_index >= 0 and static_cast<std::size_t>(source_index) <
-                                                       byte_ranges_per_source.size(),
-                               "Invalid byte range source index");
-                  byte_ranges_per_source[source_index].push_back(range);
-                });
-  return byte_ranges_per_source;
-}
-
-multisource_device_data fetch_multisource_device_data(
-  multifile_inputs const& inputs,
-  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
-    byte_ranges_and_source_map,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  auto const byte_ranges_per_source =
-    group_byte_ranges_by_source(byte_ranges_and_source_map, inputs.datasources.size());
-  auto [buffers, per_source_spans, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
-    inputs.datasource_refs,
-    cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{byte_ranges_per_source},
-    stream,
-    mr);
-  tasks.get();
-
-  auto flat_spans = std::vector<cudf::device_span<uint8_t const>>{};
-  for (auto const& source_spans : per_source_spans) {
-    flat_spans.insert(flat_spans.end(), source_spans.begin(), source_spans.end());
-  }
-
-  return {std::move(buffers), std::move(per_source_spans), std::move(flat_spans)};
-}
-
-void setup_page_indexes(cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
-                        multifile_inputs const& inputs)
-{
-  auto const page_index_byte_ranges = reader.page_index_byte_ranges();
-  std::vector<cudf::host_span<uint8_t const>> page_index_byte_spans;
-  page_index_byte_spans.reserve(page_index_byte_ranges.size());
-
-  auto const page_index_buffers = cudf::io::parquet::fetch_page_indexes_to_host(
-    cudf::host_span<std::reference_wrapper<cudf::io::datasource> const>{inputs.datasource_refs},
-    cudf::host_span<cudf::io::parquet::byte_range_info const>{page_index_byte_ranges});
-  std::transform(page_index_buffers.begin(),
-                 page_index_buffers.end(),
-                 std::back_inserter(page_index_byte_spans),
-                 [](auto const& buffer) { return cudf::host_span<uint8_t const>{*buffer}; });
-
-  reader.setup_page_indexes(
-    cudf::host_span<cudf::host_span<uint8_t const> const>{page_index_byte_spans});
-}
-
-#define INSTANTIATE_CREATE_PARQUET_WITH_STATS(T, NUM_CONCATS, CONSTANT_STRINGS, NULLABLE)       \
-  template std::pair<std::unique_ptr<cudf::table>, std::vector<char>>                            \
-  create_parquet_with_stats<T, NUM_CONCATS, CONSTANT_STRINGS, NULLABLE>(                         \
+#define INSTANTIATE_CREATE_PARQUET_WITH_STATS(T, NUM_CONCATS, CONSTANT_STRINGS, NULLABLE) \
+  template std::pair<std::unique_ptr<cudf::table>, std::vector<char>>                     \
+  create_parquet_with_stats<T, NUM_CONCATS, CONSTANT_STRINGS, NULLABLE>(                  \
     cudf::size_type, cudf::io::compression_type, rmm::cuda_stream_view)
 
-#define INSTANTIATE_CREATE_PARQUET_WITH_STATS_DICT(T)             \
-  INSTANTIATE_CREATE_PARQUET_WITH_STATS(T, 1, true, false);       \
+#define INSTANTIATE_CREATE_PARQUET_WITH_STATS_DICT(T)       \
+  INSTANTIATE_CREATE_PARQUET_WITH_STATS(T, 1, true, false); \
   INSTANTIATE_CREATE_PARQUET_WITH_STATS(T, 1, true, true)
 
 INSTANTIATE_CREATE_PARQUET_WITH_STATS(uint32_t, 4, true, false);
