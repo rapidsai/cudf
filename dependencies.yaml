@@ -916,8 +916,9 @@ dependencies:
           - fsspec>=0.6.0
           # pandas 3.0.4 segfaults constructing pd.Timedelta on Python 3.14,
           # which breaks `import cudf` (https://github.com/pandas-dev/pandas/issues/66086).
-          # Drop the exclusion once a fixed pandas (e.g. 3.0.5) is released.
-          - &pandas pandas>=3.0.0,<3.1.0,!=3.0.4
+          # Cap below 3.0.4 (rather than just excluding it) until a fixed
+          # release is confirmed upstream, then raise the bound.
+          - &pandas pandas>=3.0.0,<3.0.4a0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1036,7 +1037,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==3.0.*,!=3.0.4
+              - pandas==3.0.*,<3.0.4a0
               - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
@@ -1687,7 +1688,7 @@ dependencies:
               pandas_compat_version: "3.0"
             packages:
               - numpy>=1.26,<2.0a0
-              - pandas==3.0.*,!=3.0.4
+              - pandas==3.0.*,<3.0.4a0
           - matrix:
             packages:
       - output_types: requirements
