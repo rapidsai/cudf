@@ -3555,6 +3555,79 @@ class DatetimeIndex(Index):
             name=self.name,
         )
 
+    @_performance_tracking
+    def indexer_between_time(
+        self,
+        start_time,
+        end_time,
+        include_start: bool = True,
+        include_end: bool = True,
+    ) -> cupy.ndarray:
+        """
+        Return index positions of values between particular times of day.
+
+        Parameters
+        ----------
+        start_time, end_time : datetime.time, str
+            Time passed either as object (datetime.time) or as string in
+            appropriate format ("%H:%M", "%H%M", "%I:%M%p", "%I%M%p",
+            "%H:%M:%S", "%H%M%S", "%I:%M:%S%p", "%I%M%S%p").
+        include_start : bool, default True
+        include_end : bool, default True
+
+        Returns
+        -------
+        cupy.ndarray
+            Integer positions of values between ``start_time`` and
+            ``end_time``. Returned as a device array, following cuDF
+            convention (pandas returns a host ``numpy.ndarray``).
+        """
+        from pandas.core.tools.times import to_time
+
+        start_time = to_time(start_time)
+        end_time = to_time(end_time)
+
+        # microseconds since midnight for each value in the index, matching
+        # pandas (which truncates sub-microsecond resolution). NaT entries
+        # produce nulls, filled with -1 so they never fall inside a range --
+        # the same sentinel pandas uses in ``_get_time_micros``.
+        time_micros = (
+            (
+                self.hour.astype("int64") * 3600
+                + self.minute.astype("int64") * 60
+                + self.second.astype("int64")
+            )
+            * 1_000_000
+            + self.microsecond.astype("int64")
+        ).fillna(-1)
+
+        def _time_to_micros(value) -> int:
+            return (
+                value.hour * 3600 + value.minute * 60 + value.second
+            ) * 1_000_000 + value.microsecond
+
+        start_micros = _time_to_micros(start_time)
+        end_micros = _time_to_micros(end_time)
+
+        after_start = (
+            time_micros >= start_micros
+            if include_start
+            else time_micros > start_micros
+        )
+        before_end = (
+            time_micros <= end_micros
+            if include_end
+            else time_micros < end_micros
+        )
+
+        if start_micros <= end_micros:
+            mask = after_start & before_end
+        else:
+            # the interval wraps around midnight
+            mask = after_start | before_end
+
+        return cupy.flatnonzero(mask)
+
     @cached_property
     def _constructor(self):
         return DatetimeIndex
