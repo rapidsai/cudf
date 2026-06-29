@@ -169,6 +169,7 @@ public class WindowOptions implements AutoCloseable {
 
   /**
    * Per-order-by-column ascending flags, parallel to {@link #getOrderByColumnIndices()}.
+   * Call only on a RANGE-frame WindowOptions; the backing array is null for a ROWS frame.
    */
   boolean[] getOrderByAscending() {
     return Arrays.copyOf(orderByAscendingFlags, orderByAscendingFlags.length);

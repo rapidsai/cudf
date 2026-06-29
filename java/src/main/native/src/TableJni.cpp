@@ -4622,7 +4622,7 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
         requests.push_back(cudf::rolling_request{
           input_table->column(agg_column_index), min_periods[i], clone_rolling(*agg)});
 
-        auto result = cudf::grouped_range_rolling_window(
+        auto const result = cudf::grouped_range_rolling_window(
           groupby_keys,
           order_by_table,
           cudf::host_span<cudf::order const>{orders},

@@ -6957,6 +6957,15 @@ public class TableTest extends CudfTestBase {
                             new boolean[]{true, true})
             .orderByAscending()
             .build());
+    assertThrows(IllegalStateException.class,
+        () -> WindowOptions.builder()
+            .currentRowPreceding()
+            .currentRowFollowing()
+            .orderByColumns(new int[]{0, 1},
+                            new boolean[]{true, true},
+                            new boolean[]{true, true})
+            .orderByDescending()
+            .build());
   }
 
   @Test
@@ -7100,6 +7109,46 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testRangeWindowingMultiOrderBySingleColumnEquivalenceWithNulls() {
+    // Like testRangeWindowingMultiOrderBySingleColumnEquivalence, but the order-by column has
+    // nulls -- the one place the null-ordering handling could diverge between the legacy
+    // single-column path and the length-1 orderByColumns({i}) array path. Both route to the
+    // single-column native overload, which deduces null placement natively, so the results must
+    // match. A CURRENT ROW peer frame keeps the expectation independent of the deduced null
+    // placement: two nulls are mutual peers, so the answer depends only on peer-equality.
+    try (Table sorted = new Table.TestBuilder()
+        .column((Integer) null, (Integer) null, 10, 20)  // oby_int (with nulls)
+        .column(1, 2, 3, 4)                               // agg column
+        .build()) {
+      try (WindowOptions legacy = WindowOptions.builder()
+              .minPeriods(1)
+              .currentRowPreceding()
+              .currentRowFollowing()
+              .orderByColumnIndex(0)
+              .orderByAscending()
+              .build();
+           WindowOptions viaArrays = WindowOptions.builder()
+              .minPeriods(1)
+              .currentRowPreceding()
+              .currentRowFollowing()
+              .orderByColumns(new int[]{0}, new boolean[]{true}, new boolean[]{true})
+              .build();
+           Table legacyResult = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(1).overWindow(legacy));
+           Table arraysResult = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(1).overWindow(viaArrays));
+           // Peer groups on oby_int: {null,null}={0,1}, {10}={2}, {20}={3}.
+           ColumnVector expect = ColumnVector.fromBoxedInts(2, 2, 1, 1)) {
+        assertColumnsAreEqual(expect, legacyResult.getColumn(0));
+        assertColumnsAreEqual(expect, arraysResult.getColumn(0));
+        assertColumnsAreEqual(legacyResult.getColumn(0), arraysResult.getColumn(0));
+      }
+    }
+  }
+
+  @Test
   void testRangeWindowingMultiOrderByTimestampDateDecimalLeading() {
     // Multi-column RANGE with the leading order-by column being, in turn, a TIMESTAMP_SECONDS,
     // a TIMESTAMP_DAYS (date), and a DECIMAL64 column, tie-broken by an int column.
@@ -7220,6 +7269,39 @@ public class TableTest extends CudfTestBase {
                   RollingAggregation.count().onColumn(2).overWindow(window));
            // Peer groups: {0,1} (null,null), {2} (2,3).
            ColumnVector expect = ColumnVector.fromBoxedInts(2, 2, 1)) {
+        assertColumnsAreEqual(expect, result.getColumn(0));
+      }
+    }
+  }
+
+  @Test
+  void testRangeWindowingMultiOrderByFloatEdgeValuePeers() {
+    // ORDER BY oby_f32 ASC NULLS FIRST (FLOAT32), oby_f64 ASC NULLS FIRST (FLOAT64)
+    // RANGE BETWEEN CURRENT ROW AND CURRENT ROW. Each row's window is its peer group, so the
+    // expected COUNT exercises float peer-equality on the tricky edge values: NaN == NaN, signed
+    // zero (-0.0f == +0.0f), and null == null on either order-by column. Input is pre-sorted on
+    // (oby_f32, oby_f64): nulls first, then ascending finite values, then NaN last.
+    try (Table sorted = new Table.TestBuilder()
+        // oby_f32 (FLOAT32): null,null | -0.0,+0.0 | 2.5,2.5,2.5 | NaN,NaN
+        .column((Float) null, (Float) null, -0.0f, 0.0f, 2.5f, 2.5f, 2.5f, Float.NaN, Float.NaN)
+        // oby_f64 (FLOAT64), tie-breaks within equal oby_f32 (nulls first)
+        .column(1.0, 1.0, 5.0, 5.0, (Double) null, (Double) null, 9.0, 4.0, 4.0)
+        .column(1, 2, 3, 4, 5, 6, 7, 8, 9)  // agg column (non-null)
+        .build()) {
+      try (WindowOptions window = WindowOptions.builder()
+              .minPeriods(1)
+              .currentRowPreceding()
+              .currentRowFollowing()
+              .orderByColumns(new int[]{0, 1},
+                              new boolean[]{true, true},
+                              new boolean[]{true, true})   // ASC, nulls first on both
+              .build();
+           Table result = sorted.groupBy()
+              .aggregateWindowsOverRanges(
+                  RollingAggregation.count().onColumn(2).overWindow(window));
+           // Peer groups: {0,1} (null,1.0), {2,3} (+/-0.0,5.0), {4,5} (2.5,null), {6} (2.5,9.0),
+           // {7,8} (NaN,4.0).
+           ColumnVector expect = ColumnVector.fromBoxedInts(2, 2, 2, 2, 2, 2, 1, 2, 2)) {
         assertColumnsAreEqual(expect, result.getColumn(0));
       }
     }

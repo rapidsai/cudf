@@ -636,11 +636,21 @@ public final class Table implements AutoCloseable {
       boolean[] unboundedFollowing,
       boolean ignoreNullKeys) throws CudfException;
 
-  private static native long[] rangeRollingWindowAggregate(long inputTable, int[] keyIndices,
-                                                           int[] orderByIndices, boolean[] isOrderByAscending, boolean[] isOrderByNullsFirst, int[] orderByOffsets,
-                                                           int[] aggColumnsIndices, long[] aggInstances, int[] minPeriods,
-                                                           long[] preceding, long[] following, int[] precedingRangeExtent, int[] followingRangeExtent,
-                                                           boolean ignoreNullKeys) throws CudfException;
+  private static native long[] rangeRollingWindowAggregate(
+      long inputTable,
+      int[] keyIndices,
+      int[] orderByIndices,
+      boolean[] isOrderByAscending,
+      boolean[] isOrderByNullsFirst,
+      int[] orderByOffsets,
+      int[] aggColumnsIndices,
+      long[] aggInstances,
+      int[] minPeriods,
+      long[] preceding,
+      long[] following,
+      int[] precedingRangeExtent,
+      int[] followingRangeExtent,
+      boolean ignoreNullKeys) throws CudfException;
 
   private static native long sortOrder(long inputTable, long[] sortKeys, boolean[] isDescending,
       boolean[] areNullsSmallest) throws CudfException;
