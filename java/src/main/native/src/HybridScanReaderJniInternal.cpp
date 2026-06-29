@@ -8,68 +8,12 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include <cuda_runtime_api.h>
-
-#include <cstring>
 #include <string>
 #include <utility>
 
 namespace cudf {
 namespace jni {
 namespace hybrid_scan {
-
-bool are_ranges_contiguous(std::vector<byte_range_info> const& ranges)
-{
-  if (ranges.size() <= 1) { return true; }
-  for (size_t i = 1; i < ranges.size(); ++i) {
-    if (ranges[i - 1].offset() + ranges[i - 1].size() != ranges[i].offset()) { return false; }
-  }
-  return true;
-}
-
-planned_copy_result plan_and_copy_ranges(uint8_t const* host_ptr,
-                                         std::vector<byte_range_info> const& ranges,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr)
-{
-  planned_copy_result result;
-  if (ranges.empty()) { return result; }
-
-  if (are_ranges_contiguous(ranges)) {
-    auto const first_offset = ranges.front().offset();
-    auto const last_range   = ranges.back();
-    auto const total_size   = (last_range.offset() + last_range.size()) - first_offset;
-    rmm::device_buffer coalesced_buf(total_size, stream, mr);
-    CUDF_CUDA_TRY(cudaMemcpyAsync(coalesced_buf.data(),
-                                  host_ptr + first_offset,
-                                  total_size,
-                                  cudaMemcpyHostToDevice,
-                                  stream.value()));
-    result.spans.reserve(ranges.size());
-    auto const* base_ptr = static_cast<uint8_t const*>(coalesced_buf.data());
-    for (auto const& range : ranges) {
-      auto const offset_in_buffer = range.offset() - first_offset;
-      result.spans.emplace_back(base_ptr + offset_in_buffer, range.size());
-    }
-    result.device_buffers.emplace_back(std::move(coalesced_buf));
-  } else {
-    result.device_buffers.reserve(ranges.size());
-    for (auto const& range : ranges) {
-      rmm::device_buffer dev_buf(range.size(), stream, mr);
-      CUDF_CUDA_TRY(cudaMemcpyAsync(dev_buf.data(),
-                                    host_ptr + range.offset(),
-                                    range.size(),
-                                    cudaMemcpyHostToDevice,
-                                    stream.value()));
-      result.device_buffers.emplace_back(std::move(dev_buf));
-    }
-    result.spans.reserve(result.device_buffers.size());
-    for (auto const& buf : result.device_buffers) {
-      result.spans.emplace_back(static_cast<uint8_t const*>(buf.data()), buf.size());
-    }
-  }
-  return result;
-}
 
 cudf::io::parquet_reader_options build_options(JNIEnv* env,
                                                jlong filter_handle,

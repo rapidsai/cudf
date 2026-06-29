@@ -13,10 +13,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/resource_ref.hpp>
-
 #include <jni.h>
 
 #include <cstdint>
@@ -54,15 +50,6 @@ struct hybrid_scan_reader_wrapper {
 };
 
 /**
- * @brief Holds the result of a planned host-to-device copy: the actual device memory and a
- *        list of device spans into that memory matching the requested byte ranges.
- */
-struct planned_copy_result {
-  std::vector<rmm::device_buffer> device_buffers;
-  std::vector<cudf::device_span<uint8_t const>> spans;
-};
-
-/**
  * @brief Convert a Java int[] of row group indices into a host_span<size_type const>. The
  *        wrapper owns a vector that backs the span; capture it as a value to avoid dangling.
  */
@@ -70,13 +57,6 @@ struct row_group_span_holder {
   std::vector<cudf::size_type> storage;
   cudf::host_span<cudf::size_type const> span() const { return {storage.data(), storage.size()}; }
 };
-
-bool are_ranges_contiguous(std::vector<byte_range_info> const& ranges);
-
-planned_copy_result plan_and_copy_ranges(uint8_t const* host_ptr,
-                                         std::vector<byte_range_info> const& ranges,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::device_async_resource_ref mr);
 
 /**
  * @brief Build a parquet_reader_options from the supplied JNI args. The footer is provided

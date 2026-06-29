@@ -580,10 +580,13 @@ public class HybridScanReader implements AutoCloseable {
 
   private static long[] bufferAddrs(DeviceMemoryBuffer[] buffers) {
     if (buffers == null) {
-      return new long[0];
+      throw new IllegalArgumentException("buffers must not be null");
     }
     long[] addrs = new long[buffers.length];
     for (int i = 0; i < buffers.length; i++) {
+      if (buffers[i] == null) {
+        throw new IllegalArgumentException("buffers[" + i + "] must not be null");
+      }
       addrs[i] = buffers[i].getAddress();
     }
     return addrs;
@@ -591,10 +594,13 @@ public class HybridScanReader implements AutoCloseable {
 
   private static long[] bufferLens(DeviceMemoryBuffer[] buffers) {
     if (buffers == null) {
-      return new long[0];
+      throw new IllegalArgumentException("buffers must not be null");
     }
     long[] lens = new long[buffers.length];
     for (int i = 0; i < buffers.length; i++) {
+      if (buffers[i] == null) {
+        throw new IllegalArgumentException("buffers[" + i + "] must not be null");
+      }
       lens[i] = buffers[i].getLength();
     }
     return lens;

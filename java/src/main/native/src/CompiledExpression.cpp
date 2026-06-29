@@ -109,7 +109,7 @@ class jni_serialized_ast {
 
 /**
  * Enumeration of the AST expression types that can appear in the serialized data.
- * NOTE: This must be kept in sync with the NodeType enumeration in AstNode.java!
+ * NOTE: This must be kept in sync with the ExpressionType enumeration in AstExpression.java!
  */
 enum class jni_serialized_expression_type : int8_t {
   VALID_LITERAL         = 0,

@@ -974,6 +974,12 @@ public class HybridScanReaderTest extends CudfTestBase {
         invocation("materializeFilterColumns", r -> r.materializeFilterColumns(null,
             new DeviceMemoryBuffer[0], UseDataPageMask.NO,
             HybridScanReader.RowMaskKind.ALL_TRUE)),
+        invocation("materializeFilterColumnsNullBuffers", r -> r.materializeFilterColumns(
+            new int[]{0}, null, UseDataPageMask.NO,
+            HybridScanReader.RowMaskKind.ALL_TRUE)),
+        invocation("materializeFilterColumnsNullBufferElement", r -> r.materializeFilterColumns(
+            new int[]{0}, new DeviceMemoryBuffer[]{null}, UseDataPageMask.NO,
+            HybridScanReader.RowMaskKind.ALL_TRUE)),
         invocation("materializePayloadColumnsNullRowGroups", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
             r.materializePayloadColumns(null, new DeviceMemoryBuffer[0],
@@ -982,11 +988,32 @@ public class HybridScanReaderTest extends CudfTestBase {
         }),
         invocation("materializePayloadColumnsNullRowMask", r -> r.materializePayloadColumns(
             new int[]{0}, new DeviceMemoryBuffer[0], null, UseDataPageMask.NO)),
+        invocation("materializePayloadColumnsNullBuffers", r -> {
+          try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
+            r.materializePayloadColumns(new int[]{0}, null, mask, UseDataPageMask.NO);
+          }
+        }),
+        invocation("materializePayloadColumnsNullBufferElement", r -> {
+          try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
+            r.materializePayloadColumns(new int[]{0}, new DeviceMemoryBuffer[]{null},
+                mask, UseDataPageMask.NO);
+          }
+        }),
         invocation("materializeAllColumns", r -> r.materializeAllColumns(null,
             new DeviceMemoryBuffer[0])),
+        invocation("materializeAllColumnsNullBuffers", r -> r.materializeAllColumns(
+            new int[]{0}, null)),
+        invocation("materializeAllColumnsNullBufferElement", r -> r.materializeAllColumns(
+            new int[]{0}, new DeviceMemoryBuffer[]{null})),
         invocation("setupChunkingForFilterColumns", r -> r.setupChunkingForFilterColumns(
             0L, 0L, null, UseDataPageMask.NO, HybridScanReader.RowMaskKind.ALL_TRUE,
             new DeviceMemoryBuffer[0])),
+        invocation("setupChunkingForFilterColumnsNullBuffers", r ->
+            r.setupChunkingForFilterColumns(0L, 0L, new int[]{0}, UseDataPageMask.NO,
+                HybridScanReader.RowMaskKind.ALL_TRUE, null)),
+        invocation("setupChunkingForFilterColumnsNullBufferElement", r ->
+            r.setupChunkingForFilterColumns(0L, 0L, new int[]{0}, UseDataPageMask.NO,
+                HybridScanReader.RowMaskKind.ALL_TRUE, new DeviceMemoryBuffer[]{null})),
         invocation("setupChunkingForPayloadColumnsNullRowGroups", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
             r.setupChunkingForPayloadColumns(0L, 0L, null, mask, UseDataPageMask.NO,
@@ -996,9 +1023,25 @@ public class HybridScanReaderTest extends CudfTestBase {
         invocation("setupChunkingForPayloadColumnsNullRowMask", r ->
             r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, null, UseDataPageMask.NO,
                 new DeviceMemoryBuffer[0])),
+        invocation("setupChunkingForPayloadColumnsNullBuffers", r -> {
+          try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
+            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, UseDataPageMask.NO,
+                null);
+          }
+        }),
+        invocation("setupChunkingForPayloadColumnsNullBufferElement", r -> {
+          try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
+            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, UseDataPageMask.NO,
+                new DeviceMemoryBuffer[]{null});
+          }
+        }),
         invocation("materializePayloadColumnsChunk", r -> r.materializePayloadColumnsChunk(null)),
         invocation("setupChunkingForAllColumns", r -> r.setupChunkingForAllColumns(
             0L, 0L, null, new DeviceMemoryBuffer[0])),
+        invocation("setupChunkingForAllColumnsNullBuffers", r ->
+            r.setupChunkingForAllColumns(0L, 0L, new int[]{0}, null)),
+        invocation("setupChunkingForAllColumnsNullBufferElement", r ->
+            r.setupChunkingForAllColumns(0L, 0L, new int[]{0}, new DeviceMemoryBuffer[]{null})),
         invocation("constructRowGroupPasses", r -> r.constructRowGroupPasses(null, 0L))
     );
   }
