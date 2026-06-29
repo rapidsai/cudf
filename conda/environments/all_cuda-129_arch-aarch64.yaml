@@ -27,7 +27,7 @@ dependencies:
 - cuda-version=12.9
 - cupy>=13.6.0,!=14.0.0,!=14.1.0
 - cxx-compiler
-- cython>=3.2.2
+- cython>=3.2.2,<3.3.0a0
 - dask-cuda==26.8.*,>=0.0.0a0
 - dlpack>=0.8,<1.0
 - doxygen=1.9.1
@@ -51,7 +51,7 @@ dependencies:
 - librmm==26.8.*,>=0.0.0a0
 - libucxx==0.51.*,>=0.0.0a0
 - make
-- matplotlib<3.11
+- matplotlib-base<3.11
 - mmh3
 - moto>=4.0.8
 - msgpack-python
@@ -72,7 +72,7 @@ dependencies:
 - odfpy
 - openpyxl
 - packaging
-- pandas>=3.0.0,<3.1.0
+- pandas>=3.0.0,<3.0.4a0
 - pandoc
 - polars>=1.35,<1.42
 - pre-commit
