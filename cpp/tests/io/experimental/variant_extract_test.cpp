@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -715,4 +715,144 @@ TEST_F(CastVariantTest, EmptyInput)
     EXPECT_EQ(got->size(), 0);
     EXPECT_EQ(got->null_count(), 0);
   }
+}
+
+TEST_F(CastVariantTest, UnsupportedCastTypeThrows)
+{
+  auto stream = cudf::test::get_default_stream();
+  std::vector<uint8_t> const val{0x00};  // null primitive — valid list<uint8> input
+  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+                 values, cudf::data_type{cudf::type_id::FLOAT64}, stream)),
+               std::invalid_argument);
+  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+                 values, cudf::data_type{cudf::type_id::BOOL8}, stream)),
+               std::invalid_argument);
+}
+
+TEST_F(CastVariantTest, ShortStringLengthZero)
+{
+  // Short string with length 0: header = 0x01 | (0 << 2) = 0x01, no payload.
+  auto stream = cudf::test::get_default_stream();
+  std::vector<uint8_t> const val{0x01};
+  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+  auto got = cudf::io::parquet::experimental::cast_variant(
+    values, cudf::data_type{cudf::type_id::STRING}, stream);
+  cudf::test::strings_column_wrapper expected({""});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(CastVariantTest, ShortStringLengthSixtyThree)
+{
+  // Short string with length 63 (max): header = 0x01 | (63 << 2) = 0xFD, then 63 bytes.
+  auto stream = cudf::test::get_default_stream();
+  std::vector<uint8_t> val;
+  val.push_back(0xFD);
+  std::string const payload(63, 'z');
+  val.insert(val.end(), payload.begin(), payload.end());
+  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+  auto got = cudf::io::parquet::experimental::cast_variant(
+    values, cudf::data_type{cudf::type_id::STRING}, stream);
+  cudf::test::strings_column_wrapper expected({payload});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(CastVariantTest, LongStringLengthZero)
+{
+  // Long string: header 0x40, 4-byte LE length = 0, no payload.
+  auto stream = cudf::test::get_default_stream();
+  std::vector<uint8_t> const val{0x40, 0x00, 0x00, 0x00, 0x00};
+  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+  auto got = cudf::io::parquet::experimental::cast_variant(
+    values, cudf::data_type{cudf::type_id::STRING}, stream);
+  cudf::test::strings_column_wrapper expected({""});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+}
+
+TEST_F(CastVariantTest, LongStringTruncatedPayloadYieldsNull)
+{
+  // Declares length=10 but only 3 payload bytes follow — decode_string returns nullopt.
+  auto stream = cudf::test::get_default_stream();
+  std::vector<uint8_t> const val{0x40, 0x0A, 0x00, 0x00, 0x00, 'a', 'b', 'c'};
+  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+  auto got = cudf::io::parquet::experimental::cast_variant(
+    values, cudf::data_type{cudf::type_id::STRING}, stream);
+  ASSERT_EQ(got->size(), 1);
+  EXPECT_EQ(got->null_count(), 1);
+}
+
+struct InvalidInputShapeTest : public cudf::test::BaseFixture {};
+
+TEST_F(InvalidInputShapeTest, GetVariantFieldNonStructInput)
+{
+  auto stream = cudf::test::get_default_stream();
+  cudf::test::fixed_width_column_wrapper<int32_t> not_struct{1, 2, 3};
+  EXPECT_THROW(
+    static_cast<void>(cudf::io::parquet::experimental::get_variant_field(not_struct, "x", stream)),
+    std::invalid_argument);
+}
+
+TEST_F(InvalidInputShapeTest, GetVariantFieldFewerThanTwoChildren)
+{
+  auto stream = cudf::test::get_default_stream();
+  std::vector<uint8_t> const bytes{0x01, 0x00, 0x00};
+  cudf::test::lists_column_wrapper<uint8_t> only_child(bytes.begin(), bytes.end());
+  cudf::column_view const one_child_struct{
+    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {only_child}};
+  EXPECT_THROW(static_cast<void>(
+                 cudf::io::parquet::experimental::get_variant_field(one_child_struct, "x", stream)),
+               std::invalid_argument);
+}
+
+TEST_F(InvalidInputShapeTest, GetVariantFieldMetadataChildNotList)
+{
+  // child(0) is INT32, not LIST.
+  auto stream = cudf::test::get_default_stream();
+  cudf::test::fixed_width_column_wrapper<int32_t> meta_not_list{42};
+  std::vector<uint8_t> const val_bytes{0x00};
+  cudf::test::lists_column_wrapper<uint8_t> good_val(val_bytes.begin(), val_bytes.end());
+  cudf::column_view const bad_meta_col{
+    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {meta_not_list, good_val}};
+  EXPECT_THROW(static_cast<void>(
+                 cudf::io::parquet::experimental::get_variant_field(bad_meta_col, "x", stream)),
+               std::invalid_argument);
+}
+
+TEST_F(InvalidInputShapeTest, GetVariantFieldMetadataChildListInt32)
+{
+  // child(0) is list<int32> instead of list<uint8>.
+  auto stream = cudf::test::get_default_stream();
+  std::vector<int32_t> const meta_int_data{1, 2, 3};
+  cudf::test::lists_column_wrapper<int32_t> meta_list_int(meta_int_data.begin(),
+                                                          meta_int_data.end());
+  std::vector<uint8_t> const val_bytes{0x00};
+  cudf::test::lists_column_wrapper<uint8_t> good_val(val_bytes.begin(), val_bytes.end());
+  cudf::column_view const bad_meta_col{
+    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {meta_list_int, good_val}};
+  EXPECT_THROW(static_cast<void>(
+                 cudf::io::parquet::experimental::get_variant_field(bad_meta_col, "x", stream)),
+               std::invalid_argument);
+}
+
+TEST_F(InvalidInputShapeTest, GetVariantFieldValueChildNotList)
+{
+  // child(1) is INT32, not LIST.
+  auto stream = cudf::test::get_default_stream();
+  std::vector<uint8_t> const meta_bytes{0x01, 0x00, 0x00};
+  cudf::test::lists_column_wrapper<uint8_t> good_meta(meta_bytes.begin(), meta_bytes.end());
+  cudf::test::fixed_width_column_wrapper<int32_t> val_not_list{42};
+  cudf::column_view const bad_val_col{
+    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {good_meta, val_not_list}};
+  EXPECT_THROW(
+    static_cast<void>(cudf::io::parquet::experimental::get_variant_field(bad_val_col, "x", stream)),
+    std::invalid_argument);
+}
+
+TEST_F(InvalidInputShapeTest, CastVariantNonListInput)
+{
+  auto stream = cudf::test::get_default_stream();
+  cudf::test::fixed_width_column_wrapper<int32_t> not_a_list{1, 2, 3};
+  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+                 not_a_list, cudf::data_type{cudf::type_id::INT32}, stream)),
+               std::invalid_argument);
 }
