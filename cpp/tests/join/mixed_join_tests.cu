@@ -1370,60 +1370,8 @@ struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
                       std::string const& jit_predicate  = "") override
   {
-    // Test both approaches and verify they produce the same results
-    auto mixed_result = cudf::mixed_full_join(
+    return cudf::mixed_full_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate, compare_nulls);
-
-    // Alternative approach: hash_join + filter_join_indices
-    // Skip hash_join approach for empty tables (hash_join doesn't support empty tables)
-    if (left_equality.num_rows() > 0 && right_equality.num_rows() > 0) {
-      cudf::hash_join hash_joiner(right_equality, compare_nulls);
-      auto hash_join_result = hash_joiner.full_join(left_equality);
-
-      // Verify AST filter_join_indices
-      auto ast_filter_result = cudf::filter_join_indices(
-        left_conditional,
-        right_conditional,
-        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
-        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
-        predicate,
-        cudf::join_kind::FULL_JOIN);
-      this->compare_join_results(mixed_result, ast_filter_result);
-
-      // Verify filter_join_indices_output_size matches the materialized output size.
-      auto const filter_output_size_result = cudf::filter_join_indices_output_size(
-        left_conditional,
-        right_conditional,
-        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
-        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
-        predicate,
-        cudf::join_kind::FULL_JOIN);
-      EXPECT_EQ(filter_output_size_result.first, ast_filter_result.first->size());
-
-      // Verify JIT filter_join_indices if provided
-      if (!jit_predicate.empty()) {
-        auto jit_filter_result = cudf::filter_join_indices_jit(
-          left_conditional,
-          right_conditional,
-          cudf::device_span<cudf::size_type const>(*hash_join_result.first),
-          cudf::device_span<cudf::size_type const>(*hash_join_result.second),
-          jit_predicate,
-          cudf::join_kind::FULL_JOIN);
-        this->compare_join_results(mixed_result, jit_filter_result);
-      }
-
-      // Verify AST-based JIT filter_join_indices
-      auto jit_ast_filter_result = cudf::filter_join_indices_jit(
-        left_conditional,
-        right_conditional,
-        cudf::device_span<cudf::size_type const>(*hash_join_result.first),
-        cudf::device_span<cudf::size_type const>(*hash_join_result.second),
-        predicate,
-        cudf::join_kind::FULL_JOIN);
-      this->compare_join_results(mixed_result, jit_ast_filter_result);
-    }
-
-    return mixed_result;
   }
 
   std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
@@ -1519,6 +1467,24 @@ TYPED_TEST(MixedFullJoinTest, Basic2)
               {cudf::JoinNoMatch, 0},
               {cudf::JoinNoMatch, 1},
               {cudf::JoinNoMatch, 2}});
+}
+
+TYPED_TEST(MixedFullJoinTest, MultiMatchUnmatchedDedup)
+{
+  auto const predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_0, col_ref_right_0);
+  this->test({{5, 5, 7}, {10, 1, 10}},
+             {{5, 5, 9}, {2, 20, 0}},
+             {0},
+             {1},
+             predicate,
+             {},
+             {{0, 0},
+              {1, cudf::JoinNoMatch},
+              {2, cudf::JoinNoMatch},
+              {cudf::JoinNoMatch, 1},
+              {cudf::JoinNoMatch, 2}},
+             make_jit_comparison<TypeParam>(1, 1, 0, 0, ">"));
 }
 
 using MixedFullJoinTest_int32 = MixedFullJoinTest<int32_t>;

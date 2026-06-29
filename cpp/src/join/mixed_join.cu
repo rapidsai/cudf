@@ -88,6 +88,24 @@ mixed_join(table_view const& left_equality,
     }
   }
 
+  // A full join is a left join plus the unmatched-right complement. Build the left-outer result and
+  // append the complement with finalize_full_join rather than splitting failed pairs, which would
+  // emit spurious unmatched rows for keys that also match elsewhere.
+  if (join_type == join_kind::FULL_JOIN) {
+    auto left_outer = mixed_join(left_equality,
+                                 right_equality,
+                                 left_conditional,
+                                 right_conditional,
+                                 binary_predicate,
+                                 compare_nulls,
+                                 join_kind::LEFT_JOIN,
+                                 std::nullopt,
+                                 stream,
+                                 mr);
+    return finalize_full_join(
+      std::move(left_outer), left_conditional.num_rows(), right_conditional.num_rows(), stream, mr);
+  }
+
   auto const hash_joiner = cudf::hash_join{right_equality, compare_nulls, stream};
   auto const [left_indices, right_indices] =
     equality_join_indices(hash_joiner, left_equality, join_type, stream, mr);
