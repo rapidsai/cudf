@@ -849,6 +849,7 @@ public final class ColumnVector extends ColumnView {
     }
 
     long[] mergeOutput = bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId);
+    assert mergeOutput.length == 2;
     if (mergeOutput[1] == 0) {  // no-op, the current column is unchanged
       return incRefCount();
     }
