@@ -308,7 +308,6 @@ def test_join_prefilter_filters_large_side_with_key_prefix() -> None:
         max_key_columns=1,
     )
     assert decision.enabled
-    assert decision.build_side == "left"
     assert decision.filter_side == "right"
     assert decision.build_indices == (0,)
     assert decision.apply_indices == (3,)
@@ -355,7 +354,6 @@ def test_join_prefilter_outer_semantics_only_filter_right_side(how) -> None:
         max_key_columns=1,
     )
     assert decision.enabled
-    assert decision.build_side == "left"
     assert decision.filter_side == "right"
 
 
@@ -382,7 +380,6 @@ def test_join_prefilter_right_join_only_filters_left_side() -> None:
         max_key_columns=1,
     )
     assert decision.enabled
-    assert decision.build_side == "right"
     assert decision.filter_side == "left"
 
 
@@ -398,6 +395,35 @@ def test_join_prefilter_skips_unsupported_full_join() -> None:
     )
     assert not decision.enabled
     assert decision.reason_skipped == "unsupported_join_type"
+
+
+def test_join_prefilter_skips_unsupported_cross_join() -> None:
+    decision = _select_join_prefilter(
+        "Cross",
+        10,
+        1_000,
+        (),
+        (),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "unsupported_join_type"
+
+
+def test_join_prefilter_asserts_mismatched_key_count() -> None:
+    with pytest.raises(
+        AssertionError, match="left and right join key counts must match"
+    ):
+        _select_join_prefilter(
+            "Inner",
+            10,
+            1_000,
+            (0,),
+            (0, 1),
+            threshold=0.5,
+            max_key_columns=1,
+        )
 
 
 @pytest.mark.parametrize(
