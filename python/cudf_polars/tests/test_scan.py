@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -25,6 +25,7 @@ from cudf_polars.testing.io import make_partitioned_source
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_139,
+    POLARS_VERSION_LT_142,
 )
 
 if TYPE_CHECKING:
@@ -532,6 +533,7 @@ def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
         pytest.param(
             "foo=bar",
             marks=pytest.mark.xfail(
+                condition=POLARS_VERSION_LT_142,
                 reason="https://github.com/pola-rs/polars/issues/27840",
                 strict=True,
             ),
