@@ -447,39 +447,39 @@ if(NOT BUILD_SHARED_LIBS)
   )
 endif()
 
-add_embed(cudf_cuda_embed)
+rtcx_add_embed(cudf_cuda_embed)
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
   cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY
   cudf/cpp/src/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
   cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
   cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
   cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
@@ -489,13 +489,13 @@ get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLU
 foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
 
-  embed_includes(
+  rtcx_embed_includes(
     cudf_cuda_embed SOURCE_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
     INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
 endforeach()
 
-embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+rtcx_embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
 # This macro is used to create object libraries for JIT compilation fragments, and embed them as
 # fatbins in the final library. It compiles the specified source file with the appropriate flags to
@@ -570,13 +570,13 @@ macro(add_fragment)
   )
   target_compile_options(${OBJECT_ID} PRIVATE "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
 
-  embed_blob(
+  rtcx_embed_blob(
     ${TARGET} FILE $<TARGET_OBJECTS:${OBJECT_ID}> DEST fragments/${ARG_FRAGMENT}.fatbin ID
     ${ARG_FRAGMENT} ARRAY_IDS ${ARG_ARRAY_IDS} ARRAY_VALUES ${ARG_ARRAY_VALUES}
   )
 endmacro()
 
-add_embed(cudf_fragments)
+rtcx_add_embed(cudf_fragments)
 
 list(
   APPEND
@@ -672,7 +672,7 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
   endforeach()
 endforeach()
 
-embed(cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+rtcx_embed(cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -1235,7 +1235,6 @@ add_library(
   src/utilities/traits.cpp
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
-  librtcx/rtcx.cpp
   ${cudf_cuda_embed_SOURCE_DIR}/cudf_cuda_embed.s
   ${cudf_fragments_SOURCE_DIR}/cudf_fragments.s
 )

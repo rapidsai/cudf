@@ -17,7 +17,7 @@ endif()
 # embed_includes() or embed_blob() for the target. It creates a dedicated INTERFACE library target
 # that is used to track registered files and dependencies via target properties. The TARGET argument
 # specifies the name of the target being initialized.
-function(add_embed TARGET)
+function(rtcx_add_embed TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS)
   set(MULTI_VALUE_ARGS)
@@ -32,7 +32,7 @@ function(add_embed TARGET)
 endfunction()
 
 # This function registers a directory of include files to be embedded for JIT compilation.
-function(embed_includes TARGET)
+function(rtcx_embed_includes TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS SOURCE_DIRECTORY # Source directory where files will be copied from
                      DEST_DIRECTORY # Destination directory where files will be copied to
@@ -123,14 +123,14 @@ function(embed_includes TARGET)
 endfunction()
 
 # This function registers a single file to be embedded for JIT compilation.
-function(embed_blob TARGET)
+function(rtcx_embed_blob TARGET)
   set(OPTIONS)
   set(ONE_VALUE_ARGS ID FILE DEST)
   set(MULTI_VALUE_ARGS ARRAY_IDS ARRAY_VALUES)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
   if(NOT TARGET ${TARGET}__embed_props)
-    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
+    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with rtcx_add_embed()")
   endif()
 
   if(NOT ARG_ID
@@ -209,14 +209,14 @@ endfunction()
 # for JIT compilation.
 #]==]
 # cmake-lint: disable=R0915
-function(embed TARGET)
+function(rtcx_embed TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS "COMPRESSION" "OUTPUT_DIRECTORY")
   set(MULTI_VALUE_ARGS "")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
   if(NOT TARGET ${TARGET}__embed_props)
-    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
+    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with rtcx_add_embed()")
   endif()
 
   if(NOT DEFINED ARG_COMPRESSION)
@@ -294,7 +294,7 @@ function(embed TARGET)
   )
 
   set(RUNNER "${TARGET}__jit_embed_run")
-  add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
+  add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}" ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/hash.cpp)
   target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd xxhash)
   target_include_directories(
     ${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${ZSTD_INCLUDE_DIR}

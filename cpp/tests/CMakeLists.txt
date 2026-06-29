@@ -690,7 +690,7 @@ ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
 # ##################################################################################################
 # * transform LTO tests
 # -------------------------------------------------------------------------------------
-add_embed(cudf_test_fragments)
+rtcx_add_embed(cudf_test_fragments)
 
 add_fragment(cudf_test_fragments FRAGMENT invsqrt SOURCE transform/fragments/invsqrt.cu)
 
@@ -704,7 +704,7 @@ add_fragment(
   cudf_test_fragments FRAGMENT bankers_rounding SOURCE transform/fragments/bankers_rounding.cu
 )
 
-embed(cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY
+rtcx_embed(cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY
       "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
 )
 
