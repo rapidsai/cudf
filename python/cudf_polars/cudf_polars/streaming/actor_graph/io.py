@@ -351,6 +351,37 @@ def _find_rank_aware_source(scan_fn: Callable[..., Any]) -> RankAwareSource | No
     return None
 
 
+async def _process_and_send_chunk(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    ir: PythonScan,
+    ir_context: IRExecutionContext,
+    tracer: ActorTracer | None,
+    chunk: pl.DataFrame | DataFrame,
+    seq_num: int,
+) -> None:
+    """Move a raw chunk to the device, validate and filter it, then send it."""
+    # A host chunk must be copied to the device, so we reserve room sized from
+    # the host chunk.
+    process = functools.partial(
+        ir.process_chunk, chunk, ir.schema, ir.predicate, context=ir_context
+    )
+
+    # A GPU chunk needs no copy, so its size is 0. When a predicate is applied,
+    # the filter briefly holds both the input and its (smaller) output, so we
+    # reserve double for that transient peak.
+    size = 0 if isinstance(chunk, DataFrame) else chunk.estimated_size()
+    reservation = size * 2 if ir.predicate is not None else size
+    with opaque_memory_usage(
+        await reserve_memory(context, size=reservation, net_memory_delta=size)
+    ):
+        df = await ir_context.to_thread(process)
+    chunk_out = TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
+    )
+    await send_chunk(context, ch_out, chunk_out, seq_num, tracer=tracer)
+
+
 @define_actor()
 async def python_scan_node(
     context: Context,
@@ -378,32 +409,6 @@ async def python_scan_node(
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
-
-        async def process_and_send_chunk(
-            chunk: pl.DataFrame | DataFrame, seq_num: int
-        ) -> None:
-            """
-            Move a raw chunk to the device, validate and filter it, then send it.
-
-            A host chunk must be copied to the device, so we reserve room sized
-            from the host chunk. A GPU chunk needs no copy, so its size is 0.
-            When a predicate is applied, the filter briefly holds both the input
-            and its (smaller) output, so we reserve double for that transient peak.
-            """
-            process = functools.partial(
-                ir.process_chunk, chunk, ir.schema, ir.predicate, context=ir_context
-            )
-            size = 0 if isinstance(chunk, DataFrame) else chunk.estimated_size()
-            reservation = size * 2 if ir.predicate is not None else size
-            with opaque_memory_usage(
-                await reserve_memory(context, size=reservation, net_memory_delta=size)
-            ):
-                df = await ir_context.to_thread(process)
-            chunk_out = TableChunk.from_pylibcudf_table(
-                df.table, df.stream, exclusive_view=True, br=context.br()
-            )
-            await send_chunk(context, ch_out, chunk_out, seq_num, tracer=tracer)
-
         rank_aware_source = _find_rank_aware_source(ir.options[0])
         if rank_aware_source is None and comm.nranks > 1 and comm.rank != 0:
             # A plain (rank-unaware) source runs on rank 0 only; other ranks
@@ -432,8 +437,14 @@ async def python_scan_node(
                 chunk = await ir_context.to_thread(next, raw_chunks, sentinel)
                 if chunk is sentinel:
                     break
-                await process_and_send_chunk(
-                    cast("pl.DataFrame | DataFrame", chunk), seq_num
+                await _process_and_send_chunk(
+                    context,
+                    ch_out,
+                    ir,
+                    ir_context,
+                    tracer,
+                    cast("pl.DataFrame | DataFrame", chunk),
+                    seq_num,
                 )
                 seq_num += 1
             if seq_num != announced:
@@ -449,7 +460,9 @@ async def python_scan_node(
                 ch_out, context, ChannelMetadata(local_count=len(chunks))
             )
             for seq_num, chunk in enumerate(chunks):
-                await process_and_send_chunk(chunk, seq_num)
+                await _process_and_send_chunk(
+                    context, ch_out, ir, ir_context, tracer, chunk, seq_num
+                )
         await ch_out.drain(context)
 
 

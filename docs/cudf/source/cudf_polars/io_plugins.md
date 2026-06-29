@@ -13,7 +13,7 @@ the IO-source contract. This page covers the cudf-polars-specific behavior.
 ## Plain IO Sources
 
 An IO source is a callable with the signature `(with_columns, predicate, n_rows, batch_size)`
-that yields one or more chunks:
+that yields one or more chunks (i.e. polars DataFrames):
 
 ```python
 import polars as pl
@@ -82,17 +82,17 @@ from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 
 class PartitionedFrame(RankAwareSource):
-    def __init__(self, frame):
+    def __init__(self, frame: pl.DataFrame):
         self.frame = frame
 
     def __call__(
         self,
-        with_columns,
-        predicate,
-        n_rows,
-        batch_size,
-        rank=0,
-        nranks=1,
+        with_columns: list[str] | None,
+        predicate: pl.Expr | None,
+        n_rows: int | None,
+        batch_size: int | None,
+        rank: int = 0,
+        nranks: int = 1,
     ):
         df = self.frame.gather_every(nranks, offset=rank)
         if predicate is not None:

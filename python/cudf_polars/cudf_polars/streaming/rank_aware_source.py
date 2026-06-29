@@ -29,6 +29,11 @@ class SizedChunks:
     `SizedChunks` remains an ordinary iterator, so the default (host) Polars
     engine handles it unchanged.
 
+    This is an interim cudf-polars API. It exists because Polars' IO-source
+    contract returns a plain iterator with no length. It may be removed if Polars
+    exposes a supported way to report the chunk count. Tracked in
+    https://github.com/rapidsai/cudf/issues/22917.
+
     Parameters
     ----------
     count
@@ -81,6 +86,11 @@ class RankAwareSource(abc.ABC):
     During multi-rank streaming execution, every rank calls the IO source once.
     The implementation should therefore use `rank` and `nranks` to produce the
     rank-local rows of the global dataframe.
+
+    This is an interim cudf-polars API. It exists because Polars' IO-source
+    contract has no way to thread rank information into a source. It may be
+    removed if Polars exposes a supported mechanism. Tracked in
+    https://github.com/rapidsai/cudf/issues/22917.
 
     The `rank` and `nranks` arguments default to `0` and `1` for the in-memory
     cudf-polars engine, the default Polars engine, and single-rank streaming.
@@ -169,8 +179,8 @@ class RankAwareSource(abc.ABC):
             Total number of ranks (the world size), bound by the streaming
             engine. Defaults to ``1`` for single-rank execution.
 
-        Returns
-        -------
+        Yields
+        ------
         Chunks for this rank.
 
         Notes
