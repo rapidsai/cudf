@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,22 +18,22 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <random>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 namespace {
 
-constexpr cudf::size_type num_rows       = 5000;
-constexpr cudf::size_type cardinality    = num_rows / 10;
-constexpr cudf::size_type row_group_size = 1000;
-constexpr unsigned int seed              = 0xcece;
-constexpr unsigned int list_strings_seed = seed ^ 0xA5701DUL;
+constexpr cudf::size_type num_rows              = 5000;
+constexpr cudf::size_type cardinality           = num_rows / 10;
+constexpr cudf::size_type row_group_size        = 1000;
+constexpr unsigned int seed                     = 0xcece;
+constexpr unsigned int list_strings_seed        = seed ^ 0xA5701DUL;
 constexpr cudf::size_type max_elements_per_list = 8;
-constexpr double null_probability        = 0.1;
+constexpr double null_probability               = 0.1;
 
 // Per-distinct-value prefixes deliberately mixing ASCII with multi-byte UTF-8 (accented Latin,
 // Greek, CJK, and an emoji) so the transcode/fallback paths are exercised on non-ASCII keys. The
@@ -112,10 +112,9 @@ void write_parquet(cudf::table_view const& input, std::string const& filepath)
 
 cudf::io::table_with_metadata read_parquet_as_dict(std::string const& filepath)
 {
-  auto const read_opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-      .try_output_dict_columns(true)
-      .build();
+  auto const read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                           .try_output_dict_columns(true)
+                           .build();
   return cudf::io::read_parquet(read_opts);
 }
 
@@ -239,9 +238,8 @@ TEST_F(ParquetReaderDictTest, SlicedFlatStringDictTranscode)
   // row groups to also exercise the per-row-group key concatenation / index remapping path.
   auto const slice_start = row_group_size + 7;
   auto const slice_end   = num_rows - 13;
-  auto const sliced      = cudf::slice(static_cast<cudf::column_view>(full_col),
-                                  {slice_start, slice_end})
-                        .front();
+  auto const sliced =
+    cudf::slice(static_cast<cudf::column_view>(full_col), {slice_start, slice_end}).front();
 
   auto const input_tbl = cudf::table_view{{sliced}};
   auto const filepath  = temp_env->get_temp_filepath("SlicedFlatStringDictTranscode.parquet");

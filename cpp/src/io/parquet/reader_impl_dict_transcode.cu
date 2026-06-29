@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -124,16 +124,15 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
   auto const num_input_cols = input_columns.size();
   std::vector<column_eligibility> elig(num_input_cols);
 
-  //Check if the output buffer is a flat string column
-  std::for_each(cuda::counting_iterator<size_t>{0},
-                cuda::counting_iterator{num_input_cols},
-                [&](size_t i) {
-                  auto const& input_col = input_columns[i];
-                  if (input_col.nesting_depth() != 1) { return; }
-                  if (output_buffers[input_col.nesting[0]].type.id() == type_id::STRING) {
-                    elig[i].has_string_buffer = true;
-                  }
-                });
+  // Check if the output buffer is a flat string column
+  std::for_each(
+    cuda::counting_iterator<size_t>{0}, cuda::counting_iterator{num_input_cols}, [&](size_t i) {
+      auto const& input_col = input_columns[i];
+      if (input_col.nesting_depth() != 1) { return; }
+      if (output_buffers[input_col.nesting[0]].type.id() == type_id::STRING) {
+        elig[i].has_string_buffer = true;
+      }
+    });
 
   // Fold per-chunk info into the per-column eligibility flags.
   for (auto const& chunk : pass.chunks) {
@@ -146,7 +145,7 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
   for (auto const& page : pass.pages) {
     if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { continue; }
     auto const chunk_idx = page.chunk_idx;
-    auto const col_idx = pass.chunks[chunk_idx].src_col_index;
+    auto const col_idx   = pass.chunks[chunk_idx].src_col_index;
     if (not is_dict_data_page_encoding(page.encoding)) { elig[col_idx].all_pages_dict = false; }
   }
 
@@ -220,7 +219,7 @@ bool reader_impl::prepare_dict_transcode()
   std::for_each(subpass.pages.host_begin(), subpass.pages.host_end(), [&](PageInfo& page) {
     if ((page.flags & PAGEINFO_FLAGS_DICTIONARY) != 0) { return; }
     auto const chunk_idx = page.chunk_idx;
-    auto const col_idx = pass.chunks[chunk_idx].src_col_index;
+    auto const col_idx   = pass.chunks[chunk_idx].src_col_index;
     if (not _dict_transcode_eligible[col_idx]) { return; }
     if (page.kernel_mask == decode_kernel_mask::STRING_DICT) {
       page.kernel_mask = decode_kernel_mask::DICT_INT32;
@@ -231,9 +230,9 @@ bool reader_impl::prepare_dict_transcode()
   if (not any_rewritten) { return false; }
 
   // Push the rewritten `kernel_mask`s back to device so subsequent decode kernels dispatch
-  // correctly. The copy is enqueued on `_stream`, so no explicit synchronization is required. The host
-  // source buffer (`subpass.pages`) is owned by the subpass and is neither freed nor re-mutated
-  // before the copy completes.
+  // correctly. The copy is enqueued on `_stream`, so no explicit synchronization is required. The
+  // host source buffer (`subpass.pages`) is owned by the subpass and is neither freed nor
+  // re-mutated before the copy completes.
   subpass.pages.host_to_device_async(_stream);
   subpass.kernel_mask = std::transform_reduce(
     subpass.pages.host_begin(),
