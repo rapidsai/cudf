@@ -9,7 +9,6 @@
 #include "io/parquet/compact_protocol_reader.hpp"
 #include "io/parquet/expression_transform_helpers.hpp"
 #include "io/parquet/reader_impl_helpers.hpp"
-#include "page_index_filter_utils.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/logger.hpp>
@@ -32,6 +31,7 @@ using metadata_base                  = parquet::detail::metadata;
 using io::detail::inline_column_buffer;
 using parquet::detail::CompactProtocolReader;
 using parquet::detail::equality_literals_collector;
+using parquet::detail::find_colchunk_iter_offset;
 using parquet::detail::input_column_info;
 using parquet::detail::row_group_info;
 using text::byte_range_info;

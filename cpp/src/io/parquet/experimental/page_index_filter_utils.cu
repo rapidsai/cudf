@@ -18,23 +18,12 @@
 #include <thrust/gather.h>
 
 #include <algorithm>
-#include <format>
 #include <numeric>
 #include <vector>
 
 namespace cudf::io::parquet::experimental::detail {
 
-size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx)
-{
-  auto const& colchunk_iter =
-    std::find_if(row_group.columns.begin(), row_group.columns.end(), [schema_idx](auto const& col) {
-      return col.schema_idx == schema_idx;
-    });
-  CUDF_EXPECTS(colchunk_iter != row_group.columns.end(),
-               std::format("Column chunk with schema index {} not found in row group", schema_idx),
-               std::invalid_argument);
-  return std::distance(row_group.columns.begin(), colchunk_iter);
-}
+using parquet::detail::find_colchunk_iter_offset;
 
 bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
                             cudf::host_span<std::vector<size_type> const> row_group_indices)
