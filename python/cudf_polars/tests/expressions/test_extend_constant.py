@@ -19,6 +19,10 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
         (pl.Series(["a", "bb", None]), "zz"),
         (pl.Series(["a", "bb", "c"]), None),
         (pl.Series([], dtype=pl.Int64), 0),
+        (pl.Series([None, None, None], dtype=pl.Int64), 7),
+        (pl.Series([None, None, None], dtype=pl.Int64), None),
+        (pl.Series([42], dtype=pl.Int64), 7),
+        (pl.Series([None], dtype=pl.Int64), 7),
     ],
 )
 @pytest.mark.parametrize("n", [0, 1, 3])

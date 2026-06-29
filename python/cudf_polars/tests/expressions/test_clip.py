@@ -37,3 +37,27 @@ def ldf() -> pl.LazyFrame:
 def test_clip(engine: pl.GPUEngine, ldf: pl.LazyFrame, expr: pl.Expr) -> None:
     q = ldf.select(expr)
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "series",
+    [
+        pl.Series("a", [], dtype=pl.Int64),
+        pl.Series("a", [], dtype=pl.Float64),
+        pl.Series("a", [None, None, None], dtype=pl.Int64),
+        pl.Series("a", [None, None, None], dtype=pl.Float64),
+    ],
+)
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a").clip(2, 6),
+        pl.col("a").clip(2),
+        pl.col("a").clip(upper_bound=6),
+    ],
+)
+def test_clip_empty_and_all_null(
+    engine: pl.GPUEngine, series: pl.Series, expr: pl.Expr
+) -> None:
+    q = pl.LazyFrame({"a": series}).select(expr)
+    assert_gpu_result_equal(q, engine=engine)
