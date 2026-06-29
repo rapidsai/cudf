@@ -5,12 +5,15 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import math
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
@@ -193,14 +196,34 @@ async def dataframescan_node(
 
         # Build list of IR slices to read
         ir_slices = []
+        # Partial workaround for
+        # https://github.com/pola-rs/polars/issues/23214 If a struct column
+        # has nulls and is sliced then polars exports invalid validity
+        # buffers. We can't detect this exact state because we can't know
+        # when the column is sliced.
+        copy_slice = any(
+            isinstance(dt, pl.Struct)
+            for dt in pl.datatypes.unpack_dtypes(ir.df.dtypes(), include_compound=True)
+        )
+
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
                 break
+            sliced = ir.df.slice(offset, rows_per_partition)
+            if copy_slice:
+                # OK, we have structs that might have nulls, and we're
+                # slicing. So let's copy to contiguous storage. This is
+                # hacky and doesn't handle the case where we didn't slice
+                # but the user sliced the input.
+                f = io.BytesIO()
+                sliced.serialize_binary(f)
+                f.seek(0)
+                sliced = pl._plr.PyDataFrame.deserialize_binary(f)
             ir_slices.append(
                 DataFrameScan(
                     ir.schema,
-                    ir.df.slice(offset, rows_per_partition),
+                    sliced,
                     ir.projection,
                 )
             )
@@ -477,7 +500,7 @@ def make_rapidsmpf_read_parquet_node(
     The RapidsMPF read parquet node, or None if the predicate cannot be
     converted to a parquet filter (caller should fall back to scan_node).
     """
-    from cudf_streaming.streaming.parquet import Filter, read_parquet
+    from cudf_streaming.parquet import Filter, read_parquet
 
     # Build ParquetReaderOptions
     try:

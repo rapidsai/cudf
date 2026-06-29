@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition IO Logic."""
 
@@ -98,7 +98,7 @@ def scan_partition_plan(
                     )
                 else:
                     # Fuse small files
-                    factor = max(blocksize // int(file_size), 1)
+                    factor = min(max(blocksize // int(file_size), 1), len(ir.paths))
                     return IOPartitionPlan(
                         factor,
                         IOPartitionFlavor.FUSED_FILES,

@@ -1325,20 +1325,30 @@ class StringColumn(ColumnBase, Scannable):
             ).execute_with_args(self),
         )
 
-    def is_all_integer(self) -> bool:
+    def is_all_integer(self, int_type: DtypeObj | None = None) -> bool:
         """Check if all non-null strings in the column are integers.
 
         This is an optimized version of `is_integer().all()` that avoids
         creating an intermediate boolean column.
+
+        Parameters
+        ----------
+        int_type : dtype, optional
+            If provided, additionally checks that every string represents a
+            value that fits within ``int_type`` (i.e. no underflow/overflow).
+            By default no range checking is performed.
 
         Returns
         -------
         bool
             True if all non-null strings are valid integers, False otherwise.
         """
+        plc_int_type = (
+            dtype_to_pylibcudf_type(int_type) if int_type is not None else None
+        )
         with self.access(mode="read", scope="internal"):
             bool_plc = plc.strings.convert.convert_integers.is_integer(
-                self.plc_column
+                self.plc_column, plc_int_type
             )
             return self._reduce_bool_column(bool_plc)
 
