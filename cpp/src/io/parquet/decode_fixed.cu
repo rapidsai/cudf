@@ -81,6 +81,23 @@ __device__ static void scan_block_exclusive_sum(
   }
 }
 
+/**
+ * @brief Write a batch of decoded dictionary indices directly as INT32 output values.
+ *
+ * Used by the Parquet-dict → DICTIONARY32 transcode path: instead of materializing the dictionary
+ * keys, the per-row dictionary indices are emitted verbatim as the INT32 indices child of the
+ * output DICTIONARY32 column.
+ *
+ * @tparam block_size Number of threads per block
+ * @tparam has_lists_t Whether the column has a list (repetition) level
+ * @tparam copy_mode_t Whether destination positions are direct or indirect (nz_idx) mapped
+ * @tparam state_buf Page state buffer type providing the decoded dictionary indices
+ * @param s Page decode state for the current page
+ * @param sb Page state buffers holding the decoded dictionary indices
+ * @param start First value position (within the page) to write in this batch
+ * @param end One-past-the-last value position to write in this batch
+ * @param t Thread index within the block
+ */
 template <int block_size, bool has_lists_t, copy_mode copy_mode_t, typename state_buf>
 __device__ void decode_dict_indices_as_int32(
   page_state_s* s, state_buf* const sb, int start, int end, int t)
@@ -948,6 +965,12 @@ __device__ void skip_ahead_in_decoding(page_state_s* s,
   block.sync();
 }
 
+/**
+ * @brief Check if the kernel mask decodes dictionary-encoded data (has a dictionary stream).
+ *
+ * @tparam kernel_mask_t The decode kernel mask to test
+ * @return True for fixed-width, string and INT32-index dictionary masks
+ */
 template <decode_kernel_mask kernel_mask_t>
 CUDF_HOST_DEVICE constexpr bool has_dict()
 {
@@ -962,6 +985,15 @@ CUDF_HOST_DEVICE constexpr bool has_dict()
          (kernel_mask_t == decode_kernel_mask::DICT_INT32_LIST);
 }
 
+/**
+ * @brief Check whether the kernel mask decodes parquet dictionary indices directly to an INT32 column.
+ *
+ * These masks back the Parquet-dict → DICTIONARY32 transcode path, where the decoded output is the
+ * INT32 indices child of a DICTIONARY32 column rather than fully materialized values.
+ *
+ * @tparam kernel_mask_t The decode kernel mask to test
+ * @return True for the DICT_INT32, DICT_INT32_NESTED and DICT_INT32_LIST masks
+ */
 template <decode_kernel_mask kernel_mask_t>
 CUDF_HOST_DEVICE constexpr bool is_dict_int32_output()
 {
@@ -978,6 +1010,12 @@ CUDF_HOST_DEVICE constexpr bool has_bools()
          (kernel_mask_t == decode_kernel_mask::BOOLEAN_LIST);
 }
 
+/**
+ * @brief Check if the kernel mask decodes a (non-list) nested column.
+ *
+ * @tparam kernel_mask_t The decode kernel mask to test
+ * @return True for the `*_NESTED` masks
+ */
 template <decode_kernel_mask kernel_mask_t>
 CUDF_HOST_DEVICE constexpr bool has_nesting()
 {
@@ -991,6 +1029,12 @@ CUDF_HOST_DEVICE constexpr bool has_nesting()
          (kernel_mask_t == decode_kernel_mask::DICT_INT32_NESTED);
 }
 
+/**
+ * @brief Check if the kernel mask decodes a list column (has a repetition level).
+ *
+ * @tparam kernel_mask_t The decode kernel mask to test
+ * @return True for the `*_LIST` masks
+ */
 template <decode_kernel_mask kernel_mask_t>
 CUDF_HOST_DEVICE constexpr bool has_lists()
 {
