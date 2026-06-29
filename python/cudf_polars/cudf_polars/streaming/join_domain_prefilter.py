@@ -88,6 +88,7 @@ class _RewriteState(TypedDict):
 
     threshold: float
     trace: bool
+    stats: StatsCollector
     row_estimates: dict[IR, int | None]
     selective_nodes: set[IR]
 
@@ -115,6 +116,7 @@ def optimize_join_domain_prefilters(
     state = _RewriteState(
         threshold=threshold,
         trace=trace,
+        stats=stats,
         row_estimates=_estimate_row_counts(ir, stats),
         selective_nodes=_collect_selective_nodes(ir),
     )
@@ -136,14 +138,24 @@ def _(node: IR, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
 
 @_rewrite.register(Join)
 def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
+    original = node
     rewritten = reuse_if_unchanged(node, rec)
     assert isinstance(rewritten, Join)
     node = rewritten
+    if node is original:
+        row_estimates = rec.state["row_estimates"]
+        selective_nodes = rec.state["selective_nodes"]
+    else:
+        # Child rewrites introduce new semi joins and reconstructed ancestors.
+        # Re-analyze that current subtree so parent joins can use the derived
+        # selectivity and cardinality when ranking their own candidates.
+        row_estimates = _estimate_row_counts(node, rec.state["stats"])
+        selective_nodes = _collect_selective_nodes(node)
     candidate, reason = _select_candidate(
         node,
         rec.state["threshold"],
-        rec.state["row_estimates"],
-        rec.state["selective_nodes"],
+        row_estimates,
+        selective_nodes,
     )
     if rec.state["trace"]:
         _trace_decision(node, rec.state["threshold"], candidate, reason)
