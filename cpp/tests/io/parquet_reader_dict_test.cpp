@@ -193,3 +193,68 @@ TEST_F(ParquetReaderDictTest, ListOfStringsDictEncodedWithTryOutputDictOption)
     << "List<string> must remain LIST when try_output_dict_columns is on (transcode is flat-only)";
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(list_col->view(), read_col);
 }
+
+// Edge case: empty input. A zero-row flat STRING column must round-trip through the transcode
+// path without error and reproduce the empty input (whether it comes back as STRING or as an
+// empty DICTIONARY32 via the best-effort fallback encode).
+TEST_F(ParquetReaderDictTest, EmptyFlatStringDictTranscode)
+{
+  std::vector<std::string> const empty;
+  auto const input_col = cudf::test::strings_column_wrapper(empty.begin(), empty.end());
+
+  auto const input_tbl = cudf::table_view{{input_col}};
+  auto const filepath  = temp_env->get_temp_filepath("EmptyFlatStringDictTranscode.parquet");
+
+  // Write directly: the chunked row-group loop in `write_parquet` would skip a zero-row table.
+  auto const write_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, input_tbl)
+      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
+      .compression(cudf::io::compression_type::NONE)
+      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
+      .build();
+  cudf::io::write_parquet(write_opts);
+
+  auto const read_table = read_parquet_as_dict(filepath).tbl;
+  ASSERT_EQ(read_table->num_rows(), 0);
+  ASSERT_EQ(read_table->num_columns(), 1);
+
+  auto const read_col = read_table->view().column(0);
+  if (read_col.type().id() == cudf::type_id::DICTIONARY32) {
+    auto const decoded = cudf::dictionary::decode(cudf::dictionary_column_view(read_col));
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_col, decoded->view());
+  } else {
+    ASSERT_EQ(read_col.type().id(), cudf::type_id::STRING);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(input_col, read_col);
+  }
+}
+
+// Edge case: sliced input. Writing a sliced (non-zero offset, reduced size) flat STRING column
+// must transcode correctly -- the reader's DICTIONARY32 output must decode back to exactly the
+// sliced rows (including nulls), not the underlying full column.
+TEST_F(ParquetReaderDictTest, SlicedFlatStringDictTranscode)
+{
+  auto const full_col = make_low_cardinality_strings();
+
+  // Interior slice so the view carries a non-zero offset and a reduced size, spanning multiple
+  // row groups to also exercise the per-row-group key concatenation / index remapping path.
+  auto const slice_start = row_group_size + 7;
+  auto const slice_end   = num_rows - 13;
+  auto const sliced      = cudf::slice(static_cast<cudf::column_view>(full_col),
+                                  {slice_start, slice_end})
+                        .front();
+
+  auto const input_tbl = cudf::table_view{{sliced}};
+  auto const filepath  = temp_env->get_temp_filepath("SlicedFlatStringDictTranscode.parquet");
+  write_parquet(input_tbl, filepath);
+
+  auto const read_table = read_parquet_as_dict(filepath).tbl;
+  ASSERT_EQ(read_table->num_rows(), slice_end - slice_start);
+  ASSERT_EQ(read_table->num_columns(), 1);
+
+  auto const read_col = read_table->view().column(0);
+  ASSERT_EQ(read_col.type().id(), cudf::type_id::DICTIONARY32)
+    << "Expected a DICTIONARY32 column for a fully dict-encoded sliced string input";
+
+  auto const decoded_read = cudf::dictionary::decode(cudf::dictionary_column_view(read_col));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(sliced, decoded_read->view());
+}
