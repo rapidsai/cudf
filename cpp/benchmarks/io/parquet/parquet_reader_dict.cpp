@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -42,14 +42,13 @@ void write_dict_encoded_parquet(cudf::table_view const& view,
 
 void BM_parquet_read_dict_transcode(nvbench::state& state)
 {
-  auto const cardinality  = static_cast<cudf::size_type>(state.get_int64("cardinality"));
-  auto const data_size    = static_cast<size_t>(state.get_int64("data_size"));
-  auto const num_cols     = static_cast<cudf::size_type>(state.get_int64("num_cols"));
-  auto const rg_size_rows = state.get_int64("row_group_size_rows");
-  auto const try_dict     = static_cast<bool>(state.get_int64("try_output_dict_columns"));
-  auto const avg_string_length =
-    static_cast<cudf::size_type>(state.get_int64("avg_string_length"));
-  auto const source_type = retrieve_io_type_enum(state.get_string("io_type"));
+  auto const cardinality       = static_cast<cudf::size_type>(state.get_int64("cardinality"));
+  auto const data_size         = static_cast<size_t>(state.get_int64("data_size"));
+  auto const num_cols          = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  auto const rg_size_rows      = state.get_int64("row_group_size_rows");
+  auto const try_dict          = static_cast<bool>(state.get_int64("try_output_dict_columns"));
+  auto const avg_string_length = static_cast<cudf::size_type>(state.get_int64("avg_string_length"));
+  auto const source_type       = retrieve_io_type_enum(state.get_string("io_type"));
 
   // corresponds to 3 sigma (full width 6 sigma: 99.7% of range)
   auto const half_width = avg_string_length >> 3;
@@ -86,16 +85,16 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
 
   auto mem_stats_logger = cudf::memory_stats_logger();
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.exec(
-    nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
-      drop_page_cache_if_enabled(read_opts.get_source().filepaths());
+  state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
+             [&](nvbench::launch& launch, auto& timer) {
+               drop_page_cache_if_enabled(read_opts.get_source().filepaths());
 
-      timer.start();
-      auto const result = cudf::io::read_parquet(read_opts);
-      timer.stop();
+               timer.start();
+               auto const result = cudf::io::read_parquet(read_opts);
+               timer.stop();
 
-      CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
-    });
+               CUDF_EXPECTS(result.tbl->num_columns() == num_cols, "Unexpected number of columns");
+             });
 
   auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");

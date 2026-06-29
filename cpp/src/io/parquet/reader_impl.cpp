@@ -549,8 +549,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // AST filters do not support dictionary columns yet (see the column selection below). The
   // transcode fast path and the `finalize_output` fallback both convert flat STRING columns to
   // DICTIONARY32 *before* the filter is evaluated, which would feed dictionary columns to the AST.
-  // Since `try_output_dict_columns` is best-effort, we silently disable it for filtered reads so the
-  // filter still operates on STRING columns (the columns are simply returned as STRING).
+  // Since `try_output_dict_columns` is best-effort, we silently disable it for filtered reads so
+  // the filter still operates on STRING columns (the columns are simply returned as STRING).
   if (_options.try_output_dict_columns and options.get_filter().has_value()) {
     _options.try_output_dict_columns = false;
   }
@@ -686,7 +686,7 @@ void reader_impl::preprocess_chunk_strings(read_mode mode, row_range const& read
 
 table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
 {
-  //TODO: Having local views instead of offsets for the segments/
+  // TODO: Having local views instead of offsets for the segments/
   CUDF_FUNC_RANGE();
 
   // If `_output_metadata` has been constructed, just copy it over.
@@ -971,8 +971,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   if (_options.try_output_dict_columns) {
     for (auto& col : out_columns) {
       if (col and col->type().id() == type_id::STRING) {
-        col = cudf::dictionary::detail::encode(
-          col->view(), data_type{type_id::INT32}, _stream, _mr);
+        col =
+          cudf::dictionary::detail::encode(col->view(), data_type{type_id::INT32}, _stream, _mr);
       }
     }
   }
