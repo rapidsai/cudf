@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 #include "utils.hpp"
@@ -9,13 +9,14 @@
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 
+#include <cudf_streaming/parquet.hpp>
+
 #include <rmm/detail/format.hpp>
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 
 #include <cuda_runtime_api.h>
 
 #include <coro/when_all.hpp>
-#include <cudf_streaming/streaming/parquet.hpp>
 #include <getopt.h>
 #include <rapidsmpf/memory/memory_type.hpp>
 #include <rapidsmpf/nvtx.hpp>
@@ -51,7 +52,7 @@ rapidsmpf::streaming::Actor read_parquet(std::shared_ptr<rapidsmpf::streaming::C
     rapidsmpf::ndsh::detail::get_table_path(input_directory, input_file));
   auto options = cudf::io::parquet_reader_options::builder(cudf::io::source_info(files)).build();
   if (columns.has_value()) { options.set_column_names(*columns); }
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -67,9 +68,8 @@ rapidsmpf::streaming::Actor consume_channel_parallel(
     while (true) {
       auto msg = co_await ch_in->receive();
       if (msg.empty()) { break; }
-      if (msg.holds<cudf_streaming::streaming::TableChunk>()) {
-        auto chunk =
-          co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+      if (msg.holds<cudf_streaming::table_chunk>()) {
+        auto chunk = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
         ctx->logger()->print("Consumed chunk with ",
                              chunk.table_view().num_rows(),
                              " rows and ",

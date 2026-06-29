@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -28,6 +28,7 @@ from pylibcudf.libcudf.interop cimport (
     to_arrow_schema_raw,
 )
 from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
 
 from .column cimport Column
 from .types cimport DataType
@@ -215,7 +216,7 @@ cdef class Table:
         else:
             raise ValueError("Invalid Arrow-like object")
 
-    cdef table_view view(self) nogil:
+    cdef table_view view(self):
         """Generate a libcudf table_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -226,9 +227,8 @@ cdef class Table:
         # self._columns whenever new columns are added or columns are removed.
         cdef vector[column_view] c_columns
 
-        with gil:
-            for col in self._columns:
-                c_columns.push_back((<Column> col).view())
+        for col in self._columns:
+            c_columns.push_back((<Column> col).view())
 
         return table_view(c_columns)
 
@@ -354,8 +354,9 @@ cdef class Table:
             c_metadata.push_back(_metadata_to_libcudf(meta))
 
         cdef ArrowSchema* raw_schema_ptr
+        cdef table_view c_self = self.view()
         with nogil:
-            raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
+            raw_schema_ptr = to_arrow_schema_raw(c_self, c_metadata)
 
         return PyCapsule_New(<void*>raw_schema_ptr, "arrow_schema", _release_schema)
 
@@ -363,16 +364,18 @@ cdef class Table:
         cdef ArrowArray* raw_host_array_ptr
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
+        cdef table_view c_self = self.view()
 
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
+            raw_host_array_ptr = to_arrow_host_raw(c_self, _cs)
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
     def _to_device_array(self):
         cdef ArrowDeviceArray* raw_device_array_ptr
+        cdef table_view c_self = self.view()
         with nogil:
-            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
+            raw_device_array_ptr = to_arrow_device_raw(c_self, self)
 
         return PyCapsule_New(
             <void*>raw_device_array_ptr,

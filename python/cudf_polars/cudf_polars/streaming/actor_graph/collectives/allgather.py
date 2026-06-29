@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """AllGather logic for the RapidsMPF streaming runtime."""
 
@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cudf_streaming.integrations.partition import (
+from cudf_streaming.partition_utils import (
     packed_data_from_cudf_packed_columns,
     unpack_and_concat,
 )
@@ -15,7 +15,7 @@ from rapidsmpf.streaming.coll.allgather import AllGather
 
 if TYPE_CHECKING:
     import pylibcudf as plc
-    from cudf_streaming.streaming.table_chunk import TableChunk
+    from cudf_streaming.table_chunk import TableChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
     from rmm.pylibrmm.stream import Stream

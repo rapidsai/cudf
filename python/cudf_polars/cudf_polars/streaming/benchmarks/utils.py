@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Benchmark utilities for the RapidsMPF SPMD and Ray frontends."""
@@ -263,6 +263,7 @@ class QueryRunResult:
     plan: SerializablePlan | None
     iteration_failures: list[tuple[int, int]]
     validation_failed: bool
+    partition_plan_rows: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -991,6 +992,16 @@ def run_polars_query(
 
         plan = serialize_query(q, engine)
 
+    part_plan_rows = []
+    if (
+        getattr(args, "explain_partition_plan", False)
+        and engine is not None
+        and run_config.frontend in _STREAMING_FRONTENDS
+    ):
+        from cudf_polars.streaming.explain import collect_partition_plan
+
+        part_plan_rows = collect_partition_plan(q, engine, q_id)
+
     casts = benchmark.EXPECTED_CASTS.get(q_id, [])
     if numeric_type == "decimal":
         casts.extend(benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, []))
@@ -1086,6 +1097,7 @@ def run_polars_query(
         plan=plan,
         iteration_failures=iteration_failures,
         validation_failed=validation_failed,
+        partition_plan_rows=part_plan_rows,
     )
 
 
@@ -1108,6 +1120,7 @@ def _run_query_loop(
     plans: dict[int, SerializablePlan] = {}
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
+    all_partition_plan_rows: list = []
 
     for q_id in run_config.queries:
         try:
@@ -1143,6 +1156,12 @@ def _run_query_loop(
         query_failures.extend(result.iteration_failures)
         if result.validation_failed:
             validation_failures.append(q_id)
+        all_partition_plan_rows.extend(result.partition_plan_rows)
+
+    if all_partition_plan_rows and getattr(args, "explain_partition_plan", False):
+        from cudf_polars.streaming.explain import format_partition_plan_table
+
+        print(format_partition_plan_table(all_partition_plan_rows), flush=True)
 
     return records, plans, validation_failures, query_failures
 
@@ -1210,9 +1229,9 @@ def run_polars_in_memory(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     engine = pl.GPUEngine(
         executor="in-memory",
-        raise_on_fail=True,
         **engine_options,
     )
     records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1248,6 +1267,7 @@ def run_polars_spmd(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
@@ -1305,6 +1325,7 @@ def run_polars_ray(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     ray_init_options: dict[str, Any] = {}
     if run_config.connect is not None:
         ray_init_options["address"] = run_config.connect
@@ -1354,6 +1375,7 @@ def run_polars_dask(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     dask_client = None
     if run_config.connect is not None:
         if Path(run_config.connect).is_file():
@@ -1940,6 +1962,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--explain-logical",
         action=argparse.BooleanOptionalAction,
         help="Print an outline of the logical plan.",
+        default=False,
+    )
+    parser.add_argument(
+        "--explain-partition-plan",
+        action=argparse.BooleanOptionalAction,
+        help="Print a combined partition plan summary table across all queries.",
         default=False,
     )
     parser.add_argument(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Core node definitions for the RapidsMPF streaming runtime."""
 
@@ -7,8 +7,8 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any, cast
 
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
@@ -199,7 +199,7 @@ async def default_node_multi(
                 ready_chunks,
                 reserve_extra=sum(
                     chunk.data_alloc_size()
-                    for chunk in cast(list[TableChunk], ready_chunks)
+                    for chunk in cast("list[TableChunk]", ready_chunks)
                 ),
                 net_memory_delta=0,
             )

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -380,6 +380,24 @@ class _SeriesLocIndexer(_FrameIndexer):
             return _indices_from_labels(self._frame, arg)
 
         else:
+            if (
+                isinstance(arg, Series)
+                and arg.dtype.kind == "b"
+                and not arg.index.equals(self._frame.index)
+            ):
+                # Align a boolean Series indexer to the frame's index by
+                # label rather than positionally. Only labels missing from
+                # the mask make it unalignable; pre-existing NA values are
+                # treated as not-selected (matching pandas), so check for
+                # missing labels rather than for nulls post-reindex.
+                if len(self._frame.index.difference(arg.index)) > 0:
+                    raise ValueError(
+                        "Unalignable boolean Series provided as indexer "
+                        "(index of the boolean Series and of the indexed "
+                        "object do not match)."
+                    )
+                aligned = arg.reindex(self._frame.index)
+                return Series._from_column(aligned._column)
             col = as_column(arg)
             if col.dtype.kind == "b":
                 return Series._from_column(col)
@@ -833,6 +851,88 @@ class Series(SingleColumnFrame, IndexedFrame):
         defaultdict(<class 'list'>, {0: 1, 1: 2, 2: 3, 3: 4})
         """
         return self.to_pandas().to_dict(into=into)
+
+    @_performance_tracking
+    def to_string(
+        self,
+        buf=None,
+        *,
+        na_rep: str = "NaN",
+        float_format=None,
+        header: bool = True,
+        index: bool = True,
+        length: bool = False,
+        dtype: bool = False,
+        name: bool = False,
+        max_rows: int | None = None,
+        min_rows: int | None = None,
+    ) -> str | None:
+        r"""
+        Render a Series to a console-friendly string output.
+
+        cuDF uses pandas internals for string formatting, so this mirrors
+        :meth:`pandas.Series.to_string` and accepts the same arguments.
+        Unlike ``repr``, the output is not truncated by the
+        ``display.max_rows`` option unless ``max_rows`` is passed
+        explicitly, and the ``dtype``/``name``/``length`` footer is
+        omitted unless requested.
+
+        cuDF supports `null/None` as a value in any column type, which
+        is transparently supported during this output process.
+
+        Parameters
+        ----------
+        buf : writable buffer, optional
+            File path or buffer to write to. If ``None`` (default), the
+            output is returned as a string.
+        na_rep : str, default "NaN"
+            String representation of ``NaN``/null values.
+        float_format : callable, optional
+            One-parameter formatter function applied to floating point
+            values.
+        header : bool, default True
+            Whether to print the Series header (the index name).
+        index : bool, default True
+            Whether to print index (row) labels.
+        length : bool, default False
+            Whether to append the Series length to the output.
+        dtype : bool, default False
+            Whether to append the Series dtype to the output.
+        name : bool, default False
+            Whether to append the Series name to the output.
+        max_rows : int, optional
+            Maximum number of rows to show before truncating. If ``None``,
+            all rows are shown.
+        min_rows : int, optional
+            Number of rows to show in a truncated output (when the number
+            of rows exceeds ``max_rows``).
+
+        Returns
+        -------
+        str or None
+            The string representation of the Series when ``buf`` is
+            ``None``; otherwise the result is written to ``buf`` and
+            ``None`` is returned.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1, 2, 3, 4])
+        >>> series.to_string()
+        '0    1\n1    2\n2    3\n3    4'
+        """
+        return self.to_pandas().to_string(
+            buf=buf,
+            na_rep=na_rep,
+            float_format=float_format,
+            header=header,
+            index=index,
+            length=length,
+            dtype=dtype,
+            name=name,
+            max_rows=max_rows,
+            min_rows=min_rows,
+        )
 
     @_performance_tracking
     def reindex(
@@ -2057,9 +2157,7 @@ class Series(SingleColumnFrame, IndexedFrame):
             name=self.name,
         )
         res.attrs = self.attrs
-        res.flags.allows_duplicate_labels = (
-            self._flags.allows_duplicate_labels  # type: ignore[has-type]
-        )
+        res.flags.allows_duplicate_labels = self._flags.allows_duplicate_labels
         return res
 
     @_performance_tracking

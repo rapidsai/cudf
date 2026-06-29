@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -10,7 +10,7 @@ rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
 
 rapids-logger "Downloading artifacts from previous jobs"
-CPP_CHANNEL=$(rapids-download-conda-from-github cpp)
+CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
 
 rapids-logger "Generate Java testing dependencies"
 
@@ -45,7 +45,7 @@ export LIBCUDF_LARGE_STRINGS_ENABLED=0
 
 rapids-logger "Run Java tests"
 pushd java
-timeout 30m mvn test -B -s ci/test_java_settings.xml -DCUDF_JNI_ENABLE_PROFILING=OFF
+timeout 30m mvn test -B -DCUDF_JNI_ENABLE_PROFILING=OFF
 popd
 
 rapids-logger "Test script exiting with value: $EXITCODE"

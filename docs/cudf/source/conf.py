@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
 # cudf documentation build configuration file, created by
@@ -655,6 +655,19 @@ nitpick_ignore_regex = [
 
 # Needed for the [source] button on the API docs to link to the github code
 # based on pandas doc/source/conf.py
+_python_source_roots = {
+    "cudf": "python/cudf/cudf",
+    "cudf_kafka": "python/cudf_kafka/cudf_kafka",
+    "cudf_polars": "python/cudf_polars/cudf_polars",
+    "cudf_streaming": "python/cudf_streaming/cudf_streaming",
+    "custreamz": "python/custreamz/custreamz",
+    "dask_cudf": "python/dask_cudf/dask_cudf",
+    "libcudf": "python/libcudf/libcudf",
+    "libcudf_streaming": "python/libcudf_streaming/libcudf_streaming",
+    "pylibcudf": "python/pylibcudf/pylibcudf",
+}
+
+
 def linkcode_resolve(domain, info) -> str | None:
     """
     Determine the URL corresponding to Python object
@@ -704,10 +717,17 @@ def linkcode_resolve(domain, info) -> str | None:
     else:
         linespec = ""
 
-    fn = os.path.relpath(fn, start=os.path.dirname(cudf.__file__))
+    pkg_name = modname.partition(".")[0]
+    source_path = _python_source_roots.get(pkg_name)
+    pkg = sys.modules.get(pkg_name)
+    pkg_file = getattr(pkg, "__file__", None)
+    if source_path is None or pkg_file is None:
+        return None
+
+    fn = os.path.relpath(fn, start=os.path.dirname(pkg_file))
     return (
         f"https://github.com/rapidsai/cudf/blob/"
-        f"{RAPIDS_BRANCH}/python/cudf/cudf/{fn}{linespec}"
+        f"{RAPIDS_BRANCH}/{source_path}/{fn}{linespec}"
     )
 
 
