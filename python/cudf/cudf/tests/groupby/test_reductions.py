@@ -1436,6 +1436,81 @@ def test_groupby_reduce_min_count(op, min_count):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    ["Int64", "UInt32", "Float64", "int64[pyarrow]", "double[pyarrow]"],
+)
+@pytest.mark.parametrize("op", ["first", "last"])
+def test_groupby_first_last_skipna(dtype, op, skipna):
+    # first/last honor skipna: with skipna=True nulls are dropped, with
+    # skipna=False the actual first/last element of each group is returned
+    # even when it is null (previously skipna=False was ignored). sort=True so
+    # the group order matches pandas (first/last values are independent of it).
+    pdf = pd.DataFrame(
+        {
+            "a": [2, 1, 1, 2, 3, 3],
+            "b": pd.array([None, 3, None, 4, None, None], dtype=dtype),
+            "c": pd.array([None, 30, None, 40, None, None], dtype=dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    got = getattr(gdf.groupby("a", sort=True), op)(skipna=skipna)
+    expect = getattr(pdf.groupby("a", sort=True), op)(skipna=skipna)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["first", "last"])
+def test_groupby_series_first_last_skipna(op, skipna):
+    psr = pd.Series(
+        pd.array([None, 3, None, 4, None, None], dtype="Float64"), name="b"
+    )
+    pkeys = pd.Series([2, 1, 1, 2, 3, 3], name="a")
+    gsr = cudf.from_pandas(psr)
+    gkeys = cudf.from_pandas(pkeys)
+    got = getattr(gsr.groupby(gkeys, sort=True), op)(skipna=skipna)
+    expect = getattr(psr.groupby(pkeys, sort=True), op)(skipna=skipna)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("op", ["sum", "prod", "mean", "median", "min", "max"])
+@pytest.mark.parametrize("dtype", ["float64", "Int64", "Float64"])
+def test_groupby_reduction_skipna_false(op, dtype, as_index):
+    # With skipna=False a group containing any null yields a null result for
+    # that group/column (libcudf reductions otherwise always drop nulls).
+    # With as_index=False the grouping key is also a column of the result (and
+    # ``size()`` returns a DataFrame), so the null-propagation must mask only
+    # the value columns, never the key column.
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2, 2],
+            "b": pd.array([1, None, 3, 4, 5], dtype=dtype),
+            "c": pd.array([10, 20, None, 40, 50], dtype=dtype),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    got = getattr(gdf.groupby("a", as_index=as_index, sort=True), op)(
+        skipna=False
+    )
+    expect = getattr(pdf.groupby("a", as_index=as_index, sort=True), op)(
+        skipna=False
+    )
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("how", ["idxmin", "idxmax"])
+@pytest.mark.parametrize("as_series", [False, True])
+def test_groupby_idxmin_idxmax_skipna_false_raises(how, as_series):
+    # pandas does not support positional idxmin/idxmax with skipna=False.
+    pdf = pd.DataFrame({"a": [1, 1, 2], "b": [1.0, None, 3.0]})
+    gdf = cudf.from_pandas(pdf)
+    pobj = pdf["b"].groupby(pdf["a"]) if as_series else pdf.groupby("a")
+    gobj = gdf["b"].groupby(gdf["a"]) if as_series else gdf.groupby("a")
+    assert_exceptions_equal(
+        lfunc=lambda: getattr(pobj, how)(skipna=False),
+        rfunc=lambda: getattr(gobj, how)(skipna=False),
+    )
+
+
 @pytest.mark.parametrize("min_count", [0, 2, 3])
 def test_groupby_series_reduce_min_count(min_count):
     psr = pd.Series([1.0, 2.0, 3.0, 4.0, 5.0])
