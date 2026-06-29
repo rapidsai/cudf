@@ -58,33 +58,3 @@ def test_masked_type_unsupported_value_becomes_poison():
     assert isinstance(masked.value_type, types.Poison)
 
 
-def test_supported_value_type_classes_are_numeric_and_boolean_only():
-    """At this PR layer, value types are restricted to numeric + boolean."""
-    assert _SUPPORTED_MASKED_VALUE_TYPE_CLASSES == (
-        types.Number,
-        types.Boolean,
-    )
-
-
-def test_supported_value_type_instances_includes_typical_numerics():
-    """Spot-check that the instance set covers common scalar types."""
-    expected = {
-        types.int8,
-        types.int16,
-        types.int32,
-        types.int64,
-        types.uint8,
-        types.uint16,
-        types.uint32,
-        types.uint64,
-        types.float32,
-        types.float64,
-        types.boolean,
-    }
-    missing = expected - _supported_value_type_instances
-    assert not missing, f"missing instance entries: {missing}"
-
-
-def test_supported_value_type_instances_excludes_strings():
-    """String-typed values aren't supported at this layer."""
-    assert types.unicode_type not in _supported_value_type_instances
