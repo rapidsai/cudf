@@ -8,45 +8,50 @@ The steps below reproduce the PDS-H benchmark results using the Polars GPU engin
 
 ### Setup
 
-Create and activate a fresh environment ([conda](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html), [mamba](https://mamba.readthedocs.io/en/latest/user_guide/mamba.html), [Python venv](https://docs.python.org/3/library/venv.html), or [uv](https://docs.astral.sh/uv/)), then install the dependencies:
+Install `cudf-polars` following the [RAPIDS installation guide](https://docs.rapids.ai/install).
+For nightly wheels, install with the `ray` extra (required for multi-GPU benchmarking):
 
 ```bash
 CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
-pip install tpchgen-cli
-pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple "cudf-polars-cu${CUDA_MAJOR}>=0.0.0a0"
+pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+    "cudf-polars-cu${CUDA_MAJOR}[ray]>=0.0.0a0"
 ```
 
-This installs:
+Because `cudf-polars` pins to a tested range of Polars versions, the nightly wheel will install
+the highest Polars version the GPU engine currently supports, which may not be the latest
+Polars release.
 
-- **`tpchgen-cli`**: a Rust-based TPC-H data generator used to produce the benchmark dataset as Parquet files.
-- **`cudf-polars`**: the Polars GPU engine, along with its dependencies including `polars`. Because the GPU engine pins to a tested range of Polars versions, the nightly wheel will install the highest Polars version that the GPU engine currently supports, which may not be the latest Polars release.
+<!-- TODO: consider adding a [benchmark] pip extra to cudf-polars that includes tpchgen-cli
+     (and possibly structlog) so benchmark dependencies can be installed in one step:
+     pip install "cudf-polars-cu${CUDA_MAJOR}[ray,benchmark]>=0.0.0a0"
+     Requires changes to pyproject.toml and dependencies.yaml. -->
+Then install `tpchgen-cli`, a Rust-based TPC-H data generator used to produce the benchmark
+dataset as Parquet files:
+
+```bash
+pip install tpchgen-cli
+```
 
 ### Generate data
 
-The following generates SF1000 (scale factor 1000, roughly 1TB of data):
+Set the scale factor once and reuse it across all steps. The following generates SF1000
+(scale factor 1000, roughly 1TB of data):
 
 ```bash
-tpchgen-cli --output-dir="data/tables/scale-1000.0" --format=parquet -s 1000.0
+export SCALE_FACTOR=1000.0
+export DATA_PATH="data/tables/scale-${SCALE_FACTOR}"
+
+tpchgen-cli --output-dir="${DATA_PATH}" --format=parquet -s ${SCALE_FACTOR}
 ```
 
 ### Run
-
-Set these environment variables before running to match the configuration used for the published results:
-
-```bash
-export POLARS_MAX_THREADS=1
-export OMP_NUM_THREADS=1
-export LIBCUDF_NUM_HOST_WORKERS=4
-export KVIKIO_NTHREADS=8
-export RAPIDSMPF_num_streaming_threads=8
-```
 
 **CPU** (`--frontend polars-cpu`, Polars CPU streaming engine):
 
 ```bash
 python -m cudf_polars.streaming.benchmarks.pdsh all \
     --frontend polars-cpu \
-    --path data/tables/scale-1000.0
+    --path "${DATA_PATH}"
 ```
 
 **Single GPU** (`--frontend spmd`, single-process streaming executor, equivalent to `collect(engine="gpu")`):
@@ -54,7 +59,7 @@ python -m cudf_polars.streaming.benchmarks.pdsh all \
 ```bash
 python -m cudf_polars.streaming.benchmarks.pdsh all \
     --frontend spmd \
-    --path data/tables/scale-1000.0
+    --path "${DATA_PATH}"
 ```
 
 **Multi GPU** (`--frontend ray`, Ray-managed distributed streaming executor):
@@ -71,22 +76,19 @@ To limit the number of GPUs, use `--num-gpus`:
 # All visible GPUs
 python -m cudf_polars.streaming.benchmarks.pdsh all \
     --frontend ray \
-    --path data/tables/scale-1000.0
+    --path "${DATA_PATH}"
 
 # Specific devices
 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m cudf_polars.streaming.benchmarks.pdsh all \
     --frontend ray \
-    --path data/tables/scale-1000.0
+    --path "${DATA_PATH}"
 
 # Limit to N GPUs
 python -m cudf_polars.streaming.benchmarks.pdsh all \
     --frontend ray \
     --num-gpus 4 \
-    --path data/tables/scale-1000.0
+    --path "${DATA_PATH}"
 ```
-
-The `--path` value must match the `--output-dir` used during data generation.
-Update both consistently when changing scale factors (e.g. `scale-100.0`).
 
 ### Results
 
@@ -118,7 +120,7 @@ The commands above use default settings, which gives a realistic baseline withou
 
 | Option | Description |
 |--------|-------------|
-| `--target-partition-size` | Target IO chunk size in bytes fed to the GPU. The most impactful lever; tune this first if query performance is below expectations. Default: auto. |
-| `--broadcast-limit` | Maximum table size in bytes for broadcast joins instead of shuffle. Increasing this can significantly speed up join-heavy queries. Default: auto. |
+| `--target-partition-size` | Target IO chunk size in bytes fed to the GPU. The most impactful lever; tune this first if query performance is below expectations. Default: `min(2.5% of smallest GPU memory, 1.5GB)`. |
+| `--broadcast-limit` | Maximum table size in bytes for broadcast joins instead of shuffle. Increasing this can significantly speed up join-heavy queries. Default: `min(15% of smallest GPU memory, 16GB)`. |
 | `--spill-device-limit` | GPU memory usage percentage before spilling to host. Lower this if hitting out-of-memory errors. Default: 80%. |
 | `--pinned-memory` / `--pinned-max-pool-size` | Enable and size a pinned host memory pool for faster CPU to GPU transfers. |
