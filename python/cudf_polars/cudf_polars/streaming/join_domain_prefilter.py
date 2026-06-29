@@ -5,10 +5,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from functools import singledispatch
+from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
+    IR,
     Cache,
     DataFrameScan,
     Distinct,
@@ -21,13 +23,19 @@ from cudf_polars.dsl.ir import (
     Select,
 )
 from cudf_polars.dsl.tracing import Scope, log
-from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.traversal import (
+    CachingVisitor,
+    post_traversal,
+    reuse_if_unchanged,
+    traversal,
+)
+from cudf_polars.dsl.utils.replace import replace
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import StatsCollector
+    from cudf_polars.typing import GenericTransformer
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -50,6 +58,7 @@ class _Candidate:
     target_key: expr.Col
     domain: _Producer
     domain_key: expr.Col
+    target_rows: int
     constraint_domain: _Producer | None = None
     domain_constraint_key: expr.Col | None = None
     target_constraint_key: expr.Col | None = None
@@ -58,11 +67,6 @@ class _Candidate:
     def domain_rows(self) -> int:
         """Estimated rows in the domain input."""
         return self.domain.rows
-
-    @property
-    def target_rows(self) -> int:
-        """Estimated rows in the target input."""
-        return _estimate_rows(self.target) or 0
 
     @property
     def score(self) -> tuple[int, int, int]:
@@ -79,9 +83,13 @@ class _Candidate:
         )
 
 
-_ROW_ESTIMATES: dict[IR, int | None] = {}
-_SELECTIVE: dict[IR, bool] = {}
-_STATS: StatsCollector | None = None
+class _RewriteState(TypedDict):
+    """State shared by the join-domain prefilter DAG rewrite."""
+
+    threshold: float
+    trace: bool
+    row_estimates: dict[IR, int | None]
+    selective_nodes: set[IR]
 
 
 def optimize_join_domain_prefilters(
@@ -104,48 +112,59 @@ def optimize_join_domain_prefilters(
     if threshold is None or threshold == 0 or trace is None:
         return ir
 
-    global _ROW_ESTIMATES, _SELECTIVE, _STATS
-    old_estimates, old_selective, old_stats = _ROW_ESTIMATES, _SELECTIVE, _STATS
-    _ROW_ESTIMATES, _SELECTIVE, _STATS = {}, {}, stats
-    try:
-        return _rewrite_node(
-            ir,
-            threshold=threshold,
-            trace=trace,
-        )
-    finally:
-        _ROW_ESTIMATES, _SELECTIVE, _STATS = (
-            old_estimates,
-            old_selective,
-            old_stats,
-        )
-
-
-def _rewrite_node(ir: IR, *, threshold: float, trace: bool) -> IR:
-    children = tuple(
-        _rewrite_node(child, threshold=threshold, trace=trace) for child in ir.children
+    state = _RewriteState(
+        threshold=threshold,
+        trace=trace,
+        row_estimates=_estimate_row_counts(ir, stats),
+        selective_nodes=_collect_selective_nodes(ir),
     )
-    node = ir if children == ir.children else ir.reconstruct(children)
+    mapper: GenericTransformer[IR, IR, _RewriteState] = CachingVisitor(
+        _rewrite, state=state
+    )
+    return mapper(ir)
 
-    if not isinstance(node, Join):
-        return node
 
-    candidate, reason = _select_candidate(node, threshold)
-    if trace:
-        _trace_decision(node, threshold, candidate, reason)
+@singledispatch
+def _rewrite(node: IR, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
+    raise AssertionError
+
+
+@_rewrite.register(IR)
+def _(node: IR, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
+    return reuse_if_unchanged(node, rec)
+
+
+@_rewrite.register(Join)
+def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
+    rewritten = reuse_if_unchanged(node, rec)
+    assert isinstance(rewritten, Join)
+    node = rewritten
+    candidate, reason = _select_candidate(
+        node,
+        rec.state["threshold"],
+        rec.state["row_estimates"],
+        rec.state["selective_nodes"],
+    )
+    if rec.state["trace"]:
+        _trace_decision(node, rec.state["threshold"], candidate, reason)
     if candidate is None:
         return node
 
     left, right = node.children
     target_filter = _make_target_filter(node, candidate)
     if candidate.target_side == "left":
-        left = _replace_identity(left, candidate.target, target_filter)
+        (left,) = replace([left], {candidate.target: target_filter})
     else:
-        right = _replace_identity(right, candidate.target, target_filter)
+        (right,) = replace([right], {candidate.target: target_filter})
     return node.reconstruct((left, right))
 
 
-def _select_candidate(ir: Join, threshold: float) -> tuple[_Candidate | None, str]:
+def _select_candidate(
+    ir: Join,
+    threshold: float,
+    row_estimates: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> tuple[_Candidate | None, str]:
     if ir.options[0] != "Inner":
         return None, "not_inner_join"
     if ir.options[2] is not None:
@@ -180,6 +199,8 @@ def _select_candidate(ir: Join, threshold: float) -> tuple[_Candidate | None, st
                 target_keys,
                 domain_keys,
                 threshold,
+                row_estimates,
+                selective_nodes,
             )
         )
         candidates.extend(
@@ -190,6 +211,8 @@ def _select_candidate(ir: Join, threshold: float) -> tuple[_Candidate | None, st
                 target_keys,
                 domain_keys,
                 threshold,
+                row_estimates,
+                selective_nodes,
             )
         )
 
@@ -209,16 +232,22 @@ def _simple_candidates(
     target_keys: tuple[expr.Col, ...],
     domain_keys: tuple[expr.Col, ...],
     threshold: float,
+    row_estimates: dict[IR, int | None],
+    selective_nodes: set[IR],
 ) -> Iterable[_Candidate]:
     for target_key, domain_key in zip(target_keys, domain_keys, strict=True):
-        target = _largest_key_source(target_child, target_key.name)
+        target = _largest_key_source(target_child, target_key.name, row_estimates)
         if target is None:
             continue
-        target_rows = _estimate_rows(target)
+        target_rows = row_estimates.get(target)
         if target_rows is None or target_rows <= 0:
             continue
         domain = _smallest_key_producer(
-            domain_child, domain_key.name, require_selective=True
+            domain_child,
+            domain_key.name,
+            row_estimates,
+            selective_nodes,
+            require_selective=True,
         )
         if domain is None:
             continue
@@ -233,6 +262,7 @@ def _simple_candidates(
             target_key=target_key,
             domain=domain,
             domain_key=domain_key,
+            target_rows=target_rows,
         )
 
 
@@ -243,6 +273,8 @@ def _composite_candidates(
     target_keys: tuple[expr.Col, ...],
     domain_keys: tuple[expr.Col, ...],
     threshold: float,
+    row_estimates: dict[IR, int | None],
+    selective_nodes: set[IR],
 ) -> Iterable[_Candidate]:
     if len(target_keys) < 2:
         return
@@ -250,10 +282,10 @@ def _composite_candidates(
     for filter_index, (target_key, domain_key) in enumerate(
         zip(target_keys, domain_keys, strict=True)
     ):
-        target = _largest_key_source(target_child, target_key.name)
+        target = _largest_key_source(target_child, target_key.name, row_estimates)
         if target is None:
             continue
-        target_rows = _estimate_rows(target)
+        target_rows = row_estimates.get(target)
         if target_rows is None or target_rows <= 0:
             continue
 
@@ -264,13 +296,17 @@ def _composite_candidates(
             if constraint_index == filter_index:
                 continue
             domain = _smallest_node_containing_all(
-                domain_child, (domain_key.name, domain_constraint_key.name)
+                domain_child,
+                (domain_key.name, domain_constraint_key.name),
+                row_estimates,
             )
             if domain is None:
                 continue
             constraint_domain = _smallest_key_producer(
                 target_child,
                 target_constraint_key.name,
+                row_estimates,
+                selective_nodes,
                 require_selective=True,
                 exclude=target,
             )
@@ -291,6 +327,7 @@ def _composite_candidates(
                 target_key=target_key,
                 domain=domain,
                 domain_key=domain_key,
+                target_rows=target_rows,
                 constraint_domain=constraint_domain,
                 domain_constraint_key=domain_constraint_key,
                 target_constraint_key=target_constraint_key,
@@ -373,16 +410,22 @@ def _make_semi_join(
 
 
 def _smallest_key_producer(
-    root: IR, column: str, *, require_selective: bool, exclude: IR | None = None
+    root: IR,
+    column: str,
+    row_estimates: dict[IR, int | None],
+    selective_nodes: set[IR],
+    *,
+    require_selective: bool,
+    exclude: IR | None = None,
 ) -> _Producer | None:
     candidates = []
     for node in traversal([root]):
         if node is exclude or column not in node.schema:
             continue
-        rows = _estimate_rows(node)
+        rows = row_estimates.get(node)
         if rows is None or rows <= 0:
             continue
-        if require_selective and not _is_selective(node):
+        if require_selective and node not in selective_nodes:
             continue
         candidates.append((rows, len(node.schema), _Producer(node, column, rows)))
     if not candidates:
@@ -390,13 +433,15 @@ def _smallest_key_producer(
     return min(candidates, key=lambda item: (item[0], item[1]))[2]
 
 
-def _smallest_node_containing_all(root: IR, columns: Sequence[str]) -> _Producer | None:
+def _smallest_node_containing_all(
+    root: IR, columns: Sequence[str], row_estimates: dict[IR, int | None]
+) -> _Producer | None:
     candidates = []
     needed = set(columns)
     for node in traversal([root]):
         if not needed.issubset(node.schema):
             continue
-        rows = _estimate_rows(node)
+        rows = row_estimates.get(node)
         if rows is None or rows <= 0:
             continue
         candidates.append((rows, len(node.schema), _Producer(node, columns[0], rows)))
@@ -405,13 +450,15 @@ def _smallest_node_containing_all(root: IR, columns: Sequence[str]) -> _Producer
     return min(candidates, key=lambda item: (item[0], item[1]))[2]
 
 
-def _largest_key_source(root: IR, column: str) -> IR | None:
+def _largest_key_source(
+    root: IR, column: str, row_estimates: dict[IR, int | None]
+) -> IR | None:
     source_candidates = []
     fallback_candidates = []
     for node in traversal([root]):
         if column not in node.schema:
             continue
-        rows = _estimate_rows(node)
+        rows = row_estimates.get(node)
         if rows is None or rows <= 0:
             continue
         item = (rows, len(node.schema), node)
@@ -425,32 +472,33 @@ def _largest_key_source(root: IR, column: str) -> IR | None:
     return max(candidates, key=lambda item: (item[0], -item[1]))[2]
 
 
-def _estimate_rows(ir: IR) -> int | None:
-    try:
-        return _ROW_ESTIMATES[ir]
-    except KeyError:
-        pass
-
-    rows: int | None
-    if isinstance(ir, (Scan, DataFrameScan)):
-        source = None if _STATS is None else _STATS.scan_stats.get(ir)
-        rows = None if source is None else source.row_count
-        if rows is None and isinstance(ir, DataFrameScan):
-            rows = ir.df.shape()[0]
-    elif isinstance(ir, (Select, Projection, HStack, Cache, Filter, Distinct, GroupBy)):
-        rows = _estimate_rows(ir.children[0])
-    elif isinstance(ir, Join):
-        left_rows = _estimate_rows(ir.children[0])
-        right_rows = _estimate_rows(ir.children[1])
-        rows = _estimate_join_rows(ir.options[0], left_rows, right_rows)
-    else:
-        estimates = [
-            estimate for child in ir.children if (estimate := _estimate_rows(child))
-        ]
-        rows = max(estimates) if estimates else None
-
-    _ROW_ESTIMATES[ir] = rows
-    return rows
+def _estimate_row_counts(ir: IR, stats: StatsCollector) -> dict[IR, int | None]:
+    estimates: dict[IR, int | None] = {}
+    for node in post_traversal([ir]):
+        if isinstance(node, (Scan, DataFrameScan)):
+            source = stats.scan_stats.get(node)
+            rows = None if source is None else source.row_count
+            if rows is None and isinstance(node, DataFrameScan):
+                rows = node.df.shape()[0]
+        elif isinstance(
+            node, (Select, Projection, HStack, Cache, Filter, Distinct, GroupBy)
+        ):
+            rows = estimates[node.children[0]]
+        elif isinstance(node, Join):
+            rows = _estimate_join_rows(
+                node.options[0],
+                estimates[node.children[0]],
+                estimates[node.children[1]],
+            )
+        else:
+            child_estimates = [
+                estimate
+                for child in node.children
+                if (estimate := estimates[child]) is not None
+            ]
+            rows = max(child_estimates) if child_estimates else None
+        estimates[node] = rows
+    return estimates
 
 
 def _estimate_join_rows(
@@ -471,36 +519,20 @@ def _estimate_join_rows(
     return None
 
 
-def _is_selective(ir: IR) -> bool:
-    try:
-        return _SELECTIVE[ir]
-    except KeyError:
-        pass
-
-    if isinstance(ir, Scan):
-        selective = ir.predicate is not None
-    elif isinstance(ir, Filter):
-        selective = True
-    else:
-        selective = any(_is_selective(child) for child in ir.children)
-
-    _SELECTIVE[ir] = selective
+def _collect_selective_nodes(ir: IR) -> set[IR]:
+    selective: set[IR] = set()
+    for node in post_traversal([ir]):
+        if (
+            (isinstance(node, Scan) and node.predicate is not None)
+            or isinstance(node, Filter)
+            or any(child in selective for child in node.children)
+        ):
+            selective.add(node)
     return selective
 
 
 def _contains_identity(root: IR, needle: IR) -> bool:
     return any(node is needle for node in traversal([root]))
-
-
-def _replace_identity(root: IR, old: IR, new: IR) -> IR:
-    if root is old:
-        return new
-    if not root.children:
-        return root
-    children = tuple(_replace_identity(child, old, new) for child in root.children)
-    if children == root.children:
-        return root
-    return root.reconstruct(children)
 
 
 def _trace_decision(
