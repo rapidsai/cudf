@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 [build-system]
@@ -30,7 +30,7 @@ dependencies = [
     "numpy>=1.26,<3.0",
     "nvtx>=0.2.1",
     "packaging",
-    "pandas>=3.0.0,<3.1.0",
+    "pandas>=3.0.0,<3.0.4a0",
     "pyarrow>=19.0.0,<24",
     "pylibcudf==26.8.*,>=0.0.0a0",
     "rich",
@@ -123,7 +123,7 @@ dependencies-file = "../../dependencies.yaml"
 matrix-entry = "cuda_suffixed=true;use_cuda_wheels=true"
 requires = [
     "cmake>=4.0",
-    "cython>=3.2.2",
+    "cython>=3.2.2,<3.3.0a0",
     "libcudf==26.8.*,>=0.0.0a0",
     "librmm==26.8.*,>=0.0.0a0",
     "ninja",

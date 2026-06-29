@@ -301,9 +301,11 @@ def _drop_dyn_pred_hints(
     ):
         left = _drop_dyn_pred_hints(translator, node.left, schema)
         right = _drop_dyn_pred_hints(translator, node.right, schema)
-        if left is None:
-            return right  # pragma: no cover
-        if right is None:
+        # Which branch is taken depends on where the dynamic predicate lands in
+        # the AND tree, which is nondeterministic.
+        if left is None:  # pragma: no cover
+            return right
+        if right is None:  # pragma: no cover
             return left
         return expr.BinOp(
             DataType(translator.visitor.get_dtype(n)),

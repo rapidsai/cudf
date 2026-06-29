@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -180,7 +180,7 @@ CUDF_KERNEL void minhash_seed_kernel(cudf::column_device_view const d_strings,
  * @param d_results Final results vector (used for the proactive initialize)
  */
 template <typename HashFunction, typename hash_value_type = typename HashFunction::result_type>
-CUDF_KERNEL void minhash_ngrams_kernel(cudf::detail::lists_column_device_view const d_input,
+CUDF_KERNEL void minhash_ngrams_kernel(cudf::lists_column_device_view const d_input,
                                        hash_value_type seed,
                                        cudf::size_type ngrams,
                                        hash_value_type* d_hashes,
@@ -558,7 +558,7 @@ std::unique_ptr<cudf::column> minhash_ngrams_fn(
   auto d_threshold_count = cudf::detail::device_scalar<cudf::size_type>(
     0, stream, cudf::get_current_device_resource_ref());
 
-  auto d_list = cudf::detail::lists_column_device_view(*d_input);
+  auto d_list = cudf::lists_column_device_view(*d_input);
   minhash_ngrams_kernel<HashFunction>
     <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(d_list,
                                                                          seed,
