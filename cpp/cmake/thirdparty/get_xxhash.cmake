@@ -17,7 +17,7 @@ function(find_and_configure_xxhash)
     GLOBAL_TARGETS xxhash
     CPM_ARGS
     GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
-    GIT_TAG v0.8.3
+    GIT_TAG e626a72bc2321cd320e953a0ccf1584cad60f363
     GIT_SHALLOW TRUE
     DOWNLOAD_ONLY TRUE
     EXCLUDE_FROM_ALL ${CUDF_EXCLUDE_DEPS_FROM_ALL}
