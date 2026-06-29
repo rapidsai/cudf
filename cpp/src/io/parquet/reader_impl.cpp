@@ -546,6 +546,15 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     "try_output_dict_columns is only supported for single-pass reads; it cannot be combined "
     "with a non-zero chunk_read_limit or pass_read_limit.");
 
+  // AST filters do not support dictionary columns yet (see the column selection below). The
+  // transcode fast path and the `finalize_output` fallback both convert flat STRING columns to
+  // DICTIONARY32 *before* the filter is evaluated, which would feed dictionary columns to the AST.
+  // Since `try_output_dict_columns` is best-effort, we silently disable it for filtered reads so the
+  // filter still operates on STRING columns (the columns are simply returned as STRING).
+  if (_options.try_output_dict_columns and options.get_filter().has_value()) {
+    _options.try_output_dict_columns = false;
+  }
+
   // Open and parse the source dataset metadata
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
