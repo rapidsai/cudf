@@ -26,10 +26,17 @@ namespace cudf::io::parquet::detail {
 
 namespace {
 
-// Host-side counterpart of `is_string_col` in `parquet_gpu.hpp`. Kept narrow: for direct
-// Parquet-dict → DICTIONARY32 transcode we only accept pure BYTE_ARRAY columns without a
-// DECIMAL logical type and without the strings-to-categorical flag. FIXED_LEN_BYTE_ARRAY is
-// deliberately excluded because it is typically a binary payload.
+/**
+ * @brief Host-side check for whether a column chunk decodes to a plain string column.
+ *
+ * Host-side counterpart of `is_string_col` in `parquet_gpu.hpp`. Kept narrow: for direct
+ * Parquet-dict → DICTIONARY32 transcode we only accept pure BYTE_ARRAY columns without a
+ * DECIMAL logical type and without the strings-to-categorical flag. FIXED_LEN_BYTE_ARRAY is
+ * deliberately excluded because it is typically a binary payload.
+ *
+ * @param chunk The column chunk descriptor to classify
+ * @return True if the chunk is a plain BYTE_ARRAY string chunk eligible for transcode
+ */
 [[nodiscard]] bool is_host_byte_array_string_chunk(ColumnChunkDesc const& chunk)
 {
   if (chunk.physical_type != Type::BYTE_ARRAY) { return false; }
@@ -40,28 +47,48 @@ namespace {
   return true;
 }
 
-// Both PLAIN_DICTIONARY (legacy) and RLE_DICTIONARY are valid encodings for data pages that
-// reference a parquet dictionary page.
+/**
+ * @brief Whether a data-page encoding references a parquet dictionary page.
+ *
+ * Both PLAIN_DICTIONARY (legacy) and RLE_DICTIONARY are valid encodings for data pages that
+ * reference a parquet dictionary page.
+ *
+ * @param enc The data-page encoding to test
+ * @return True if the encoding is a dictionary data-page encoding
+ */
 [[nodiscard]] bool is_dict_data_page_encoding(Encoding enc)
 {
   return enc == Encoding::PLAIN_DICTIONARY or enc == Encoding::RLE_DICTIONARY;
 }
 
-// Per-input-column eligibility flags. Each column must satisfy all of these conditions to be
-// eligible for direct Parquet-dict → DICTIONARY32 transcode.
+/**
+ * @brief Per-input-column eligibility flags for Parquet-dict → DICTIONARY32 transcode.
+ *
+ * Each column must satisfy all of these conditions to be eligible for direct transcode.
+ */
 struct column_eligibility {
-  bool has_string_buffer = false;
-  bool has_any_chunk     = false;
-  bool all_chunks_string = true;
-  bool all_pages_dict    = true;
+  bool has_string_buffer = false;  ///< Output buffer is currently typed as STRING
+  bool has_any_chunk     = false;  ///< At least one chunk was seen for this column
+  bool all_chunks_string = true;   ///< Every chunk is a flat BYTE_ARRAY string chunk with a dict
+  bool all_pages_dict    = true;   ///< Every data page uses a dictionary encoding
 
+  /**
+   * @brief Whether the column satisfies every transcode-eligibility condition.
+   *
+   * @return True if the column is eligible for direct DICTIONARY32 transcode
+   */
   [[nodiscard]] bool is_eligible() const
   {
     return has_string_buffer and has_any_chunk and all_chunks_string and all_pages_dict;
   }
 };
 
-// Classify a chunk against its column's eligibility state.
+/**
+ * @brief Fold a single chunk's properties into its column's eligibility state.
+ *
+ * @param e The per-column eligibility state to update in place
+ * @param chunk The column chunk descriptor to classify
+ */
 void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
 {
   e.has_any_chunk = true;
@@ -71,15 +98,24 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
   }
 }
 
-// Per-input-column eligibility for Parquet-dict → DICTIONARY32. A column is eligible iff
-//  - the corresponding output buffer is currently typed as STRING (i.e. a flat string column),
-//  - every chunk of that column is a BYTE_ARRAY string chunk with a dictionary page,
-//  - every data page of every chunk of that column uses (PLAIN|RLE)_DICTIONARY encoding,
-//  - the chunk has a flat (non-list, non-nested) schema.
-//
-// We scan host-side `pass.chunks` and `pass.pages` here rather than `subpass.pages` because
-// `subpass.pages` may be a subset. For single-pass single-subpass reads (the only configuration
-// in which `try_output_dict_columns` is supported), `subpass.pages == pass.pages`.
+/**
+ * @brief Compute per-input-column eligibility for Parquet-dict → DICTIONARY32 transcode.
+ *
+ * A column is eligible iff
+ *  - the corresponding output buffer is currently typed as STRING (i.e. a flat string column),
+ *  - every chunk of that column is a BYTE_ARRAY string chunk with a dictionary page,
+ *  - every data page of every chunk of that column uses (PLAIN|RLE)_DICTIONARY encoding,
+ *  - the chunk has a flat (non-list, non-nested) schema.
+ *
+ * We scan host-side `pass.chunks` and `pass.pages` here rather than `subpass.pages` because
+ * `subpass.pages` may be a subset. For single-pass single-subpass reads (the only configuration
+ * in which `try_output_dict_columns` is supported), `subpass.pages == pass.pages`.
+ *
+ * @param pass The pass intermediate data holding host-side chunks and pages
+ * @param input_columns The reader's input column descriptors
+ * @param output_buffers The output column buffers (used to detect flat STRING columns)
+ * @return A vector of per-input-column eligibility records, indexed by input column
+ */
 [[nodiscard]] std::vector<column_eligibility> compute_dict_transcode_eligibility(
   pass_intermediate_data const& pass,
   std::vector<input_column_info> const& input_columns,
@@ -117,8 +153,18 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
   return elig;
 }
 
-// Build a STRING keys column covering the dictionary entries of a single chunk of a single input
-// column. `begin` points into the pass-wide `string_index_pair` buffer.
+/**
+ * @brief Build a STRING keys column from a chunk's dictionary entries.
+ *
+ * Builds a STRING keys column covering the dictionary entries of a single chunk of a single input
+ * column. `begin` points into the pass-wide `string_index_pair` buffer.
+ *
+ * @param begin Pointer to the first `string_index_pair` entry for this chunk's dictionary
+ * @param entry_count Number of dictionary entries (keys) for this chunk
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's memory
+ * @return A STRING column holding this chunk's dictionary keys (empty if `entry_count <= 0`)
+ */
 [[nodiscard]] std::unique_ptr<column> make_keys_column_from_index_pairs(
   string_index_pair const* begin,
   size_type entry_count,
