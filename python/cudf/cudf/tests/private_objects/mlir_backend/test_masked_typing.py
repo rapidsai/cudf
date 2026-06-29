@@ -56,9 +56,6 @@ def test_masked_type_unsupported_value_becomes_poison():
     assert isinstance(masked.value_type, types.Poison)
 
 
-# --- NAType ----------------------------------------------------------------
-
-
 def test_na_type_singleton_repr():
     """``NAType`` repr is ``"NA"``."""
     from cudf.core.udf.mlir_backend.masked_typing import NAType, na_type

@@ -97,9 +97,6 @@ def test_masked_constructor_and_accessors_runtime_validity(valid):
         assert int(out_value.get()[0]) == 42
 
 
-# --- NA casts and is_/is_not ----------------------------------------------
-
-
 def test_cast_na_to_masked_via_branch_unification():
     """``return cudf.NA`` branch unifies with a Masked branch.
 
