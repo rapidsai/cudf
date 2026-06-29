@@ -78,6 +78,20 @@ if TYPE_CHECKING:
 # different dtypes. These strings must be elements of the AggregationKind enum.
 # The libcudf infrastructure exists for "COLLECT" support on
 # categoricals, but the dtype support in python does not.
+# Reductions whose result for a group becomes null when that group contains
+# any null value and ``skipna=False`` (libcudf otherwise always drops nulls).
+_NULL_PROPAGATING_REDUCTIONS = {
+    "sum",
+    "prod",
+    "product",
+    "mean",
+    "median",
+    "var",
+    "std",
+    "min",
+    "max",
+}
+
 _CATEGORICAL_AGGS = {"COUNT", "NUNIQUE", "SIZE", "UNIQUE"}
 _STRING_AGGS = {
     "COLLECT",
@@ -1318,7 +1332,9 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         return result
 
-    def _wrap_idxmin_idxmax(self, result: DataFrame | Series, *, skipna: bool):
+    def _wrap_idxmin_idxmax(
+        self, result: DataFrame | Series, *, skipna: bool, how: str
+    ):
         # libcudf's idxmin/idxmax return the integer row-position of the
         # min/max element within each group (null if the group's values were
         # all NA). pandas instead returns the *label* of that row taken from
@@ -1326,6 +1342,11 @@ class GroupBy(Serializable, Reducible, Scannable):
         # positions and then gather the corresponding index labels.
         from cudf.core.multiindex import MultiIndex
         from cudf.core.series import Series
+
+        if not skipna:
+            # pandas does not support positional idxmin/idxmax with
+            # skipna=False (it cannot represent "the label of a NA").
+            raise ValueError(f"{how} with skipna=False")
 
         key_names = set(self.grouping.names)
         if result.ndim == 2:
@@ -1413,7 +1434,44 @@ class GroupBy(Serializable, Reducible, Scannable):
                 skipna=kwargs.get("skipna", True), min_count=min_count
             )
 
-        result = self.agg(op)
+        skipna = kwargs.get("skipna", True)
+        agg_op: str | _FirstLastAggSpec = op
+        if op in {"first", "last"} and not skipna:
+            # ``first``/``last`` default to dropping nulls (skipna=True). With
+            # ``skipna=False`` the actual first/last element of each group is
+            # returned even when it is null, matching pandas.
+            agg_op = _FirstLastAggSpec(op, skipna=False)
+
+        result = self.agg(agg_op)
+        if op in _NULL_PROPAGATING_REDUCTIONS and not skipna:
+            # libcudf reductions always drop nulls. With ``skipna=False`` a
+            # group containing any null in a column yields a null result for
+            # that (group, column), matching pandas. A (group, column) is
+            # all-non-null when its non-null count equals the group size
+            # (``size()`` is used instead of the ``size`` aggregation because
+            # the latter is unsupported for string columns).
+            from cudf.core.dataframe import DataFrame
+
+            non_null_counts = self.agg("count")
+            group_sizes = self.size()
+            if isinstance(group_sizes, DataFrame):
+                # With ``as_index=False`` the per-group counts are returned as
+                # the "size" column of a DataFrame; reduce it to a Series so it
+                # aligns with each value column below.
+                group_sizes = group_sizes["size"]
+            if isinstance(result, DataFrame):
+                # ``as_index=False`` keeps the grouping keys as columns of
+                # ``result``; they must never be nulled out, so mask only the
+                # value columns.
+                key_names = set(self.grouping.names)
+                for name in result._column_names:
+                    if name in key_names:
+                        continue
+                    result[name] = result[name].where(
+                        non_null_counts[name] == group_sizes, None
+                    )
+            else:
+                result = result.where(non_null_counts == group_sizes, None)
         if min_count and min_count > 0:
             counts = self.agg("count")
             result = result.where(counts >= min_count, None)
@@ -3523,7 +3581,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         **kwargs: Any,
     ) -> DataFrame:
         result = self._reduce("idxmin", numeric_only=numeric_only)
-        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmin")
 
     def idxmax(
         self,
@@ -3533,7 +3591,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
         **kwargs: Any,
     ) -> DataFrame:
         result = self._reduce("idxmax", numeric_only=numeric_only)
-        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmax")
 
     def value_counts(
         self,
@@ -3848,13 +3906,13 @@ class SeriesGroupBy(GroupBy):
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> Series:
         result = self._reduce("idxmin")
-        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmin")
 
     def idxmax(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
     ) -> Series:
         result = self._reduce("idxmax")
-        return self._wrap_idxmin_idxmax(result, skipna=skipna)
+        return self._wrap_idxmin_idxmax(result, skipna=skipna, how="idxmax")
 
     @property
     def dtype(self) -> pd.Series:
@@ -4164,6 +4222,28 @@ class _Grouping(Serializable):
         out._named_columns = copy.deepcopy(self._named_columns)
         out._key_columns = [col.copy(deep=deep) for col in self._key_columns]
         return out
+
+
+class _FirstLastAggSpec:
+    """Callable aggregation spec for groupby ``first``/``last``.
+
+    Lets :meth:`GroupBy._reduce` thread ``skipna`` to
+    :meth:`Aggregation.first`/:meth:`Aggregation.last` through
+    ``make_aggregation``'s callable path. ``__str__``/``__name__`` report the
+    op name so aggregation-validity checks and result-column naming behave
+    exactly as they do for the plain ``"first"``/``"last"`` string specs.
+    """
+
+    def __init__(self, op: str, skipna: bool) -> None:
+        self._op = op
+        self._skipna = skipna
+        self.__name__ = op
+
+    def __call__(self, agg):
+        return getattr(agg, self._op)(skipna=self._skipna)
+
+    def __str__(self) -> str:
+        return self._op
 
 
 def _is_multi_agg(aggs):
