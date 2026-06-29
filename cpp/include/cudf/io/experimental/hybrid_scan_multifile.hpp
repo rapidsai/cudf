@@ -421,13 +421,6 @@ class hybrid_scan_multifile {
   [[nodiscard]] table_with_metadata materialize_all_columns_chunk() const;
 
   /**
-   * @brief Check if there is any parquet data left to read for the current chunked setup
-   *
-   * @return Boolean indicating if there is any data left to read
-   */
-  [[nodiscard]] bool has_next_table_chunk() const;
-
-  /**
    * @brief Partition row groups into passes such that the amount of GPU memory required to read,
    * decompress and decode a pass is bounded by the specified limit
    *
@@ -447,6 +440,13 @@ class hybrid_scan_multifile {
   [[nodiscard]] std::vector<std::vector<std::vector<size_type>>> construct_row_group_passes(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
     std::size_t pass_read_limit) const;
+
+  /**
+   * @brief Check if there is any parquet data left to read for the current chunked setup
+   *
+   * @return Boolean indicating if there is any data left to read
+   */
+  [[nodiscard]] bool has_next_table_chunk() const;
 
  private:
   std::unique_ptr<detail::hybrid_scan_reader_impl> _impl;
