@@ -626,26 +626,17 @@ def make_filter_tasks(
     tuple
        Of new left and right channels, coroutines to await, and new channels to shutdown on error.
     """
-    bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
-    bloom_build_input: Channel[TableChunk] = context.create_channel()
-    passthrough_output: Channel[TableChunk] = context.create_channel()
     if left_rows < right_rows:
         passthrough_input = ch_left
-        ch_left = passthrough_output
         build_indices = strategy.left_indices
         bloom_apply_input = ch_right
         apply_indices = strategy.right_indices
-        ch_right = context.create_channel()
-        bloom_apply_output = ch_right
         apply_meta = strategy.right_meta
     else:
         passthrough_input = ch_right
-        ch_right = passthrough_output
         build_indices = strategy.right_indices
         bloom_apply_input = ch_left
         apply_indices = strategy.left_indices
-        ch_left = context.create_channel()
-        bloom_apply_output = ch_left
         apply_meta = strategy.left_meta
     assert apply_meta is not None
     if _is_already_partitioned(
@@ -656,6 +647,18 @@ def make_filter_tasks(
         # but the current implementation only prefilters "locally" in the
         # query DAG.
         return ch_left, ch_right, [], []
+
+    bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
+    bloom_build_input: Channel[TableChunk] = context.create_channel()
+    passthrough_output: Channel[TableChunk] = context.create_channel()
+    if left_rows < right_rows:
+        ch_left = passthrough_output
+        ch_right = context.create_channel()
+        bloom_apply_output = ch_right
+    else:
+        ch_right = passthrough_output
+        ch_left = context.create_channel()
+        bloom_apply_output = ch_left
     # TODO: configure based on GPU L2 size
     nblocks = BloomFilter.fitting_num_blocks(32 * 1024 * 1024)
     filter = BloomFilter(context, comm, LIBCUDF_DEFAULT_HASH_SEED, nblocks)
