@@ -717,15 +717,15 @@ def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
     assert config.executor.dynamic_planning.join_prefilter_trace
 
 
-@pytest.mark.parametrize("value", ["none", "null"])
-def test_join_prefilter_max_key_columns_none_from_env(
-    monkeypatch: pytest.MonkeyPatch, value: str
+@pytest.mark.parametrize("value, expected", [("none", None), ("null", None), ("2", 2)])
+def test_join_prefilter_max_key_columns_from_env(
+    monkeypatch: pytest.MonkeyPatch, value: str, expected: int | None
 ) -> None:
     monkeypatch.setenv(
         "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_MAX_KEY_COLUMNS",
         value,
     )
-    assert DynamicPlanningOptions().join_prefilter_max_key_columns is None
+    assert DynamicPlanningOptions().join_prefilter_max_key_columns == expected
 
 
 def test_validate_join_prefilter_threshold() -> None:
