@@ -443,26 +443,24 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSet
     cudf::column_view* original_column = reinterpret_cast<cudf::column_view*>(base_column);
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
 
-    // Helpers to make array outputs.
-    auto make_no_output = [&]() {
-      jlong output[2] = {0, 0};
-      return cudf::jni::native_jlongArray(env, output, 2).get_jArray();
-    };
-    auto make_output = [&](std::unique_ptr<cudf::column>& output_column) {
-      jlong output[2] = {ptr_as_jlong(output_column.get()), 1};
-      auto ret        = cudf::jni::native_jlongArray(env, output, 2).get_jArray();
-      static_cast<void>(output_column.release());
-      return ret;
+    // Helper to make array output.
+    auto make_result = [&](std::unique_ptr<cudf::column> output_column) {
+      auto const has_output = output_column != nullptr;
+
+      cudf::jni::native_jlongArray result(env, 2);
+      result[1] = has_output ? 1 : 0;
+      result[0] = cudf::jni::release_as_jlong(output_column);
+      return result.get_jArray();
     };
 
     // If we have no columns to merge, drop the top-level null mask.
     if (n_cudf_columns.size() == 0) {
       // if the original column already has no null mask, we can return it back unchanged.
-      if (!original_column->nullable()) { return make_no_output(); }
+      if (!original_column->nullable()) { return make_result({}); }
       // otherwise, return a bare copy.
       auto copy = std::make_unique<cudf::column>(*original_column);
       copy->set_null_mask({}, 0);
-      return make_output(copy);
+      return make_result(std::move(copy));
     }
 
     auto const op = static_cast<cudf::binary_operator>(bin_op);
@@ -480,7 +478,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSet
 
     // bitmask_and / bitmask_or can return an empty mask, meaning the merged mask is all-valid.
     // If so, we do not need to touch the original mask.
-    if (merge_mask.is_empty()) { return make_no_output(); }
+    if (merge_mask.is_empty()) { return make_result({}); }
 
     auto copy = std::make_unique<cudf::column>(*original_column);
 
@@ -495,7 +493,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSet
       cudf::get_default_stream(),
       cudf::get_current_device_resource_ref());
 
-    return make_output(result);
+    return make_result(std::move(result));
   }
   JNI_CATCH(env, nullptr);
 }
