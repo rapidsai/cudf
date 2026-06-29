@@ -6,9 +6,7 @@
 # =============================================================================
 
 if(NOT TARGET zstd)
-  message(
-    FATAL_ERROR "zstd library is required for JIT embedding. Please ensure it is found by CMake."
-  )
+  message(FATAL_ERROR "embed(): zstd target is required for LIBRTCX embedding.")
 endif()
 
 # This function initializes a target for JIT embedding. It must be called before any calls to
@@ -183,11 +181,14 @@ function(embed_blob TARGET)
 
 endfunction()
 
+#[==[
 # This function generates the necessary files and build targets to embed the registered source files
 # for JIT compilation.
+#]==]
+# cmake-lint: disable=R0915
 function(embed TARGET)
   set(OPTIONS "")
-  set(ONE_VALUE_ARGS "COMPRESSION")
+  set(ONE_VALUE_ARGS "COMPRESSION" "OUTPUT_DIRECTORY")
   set(MULTI_VALUE_ARGS "")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
@@ -201,6 +202,10 @@ function(embed TARGET)
 
   if(NOT ARG_COMPRESSION STREQUAL "none" AND NOT ARG_COMPRESSION STREQUAL "zstd")
     message(FATAL_ERROR "COMPRESSION argument must be either none or zstd")
+  endif()
+
+  if(NOT DEFINED ARG_OUTPUT_DIRECTORY)
+    message(FATAL_ERROR "OUTPUT_DIRECTORY argument is required")
   endif()
 
   get_property(
@@ -243,7 +248,7 @@ function(embed TARGET)
     PROPERTY EMBED_INCLUDE_DIRECTORIES
   )
 
-  set(OUTPUT_DIR "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+  set(OUTPUT_DIR "${ARG_OUTPUT_DIRECTORY}")
   set(EMBED_SCRIPT_TEMPLATE "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/embed.in.cpp")
   set(CONFIGURED_EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed_cfg.cpp")
   set(EMBED_SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/${TARGET}__embed.cpp")
@@ -267,10 +272,11 @@ function(embed TARGET)
 
   set(RUNNER "${TARGET}__jit_embed_run")
   add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
-  target_include_directories(${RUNNER} PRIVATE ${ZSTD_INCLUDE_DIR})
   target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd)
+  target_include_directories(
+    ${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${ZSTD_INCLUDE_DIR}
+  )
   set_target_properties(${RUNNER} PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
-  target_include_directories(${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR})
 
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import json
@@ -393,7 +393,7 @@ def test_str_join_lists_error():
     sr = cudf.Series([["a", "a"], ["b"], ["c"]])
 
     with pytest.raises(
-        ValueError, match="sep_na_rep cannot be defined when `sep` is scalar."
+        ValueError, match=r"sep_na_rep cannot be defined when `sep` is scalar."
     ):
         sr.str.join(sep="-", sep_na_rep="-")
 
@@ -1495,6 +1495,17 @@ def test_string_findall(pat, flags):
 
     expected = ps.str.findall(pat, flags)
     actual = gs.str.findall(pat, flags)
+    assert_eq(expected, actual)
+
+
+def test_string_findall_one_capture():
+    test_data = ["1 One", "12 Twelve", "3 Three 4 Four 5 Five", "Six 6"]
+    ps = pd.Series(test_data)
+    gs = cudf.Series(test_data)
+
+    pat = r"(\d+) \w+"
+    expected = ps.str.findall(pat)
+    actual = gs.str.findall(pat)
     assert_eq(expected, actual)
 
 

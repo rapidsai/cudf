@@ -42,9 +42,10 @@ timeout 30m ./ci/run_custreamz_pytests.sh \
   --cov-report=term
 
 rapids-logger "pytest cudf-polars"
-timeout 30m ./ci/run_cudf_polars_pytests.sh \
+./ci/run_cudf_polars_pytests.sh \
+  -vv \
   --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars.xml" \
-  --numprocesses=8 \
+  --numprocesses=4 \
   --dist=worksteal \
   --cov-config=./pyproject.toml \
   --cov=cudf_polars \
@@ -52,6 +53,10 @@ timeout 30m ./ci/run_cudf_polars_pytests.sh \
   --cov-report=term \
   --durations=10 --durations-min=10 \
   -ra
+
+rapids-logger "pytest cudf_streaming"
+timeout 30m ./ci/run_cudf_streaming_pytests.sh \
+  --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-streaming.xml"
 
 rapids-logger "Test script exiting with value: $EXITCODE"
 exit ${EXITCODE}

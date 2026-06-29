@@ -146,13 +146,14 @@ int32_t instance_context::add_input(input in)
   auto id     = static_cast<int32_t>(inputs_.size());
   auto id_str = std::format("in_{}", id);
 
-  data_type type{type_id::EMPTY, 0};
-  if (auto* col = std::get_if<column_input>(&in)) {
-    type = col->column.type();
-  } else {
-    auto& scalar = std::get<scalar_input>(in);
-    type         = scalar.scalar_column->type();
-  }
+  data_type const type = [&in] {
+    if (auto* col = std::get_if<column_input>(&in)) {
+      return col->column.type();
+    } else {
+      auto& scalar = std::get<scalar_input>(in);
+      return scalar.scalar_column->type();
+    }
+  }();
   inputs_.emplace_back(std::move(in));
   input_vars_.emplace_back(std::move(id_str), type);
   return id;
@@ -309,7 +310,7 @@ void node::instantiate(instance_context& ctx)
       CUDF_EXPECTS(args_[0]->get_type().id() == type_id::BOOL8,
                    "Predicate operator requires a boolean argument.",
                    std::runtime_error);
-      type_ = data_type{type_id::BOOL8, 0};
+      type_ = data_type{type_id::BOOL8};
     } break;
     default: {
       std::vector<data_type> arg_types;
@@ -369,18 +370,17 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
 
           if (op_ == opcode::PREDICATE) {
             sink.emit(std::format(
-              R"***(bool {} = cudf::ast::detail::predicate({});
+              R"***(bool {} = cudf::detail::ops::predicate({});
 )***",
               id_,
               args_str));
           } else {
             sink.emit(std::format(
-              R"***({} {} = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::{}, {}>{{}}({});
+              R"***({} {} = cudf::ast::detail::operator_functor<cudf::ast::ast_operator::{}>{{}}({});
 )***",
               type,
               id_,
               ast::detail::ast_operator_string(as_ast_op(op_)),
-              instance.has_nulls(),
               args_str));
           }
         } break;

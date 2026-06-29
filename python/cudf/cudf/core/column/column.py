@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -55,9 +55,6 @@ from cudf.core.dtype.conversions import (
 from cudf.core.dtype.validators import (
     is_dtype_obj_datetime_tz,
     is_dtype_obj_decimal,
-    is_dtype_obj_decimal32,
-    is_dtype_obj_decimal64,
-    is_dtype_obj_decimal128,
     is_dtype_obj_interval,
     is_dtype_obj_list,
     is_dtype_obj_numeric,
@@ -108,7 +105,7 @@ if TYPE_CHECKING:
     from cudf._typing import ColumnLike, DtypeObj, DtypePolicy, ScalarLike
     from cudf.core.column.categorical import CategoricalColumn
     from cudf.core.column.datetime import DatetimeColumn
-    from cudf.core.column.decimal import DecimalBaseColumn
+    from cudf.core.column.decimal import DecimalColumn
     from cudf.core.column.interval import IntervalColumn
     from cudf.core.column.numerical import NumericalColumn
     from cudf.core.column.string import StringColumn
@@ -588,7 +585,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
                 ]
             )
             # Only need validity buffer for structs
-            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:1])
+            buffers = cast("list[pa.Buffer | None]", arrow_array.buffers()[:1])
             return pa.StructArray.from_buffers(
                 new_struct_type,
                 len(arrow_array),
@@ -608,7 +605,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
         )
 
         if new_values is not values or has_non_nullable_field:
-            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:2])
+            buffers = cast("list[pa.Buffer | None]", arrow_array.buffers()[:2])
             list_type = pa.list_(
                 pa.field(value_field.name, new_values.type, nullable=True)
             )
@@ -677,13 +674,10 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     """
     A ColumnBase stores columnar data in device memory.
 
-    A ColumnBase may be composed of:
+    A ColumnBase is composed of:
 
-    * A *data* Buffer
-    * One or more (optional) *children* Columns
-    * An (optional) *mask* Buffer representing the nullmask
-
-    The *dtype* indicates the ColumnBase's element type.
+    * A pylibcudf.Column
+    * A valid pandas data type object reflecting the type of the values.
     """
 
     _VALID_REDUCTIONS = {
@@ -1016,14 +1010,8 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             return cudf.core.column.IntervalColumn
         if is_dtype_obj_struct(dtype):
             return cudf.core.column.StructColumn
-
-        # Decimal types
-        if is_dtype_obj_decimal128(dtype):
-            return cudf.core.column.Decimal128Column
-        if is_dtype_obj_decimal64(dtype):
-            return cudf.core.column.Decimal64Column
-        if is_dtype_obj_decimal32(dtype):
-            return cudf.core.column.Decimal32Column
+        if is_dtype_obj_decimal(dtype):
+            return cudf.core.column.DecimalColumn
 
         # Numerical types
         if is_dtype_obj_numeric(dtype, include_decimal=False):
@@ -2148,7 +2136,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ColumnBase.create(gathered, self.dtype),
         )
 
-    def isin(self, values: Sequence) -> ColumnBase:
+    def isin(self, values: Sequence | ColumnBase) -> ColumnBase:
         """Check whether values are contained in the Column.
 
         Parameters
@@ -2187,7 +2175,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         """
         Helper function for `isin` which pre-process `values` based on `self`.
@@ -2381,7 +2369,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
     def as_string_column(self, dtype: DtypeObj) -> StringColumn:
         raise NotImplementedError()
 
-    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalBaseColumn:
+    def as_decimal_column(self, dtype: DecimalDtype) -> DecimalColumn:
         raise NotImplementedError()
 
     def apply_boolean_mask(self, mask: ColumnBase) -> ColumnBase:
@@ -2980,7 +2968,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                 aggregation.make_aggregation(op, kwargs).plc_obj,
                 dtype_to_pylibcudf_type(col_dtype),
             )
-            # Hook for subclasses (e.g., DecimalBaseColumn adjusts precision)
+            # Hook for subclasses (e.g., DecimalColumn adjusts precision)
             col_dtype = col._adjust_reduce_result_dtype(
                 op, col_dtype, plc_scalar
             )
@@ -3491,7 +3479,7 @@ def as_column(
                 )
             elif inferred_dtype == "boolean":
                 if cudf.get_option("mode.pandas_compatible"):
-                    if dtype.kind != "b" or pd.isna(arbitrary).any():
+                    if dtype.kind != "b" or pd.isna(arbitrary).any():  # type: ignore[union-attr]  # (dtype is required for boolean compatibility)
                         raise MixedTypeError(
                             f"Cannot have mixed values with {inferred_dtype}"
                         )
@@ -3575,7 +3563,7 @@ def as_column(
         if is_arrow_null_dtype(dtype):
             if is_na_like(arbitrary):
                 return column_empty(length, dtype=dtype)
-            pa.scalar(arbitrary, type=dtype.pyarrow_dtype)
+            pa.scalar(arbitrary, type=dtype.pyarrow_dtype)  # type: ignore[union-attr]  # (arrow null dtype has pyarrow_dtype)
 
         pa_type = None
         if isinstance(arbitrary, pd.Interval) or _is_categorical_dtype(dtype):
@@ -3622,17 +3610,18 @@ def as_column(
                     np.dtype(f"{arbitrary.dtype.kind}8[s]")
                 )
 
-        pa_scalar = pa.scalar(arbitrary, type=pa_type)
+        pa_scalar = pa.scalar(arbitrary, type=pa_type)  # type: ignore[type-var]  # (pyarrow accepts normalized scalar inputs)
         if length == 0:
             if dtype is None:
-                dtype = cudf_dtype_from_pa_type(pa_scalar.type)
+                dtype = cudf_dtype_from_pa_type(pa_scalar.type)  # type: ignore[arg-type]  # (pyarrow scalar exposes a DataType)
             return column_empty(length, dtype=dtype)
         else:
             plc_col = plc.Column.from_scalar(
                 pa_scalar_to_plc_scalar(pa_scalar), length
             )
             col = ColumnBase.create(
-                plc_col, cudf_dtype_from_pa_type(pa_scalar.type)
+                plc_col,
+                cudf_dtype_from_pa_type(pa_scalar.type),  # type: ignore[arg-type]  # (pyarrow scalar exposes a DataType)
             )
             if dtype is not None:
                 col = col.astype(dtype)
@@ -3749,17 +3738,17 @@ def as_column(
             pa_type = pa.decimal128(
                 precision=dtype.precision, scale=dtype.scale
             )
-            column_class = cudf.core.column.Decimal128Column
+            column_class = cudf.core.column.DecimalColumn
         elif isinstance(dtype, cudf.Decimal64Dtype):
             pa_type = pa.decimal64(
                 precision=dtype.precision, scale=dtype.scale
             )
-            column_class = cudf.core.column.Decimal64Column
+            column_class = cudf.core.column.DecimalColumn
         elif isinstance(dtype, cudf.Decimal32Dtype):
             pa_type = pa.decimal32(
                 precision=dtype.precision, scale=dtype.scale
             )
-            column_class = cudf.core.column.Decimal32Column
+            column_class = cudf.core.column.DecimalColumn
         else:
             raise NotImplementedError(f"{dtype} not implemented")
         data = pa.array(arbitrary, type=pa_type)
@@ -3788,18 +3777,20 @@ def as_column(
                 ser = pd.Series(arbitrary).astype(dtype)
             else:
                 ser = pd.Series(
-                    arbitrary, dtype=pd.CategoricalDtype(ordered=dtype.ordered)
+                    arbitrary,
+                    dtype=pd.CategoricalDtype(ordered=dtype.ordered),  # type: ignore[union-attr]  # (categorical dtype converted from cudf dtype)
                 )
-                if dtype.categories is not None:
+                if dtype.categories is not None:  # type: ignore[union-attr]  # (categorical dtype converted from cudf dtype)
                     ser = ser.cat.set_categories(
-                        dtype.categories, ordered=dtype.ordered
+                        dtype.categories,  # type: ignore[union-attr]  # (categorical dtype converted from cudf dtype)
+                        ordered=dtype.ordered,  # type: ignore[union-attr]  # (categorical dtype converted from cudf dtype)
                     )
         else:
             ser = pd.Series(arbitrary, dtype=dtype)
         return as_column(ser, nan_as_null=nan_as_null)
     elif isinstance(dtype, (StructDtype, ListDtype)):
         try:
-            data = pa.array(arbitrary, type=dtype.to_arrow())
+            data = pa.array(arbitrary, type=dtype.to_arrow())  # type: ignore[arg-type]  # (cudf nested dtype converts to Arrow type)
         except (pa.ArrowInvalid, pa.ArrowTypeError):
             if isinstance(dtype, ListDtype):
                 # e.g. test_cudf_list_struct_write
@@ -3812,7 +3803,7 @@ def as_column(
         if is_arrow_null_dtype(dtype):
             arbitrary = pa.array(
                 arbitrary,
-                type=dtype.pyarrow_dtype,
+                type=dtype.pyarrow_dtype,  # type: ignore[union-attr]  # (arrow null dtype has pyarrow_dtype)
                 from_pandas=True,
             )
             return as_column(arbitrary, nan_as_null=nan_as_null, dtype=dtype)

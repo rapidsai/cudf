@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Join logic for the RapidsMPF streaming runtime."""
 
@@ -7,25 +7,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+import pylibcudf as plc
+from cudf_streaming.bloom_filter import BloomFilter
+from cudf_streaming.channel_metadata import (
+    ChannelMetadata,
+    HashScheme,
+    Partitioning,
+)
+from cudf_streaming.table_chunk import (
+    TableChunk,
+    make_table_chunks_available_or_wait,
+)
+from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.bloom_filter import BloomFilter
-from rapidsmpf.streaming.cudf.channel_metadata import (
-    ChannelMetadata,
-    HashScheme,
-    Partitioning,
-)
-from rapidsmpf.streaming.cudf.table_chunk import (
-    TableChunk,
-    make_table_chunks_available_or_wait,
-)
-
-import pylibcudf as plc
-from pylibcudf.hashing import LIBCUDF_DEFAULT_HASH_SEED
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IR, Join
@@ -36,7 +35,10 @@ from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
 from cudf_polars.streaming.actor_graph.nodes import default_node_multi
+from cudf_polars.streaming.actor_graph.tracing import send_chunk
 from cudf_polars.streaming.actor_graph.utils import (
+    CUDF_ROW_LIMIT,
+    MAX_ROWS_PER_PARTITION,
     ChannelManager,
     NormalizedPartitioning,
     TableSizeStats,
@@ -60,21 +62,16 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, MutableMapping
     from types import CoroutineType
 
+    from cudf_streaming.bloom_filter import BloomFilterChunk
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.bloom_filter import BloomFilterChunk
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.utils.config import StreamingExecutor
-
-
-# cuDF column/concatenate row limit (int32)
-CUDF_ROW_LIMIT = 2**31 - 1
-MAX_BROADCAST_ROWS = CUDF_ROW_LIMIT // 2
 
 
 @dataclass(frozen=True)
@@ -276,17 +273,10 @@ async def _broadcast_join_large_chunk(
         df = _concat(*join_results, context=ir_context)
         del join_results
 
-    if tracer is not None:
-        tracer.add_chunk(table=df.table)
-    await ch_out.send(
-        context,
-        Message(
-            seq_num,
-            TableChunk.from_pylibcudf_table(
-                df.table, df.stream, exclusive_view=True, br=context.br()
-            ),
-        ),
+    output_chunk = TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
     )
+    await send_chunk(context, ch_out, output_chunk, seq_num, tracer=tracer)
     del df, large_df
 
 
@@ -476,17 +466,16 @@ async def _join_chunks(
                 context=ir_context,
             )
             del left_chunk, right_chunk
-        if tracer is not None:
-            tracer.add_chunk(table=df.table)
 
-        await ch_out.send(
+        output_chunk = TableChunk.from_pylibcudf_table(
+            df.table, df.stream, exclusive_view=True, br=context.br()
+        )
+        await send_chunk(
             context,
-            Message(
-                left_msg.sequence_number,
-                TableChunk.from_pylibcudf_table(
-                    df.table, df.stream, exclusive_view=True, br=context.br()
-                ),
-            ),
+            ch_out,
+            output_chunk,
+            left_msg.sequence_number,
+            tracer=tracer,
         )
         del df
 
@@ -930,10 +919,10 @@ async def _choose_strategy_from_samples(
     # Determine which sides may be broadcasted
     broadcast_threshold = executor.broadcast_limit
     left_size_ok = left_total < broadcast_threshold and (
-        left_total_rows < MAX_BROADCAST_ROWS or left_metadata.duplicated
+        left_total_rows < MAX_ROWS_PER_PARTITION or left_metadata.duplicated
     )
     right_size_ok = right_total < broadcast_threshold and (
-        right_total_rows < MAX_BROADCAST_ROWS or right_metadata.duplicated
+        right_total_rows < MAX_ROWS_PER_PARTITION or right_metadata.duplicated
     )
     can_broadcast_left = left_size_ok and ir.options[0] in ("Inner", "Right")
     can_broadcast_right = right_size_ok and ir.options[0] in (
@@ -971,10 +960,9 @@ async def _choose_strategy_from_samples(
 
     # Stay away from cuDF's row limit
     if (estimated_rows_count := max(left_total_rows, right_total_rows)) > 0:
-        max_rows_per_partition = CUDF_ROW_LIMIT // 4
         min_partitions_for_row_limit = (
-            estimated_rows_count + max_rows_per_partition - 1
-        ) // max_rows_per_partition
+            estimated_rows_count + MAX_ROWS_PER_PARTITION - 1
+        ) // MAX_ROWS_PER_PARTITION
         min_shuffle_modulus = max(min_shuffle_modulus, min_partitions_for_row_limit)
 
     shuffle_modulus = _choose_shuffle_modulus(

@@ -9,9 +9,10 @@ import os
 from typing import TYPE_CHECKING
 
 import pytest
-from rapidsmpf.bootstrap import is_running_with_rrun
 
 import polars as pl
+
+from rapidsmpf.bootstrap import is_running_with_rrun
 
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.testing.asserts import assert_gpu_result_equal

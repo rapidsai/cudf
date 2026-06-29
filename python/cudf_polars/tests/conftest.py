@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import concurrent.futures
 from typing import TYPE_CHECKING, Any
 
 import pytest
@@ -16,6 +17,21 @@ from cudf_polars.testing.engine_utils import (
     create_streaming_options,
     merge_streaming_options,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_140, POLARS_VERSION_LT_141
+
+
+@pytest.fixture
+def xfail_decimal_sum_precision_polars_140(request: pytest.FixtureRequest) -> None:
+    """xfail decimal ``sum`` tests on polars 1.40."""
+    request.applymarker(
+        pytest.mark.xfail(
+            condition=(not POLARS_VERSION_LT_140) and POLARS_VERSION_LT_141,
+            reason="polars 1.40 reports narrow precision for decimal sum "
+            "(Decimal(9,2) vs (38,2)), fixed in 1.41. "
+            "See https://github.com/pola-rs/polars/issues/27269",
+        )
+    )
+
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -311,6 +327,17 @@ def engine_raise_on_fail() -> pl.GPUEngine:
     return pl.GPUEngine(executor="in-memory", raise_on_fail=True)
 
 
+@pytest.fixture
+def timeout_seconds() -> int:
+    """
+    Conservative timeout for APIs that accept a timeout parameter.
+
+    Since pytest-timeout is installed, ensure this value is less than timeout
+    in python/cudf_polars/pyproject.toml.
+    """
+    return 30
+
+
 def pytest_configure(config: pytest.Config):
     config.addinivalue_line(
         "markers",
@@ -389,3 +416,10 @@ def pytest_collection_modifyitems(
             else marker.kwargs.get("reason", "unsupported on streaming engine")
         )
         item.add_marker(pytest.mark.skip(reason=reason))
+
+
+@pytest.fixture(scope="module")
+def parquet_stats_executor() -> concurrent.futures.ThreadPoolExecutor:  # type: ignore[misc]
+    """A thread pool to use for cudf-polars status collection."""
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        yield executor

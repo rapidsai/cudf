@@ -86,11 +86,7 @@ struct n_table_comparator {
   key_location_t const* key_loc;  ///< {batch_id, row_in_compacted} per dense ID
   size_type max_distinct_keys;  ///< Threshold: idx >= max_distinct_keys is a transient batch value
 
-#ifndef NDEBUG
-  __attribute__((noinline))
-#endif
-  __device__ bool
-  operator()(size_type lhs, size_type rhs) const noexcept
+  __attribute__((noinline)) __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
   {
     bool const lhs_is_batch = (lhs >= max_distinct_keys);
     bool const rhs_is_batch = (rhs >= max_distinct_keys);

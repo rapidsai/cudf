@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Benchmark utilities for the RapidsMPF SPMD and Ray frontends."""
@@ -45,6 +45,11 @@ __all__: list[str] = [
 # of the polars-runtime-64 package (`polars[rt64]`).
 HAS_POLARS_RT_64 = pl.config.plr.RUNTIME_REPR == "rt64"
 COUNT_DTYPE = pl.UInt64() if HAS_POLARS_RT_64 else pl.UInt32()
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 try:
     import duckdb
@@ -258,6 +263,7 @@ class QueryRunResult:
     plan: SerializablePlan | None
     iteration_failures: list[tuple[int, int]]
     validation_failed: bool
+    partition_plan_rows: list = dataclasses.field(default_factory=list)
 
 
 @dataclasses.dataclass
@@ -345,22 +351,65 @@ class GPUInfo:
 
 
 @dataclasses.dataclass
+class CPUInfo:
+    """Information about the host CPU."""
+
+    model: str | None
+    physical_cores: int | None
+    logical_cores: int | None
+
+    @classmethod
+    def collect(cls) -> CPUInfo:
+        """Collect CPU information."""
+        model: str | None = None
+        try:
+            with Path("/proc/cpuinfo").open() as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        model = line.split(":", 1)[1].strip()
+                        break
+        except OSError:
+            pass
+        physical_cores: int | None = None
+        logical_cores: int | None = None
+        if psutil is not None:
+            physical_cores = psutil.cpu_count(logical=False)
+            logical_cores = psutil.cpu_count(logical=True)
+        return cls(
+            model=model, physical_cores=physical_cores, logical_cores=logical_cores
+        )
+
+
+@dataclasses.dataclass
 class HardwareInfo:
     """Information about the hardware used to run the query."""
 
     gpus: list[GPUInfo]
+    cpu: CPUInfo
     # TODO: ucx
 
     @classmethod
-    def collect(cls) -> HardwareInfo:
-        """Collect the hardware information."""
-        if pynvml is not None:
+    def collect(cls, *, collect_gpus: bool = True) -> HardwareInfo:
+        """
+        Collect the hardware information.
+
+        Parameters
+        ----------
+        collect_gpus : bool, optional
+            Whether to collect GPU information.
+
+        Returns
+        -------
+        HardwareInfo
+            The hardware information.
+        """
+        if collect_gpus and pynvml is not None:
             pynvml.nvmlInit()
             gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
         else:
-            # No GPUs -- probably running in CPU mode
+            # No GPUs -- CPU-only frontend or NVML unavailable
             gpus = []
-        return cls(gpus=gpus)
+        return cls(gpus=gpus, cpu=CPUInfo.collect())
 
 
 def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
@@ -570,6 +619,9 @@ class RunConfig:
             duckdb_temp_dir=args.duckdb_temp_dir,
             command_line=shlex.join(sys.argv),
             capture_env_vars=args.capture_env_vars,
+            hardware=HardwareInfo.collect(
+                collect_gpus=args.frontend not in _CPU_ENGINES
+            ),
         )
 
     def serialize(self, engine: StreamingEngine | None) -> dict:
@@ -633,6 +685,7 @@ class RunConfig:
         print("Iteration Summary")
         print("=======================================")
 
+        total_mean_time = 0.0
         for query, records in self.records.items():
             print(f"query: {query}")
             print(f"path: {self.dataset_path}")
@@ -649,22 +702,16 @@ class RunConfig:
                 record.duration for record in records if record.status == "success"
             ]
             if len(valid_durations) > 0:
+                mean_time = mean(valid_durations)
+                total_mean_time += mean_time
                 print(f"iterations: {self.iterations}")
                 print("---------------------------------------")
                 print(f"min time : {min(valid_durations):0.4f}")
                 print(f"max time : {max(valid_durations):0.4f}")
-                print(f"mean time: {mean(valid_durations):0.4f}")
+                print(f"mean time: {mean_time:0.4f}")
                 print("=======================================")
-        any_success = any(record.status == "success" for record in records)
 
-        if any_success:
-            total_mean_time = sum(
-                mean(
-                    record.duration for record in records if record.status == "success"
-                )
-                for records in self.records.values()
-                if records
-            )
+        if total_mean_time > 0:
             print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
         else:
             print("No successful queries")
@@ -945,6 +992,16 @@ def run_polars_query(
 
         plan = serialize_query(q, engine)
 
+    part_plan_rows = []
+    if (
+        getattr(args, "explain_partition_plan", False)
+        and engine is not None
+        and run_config.frontend in _STREAMING_FRONTENDS
+    ):
+        from cudf_polars.streaming.explain import collect_partition_plan
+
+        part_plan_rows = collect_partition_plan(q, engine, q_id)
+
     casts = benchmark.EXPECTED_CASTS.get(q_id, [])
     if numeric_type == "decimal":
         casts.extend(benchmark.EXPECTED_CASTS_DECIMAL.get(q_id, []))
@@ -1040,6 +1097,7 @@ def run_polars_query(
         plan=plan,
         iteration_failures=iteration_failures,
         validation_failed=validation_failed,
+        partition_plan_rows=part_plan_rows,
     )
 
 
@@ -1062,6 +1120,7 @@ def _run_query_loop(
     plans: dict[int, SerializablePlan] = {}
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
+    all_partition_plan_rows: list = []
 
     for q_id in run_config.queries:
         try:
@@ -1097,6 +1156,12 @@ def _run_query_loop(
         query_failures.extend(result.iteration_failures)
         if result.validation_failed:
             validation_failures.append(q_id)
+        all_partition_plan_rows.extend(result.partition_plan_rows)
+
+    if all_partition_plan_rows and getattr(args, "explain_partition_plan", False):
+        from cudf_polars.streaming.explain import format_partition_plan_table
+
+        print(format_partition_plan_table(all_partition_plan_rows), flush=True)
 
     return records, plans, validation_failures, query_failures
 
@@ -1164,9 +1229,9 @@ def run_polars_in_memory(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     engine = pl.GPUEngine(
         executor="in-memory",
-        raise_on_fail=True,
         **engine_options,
     )
     records, plans, validation_failures, query_failures = _run_query_loop(
@@ -1202,6 +1267,7 @@ def run_polars_spmd(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     with SPMDEngine(
         rapidsmpf_options=run_config.streaming_options.to_rapidsmpf_options(),
         executor_options=executor_options,
@@ -1259,6 +1325,7 @@ def run_polars_ray(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     ray_init_options: dict[str, Any] = {}
     if run_config.connect is not None:
         ray_init_options["address"] = run_config.connect
@@ -1308,6 +1375,7 @@ def run_polars_dask(
         **run_config.streaming_options.to_engine_options(),
         "parquet_options": parquet_options,
     }
+    engine_options.setdefault("raise_on_fail", True)
     dask_client = None
     if run_config.connect is not None:
         if Path(run_config.connect).is_file():
@@ -1894,6 +1962,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         "--explain-logical",
         action=argparse.BooleanOptionalAction,
         help="Print an outline of the logical plan.",
+        default=False,
+    )
+    parser.add_argument(
+        "--explain-partition-plan",
+        action=argparse.BooleanOptionalAction,
+        help="Print a combined partition plan summary table across all queries.",
         default=False,
     )
     parser.add_argument(
