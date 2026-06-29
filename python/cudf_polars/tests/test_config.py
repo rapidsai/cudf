@@ -30,6 +30,7 @@ from cudf_polars.utils.config import (
     CUDAStreamPoolConfig,
     Cluster,
     ConfigOptions,
+    DynamicPlanningOptions,
     MemoryResourceConfig,
     StreamingExecutor,
     _default_cuda_stream_policy,
@@ -716,6 +717,17 @@ def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
     assert config.executor.dynamic_planning.join_prefilter_trace
 
 
+@pytest.mark.parametrize("value", ["none", "null"])
+def test_join_prefilter_max_key_columns_none_from_env(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_MAX_KEY_COLUMNS",
+        value,
+    )
+    assert DynamicPlanningOptions().join_prefilter_max_key_columns is None
+
+
 def test_validate_join_prefilter_threshold() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
@@ -787,9 +799,17 @@ def test_validate_join_prefilter_max_key_columns() -> None:
         )
 
 
-def test_dynamic_planning_from_instance() -> None:
-    from cudf_polars.utils.config import DynamicPlanningOptions
+def test_validate_join_prefilter_trace() -> None:
+    with pytest.raises(TypeError, match="join_prefilter_trace must be a bool"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"join_prefilter_trace": "bad"}},
+            )
+        )
 
+
+def test_dynamic_planning_from_instance() -> None:
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
