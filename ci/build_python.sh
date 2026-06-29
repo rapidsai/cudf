@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -38,7 +38,14 @@ rapids-logger "Building pylibcudf"
 rapids-telemetry-record build-pylibcudf.log \
   rattler-build build --recipe conda/recipes/pylibcudf \
                     "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
+                    "${RATTLER_CHANNELS[@]}" 2>&1 | tee pylibcudf-build-output.log
+
+rapids-logger "Checking for Cython performance warnings in pylibcudf"
+if grep -Fq "performance hint:" pylibcudf-build-output.log; then
+  echo "Cython performance hints found in pylibcudf build:"
+  grep -F "performance hint:" pylibcudf-build-output.log
+  exit 1
+fi
 
 rapids-telemetry-record sccache-stats-pylibcudf.txt sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
@@ -68,7 +75,14 @@ rapids-logger "Building cudf_streaming"
 rapids-telemetry-record build-cudf_streaming.log \
     rattler-build build --recipe conda/recipes/cudf_streaming \
                     "${RATTLER_ARGS[@]}" \
-                    "${RATTLER_CHANNELS[@]}"
+                    "${RATTLER_CHANNELS[@]}" 2>&1 | tee cudf_streaming-build-output.log
+
+rapids-logger "Checking for Cython performance warnings in cudf_streaming"
+if grep -Fq "performance hint:" cudf_streaming-build-output.log; then
+  echo "Cython performance hints found in cudf_streaming build:"
+  grep -F "performance hint:" cudf_streaming-build-output.log
+  exit 1
+fi
 
 rapids-telemetry-record sccache-stats-cudf_streaming.txt sccache --show-adv-stats
 sccache --stop-server >/dev/null 2>&1 || true
