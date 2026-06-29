@@ -8,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/cudf_gtest.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
@@ -21,6 +22,7 @@
 #include <random>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 namespace {
 
