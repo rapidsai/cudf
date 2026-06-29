@@ -27,7 +27,7 @@ import functools
 import importlib.util
 import json
 import os
-from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
 
@@ -144,12 +144,13 @@ class Cluster(enum.StrEnum):
 
 
 T = TypeVar("T")
+DefaultT = TypeVar("DefaultT")
 
 
 def _make_default_factory(
-    key: str, converter: Callable[[str], T], *, default: T
-) -> Callable[[], T]:
-    def default_factory() -> T:
+    key: str, converter: Callable[[str], T], *, default: DefaultT
+) -> Callable[[], T | DefaultT]:
+    def default_factory() -> T | DefaultT:
         v = os.environ.get(key)
         if v is None:
             return default
@@ -363,7 +364,7 @@ class DynamicPlanningOptions:
         default_factory=_make_default_factory(
             f"{_env_prefix}__JOIN_PREFILTER_MAX_KEY_COLUMNS",
             _optional_int_converter,
-            default=cast("int | None", 1),
+            default=1,
         )
     )
     join_prefilter_trace: bool = dataclasses.field(
