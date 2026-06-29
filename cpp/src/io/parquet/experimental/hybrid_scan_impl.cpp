@@ -108,9 +108,11 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   if (read_columns_mode == read_columns_mode::ALL_COLUMNS) {
     if (_is_all_columns_selected) { return; }
 
+    auto const ignore_missing_columns = parquet::detail::effective_ignore_missing_columns(
+      options, _extended_metadata->get_num_sources());
+
     // Select only columns required by the options and filter
-    auto const select_column_names =
-      get_column_projection(options, options.is_enabled_ignore_missing_columns());
+    auto const select_column_names = get_column_projection(options, ignore_missing_columns);
 
     // Initialize column selection related options
     initialize_column_selection_options(options);
@@ -129,7 +131,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                 filter_only_columns_names,
                                 options.is_enabled_use_pandas_metadata(),
                                 _strings_to_categorical,
-                                options.is_enabled_ignore_missing_columns(),
+                                ignore_missing_columns,
                                 _options.timestamp_type.id(),
                                 _options.decimal_width,
                                 _options.case_sensitive_names);
@@ -168,14 +170,15 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
     // Initialize column selection related options
     initialize_column_selection_options(options);
 
-    auto select_column_names =
-      get_column_projection(options, options.is_enabled_ignore_missing_columns());
+    auto const ignore_missing_columns = parquet::detail::effective_ignore_missing_columns(
+      options, _extended_metadata->get_num_sources());
+    auto select_column_names = get_column_projection(options, ignore_missing_columns);
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _extended_metadata->select_payload_columns(select_column_names,
                                                  _filter_columns_names,
                                                  _use_pandas_metadata,
                                                  _strings_to_categorical,
-                                                 options.is_enabled_ignore_missing_columns(),
+                                                 ignore_missing_columns,
                                                  _options.timestamp_type.id(),
                                                  _options.decimal_width,
                                                  _options.case_sensitive_names);

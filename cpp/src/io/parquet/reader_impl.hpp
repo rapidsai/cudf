@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -424,7 +424,8 @@ class reader_impl {
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
+   * @param ignore_missing_columns Whether to ignore non-existent projected columns.
+   * See `effective_ignore_missing_columns` for the mismatched-schema policy.
    * @return Names of columns to be read from the file if specified, `nullopt` otherwise
    */
   [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(

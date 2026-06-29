@@ -515,6 +515,13 @@ bool has_mismatched_pq_schema_selection(cudf::io::parquet_reader_options const& 
          options.is_enabled_allow_mismatched_pq_schemas();
 }
 
+bool effective_ignore_missing_columns(cudf::io::parquet_reader_options const& options,
+                                      size_t num_sources)
+{
+  return options.is_enabled_ignore_missing_columns() and
+         not(has_mismatched_pq_schema_selection(options) and num_sources > 1);
+}
+
 std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::init_schema_idx_maps(
   bool const has_cols_from_mismatched_srcs) const
 {
@@ -1961,9 +1968,6 @@ aggregate_reader_metadata::select_columns(
     // Find which of the selected paths are valid and get their schema index
     std::vector<path_info> valid_selected_paths;
     auto const empty_names = std::vector<std::string>{};
-    // In mismatched mode (schema_idx_maps is non-empty), `ignore_missing_columns` is not honored:
-    // a required column missing from the zeroth (reference) source must throw.
-    bool const validate_required_columns = not schema_idx_maps.empty();
     // vector reference pushback for select column and/or filter names passed. Use empty names
     // reference if the no filter column names provided.
     std::vector<std::reference_wrapper<std::vector<std::string> const>> const column_names{
@@ -1975,21 +1979,11 @@ aggregate_reader_metadata::select_columns(
             return are_column_paths_equal(
               valid_path.full_path, selected_path, case_sensitive_names);
           });
-        auto const column_found = found_path != all_paths.end();
         // Ensure that selected path matches a path in all_paths
-        if (validate_required_columns) {
-          CUDF_EXPECTS(column_found,
-                       std::format("Column '{}' is not present in all Parquet sources; when "
-                                   "allow_mismatched_pq_schemas is enabled, every selected or "
-                                   "filter column must be present in each source",
-                                   selected_path),
-                       std::invalid_argument);
-        } else {
-          CUDF_EXPECTS(column_found or ignore_missing_columns,
-                       "Encountered non-existent column in selected path",
-                       std::invalid_argument);
-        }
-        if (column_found) {
+        CUDF_EXPECTS(found_path != all_paths.end() or ignore_missing_columns,
+                     "Encountered non-existent column in selected path",
+                     std::invalid_argument);
+        if (found_path != all_paths.end()) {
           // Use the file's actual path (preserving original case) for the valid_selected_paths
           valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
         }

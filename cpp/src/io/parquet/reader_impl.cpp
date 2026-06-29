@@ -24,7 +24,6 @@
 #include <cuda/std/tuple>
 
 #include <bitset>
-#include <format>
 #include <limits>
 #include <numeric>
 #include <stdexcept>
@@ -539,9 +538,11 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
 
+  auto const ignore_missing_columns =
+    effective_ignore_missing_columns(options, _metadata->get_num_sources());
+
   // Select only columns required by the options and filter
-  auto select_column_names =
-    get_column_projection(options, options.is_enabled_ignore_missing_columns());
+  auto select_column_names = get_column_projection(options, ignore_missing_columns);
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
   if (options.get_filter().has_value() and
@@ -557,7 +558,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               filter_only_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
-                              options.is_enabled_ignore_missing_columns(),
+                              ignore_missing_columns,
                               _options.timestamp_type.id(),
                               _options.decimal_width,
                               _options.case_sensitive_names);
@@ -831,23 +832,11 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   } else {
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
-    // In mismatched mode, `ignore_missing_columns` is not honored: an out-of-range index refers to
-    // a required column absent from the reference source and must throw.
-    auto const validate_required_columns =
-      has_mismatched_pq_schema_selection(options) and _metadata->get_num_sources() > 1;
     for (auto const index : options.get_column_indices().value_or(std::vector<cudf::size_type>{})) {
       auto const is_valid_index =
         std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
-      if (validate_required_columns) {
-        CUDF_EXPECTS(is_valid_index,
-                     std::format("Selected column index {} is out of range; when "
-                                 "allow_mismatched_pq_schemas is enabled, every selected column "
-                                 "must be present in each Parquet source",
-                                 index));
-      } else {
-        CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
-                     "Encountered an invalid col index in the top-level column selection");
-      }
+      CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
+                   "Encountered an invalid col index in the top-level column selection");
       if (is_valid_index) {
         col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
       }
