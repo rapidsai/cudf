@@ -50,6 +50,21 @@ TEST_F(SliceZeroColumnTest, OutOfBoundsThrows)
   EXPECT_THROW(cudf::slice(input, std::vector<cudf::size_type>{-1, 4}), std::out_of_range);
 }
 
+TEST_F(SliceZeroColumnTest, EmptyTable)
+{
+  cudf::table_view input{std::vector<cudf::column_view>{}, 0};
+
+  auto const result = cudf::slice(input, std::vector<cudf::size_type>{1, 4, 5, 9});
+  ASSERT_EQ(result.size(), 2);
+  for (auto const& t : result) {
+    EXPECT_EQ(t.num_columns(), 0);
+    EXPECT_EQ(t.num_rows(), 0);
+  }
+
+  // Unlike a zero-column table with rows, an empty table does not reject out-of-range indices.
+  EXPECT_NO_THROW(cudf::slice(input, std::vector<cudf::size_type>{8, 12}));
+}
+
 TYPED_TEST(SliceTest, NumericColumnsWithNulls)
 {
   using T = TypeParam;

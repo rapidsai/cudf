@@ -36,6 +36,9 @@ TEST_F(RoundRobinZeroColumnTest, PreservesRowCount)
   auto const [result, offsets] = cudf::round_robin_partition(input, 3);
   EXPECT_EQ(result->num_columns(), 0);
   EXPECT_EQ(result->num_rows(), 7);
+  // 7 rows over 3 partitions deals sizes {3, 2, 2}, so the round-robin boundaries must hold
+  // even with no columns.
+  EXPECT_EQ(offsets, (std::vector<cudf::size_type>{0, 3, 5, 7}));
 }
 
 TYPED_TEST(RoundRobinTest, EmptyInput)

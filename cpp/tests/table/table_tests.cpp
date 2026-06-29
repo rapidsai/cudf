@@ -75,6 +75,18 @@ TEST_F(TableTest, ZeroColumnConstructors)
   // A negative explicit row count is rejected by both.
   EXPECT_THROW((TView{std::vector<column_view>{}, -1}), std::invalid_argument);
   EXPECT_THROW(Table(CVector{}, -1), std::invalid_argument);
+
+  // mutable_table_view exposes the same explicit row-count overload.
+  using MView = cudf::mutable_table_view;
+  MView mview{std::vector<cudf::mutable_column_view>{}, 42};
+  EXPECT_EQ(mview.num_columns(), 0);
+  EXPECT_EQ(mview.num_rows(), 42);
+
+  auto owned = column_wrapper<int32_t>{1, 2, 3}.release();
+  std::vector<cudf::mutable_column_view> mcols{owned->mutable_view()};
+  EXPECT_NO_THROW((MView{mcols, 3}));
+  EXPECT_THROW((MView{mcols, 4}), cudf::logic_error);
+  EXPECT_THROW((MView{std::vector<cudf::mutable_column_view>{}, -1}), std::invalid_argument);
 }
 
 TEST_F(TableTest, ZeroColumnRowCountPropagation)

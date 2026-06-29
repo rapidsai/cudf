@@ -62,8 +62,10 @@ def test_round_robin_partition(partitioning_data):
 
 
 def test_round_robin_partition_zero_columns_preserves_num_rows():
-    result, _offsets = plc.partitioning.round_robin_partition(
+    result, offsets = plc.partitioning.round_robin_partition(
         plc.Table([], num_rows=7), 3
     )
     assert result.num_columns() == 0
     assert result.num_rows() == 7
+    # 7 rows over 3 partitions deals sizes {3, 2, 2}: boundaries hold with no columns.
+    assert offsets == [0, 3, 5, 7]
