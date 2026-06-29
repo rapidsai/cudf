@@ -15,11 +15,9 @@
 #include <type_traits>
 #include <utility>
 
-namespace {
-
 using cudf::test::scoped_current_device_resource;
 
-rmm::device_async_resource_ref get_output_mr(cudf::memory_resources resources)
+static rmm::device_async_resource_ref get_output_mr(cudf::memory_resources resources)
 {
   return resources.get_output_mr();
 }
@@ -159,5 +157,3 @@ TEST(MemoryResourceTestHarness, TracksSetupOutputAndTemporaryLifetimes)
   harness.expect_no_live_allocations(stream);
   EXPECT_GT(harness.setup_mr().get_bytes_counter().value, 0);
 }
-
-}  // namespace

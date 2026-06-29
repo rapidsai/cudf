@@ -11,7 +11,7 @@
 
 #include <cuda/memory_resource>
 
-#include <type_traits>
+#include <concepts>
 #include <utility>
 
 namespace cudf {
@@ -36,9 +36,9 @@ inline rmm::device_async_resource_ref get_current_device_resource_ref()
  * @brief Non-owning references to the memory resources used by a cuDF operation.
  *
  * The output resource allocates memory returned to the caller. The temporary resource allocates
- * intermediate memory that is released before the operation returns. Objects that own allocated
- * memory reify the selected resource ref into an owning resource, retaining the resource needed for
- * later deallocation.
+ * intermediate memory that is released before the operation returns. If allocations are made from
+ * a resource ref, callers must construct an owning resource from the resource ref, keep that owning
+ * resource alive for the allocation's lifetime, and use it for deallocation.
  */
 class memory_resources {
  public:
@@ -52,10 +52,9 @@ class memory_resources {
    * @tparam Resource Type that can construct a device asynchronous resource ref
    * @param output_mr Resource used for returned allocations
    */
-  template <typename Resource,
-            std::enable_if_t<std::is_constructible_v<rmm::device_async_resource_ref, Resource&&>>* =
-              nullptr>
+  template <typename Resource>
   memory_resources(Resource&& output_mr)
+    requires std::constructible_from<rmm::device_async_resource_ref, Resource&&>
     : _output_mr{std::forward<Resource>(output_mr)},
       _temporary_mr{cudf::get_current_device_resource_ref()}
   {
@@ -71,13 +70,10 @@ class memory_resources {
    * @param output_mr Resource used for returned allocations
    * @param temporary_mr Resource used for intermediate allocations
    */
-  template <
-    typename OutputResource,
-    typename TemporaryResource,
-    std::enable_if_t<
-      std::is_constructible_v<rmm::device_async_resource_ref, OutputResource&&> and
-      std::is_constructible_v<rmm::device_async_resource_ref, TemporaryResource&&>>* = nullptr>
+  template <typename OutputResource, typename TemporaryResource>
   memory_resources(OutputResource&& output_mr, TemporaryResource&& temporary_mr)
+    requires(std::constructible_from<rmm::device_async_resource_ref, OutputResource &&> and
+             std::constructible_from<rmm::device_async_resource_ref, TemporaryResource &&>)
     : _output_mr{std::forward<OutputResource>(output_mr)},
       _temporary_mr{std::forward<TemporaryResource>(temporary_mr)}
   {
