@@ -1165,6 +1165,11 @@ dependencies:
           - pytest-httpserver
           - pytest-timeout
           - zstandard
+          # The polars test suite constructs pandas objects for interop and
+          # dask-cuda pulls pandas in transitively (unbounded), so constrain it
+          # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
+          # (https://github.com/pandas-dev/pandas/issues/66086).
+          - *pandas
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
