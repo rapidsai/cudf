@@ -150,6 +150,17 @@ files:
     includes:
       - develop
       - py_version
+  test_cmake:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - build_cpp
+      - cuda
+      - cuda_static
+      - cuda_version
+      - develop
+      - py_version
   clang_tidy:
     output: none
     includes:
@@ -618,8 +629,9 @@ dependencies:
     common:
       - output_types: conda
         packages:
+          - croaring==4.4.2
           - flatbuffers==24.3.25
-          - librdkafka>=2.11.1,<2.12.0
+          - librdkafka<2.15.0a0
   depends_on_libnvcomp:
     common:
       - output_types: conda
@@ -666,7 +678,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
 
-          - cython>=3.2.2
+          - cython>=3.2.2,<3.3.0a0
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -812,6 +824,13 @@ dependencies:
           - matrix:
             packages:
               - *nvjitlink_cu13
+  cuda_static:
+    common:
+      - output_types: [conda]
+        packages:
+          - cuda-cudart-static
+          - cuda-nvrtc-static
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
@@ -895,7 +914,11 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &pandas pandas>=3.0.0,<3.1.0
+          # pandas 3.0.4 segfaults constructing pd.Timedelta on Python 3.14,
+          # which breaks `import cudf` (https://github.com/pandas-dev/pandas/issues/66086).
+          # Cap below 3.0.4 (rather than just excluding it) until a fixed
+          # release is confirmed upstream, then raise the bound.
+          - &pandas pandas>=3.0.0,<3.0.4a0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1014,7 +1037,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==3.0.*
+              - pandas==3.0.*,<3.0.4a0
               - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
@@ -1143,6 +1166,11 @@ dependencies:
           - pytest-httpserver
           - pytest-timeout
           - zstandard
+          # The polars test suite constructs pandas objects for interop and
+          # dask-cuda pulls pandas in transitively (unbounded), so constrain it
+          # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
+          # (https://github.com/pandas-dev/pandas/issues/66086).
+          - *pandas
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1587,7 +1615,15 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib-base<3.11
           - numexpr
+          - odfpy
+          - pyxlsb
+          - python-calamine
+          - pytables
+          - xlrd
           - xlsxwriter
   depends_on_dask_cuda:
     common:
@@ -1652,7 +1688,7 @@ dependencies:
               pandas_compat_version: "3.0"
             packages:
               - numpy>=1.26,<2.0a0
-              - pandas==3.0.*
+              - pandas==3.0.*,<3.0.4a0
           - matrix:
             packages:
       - output_types: requirements

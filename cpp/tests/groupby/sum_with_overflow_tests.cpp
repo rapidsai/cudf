@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,12 +58,9 @@ TYPED_TEST(groupby_sum_with_overflow_test, basic)
     auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
-    // SUM_WITH_OVERFLOW should throw with sort-based groupby
     auto agg_sort = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-    EXPECT_THROW(
-      test_single_agg(
-        keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES),
-      cudf::logic_error);
+    test_single_agg(
+      keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES);
   } else {
     // For integer types
     cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -80,15 +77,62 @@ TYPED_TEST(groupby_sum_with_overflow_test, basic)
     auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
-    // SUM_WITH_OVERFLOW should throw with sort-based groupby
     auto agg_sort = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
-    EXPECT_THROW(
-      test_single_agg(
-        keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES),
-      cudf::logic_error);
+    test_single_agg(
+      keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES);
   }
+}
 
-  // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
+TYPED_TEST(groupby_sum_with_overflow_test, sort_path_with_tdigest)
+{
+  using K = int32_t;
+  using V = TypeParam;
+
+  cudf::test::fixed_width_column_wrapper<K> keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  cudf::test::fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
+
+  // Co-request TDIGEST (a sort-only aggregation) so the whole groupby takes the sort-based path,
+  // then verify the SUM_WITH_OVERFLOW struct matches the hash result and TDIGEST also runs.
+  auto run_and_check = [&](cudf::column_view const& vals, cudf::column_view const& expect_vals) {
+    std::vector<cudf::groupby::aggregation_request> requests;
+    requests.emplace_back();
+    requests[0].values = vals;
+    requests[0].aggregations.push_back(
+      cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.push_back(
+      cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(1000));
+
+    auto result = cudf::groupby::groupby(cudf::table_view{{keys}}).aggregate(requests);
+
+    // Sort-based groupby returns keys in sorted order, aligning with expect_keys/expect_vals.
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.first->get_column(0).view(), expect_keys);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.second[0].results[0]->view(), expect_vals);
+    // TDIGEST produces one tdigest per group.
+    EXPECT_EQ(result.second[0].results[1]->size(), 3);
+  };
+
+  if constexpr (cudf::is_fixed_point<V>()) {
+    using RepType    = cudf::device_storage_type_t<V>;
+    auto const scale = scale_type{0};
+    auto vals =
+      cudf::test::fixed_point_column_wrapper<RepType>{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
+    auto sum_col      = cudf::test::fixed_point_column_wrapper<RepType>{{9, 19, 17}, scale};
+    auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{false, false, false};
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.push_back(sum_col.release());
+    children.push_back(overflow_col.release());
+    auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
+    run_and_check(vals, *expect_vals);
+  } else {
+    cudf::test::fixed_width_column_wrapper<V> vals{0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+    auto sum_col      = cudf::test::fixed_width_column_wrapper<V>{9, 19, 17};
+    auto overflow_col = cudf::test::fixed_width_column_wrapper<bool>{false, false, false};
+    std::vector<std::unique_ptr<cudf::column>> children;
+    children.push_back(sum_col.release());
+    children.push_back(overflow_col.release());
+    auto expect_vals = cudf::create_structs_hierarchy(3, std::move(children), 0, {});
+    run_and_check(vals, *expect_vals);
+  }
 }
 
 TYPED_TEST(groupby_sum_with_overflow_test, empty_cols)
@@ -112,8 +156,6 @@ TYPED_TEST(groupby_sum_with_overflow_test, empty_cols)
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
-
-  // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
 }
 
 TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_keys)
@@ -137,8 +179,6 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_keys)
 
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
-
-  // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
 }
 
 TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
@@ -167,7 +207,10 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
-  // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
+  // Exercise the sort-based path for an all-null group.
+  auto agg_sort = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
+  test_single_agg(
+    keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES);
 }
 
 TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
@@ -202,7 +245,10 @@ TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
   auto agg = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, *expect_vals, std::move(agg));
 
-  // Note: SUM_WITH_OVERFLOW only works with hash groupby, not sort groupby
+  // Exercise the sort-based path with null keys and null values.
+  auto agg_sort = cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>();
+  test_single_agg(
+    keys, vals, expect_keys, *expect_vals, std::move(agg_sort), force_use_sort_impl::YES);
 }
 
 TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
@@ -219,6 +265,29 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
     requests[0].values = vals;
     requests[0].aggregations.push_back(
       cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>());
+
+    auto result = cudf::groupby::groupby(cudf::table_view{{keys}}).aggregate(requests);
+    auto const overflow_child =
+      cudf::structs_column_view{result.second[0].results[0]->view()}.get_sliced_child(1);
+
+    auto sorted = cudf::sort_by_key(
+      cudf::table_view{{result.first->get_column(0).view(), overflow_child}}, result.first->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted->view().column(0), expect_keys);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted->view().column(1), expect_overflow);
+  };
+
+  // Same check, but a co-requested sort-only aggregation (TDIGEST) forces the sort path.
+  auto check_overflow_flags_sort = [](cudf::column_view const& keys,
+                                      cudf::column_view const& vals,
+                                      cudf::column_view const& expect_keys,
+                                      cudf::column_view const& expect_overflow) {
+    std::vector<cudf::groupby::aggregation_request> requests;
+    requests.emplace_back();
+    requests[0].values = vals;
+    requests[0].aggregations.push_back(
+      cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>());
+    requests[0].aggregations.push_back(
+      cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(1000));
 
     auto result = cudf::groupby::groupby(cudf::table_view{{keys}}).aggregate(requests);
     auto const overflow_child =
@@ -267,16 +336,8 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
 
     check_overflow_flags(keys, vals, expect_keys, expect_overflow);
 
-    // Adding nth_element forces sort-based groupby, which must throw for SUM_WITH_OVERFLOW.
-    std::vector<cudf::groupby::aggregation_request> sort_requests;
-    sort_requests.emplace_back();
-    sort_requests[0].values = vals;
-    sort_requests[0].aggregations.push_back(
-      cudf::make_sum_with_overflow_aggregation<cudf::groupby_aggregation>());
-    sort_requests[0].aggregations.push_back(
-      cudf::make_nth_element_aggregation<cudf::groupby_aggregation>(0));
-    EXPECT_THROW(cudf::groupby::groupby(cudf::table_view{{keys}}).aggregate(sort_requests),
-                 cudf::logic_error);
+    // Adding TDIGEST forces sort-based groupby; the overflow flags must match the hash path.
+    check_overflow_flags_sort(keys, vals, expect_keys, expect_overflow);
   } else {
     using DeviceType = cudf::device_storage_type_t<V>;
 
@@ -306,6 +367,7 @@ TYPED_TEST(groupby_sum_with_overflow_test, overflow_detection)
                                                    static_cast<V>(large_negative)};
 
     check_overflow_flags(keys, vals, expect_keys, expect_overflow);
+    check_overflow_flags_sort(keys, vals, expect_keys, expect_overflow);
   }
 }
 
