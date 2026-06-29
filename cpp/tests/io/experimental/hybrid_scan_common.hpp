@@ -8,6 +8,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
+#include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -15,6 +16,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <cstddef>
@@ -99,6 +101,15 @@ struct multifile_inputs {
 };
 
 /**
+ * @brief Device buffers and spans from multiple input sources
+ */
+struct multisource_device_data {
+  std::vector<rmm::device_buffer> buffers;
+  std::vector<std::vector<cudf::device_span<uint8_t const>>> per_source_spans;
+  std::vector<cudf::device_span<uint8_t const>> flat_spans;
+};
+
+/**
  * @brief Construct source info from host buffers
  */
 cudf::io::source_info build_source_info(std::vector<std::vector<char>> const& file_buffers);
@@ -108,3 +119,21 @@ cudf::io::source_info build_source_info(std::vector<std::vector<char>> const& fi
  */
 void setup_page_indexes(cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
                         multifile_inputs const& inputs);
+
+/**
+ * @brief Groups a flat byte range list by source using the specified source map
+ */
+std::vector<std::vector<cudf::io::text::byte_range_info>> group_byte_ranges_by_source(
+  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
+    byte_ranges_and_source_map,
+  std::size_t num_sources);
+
+/**
+ * @brief Fetches byte ranges from multiple sources and returns per-source and flattened spans
+ */
+multisource_device_data fetch_multisource_device_data(
+  multifile_inputs const& inputs,
+  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
+    byte_ranges_and_source_map,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);

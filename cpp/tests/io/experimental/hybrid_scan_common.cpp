@@ -243,6 +243,52 @@ cudf::io::source_info build_source_info(std::vector<std::vector<char>> const& fi
   return cudf::io::source_info(cudf::host_span<cudf::host_span<char const>>{spans});
 }
 
+std::vector<std::vector<cudf::io::text::byte_range_info>> group_byte_ranges_by_source(
+  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
+    byte_ranges_and_source_map,
+  std::size_t num_sources)
+{
+  auto const& [byte_ranges, source_map] = byte_ranges_and_source_map;
+  CUDF_EXPECTS(byte_ranges.size() == source_map.size(), "Invalid source map size");
+
+  auto byte_ranges_per_source =
+    std::vector<std::vector<cudf::io::text::byte_range_info>>(num_sources);
+  std::for_each(byte_ranges.begin(),
+                byte_ranges.end(),
+                [&, range_index = std::size_t{0}](auto const& range) mutable {
+                  auto const source_index = source_map[range_index++];
+                  CUDF_EXPECTS(source_index >= 0 and static_cast<std::size_t>(source_index) <
+                                                       byte_ranges_per_source.size(),
+                               "Invalid byte range source index");
+                  byte_ranges_per_source[source_index].push_back(range);
+                });
+  return byte_ranges_per_source;
+}
+
+multisource_device_data fetch_multisource_device_data(
+  multifile_inputs const& inputs,
+  std::pair<std::vector<cudf::io::text::byte_range_info>, std::vector<cudf::size_type>> const&
+    byte_ranges_and_source_map,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const byte_ranges_per_source =
+    group_byte_ranges_by_source(byte_ranges_and_source_map, inputs.datasources.size());
+  auto [buffers, per_source_spans, tasks] = cudf::io::parquet::fetch_byte_ranges_to_device_async(
+    inputs.datasource_refs,
+    cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{byte_ranges_per_source},
+    stream,
+    mr);
+  tasks.get();
+
+  auto flat_spans = std::vector<cudf::device_span<uint8_t const>>{};
+  for (auto const& source_spans : per_source_spans) {
+    flat_spans.insert(flat_spans.end(), source_spans.begin(), source_spans.end());
+  }
+
+  return {std::move(buffers), std::move(per_source_spans), std::move(flat_spans)};
+}
+
 void setup_page_indexes(cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
                         multifile_inputs const& inputs)
 {
