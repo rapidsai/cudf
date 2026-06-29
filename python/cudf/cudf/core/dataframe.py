@@ -6759,24 +6759,29 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 index=Index(source._data.to_pandas_index),
                 attrs=self.attrs,
             )
-        # axis == 1: count non-NA cells per row, i.e. the row-wise sum of each
-        # column's validity. Implemented on-device to avoid a cudf.pandas
-        # fallback that would copy the whole frame to host.
-        if len(source._columns) == 0:
-            result_col = as_column(
-                0, length=len(self), dtype=np.dtype(np.int64)
+        elif axis == 1:
+            # count non-NA cells per row, i.e. the row-wise sum of each
+            # column's validity. Implemented on-device to avoid a cudf.pandas
+            # fallback that would copy the whole frame to host.
+            if len(source._columns) == 0:
+                result_col = as_column(
+                    0, length=len(self), dtype=np.dtype(np.int64)
+                )
+            else:
+                result_col = functools.reduce(
+                    lambda left, right: left + right,
+                    (
+                        col.notnull().astype(np.dtype(np.int64))
+                        for col in source._columns
+                    ),
+                )
+            return Series._from_column(
+                result_col, index=self.index, attrs=self.attrs
             )
         else:
-            result_col = functools.reduce(
-                lambda left, right: left + right,
-                (
-                    col.notnull().astype(np.dtype(np.int64))
-                    for col in source._columns
-                ),
+            raise NotImplementedError(
+                "Only axis=0 and axis=1 are currently supported."
             )
-        return Series._from_column(
-            result_col, index=self.index, attrs=self.attrs
-        )
 
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
