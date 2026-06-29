@@ -18,6 +18,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
+#include <array>
 #include <memory>
 #include <random>
 #include <string>
@@ -34,6 +35,20 @@ constexpr unsigned int list_strings_seed = seed ^ 0xA5701DUL;
 constexpr cudf::size_type max_elements_per_list = 8;
 constexpr double null_probability        = 0.1;
 
+// Per-distinct-value prefixes deliberately mixing ASCII with multi-byte UTF-8 (accented Latin,
+// Greek, CJK, and an emoji) so the transcode/fallback paths are exercised on non-ASCII keys. The
+// numeric suffix in `make_value_string` keeps every distinct value a distinct string, preserving
+// the intended cardinality.
+std::array<char const*, 6> const utf8_prefixes{
+  "str", "café", "naïve", "Ωμέγα", "日本語", "🚀rocket"};
+
+// Map a dictionary value to a UTF-8 string. Distinct values map to distinct
+// strings via the numeric suffix.
+std::string make_value_string(int value)
+{
+  return std::string{utf8_prefixes[value % utf8_prefixes.size()]} + "_" + std::to_string(value);
+}
+
 cudf::test::strings_column_wrapper make_low_cardinality_strings()
 {
   std::mt19937 engine(seed);
@@ -43,7 +58,7 @@ cudf::test::strings_column_wrapper make_low_cardinality_strings()
   std::vector<std::string> strings(num_rows);
   std::vector<bool> valids(num_rows);
   for (cudf::size_type i = 0; i < num_rows; ++i) {
-    strings[i] = "str_" + std::to_string(value_dist(engine));
+    strings[i] = make_value_string(value_dist(engine));
     valids[i]  = not null_dist(engine);
   }
 
@@ -63,7 +78,7 @@ std::unique_ptr<cudf::column> make_low_cardinality_lists_of_strings()
   for (cudf::size_type row = 0; row < num_rows; ++row) {
     auto const len = len_dist(engine);
     for (int e = 0; e < len; ++e) {
-      child_strings.push_back("str_" + std::to_string(value_dist(engine)));
+      child_strings.push_back(make_value_string(value_dist(engine)));
     }
     offsets.push_back(offsets.back() + static_cast<cudf::size_type>(len));
   }
