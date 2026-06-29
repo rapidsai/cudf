@@ -40,6 +40,11 @@ set +e
 PASSED=()
 FAILED=()
 
+cudf_polars_engine_args=()
+if [[ -n "${CUDF_POLARS_ENGINE:-}" ]]; then
+    cudf_polars_engine_args+=("--cudf-polars-engine=${CUDF_POLARS_ENGINE}")
+fi
+
 for version in "${VERSIONS[@]}"; do
     rapids-logger "Testing cudf_polars with polars ${version}.*"
 
@@ -96,6 +101,7 @@ for version in "${VERSIONS[@]}"; do
         --dist=worksteal \
         --durations 10 --durations-min 10 \
         -ra \
+        "${cudf_polars_engine_args[@]}" \
         --junitxml="${RAPIDS_TESTS_DIR}/junit-cudf-polars-${version}.xml"
 
     test_exitcode=$?
