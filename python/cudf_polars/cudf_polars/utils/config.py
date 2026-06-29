@@ -174,6 +174,10 @@ def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
     return parse(v)
 
 
+def _optional_float_converter(v: str) -> float | None:
+    return _optional_converter(v, float)
+
+
 def _optional_int_converter(v: str) -> int | None:
     return _optional_converter(v, int)
 
