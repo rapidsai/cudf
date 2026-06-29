@@ -95,9 +95,6 @@ static void bench_find_string_skewed(nvbench::state& state)
   auto const short_string_pct = static_cast<int32_t>(state.get_int64("short_string_pct"));
   auto const hit_rate         = static_cast<int32_t>(state.get_int64("hit_rate"));
 
-  CUDF_EXPECTS(short_length >= 16, "short string length must be at least 16");
-  CUDF_EXPECTS(long_tail_length >= 1024, "long tail length must be at least 1024");
-
   auto const stream = cudf::get_default_stream();
   auto const col    = create_skewed_string_column(
     num_rows, short_length, long_tail_length, short_string_pct, hit_rate);

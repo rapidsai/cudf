@@ -10,7 +10,7 @@
 #include <string_view>
 
 /** @brief Target substring embedded in skewed string benchmark data. */
-extern std::string_view const skewed_string_target_substring;
+constexpr std::string_view skewed_string_target_substring{"0987 5W43"};
 
 /**
  * @brief Deterministically generates a string column with a skewed length distribution.
