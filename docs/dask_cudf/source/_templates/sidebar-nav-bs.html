@@ -1,0 +1,31 @@
+{# Displays the TOC subtree below the currently active top-level navbar item. #}
+{% set show_nav_level = meta['html_theme.show_nav_level'] if (meta is defined and meta is not none and 'html_theme.show_nav_level' in meta) else theme_show_nav_level %}
+{% if pagename == root_doc or pagename in ["genindex", "py-modindex", "search"] %}
+  {% set nav_tree = generate_toctree_html(
+    "raw",
+    startdepth=0,
+    show_nav_level=show_nav_level | int,
+    maxdepth=theme_navigation_depth | int,
+    collapse=theme_collapse_navigation | tobool,
+    includehidden=theme_sidebar_includehidden | tobool,
+    titles_only=True,
+  ) %}
+{% else %}
+  {% set nav_tree = generate_toctree_html(
+    "raw",
+    startdepth=1,
+    show_nav_level=show_nav_level | int,
+    maxdepth=theme_navigation_depth | int,
+    collapse=theme_collapse_navigation | tobool,
+    includehidden=theme_sidebar_includehidden | tobool,
+    titles_only=True,
+  ) %}
+{% endif %}
+{% set active_children = nav_tree.select_one("ul > li.current > ul") %}
+<nav class="bd-docs-nav bd-links"
+     aria-label="{{ _('Section Navigation') }}">
+  <p class="bd-links__title" role="heading" aria-level="1">{{ _("Section Navigation") }}</p>
+  <div class="bd-toc-item navbar-nav">
+    {{ active_children if active_children else nav_tree }}
+  </div>
+</nav>
