@@ -26,18 +26,9 @@ from cudf_polars.dsl.traversal import traversal
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from cudf_polars.containers import DataType
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import StatsCollector
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
-
-
-@dataclass(frozen=True)
-class _ColumnRef:
-    """A simple column join key."""
-
-    name: str
-    dtype: DataType
 
 
 @dataclass(frozen=True)
@@ -56,12 +47,12 @@ class _Candidate:
     mode: Literal["simple", "composite"]
     target_side: Literal["left", "right"]
     target: IR
-    target_key: _ColumnRef
+    target_key: expr.Col
     domain: _Producer
-    domain_key: _ColumnRef
+    domain_key: expr.Col
     constraint_domain: _Producer | None = None
-    domain_constraint_key: _ColumnRef | None = None
-    target_constraint_key: _ColumnRef | None = None
+    domain_constraint_key: expr.Col | None = None
+    target_constraint_key: expr.Col | None = None
 
     @property
     def domain_rows(self) -> int:
@@ -162,9 +153,9 @@ def _select_candidate(ir: Join, threshold: float) -> tuple[_Candidate | None, st
     if ir.options[5] != "none":
         return None, "maintain_order"
 
-    left_keys = _simple_keys(ir.left_on, ir.children[0].schema)
-    right_keys = _simple_keys(ir.right_on, ir.children[1].schema)
-    if left_keys is None or right_keys is None:
+    left_keys = _simple_keys(ir.left_on)
+    right_keys = _simple_keys(ir.right_on)
+    if len(left_keys) != len(ir.left_on) or len(right_keys) != len(ir.right_on):
         return None, "non_column_join_key"
     if len(left_keys) != len(right_keys):
         return None, "key_count_mismatch"
@@ -207,26 +198,16 @@ def _select_candidate(ir: Join, threshold: float) -> tuple[_Candidate | None, st
     return min(candidates, key=lambda c: c.score), "applied"
 
 
-def _simple_keys(
-    keys: Sequence[expr.NamedExpr], schema: dict[str, DataType]
-) -> tuple[_ColumnRef, ...] | None:
-    result: list[_ColumnRef] = []
-    for key in keys:
-        if not isinstance(key.value, expr.Col):
-            return None
-        name = key.value.name
-        if name not in schema:
-            return None
-        result.append(_ColumnRef(name, schema[name]))
-    return tuple(result)
+def _simple_keys(keys: Sequence[expr.NamedExpr]) -> tuple[expr.Col, ...]:
+    return tuple(key.value for key in keys if isinstance(key.value, expr.Col))
 
 
 def _simple_candidates(
     target_side: Literal["left", "right"],
     target_child: IR,
     domain_child: IR,
-    target_keys: tuple[_ColumnRef, ...],
-    domain_keys: tuple[_ColumnRef, ...],
+    target_keys: tuple[expr.Col, ...],
+    domain_keys: tuple[expr.Col, ...],
     threshold: float,
 ) -> Iterable[_Candidate]:
     for target_key, domain_key in zip(target_keys, domain_keys, strict=True):
@@ -259,8 +240,8 @@ def _composite_candidates(
     target_side: Literal["left", "right"],
     target_child: IR,
     domain_child: IR,
-    target_keys: tuple[_ColumnRef, ...],
-    domain_keys: tuple[_ColumnRef, ...],
+    target_keys: tuple[expr.Col, ...],
+    domain_keys: tuple[expr.Col, ...],
     threshold: float,
 ) -> Iterable[_Candidate]:
     if len(target_keys) < 2:
@@ -322,7 +303,7 @@ def _make_target_filter(ir: Join, candidate: _Candidate) -> Join:
         candidate.target,
         candidate.target_key,
         domain,
-        _ColumnRef(candidate.domain_key.name, domain.schema[candidate.domain_key.name]),
+        expr.Col(domain.schema[candidate.domain_key.name], candidate.domain_key.name),
         nulls_equal=ir.options[1],
         suffix=ir.options[3],
     )
@@ -347,14 +328,14 @@ def _make_domain(candidate: _Candidate, ir: Join) -> IR:
     )
     constrained = _make_semi_join(
         candidate.domain.node,
-        _ColumnRef(
-            candidate.domain_constraint_key.name,
+        expr.Col(
             candidate.domain.node.schema[candidate.domain_constraint_key.name],
+            candidate.domain_constraint_key.name,
         ),
         constraint_domain,
-        _ColumnRef(
-            candidate.target_constraint_key.name,
+        expr.Col(
             constraint_domain.schema[candidate.target_constraint_key.name],
+            candidate.target_constraint_key.name,
         ),
         nulls_equal=ir.options[1],
         suffix=ir.options[3],
@@ -374,17 +355,17 @@ def _select_key(source: IR, source_column: str, output_column: str) -> Select:
 
 def _make_semi_join(
     target: IR,
-    target_key: _ColumnRef,
+    target_key: expr.Col,
     domain: IR,
-    domain_key: _ColumnRef,
+    domain_key: expr.Col,
     *,
     nulls_equal: bool,
     suffix: str,
 ) -> Join:
     return Join(
         target.schema,
-        (expr.NamedExpr(target_key.name, expr.Col(target_key.dtype, target_key.name)),),
-        (expr.NamedExpr(domain_key.name, expr.Col(domain_key.dtype, domain_key.name)),),
+        (expr.NamedExpr(target_key.name, target_key),),
+        (expr.NamedExpr(domain_key.name, domain_key),),
         ("Semi", nulls_equal, None, suffix, False, "none"),
         target,
         domain,
