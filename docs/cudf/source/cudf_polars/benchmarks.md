@@ -41,6 +41,14 @@ export KVIKIO_NTHREADS=8
 export RAPIDSMPF_num_streaming_threads=8
 ```
 
+**CPU** (`--frontend polars-cpu`, Polars CPU streaming engine):
+
+```bash
+python -m cudf_polars.streaming.benchmarks.pdsh all \
+    --frontend polars-cpu \
+    --path data/tables/scale-1000.0
+```
+
 **Single GPU** (`--frontend spmd`, single-process streaming executor, equivalent to `collect(engine="gpu")`):
 
 ```bash
@@ -79,6 +87,30 @@ python -m cudf_polars.streaming.benchmarks.pdsh all \
 
 The `--path` value must match the `--output-dir` used during data generation.
 Update both consistently when changing scale factors (e.g. `scale-100.0`).
+
+### Results
+
+Results are written to `pdsh_results.jsonl` in the current directory by default (override with `-o`).
+Each run appends one JSON line containing metadata and a `records` field with per-query,
+per-iteration timings:
+
+```json
+{
+  "engine_name": "cudf-polars",
+  "frontend": "spmd",
+  "dataset_path": "data/tables/scale-1000.0",
+  "scale_factor": 1000,
+  "records": {
+    "1": [
+      {"query": 1, "iteration": 0, "duration": 0.79, "status": "success"},
+      {"query": 1, "iteration": 1, "duration": 0.55, "status": "success"}
+    ]
+  }
+}
+```
+
+`duration` is in seconds. Running multiple frontends with the same `-o` file appends each as a
+separate line, making it easy to compare CPU and GPU results in one file.
 
 ### Tuning
 
