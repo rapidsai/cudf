@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
 import pylibcudf as plc
@@ -42,7 +42,6 @@ from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     NormalizedPartitioning,
     TableSizeStats,
-    _is_already_partitioned,
     _sample_chunks,
     allgather_reduce,
     chunk_to_frame,
@@ -97,12 +96,10 @@ class JoinStrategy:
 class JoinPrefilterDecision:
     """Decision for an optional join-key prefilter stage."""
 
-    considered: bool
     left_rows: int
     right_rows: int
     threshold: float
     filter_side: Literal["left", "right"] | None = None
-    build_side: Literal["left", "right"] | None = None
     build_indices: tuple[int, ...] = ()
     apply_indices: tuple[int, ...] = ()
     key_column_count: int = 0
@@ -116,20 +113,7 @@ class JoinPrefilterDecision:
 
     def trace_dict(self) -> dict[str, Any]:
         """Return structured trace metadata for this decision."""
-        metadata: dict[str, Any] = {
-            "considered": self.considered,
-            "estimated_left_rows": self.left_rows,
-            "estimated_right_rows": self.right_rows,
-            "threshold": self.threshold,
-            "filtered_side": self.filter_side,
-            "build_side": self.build_side,
-            "key_column_count": self.key_column_count,
-        }
-        if self.small_large_ratio is not None:
-            metadata["small_large_ratio"] = self.small_large_ratio
-        if self.reason_skipped is not None:
-            metadata["reason_skipped"] = self.reason_skipped
-        return metadata
+        return asdict(self)
 
 
 @define_actor()
@@ -603,44 +587,6 @@ async def passthrough_split(
     await ch_out.drain(context)
 
 
-def use_bloom_filter(
-    join_type: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
-    left_rows: int,
-    right_rows: int,
-    threshold: float,
-) -> bool:
-    """Return True if bloom filter pre-filtering should be applied."""
-    if (
-        threshold == 0.0
-        or join_type not in ("Inner", "Semi", "Left", "Right")
-        or (join_type == "Left" and right_rows <= left_rows)
-        or (join_type == "Right" and left_rows <= right_rows)
-    ):
-        return False
-    small_rows, large_rows = sorted([left_rows, right_rows])
-    return large_rows > 0 and small_rows / large_rows < threshold
-
-
-def _skipped_prefilter(
-    reason: str,
-    *,
-    left_rows: int,
-    right_rows: int,
-    threshold: float,
-    ratio: float | None = None,
-    key_column_count: int = 0,
-) -> JoinPrefilterDecision:
-    return JoinPrefilterDecision(
-        considered=True,
-        left_rows=left_rows,
-        right_rows=right_rows,
-        threshold=threshold,
-        key_column_count=key_column_count,
-        small_large_ratio=ratio,
-        reason_skipped=reason,
-    )
-
-
 def _select_join_prefilter(
     join_type: Literal["Inner", "Left", "Right", "Full", "Semi", "Anti", "Cross"],
     left_rows: int,
@@ -652,126 +598,102 @@ def _select_join_prefilter(
     max_key_columns: int | None,
 ) -> JoinPrefilterDecision:
     """
-    Select a safe join-key prefilter.
+    Determine whether to apply a prefilter to a join.
 
-    The prefilter only removes rows that cannot participate in the original
-    join. The full join still runs afterward with the complete key set.
+    Parameters
+    ----------
+    join_type
+        Type of join.
+    left_rows
+        Estimated number of rows in the left table.
+    right_rows
+        Estimated number of rows in the right table.
+    left_key_indices
+        Column indices of the join keys in the left table.
+    right_key_indices
+        Column indices of the join keys in the right table.
+    threshold
+        Small-to-large row-count ratio at or above which filtering is disabled.
+    max_key_columns
+        Maximum number of columns to use from the key prefix. ``None`` uses all
+        join-key columns.
+
+    Returns
+    -------
+    JoinPrefilterDecision
+        The selected prefilter configuration, or the reason it was skipped.
     """
     key_column_count = len(left_key_indices)
+    assert key_column_count == len(right_key_indices), (
+        "left and right join key counts must match"
+    )
     if threshold == 0.0:
-        return _skipped_prefilter(
-            "disabled",
+        return JoinPrefilterDecision(
             left_rows=left_rows,
             right_rows=right_rows,
             threshold=threshold,
-        )
-    if key_column_count == 0:
-        return _skipped_prefilter(
-            "no_join_keys",
-            left_rows=left_rows,
-            right_rows=right_rows,
-            threshold=threshold,
-        )
-    if key_column_count != len(right_key_indices):
-        return _skipped_prefilter(
-            "mismatched_join_keys",
-            left_rows=left_rows,
-            right_rows=right_rows,
-            threshold=threshold,
+            reason_skipped="disabled",
         )
 
     if max_key_columns is not None:
         key_column_count = min(key_column_count, max_key_columns)
 
-    build_side: Literal["left", "right"]
-    filter_side: Literal["left", "right"]
-    small_rows: int
-    large_rows: int
+    if join_type not in ("Inner", "Semi", "Left", "Anti", "Right"):
+        return JoinPrefilterDecision(
+            left_rows=left_rows,
+            right_rows=right_rows,
+            threshold=threshold,
+            key_column_count=key_column_count,
+            reason_skipped="unsupported_join_type",
+        )
+
+    small_rows, large_rows = sorted((left_rows, right_rows))
+    ratio = small_rows / large_rows if large_rows > 0 else None
+    filter_side: Literal["left", "right"] | None = None
+    reason_skipped: str | None = None
 
     if join_type in ("Inner", "Semi"):
-        if left_rows <= right_rows:
-            build_side = "left"
-            filter_side = "right"
-            small_rows, large_rows = left_rows, right_rows
-        else:
-            build_side = "right"
-            filter_side = "left"
-            small_rows, large_rows = right_rows, left_rows
+        filter_side = "right" if left_rows <= right_rows else "left"
     elif join_type in ("Left", "Anti"):
         if left_rows >= right_rows:
-            ratio = right_rows / left_rows if left_rows > 0 else None
-            return _skipped_prefilter(
-                "no_legal_large_side",
-                left_rows=left_rows,
-                right_rows=right_rows,
-                threshold=threshold,
-                ratio=ratio,
-                key_column_count=key_column_count,
-            )
-        build_side = "left"
-        filter_side = "right"
-        small_rows, large_rows = left_rows, right_rows
-    elif join_type == "Right":
-        if right_rows >= left_rows:
-            ratio = left_rows / right_rows if right_rows > 0 else None
-            return _skipped_prefilter(
-                "no_legal_large_side",
-                left_rows=left_rows,
-                right_rows=right_rows,
-                threshold=threshold,
-                ratio=ratio,
-                key_column_count=key_column_count,
-            )
-        build_side = "right"
-        filter_side = "left"
-        small_rows, large_rows = right_rows, left_rows
+            reason_skipped = "no_legal_large_side"
+        else:
+            filter_side = "right"
     else:
-        return _skipped_prefilter(
-            "unsupported_join_type",
-            left_rows=left_rows,
-            right_rows=right_rows,
-            threshold=threshold,
-            key_column_count=key_column_count,
-        )
+        if right_rows >= left_rows:
+            reason_skipped = "no_legal_large_side"
+        else:
+            filter_side = "left"
 
-    if large_rows <= 0:
-        return _skipped_prefilter(
-            "no_large_side",
-            left_rows=left_rows,
-            right_rows=right_rows,
-            threshold=threshold,
-            key_column_count=key_column_count,
-        )
+    if reason_skipped is None:
+        if ratio is None:
+            reason_skipped = "no_large_side"
+        elif ratio >= threshold:
+            reason_skipped = "ratio_above_threshold"
 
-    ratio = small_rows / large_rows
-    if ratio >= threshold:
-        return _skipped_prefilter(
-            "ratio_above_threshold",
-            left_rows=left_rows,
-            right_rows=right_rows,
-            threshold=threshold,
-            ratio=ratio,
-            key_column_count=key_column_count,
-        )
+    if reason_skipped is not None:
+        filter_side = None
 
-    if build_side == "left":
+    if filter_side == "right":
         build_indices = left_key_indices[:key_column_count]
         apply_indices = right_key_indices[:key_column_count]
-    else:
+    elif filter_side == "left":
         build_indices = right_key_indices[:key_column_count]
         apply_indices = left_key_indices[:key_column_count]
+    else:
+        build_indices = ()
+        apply_indices = ()
 
     return JoinPrefilterDecision(
-        considered=True,
         left_rows=left_rows,
         right_rows=right_rows,
         threshold=threshold,
         filter_side=filter_side,
-        build_side=build_side,
         build_indices=build_indices,
         apply_indices=apply_indices,
         key_column_count=key_column_count,
         small_large_ratio=ratio,
+        reason_skipped=reason_skipped,
     )
 
 
@@ -836,11 +758,11 @@ def make_filter_tasks(
        Of new left and right channels, coroutines to await, and new channels to shutdown on error.
     """
     assert decision.enabled
-    assert decision.build_side in ("left", "right")
+    assert decision.filter_side in ("left", "right")
     bloom_build_output: Channel[BloomFilterChunk] = context.create_channel()
     bloom_build_input: Channel[TableChunk] = context.create_channel()
     passthrough_output: Channel[TableChunk] = context.create_channel()
-    if decision.build_side == "left":
+    if decision.filter_side == "right":
         passthrough_input = ch_left
         ch_left = passthrough_output
         build_indices = decision.build_indices
@@ -966,19 +888,6 @@ async def _shuffle_join(
         max_key_columns=prefilter_max_key_columns,
     )
     prefilter_trace_stats = prefilter_decision.trace_dict()
-    if prefilter_decision.enabled:
-        apply_meta = (
-            strategy.right_meta
-            if prefilter_decision.filter_side == "right"
-            else strategy.left_meta
-        )
-        assert apply_meta is not None
-        prefilter_trace_stats["apply_side_prepartitioned"] = _is_already_partitioned(
-            apply_meta,
-            prefilter_decision.apply_indices,
-            strategy.shuffle_modulus,
-            comm.nranks,
-        )
 
     if tracer is not None:
         tracer.set_extra("join_prefilter", prefilter_trace_stats)
@@ -1472,7 +1381,6 @@ async def join_actor(
                 prefilter_threshold = (
                     dynamic_options.join_prefilter_threshold
                     if dynamic_options is not None
-                    and dynamic_options.join_prefilter_threshold is not None
                     else 0.0
                 )
                 prefilter_max_key_columns = (
@@ -1583,14 +1491,12 @@ def _(
     ):
         # Dynamic join - decide strategy at runtime
         collective_ids = list(rec.state["collective_id_map"].get(ir, []))
-        # Join uses up to 4 collective IDs: size allgather, one
-        # strategy-specific allgather/bloom prefilter, left shuffle, and
-        # right shuffle.
+        # Join uses up to 4 collective IDs: allgather, left shuffle, right
+        # shuffle, and bloom filter.
         if len(collective_ids) < 4:
             raise ValueError(
                 "Dynamic join requires 4 reserved collective IDs "
-                "(size allgather + strategy allgather/bloom prefilter "
-                "+ left shuffle + right shuffle); got "
+                "(allgather + left shuffle + right shuffle + bloom filter); got "
                 f"{len(collective_ids)} for this Join. "
                 "Ensure ReserveOpIDs is run with dynamic_planning enabled."
             )

@@ -270,6 +270,57 @@ def test_source_only_domain_does_not_stack_on_prefiltered_source() -> None:
     )
 
 
+def test_derived_selectivity_propagates_through_rewritten_children() -> None:
+    region = _scan("region", ("r_regionkey",), predicate=True)
+    nation = _scan("nation", ("n_nationkey", "n_regionkey"))
+    customer = _scan("customer", ("c_custkey", "c_nationkey"))
+    orders = _scan("orders", ("o_orderkey", "o_custkey"))
+
+    region_nation = _join(region, nation, ("r_regionkey",), ("n_regionkey",))
+    nation_customer = _join(region_nation, customer, ("n_nationkey",), ("c_nationkey",))
+    root = _join(nation_customer, orders, ("c_custkey",), ("o_custkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(
+            region=(region, 1),
+            nation=(nation, 25),
+            customer=(customer, 150),
+            orders=(orders, 1_500),
+        ),
+        _config(),
+    )
+
+    filtered = {semi.children[0] for semi in _joins(optimized, "Semi")}
+    assert {nation, customer, orders} <= filtered
+
+
+def test_rewritten_analysis_respects_stack_and_cost_guards() -> None:
+    part = _scan("part", ("p_partkey",), predicate=True)
+    lineitem = _scan("lineitem", ("l_orderkey", "l_partkey", "l_suppkey"))
+    supplier = _scan("supplier", ("s_suppkey",))
+    orders = _scan("orders", ("o_orderkey",), predicate=True)
+
+    part_lineitem = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+    line_supplier = _join(part_lineitem, supplier, ("l_suppkey",), ("s_suppkey",))
+    root = _join(line_supplier, orders, ("l_orderkey",), ("o_orderkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(
+            part=(part, 60),
+            lineitem=(lineitem, 1_800),
+            supplier=(supplier, 30),
+            orders=(orders, 150),
+        ),
+        _config(),
+    )
+
+    semis = _joins(optimized, "Semi")
+    assert sum(semi.children[0] is lineitem for semi in semis) == 1
+    assert not any(semi.children[0] is orders for semi in semis)
+
+
 def test_no_domain_prefilter_for_outer_join() -> None:
     part = _scan("part", ("p_partkey",), predicate=True)
     lineitem = _scan("lineitem", ("l_partkey",))

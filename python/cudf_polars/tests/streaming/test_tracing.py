@@ -44,8 +44,8 @@ def test_actor_tracer_counts_table_chunk_without_table_view(chunk: TableChunk) -
 
 def test_actor_tracer_records_extra_metadata() -> None:
     tracer = ActorTracer()
-    tracer.set_extra("join_prefilter", {"considered": True})
-    assert tracer.extra == {"join_prefilter": {"considered": True}}
+    tracer.set_extra("join_prefilter", {"enabled": True})
+    assert tracer.extra == {"join_prefilter": {"enabled": True}}
 
 
 @pytest.mark.spmd
