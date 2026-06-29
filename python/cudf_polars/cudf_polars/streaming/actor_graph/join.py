@@ -598,10 +598,30 @@ def _select_join_prefilter(
     max_key_columns: int | None,
 ) -> JoinPrefilterDecision:
     """
-    Select a safe join-key prefilter.
+    Determine whether to apply a prefilter to a join.
 
-    The prefilter only removes rows that cannot participate in the original
-    join. The full join still runs afterward with the complete key set.
+    Parameters
+    ----------
+    join_type
+        Type of join.
+    left_rows
+        Estimated number of rows in the left table.
+    right_rows
+        Estimated number of rows in the right table.
+    left_key_indices
+        Column indices of the join keys in the left table.
+    right_key_indices
+        Column indices of the join keys in the right table.
+    threshold
+        Small-to-large row-count ratio at or above which filtering is disabled.
+    max_key_columns
+        Maximum number of columns to use from the key prefix. ``None`` uses all
+        join-key columns.
+
+    Returns
+    -------
+    JoinPrefilterDecision
+        The selected prefilter configuration, or the reason it was skipped.
     """
     key_column_count = len(left_key_indices)
     assert key_column_count == len(right_key_indices), (
