@@ -4051,12 +4051,9 @@ class IndexedFrame(Frame):
             multiindex = False
             rangeindex = False
 
-        def _new_column(name):
-            # Build a brand-new column produced by reindex (entirely
-            # missing / fill values), choosing a dtype that matches pandas
-            # for the common numeric cases. Non-numeric fills keep the
-            # legacy ``column_empty(...).fillna`` path, which raises for
-            # incompatible fills so cudf.pandas falls back to pandas.
+        def _new_nulls_column(name):
+            # Build a brand-new column produced by reindex (entirely missing
+            # or fill values), choosing a dtype that matches pandas.
             if fill_value is NA:
                 # All-null new column: keep a homogeneous float dtype,
                 # else float64 (numpy integer/bool cannot hold NaN).
@@ -4069,31 +4066,40 @@ class IndexedFrame(Frame):
                     target = frame_common_dtype
                 else:
                     target = np.dtype(np.float64)
+                # A numpy integer dtype cannot hold NA, so pandas upcasts an
+                # all-null reindexed column to float64. Match that here,
+                # mirroring the upcast applied to existing integer columns
+                # below so both paths agree.
+                if isinstance(target, np.dtype) and target.kind in "iu":
+                    target = np.dtype(np.float64)
                 return column_empty(dtype=target, row_count=len(index))
-            if name not in dtypes and is_scalar(fill_value):
-                scalar_col = as_column(fill_value, length=1)
-                if scalar_col.dtype.kind in "iuf":
-                    # Numeric scalar fill: a row-reindex of a homogeneous
-                    # numpy frame promotes the frame dtype against the fill
-                    # value (uint8 + 10 -> uint8, uint8 + 300 -> int64);
-                    # otherwise the new column's dtype is the fill value's.
-                    if row_reindex and frame_common_dtype is not None:
-                        if scalar_col.can_cast_safely(frame_common_dtype):
-                            target = frame_common_dtype
-                        else:
-                            target = find_common_type(
-                                [frame_common_dtype, scalar_col.dtype]
-                            )
-                    else:
-                        target = scalar_col.dtype
-                    return as_column(fill_value, length=len(index)).astype(
-                        target
+            # Non-null fill. A numeric scalar fill on a brand-new column of a
+            # homogeneous numpy frame promotes the frame dtype against the fill
+            # value (uint8 + 10 -> uint8, uint8 + 300 -> int64); otherwise the
+            # dtype is the fill value's own. Any other fill keeps the source /
+            # float64 default. ``fillna`` raises on incompatible fills so
+            # cudf.pandas falls back to pandas.
+            if (
+                name not in dtypes
+                and is_scalar(fill_value)
+                and (scalar_col := as_column(fill_value, length=1)).dtype.kind
+                in "iuf"
+            ):
+                if row_reindex and frame_common_dtype is not None:
+                    target = (
+                        frame_common_dtype
+                        if scalar_col.can_cast_safely(frame_common_dtype)
+                        else find_common_type(
+                            [frame_common_dtype, scalar_col.dtype]
+                        )
                     )
-            # Non-numeric / non-scalar fill: legacy behavior.
-            return column_empty(
-                dtype=dtypes.get(name, np.dtype(np.float64)),
-                row_count=len(index),
-            ).fillna(fill_value)
+                else:
+                    target = scalar_col.dtype
+            else:
+                target = dtypes.get(name, np.dtype(np.float64))
+            return column_empty(dtype=target, row_count=len(index)).fillna(
+                fill_value
+            )
 
         # cudf cannot represent duplicate column names; pandas can. Raise
         # so cudf.pandas falls back to pandas rather than silently
@@ -4104,13 +4110,8 @@ class IndexedFrame(Frame):
 
         # pandas upcasts integer columns to float64 when default-NaN
         # filling newly added rows on reindex (a numpy integer column
-        # cannot hold NA). Gated to preserve cudf's documented legacy
-        # behavior of keeping the integer dtype.
-        upcast_int_nulls = (
-            rows_added
-            and fill_value is NA
-            and cudf.get_option("mode.pandas_compatible")
-        )
+        # cannot hold NA), so match that unconditionally.
+        upcast_int_nulls = rows_added and fill_value is NA
 
         cols = {}
         for name in names_list:
@@ -4128,7 +4129,7 @@ class IndexedFrame(Frame):
                 ):
                     col = col.astype(np.dtype(np.float64))
             else:
-                col = _new_column(name)
+                col = _new_nulls_column(name)
             cols[name] = col
 
         result = self.__class__._from_data(
