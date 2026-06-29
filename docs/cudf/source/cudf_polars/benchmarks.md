@@ -23,6 +23,8 @@ This installs:
 
 ### Generate data
 
+The following generates SF1000 (scale factor 1000, roughly 1TB of data):
+
 ```bash
 tpchgen-cli --output-dir="data/tables/scale-1000.0" --format=parquet -s 1000.0
 ```
