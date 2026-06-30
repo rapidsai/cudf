@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,10 +7,11 @@
 
 #include <cudf/contiguous_split.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
 
-int main(int argc, char** argv)
+int main()
 {
   auto input_table = make_table(5, 2);
   print_table("Original Table", input_table);

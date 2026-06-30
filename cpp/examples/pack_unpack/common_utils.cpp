@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,8 +11,11 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
+#include <rmm/device_buffer.hpp>
+
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <memory>
 #include <numeric>
 #include <string>

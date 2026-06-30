@@ -1,19 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "cudf/aggregation.hpp"
-#include "cudf/reduction.hpp"
-#include "cudf/table/table.hpp"
-#include "cudf/table/table_view.hpp"
-#include "cudf/types.hpp"
-
 #include <benchmarks/common/generate_input.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/concatenate.hpp>
 #include <cudf/contiguous_split.hpp>
+#include <cudf/reduction.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
 
 #include <rmm/mr/pinned_host_memory_resource.hpp>
@@ -28,19 +27,27 @@ static std::unique_ptr<cudf::table> make_bench_table(nvbench::state& state)
 {
   auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
   auto const num_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
-  auto const nulls    = static_cast<cudf::size_type>(state.get_float64("nulls"));
+  auto const nulls    = state.get_float64("nulls");
 
   auto table = create_sequence_table(
     cycle_dtypes({cudf::type_to_id<int64_t>()}, num_cols), row_count{num_rows}, nulls);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.add_global_memory_reads<int64_t>(num_rows * num_cols);
-  state.add_global_memory_writes<int64_t>(num_rows * num_cols);
 
   return table;
 }
 
-void column_sum(const cudf::column_view& col_view)
+// Only pack does device-side I/O (deep-copies source columns into a contiguous buffer).
+// unpack allocates no device memory, so annotating it would misreport bandwidth.
+static void set_throughput_counters(nvbench::state& state)
+{
+  auto const num_rows = static_cast<cudf::size_type>(state.get_int64("num_rows"));
+  auto const num_cols = static_cast<cudf::size_type>(state.get_int64("num_cols"));
+  state.add_global_memory_reads<int64_t>(num_rows * num_cols);
+  state.add_global_memory_writes<int64_t>(num_rows * num_cols);
+}
+
+void column_sum(cudf::column_view const& col_view)
 {
   auto sum_agg = cudf::make_sum_aggregation<cudf::reduce_aggregation>();
   auto result  = cudf::reduce(col_view, *sum_agg, cudf::data_type{cudf::type_id::INT64});
@@ -51,6 +58,7 @@ static void bench_device_pack(nvbench::state& state)
 {
   const auto table      = make_bench_table(state);
   const auto table_view = table->view();
+  set_throughput_counters(state);
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch&) { auto packed = cudf::pack(table_view); });
 }
@@ -100,6 +108,7 @@ static void bench_host_pack(nvbench::state& state)
   const auto table_view = table->view();
   auto stream           = cudf::get_default_stream();
   rmm::mr::pinned_host_memory_resource phmr;
+  set_throughput_counters(state);
   state.exec(nvbench::exec_tag::sync,
              [&](nvbench::launch&) { auto packed = cudf::pack(table_view, stream, phmr); });
 }
