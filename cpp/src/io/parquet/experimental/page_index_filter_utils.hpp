@@ -16,6 +16,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <span>
+
 namespace cudf::io::parquet::experimental::detail {
 
 using metadata_base = parquet::detail::metadata;
@@ -30,7 +32,7 @@ using metadata_base = parquet::detail::metadata;
  */
 [[nodiscard]] bool compute_has_page_index(
   cudf::host_span<metadata_base const> file_metadatas,
-  cudf::host_span<std::vector<size_type> const> row_group_indices);
+  std::span<std::vector<size_type> const> row_group_indices);
 
 /**
  * @brief Compute page row counts and page row offsets and column chunk page (count) offsets for a
@@ -46,7 +48,7 @@ using metadata_base = parquet::detail::metadata;
                          cudf::detail::host_vector<size_type>,
                          cudf::detail::host_vector<size_type>>
 compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_file_metadata,
-                                    cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                    std::span<std::vector<size_type> const> row_group_indices,
                                     size_type schema_idx,
                                     rmm::cuda_stream_view stream);
 
@@ -62,7 +64,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
  */
 [[nodiscard]] std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::span<std::vector<size_type> const> row_group_indices,
   size_type schema_idx);
 
 /**

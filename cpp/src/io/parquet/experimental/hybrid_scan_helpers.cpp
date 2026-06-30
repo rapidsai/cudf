@@ -40,7 +40,7 @@ namespace {
 
 // Construct a vector of all row group indices from the input vectors
 [[nodiscard]] auto all_row_group_indices(
-  host_span<std::vector<cudf::size_type> const> row_group_indices)
+  std::span<std::vector<cudf::size_type> const> row_group_indices)
 {
   return std::vector<std::vector<cudf::size_type>>(row_group_indices.begin(),
                                                    row_group_indices.end());
@@ -48,7 +48,7 @@ namespace {
 
 // Compute total number of input row groups
 [[nodiscard]] cudf::size_type compute_total_row_groups(
-  host_span<std::vector<cudf::size_type> const> row_group_indices)
+  std::span<std::vector<cudf::size_type> const> row_group_indices)
 {
   auto const total_row_groups =
     std::accumulate(row_group_indices.begin(),
@@ -232,7 +232,7 @@ std::vector<std::vector<size_type>> aggregate_reader_metadata::all_row_groups(
 }
 
 std::size_t aggregate_reader_metadata::total_rows_in_row_groups(
-  cudf::host_span<std::vector<size_type> const> row_group_indices) const
+  std::span<std::vector<size_type> const> row_group_indices) const
 {
   CUDF_EXPECTS(row_group_indices.size() == per_file_metadata.size(),
                "Encountered unexpected number of input row group indices",
@@ -354,17 +354,20 @@ aggregate_reader_metadata::select_payload_columns(
 
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_byte_range(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::span<std::vector<size_type> const> row_group_indices,
   std::size_t bytes_to_skip,
   std::optional<std::size_t> const& bytes_to_read) const
 {
-  return apply_byte_bounds_filter(row_group_indices, bytes_to_skip, bytes_to_read);
+  return apply_byte_bounds_filter(
+    host_span<std::vector<size_type> const>{row_group_indices.data(), row_group_indices.size()},
+    bytes_to_skip,
+    bytes_to_read);
 }
 
 std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_groups_with_stats(
-  host_span<std::vector<cudf::size_type> const> row_group_indices,
-  host_span<data_type const> output_dtypes,
-  host_span<cudf::size_type const> output_column_schemas,
+  std::span<std::vector<cudf::size_type> const> row_group_indices,
+  std::span<data_type const> output_dtypes,
+  std::span<cudf::size_type const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -373,21 +376,30 @@ std::vector<std::vector<cudf::size_type>> aggregate_reader_metadata::filter_row_
 
   // Filter stats table with StatsAST expression and collect filtered row group indices
   auto const stats_filtered_row_group_indices = apply_stats_filters(
-    row_group_indices, total_row_groups, output_dtypes, output_column_schemas, filter, stream);
+    host_span<std::vector<cudf::size_type> const>{row_group_indices.data(),
+                                                  row_group_indices.size()},
+    total_row_groups,
+    host_span<data_type const>{output_dtypes.data(), output_dtypes.size()},
+    host_span<int const>{output_column_schemas.data(), output_column_schemas.size()},
+    filter,
+    stream);
 
   return stats_filtered_row_group_indices.value_or(all_row_group_indices(row_group_indices));
 }
 
 std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
-  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
-  host_span<data_type const> output_dtypes,
-  host_span<cudf::size_type const> output_column_schemas,
+  std::span<std::vector<cudf::size_type> const> row_group_indices,
+  std::span<data_type const> output_dtypes,
+  std::span<cudf::size_type const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter)
 {
   // Collect equality literals for each input table column
   auto const literals =
     equality_literals_collector{
-      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
+      filter.get(),
+      host_span<data_type const>{output_dtypes.data(), output_dtypes.size()},
+      host_span<cudf::size_type const>{output_column_schemas.data(), output_column_schemas.size()},
+      per_file_metadata[0].schema}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
@@ -446,9 +458,9 @@ std::vector<byte_range_info> aggregate_reader_metadata::get_bloom_filter_bytes(
 
 std::pair<std::vector<byte_range_info>, std::vector<cudf::size_type>>
 aggregate_reader_metadata::dictionary_pages_byte_ranges(
-  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
-  host_span<data_type const> output_dtypes,
-  host_span<cudf::size_type const> output_column_schemas,
+  std::span<std::vector<cudf::size_type> const> row_group_indices,
+  std::span<data_type const> output_dtypes,
+  std::span<cudf::size_type const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter)
 {
   // Collect (in)equality literals for each input table column
@@ -583,11 +595,11 @@ std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
   cudf::detail::hostdevice_span<parquet::detail::ColumnChunkDesc const> chunks,
   cudf::detail::hostdevice_span<parquet::detail::PageInfo const> pages,
-  cudf::host_span<std::vector<cudf::size_type> const> row_group_indices,
-  cudf::host_span<std::vector<ast::literal*> const> literals,
-  cudf::host_span<std::vector<ast::ast_operator> const> operators,
-  cudf::host_span<data_type const> output_dtypes,
-  cudf::host_span<cudf::size_type const> dictionary_col_schemas,
+  std::span<std::vector<cudf::size_type> const> row_group_indices,
+  std::span<std::vector<ast::literal*> const> literals,
+  std::span<std::vector<ast::ast_operator> const> operators,
+  std::span<data_type const> output_dtypes,
+  std::span<cudf::size_type const> dictionary_col_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
@@ -612,17 +624,20 @@ aggregate_reader_metadata::filter_row_groups_with_dictionary_pages(
 
 std::vector<std::vector<cudf::size_type>>
 aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
-  cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
-  host_span<std::vector<cudf::size_type> const> row_group_indices,
-  host_span<data_type const> output_dtypes,
-  host_span<cudf::size_type const> output_column_schemas,
+  std::span<cudf::device_span<uint8_t const> const> bloom_filter_data,
+  std::span<std::vector<cudf::size_type> const> row_group_indices,
+  std::span<data_type const> output_dtypes,
+  std::span<cudf::size_type const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream) const
 {
   // Collect equality literals for each input table column
   auto const literals =
     equality_literals_collector{
-      filter.get(), output_dtypes, output_column_schemas, per_file_metadata[0].schema}
+      filter.get(),
+      host_span<data_type const>{output_dtypes.data(), output_dtypes.size()},
+      host_span<cudf::size_type const>{output_column_schemas.data(), output_column_schemas.size()},
+      per_file_metadata[0].schema}
       .get_literals();
 
   // Collect schema indices of columns with equality predicate(s)
@@ -651,14 +666,16 @@ aggregate_reader_metadata::filter_row_groups_with_bloom_filters(
                      reinterpret_cast<cuda::std::byte const*>(data.data()), data.size()};
                  });
 
-  auto const bloom_filtered_row_groups = apply_bloom_filters(transformed_bloom_filter_data,
-                                                             row_group_indices,
-                                                             literals,
-                                                             total_row_groups,
-                                                             output_dtypes,
-                                                             bloom_filter_col_schemas,
-                                                             filter,
-                                                             stream);
+  auto const bloom_filtered_row_groups =
+    apply_bloom_filters(transformed_bloom_filter_data,
+                        host_span<std::vector<cudf::size_type> const>{row_group_indices.data(),
+                                                                      row_group_indices.size()},
+                        literals,
+                        total_row_groups,
+                        host_span<data_type const>{output_dtypes.data(), output_dtypes.size()},
+                        bloom_filter_col_schemas,
+                        filter,
+                        stream);
 
   return bloom_filtered_row_groups.value_or(all_row_group_indices(row_group_indices));
 }

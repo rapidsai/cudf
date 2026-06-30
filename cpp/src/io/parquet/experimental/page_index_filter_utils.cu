@@ -26,7 +26,7 @@ namespace cudf::io::parquet::experimental::detail {
 using parquet::detail::find_colchunk_iter_offset;
 
 bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
-                            cudf::host_span<std::vector<size_type> const> row_group_indices)
+                            std::span<std::vector<size_type> const> row_group_indices)
 {
   // For all parquet data sources
   return std::all_of(
@@ -49,7 +49,7 @@ std::tuple<cudf::detail::host_vector<size_type>,
            cudf::detail::host_vector<size_type>,
            cudf::detail::host_vector<size_type>>
 compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_file_metadata,
-                                    cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                    std::span<std::vector<size_type> const> row_group_indices,
                                     size_type schema_idx,
                                     rmm::cuda_stream_view stream)
 {
@@ -125,7 +125,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 
 std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::span<std::vector<size_type> const> row_group_indices,
   cudf::size_type schema_idx)
 {
   // Compute total number of row groups
