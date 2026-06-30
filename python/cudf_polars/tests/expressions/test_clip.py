@@ -61,3 +61,12 @@ def test_clip_empty_and_all_null(
 ) -> None:
     q = pl.LazyFrame({"a": series}).select(expr)
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_clip_non_literal_scalar_bound(engine: pl.GPUEngine, ldf: pl.LazyFrame) -> None:
+    q = ldf.select(
+        pl.col("a").clip(
+            lower_bound=pl.col("lo").first(), upper_bound=pl.col("hi").last()
+        )
+    )
+    assert_gpu_result_equal(q, engine=engine)

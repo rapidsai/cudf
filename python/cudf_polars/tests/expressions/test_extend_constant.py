@@ -32,3 +32,9 @@ def test_extend_constant(
     lf = pl.LazyFrame({"a": series})
     q = lf.select(pl.col("a").extend_constant(value, n))
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_extend_constant_non_literal_value_and_n(engine: pl.GPUEngine) -> None:
+    lf = pl.LazyFrame({"a": [1, 2, 3], "v": [9, 9, 9], "n": [2, 2, 2]})
+    q = lf.select(pl.col("a").extend_constant(pl.col("v").first(), pl.col("n").first()))
+    assert_gpu_result_equal(q, engine=engine)
