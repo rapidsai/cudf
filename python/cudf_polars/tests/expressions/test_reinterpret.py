@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.mark.parametrize(
@@ -26,3 +29,22 @@ def test_reinterpret(engine: pl.GPUEngine, series: pl.Series, *, signed: bool) -
     lf = pl.LazyFrame({"a": series})
     q = lf.select(pl.col("a").reinterpret(signed=signed))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "source_dtype, target_dtype",
+    [
+        (pl.UInt32, pl.Float32),
+        (pl.Int32, pl.Float32),
+        (pl.Float32, pl.Int32),
+        (pl.Float64, pl.Int64),
+    ],
+)
+def test_reinterpret_across_kinds_raises(
+    engine: pl.GPUEngine,
+    source_dtype: pl.DataType,
+    target_dtype: pl.DataType,
+) -> None:
+    lf = pl.LazyFrame({"a": pl.Series([0, 1, 2]).cast(source_dtype)})
+    q = lf.select(pl.col("a").reinterpret(dtype=target_dtype))  # type: ignore[call-arg]
+    assert_ir_translation_raises(q, engine, NotImplementedError)

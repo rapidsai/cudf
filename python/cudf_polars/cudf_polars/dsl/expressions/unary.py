@@ -191,6 +191,16 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "reinterpret":
+            source = children[0].dtype.plc_type
+            target = self.dtype.plc_type
+            if plc.traits.is_floating_point(source) != plc.traits.is_floating_point(
+                target
+            ):
+                raise NotImplementedError(
+                    "reinterpret between integer and floating-point types is not "
+                    "supported"
+                )
 
     @staticmethod
     def _evaluate_n(n_expr: Expr, df: DataFrame, context: ExecutionContext) -> int:
