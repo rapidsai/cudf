@@ -199,8 +199,8 @@ TYPED_TEST(groupby_sum_with_overflow_test, zero_valid_values)
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
   std::vector<int> validity{0};  // null struct
-  auto [validity_mask, null_count] =
-    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+  auto [validity_mask, null_count] = cudf::test::detail::make_null_mask(
+    validity.begin(), validity.end(), cudf::get_current_device_resource_ref());
   auto expect_vals =
     cudf::create_structs_hierarchy(1, std::move(children), null_count, std::move(validity_mask));
 
@@ -237,8 +237,8 @@ TYPED_TEST(groupby_sum_with_overflow_test, null_keys_and_values)
   children.push_back(sum_col.release());
   children.push_back(overflow_col.release());
   std::vector<int> validity{1, 1, 1, 0};
-  auto [validity_mask, null_count] =
-    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+  auto [validity_mask, null_count] = cudf::test::detail::make_null_mask(
+    validity.begin(), validity.end(), cudf::get_current_device_resource_ref());
   auto expect_vals =
     cudf::create_structs_hierarchy(4, std::move(children), null_count, std::move(validity_mask));
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 namespace CUDF_EXPORT cudf {
 namespace test::detail {
@@ -31,8 +32,11 @@ void expect_table_properties_equal(cudf::table_view lhs, cudf::table_view rhs);
  *
  * @param lhs The first table
  * @param rhs The second table
+ * @param mr Memory resources used for temporary device allocations
  */
-void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
+void expect_tables_equal(cudf::table_view lhs,
+                         cudf::table_view rhs,
+                         cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief Verifies the equivalency of two tables.
@@ -45,8 +49,11 @@ void expect_tables_equal(cudf::table_view lhs, cudf::table_view rhs);
  *
  * @param lhs The first table
  * @param rhs The second table
+ * @param mr Memory resources used for temporary device allocations
  */
-void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
+void expect_tables_equivalent(cudf::table_view lhs,
+                              cudf::table_view rhs,
+                              cudf::memory_resources mr = cudf::get_current_device_resource_ref());
 
 }  // namespace test::detail
 }  // namespace CUDF_EXPORT cudf
@@ -58,13 +65,13 @@ void expect_tables_equivalent(cudf::table_view lhs, cudf::table_view rhs);
     cudf::test::detail::expect_table_properties_equal(lhs, rhs); \
   } while (0)
 
-#define CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, rhs)        \
+#define CUDF_TEST_EXPECT_TABLES_EQUAL(lhs, rhs...)     \
   do {                                                 \
     SCOPED_TRACE(" <--  line of failure\n");           \
     cudf::test::detail::expect_tables_equal(lhs, rhs); \
   } while (0)
 
-#define CUDF_TEST_EXPECT_TABLES_EQUIVALENT(lhs, rhs)        \
+#define CUDF_TEST_EXPECT_TABLES_EQUIVALENT(lhs, rhs...)     \
   do {                                                      \
     SCOPED_TRACE(" <--  line of failure\n");                \
     cudf::test::detail::expect_tables_equivalent(lhs, rhs); \

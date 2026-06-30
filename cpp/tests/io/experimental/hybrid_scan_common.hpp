@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -78,7 +78,8 @@ inline auto make_list_str_column(std::mt19937& gen, bool is_str_nullable, bool i
     cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
   auto [null_mask, null_count] = [&]() {
     if (is_list_nullable) {
-      return cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
+      return cudf::test::detail::make_null_mask(
+        list_valids, list_valids + num_rows, cudf::get_current_device_resource_ref());
     } else {
       return std::make_pair(rmm::device_buffer{}, 0);
     }
@@ -189,17 +190,18 @@ auto create_parquet_with_stats(
     auto const num_rows = static_cast<cudf::column_view>(col0).size();
 
     columns.emplace_back(col0.release());
-    auto [nullmask, nullcount] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+    auto [nullmask, nullcount] = cudf::test::detail::make_null_mask(
+      valids, valids + num_rows, cudf::get_current_device_resource_ref());
     columns.back()->set_null_mask(std::move(nullmask), nullcount);
 
     columns.emplace_back(col1.release());
-    std::tie(nullmask, nullcount) =
-      cudf::test::detail::make_null_mask(valids + num_rows, valids + 2 * num_rows);
+    std::tie(nullmask, nullcount) = cudf::test::detail::make_null_mask(
+      valids + num_rows, valids + 2 * num_rows, cudf::get_current_device_resource_ref());
     columns.back()->set_null_mask(std::move(nullmask), nullcount);
 
     columns.emplace_back(col2.release());
-    std::tie(nullmask, nullcount) =
-      cudf::test::detail::make_null_mask(valids + 2 * num_rows, valids + 3 * num_rows);
+    std::tie(nullmask, nullcount) = cudf::test::detail::make_null_mask(
+      valids + 2 * num_rows, valids + 3 * num_rows, cudf::get_current_device_resource_ref());
     columns.back()->set_null_mask(std::move(nullmask), nullcount);
 
     // Purge non-empty nulls from the strings column only

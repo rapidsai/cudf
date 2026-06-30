@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1733,10 +1733,10 @@ TEST_F(JsonReaderTest, JsonNestedDtypeSchema)
                                  float_wrapper{{0.0, 123.0}, {false, true}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1), int_wrapper{{1, 1, 2}});
   // List column expected
-  auto leaf_child     = float_wrapper{{0.0, 123.0}, {false, true}};
-  auto const validity = {1, 0, 0};
-  auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(validity.begin(), validity.end());
+  auto leaf_child              = float_wrapper{{0.0, 123.0}, {false, true}};
+  auto const validity          = {1, 0, 0};
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    validity.begin(), validity.end(), cudf::get_current_device_resource_ref());
   auto expected = cudf::make_lists_column(
     3,
     int_wrapper{{0, 2, 2, 2}}.release(),
@@ -3417,9 +3417,9 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
     EXPECT_EQ(result.metadata.schema_info[1].children[1].children[0].name, "d");
 
     auto const expected0 = [&] {
-      auto const valids = std::vector<bool>{1, 0};
-      auto [null_mask, null_count] =
-        cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+      auto const valids            = std::vector<bool>{1, 0};
+      auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+        valids.begin(), valids.end(), cudf::get_current_device_resource_ref());
       return cudf::make_lists_column(2,
                                      size_type_wrapper{0, 1, 1}.release(),
                                      int64_wrapper{1}.release(),
@@ -3432,9 +3432,9 @@ TEST_F(JsonReaderTest, JsonNestedDtypeFilterWithOrder)
         auto child = cudf::test::strings_column_wrapper{};
         return cudf::test::structs_column_wrapper{{child}};
       };
-      auto const valids = std::vector<bool>{0, 0};
-      auto [null_mask, null_count] =
-        cudf::test::detail::make_null_mask(valids.begin(), valids.end());
+      auto const valids            = std::vector<bool>{0, 0};
+      auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+        valids.begin(), valids.end(), cudf::get_current_device_resource_ref());
       return cudf::make_lists_column(2,
                                      size_type_wrapper{0, 0, 0}.release(),
                                      get_structs().release(),
@@ -3500,8 +3500,8 @@ TEST_F(JsonReaderTest, NullifyMixedList)
     return cudf::test::structs_column_wrapper{{child0, child1}, no_nulls()}.release();
   };
   std::vector<bool> const list_nulls{1, 1, 0, 0, 0, 1, 0};
-  auto [null_mask, null_count] =
-    cudf::test::detail::make_null_mask(list_nulls.cbegin(), list_nulls.cend());
+  auto [null_mask, null_count] = cudf::test::detail::make_null_mask(
+    list_nulls.cbegin(), list_nulls.cend(), cudf::get_current_device_resource_ref());
   auto const expected = cudf::make_lists_column(
     7,
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 1, 1, 1, 1, 3, 3}.release(),
