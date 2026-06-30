@@ -7,8 +7,8 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 cdef class Table:
-    # List[pylibcudf.Column]
-    cdef public list _columns
+    # Tuple[pylibcudf.Column]
+    cdef public tuple _columns
 
     cdef table_view view(self)
 
@@ -33,5 +33,6 @@ cdef class Table:
         object stream,
     )
 
-    cpdef list columns(self)
+    cpdef tuple columns(self)
+    cpdef list release(self)
     cpdef Table copy(self, object stream = *, DeviceMemoryResource mr=*)

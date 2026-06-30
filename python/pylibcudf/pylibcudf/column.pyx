@@ -333,7 +333,7 @@ cdef class Column:
         The number of null rows in the column.
     offset : int
         The offset into the data buffer where the column's data begins.
-    children : list
+    children : Iterable[Column]
         The children of this column if it is a compound column type.
     validate : bool, default True
         Whether to validate that data and mask satisfy Span protocol.
@@ -343,8 +343,9 @@ cdef class Column:
     def __init__(
         self, DataType data_type not None, size_type size, object data,
         object mask, size_type null_count, size_type offset,
-        list children, bint validate=True
+        children, bint validate=True
     ):
+        children = list(children)
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
 
@@ -600,7 +601,7 @@ cdef class Column:
         DeviceBuffer buff,
         DataType dtype,
         size_type size,
-        list children,
+        children,
     ):
         """
         Create a Column from an RMM DeviceBuffer.
@@ -613,14 +614,15 @@ cdef class Column:
             The number of rows in the column.
         dtype : DataType
             The type of the data in the buffer.
-        children : list
-            List of child columns.
+        children : Iterable[Column]
+            The child columns.
 
         Notes
         -----
         To provide a mask and null count, use `Column.with_mask` after
         this method.
         """
+        children = list(children)
         if plc_is_fixed_width(dtype) and len(children) != 0:
             raise ValueError("Fixed-width types must have zero children.")
         elif dtype.id() == type_id.STRING and len(children) != 1:
