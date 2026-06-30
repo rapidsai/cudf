@@ -89,7 +89,7 @@ dremel_data get_encoding(column_view h_col,
       cuda::counting_iterator<size_type>{start},
       cuda::counting_iterator<size_type>{end},
       empties_idx.begin(),
-      [d_off] __device__(auto i) { return d_off[i] == d_off[i + 1]; },
+      [d_off] __device__(auto i) -> bool { return d_off[i] == d_off[i + 1]; },
       stream);
     auto empties_end =
       thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),

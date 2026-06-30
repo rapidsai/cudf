@@ -515,7 +515,7 @@ rmm::device_uvector<cudf::size_type> compute_all_tokens(
     cuda::counting_iterator<int64_t>{0},
     cuda::counting_iterator<int64_t>{chars_size},
     d_edges.begin(),
-    [d_input_chars] __device__(auto idx) {
+    [d_input_chars] __device__(auto idx) -> bool {
       if (idx == 0) { return d_input_chars[idx] == ' '; }
       return (d_input_chars[idx] != ' ' && d_input_chars[idx - 1] == ' ');
     },

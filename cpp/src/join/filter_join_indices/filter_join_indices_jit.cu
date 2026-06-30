@@ -288,7 +288,7 @@ apply_join_semantics(cudf::table_view const& left,
     }
     if (num_invalid > 0) {
       auto filter_passing_indices_ref = filter_passing_indices.ref(cuco::contains);
-      auto is_unmatched_idx           = [filter_passing_indices_ref] __device__(size_type idx) {
+      auto is_unmatched_idx = [filter_passing_indices_ref] __device__(size_type idx) -> bool {
         auto is_unmatched = !filter_passing_indices_ref.contains(idx);
         return is_unmatched;
       };

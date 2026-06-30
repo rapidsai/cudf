@@ -279,7 +279,7 @@ filter_join_indices(cudf::table_view const& left,
         // CUB APIs are used instead of Thrust to enable 64-bit operations on index vectors of size
         // greater than integer limits
         auto filter_passing_indices_ref = filter_passing_indices.ref(cuco::contains);
-        auto is_unmatched_idx           = [filter_passing_indices_ref] __device__(size_type idx) {
+        auto is_unmatched_idx = [filter_passing_indices_ref] __device__(size_type idx) -> bool {
           auto is_unmatched = !filter_passing_indices_ref.contains(idx);
           return is_unmatched;
         };

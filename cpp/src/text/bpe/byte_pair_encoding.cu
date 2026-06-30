@@ -431,7 +431,7 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   auto d_chars = chars.data();
 
   auto const d_inserts     = d_working.data();  // stores the insert positions
-  auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) {
+  auto offsets_at_non_zero = [d_spaces = d_spaces.data()] __device__(auto idx) -> bool {
     return d_spaces[idx] > 0;  // separator to be inserted here
   };
   auto const copy_end =
