@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -29,7 +29,7 @@ enum regex_flags : uint32_t {
   MULTILINE   = 8,    ///< the '^' and '$' honor new-line characters
   DOTALL      = 16,   ///< the '.' matching includes new-line characters
   ASCII       = 256,  ///< use only ASCII when matching built-in character classes
-  EXT_NEWLINE = 512,  ///< new-line matches extended characters
+  EXT_NEWLINE = 512   ///< new-line matches extended characters
 };
 
 /**

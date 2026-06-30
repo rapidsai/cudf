@@ -36,6 +36,7 @@
 #include "glushkov_regcomp.h"
 
 #include <algorithm>
+#include <bit>
 #include <map>
 #include <memory>
 #include <unordered_set>
@@ -322,8 +323,7 @@ void build_shift_masks(gkprog& gp)
   for (uint32_t p = 0; p < gp.num_states; ++p) {
     glushkov_state_t follow = gp.follow_table[p];
     while (follow) {
-      uint32_t const q =
-        static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(follow)));
+      auto const q = std::countr_zero(follow);
       follow &= follow - 1;
 
       int32_t const span = static_cast<int32_t>(q) - static_cast<int32_t>(p);
@@ -341,8 +341,7 @@ void build_shift_masks(gkprog& gp)
   std::vector<std::pair<int32_t, glushkov_state_t>> span_list(span_to_mask.begin(),
                                                               span_to_mask.end());
   std::sort(span_list.begin(), span_list.end(), [](auto const& a, auto const& b) {
-    return __builtin_popcountll(static_cast<long long>(a.second)) >
-           __builtin_popcountll(static_cast<long long>(b.second));
+    return std::popcount(a.second) > std::popcount(b.second);
   });
 
   // Use a local const for the loop bound so GCC's static analyzer can prove
@@ -362,8 +361,7 @@ void build_shift_masks(gkprog& gp)
     glushkov_state_t src = span_list[i].second;
     int32_t const s      = span_list[i].first;
     while (src) {
-      uint32_t const p =
-        static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(src)));
+      auto const p = std::countr_zero(src);
       src &= src - 1;
       uint32_t const q = static_cast<uint32_t>(static_cast<int32_t>(p) + s);
       gp.exception_mask |= glushkov_state_t(1) << p;
@@ -402,7 +400,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
 
   // Map instruction ID → Glushkov position index (0-based, left-to-right order)
   std::vector<int32_t> inst_to_pos(static_cast<size_t>(num_insts), -1);
-  for (int32_t idx = 0; idx < static_cast<int32_t>(char_insts.size()); ++idx) {
+  for (int32_t idx = 0; std::cmp_less(idx, char_insts.size()); ++idx) {
     inst_to_pos[char_insts[idx]] = idx;
   }
 
@@ -414,17 +412,6 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
     int32_t const inst_id = char_insts[idx];
     auto const& inst      = prog.insts_data()[inst_id];
     gp->pos_insts[idx]    = inst;
-    // gp->pos_inst_type[idx] = inst.type;
-    // if (inst.type == CHAR) {
-    //   gp->pos_ch[idx] = inst.u1.c;
-    // } else if (inst.type == ANY) {
-    //   // Store the newline-mode flag from the Thompson instruction:
-    //   //   'N' = EXT_NEWLINE (reject all is_newline chars)
-    //   //   anything else = default (reject only '\n')
-    //   gp->pos_ch[idx] = inst.u1.c;
-    // } else if (inst.type == CCLASS || inst.type == NCCLASS) {
-    //   gp->pos_cls_idx[idx] = inst.u1.cls_id;
-    // }
   }
 
   // Copy character class definitions (referenced by CCLASS/NCCLASS positions)
@@ -538,8 +525,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
     bool all_char       = true;
     bool seen_first     = false;
     while (fs) {
-      uint32_t const p =
-        static_cast<uint32_t>(__builtin_ctzll(static_cast<unsigned long long>(fs)));
+      auto const p = std::countr_zero(fs);
       fs &= fs - 1;
       if (gp->pos_insts[p].type != CHAR) {
         all_char = false;

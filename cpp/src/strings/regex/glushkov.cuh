@@ -20,6 +20,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/bit>
+#include <cuda/std/array>
 #include <cuda/std/optional>
 
 #include <cstddef>
@@ -41,11 +42,13 @@ struct gkprog;
  * Total size: ~1608 bytes — negligible impact on occupancy.
  */
 struct glushkov_shmem_cache {
-  glushkov_state_t reach_ascii[GLUSHKOV_ASCII_TABLE_SIZE];  ///< precomputed ASCII reach masks
-  glushkov_state_t shift_masks[GLUSHKOV_MAX_SHIFTS];  ///< [shift_count] shift-and source masks
-  glushkov_state_t
-    exception_successors[GLUSHKOV_MAX_STATES];  ///< [num_states] exception successor masks
-  uint8_t shift_amounts[GLUSHKOV_MAX_SHIFTS];   ///< [shift_count] shift amounts
+  cuda::std::array<glushkov_state_t, GLUSHKOV_ASCII_TABLE_SIZE>
+    reach_ascii;  ///< precomputed ASCII reach masks
+  cuda::std::array<glushkov_state_t, GLUSHKOV_MAX_SHIFTS>
+    shift_masks;  ///< [shift_count] shift-and source masks
+  cuda::std::array<glushkov_state_t, GLUSHKOV_MAX_STATES>
+    exception_successors;  ///< [num_states] exception successor masks
+  cuda::std::array<uint8_t, GLUSHKOV_MAX_SHIFTS> shift_amounts;  ///< [shift_count] shift amounts
 };
 
 /**
@@ -140,14 +143,14 @@ struct gkprog_device {
   std::size_t _prog_size{};  ///< Total buffer size (for potential shmem loading)
   int32_t _thread_count{};   ///< Used for strided kernel loops
 
-  __device__ glushkov_state_t priority_kill(glushkov_state_t const state,
-                                            glushkov_state_t const accept_mask) const;
-  __device__ bool position_matches(reinst const& pos,
-                                   char32_t const c,
-                                   reclass_device const* classes,
-                                   uint8_t const* codepoint_flags) const;
-  __device__ glushkov_state_t compute_follow_impl(glushkov_state_t const state) const;
-  __device__ glushkov_state_t compute_reach_impl(char32_t const c) const;
+  [[nodiscard]] __device__ glushkov_state_t priority_kill(glushkov_state_t const state,
+                                                          glushkov_state_t const accept_mask) const;
+  [[nodiscard]] __device__ bool position_matches(reinst const& pos,
+                                                 char32_t const c,
+                                                 reclass_device const* classes,
+                                                 uint8_t const* codepoint_flags) const;
+  [[nodiscard]] __device__ glushkov_state_t compute_follow_impl(glushkov_state_t const state) const;
+  [[nodiscard]] __device__ glushkov_state_t compute_reach_impl(char32_t const c) const;
 };
 
 /**
@@ -176,14 +179,6 @@ struct gkprog_device {
  *
  */
 
-// Count least-significant zeros in a 64-bit value
-// (portable across host and device) -- dw: not necessary
-__device__ __forceinline__ uint32_t glushkov_ctz64(uint64_t x)
-{
-  // dw: use this directly; no need for this inline function
-  return static_cast<uint32_t>(cuda::std::countr_zero(x));
-}
-
 /**
  * @brief Emulate Thompson's first-alternative-wins priority by killing lower-priority states.
  *
@@ -201,8 +196,7 @@ __device__ __forceinline__ glushkov_state_t
 gkprog_device::priority_kill(glushkov_state_t const state, glushkov_state_t const accept_mask) const
 {
   auto const lsb_a = static_cast<uint32_t>(cuda::std::countr_zero(state & accept_mask));
-  if (lsb_a < 63) { return state & ((glushkov_state_t(1) << (lsb_a + 1)) - 1); }
-  return state;
+  return (lsb_a < 63) ? (state & ((glushkov_state_t(1) << (lsb_a + 1)) - 1)) : state;
 }
 
 /**
@@ -250,7 +244,7 @@ gkprog_device::compute_follow_impl(glushkov_state_t const state) const
   // Phase 2: exception transitions (backward / large-span)
   glushkov_state_t exc = state & exception_mask;
   while (exc) {
-    uint32_t const p = glushkov_ctz64(exc);
+    auto const p = cuda::std::countr_zero(exc);
     exc &= exc - 1;  // clear lowest set bit
     follow |= _exception_successors[p];
   }
@@ -474,37 +468,6 @@ __device__ __forceinline__ match_result gkprog_device::find(int32_t const,
   return cur_match;
 }
 
-/**
- * @brief Cooperatively load Glushkov program arrays into shared memory.
- *
- * Must be called by ALL threads in the block.  After return (caller must call
- * __syncthreads), the @p cache is ready for use.
- */
-// #ifdef __CUDACC__
-//__device__ __forceinline__ gkprog_device glushkov_load_shmem(gkprog_device const& prog,
-//                                                             glushkov_shmem_cache* cache)
-//{
-//  auto result = gkprog_device(prog);
-//  // Cooperative load: each thread handles a strided portion of each array.
-//  for (uint32_t i = threadIdx.x; i < static_cast<uint32_t>(GLUSHKOV_ASCII_TABLE_SIZE);
-//       i += blockDim.x) {
-//    cache->reach_ascii[i] = prog._reach_ascii[i];
-//  }
-//  result._reach_ascii = cache->reach_ascii;
-//  for (uint32_t i = threadIdx.x; i < prog.shift_count; i += blockDim.x) {
-//    cache->shift_masks[i]   = prog._shift_masks[i];
-//    cache->shift_amounts[i] = prog._shift_amounts[i];
-//  }
-//  result._shift_masks   = cache->shift_masks;
-//  result._shift_amounts = cache->shift_amounts;
-//  for (uint32_t i = threadIdx.x; i < prog.num_states; i += blockDim.x) {
-//    cache->exception_successors[i] = prog._exception_successors[i];
-//  }
-//  result._exception_successors = cache->exception_successors;
-//  return result;
-//}
-// #endif
-
 __device__ inline void gkprog_device::store(void* buffer) const
 {
   auto cache = static_cast<glushkov_shmem_cache*>(buffer);
@@ -524,10 +487,10 @@ __device__ gkprog_device gkprog_device::load(gkprog_device const prog, void* buf
 {
   auto result                  = gkprog_device(prog);
   auto cache                   = static_cast<glushkov_shmem_cache const*>(buffer);
-  result._reach_ascii          = cache->reach_ascii;
-  result._shift_amounts        = cache->shift_amounts;
-  result._shift_masks          = cache->shift_masks;
-  result._exception_successors = cache->exception_successors;
+  result._reach_ascii          = cache->reach_ascii.data();
+  result._shift_amounts        = cache->shift_amounts.data();
+  result._shift_masks          = cache->shift_masks.data();
+  result._exception_successors = cache->exception_successors.data();
   return result;
 }
 
