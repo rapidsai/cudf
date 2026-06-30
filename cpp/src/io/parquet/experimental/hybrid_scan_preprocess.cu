@@ -321,6 +321,8 @@ struct is_row_pruned_fn {
 bool hybrid_scan_reader_impl::are_all_rows_pruned(cudf::column_view const& row_mask,
                                                   rmm::cuda_stream_view stream) const
 {
+  CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8,
+               "Input row mask column must be a boolean column");
   return cudf::detail::all_of(
     cuda::counting_iterator<cudf::size_type>{0},
     cuda::counting_iterator{row_mask.size()},
@@ -335,6 +337,7 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_ma
 {
   CUDF_FUNC_RANGE();
 
+  // Total number of output row mask rows to be updated from the input
   auto const total_rows = static_cast<cudf::size_type>(in_row_mask.size());
 
   CUDF_EXPECTS(out_row_mask_offset + total_rows <= out_row_mask.size(),

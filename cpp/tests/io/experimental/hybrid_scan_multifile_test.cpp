@@ -121,7 +121,7 @@ TEST_F(HybridScanMultifileTest, EmptyResult)
   auto col3 = make_list_str_column(gen, true, false);
   auto col4 = make_list_str_column(gen, true, true);
 
-  auto constexpr literal_value = uint32_t(200);
+  auto constexpr literal_value = uint32_t(num_ordered_rows);
   test_hybrid_scan_multifile({col0, *col1, *col2, *col3, *col4}, false, literal_value);
 }
 
