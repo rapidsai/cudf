@@ -72,7 +72,7 @@ dependencies:
 - odfpy
 - openpyxl
 - packaging
-- pandas>=3.0.0,<3.1.0
+- pandas>=3.0.0,<3.0.4a0
 - pandoc
 - polars>=1.35,<1.42
 - pre-commit
