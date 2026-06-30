@@ -568,6 +568,28 @@ __device__ inline void decode(float * output, float input){
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(out_ptx->view(), a->view());
   }
+
+  // sliced
+  {
+    auto a = cudf::test::fixed_width_column_wrapper<float>(
+               {1.0F, 2.0F, 3.0F, 4.0F, 5.0F, 5.0F, 5.0F, 1.0F, 2.0F})
+               .release();
+
+    auto a_encoded     = cudf::dictionary::encode(a->view());
+    auto sliced_input  = cudf::slice(a_encoded->view(), {2, 7}).front();
+    auto sliced_expect = cudf::slice(a->view(), {2, 7}).front();
+
+    cudf::transform_input inputs[] = {sliced_input};
+
+    auto out = cudf::transform_extended(
+      inputs, cuda, cudf::data_type{cudf::type_id::FLOAT32}, cudf::udf_source_type::CUDA);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), sliced_expect);
+
+    auto out_ptx = cudf::transform_extended(
+      inputs, ptx, cudf::data_type{cudf::type_id::FLOAT32}, cudf::udf_source_type::PTX);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out_ptx->view(), a->view());
+  }
 }
 
 struct TernaryOperationTest : public cudf::test::BaseFixture {};

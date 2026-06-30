@@ -517,7 +517,8 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
   {
     auto const& indices = child(dictionary_indices_column_index);
     auto const& keys    = child(dictionary_keys_column_index);
-    auto const index    = indices.template element<typename T::index_type>(element_index);
+    auto const index    = indices.template element<typename T::index_type>(
+      element_index + offset());  // account for this view's _offset
     return keys.template element<typename T::key_type>(index);
   }
 
