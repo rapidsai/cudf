@@ -111,8 +111,8 @@ struct empty_column_constructor {
     }
     if constexpr (k == aggregation::Kind::MERGE_HISTOGRAM) { return empty_like(values); }
 
-    if constexpr (k == aggregation::Kind::SUM_WITH_OVERFLOW) {
-      // SUM_WITH_OVERFLOW returns a struct with sum (same type as input) and overflow (bool)
+    if constexpr (k == aggregation::Kind::SUM_OVERFLOW) {
+      // SUM_OVERFLOW returns a struct with sum (same type as input) and overflow (bool)
       // children
       std::vector<std::unique_ptr<cudf::column>> children;
       children.push_back(make_empty_column(values.type()));
@@ -201,13 +201,13 @@ void verify_valid_requests(std::span<RequestType const> requests)
       }),
     "Invalid type/aggregation combination.");
 
-  // Additional validation for SUM_WITH_OVERFLOW: only signed integers and decimals are supported
+  // Additional validation for SUM_OVERFLOW: only signed integers and decimals are supported
   for (auto const& request : requests) {
     for (auto const& agg : request.aggregations) {
-      if (agg->kind == aggregation::SUM_WITH_OVERFLOW) {
+      if (agg->kind == aggregation::SUM_OVERFLOW) {
         CUDF_EXPECTS(
-          cudf::detail::is_valid_aggregation(request.values.type(), aggregation::SUM_WITH_OVERFLOW),
-          "SUM_WITH_OVERFLOW aggregation only supports signed integer types and decimal types. "
+          cudf::detail::is_valid_aggregation(request.values.type(), aggregation::SUM_OVERFLOW),
+          "SUM_OVERFLOW aggregation only supports signed integer types and decimal types. "
           "Unsigned integers, bool, dictionary columns, and other types are not supported.");
       }
     }

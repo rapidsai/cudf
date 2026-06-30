@@ -47,7 +47,7 @@ std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs(
 
   // Performs naive global memory aggregations when the workload is not compatible with shared
   // memory, such as when aggregating dictionary columns, when there is insufficient dynamic
-  // shared memory for shared memory aggregations, or when SUM_WITH_OVERFLOW aggregations are
+  // shared memory for shared memory aggregations, or when SUM_OVERFLOW aggregations are
   // present.
   auto const run_aggs_by_global_mem_kernel = [&] {
     auto [agg_results, unique_key_indices] = compute_global_memory_aggs(
