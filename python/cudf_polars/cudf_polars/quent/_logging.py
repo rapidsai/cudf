@@ -39,8 +39,9 @@ class QuentLogger:
         )
         self._lock = threading.Lock()
 
-    def _get_logger(self, **initial_values: Any) -> Any:
-        if _HAS_STRUCTLOG:
+    if _HAS_STRUCTLOG:
+
+        def _get_logger(self, **initial_values: Any) -> Any:
             return structlog.wrap_logger(
                 DequeLogger(self._buffer, self._lock),
                 processors=[
@@ -51,7 +52,9 @@ class QuentLogger:
                 wrapper_class=structlog.stdlib.BoundLogger,
                 **initial_values,
             )
-        else:  # pragma: no cover; requires no structlog
+    else:
+
+        def _get_logger(self, **initial_values: Any) -> Any:
             return logging.getLogger(__name__)
 
     def emit(self, event: Event) -> None:
