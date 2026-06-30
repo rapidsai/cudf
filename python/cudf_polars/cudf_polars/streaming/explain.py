@@ -488,6 +488,9 @@ def _predicate_to_str(expr: Expr) -> str:
             sym = _BINOP_SYMBOLS.get(op, op.name)
             return f"({_predicate_to_str(left)} {sym} {_predicate_to_str(right)})"
         case UnaryFunction(name=name):
+            # Unlike the other cases here, UnaryFunction doesn't have a fixed
+            # number of children. E.g. `pl.col("x").fill_null(0)` has two:
+            # the column expression ("x") and the fill value literal (0).
             args = ", ".join(_predicate_to_str(child) for child in expr.children)
             return f"{name}({args})"
         case Ternary():
