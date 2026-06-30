@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import functools
@@ -165,9 +165,11 @@ def test_sort_values(data, index, ascending, na_position, ignore_index):
     gs = cudf.from_pandas(ps)
 
     expected = ps.apply(
-        lambda x: sorted(x, key=key_func, reverse=not ascending)
-        if x is not None
-        else None
+        lambda x: (
+            sorted(x, key=key_func, reverse=not ascending)
+            if x is not None
+            else None
+        )
     )
     if ignore_index:
         expected.reset_index(drop=True, inplace=True)
@@ -356,7 +358,7 @@ def test_contains_invalid(data, scalar):
     sr = cudf.Series(data)
     with pytest.raises(
         TypeError,
-        match="Type/Scale of search key does not "
+        match=r"Type/Scale of search key does not "
         "match list column element type.",
     ):
         sr.list.contains(scalar)
@@ -446,7 +448,7 @@ def test_index_invalid_type(data, search_key):
     sr = cudf.Series(data)
     with pytest.raises(
         TypeError,
-        match="Type/Scale of search key does not "
+        match=r"Type/Scale of search key does not "
         "match list column element type.",
     ):
         sr.list.index(search_key)
@@ -469,7 +471,7 @@ def test_index_invalid_length(data, search_key):
     sr = cudf.Series(data)
     with pytest.raises(
         RuntimeError,
-        match="Number of search keys must match list column size.",
+        match=r"Number of search keys must match list column size.",
     ):
         sr.list.index(search_key)
 
@@ -509,7 +511,7 @@ def test_concat_elements_raise():
     s = cudf.Series([[1, 2, 3]])  # no nesting
     with pytest.raises(
         ValueError,
-        match=".*Child of the input lists column must also be a lists column",
+        match=r".*Child of the input lists column must also be a lists column",
     ):
         s.list.concat()
 

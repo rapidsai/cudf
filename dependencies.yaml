@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Dependency list for https://github.com/rapidsai/dependency-file-generator
@@ -6,7 +6,7 @@ files:
   all:
     output: conda
     matrix:
-      cuda: ["12.9", "13.2"]
+      cuda: ["12.9", "13.3"]
       arch: [x86_64, aarch64]
     includes:
       - build_base
@@ -23,11 +23,15 @@ files:
       - depends_on_libkvikio
       - depends_on_librmm
       - depends_on_libnvcomp
+      - depends_on_librapidsmpf
+      - depends_on_libucxx
       - depends_on_numba_cuda
+      - depends_on_numba_cuda_mlir
       - depends_on_rapids_logger
       - depends_on_rapidsmpf
       - depends_on_ray
       - depends_on_rmm
+      - depends_on_ucxx
       - develop
       - docs
       - iwyu
@@ -49,6 +53,7 @@ files:
       - test_python_cudf_common
       - test_python_pylibcudf
       - test_python_cudf_pandas
+      - test_cudf_pandas_pandas_tests
       - test_python_cudf_polars
       - test_python_s3
   test_static_build:
@@ -86,6 +91,11 @@ files:
       - depends_on_pylibcudf
       - depends_on_libcudf
       - depends_on_numba_cuda
+      - depends_on_numba_cuda_mlir
+  test_cuml:
+    output: none
+    includes:
+      - depends_on_cuml
   test_python_pylibcudf:
     output: none
     includes:
@@ -118,6 +128,7 @@ files:
       - depends_on_custreamz
       - depends_on_cudf_polars
       - depends_on_ray
+      - depends_on_cudf_streaming
   test_java:
     output: none
     includes:
@@ -137,6 +148,17 @@ files:
   checks:
     output: none
     includes:
+      - develop
+      - py_version
+  test_cmake:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - build_cpp
+      - cuda
+      - cuda_static
+      - cuda_version
       - develop
       - py_version
   clang_tidy:
@@ -198,6 +220,7 @@ files:
       - depends_on_cupy
       - depends_on_libcudf
       - depends_on_numba_cuda
+      - depends_on_numba_cuda_mlir
       - depends_on_pylibcudf_pyarrow
       - depends_on_rmm
       - depends_on_cuda_python
@@ -240,6 +263,7 @@ files:
     extras:
       table: project
     includes:
+      - cuda
       - depends_on_libkvikio
       - depends_on_libnvcomp
       - depends_on_librmm
@@ -333,6 +357,7 @@ files:
     includes:
       - run_cudf_polars
       - depends_on_rapidsmpf
+      - depends_on_cudf_streaming
       - depends_on_pylibcudf
       - depends_on_cuda_python
   # TODO(26.10): Remove this alias in favor of dask
@@ -468,6 +493,80 @@ files:
     includes:
       - test_python_common
       - test_python_cudf_common
+  py_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
+      - depends_on_libucxx
+  py_run_libcudf_streaming:
+    output: pyproject
+    pyproject_dir: python/libcudf_streaming
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf
+      - depends_on_librmm
+      - depends_on_librapidsmpf
+  py_build_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_skbuild
+  py_rapids_build_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: tool.rapids-build-backend
+      key: requires
+    includes:
+      - build_base
+      - build_cpp
+      - build_python_common
+      - depends_on_libcudf_streaming
+      - depends_on_librapidsmpf
+      - depends_on_libucxx
+      - depends_on_librmm
+      - depends_on_pylibcudf
+      - depends_on_rapidsmpf
+      - depends_on_rmm
+      - depends_on_ucxx
+  py_run_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: project
+    includes:
+      - depends_on_libcudf_streaming
+      - depends_on_pylibcudf
+      - depends_on_rapidsmpf
+      - depends_on_rmm
+  py_test_cudf_streaming:
+    output: pyproject
+    pyproject_dir: python/cudf_streaming
+    extras:
+      table: project.optional-dependencies
+      key: test
+    includes:
+      - test_python_common
+      - depends_on_cupy
+      - numpy_run
   test_python_narwhals:
     output: none
     includes:
@@ -480,6 +579,19 @@ files:
       - depends_on_cudf
       - depends_on_cudf_polars
       - depends_on_narwhals
+  test_cudf_pandas_compat:
+    output: none
+    matrix:
+      cuda: ["12.9", "13.3"]
+      pandas_compat_version: ["3.0"]
+    includes:
+      - test_cudf_pandas_compat
+  test_cudf_polars_compat:
+    output: none
+    matrix:
+      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41"]
+    includes:
+      - test_cudf_polars_compat
 channels:
   - rapidsai-nightly
   - rapidsai
@@ -517,8 +629,9 @@ dependencies:
     common:
       - output_types: conda
         packages:
+          - croaring==4.4.2
           - flatbuffers==24.3.25
-          - librdkafka>=2.11.1,<2.12.0
+          - librdkafka<2.15.0a0
   depends_on_libnvcomp:
     common:
       - output_types: conda
@@ -565,12 +678,12 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
 
-          - cython>=3.2.2
+          - cython>=3.2.2,<3.3.0a0
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - numpy>=1.26,<3.0
+          - numpy>=2.0,<3.0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -613,6 +726,10 @@ dependencies:
               cuda: "13.2"
             packages:
               - cuda-version=13.2
+          - matrix:
+              cuda: "13.3"
+            packages:
+              - cuda-version=13.3
       - output_types: requirements
         matrices:
           # if use_cuda_wheels=false is provided, do not add dependencies on any CUDA wheels
@@ -663,11 +780,17 @@ dependencies:
               use_cuda_wheels: "true"
             packages:
               - cuda-toolkit==13.2.*
+          - matrix:
+              cuda: "13.3"
+              use_cuda_wheels: "true"
+            packages:
+              - cuda-toolkit==13.3.*
   cuda:
     common:
       - output_types: [conda]
         packages:
           - cuda-cudart-dev
+          - cuda-cupti-dev
           - cuda-nvrtc-dev
           - cuda-nvtx-dev
           - cuda-sanitizer-api
@@ -701,6 +824,13 @@ dependencies:
           - matrix:
             packages:
               - *nvjitlink_cu13
+  cuda_static:
+    common:
+      - output_types: [conda]
+        packages:
+          - cuda-cudart-static
+          - cuda-nvrtc-static
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
@@ -784,7 +914,11 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &pandas pandas>=3.0.0,<3.1.0
+          # pandas 3.0.4 segfaults constructing pd.Timedelta on Python 3.14,
+          # which breaks `import cudf` (https://github.com/pandas-dev/pandas/issues/66086).
+          # Cap below 3.0.4 (rather than just excluding it) until a fixed
+          # release is confirmed upstream, then raise the bound.
+          - &pandas pandas>=3.0.0,<3.0.4a0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -839,7 +973,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.35,<1.40
+          - polars>=1.35,<1.42
           - typing_extensions>=4.0.0
   run_cudf_polars_dask:
     common:
@@ -878,6 +1012,7 @@ dependencies:
           - libcudf-example==26.8.*,>=0.0.0a0
           - libcudf_kafka==26.8.*,>=0.0.0a0
           - libcudf-tests==26.8.*,>=0.0.0a0
+          - libcudf-streaming-tests==26.8.*,>=0.0.0a0
   test_java:
     common:
       - output_types: conda
@@ -891,7 +1026,7 @@ dependencies:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - pytest
+          - pytest<9.1.0
           - pytest-cov
           - pytest-xdist
   test_python_cudf_common:
@@ -902,8 +1037,8 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==3.0.*
-              - numba-cuda==0.22.2,<0.29.0
+              - pandas==3.0.*,<3.0.4a0
+              - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
               - pandas==3.0.3
@@ -913,7 +1048,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - cupy==13.6.0
+              - cupy==14.0.1
           - matrix:
             packages:
       - output_types: requirements
@@ -926,20 +1061,20 @@ dependencies:
               cuda: "12.*"
               dependencies: "oldest"
             packages:
-              - cupy-cuda12x==13.6.0
+              - cupy-cuda12x==14.0.1
           - matrix:
               cuda: "13.*"
               dependencies: "oldest"
             packages:
-              - cupy-cuda13x==13.6.0
+              - cupy-cuda13x==14.0.1
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x!=14.0.0
+              - cupy-cuda12x>=14.0.1,!=14.1.0
           - matrix:
               cuda: "13.*"
             packages:
-              - cupy-cuda13x!=14.0.0
+              - cupy-cuda13x>=14.0.1,!=14.1.0
           - matrix:
             packages:
   test_python_dask_cudf:
@@ -951,7 +1086,7 @@ dependencies:
             packages:
               # this is sometimes different from the floor in cudf because
               # dask imposes its own constraints on 'numpy' (e.g. for 'dask.array')
-              - numpy==1.26.*
+              - numpy==2.0.*
           - matrix:
             packages:
   test_python_pylibcudf:
@@ -1007,7 +1142,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numpy==1.26.*
+              - numpy==2.0.*
               - pyarrow==19.*
           - matrix:
             packages:
@@ -1031,6 +1166,11 @@ dependencies:
           - pytest-httpserver
           - pytest-timeout
           - zstandard
+          # The polars test suite constructs pandas objects for interop and
+          # dask-cuda pulls pandas in transitively (unbounded), so constrain it
+          # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
+          # (https://github.com/pandas-dev/pandas/issues/66086).
+          - *pandas
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1064,7 +1204,7 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
-        - &numba_cuda numba-cuda>=0.22.2,<0.29.0
+        - &numba_cuda numba-cuda>=0.22.2
     specific:
       - output_types: [requirements, pyproject]
         matrices:
@@ -1072,16 +1212,40 @@ dependencies:
               cuda: "12.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu12]>=0.22.2,<0.29.0
+              - numba-cuda[cu12]>=0.22.2
           - matrix:
               cuda: "13.*"
               cuda_suffixed: "true"
             packages:
-              - numba-cuda[cu13]>=0.22.2,<0.29.0
+              - numba-cuda[cu13]>=0.22.2
           # fallback to numba-cuda with no extra CUDA packages if 'cuda_suffixed' isn't true
           - matrix:
             packages:
               - *numba_cuda
+  depends_on_numba_cuda_mlir:
+    # numba-cuda-mlir is the MLIR-based numba-cuda compiler used by the cudf
+    # UDF backend. Currently only published to PyPI; conda packaging is a
+    # tracked feature request (see TODOs in conda/recipes/cudf/recipe.yaml).
+    # Once a conda package exists, add an `output_types: [conda]` entry here
+    # mirroring `depends_on_numba_cuda`.
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - numba-cuda-mlir[cu12]>=0.3.0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - numba-cuda-mlir[cu13]>=0.3.0
+          # fallback to numba-cuda-mlir with no extra CUDA packages if
+          # 'cuda_suffixed' isn't true
+          - matrix:
+            packages:
+              - numba-cuda-mlir>=0.3.0
   depends_on_pylibcudf:
     common:
       - output_types: conda
@@ -1160,21 +1324,41 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cupy>=13.6.0,!=14.0.0
+          - cupy>=14.0.1,!=14.1.0
     # NOTE: This is intentionally not broken into groups by a 'cuda_suffixed' selector like
     #       other packages with -cu{nn}x suffixes in this file.
     #       All RAPIDS wheel builds (including in devcontainers) expect cupy to be suffixed.
     specific:
-      - output_types: [requirements, pyproject]
+      - output_types: requirements
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x>=13.6.0,!=14.0.0
+              - &cupy_cu12 cupy-cuda12x>=14.0.1,!=14.1.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cupy-cuda13x>=13.6.0,!=14.0.0
+              - &cupy_cu13 cupy-cuda13x>=14.0.1,!=14.1.0
+      - output_types: pyproject
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              use_cuda_wheels: "false"
+            packages:
+              - *cupy_cu12
+          - matrix:
+              cuda: "13.*"
+              use_cuda_wheels: "false"
+            packages:
+              - *cupy_cu13
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - cupy-cuda12x[ctk]>=14.0.1,!=14.1.0
+          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
+          - matrix:
+            packages:
+              - cupy-cuda13x[ctk]>=14.0.1,!=14.1.0
   depends_on_libkvikio:
     common:
       - output_types: conda
@@ -1249,6 +1433,56 @@ dependencies:
           - matrix:
             packages:
               - *rmm_unsuffixed
+  depends_on_libucxx:
+    common:
+      - output_types: conda
+        packages:
+          - &libucxx_unsuffixed libucxx==0.51.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libucxx-cu12==0.51.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - libucxx-cu13==0.51.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libucxx_unsuffixed
+  depends_on_ucxx:
+    common:
+      - output_types: conda
+        packages:
+          - &ucxx_unsuffixed ucxx==0.51.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - ucxx-cu12==0.51.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - ucxx-cu13==0.51.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *ucxx_unsuffixed
   depends_on_rapidsmpf:
     common:
       - output_types: conda
@@ -1274,6 +1508,81 @@ dependencies:
           - matrix:
             packages:
               - *rapidsmpf_unsuffixed
+  depends_on_librapidsmpf:
+    common:
+      - output_types: conda
+        packages:
+          - &librapidsmpf_unsuffixed librapidsmpf==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - librapidsmpf-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *librapidsmpf_unsuffixed
+  depends_on_libcudf_streaming:
+    common:
+      - output_types: conda
+        packages:
+          - &libcudf_streaming_unsuffixed libcudf-streaming==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-streaming-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - libcudf-streaming-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *libcudf_streaming_unsuffixed
+  depends_on_cudf_streaming:
+    common:
+      - output_types: conda
+        packages:
+          - &cudf_streaming_unsuffixed cudf-streaming==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - cudf-streaming-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - cudf-streaming-cu13==26.8.*,>=0.0.0a0
+          - matrix:
+            packages:
+              - *cudf_streaming_unsuffixed
   depends_on_ray:
     common:
       - output_types: conda
@@ -1301,6 +1610,9 @@ dependencies:
           # Intentionally excluding `postgresql` because of
           # installation issues with `psycopg2`.
           - pandas[test, pyarrow, performance, computation, fss, excel, parquet, feather, hdf5, spss, html, xml, plot, output-formatting, clipboard, compression]
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib<3.11
           - pytest-reportlog
           - ipython
           - hypothesis>=6.131.7
@@ -1316,6 +1628,23 @@ dependencies:
           - openpyxl
           # https://github.com/pytest-dev/pytest-rerunfailures/issues/302
           - pytest-rerunfailures!=16.0.0
+  # Additional dependencies for running the pandas test suite under cudf.pandas.
+  # Unlike test_python_pandas_cudf (which uses pip extras like pandas[excel]),
+  # conda environments need these listed explicitly.
+  test_cudf_pandas_pandas_tests:
+    common:
+      - output_types: [conda]
+        packages:
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib-base<3.11
+          - numexpr
+          - odfpy
+          - pyxlsb
+          - python-calamine
+          - pytables
+          - xlrd
+          - xlsxwriter
   depends_on_dask_cuda:
     common:
       - output_types: conda
@@ -1346,6 +1675,11 @@ dependencies:
       - output_types: conda
         packages:
           - dask-cudf==26.8.*,>=0.0.0a0
+  depends_on_cuml:
+    common:
+      - output_types: conda
+        packages:
+          - cuml==26.8.*,>=0.0.0a0
   depends_on_custreamz:
     common:
       - output_types: conda
@@ -1366,3 +1700,48 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - structlog
+  test_cudf_pandas_compat:
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              pandas_compat_version: "3.0"
+            packages:
+              - numpy>=2.0,<3.0
+              - pandas==3.0.*,<3.0.4a0
+          - matrix:
+            packages:
+  test_cudf_polars_compat:
+    specific:
+      - output_types: requirements
+        matrices:
+          - matrix:
+              polars_compat_version: "1.35"
+            packages:
+              - polars==1.35.*
+          - matrix:
+              polars_compat_version: "1.36"
+            packages:
+              - polars==1.36.*
+          - matrix:
+              polars_compat_version: "1.37"
+            packages:
+              - polars==1.37.*
+          - matrix:
+              polars_compat_version: "1.38"
+            packages:
+              - polars==1.38.*
+          - matrix:
+              polars_compat_version: "1.39"
+            packages:
+              - polars==1.39.*
+          - matrix:
+              polars_compat_version: "1.40"
+            packages:
+              - polars==1.40.*
+          - matrix:
+              polars_compat_version: "1.41"
+            packages:
+              - polars==1.41.*
+          - matrix:
+            packages:

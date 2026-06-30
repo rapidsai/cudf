@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -31,6 +31,7 @@ DESELECTED_TESTS=(
     "tests/unit/io/test_write.py::test_write_async[read_parquet-<lambda>]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>0]" # kvikio file creation error in CI
     "tests/unit/io/test_write.py::test_write_async[<lambda>-<lambda>2]" # kvikio file creation error in CI
+    "tests/unit/operations/test_random.py::test_shuffle_group_by_reseed" # https://github.com/rapidsai/cudf/issues/22964
 )
 
 if [[ $(arch) == "aarch64" ]]; then
@@ -65,7 +66,7 @@ python -m pytest \
        --cache-clear \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
-       -n 8 \
+       -n 4 \
        --dist=worksteal \
        --tb=native \
        --timeout=240 \
@@ -83,10 +84,11 @@ CUDF_POLARS__EXECUTOR__FALLBACK_MODE=silent \
     python -m pytest \
        --import-mode=importlib \
        --cache-clear \
+       -v \
        -m "" \
        -p cudf_polars.testing.inject_gpu_engine \
        -W ignore::ResourceWarning \
-       -n 8 \
+       -n 4 \
        --dist=worksteal \
        --tb=native \
        --timeout=240 \

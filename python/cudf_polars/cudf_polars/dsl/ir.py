@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the LogicalPlan of polars.
@@ -529,8 +529,6 @@ class Scan(IR):
             raise NotImplementedError(
                 "Read from cloud storage"
             )  # pragma: no cover; no test yet
-        if any(str(p).startswith("file://") for p in self.paths):
-            raise NotImplementedError("Read from file URI")
         if self.typ == "csv":
             if any(
                 plc.io.SourceInfo._is_remote_uri(p) for p in self.paths
@@ -646,17 +644,6 @@ class Scan(IR):
         return df.with_columns(
             [Column(filepaths, name=name, dtype=dtype)], stream=df.stream
         )
-
-    @nvtx_annotate_cudf_polars(message="Scan.fast_count")
-    def fast_count(self) -> int:  # pragma: no cover
-        """Get the number of rows in a Parquet Scan."""
-        meta = plc.io.parquet_metadata.read_parquet_metadata(
-            plc.io.SourceInfo(self.paths)
-        )
-        total_rows = meta.num_rows() - self.skip_rows
-        if self.n_rows != -1:
-            total_rows = min(total_rows, self.n_rows)
-        return max(total_rows, 0)
 
     @staticmethod
     @nvtx_annotate_cudf_polars(message="Scan._get_parquet_row_count_from_metadata")
@@ -835,9 +822,9 @@ class Scan(IR):
                 chunk = reader.read_chunk()
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
-                concatenated_columns = chunk.tbl.columns()
+                concatenated_columns = chunk.tbl.release()
                 while reader.has_next():
-                    columns = reader.read_chunk().tbl.columns()
+                    columns = reader.read_chunk().tbl.release()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
                     for i in reversed(range(len(concatenated_columns))):
@@ -929,8 +916,8 @@ class Scan(IR):
                 dtype=dtype,
             )
             df = DataFrame([index_col, *df.columns], stream=df.stream)
-            if next(iter(schema)) != name:
-                df = df.select(schema)
+            # Reorder to the row-index column is always first.
+            df = df.select(schema) if next(iter(schema)) != name else df
         assert all(
             c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )
@@ -1544,7 +1531,9 @@ class Select(IR):
         ):  # pragma: no cover
             stream = context.get_cuda_stream()
             scan = self.children[0]
-            effective_rows = scan.fast_count()
+            effective_rows = Scan._get_parquet_row_count_from_metadata(
+                scan.paths, scan.skip_rows, scan.n_rows
+            )
             dtype = DataType(pl.UInt32())
             col = Column(
                 plc.Column.from_scalar(
@@ -2167,7 +2156,7 @@ class ConditionalJoin(IR):
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
-        _, nulls_equal, zlice, suffix, coalesce, maintain_order = self.options
+        _, nulls_equal, _zlice, _suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
         assert not nulls_equal
         assert not coalesce
@@ -2187,17 +2176,16 @@ class ConditionalJoin(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        left_casts, right_casts = _collect_decimal_binop_casts(
+            predicate_wrapper.predicate
+        )
+        left_on = _apply_casts(left, left_casts)
+        right_on = _apply_casts(right, right_casts)
         with context.stream_ordered_after(left, right) as stream:
-            left_casts, right_casts = _collect_decimal_binop_casts(
-                predicate_wrapper.predicate
-            )
             _, _, zlice, suffix, _, _ = options
 
             lg, rg = plc.join.conditional_inner_join(
-                _apply_casts(left, left_casts).table,
-                _apply_casts(right, right_casts).table,
-                predicate_wrapper.ast,
-                stream=stream,
+                left_on.table, right_on.table, predicate_wrapper.ast, stream=stream
             )
             left_result = DataFrame.from_table(
                 plc.copying.gather(
@@ -2340,7 +2328,7 @@ class Join(IR):
         *,
         left_primary: bool = True,
         stream: Stream,
-    ) -> list[plc.Column]:
+    ) -> tuple[plc.Column, ...]:
         """
         Reorder gather maps to satisfy polars join order restrictions.
 
@@ -2367,7 +2355,7 @@ class Join(IR):
 
         Returns
         -------
-        list[plc.Column]
+        tuple[plc.Column, ...]
             Reordered left and right gather maps.
 
         Notes
@@ -2480,9 +2468,9 @@ class Join(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with context.stream_ordered_after(left, right) as stream:
-            how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
-            if how == "Cross":
+        how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
+        if how == "Cross":
+            with context.stream_ordered_after(left, right) as stream:
                 # Separate implementation, since cross_join returns the
                 # result, not the gather maps
                 if right.num_rows == 0:
@@ -2501,7 +2489,9 @@ class Join(IR):
                         ),
                         stream=stream,
                     )
-                    result = DataFrame([*left_cols, *right_cols], stream=stream)
+                    return DataFrame([*left_cols, *right_cols], stream=stream).slice(
+                        zlice
+                    )
                 else:
                     columns = plc.join.cross_join(
                         left.table, right.table, stream=stream
@@ -2520,25 +2510,25 @@ class Join(IR):
                         left=False,
                         stream=stream,
                     )
-                    result = DataFrame([*left_cols, *right_cols], stream=stream).slice(
+                    return DataFrame([*left_cols, *right_cols], stream=stream).slice(
                         zlice
                     )
-
-            else:
-                # how != "Cross"
-                # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
-                left_on = DataFrame(
-                    broadcast(
-                        *(e.evaluate(left) for e in left_on_exprs), stream=stream
-                    ),
-                    stream=stream,
-                )
-                right_on = DataFrame(
-                    broadcast(
-                        *(e.evaluate(right) for e in right_on_exprs), stream=stream
-                    ),
-                    stream=stream,
-                )
+        else:
+            # how != "Cross"
+            # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
+            left_on = DataFrame(
+                broadcast(
+                    *(e.evaluate(left) for e in left_on_exprs), stream=left.stream
+                ),
+                stream=left.stream,
+            )
+            right_on = DataFrame(
+                broadcast(
+                    *(e.evaluate(right) for e in right_on_exprs), stream=right.stream
+                ),
+                stream=right.stream,
+            )
+            with context.stream_ordered_after(left, right) as stream:
                 null_equality = (
                     plc.types.NullEquality.EQUAL
                     if nulls_equal
@@ -2551,16 +2541,15 @@ class Join(IR):
                     table = plc.copying.gather(
                         left.table, lg, left_policy, stream=stream
                     )
-                    result = DataFrame.from_table(
+                    return DataFrame.from_table(
                         table, left.column_names, left.dtypes, stream=stream
-                    )
+                    ).slice(zlice)
                 else:
                     if how == "Right":
                         # Right join is a left join with the tables swapped
                         left, right = right, left
                         left_on, right_on = right_on, left_on
                         maintain_order = Join.SWAPPED_ORDER[maintain_order]
-
                     lg, rg = join_fn(
                         left_on.table, right_on.table, null_equality, stream=stream
                     )
@@ -2638,10 +2627,7 @@ class Join(IR):
                             if name in left.column_names_set
                         }
                     )
-                    result = left.with_columns(right.columns, stream=stream)
-                result = result.slice(zlice)
-
-        return result
+                    return left.with_columns(right.columns, stream=stream).slice(zlice)
 
 
 class HStack(IR):
@@ -3214,15 +3200,24 @@ class MapFunction(IR):
 class Union(IR):
     """Concatenate dataframes vertically."""
 
-    __slots__ = ("zlice",)
-    _non_child = ("schema", "zlice")
+    __slots__ = ("maintain_order", "zlice")
+    _non_child = ("schema", "zlice", "maintain_order")
     _n_non_child_args = 1
+    maintain_order: bool
+    """Whether row order must be preserved."""
     zlice: Zlice | None
     """Optional slice to apply to the result."""
 
-    def __init__(self, schema: Schema, zlice: Zlice | None, *children: IR):
+    def __init__(
+        self,
+        schema: Schema,
+        zlice: Zlice | None,
+        maintain_order: bool,  # noqa: FBT001
+        *children: IR,
+    ):
         self.schema = schema
         self.zlice = zlice
+        self.maintain_order = maintain_order
         self._non_child_args = (zlice,)
         self.children = children
         schema = self.children[0].schema

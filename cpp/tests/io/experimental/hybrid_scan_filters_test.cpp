@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_common.hpp"
+#include "tests/io/parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 
@@ -19,8 +20,12 @@
 
 #include <src/io/parquet/parquet_gpu.hpp>
 
+#include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <memory>
+#include <vector>
 
 namespace {
 
@@ -155,6 +160,67 @@ TEST_F(HybridScanFiltersTest, Metadata)
   // Expect only 2 row groups now
   EXPECT_EQ(input_row_group_indices.size(), 2);
   EXPECT_EQ(reader->total_rows_in_row_groups(input_row_group_indices), 2 * rows_per_row_group);
+}
+
+TEST_F(HybridScanFiltersTest, MultiSourceMetadata)
+{
+  srand(0xdede);
+  using T = uint32_t;
+
+  // Helper to test multi-source metadata
+  auto const test_multisource_metadata = [&](auto num_sources) {
+    auto const file_buffer = std::get<1>(create_parquet_with_stats<T, 1>());
+
+    std::vector<std::unique_ptr<cudf::io::datasource>> datasources(num_sources);
+    std::vector<std::reference_wrapper<cudf::io::datasource>> datasource_refs{};
+    std::transform(datasources.begin(),
+                   datasources.end(),
+                   std::back_inserter(datasource_refs),
+                   [&](auto& datasource) {
+                     datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+                       reinterpret_cast<std::byte const*>(file_buffer.data()), file_buffer.size()));
+                     return std::ref(*datasource);
+                   });
+
+    // Fetch all footers at once
+    auto const footer_buffers =
+      cudf::io::parquet::fetch_footers_to_host({datasource_refs.data(), datasource_refs.size()});
+    ASSERT_EQ(footer_buffers.size(), num_sources);
+
+    // Fetch all page indexes at once
+    auto const reader = std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(
+      cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffers.front()->data()),
+                                     footer_buffers.front()->size()},
+      cudf::io::parquet_reader_options::builder().build());
+    std::vector<cudf::io::parquet::byte_range_info> page_index_byte_ranges(
+      num_sources, reader->page_index_byte_range());
+    auto const page_index_buffers = cudf::io::parquet::fetch_page_indexes_to_host(
+      {datasource_refs.data(), datasource_refs.size()},
+      {page_index_byte_ranges.data(), page_index_byte_ranges.size()});
+    ASSERT_EQ(page_index_buffers.size(), num_sources);
+
+    // Footer and page index from multi-source and single-source APIs should match
+    auto const single_footer     = cudf::io::parquet::fetch_footer_to_host(datasource_refs.front());
+    auto const single_page_index = cudf::io::parquet::fetch_page_index_to_host(
+      datasource_refs.front(), reader->page_index_byte_range());
+
+    auto const iter = cuda::make_zip_iterator(footer_buffers.begin(), page_index_buffers.begin());
+    std::for_each(iter, iter + num_sources, [&](auto const& pair) {
+      auto const& [footer_buffer, page_index_buffer] = pair;
+      ASSERT_EQ(footer_buffer->size(), single_footer->size());
+      EXPECT_EQ(std::memcmp(footer_buffer->data(), single_footer->data(), single_footer->size()),
+                0);
+      ASSERT_EQ(page_index_buffer->size(), single_page_index->size());
+      EXPECT_EQ(std::memcmp(
+                  page_index_buffer->data(), single_page_index->data(), single_page_index->size()),
+                0);
+    });
+  };
+
+  auto num_sources = 4;
+  test_multisource_metadata(num_sources);
+  num_sources = 32;
+  test_multisource_metadata(num_sources);
 }
 
 TEST_F(HybridScanFiltersTest, ExternalMetadata)

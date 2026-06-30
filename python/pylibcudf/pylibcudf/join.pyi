@@ -1,8 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
-from enum import IntEnum
-
 from rmm.pylibrmm.memory_resource import DeviceMemoryResource
 
 from pylibcudf.column import Column
@@ -10,10 +8,6 @@ from pylibcudf.expressions import Expression
 from pylibcudf.table import Table
 from pylibcudf.types import NullEquality
 from pylibcudf.utils import CudaStreamLike
-
-class SetAsBuildTable(IntEnum):
-    LEFT = ...
-    RIGHT = ...
 
 def inner_join(
     left_keys: Table,

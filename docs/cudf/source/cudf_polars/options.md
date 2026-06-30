@@ -117,7 +117,6 @@ Environment variables follow these patterns:
 | `raise_on_fail`          | Raise an error instead of falling back to CPU execution.                                                                      | `False`                   |
 | `parquet_options`        | Parquet configuration, dict or {class}`~cudf_polars.utils.config.ParquetOptions`.                                             | —                         |
 | `memory_resource_config` | RMM configuration, dict or {class}`~cudf_polars.utils.config.MemoryResourceConfig`.                                           | —                         |
-| `cuda_stream_policy`     | CUDA stream policy (`"default"`, `"pool"`, or a configuration dict).                                                          | —                         |
 | `hardware_binding`       | Hardware binding policy. Pass a {class}`~cudf_polars.engine.hardware_binding.HardwareBindingPolicy` for fine-grained control. | `HardwareBindingPolicy()` |
 | `allow_gpu_sharing`      | When `False` (default), the engine raises if multiple ranks share the same physical GPU.                                      | `False`                   |
 
@@ -125,6 +124,14 @@ Environment variables follow these patterns:
 
 Lower-level streaming runtime knobs. Most users will not need to touch these directly. See the
 [streaming runtime configuration reference][rapidsmpf-config] for the full list of fields and defaults.
+
+## Developer Options
+
+These environment variables are intended for library developers and advanced users.
+
+| Environment variable        | Description                                                                                                    | Default |
+|-----------------------------|----------------------------------------------------------------------------------------------------------------|---------|
+| `CUDF_POLARS_WARN_UNSTABLE` | Raises a `cudf_polars.UnstableWarning` whenever an unstable cudf-polars feature is used. Set to `1` to enable. | `0`     |
 
 <!-- Reference links -->
 [rapidsmpf-config]: https://docs.rapids.ai/api/rapidsmpf/nightly/configuration/
