@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,6 +27,7 @@
 #include <cuda/std/functional>
 
 #include <concepts>
+#include <span>
 
 namespace cudf {
 
@@ -213,7 +214,7 @@ namespace {
 template <typename MakeWindows>
   requires(std::invocable<MakeWindows&>)
 std::unique_ptr<table> grouped_range_rolling_window_impl(table_view const& group_keys,
-                                                         host_span<rolling_request const> requests,
+                                                         std::span<rolling_request const> requests,
                                                          range_window_type preceding,
                                                          range_window_type following,
                                                          size_type orderby_size,
@@ -291,7 +292,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     null_order null_order,
                                                     range_window_type preceding,
                                                     range_window_type following,
-                                                    host_span<rolling_request const> requests,
+                                                    std::span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
@@ -567,7 +568,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
                                                     null_order null_order,
                                                     range_window_type preceding,
                                                     range_window_type following,
-                                                    host_span<rolling_request const> requests,
+                                                    std::span<rolling_request const> requests,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
