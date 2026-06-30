@@ -114,7 +114,7 @@ struct [[nodiscard]] hash128_hasher {
     // std::hash requires a single 64-bit hash value, but we want to use the combined entropy of
     // both 64-bit values.
     auto mix = [](std::uint64_t seed, std::uint64_t v) {
-      // based on `cccl::hash_combine`
+      // based on `cuda::experimental::stf::hash_combine`
       // (https://github.com/NVIDIA/cccl/blob/e1cb6965571312e43c6a519901f5403b0a0df4a6/cudax/include/cuda/experimental/__stf/utility/hash.cuh#L93-L94)
       seed ^= v + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2);
       return seed;
