@@ -108,6 +108,7 @@ class UnaryFunction(Expr):
             "drop_nulls",
             "fill_null",
             "fill_null_with_strategy",
+            "index_of",
             "mask_nans",
             "null_count",
             "rank",
@@ -402,6 +403,45 @@ class UnaryFunction(Expr):
                 plc.unary.cast(indices, self.dtype.plc_type, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "index_of":
+            column = self.children[0].evaluate(df, context=context)
+            value_expr = self.children[1]
+            if isinstance(value_expr, Literal):
+                value = plc.Scalar.from_py(
+                    value_expr.value, column.dtype.plc_type, stream=df.stream
+                )
+            else:
+                value = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+            mask = plc.binaryop.binary_operation(
+                column.obj,
+                value,
+                plc.binaryop.BinaryOperator.NULL_EQUALS,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            indices = plc.filling.sequence(
+                column.obj.size(),
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            matched = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([indices]), mask, stream=df.stream
+            ).columns()[0]
+            if matched.size() == 0:
+                result = plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                    1,
+                    stream=df.stream,
+                )
+            else:
+                (first,) = plc.copying.slice(
+                    plc.Table([matched]), [0, 1], stream=df.stream
+                )[0].columns()
+                result = plc.unary.cast(first, self.dtype.plc_type, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         elif self.name == "drop_nans":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if not plc.traits.is_floating_point(column.obj.type()):
