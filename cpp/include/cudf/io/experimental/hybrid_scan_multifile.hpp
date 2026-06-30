@@ -100,7 +100,7 @@ class hybrid_scan_multifile {
    * @brief Get all available per-source row group indices from the parquet files
    *
    * @param options Parquet reader options
-   * @return Vectors of row group indices, one per source
+   * @return Vector of vectors of row group indices, one per source
    */
   [[nodiscard]] std::vector<std::vector<size_type>> all_row_groups(
     parquet_reader_options const& options) const;
@@ -108,7 +108,7 @@ class hybrid_scan_multifile {
   /**
    * @brief Get the total number of top-level rows in the per-source row groups
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @return Total number of top-level rows across all sources
    */
   [[nodiscard]] size_type total_rows_in_row_groups(
@@ -130,9 +130,9 @@ class hybrid_scan_multifile {
    * Filters the row groups such that only the row groups that start within the byte range are
    * selected. Note that the last selected row group may end beyond the byte range.
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
-   * @return Vectors of filtered per-source row group indices, one per source
+   * @return Vector of vectors of filtered row group indices, one per source
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_byte_range(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -141,10 +141,10 @@ class hybrid_scan_multifile {
   /**
    * @brief Filter the input row groups using column chunk statistics
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Filtered row group indices, one per source
+   * @return Vector of vectors of filtered row group indices, one per source
    */
   [[nodiscard]] std::vector<std::vector<size_type>> filter_row_groups_with_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -158,7 +158,7 @@ class hybrid_scan_multifile {
    * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
    *       aligned memory resource
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
    * @return Pair of vectors of byte ranges of column chunk with bloom filters and dictionary
    *         pages subject to filter predicate
@@ -171,7 +171,7 @@ class hybrid_scan_multifile {
    * @brief Builds a boolean survival column of size equal to the total number of rows in the row
    * groups containing all `true` values
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
    * @return An all-true boolean (survival) column spanning all selected rows across all sources
@@ -185,7 +185,7 @@ class hybrid_scan_multifile {
    * @brief Builds a boolean column indicating surviving rows using page-level statistics in the
    * page index
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource used to allocate the returned column's device memory
@@ -206,7 +206,7 @@ class hybrid_scan_multifile {
    * map has one source index per byte range and can be used to regroup byte ranges by datasource
    * before fetching.
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
    * @return Pair of flattened byte ranges to column chunks of filter columns and their
    *         corresponding source indices
@@ -219,7 +219,7 @@ class hybrid_scan_multifile {
    * @brief Materializes filter columns and updates the input row mask to only the rows that exist
    * in the output table
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param column_chunk_data Flattened device spans of filter column chunk data returned in the
    * same order as `filter_column_chunks_byte_ranges`
    * @param[in,out] row_mask Mutable boolean column spanning all selected rows across all sources
@@ -247,7 +247,7 @@ class hybrid_scan_multifile {
    * map has one source index per byte range and can be used to regroup byte ranges by datasource
    * before fetching.
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
    * @return Pair of flattened byte ranges to column chunks of payload columns and their
    *         corresponding source indices
@@ -259,7 +259,7 @@ class hybrid_scan_multifile {
   /**
    * @brief Materialize payload columns and applies the row mask to the output table
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param column_chunk_data Flattened device spans of payload column chunk data returned in the
    *        same order as `payload_column_chunks_byte_ranges`
    * @param row_mask Boolean column spanning all selected rows across all sources and indicating
@@ -282,7 +282,7 @@ class hybrid_scan_multifile {
   /**
    * @brief Get byte ranges of column chunks of all (or selected) columns
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param options Parquet reader options
    * @return Pair of flattened byte ranges to column chunks of all (or selected) columns and their
    *         corresponding source indices
@@ -294,7 +294,7 @@ class hybrid_scan_multifile {
   /**
    * @brief Materializes all (or selected) columns and returns the final output table
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param column_chunk_data Flattened device spans of column chunk data returned in the same order
    *        as `all_column_chunks_byte_ranges`
    * @param options Parquet reader options
@@ -316,7 +316,7 @@ class hybrid_scan_multifile {
    * there is no limit
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param row_mask Boolean column spanning all selected rows across all sources and indicating
    * which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
@@ -358,7 +358,7 @@ class hybrid_scan_multifile {
    * there is no limit
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param row_mask Boolean column spanning all selected rows across all sources and indicating
    * which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
@@ -399,7 +399,7 @@ class hybrid_scan_multifile {
    * there is no limit
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param column_chunk_data Flattened device spans of column chunk data returned in the same order
    * as `all_column_chunks_byte_ranges`
    * @param options Parquet reader options
@@ -433,7 +433,7 @@ class hybrid_scan_multifile {
    *
    * @throws std::invalid_argument if no row group indices in the input
    *
-   * @param row_group_indices Vectors of input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param pass_read_limit Memory limit to read and decompress row group data, `0` if there is
    * no limit (single pass)
    *
