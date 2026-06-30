@@ -12,7 +12,9 @@ import pytest
 import cudf.pandas.fast_slow_proxy
 from cudf.pandas.fast_slow_proxy import (
     _fast_arg,
+    _FastSlowAttribute,
     _FunctionProxy,
+    _setattr_fsproxy_no_mirror,
     _slow_arg,
     _transform_arg,
     _Unusable,
@@ -636,3 +638,106 @@ def test_tuple_with_attrs_transform():
     assert b == bprime and b is not bprime
     assert c == cprime and c is not cprime
     assert d == dprime and d is not dprime
+
+
+def _make_mirror_proxy():
+    class Fast:
+        pass
+
+    class Slow:
+        def existing(self):
+            return "slow original"
+
+    Pxy = make_final_proxy_type(
+        "Pxy",
+        Fast,
+        Slow,
+        fast_to_slow=lambda fast: Slow(),
+        slow_to_fast=lambda slow: Fast(),
+    )
+    return Fast, Slow, Pxy
+
+
+def test_class_attr_mirroring_enabled_after_construction():
+    # ``make_*_proxy_type`` enables per-type mirroring once the proxy type is
+    # fully built (it starts disabled so the methods installed during
+    # construction are not forwarded to the real type).
+    _, _, Pxy = _make_mirror_proxy()
+    assert Pxy.__dict__["_fsproxy_mirror_slow_overrides"] is True
+
+
+def test_class_attr_setattr_mirrored_to_slow():
+    # A class-level attribute write on the proxy is mirrored onto the
+    # underlying "slow" (real) type so it is visible to fallback code.
+    _, Slow, Pxy = _make_mirror_proxy()
+
+    def patched(self):
+        return "patched"
+
+    Pxy.new_method = patched
+    assert Slow.__dict__.get("new_method") is patched
+
+
+def test_class_attr_delattr_restores_slow():
+    # Deleting a previously-mirrored *new* attribute removes it from the slow
+    # type as well (the ``__delattr__`` path).
+    _, Slow, Pxy = _make_mirror_proxy()
+
+    def patched(self):
+        return "patched"
+
+    Pxy.new_method = patched
+    assert "new_method" in Slow.__dict__
+
+    del Pxy.new_method
+    assert "new_method" not in Pxy.__dict__
+    assert "new_method" not in Slow.__dict__
+
+
+def test_class_attr_restore_existing_slow_attr():
+    # Patching an attribute that already exists on the slow type, then
+    # restoring the proxy's auto-generated ``_FastSlowAttribute`` (as
+    # ``monkeypatch`` teardown does), reverts the real implementation.
+    _, Slow, Pxy = _make_mirror_proxy()
+    saved = Pxy.__dict__["existing"]
+    assert isinstance(saved, _FastSlowAttribute)
+    original_slow = Slow.__dict__["existing"]
+
+    def patched(self):
+        return "patched"
+
+    Pxy.existing = patched
+    assert Slow.__dict__["existing"] is patched
+
+    Pxy.existing = saved
+    assert Slow.__dict__["existing"] is original_slow
+
+
+def test_class_attr_monkeypatch_roundtrip(monkeypatch):
+    # End-to-end: ``monkeypatch`` of a brand-new attribute mirrors onto the
+    # slow type, and teardown (which deletes it) restores the slow type.
+    _, Slow, Pxy = _make_mirror_proxy()
+
+    def fake(self):
+        return "fake"
+
+    monkeypatch.setattr(Pxy, "brand_new", fake, raising=False)
+    assert Slow.__dict__.get("brand_new") is fake
+
+    monkeypatch.undo()
+    assert "brand_new" not in Pxy.__dict__
+    assert "brand_new" not in Slow.__dict__
+
+
+def test_setattr_fsproxy_no_mirror_skips_slow():
+    # ``_setattr_fsproxy_no_mirror`` sets a class attribute on the proxy
+    # without forwarding it to the slow type (used for cudf.pandas' own custom
+    # methods such as ``DataFrame.query``/``eval``).
+    _, Slow, Pxy = _make_mirror_proxy()
+
+    def custom(self):
+        return "custom"
+
+    _setattr_fsproxy_no_mirror(Pxy, "custom_method", custom)
+    assert Pxy.__dict__["custom_method"] is custom
+    assert "custom_method" not in Slow.__dict__
