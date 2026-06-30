@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     import polars as pl
 
     from cudf_polars.containers import DataFrame
+    from cudf_polars.typing import SizedIterator
 
 
 class SizedChunks:
@@ -151,7 +152,7 @@ class RankAwareSource(abc.ABC):
         batch_size: int | None,
         rank: int = 0,
         nranks: int = 1,
-    ) -> Iterator[pl.DataFrame | DataFrame]:
+    ) -> Iterator[pl.DataFrame | DataFrame] | SizedIterator[pl.DataFrame | DataFrame]:
         """
         Produce the rank-local chunks of this IO source.
 
@@ -179,9 +180,10 @@ class RankAwareSource(abc.ABC):
             Total number of ranks (the world size), bound by the streaming
             engine. Defaults to ``1`` for single-rank execution.
 
-        Yields
-        ------
-        Chunks for this rank.
+        Returns
+        -------
+        Chunks for this rank. Return a :class:`SizedChunks` if the total chunk count
+        is known upfront to enable lazy streaming.
 
         Notes
         -----

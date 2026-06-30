@@ -406,7 +406,7 @@ class PythonScan(IR):
         schema
             The declared output schema, used for the empty-source fallback frame.
         rank_aware_source
-            The `RankAwareSource` captured by the registered scan function, 
+            The `RankAwareSource` captured by the registered scan function,
             when one was found.
         rank
             Rank running this scan, passed to a `RankAwareSource`. Defaults to
