@@ -1148,7 +1148,7 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 }
 
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<datasource> const> sources)
+  std::span<std::unique_ptr<datasource> const> sources)
 {
   // Do not use arrow schema when only reading the parquet metadata.
   constexpr auto use_arrow_schema = false;
@@ -1161,7 +1161,10 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
 
   // Parse the source dataset metadata
   return aggregate_reader_metadata(
-           sources, use_arrow_schema, has_column_projection, read_page_indexes)
+           host_span<std::unique_ptr<datasource> const>{sources.data(), sources.size()},
+           use_arrow_schema,
+           has_column_projection,
+           read_page_indexes)
     .get_parquet_metadatas();
 }
 
