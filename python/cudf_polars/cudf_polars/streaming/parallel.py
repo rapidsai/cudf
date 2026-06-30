@@ -65,6 +65,24 @@ def _(
     )
 
 
+def _lower_ir_graph_impl(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
+) -> tuple[tuple[IR, MutableMapping[IR, PartitionInfo]], LowerIRTransformer]:
+    state: State = {
+        "config_options": config_options,
+        "stats": stats,
+        "rank": rank,
+        "nranks": nranks,
+    }
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
+    return mapper(ir), mapper
+
+
 def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
@@ -104,14 +122,7 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    state: State = {
-        "config_options": config_options,
-        "stats": stats,
-        "rank": rank,
-        "nranks": nranks,
-    }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return _lower_ir_graph_impl(ir, config_options, stats, rank=rank, nranks=nranks)[0]
 
 
 def lower_ir_graph_with_node_map(
@@ -153,15 +164,9 @@ def lower_ir_graph_with_node_map(
         from the internal :class:`CachingVisitor` cache. Nodes inserted
         by lowering (e.g. ``Repartition``) will not appear as keys.
     """
-    state: State = {
-        "config_options": config_options,
-        "stats": stats,
-        "rank": rank,
-        "nranks": nranks,
-    }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    result = mapper(ir)
-
+    result, mapper = _lower_ir_graph_impl(
+        ir, config_options, stats, rank=rank, nranks=nranks
+    )
     node_map: dict[str, list[str]] = {}
     for old_node, (new_node, _) in mapper.cache.items():  # type: ignore[attr-defined]
         new_key = str(new_node.get_stable_id())
