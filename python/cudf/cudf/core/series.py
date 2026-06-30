@@ -980,19 +980,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         d    40
         dtype: int64
         >>> series.reindex(['a', 'b', 'y', 'z'])
-        a      10
-        b      20
-        y    <NA>
-        z    <NA>
-        dtype: int64
-
-        .. pandas-compat::
-            :meth:`pandas.Series.reindex`
-
-            Note: One difference from Pandas is that ``NA`` is used for rows
-            that do not match, rather than ``NaN``. One side effect of this is
-            that the series retains an integer dtype in cuDF
-            where it is cast to float in Pandas.
+        a    10.0
+        b    20.0
+        y     NaN
+        z     NaN
+        dtype: float64
 
         """
         if index is None:

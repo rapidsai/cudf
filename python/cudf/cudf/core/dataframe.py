@@ -675,7 +675,7 @@ def _listlike_to_column_accessor(
                     ser = ser.reindex(temp_index)
                 temp_data[i] = ser._column
 
-            temp_frame = DataFrame._from_data(
+            combined = DataFrame._from_data(
                 ColumnAccessor(
                     temp_data,
                     verify=False,
@@ -683,9 +683,18 @@ def _listlike_to_column_accessor(
                 ),
                 index=temp_index,
             )
-            transpose = temp_frame.T
         else:
-            transpose = cudf.concat(data, axis=1).T
+            combined = cudf.concat(data, axis=1)
+        # Aligning rows above can upcast integer columns that gained nulls
+        # (e.g. int -> float64), leaving columns with differing dtypes;
+        # transpose requires a single dtype, so promote to a common one
+        # first (matching pandas, which upcasts the whole frame).
+        if combined._num_columns > 1:
+            common_dtype = find_common_type(
+                [dtype for _, dtype in combined._dtypes]
+            )
+            combined = combined.astype(common_dtype)
+        transpose = combined.T
 
         if columns is None:
             columns = pd.RangeIndex(transpose._num_columns)
@@ -3276,20 +3285,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> new_index = ['Safari', 'Iceweasel', 'Comodo Dragon', 'IE10',
         ...              'Chrome']
         >>> df.reindex(new_index)
-                    http_status response_time
-        Safari                404          0.07
-        Iceweasel            <NA>           NaN
-        Comodo Dragon        <NA>           NaN
-        IE10                  404          0.08
-        Chrome                200          0.02
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.reindex`
-
-            Note: One difference from Pandas is that ``NA`` is used for rows
-            that do not match, rather than ``NaN``. One side effect of this is
-            that the column ``http_status`` retains an integer dtype in cuDF
-            where it is cast to float in Pandas.
+                      http_status response_time
+        Safari              404.0          0.07
+        Iceweasel             NaN           NaN
+        Comodo Dragon         NaN           NaN
+        IE10                404.0          0.08
+        Chrome              200.0          0.02
 
         We can fill in the missing values by
         passing a value to the keyword ``fill_value``.
@@ -7081,13 +7082,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         3       bird     2   NaN
 
         By default, missing values are not considered, and the mode of wings
-        are both 0 and 2. The second row of species and legs contains ``NA``,
+        are both 0 and 2. The second row of species and legs contains ``NaN``,
         because they have only one mode, but the DataFrame has two rows.
 
         >>> df.mode()
-          species  legs  wings
-        0    bird     2    0.0
-        1     NaN  <NA>    2.0
+          species legs  wings
+        0    bird  2.0    0.0
+        1     NaN  NaN    2.0
 
         Setting ``dropna=False``, ``NA`` values are considered and they can be
         the mode (like for wings).
@@ -7100,9 +7101,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         computed, and columns of other types are ignored.
 
         >>> df.mode(numeric_only=True)
-           legs  wings
-        0     2    0.0
-        1  <NA>    2.0
+          legs  wings
+        0  2.0    0.0
+        1  NaN    2.0
 
         .. pandas-compat::
             :meth:`pandas.DataFrame.transpose`
