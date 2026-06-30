@@ -113,13 +113,6 @@ _all_doctests = _collect_doctests()
 
 
 class TestDoctests:
-    @pytest.fixture(autouse=True)
-    def printoptions(cls):
-        # TODO: NumPy now prints scalars as `np.int8(1)`, etc. this should
-        #       be adapted evantually.
-        with np.printoptions(legacy="1.25"):
-            yield
-
     @pytest.mark.parametrize(
         "docstring",
         _all_doctests,
