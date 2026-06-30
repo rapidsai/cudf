@@ -292,10 +292,10 @@ def _drop_dyn_pred_hints(
 ) -> expr.Expr | None:
     try:
         node = translator.visitor.view_expression(n)
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         if str(e) == "dynamic_pred":
-            return None  # pragma: no cover
-        raise  # pragma: no cover
+            return None
+        raise
     if (
         not POLARS_VERSION_LT_142
         and isinstance(node, plrs._expr_nodes.Function)
