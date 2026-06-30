@@ -1,6 +1,5 @@
 /**
-
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,9 +23,9 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
-#include <cudf_streaming/streaming/bloom_filter.hpp>
-#include <cudf_streaming/streaming/parquet.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
+#include <cudf_streaming/bloom_filter.hpp>
+#include <cudf_streaming/parquet.hpp>
+#include <cudf_streaming/table_chunk.hpp>
 
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 
@@ -89,7 +88,7 @@ rapidsmpf::streaming::Actor read_lineitem(std::shared_ptr<rapidsmpf::streaming::
                    })
                    .build();
 
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk);
 }
 
@@ -110,7 +109,7 @@ rapidsmpf::streaming::Actor read_orders(std::shared_ptr<rapidsmpf::streaming::Co
                    })
                    .build();
 
-  auto stream = ctx->br()->stream_pool().get_stream();
+  auto stream = ctx->br()->stream_pool()->get_stream();
   // 1993-07-01 <= o_orderdate < 1993-10-01
   constexpr auto start_date = cuda::std::chrono::year_month_day(
     cuda::std::chrono::year(1993), cuda::std::chrono::month(7), cuda::std::chrono::day(1));
@@ -121,7 +120,7 @@ rapidsmpf::streaming::Actor read_orders(std::shared_ptr<rapidsmpf::streaming::Co
                            : rapidsmpf::ndsh::make_date_range_filter<cudf::timestamp_ms>(
                                stream, start_date, end_date, "o_orderdate");
 
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk, std::move(filter));
 }
 
@@ -136,7 +135,7 @@ rapidsmpf::streaming::Actor filter_lineitem(std::shared_ptr<rapidsmpf::streaming
   while (!ch_out->is_shutdown()) {
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
-    auto chunk = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    auto chunk        = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     auto chunk_stream = chunk.stream();
     auto table        = chunk.table_view();
 
@@ -150,10 +149,9 @@ rapidsmpf::streaming::Actor filter_lineitem(std::shared_ptr<rapidsmpf::streaming
                                        mr);
     auto filtered_table =
       cudf::apply_boolean_mask(table.select({2}), mask->view(), chunk_stream, mr);
-    co_await ch_out->send(
-      cudf_streaming::streaming::to_message(msg.sequence_number(),
-                                            std::make_unique<cudf_streaming::streaming::TableChunk>(
-                                              std::move(filtered_table), chunk_stream)));
+    co_await ch_out->send(cudf_streaming::to_message(
+      msg.sequence_number(),
+      std::make_unique<cudf_streaming::table_chunk>(std::move(filtered_table), chunk_stream)));
   }
   co_await ch_out->drain(ctx->executor());
 }
@@ -172,15 +170,15 @@ rapidsmpf::streaming::Actor fanout_bounded(std::shared_ptr<rapidsmpf::streaming:
   while (true) {
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
-    auto chunk = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(
+    auto chunk = co_await msg.release<cudf_streaming::table_chunk>().make_available(
       ctx);  // Here, we know that copying ch1_cols (a single col) is better than
              // copying
     // ch2_cols (the whole table)
     std::vector<coro::task<bool>> tasks;
     if (!ch1_out->is_shutdown()) {
-      auto msg1 = cudf_streaming::streaming::to_message(
+      auto msg1 = cudf_streaming::to_message(
         msg.sequence_number(),
-        std::make_unique<cudf_streaming::streaming::TableChunk>(
+        std::make_unique<cudf_streaming::table_chunk>(
           std::make_unique<cudf::table>(
             chunk.table_view().select(ch1_cols), chunk.stream(), ctx->br()->device_mr()),
           chunk.stream()));
@@ -188,9 +186,8 @@ rapidsmpf::streaming::Actor fanout_bounded(std::shared_ptr<rapidsmpf::streaming:
     }
     if (!ch2_out->is_shutdown()) {
       // TODO: We know here that ch2 wants the whole table.
-      tasks.push_back(ch2_out->send(cudf_streaming::streaming::to_message(
-        msg.sequence_number(),
-        std::make_unique<cudf_streaming::streaming::TableChunk>(std::move(chunk)))));
+      tasks.push_back(ch2_out->send(cudf_streaming::to_message(
+        msg.sequence_number(), std::make_unique<cudf_streaming::table_chunk>(std::move(chunk)))));
     }
     if (!std::ranges::any_of(
           rapidsmpf::streaming::coro_results(co_await coro::when_all(std::move(tasks))),
@@ -260,7 +257,7 @@ int main(int argc, char** argv)
   RAPIDSMPF_CUDA_TRY(cudaGetDevice(&device));
   RAPIDSMPF_CUDA_TRY(cudaDeviceGetAttribute(&l2size, cudaDevAttrL2CacheSize, device));
   auto const num_filter_blocks =
-    cudf_streaming::streaming::BloomFilter::fitting_num_blocks(static_cast<std::size_t>(l2size));
+    cudf_streaming::bloom_filter::fitting_num_blocks(static_cast<std::size_t>(l2size));
 
   for (int i = 0; i < arguments.num_iterations; i++) {
     rapidsmpf::OpID op_id{0};
@@ -304,8 +301,8 @@ int main(int argc, char** argv)
 
       // Build bloom filter from filtered orders' o_orderkey
       auto bloom_filter_output = ctx->create_channel();
-      auto bloom_filter        = cudf_streaming::streaming::BloomFilter(
-        ctx, comm, cudf::DEFAULT_HASH_SEED, num_filter_blocks);
+      auto bloom_filter =
+        cudf_streaming::bloom_filter(ctx, comm, cudf::DEFAULT_HASH_SEED, num_filter_blocks);
       actors.push_back(bloom_filter.build(
         bloom_filter_input, bloom_filter_output, static_cast<rapidsmpf::OpID>(10 * i + op_id++)));
 

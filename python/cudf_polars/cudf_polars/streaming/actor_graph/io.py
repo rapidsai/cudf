@@ -1,16 +1,19 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """IO logic for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
 import asyncio
+import io
 import math
 from typing import TYPE_CHECKING, Any
 
+import polars as pl
+
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
@@ -193,14 +196,34 @@ async def dataframescan_node(
 
         # Build list of IR slices to read
         ir_slices = []
+        # Partial workaround for
+        # https://github.com/pola-rs/polars/issues/23214 If a struct column
+        # has nulls and is sliced then polars exports invalid validity
+        # buffers. We can't detect this exact state because we can't know
+        # when the column is sliced.
+        copy_slice = any(
+            isinstance(dt, pl.Struct)
+            for dt in pl.datatypes.unpack_dtypes(ir.df.dtypes(), include_compound=True)
+        )
+
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
                 break
+            sliced = ir.df.slice(offset, rows_per_partition)
+            if copy_slice:
+                # OK, we have structs that might have nulls, and we're
+                # slicing. So let's copy to contiguous storage. This is
+                # hacky and doesn't handle the case where we didn't slice
+                # but the user sliced the input.
+                f = io.BytesIO()
+                sliced.serialize_binary(f)
+                f.seek(0)
+                sliced = pl._plr.PyDataFrame.deserialize_binary(f)
             ir_slices.append(
                 DataFrameScan(
                     ir.schema,
-                    ir.df.slice(offset, rows_per_partition),
+                    sliced,
                     ir.projection,
                 )
             )
@@ -477,11 +500,11 @@ def make_rapidsmpf_read_parquet_node(
     The RapidsMPF read parquet node, or None if the predicate cannot be
     converted to a parquet filter (caller should fall back to scan_node).
     """
-    from cudf_streaming.streaming.parquet import Filter, read_parquet
+    from cudf_streaming.parquet import Filter, read_parquet
 
     # Build ParquetReaderOptions
     try:
-        stream = context.get_stream_from_pool()
+        stream = context.br().stream_pool.get_stream()
         parquet_reader_options = (
             plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
             .decimal_width(plc.TypeId.DECIMAL128)
@@ -705,7 +728,7 @@ async def sink_node(
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
                 writer_state = await ir_context.to_thread(
-                    _sink_to_file,
+                    _sink_to_file,  # type: ignore[arg-type]  # (to_thread accepts this keyword-only sink helper)
                     ir.sink.kind,
                     ir.sink.path,
                     ir.sink.options,

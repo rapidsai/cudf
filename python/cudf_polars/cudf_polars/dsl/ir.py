@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """
 DSL nodes for the LogicalPlan of polars.
@@ -2156,7 +2156,7 @@ class ConditionalJoin(IR):
         self.options = options
         self.children = (left, right)
         predicate_wrapper = self.Predicate(predicate)
-        _, nulls_equal, zlice, suffix, coalesce, maintain_order = self.options
+        _, nulls_equal, _zlice, _suffix, coalesce, maintain_order = self.options
         # Preconditions from polars
         assert not nulls_equal
         assert not coalesce
@@ -2176,17 +2176,16 @@ class ConditionalJoin(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
+        left_casts, right_casts = _collect_decimal_binop_casts(
+            predicate_wrapper.predicate
+        )
+        left_on = _apply_casts(left, left_casts)
+        right_on = _apply_casts(right, right_casts)
         with context.stream_ordered_after(left, right) as stream:
-            left_casts, right_casts = _collect_decimal_binop_casts(
-                predicate_wrapper.predicate
-            )
             _, _, zlice, suffix, _, _ = options
 
             lg, rg = plc.join.conditional_inner_join(
-                _apply_casts(left, left_casts).table,
-                _apply_casts(right, right_casts).table,
-                predicate_wrapper.ast,
-                stream=stream,
+                left_on.table, right_on.table, predicate_wrapper.ast, stream=stream
             )
             left_result = DataFrame.from_table(
                 plc.copying.gather(
@@ -2469,9 +2468,9 @@ class Join(IR):
         context: IRExecutionContext,
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with context.stream_ordered_after(left, right) as stream:
-            how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
-            if how == "Cross":
+        how, nulls_equal, zlice, suffix, coalesce, maintain_order = options
+        if how == "Cross":
+            with context.stream_ordered_after(left, right) as stream:
                 # Separate implementation, since cross_join returns the
                 # result, not the gather maps
                 if right.num_rows == 0:
@@ -2490,7 +2489,9 @@ class Join(IR):
                         ),
                         stream=stream,
                     )
-                    result = DataFrame([*left_cols, *right_cols], stream=stream)
+                    return DataFrame([*left_cols, *right_cols], stream=stream).slice(
+                        zlice
+                    )
                 else:
                     columns = plc.join.cross_join(
                         left.table, right.table, stream=stream
@@ -2509,25 +2510,25 @@ class Join(IR):
                         left=False,
                         stream=stream,
                     )
-                    result = DataFrame([*left_cols, *right_cols], stream=stream).slice(
+                    return DataFrame([*left_cols, *right_cols], stream=stream).slice(
                         zlice
                     )
-
-            else:
-                # how != "Cross"
-                # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
-                left_on = DataFrame(
-                    broadcast(
-                        *(e.evaluate(left) for e in left_on_exprs), stream=stream
-                    ),
-                    stream=stream,
-                )
-                right_on = DataFrame(
-                    broadcast(
-                        *(e.evaluate(right) for e in right_on_exprs), stream=stream
-                    ),
-                    stream=stream,
-                )
+        else:
+            # how != "Cross"
+            # TODO: Waiting on clarity based on https://github.com/pola-rs/polars/issues/17184
+            left_on = DataFrame(
+                broadcast(
+                    *(e.evaluate(left) for e in left_on_exprs), stream=left.stream
+                ),
+                stream=left.stream,
+            )
+            right_on = DataFrame(
+                broadcast(
+                    *(e.evaluate(right) for e in right_on_exprs), stream=right.stream
+                ),
+                stream=right.stream,
+            )
+            with context.stream_ordered_after(left, right) as stream:
                 null_equality = (
                     plc.types.NullEquality.EQUAL
                     if nulls_equal
@@ -2540,16 +2541,15 @@ class Join(IR):
                     table = plc.copying.gather(
                         left.table, lg, left_policy, stream=stream
                     )
-                    result = DataFrame.from_table(
+                    return DataFrame.from_table(
                         table, left.column_names, left.dtypes, stream=stream
-                    )
+                    ).slice(zlice)
                 else:
                     if how == "Right":
                         # Right join is a left join with the tables swapped
                         left, right = right, left
                         left_on, right_on = right_on, left_on
                         maintain_order = Join.SWAPPED_ORDER[maintain_order]
-
                     lg, rg = join_fn(
                         left_on.table, right_on.table, null_equality, stream=stream
                     )
@@ -2627,10 +2627,7 @@ class Join(IR):
                             if name in left.column_names_set
                         }
                     )
-                    result = left.with_columns(right.columns, stream=stream)
-                result = result.slice(zlice)
-
-        return result
+                    return left.with_columns(right.columns, stream=stream).slice(zlice)
 
 
 class HStack(IR):
