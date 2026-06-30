@@ -1097,13 +1097,13 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
 
-  CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8, "Input row mask must be a boolean column");
-
-  // If the input row mask is empty, return the table as is.
+  // If the input row mask is empty, all rows are pruned anyway.
   if (row_mask.is_empty()) {
     _output_chunk_produced = true;
     return {std::move(read_table), std::move(out_metadata)};
   }
+
+  CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8, "Input row mask must be a boolean column");
 
   // Get the current row mask offset
   auto const mask_offset = _row_mask_offset;
