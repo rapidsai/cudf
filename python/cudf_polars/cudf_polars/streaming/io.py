@@ -274,7 +274,6 @@ class SplitScan(IR):
         new_base = Scan.with_prefetched_parquet_metadata(
             node.base_scan, cached_parquet_info
         )
-        # assert new_base.paths == [info.path for info in cached_parquet_info]
         return cls(
             node.schema,
             new_base,
