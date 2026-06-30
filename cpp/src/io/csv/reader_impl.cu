@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_stream.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
@@ -44,7 +45,6 @@
 
 #include <cuda/functional>
 #include <cuda/iterator>
-#include <thrust/count.h>
 #include <thrust/host_vector.h>
 
 #include <algorithm>
@@ -996,13 +996,8 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         auto const is_quoted = device_span<bool>(is_quoted_flags[str_col_idx]);
         auto* buffer         = &out_buffers[col_idx];
 
-        // Count how many rows were quoted to determine the fast path
-        auto const num_quoted = thrust::count(
-          rmm::exec_policy_nosync(col_stream, cudf::get_current_device_resource_ref()),
-          is_quoted.begin(),
-          is_quoted.end(),
-          true);
-        if (num_quoted == 0) {
+        auto const is_quoted_row = [] __device__(auto const flag) { return flag; };
+        if (cudf::detail::none_of(is_quoted.begin(), is_quoted.end(), is_quoted_row, col_stream)) {
           // Fast path: no rows were quoted, skip replacement entirely
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);
         } else {
@@ -1015,7 +1010,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
             -1,
             col_stream,
             mr);
-          if (std::cmp_equal(num_quoted, num_records)) {
+          if (cudf::detail::all_of(is_quoted.begin(), is_quoted.end(), is_quoted_row, col_stream)) {
             // Fast path: all rows were quoted, apply replacement to all
             out_columns[col_idx] = std::move(replaced_all_col);
           } else {
