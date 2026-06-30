@@ -744,8 +744,8 @@ class TableSizeStats:
 async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
-    max_sample_chunks: int,
-    max_sample_bytes: int,
+    sample_chunk_count: int,
+    target_partition_size: int,
     local_count: int,
 ) -> TableSizeStats:
     """
@@ -757,10 +757,12 @@ async def _sample_chunks(
         The context.
     ch
         The channel to sample from.
-    max_sample_chunks
-        The maximum number of chunks to sample.
-    max_sample_bytes
-        The maximum number of bytes to sample.
+    sample_chunk_count
+        Sampling budget multiplier. Sampling continues until
+        ``target_partition_size * sample_chunk_count`` bytes have been sampled
+        or the local input is exhausted.
+    target_partition_size
+        The target partition size used to derive the byte sampling budget.
     local_count
         The expected number of local chunks (used for extrapolation).
 
@@ -769,10 +771,11 @@ async def _sample_chunks(
     Sampled chunks and the extrapolated total size/rows for this rank.
     """
     sampled_chunks = ChunkStore(context)
+    sample_byte_limit = target_partition_size * sample_chunk_count
     sampled_count = 0
     total_size = 0
     total_rows = 0
-    for _ in range(max_sample_chunks):
+    while sampled_count < local_count and total_size < sample_byte_limit:
         msg = await ch.recv(context)
         if msg is None:
             break
@@ -781,8 +784,6 @@ async def _sample_chunks(
         total_rows += chunk.shape[0]
         sampled_count += 1
         sampled_chunks.insert(Message(msg.sequence_number, chunk))
-        if total_size >= max_sample_bytes:
-            break
     if sampled_count:
         total_size = int((total_size / sampled_count) * local_count)
         total_rows = int((total_rows / sampled_count) * local_count)

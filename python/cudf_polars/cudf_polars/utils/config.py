@@ -311,8 +311,10 @@ class DynamicPlanningOptions:
     Parameters
     ----------
     sample_chunk_count
-        The maximum number of chunks to sample before deciding whether
-        to shuffle. Default is 2.
+        Multiplier used to derive the dynamic-planning sampling budget from
+        the target partition size. For example, the default value of 2 samples
+        up to roughly two target partitions of data before deciding whether to
+        shuffle. Default is 2.
     join_prefilter_threshold
         Row-count ratio (small / large) below which a join key prefilter is
         applied. Set to 0 to disable join prefiltering. Default is 0.5.
