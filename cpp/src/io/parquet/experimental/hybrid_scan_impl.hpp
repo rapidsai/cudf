@@ -92,7 +92,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   void reset_column_selection();
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::filter_row_groups_with_byte_range
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::filter_row_groups_with_byte_range
    */
   [[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_byte_range(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -140,7 +141,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::build_row_mask_with_page_index_stats
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::build_row_mask_with_page_index_stats
    */
   [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
     cudf::host_span<std::vector<size_type> const> row_group_indices,
@@ -214,7 +216,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_filter_columns
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_filter_columns
    */
   void setup_chunking_for_filter_columns(
     std::size_t chunk_read_limit,
@@ -228,13 +231,15 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_filter_columns_chunk
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_filter_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns_chunk(
     cudf::mutable_column_view& row_mask);
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_payload_columns
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::setup_chunking_for_payload_columns
    */
   void setup_chunking_for_payload_columns(
     std::size_t chunk_read_limit,
@@ -248,7 +253,8 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
     rmm::device_async_resource_ref mr);
 
   /**
-   * @copydoc cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_payload_columns_chunk
+   * @copydoc
+   * cudf::io::parquet::experimental::hybrid_scan_multifile::materialize_payload_columns_chunk
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns_chunk(
     cudf::column_view const& row_mask);
