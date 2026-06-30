@@ -17,14 +17,14 @@ from werkzeug import Response
 import polars as pl
 
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.ir import IRExecutionContext, Scan
+from cudf_polars.dsl.ir import CachedParquetInfo, IRExecutionContext, Scan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
 from cudf_polars.testing.engine_utils import is_streaming_engine
 from cudf_polars.testing.io import make_partitioned_source
-from cudf_polars.utils.config import ParquetOptions
+from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_139,
@@ -171,21 +171,17 @@ def test_negative_slice_pushdown_raises(engine: pl.GPUEngine, tmp_path):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-@pytest.mark.parametrize("chunked", [False, True], ids=["single_read", "chunked"])
-def test_scan_parquet_prefetch_file_metadata(
-    tmp_path: Path, df: pl.DataFrame, *, chunked: bool
-):
-    make_partitioned_source(df, tmp_path / "file", "parquet")
-    q = pl.scan_parquet(tmp_path / "file")
-    engine = pl.GPUEngine(
-        executor="in-memory",
-        raise_on_fail=True,
-        parquet_options={
-            "chunked": chunked,
-            "prefetch_file_metadata": True,
-        },
-    )
-    assert_gpu_result_equal(q, engine=engine)
+def test_scan_parquet_prefetch_file_metadata_in_memory_raises():
+    with pytest.raises(
+        NotImplementedError,
+        match=r"Prefetching is not supported for the in-memory executor.",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="in-memory",
+                parquet_options=ParquetOptions(prefetch_file_metadata=True),
+            )
+        )
 
 
 def test_scan_do_evaluate_missing_prefetch_metadata() -> None:
@@ -196,10 +192,7 @@ def test_scan_do_evaluate_missing_prefetch_metadata() -> None:
 
     with pytest.raises(
         AssertionError,
-        match=(
-            r"Parquet file metadata was not prefetched for paths: "
-            r"\['/some/missing/file\.parquet'\]\."
-        ),
+        match=(r"Paths do not match cached parquet info."),
     ):
         Scan.do_evaluate(
             schema,
@@ -213,6 +206,7 @@ def test_scan_do_evaluate_missing_prefetch_metadata() -> None:
             None,
             None,
             parquet_options,
+            [],
             context=context,
         )
 
@@ -861,3 +855,47 @@ def test_scan_parquet_is_between_literal_dtype_mismatch_22622(
     )
 
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_scan_is_equal() -> None:
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    kwargs = {
+        "schema": {"a": DataType(pl.Int64())},
+        "typ": "parquet",
+        "reader_options": {},
+        "cloud_options": {},
+        "paths": ["file.parquet"],
+        "with_columns": None,
+        "skip_rows": 0,
+        "n_rows": -1,
+        "row_index": None,
+        "include_file_paths": None,
+        "predicate": None,
+        "parquet_options": parquet_options,
+        "cached_parquet_info": None,
+    }
+
+    scan_1 = Scan(**kwargs)  # type: ignore[arg-type]
+    scan_2 = Scan(**kwargs)  # type: ignore[arg-type]
+
+    assert scan_1.is_equal(scan_2)
+    assert hash(scan_1) == hash(scan_2)
+
+    kwargs3 = {
+        **kwargs,
+        "cached_parquet_info": [
+            CachedParquetInfo(path="file.parquet", size=100, file_metadata=None)  # type: ignore[arg-type]
+        ],
+    }
+
+    scan_3 = Scan(**kwargs3)  # type: ignore[arg-type]
+    assert scan_1.is_equal(scan_3)
+    assert hash(scan_1) == hash(scan_3)
+
+    kwargs4 = {
+        **kwargs,
+        "paths": ["file2.parquet"],
+    }
+    scan_4 = Scan(**kwargs4)  # type: ignore[arg-type]
+    assert not scan_1.is_equal(scan_4)
+    assert hash(scan_1) != hash(scan_4)

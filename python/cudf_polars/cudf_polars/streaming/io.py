@@ -180,6 +180,7 @@ class SplitScan(IR):
 
     __slots__ = (
         "base_scan",
+        "cached_parquet_info",
         "parquet_options",
         "paths",
         "schema",
@@ -193,6 +194,7 @@ class SplitScan(IR):
         "split_index",
         "total_splits",
         "parquet_options",
+        "cached_parquet_info",
     )
     _n_non_child_args = 13
     base_scan: Scan
@@ -205,6 +207,7 @@ class SplitScan(IR):
     """Total number of splits."""
     parquet_options: ParquetOptions
     """Parquet-specific options."""
+    cached_parquet_info: list[CachedParquetInfo] | None
 
     def __init__(
         self,
@@ -214,6 +217,7 @@ class SplitScan(IR):
         split_index: int,
         total_splits: int,
         parquet_options: ParquetOptions,
+        cached_parquet_info: list[CachedParquetInfo] | None,
     ):
         self.schema = schema
         self.base_scan = base_scan
@@ -234,13 +238,64 @@ class SplitScan(IR):
             base_scan.include_file_paths,
             base_scan.predicate,
             parquet_options,
+            cached_parquet_info,
         )
         self.parquet_options = parquet_options
+        self.cached_parquet_info = cached_parquet_info
         self.children = ()
         if base_scan.typ not in ("parquet",):  # pragma: no cover
             raise NotImplementedError(
                 f"Unhandled Scan type for file splitting: {base_scan.typ}"
             )
+
+    @classmethod
+    def with_prefetched_parquet_metadata(
+        cls,
+        node: SplitScan,
+        cached_parquet_info: list[CachedParquetInfo],
+    ) -> Self:
+        """
+        Create a new SplitScan node, with prefetched parquet metadata set.
+
+        Because SplitScan is a single-file scan, each composed Scan nodes will
+        use the same cached parquet metadata.
+
+        Parameters
+        ----------
+        node
+            The SplitScan node to create a new node from.
+        cached_parquet_info
+            The cached parquet metadata to set on the new node. This will be a
+            length-1 list, matching the length-1 ``path`` for the base scan node.
+
+        Returns
+        -------
+        The new SplitScan node.
+        """
+        new_base = Scan.with_prefetched_parquet_metadata(
+            node.base_scan, cached_parquet_info
+        )
+        # assert new_base.paths == [info.path for info in cached_parquet_info]
+        return cls(
+            node.schema,
+            new_base,
+            node.paths,
+            node.split_index,
+            node.total_splits,
+            node.parquet_options,
+            cached_parquet_info,
+        )
+
+    def is_equal(self, other: Self) -> bool:  # noqa: D102
+        # This needs to exclude 'cached_parquet_info' from the equality check.
+        if type(other) is not type(self):
+            return False
+        return self is other or (
+            self.base_scan.is_equal(other.base_scan)
+            and self.paths == other.paths
+            and self.split_index == other.split_index
+            and self.total_splits == other.total_splits
+        )
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
@@ -270,6 +325,7 @@ class SplitScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        cached_parquet_info: list[CachedParquetInfo] | None,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
@@ -289,8 +345,7 @@ class SplitScan(IR):
         # - We can use all this information to calculate the
         #   "skip_rows" and "n_rows" options to use locally.
 
-        if parquet_options.prefetch_file_metadata:
-            cached_parquet_info = Scan._lookup_parquet_metadatas(paths, context)
+        if cached_parquet_info is not None:
             parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
 
             row_group_num_rows = [
@@ -347,6 +402,7 @@ class SplitScan(IR):
                 include_file_paths,
                 predicate,
                 parquet_options,
+                cached_parquet_info,
                 context=context,
             )
 
@@ -361,6 +417,7 @@ class FusedScan(IR):
 
     __slots__ = (
         "base_scan",
+        "cached_parquet_info",
         "parquet_options",
         "paths",
         "schema",
@@ -370,6 +427,7 @@ class FusedScan(IR):
         "base_scan",
         "paths",
         "parquet_options",
+        "cached_parquet_info",
     )
     _n_non_child_args = 11
     base_scan: Scan
@@ -378,6 +436,8 @@ class FusedScan(IR):
     """File paths assigned to this task."""
     parquet_options: ParquetOptions
     """Parquet-specific options."""
+    cached_parquet_info: list[CachedParquetInfo] | None
+    """Cached parquet metadata."""
 
     def __init__(
         self,
@@ -385,11 +445,13 @@ class FusedScan(IR):
         base_scan: Scan,
         paths: list[str],
         parquet_options: ParquetOptions,
+        cached_parquet_info: list[CachedParquetInfo] | None,
     ):
         self.schema = schema
         self.base_scan = base_scan
         self.paths = paths
         self.parquet_options = parquet_options
+        self.cached_parquet_info = cached_parquet_info
         self._non_child_args = (
             base_scan.schema,
             base_scan.typ,
@@ -402,8 +464,39 @@ class FusedScan(IR):
             base_scan.include_file_paths,
             base_scan.predicate,
             parquet_options,
+            cached_parquet_info,
         )
         self.children = ()
+
+    @classmethod
+    def with_prefetched_parquet_metadata(
+        cls,
+        node: FusedScan,
+        cached_parquet_info_map: dict[str, CachedParquetInfo],
+    ) -> Self:
+        """Create a new FusedScan node, with prefetched parquet metadata set."""
+        cached_parquet_info = [cached_parquet_info_map[path] for path in node.paths]
+        if node.paths != [info.path for info in cached_parquet_info]:
+            raise AssertionError(
+                f"Paths do not match cached parquet info. {node.paths} != {[info.path for info in cached_parquet_info]}"
+            )
+        return cls(
+            node.schema,
+            node.base_scan,
+            node.paths,
+            node.parquet_options,
+            cached_parquet_info,
+        )
+
+    def is_equal(self, other: Self) -> bool:  # noqa: D102
+        # This needs to exclude 'cached_parquet_info' from the equality check.
+        if type(other) is not type(self):
+            return False
+        return self is other or (
+            self.base_scan.is_equal(other.base_scan)
+            and self.paths == other.paths
+            and self.parquet_options == other.parquet_options
+        )
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
@@ -429,6 +522,7 @@ class FusedScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        cached_parquet_info: list[CachedParquetInfo] | None,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
@@ -446,6 +540,7 @@ class FusedScan(IR):
                 include_file_paths,
                 predicate,
                 parquet_options,
+                cached_parquet_info,
                 context=context,
             )
 
@@ -573,25 +668,82 @@ class StreamingScan(IR):
 
     __slots__ = (
         "base_scan",
+        "scan_type",
         "scans",
         "schema",
     )
     _non_child = (
         "scans",
         "base_scan",
+        "scan_type",
     )
-    _n_non_child_args = 2
+    _n_non_child_args = 3
     scans: Sequence[SplitScan] | Sequence[FusedScan]
     base_scan: Scan
 
     def __init__(
-        self, scans: Sequence[SplitScan] | Sequence[FusedScan], base_scan: Scan
+        self,
+        scans: Sequence[SplitScan] | Sequence[FusedScan],
+        base_scan: Scan,
+        scan_type: Literal["split", "fused"],
     ):
         self.scans = scans
         self.base_scan = base_scan
         self.schema = base_scan.schema
-        self._non_child_args = (scans, base_scan)
+        self.scan_type = scan_type
+        self._non_child_args = (scans, base_scan, scan_type)
         self.children = ()
+
+    @classmethod
+    def with_prefetched_parquet_metadata(
+        cls,
+        node: StreamingScan,
+        cached_parquet_info_map: dict[str, CachedParquetInfo],
+    ) -> Self:
+        """
+        Create a new StreamingScan node, with prefetched parquet metadata set.
+
+        Parameters
+        ----------
+        node: StreamingScan
+            The StreamingScan node to create a new node from.
+        cached_parquet_info_map
+            The cached parquet metadata to set on the new node.
+
+        Returns
+        -------
+        Self: The new StreamingScan node.
+        """
+        new_scans: list[SplitScan | FusedScan] = []
+        if node.scan_type == "split":
+            new_scans = []
+            for scan in node.scans:
+                new_parquet_info = [
+                    cached_parquet_info_map[path] for path in scan.paths
+                ]
+                # SplitScan should be generic / overload based on type.
+                new_scan = SplitScan.with_prefetched_parquet_metadata(
+                    scan,  # type: ignore[arg-type]
+                    new_parquet_info,
+                )
+                assert new_scan.cached_parquet_info is not None
+                assert new_scan.paths == [
+                    info.path for info in new_scan.cached_parquet_info
+                ]
+                new_scans.append(new_scan)
+        else:
+            new_scans = [
+                FusedScan.with_prefetched_parquet_metadata(
+                    scan,  # type: ignore[arg-type]
+                    cached_parquet_info_map,
+                )
+                for scan in node.scans
+            ]
+            for scan in new_scans:
+                assert scan.cached_parquet_info is not None
+                assert scan.paths == [info.path for info in scan.cached_parquet_info]
+
+        return cls(new_scans, node.base_scan, node.scan_type)  # type: ignore[arg-type]
 
     @classmethod
     def for_split_files(
@@ -614,6 +766,9 @@ class StreamingScan(IR):
         splits_created = 0
         for path in local_paths:
             while sindex < plan.factor and splits_created < local_count:
+                # TODO: We should replace base_scan first, and then ensure cached_parquet_info
+                # is set properly from the start. Then we can remove the with_prefetched_parquet_metadata
+                # alternate constructor.
                 scans.append(
                     SplitScan(
                         base_scan.schema,
@@ -622,12 +777,13 @@ class StreamingScan(IR):
                         sindex,
                         plan.factor,
                         parquet_options,
+                        None,
                     )
                 )
                 sindex += 1
                 splits_created += 1
             sindex = 0
-        return cls(scans, base_scan)
+        return cls(scans, base_scan, "split")
 
     @classmethod
     def for_fused_files(
@@ -644,17 +800,21 @@ class StreamingScan(IR):
         local_offset, local_count = _rank_slice(partition_count, rank, nranks)
         paths_start = local_offset * plan.factor
         paths_end = paths_start + plan.factor * local_count
-        scans = [
-            FusedScan(
-                base_scan.schema,
-                base_scan,
-                base_scan.paths[offset : offset + plan.factor],
-                parquet_options,
-            )
-            for offset in range(paths_start, paths_end, plan.factor)
-            if base_scan.paths[offset : offset + plan.factor]
-        ]
-        return cls(scans, base_scan)
+        scans = []
+        for offset in range(paths_start, paths_end, plan.factor):
+            paths = base_scan.paths[offset : offset + plan.factor]
+            if paths:
+                scans.append(
+                    FusedScan(
+                        base_scan.schema,
+                        base_scan,
+                        paths,
+                        parquet_options,
+                        None,
+                    )
+                )
+
+        return cls(scans, base_scan, "fused")
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""

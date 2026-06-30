@@ -19,12 +19,8 @@ import cudf_polars.streaming.io as streaming_io
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import (
-    CachedParquetInfo,
     Empty,
-    IRExecutionContext,
     Projection,
-    Scan,
-    seed_parquet_file_metadata_from_stats,
 )
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import SerializedDataSourceInfo, StatsCollector
@@ -294,37 +290,8 @@ def test_parquet_source_info_omits_footers_when_paths_are_sampled(
     assert info.cached_parquet_info is None
 
 
-def test_seed_parquet_file_metadata_from_stats(
-    tmp_path: pathlib.Path,
-    df_and_schema: tuple[pl.DataFrame, Schema],
-    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
-) -> None:
-    _clear_source_info_cache()
-    df, _schema = df_and_schema
-    make_partitioned_source(df, tmp_path, "parquet", n_files=2)
-    engine = pl.GPUEngine(
-        raise_on_fail=True,
-        executor="streaming",
-        parquet_options={"max_footer_samples": 10, "prefetch_file_metadata": True},
-    )
-    q = pl.scan_parquet(tmp_path)
-    ir = Translator(q._ldf.visit(), engine).translate_ir()
-    config = ConfigOptions.from_polars_engine(engine)
-    stats = collect_statistics(ir, config, parquet_stats_executor)
-
-    context = IRExecutionContext()
-    seed_parquet_file_metadata_from_stats(stats, context)
-
-    scan_node, parquet_info = next(
-        (node, info)
-        for node, info in stats.scan_stats.items()
-        if isinstance(node, Scan) and isinstance(info, ParquetSourceInfo)
-    )
-    cached_parquet_info = parquet_info.cached_parquet_info
-    assert cached_parquet_info is not None
-    for path, metadata in zip(scan_node.paths, cached_parquet_info, strict=True):
-        assert isinstance(metadata, CachedParquetInfo)
-        assert context.parquet_file_metadata[path] is metadata
+# TODO: Add a test that calls prefetch_parquet_file_metadata_for_ir
+# and ensure that we don't refetch the metadata from stats
 
 
 def test_parquet_metadata_reads_footers(

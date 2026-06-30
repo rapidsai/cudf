@@ -26,7 +26,6 @@ from rmm._cuda import gpu
 import cudf_polars.dsl.tracing
 from cudf_polars.dsl.ir import (
     IRExecutionContext,
-    prefetch_parquet_file_metadata_for_ir,
 )
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
@@ -304,11 +303,6 @@ def _callback(
     ):
         if config_options.executor.name == "in-memory":
             context = IRExecutionContext()
-            if config_options.parquet_options.prefetch_file_metadata:
-                prefetch_parquet_file_metadata_for_ir(
-                    ir,
-                    context,
-                )
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
             if timer is None:
                 return df

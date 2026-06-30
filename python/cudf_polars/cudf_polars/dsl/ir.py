@@ -157,20 +157,11 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     query_id
         Identifier for the query being executed.
-    parquet_file_metadata
-        A cache of parquet file metadata keyed by file path for parquet scans.
-        The values are `CachedParquetInfo` objects storing
-        a ``SourceInfo`` with known size and a list of ``FileMetaData`` objects
-        associated with those ``paths``.
-
-        This cache lasts for the duration of the a single query's execution
-        (e.g. ``LazyFrame.collect()``).
     """
 
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
-    parquet_file_metadata: dict[str, CachedParquetInfo] = field(default_factory=dict)
 
     async def to_thread(
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs
@@ -282,8 +273,9 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
 @nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")
 def prefetch_parquet_file_metadata_for_ir(
     root: IR,
-    context: IRExecutionContext,
-) -> None:
+    py_executor: concurrent.futures.Executor | None,
+    stats: StatsCollector | None = None,
+) -> dict[str, CachedParquetInfo]:
     """
     Prefetch parquet metadata for all parquet scans in an IR graph.
 
@@ -291,89 +283,62 @@ def prefetch_parquet_file_metadata_for_ir(
     ----------
     root
         The root of the IR graph, which will be traversed.
-    context
-        The IR execution context. Its ``py_executor`` is used to fetch
-        metadata concurrently, its ``parquet_file_metadata`` is mutated
-        to cache the newly read parquet metadata.
-    """
-    from cudf_polars.streaming.io import StreamingScan
+    py_executor
+        The thread pool executor to use for fetching parquet metadata concurrently.
+    stats
+        The stats collector. The file metadata might have already been
+        prefetched during statistics collection, when the number of files
+        sampled equals the total number of files. Providing ``stats`` here will
+        skip rereading metadata for those files.
 
-    all_paths: list[str] = []
-    seen_paths: set[str] = set()
+    Returns
+    -------
+    A dictionary mapping file paths to their cached parquet metadata.
+    """
+    from cudf_polars.streaming.io import ParquetSourceInfo, StreamingScan
+
+    all_paths: set[str] = set()
+
     for node in traversal([root]):
         if isinstance(node, StreamingScan):
             for scan in node.scans:
                 for path in scan.paths:
-                    if path not in seen_paths:
-                        seen_paths.add(path)
-                        all_paths.append(path)
+                    all_paths.add(path)
         elif isinstance(node, Scan) and node.typ == "parquet":
             for path in node.paths:
-                if path not in seen_paths:
-                    seen_paths.add(path)
-                    all_paths.append(path)
+                all_paths.add(path)
 
-    if not all_paths:
-        return
+    cached_parquet_info: dict[str, CachedParquetInfo] = {}
+    if stats is not None:
+        for node, datasource_info in stats.scan_stats.items():
+            if (
+                isinstance(node, Scan)
+                and node.typ == "parquet"
+                and isinstance(datasource_info, ParquetSourceInfo)
+                and datasource_info.cached_parquet_info is not None
+            ):
+                for info in datasource_info.cached_parquet_info:
+                    cached_parquet_info[info.path] = info
 
-    missing_paths = [
-        path for path in all_paths if path not in context.parquet_file_metadata
-    ]
+    missing_paths = all_paths - set(cached_parquet_info.keys())
     cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
 
-    if context.py_executor is None:
-        cm = executor = concurrent.futures.ThreadPoolExecutor()
+    if py_executor is None:
+        cm = py_executor = concurrent.futures.ThreadPoolExecutor()
     else:
-        executor = context.py_executor
         # We didn't create the executor, so we don't close it.
         cm = contextlib.nullcontext()
 
-    if missing_paths:
-        with cm:
-            futures = [
-                executor.submit(_prefetch_parquet_footers_for_paths, [path])
-                for path in missing_paths
-            ]
+    with cm:
+        futures = [
+            py_executor.submit(_prefetch_parquet_footers_for_paths, [path])
+            for path in missing_paths
+        ]
 
-            for future in concurrent.futures.as_completed(futures):
-                for cached_parquet_info in future.result():
-                    context.parquet_file_metadata.setdefault(
-                        cached_parquet_info.path, cached_parquet_info
-                    )
-
-
-def seed_parquet_file_metadata_from_stats(
-    stats: StatsCollector,
-    context: IRExecutionContext,
-) -> None:
-    """
-    Seed prefetched parquet footers from stats collection when available.
-
-    Stats collection reads parquet footers for sampled paths. When the sample
-    covers all paths in a scan, those footers can be reused during metadata
-    prefetch to avoid rereading file footers.
-
-    Parameters
-    ----------
-    stats: StatsCollector
-        The stats collector.
-    context: IRExecutionContext
-        The execution context. Its ``parquet_file_metadata`` is mutated to
-        cache the parquet file metadata read during stats collection.
-    """
-    from cudf_polars.streaming.io import ParquetSourceInfo
-
-    for node, info in stats.scan_stats.items():
-        if (
-            isinstance(node, Scan)
-            and node.typ == "parquet"
-            and isinstance(info, ParquetSourceInfo)
-            and info.cached_parquet_info is not None
-        ):
-            for cached_parquet_info in info.cached_parquet_info:
-                context.parquet_file_metadata.setdefault(
-                    cached_parquet_info.path, cached_parquet_info
-                )
+        for future in concurrent.futures.as_completed(futures):
+            for info in future.result():
+                cached_parquet_info[info.path] = info
+    return cached_parquet_info
 
 
 _BINOPS = {
@@ -611,6 +576,7 @@ class Scan(IR):
     """Input from files."""
 
     __slots__ = (
+        "cached_parquet_info",
         "cloud_options",
         "include_file_paths",
         "n_rows",
@@ -636,8 +602,9 @@ class Scan(IR):
         "include_file_paths",
         "predicate",
         "parquet_options",
+        "cached_parquet_info",
     )
-    _n_non_child_args = 11
+    _n_non_child_args = 12
     typ: str
     """What type of file are we reading? Parquet, CSV, etc..."""
     reader_options: dict[str, Any]
@@ -660,6 +627,8 @@ class Scan(IR):
     """Mask to apply to the read dataframe."""
     parquet_options: ParquetOptions
     """Parquet-specific options."""
+    cached_parquet_info: list[CachedParquetInfo] | None
+    """Cached parquet file metadata."""
 
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
     PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
@@ -678,6 +647,7 @@ class Scan(IR):
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
         parquet_options: ParquetOptions,
+        cached_parquet_info: list[CachedParquetInfo] | None,
     ):
         self.schema = schema
         self.typ = typ
@@ -702,9 +672,11 @@ class Scan(IR):
             include_file_paths,
             predicate,
             parquet_options,
+            cached_parquet_info,
         )
         self.children = ()
         self.parquet_options = parquet_options
+        self.cached_parquet_info = cached_parquet_info
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
@@ -784,6 +756,40 @@ class Scan(IR):
                 "Reading only parquet metadata to produce row index."
             )
 
+    @classmethod
+    def with_prefetched_parquet_metadata(
+        cls, scan: Scan, cached_parquet_info: list[CachedParquetInfo]
+    ) -> Self:
+        """Create a new scan node, with prefetched parquet metadata set."""
+        return cls(
+            scan.schema,
+            scan.typ,
+            scan.reader_options,
+            scan.cloud_options,
+            scan.paths,
+            scan.with_columns,
+            scan.skip_rows,
+            scan.n_rows,
+            scan.row_index,
+            scan.include_file_paths,
+            scan.predicate,
+            scan.parquet_options,
+            cached_parquet_info,
+        )
+
+    def is_equal(self, other: Self) -> bool:  # noqa: D102
+        # This needs to exclude 'cached_parquet_info' from the equality check.
+        if self is other:
+            return True
+        result = (
+            self._ctor_arguments(self.children)[:-1]
+            == other._ctor_arguments(other.children)[:-1]
+        )
+        # Eager CSE for nodes that match.
+        if result:
+            self.children = other.children
+        return result
+
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of the node.
@@ -791,6 +797,7 @@ class Scan(IR):
         The options dictionaries are serialised for hashing purposes
         as json strings.
         """
+        # cached_parquet_info is deliberately not included in the hash data.
         schema_hash = tuple(self.schema.items())
         return (
             type(self),
@@ -844,12 +851,19 @@ class Scan(IR):
         skip_rows: int,
         n_rows: int,
         parquet_options: ParquetOptions,
-        context: IRExecutionContext | None,
+        cached_parquet_info: list[CachedParquetInfo] | None,
     ) -> int:
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
-        if parquet_options.prefetch_file_metadata and context is not None:
-            cached_parquet_info = Scan._lookup_parquet_metadatas(paths, context)
+        if parquet_options.prefetch_file_metadata:
+            if cached_parquet_info is None:
+                raise AssertionError(
+                    "Prefetching is enabled, but no cached parquet info was provided."
+                )
+            if paths != [info.path for info in cached_parquet_info]:
+                raise AssertionError(
+                    f"Paths do not match cached parquet info. {paths} != {[info.path for info in cached_parquet_info]}"
+                )
             parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
             num_rows = sum(metadata.num_rows for metadata in parquet_metadatas)
         else:
@@ -879,6 +893,7 @@ class Scan(IR):
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
         parquet_options: ParquetOptions,
+        cached_parquet_info: list[CachedParquetInfo] | None,
         *,
         context: IRExecutionContext,
     ) -> DataFrame:
@@ -995,7 +1010,14 @@ class Scan(IR):
                 )
         elif typ == "parquet":
             if parquet_options.prefetch_file_metadata:
-                cached_parquet_info = cls._lookup_parquet_metadatas(paths, context)
+                if cached_parquet_info is None:
+                    raise AssertionError(
+                        "Prefetching is enabled, but no cached parquet info was provided."
+                    )
+                if paths != [info.path for info in cached_parquet_info]:
+                    raise AssertionError(
+                        f"Paths do not match cached parquet info. {paths} != {[info.path for info in cached_parquet_info]}"
+                    )
                 source_info = plc.io.SourceInfo(
                     [
                         plc.io.types.FilepathSource(info.path, info.size)
@@ -1052,7 +1074,7 @@ class Scan(IR):
                         )
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(
-                        paths, skip_rows, n_rows, parquet_options, context
+                        paths, skip_rows, n_rows, parquet_options, cached_parquet_info
                     )
                     if not names
                     else None
@@ -1153,37 +1175,6 @@ class Scan(IR):
                 predicate.evaluate(df), target_length=df.num_rows, stream=df.stream
             )
             return df.filter(mask)
-
-    @staticmethod
-    def _lookup_parquet_metadatas(
-        paths: list[str], context: IRExecutionContext
-    ) -> list[CachedParquetInfo]:
-        """
-        Lookup parquet metadata from the prefetch metadata cache.
-
-        Only call this when prefetching is enabled.
-
-        Parameters
-        ----------
-        paths
-            The list of paths from the Scan node's ``.paths``.
-        context
-            The IRExecutionContext with the prefetch parquet file metadata.
-
-        Raises
-        ------
-        AssertionError
-            If parquet metadata for any requested file path is not found in the cache.
-        """
-        try:
-            return [context.parquet_file_metadata[path] for path in paths]
-        except KeyError as e:
-            msg = (
-                f"Parquet file metadata was not prefetched for paths: {list(paths)}."
-                "Please report this as a bug to cudf-polars. You can work around it "
-                "by setting 'CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA=0'."
-            )
-            raise AssertionError(msg) from e
 
 
 class Sink(IR):

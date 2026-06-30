@@ -884,6 +884,11 @@ class ConfigOptions(Generic[ExecutorType]):
         user_parquet_options = engine.config.get("parquet_options", {})
         if user_parquet_options is None:
             user_parquet_options = {}
+
+        if isinstance(user_parquet_options, dict):
+            parquet_options = ParquetOptions(**user_parquet_options)
+        else:
+            parquet_options = user_parquet_options
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
         user_memory_resource_config = engine.config.get("memory_resource_config", None)
@@ -911,6 +916,10 @@ class ConfigOptions(Generic[ExecutorType]):
         match user_executor:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
+                if parquet_options.prefetch_file_metadata:
+                    raise NotImplementedError(
+                        "Prefetching is not supported for the in-memory executor."
+                    )
             case "streaming":
                 user_executor_options = user_executor_options.copy()
                 if "min_device_size" not in user_executor_options:
@@ -933,7 +942,7 @@ class ConfigOptions(Generic[ExecutorType]):
 
         kwargs = {
             "raise_on_fail": user_raise_on_fail,
-            "parquet_options": ParquetOptions(**user_parquet_options),
+            "parquet_options": parquet_options,
             "executor": executor,
             "device": engine.device,
             "memory_resource_config": user_memory_resource_config,
