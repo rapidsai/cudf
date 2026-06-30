@@ -34,6 +34,10 @@ endif()
 if(NOT rapids-cmake-branch)
   set(rapids-cmake-branch "${RAPIDS_BRANCH}")
 endif()
+
+# Test rapids-cmake PR #1044 (bump cuco for the new bloom filter)
+set(rapids-cmake-repo "PointKernel/rapids-cmake")
+set(rapids-cmake-branch "cuco-new-filter")
 include("${CMAKE_CURRENT_LIST_DIR}/RAPIDS.cmake")
 
 # Don't use sccache-dist for CMake's compiler tests
