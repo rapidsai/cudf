@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,8 @@
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 #include <unordered_set>
 #include <vector>
@@ -102,10 +104,12 @@ std::vector<cudf::size_type> apply_row_group_filters(
 
   if (filters.contains(hybrid_scan_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS) and
       bloom_filter_byte_ranges.size()) {
-    // Fetch the header-stripped, 32-byte-aligned bloom filter bitsets from the input file
+    // Fetch 32-byte aligned bloom filter data buffers from the input file buffer
+    auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor(mr, bloom_filter_alignment);
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
-      cudf::io::parquet::fetch_bloom_filters_to_device_async(
-        datasource, bloom_filter_byte_ranges, stream, mr);
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        datasource, bloom_filter_byte_ranges, stream, aligned_mr);
     bloom_read_tasks.get();
 
     bloom_filtered_row_groups = reader.filter_row_groups_with_bloom_filters(

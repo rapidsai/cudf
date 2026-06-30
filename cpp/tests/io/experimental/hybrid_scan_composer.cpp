@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -104,10 +104,13 @@ auto apply_hybrid_scan_filters(cudf::io::datasource& datasource,
   std::vector<cudf::size_type> bloom_filtered_row_group_indices;
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (bloom_filter_byte_ranges.size()) {
-    // Fetch the header-stripped, 32-byte-aligned bloom filter bitsets from the input file
+    // Fetch 32 byte aligned bloom filter data buffers from the input file buffer
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor(cudf::get_current_device_resource_ref(),
+                                                        bloom_filter_alignment);
+
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
-      cudf::io::parquet::fetch_bloom_filters_to_device_async(
-        datasource, bloom_filter_byte_ranges, stream, mr);
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        datasource, bloom_filter_byte_ranges, stream, aligned_mr);
     bloom_read_tasks.get();
 
     // Filter row groups with bloom filters

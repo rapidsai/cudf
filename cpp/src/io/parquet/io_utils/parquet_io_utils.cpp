@@ -51,39 +51,39 @@ namespace cudf::io::parquet {
 namespace {
 
 /**
- * @brief Dispatches the fetch task for each source index and collects the results
+ * @brief Dispatches a fetch task for each task index and collects the results
  *
- * Dispatches sequentially or using host worker pool depending on the number of sources.
+ * Dispatches sequentially or using host worker pool depending on the number of tasks.
  *
- * @tparam Task Callable invocable as `fetch_task(std::size_t source_idx)`
- * @param num_sources Number of sources to process
- * @param fetch_task Task to run for each source index
- * @return Vector of results, one per source, in source order
+ * @tparam Task Callable invocable as `fetch_task(std::size_t task_idx)`
+ * @param num_tasks Number of tasks to dispatch
+ * @param fetch_task Task to run for each task index
+ * @return Vector of results, one per task, in task-index order
  */
 template <typename Task>
-auto dispatch_fetch_tasks(std::size_t num_sources, Task fetch_task)
+auto dispatch_fetch_tasks(std::size_t num_tasks, Task fetch_task)
 {
   using result_type = std::invoke_result_t<Task, std::size_t>;
 
   auto constexpr parallel_threshold = 32;
 
   std::vector<result_type> results;
-  results.reserve(num_sources);
+  results.reserve(num_tasks);
 
-  if (num_sources < parallel_threshold) {
+  if (num_tasks < parallel_threshold) {
     // Run sequentially to avoid task dispatch overhead
     std::for_each(cuda::counting_iterator<std::size_t>(0),
-                  cuda::counting_iterator<std::size_t>(num_sources),
-                  [&](std::size_t source_idx) { results.emplace_back(fetch_task(source_idx)); });
+                  cuda::counting_iterator<std::size_t>(num_tasks),
+                  [&](std::size_t task_idx) { results.emplace_back(fetch_task(task_idx)); });
   } else {
     // Dispatch the tasks to the host worker pool
     std::vector<std::future<result_type>> tasks;
-    tasks.reserve(num_sources);
+    tasks.reserve(num_tasks);
     std::for_each(cuda::counting_iterator<std::size_t>(0),
-                  cuda::counting_iterator<std::size_t>(num_sources),
-                  [&](std::size_t source_idx) {
+                  cuda::counting_iterator<std::size_t>(num_tasks),
+                  [&](std::size_t task_idx) {
                     tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-                      [&fetch_task, source_idx]() { return fetch_task(source_idx); }));
+                      [&fetch_task, task_idx]() { return fetch_task(task_idx); }));
                   });
     std::transform(tasks.begin(), tasks.end(), std::back_inserter(results), [](auto& task) {
       return task.get();
@@ -410,20 +410,41 @@ fetch_bloom_filters_to_device_async_impl(
     return {bloom_range.offset() + header_size, static_cast<int64_t>(bitset_size)};
   };
 
-  // Parse each source's bloom filter headers with one task per source
-  auto const bitset_byte_ranges_per_source =
-    dispatch_fetch_tasks(num_sources, [&](std::size_t source_idx) {
-      auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
-      auto& datasource         = datasources[source_idx].get();
-      std::vector<cudf::io::text::byte_range_info> bitset_ranges;
-      bitset_ranges.reserve(bloom_ranges.size());
-      std::transform(
-        bloom_ranges.begin(),
-        bloom_ranges.end(),
-        std::back_inserter(bitset_ranges),
-        [&](auto const& bloom_range) { return fetch_bitset_range(datasource, bloom_range); });
-      return bitset_ranges;
+  // Flatten to one (source index, bloom filter byte range) entry per bloom filter
+  std::vector<std::tuple<std::size_t, cudf::io::text::byte_range_info>> bloom_header_tasks;
+  bloom_header_tasks.reserve(std::accumulate(
+    bloom_filter_byte_ranges_per_source.begin(),
+    bloom_filter_byte_ranges_per_source.end(),
+    std::size_t{0},
+    [](auto acc, auto const& bloom_ranges) { return acc + bloom_ranges.size(); }));
+  for (std::size_t source_idx = 0; source_idx < num_sources; ++source_idx) {
+    auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
+    std::transform(bloom_ranges.begin(),
+                   bloom_ranges.end(),
+                   std::back_inserter(bloom_header_tasks),
+                   [source_idx](auto const& bloom_range) {
+                     return std::tuple{source_idx, bloom_range};
+                   });
+  }
+
+  // Dispatch one header read+parse per bloom filter
+  auto const flat_bitset_ranges =
+    dispatch_fetch_tasks(bloom_header_tasks.size(), [&](std::size_t task_idx) {
+      auto const& [source_idx, bloom_range] = bloom_header_tasks[task_idx];
+      return fetch_bitset_range(datasources[source_idx].get(), bloom_range);
     });
+
+  // Regroup the flat results into per-source bitset ranges
+  std::vector<std::vector<cudf::io::text::byte_range_info>> bitset_byte_ranges_per_source;
+  bitset_byte_ranges_per_source.reserve(num_sources);
+  std::transform(bloom_filter_byte_ranges_per_source.begin(),
+                 bloom_filter_byte_ranges_per_source.end(),
+                 std::back_inserter(bitset_byte_ranges_per_source),
+                 [next = flat_bitset_ranges.begin()](auto const& bloom_ranges) mutable {
+                   auto const first = next;
+                   std::advance(next, bloom_ranges.size());
+                   return std::vector<cudf::io::text::byte_range_info>(first, next);
+                 });
 
   // Fetch only the header-free bitsets to device
   auto result =

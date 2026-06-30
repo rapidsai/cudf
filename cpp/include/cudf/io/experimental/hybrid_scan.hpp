@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -117,11 +117,9 @@ enum class use_data_page_mask : bool {
  * Row group pruning (OPTIONAL): Start with either a list of custom or all row group indices in the
  * parquet file and optionally filter it using a byte range and/or the filter expression using
  * column chunk statistics, dictionaries and bloom filters. Byte ranges for column chunk dictionary
- * pages and complete bloom filters (header + bitset) within parquet file may be obtained via
- * `secondary_filters_byte_ranges()` function. Dictionary page ranges may be read directly into
- * device buffers. Bloom filter ranges should be fetched with
- * `parquet::fetch_bloom_filters_to_device_async()`, which strips the serialized
- * BloomFilterHeader and returns 32-byte-aligned bitset spans for row group filtration.
+ * pages and bloom filters within parquet file may be obtained via `secondary_filters_byte_ranges()`
+ * function. The byte ranges may be read into device buffers and their device spans may be passed
+ * to the row group filtration functions.
  * @code{.cpp}
  * // Start with a list of all parquet row group indices from the file footer
  * auto all_row_group_indices = reader->all_row_groups(options);
@@ -168,10 +166,9 @@ enum class use_data_page_mask : bool {
  * auto bloom_filtered_row_group_indices = std::vector<size_type>{};
  *
  * if (bloom_filter_byte_ranges.size()) {
- *   // Fetch bloom filter bitsets into device buffers and create spans
+ *   // Fetch bloom filter byte ranges into device buffers and create spans
  *   auto [bloom_filter_buffers, bloom_filter_data, bloom_filter_tasks] =
- *     parquet::fetch_bloom_filters_to_device_async(
- *       datasource, bloom_filter_byte_ranges, stream, mr);
+ *     parquet::fetch_byte_ranges_to_device_async(datasource, bloom_filter_byte_ranges, stream, mr);
  *   bloom_filter_tasks.get();
  *
  *   // Prune row groups using bloom filters
@@ -389,10 +386,8 @@ class hybrid_scan_reader {
    * @brief Get byte ranges of bloom filters and dictionary pages (secondary filters) for row group
    *        pruning
    *
-   * @note Bloom filter byte ranges include the serialized BloomFilterHeader. Before calling
-   *       `filter_row_groups_with_bloom_filters()`, fetch these ranges with
-   *       `parquet::fetch_bloom_filters_to_device_async()` to strip the header and produce
-   *       32-byte-aligned bitset spans.
+   * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte
+   *       aligned memory resource
    *
    * @param row_group_indices Input row groups indices
    * @param options Parquet reader options

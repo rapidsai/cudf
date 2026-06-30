@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,8 @@
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <rmm/mr/aligned_resource_adaptor.hpp>
 
 #include <nvtx3/nvtx3.hpp>
 
@@ -173,13 +175,14 @@ std::vector<cudf::size_type> apply_row_group_filters(
   bloom_filtered_row_group_indices.reserve(current_row_group_indices.size());
   if (filters.contains(hybrid_scan_filter_type::ROW_GROUPS_WITH_BLOOM_FILTERS) and
       bloom_filter_byte_ranges.size()) {
+    // Fetch 32-byte aligned bloom filter data buffers from the input file buffer
+    auto constexpr bloom_filter_alignment = rmm::CUDA_ALLOCATION_ALIGNMENT;
+    auto aligned_mr = rmm::mr::aligned_resource_adaptor(temp_mr, bloom_filter_alignment);
     if (verbose) { std::cout << "READER: Filter row groups with bloom filters...\n"; }
     timer.reset();
     nvtxRangePush("fetch_bloom_filter_byte_ranges");
-    // Fetch the header-stripped, 32-byte-aligned bloom filter bitsets from the input file
     auto [bloom_filter_buffers, bloom_filter_data, bloom_read_tasks] =
-      cudf::io::parquet::fetch_bloom_filters_to_device_async(
-        datasource, bloom_filter_byte_ranges, stream, temp_mr);
+      fetch_byte_ranges_async(datasource, bloom_filter_byte_ranges, stream, aligned_mr);
     bloom_read_tasks.get();
     nvtxRangePop();
 
