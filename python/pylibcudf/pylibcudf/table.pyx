@@ -67,7 +67,7 @@ cdef class Table:
 
     Parameters
     ----------
-    columns : list
+    columns : Sequence[Column]
         The columns in this table.
     num_rows : int | None
         Optional explicit row count. Only used to preserve the row count of a
@@ -76,7 +76,8 @@ cdef class Table:
     """
     __hash__ = None
 
-    def __init__(self, list columns, num_rows=None):
+    def __init__(self, columns, num_rows=None):
+        columns = tuple(columns)
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
@@ -335,16 +336,24 @@ cdef class Table:
 
     cpdef int num_rows(self):
         """The number of rows in this table."""
-        # When columns are present the row count is derived from the first column so that
-        # mutating the column list stays consistent. The explicit ``_num_rows`` is only the
-        # source of truth for a zero-column table, which has no column to derive it from.
-        if len(self._columns):
-            return self._columns[0].size()
         return self._num_rows
 
-    cpdef list columns(self):
+    cpdef tuple columns(self):
         """The columns in this table."""
         return self._columns
+
+    cpdef list release(self):
+        """Release ownership of this table's columns and leave it empty.
+
+        Returns
+        -------
+        list
+            The columns that were in this table.
+        """
+        cdef list columns = list(self._columns)
+        self._columns = ()
+        self._num_rows = 0
+        return columns
 
     cpdef tuple shape(self):
         """The shape of this table"""
