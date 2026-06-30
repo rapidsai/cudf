@@ -325,6 +325,8 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_HYBRID_SCAN", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__HYBRID_SCAN_STATS_PRUNING", "0")
 
         # Test default
         engine = pl.GPUEngine()

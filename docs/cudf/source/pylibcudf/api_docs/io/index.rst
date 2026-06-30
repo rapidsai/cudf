@@ -20,6 +20,7 @@ I/O Functions
     json
     orc
     parquet
+    parquet_io_utils
     parquet_metadata
     text
     timezone

@@ -877,6 +877,52 @@ TEST_F(HybridScanTest, StructChildFilterColumn)
     std::invalid_argument);
 }
 
+TEST_F(HybridScanTest, SharedMetadataReaderMatchesReadParquet)
+{
+  using T                              = int32_t;
+  auto constexpr num_concat            = 2;
+  auto [written_table, parquet_buffer] = create_parquet_with_stats<T, num_concat>();
+
+  auto const stream  = cudf::get_default_stream();
+  auto const mr      = cudf::get_current_device_resource_ref();
+  auto const options = cudf::io::parquet_reader_options::builder().build();
+
+  auto datasource          = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+    reinterpret_cast<std::byte const*>(parquet_buffer.data()), parquet_buffer.size()));
+  auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(*datasource);
+
+  // Parse the file metadata once and share it across independent readers.
+  auto const metadata = std::make_shared<cudf::io::parquet::experimental::hybrid_scan_metadata>(
+    *footer_buffer, options);
+
+  // Read all columns (single step) through a reader that borrows the shared metadata.
+  auto const read_all_columns = [&] {
+    auto const reader =
+      std::make_unique<cudf::io::parquet::experimental::hybrid_scan_reader>(*metadata);
+    auto const row_groups   = reader->all_row_groups(options);
+    auto const chunk_ranges = reader->all_column_chunks_byte_ranges(row_groups, options);
+    auto [buffers, data, tasks] =
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(*datasource, chunk_ranges, stream, mr);
+    tasks.get();
+    return reader->materialize_all_columns(row_groups, data, options, stream, mr).tbl;
+  };
+
+  // Two readers sharing one metadata instance each produce the same table as the main reader.
+  auto const table_a = read_all_columns();
+  auto const table_b = read_all_columns();
+
+  auto const expected =
+    cudf::io::read_parquet(
+      cudf::io::parquet_reader_options::builder(
+        cudf::io::source_info(cudf::host_span<char>(parquet_buffer.data(), parquet_buffer.size())))
+        .build(),
+      stream)
+      .tbl;
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_a->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected->view(), table_b->view());
+}
+
 TEST_F(HybridScanTest, ChunkedReadRowMaskPerPass)
 {
   using T = uint32_t;
