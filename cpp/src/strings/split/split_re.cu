@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -50,7 +50,8 @@ struct token_reader_fn {
   cudf::detail::input_offsetalator const d_token_offsets;
   string_index_pair* d_tokens;
 
-  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
+  template <typename ProgDevice>
+  __device__ void operator()(size_type const idx, ProgDevice const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) { return; }
     auto const d_str  = d_strings.element<string_view>(idx);
@@ -68,7 +69,7 @@ struct token_reader_fn {
     auto itr          = d_str.begin();
     auto last_pos     = itr;
     while (itr.position() <= nchars) {
-      auto const match = prog.find(prog_idx, d_str, itr);
+      auto const match = prog.template find(prog_idx, d_str, itr);
       if (!match) { break; }
 
       auto const start_pos = cuda::std::get<0>(match_positions_to_bytes(*match, d_str, last_pos));
@@ -120,7 +121,7 @@ struct token_reader_fn {
  */
 std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> generate_tokens(
   column_device_view const& d_strings,
-  reprog_device& d_prog,
+  regex_program const& prog,
   split_direction direction,
   size_type maxsplit,
   column_view const& counts,
@@ -147,7 +148,14 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   if (total_tokens > 0) {
     auto tr_fn = token_reader_fn{d_strings, direction, d_offsets, tokens.data()};
-    launch_for_each_kernel(tr_fn, d_prog, d_strings.size(), stream);
+
+    if (regex_device_builder::glushkov_fast_path_supported(prog)) {
+      auto d_prog = regex_device_builder::create_gkprog_device(prog, stream);
+      launch_for_each_kernel(tr_fn, *d_prog, d_strings.size(), stream);
+    } else {
+      auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+      launch_for_each_kernel(tr_fn, *d_prog, d_strings.size(), stream);
+    }
   }
   return std::pair(std::move(tokens), std::move(offsets));
 }
@@ -199,11 +207,11 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   // count the number of delimiters matched in each string
   auto const counts =
-    count_matches(*d_strings, *d_prog, stream, cudf::get_current_device_resource_ref());
+    count_matches(*d_strings, prog, stream, cudf::get_current_device_resource_ref());
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =
-    generate_tokens(*d_strings, *d_prog, direction, maxsplit, counts->view(), stream);
+    generate_tokens(*d_strings, prog, direction, maxsplit, counts->view(), stream);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // the output column count is the maximum number of tokens generated for any input string
@@ -256,18 +264,15 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   CUDF_EXPECTS(!prog.pattern().empty(), "Parameter pattern must not be empty");
 
   auto const strings_count = input.size();
-
-  // create device object from regex_program
-  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-
-  auto d_strings = column_device_view::create(input.parent(), stream);
+  auto d_strings           = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
-  auto counts = count_matches(*d_strings, *d_prog, stream, mr);
+  auto counts = count_matches(*d_strings, prog, stream, mr);
 
   // get the split tokens from the input column; this also converts the counts into offsets
   auto [tokens, offsets] =
-    generate_tokens(*d_strings, *d_prog, direction, maxsplit, counts->view(), stream);
+    generate_tokens(*d_strings, prog, direction, maxsplit, counts->view(), stream);
+
   CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds the column size limit",
                std::overflow_error);

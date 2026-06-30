@@ -1,13 +1,15 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "strings/count_matches.hpp"
+#include "strings/regex/regex_program_impl.h"
 #include "strings/regex/utilities.cuh"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/strings/regex/regex_program.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
@@ -23,8 +25,9 @@ template <positional P>
 struct count_fn {
   column_device_view const d_strings;
 
+  template <typename ProgDevice>
   __device__ int32_t operator()(size_type const idx,
-                                reprog_device const prog,
+                                ProgDevice const prog,
                                 int32_t const thread_idx)
   {
     if (d_strings.is_null(idx)) return 0;
@@ -34,7 +37,7 @@ struct count_fn {
 
     auto itr = d_str.begin();
     while (itr.position() <= nchars) {
-      auto result = prog.find<P>(thread_idx, d_str, itr);
+      auto result = prog.template find<P>(thread_idx, d_str, itr);
       if (!result) { break; }
       ++count;
       // increment the iterator is faster than creating a new one
@@ -48,7 +51,7 @@ struct count_fn {
 }  // namespace
 
 std::unique_ptr<column> count_matches(column_device_view const& d_strings,
-                                      reprog_device& d_prog,
+                                      regex_program const& prog,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
@@ -59,12 +62,19 @@ std::unique_ptr<column> count_matches(column_device_view const& d_strings,
 
   auto d_results = results->mutable_view().data<cudf::size_type>();
 
-  if (d_prog.is_empty_match_possible()) {
+  if (regex_device_builder::glushkov_fast_path_supported(prog)) {
+    auto d_prog = regex_device_builder::create_gkprog_device(prog, stream);
     launch_transform_kernel(
-      count_fn<positional::BEGIN_END>{d_strings}, d_prog, d_results, d_strings.size(), stream);
+      count_fn<positional::BEGIN_END>{d_strings}, *d_prog, d_results, d_strings.size(), stream);
   } else {
-    launch_transform_kernel(
-      count_fn<positional::END_ONLY>{d_strings}, d_prog, d_results, d_strings.size(), stream);
+    auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+    if (d_prog->is_empty_match_possible()) {
+      launch_transform_kernel(
+        count_fn<positional::BEGIN_END>{d_strings}, *d_prog, d_results, d_strings.size(), stream);
+    } else {
+      launch_transform_kernel(
+        count_fn<positional::END_ONLY>{d_strings}, *d_prog, d_results, d_strings.size(), stream);
+    }
   }
 
   return results;

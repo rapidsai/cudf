@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "strings/regex/glushkov.cuh"
 #include "strings/regex/regex.cuh"
 
 #include <cudf/column/column_factories.hpp>
