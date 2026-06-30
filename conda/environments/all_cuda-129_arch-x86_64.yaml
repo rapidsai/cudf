@@ -25,7 +25,7 @@ dependencies:
 - cuda-python>=12.9.2,<13.0
 - cuda-sanitizer-api
 - cuda-version=12.9
-- cupy>=13.6.0,!=14.0.0,!=14.1.0
+- cupy>=14.0.1,!=14.1.0
 - cxx-compiler
 - cython>=3.2.2,<3.3.0a0
 - dask-cuda==26.8.*,>=0.0.0a0
@@ -65,7 +65,7 @@ dependencies:
 - numba-cuda>=0.22.2
 - numba>=0.60.0,<0.65.0
 - numexpr
-- numpy>=1.26,<3.0
+- numpy>=2.0,<3.0
 - numpydoc
 - nvidia-ml-py>=12
 - nvtx>=0.2.1
