@@ -284,7 +284,7 @@ cpdef Column mask_to_bools(
 
 
 cpdef Column transform(
-    list[Column] inputs,
+    inputs,
     str transform_udf,
     DataType output_type,
     bool is_ptx,
@@ -298,7 +298,7 @@ cpdef Column transform(
 
     Parameters
     ----------
-    inputs : list[Column]
+    inputs : Sequence[Column]
         Columns to transform.
     transform_udf : str
         The PTX/CUDA string of the transform function to apply.
