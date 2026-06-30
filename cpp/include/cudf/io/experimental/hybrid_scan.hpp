@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -513,7 +513,7 @@ class hybrid_scan_reader {
    *
    * @param row_group_indices Input row groups indices
    * @param column_chunk_data Device spans of column chunk data of payload columns
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -601,7 +601,7 @@ class hybrid_scan_reader {
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
    * @param row_group_indices Input row groups indices
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param options Parquet reader options
@@ -623,7 +623,7 @@ class hybrid_scan_reader {
    * @brief Materializes a chunk of payload columns and applies the corresponding range of input row
    * mask to the output table chunk
    *
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    *
    * @return Table chunk of materialized filter columns and metadata
    */

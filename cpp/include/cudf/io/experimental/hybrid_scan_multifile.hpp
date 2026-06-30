@@ -263,7 +263,7 @@ class hybrid_scan_multifile {
    * @param column_chunk_data Flattened device spans of payload column chunk data returned in the
    *        same order as `payload_column_chunks_byte_ranges`
    * @param row_mask Boolean column spanning all selected rows across all sources and indicating
-   *        which rows need to be read. All rows read if empty
+   *        which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -342,7 +342,9 @@ class hybrid_scan_multifile {
    * mask to only the rows that exist in the output table
    *
    * @param[in,out] row_mask Mutable boolean column spanning all selected rows across all sources
-   * and indicating surviving rows from page pruning
+   * and indicating surviving rows from page pruning. The row mask size must equal the total
+   * number of rows in the input row groups, and is empty only when there are no such rows
+   * (yielding an empty output table)
    *
    * @return Table chunk of materialized filter columns and metadata
    */
@@ -358,7 +360,7 @@ class hybrid_scan_multifile {
    * there is no limit
    * @param row_group_indices Vectors of input row group indices, one per source
    * @param row_mask Boolean column spanning all selected rows across all sources and indicating
-   * which rows need to be read. All rows read if empty
+   * which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param column_chunk_data Flattened device spans of payload column chunk data returned in the
    * same order as `payload_column_chunks_byte_ranges`
@@ -382,7 +384,7 @@ class hybrid_scan_multifile {
    * mask to the output table chunk
    *
    * @param row_mask Boolean column spanning all selected rows across all sources and indicating
-   * which rows need to be read. All rows read if empty
+   * which rows need to be read
    *
    * @return Table chunk of materialized payload columns and metadata
    */

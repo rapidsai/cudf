@@ -9,6 +9,7 @@
 #include "io/parquet/reader_impl_preprocess_utils.cuh"
 #include "io/utilities/time_utils.hpp"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/parquet_schema.hpp>
@@ -301,7 +302,31 @@ struct row_mask_update_fn {
   }
 };
 
+/**
+ * @brief Checks if a row is pruned (valid and false)
+ */
+struct is_row_pruned_fn {
+  bool is_nullable;
+  bool const* row_mask;
+  bitmask_type const* bitmask;
+  __device__ bool operator()(cudf::size_type row_idx) const
+  {
+    if (is_nullable and not bit_is_set(bitmask, row_idx)) { return false; }
+    return not row_mask[row_idx];
+  }
+};
+
 }  // namespace
+
+bool hybrid_scan_reader_impl::are_all_rows_pruned(cudf::column_view const& row_mask,
+                                                  rmm::cuda_stream_view stream) const
+{
+  return cudf::detail::all_of(
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{row_mask.size()},
+    is_row_pruned_fn{row_mask.nullable(), row_mask.begin<bool>(), row_mask.null_mask()},
+    stream);
+}
 
 void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_mask,
                                               cudf::mutable_column_view& out_row_mask,
