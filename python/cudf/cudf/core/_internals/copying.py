@@ -19,7 +19,7 @@ def gather(
     columns: Sequence[ColumnBase],
     gather_map: NumericalColumn,
     nullify: bool = False,
-) -> list[plc.Column]:
+) -> tuple[plc.Column, ...]:
     with access_columns(
         *columns, gather_map, mode="read", scope="internal"
     ) as (*columns, gather_map):
@@ -38,7 +38,7 @@ def scatter(
     scatter_map: NumericalColumn,
     target_columns: list[ColumnBase],
     bounds_check: bool = True,
-):
+) -> tuple[plc.Column, ...]:
     """
     Scattering source into target as per the scatter map.
     `source` can be a list of scalars, or a list of columns. The number of
@@ -51,7 +51,7 @@ def scatter(
         raise ValueError("Mismatched number of source and target columns.")
 
     if len(sources) == 0:
-        return []
+        return ()
 
     if bounds_check:
         n_rows = len(target_columns[0])
@@ -80,7 +80,7 @@ def scatter(
 
 def columns_split(
     input_columns: Sequence[ColumnBase], splits: list[int]
-) -> list[list[plc.Column]]:
+) -> list[tuple[plc.Column, ...]]:
     with access_columns(
         *input_columns, mode="read", scope="internal"
     ) as input_columns:

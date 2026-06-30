@@ -50,7 +50,7 @@ class Column:
         mask: Span | None,
         null_count: int,
         offset: int,
-        children: list[Column],
+        children: Iterable[Column],
         validate: bool = True,
     ) -> None: ...
     def type(self) -> DataType: ...
@@ -94,7 +94,10 @@ class Column:
     ) -> Column: ...
     @staticmethod
     def from_rmm_buffer(
-        buff: DeviceBuffer, dtype: DataType, size: int, children: list[Column]
+        buff: DeviceBuffer,
+        dtype: DataType,
+        size: int,
+        children: Iterable[Column],
     ) -> Column: ...
     def to_arrow(
         self,
