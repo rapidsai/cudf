@@ -249,7 +249,7 @@ apply_join_semantics(cudf::table_view const& left,
                                    {},
                                    stream.value()};
 
-    auto predicate_func = [predicate_results_ptr] __device__(std::size_t idx) {
+    auto predicate_func = [predicate_results_ptr] __device__(std::size_t idx) -> bool {
       return static_cast<bool>(predicate_results_ptr[idx]);
     };
     auto const num_filter_passing =
