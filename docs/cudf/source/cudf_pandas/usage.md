@@ -165,22 +165,28 @@ when more control over profiling is needed.
 import cudf.pandas
 cudf.pandas.install()
 
-from cudf.pandas import Profiler
+from cudf.pandas.profiler import Profiler
 import pandas as pd
 
 with Profiler() as profiler:
     df = pd.DataFrame({"a": [1, 2, 3]})
     df.sum()
 
-print(profiler)
+profiler.print_per_function_stats()
 ```
 
 Example output:
 
 ```text
-Operation                      Device
--------------------------------------
-DataFrame.sum                 GPU
+          Total time elapsed: 0.052 seconds
+          1 GPU function calls in 0.050 seconds
+          0 CPU function calls in 0.000 seconds
+
+┌────────────────┬────────────┬─────────────┬─────────────┬────────────┬─────────────┬─────────────┐
+│ Function       │ GPU ncalls │ GPU cumtime │ GPU percall │ CPU ncalls │ CPU cumtime │ CPU percall │
+├────────────────┼────────────┼─────────────┼─────────────┼────────────┼─────────────┼─────────────┤
+│ DataFrame.sum  │ 1          │ 0.050       │ 0.050       │ 0          │ 0.000       │ 0.000       │
+└────────────────┴────────────┴─────────────┴─────────────┴────────────┴─────────────┴─────────────┘
 ```
 
 ### cudf.pandas CLI Features
