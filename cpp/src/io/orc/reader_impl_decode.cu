@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -297,7 +297,7 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<column_desc>& chunks,
           cuda::counting_iterator<int64_t>{0},
           cuda::counting_iterator{parent_mask_len},
           dst_idx.begin(),
-          [parent_valid_map_base] __device__(auto idx) {
+          [parent_valid_map_base] __device__(auto idx) -> bool {
             return bit_is_set(parent_valid_map_base, idx);
           },
           stream);
