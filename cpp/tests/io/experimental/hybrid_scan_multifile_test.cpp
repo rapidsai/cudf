@@ -4,8 +4,8 @@
  */
 
 #include "hybrid_scan_common.hpp"
-#include "hybrid_scan_multifile_common.hpp"
 #include "hybrid_scan_multifile_composer.hpp"
+#include "tests/io/parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/table_utilities.hpp>
@@ -46,7 +46,8 @@ namespace {
  */
 template <int num_sources = 2, int num_rows = num_ordered_rows>
 void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
-                                bool case_sensitive_names = true)
+                                bool case_sensitive_names = true,
+                                uint32_t literal_value    = 100)
 {
   auto const table = cudf::table_view{columns};
   cudf::io::table_input_metadata expected_metadata(table);
@@ -65,9 +66,9 @@ void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
     cudf::io::write_parquet(out_opts);
   }
 
-  auto literal_value = cudf::numeric_scalar<uint32_t>(100);
-  auto literal       = cudf::ast::literal(literal_value);
-  auto col_ref_0     = cudf::ast::column_name_reference(case_sensitive_names ? "col0" : "Col0");
+  auto scalar    = cudf::numeric_scalar<uint32_t>(literal_value);
+  auto literal   = cudf::ast::literal(scalar);
+  auto col_ref_0 = cudf::ast::column_name_reference(case_sensitive_names ? "col0" : "CoL0");
   auto filter_expression =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
 
@@ -87,18 +88,42 @@ void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
   auto const all_table = hybrid_scan_multifile_single_step(
     source_info, filter_expression, {}, case_sensitive_names, stream, mr);
 
+  auto const [chunked_filter_table, chunked_payload_table] = chunked_hybrid_scan_multifile(
+    source_info, filter_expression, {}, case_sensitive_names, stream, mr);
+
+  auto const chunked_all_table = chunked_hybrid_scan_multifile_single_step(
+    source_info, filter_expression, {}, case_sensitive_names, stream, mr);
+
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select({0}), filter_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select({0}), chunked_filter_table->view());
 
   auto payload_column_indices = std::vector<cudf::size_type>(columns.size() - 1);
   std::iota(payload_column_indices.begin(), payload_column_indices.end(), 1);
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select(payload_column_indices),
                                      payload_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->select(payload_column_indices),
+                                     chunked_payload_table->view());
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->view(), all_table->view());
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->view(), chunked_all_table->view());
 }
 
 }  // namespace
 
 struct HybridScanMultifileTest : public cudf::test::BaseFixture {};
+
+TEST_F(HybridScanMultifileTest, EmptyResult)
+{
+  std::mt19937 gen(0xc0c0a);
+
+  auto col0 = testdata::ascending<uint32_t>();
+  auto col1 = make_list_str_column(gen, false, false);
+  auto col2 = make_list_str_column(gen, false, true);
+  auto col3 = make_list_str_column(gen, true, false);
+  auto col4 = make_list_str_column(gen, true, true);
+
+  auto constexpr literal_value = uint32_t(num_ordered_rows);
+  test_hybrid_scan_multifile({col0, *col1, *col2, *col3, *col4}, false, literal_value);
+}
 
 TEST_F(HybridScanMultifileTest, MaterializeLists)
 {

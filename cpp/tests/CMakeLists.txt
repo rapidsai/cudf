@@ -348,9 +348,10 @@ ConfigureTest(
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_common.cpp
   io/experimental/hybrid_scan_composer.cpp
-  io/experimental/hybrid_scan_multifile_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_composer.cpp
   io/experimental/hybrid_scan_multifile_filters_test.cpp
   io/experimental/hybrid_scan_multifile_test.cpp
   io/experimental/hybrid_scan_test.cpp

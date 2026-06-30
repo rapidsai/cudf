@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -2017,3 +2017,23 @@ def test_build_df_from_nullable_pandas_dtype(
     got_mask = result["a"].isna().to_numpy()
 
     np.testing.assert_array_equal(expect_mask, got_mask)
+
+
+@pytest.mark.parametrize(
+    "index", [None, [], pd.Index([], name="a"), pd.RangeIndex(0)]
+)
+@pytest.mark.parametrize("columns", [["a", "b"], pd.Index(["a", "b"])])
+def test_empty_dataframe_columns_default_object_dtype(index, columns):
+    # An empty (zero-row) DataFrame built from only column labels has no
+    # data to infer from and defaults to object dtype, matching pandas
+    # (cudf otherwise uses the default string dtype).
+    expected = pd.DataFrame(columns=columns, index=index)
+    got = cudf.DataFrame(columns=columns, index=index)
+    assert_eq(got, expected)
+
+
+def test_empty_dataframe_data_none_with_columns():
+    # data=None with explicit columns and an empty index -> object columns.
+    expected = pd.DataFrame(data=None, columns=["x", "y"])
+    got = cudf.DataFrame(data=None, columns=["x", "y"])
+    assert_eq(got, expected)
