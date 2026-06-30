@@ -308,7 +308,9 @@ def test_domain_source_follows_join_key_through_rename() -> None:
         _config(),
     )
 
-    semi = next(semi for semi in _joins(optimized, "Semi") if semi.children[0] is target)
+    semi = next(
+        semi for semi in _joins(optimized, "Semi") if semi.children[0] is target
+    )
     selected_domain = semi.children[1]
     assert isinstance(selected_domain, Select)
     assert selected_domain.children[0] is domain
@@ -335,9 +337,7 @@ def test_composite_domain_columns_follow_renames() -> None:
 
 def test_target_replacement_does_not_rewrite_shared_domain_side() -> None:
     shared = _scan("shared", ("target_key", "other"))
-    domain_source = _scan(
-        "domain_source", ("domain_key", "other2"), predicate=True
-    )
+    domain_source = _scan("domain_source", ("domain_key", "other2"), predicate=True)
     domain = _join(
         shared,
         domain_source,

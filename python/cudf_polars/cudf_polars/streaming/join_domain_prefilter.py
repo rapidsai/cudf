@@ -463,7 +463,11 @@ def _smallest_node_containing_all(
         bound_columns = [first_column]
         for lineage in lineages[1:]:
             match = next(
-                (bound_column for candidate, bound_column in lineage if candidate is node),
+                (
+                    bound_column
+                    for candidate, bound_column in lineage
+                    if candidate is node
+                ),
                 None,
             )
             if match is None:
@@ -535,17 +539,9 @@ def _input_binding(node: IR, column: str) -> tuple[IR, str] | None:
     if isinstance(node, Join):
         return _join_input_binding(node, column)
     if isinstance(node, Distinct):
-        return (
-            None
-            if node.zlice is not None
-            else _passthrough_binding(child, column)
-        )
+        return None if node.zlice is not None else _passthrough_binding(child, column)
     if isinstance(node, Sort):
-        return (
-            None
-            if node.zlice is not None
-            else _passthrough_binding(child, column)
-        )
+        return None if node.zlice is not None else _passthrough_binding(child, column)
     if isinstance(node, (Cache, Filter, Projection)):
         return _passthrough_binding(child, column)
     return None
