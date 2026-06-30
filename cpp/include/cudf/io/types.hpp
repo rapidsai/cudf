@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -1007,7 +1008,7 @@ class reader_column_schema {
    *
    * @param child_span span of child schema objects
    */
-  reader_column_schema(host_span<reader_column_schema> const& child_span)
+  reader_column_schema(std::span<reader_column_schema> const& child_span)
   {
     children.assign(child_span.begin(), child_span.end());
   }
