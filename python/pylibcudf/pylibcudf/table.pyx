@@ -64,12 +64,13 @@ cdef class Table:
 
     Parameters
     ----------
-    columns : list
+    columns : Sequence[Column]
         The columns in this table.
     """
     __hash__ = None
 
-    def __init__(self, list columns):
+    def __init__(self, columns):
+        columns = tuple(columns)
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
@@ -310,9 +311,21 @@ cdef class Table:
             return 0
         return self._columns[0].size()
 
-    cpdef list columns(self):
+    cpdef tuple columns(self):
         """The columns in this table."""
         return self._columns
+
+    cpdef list release(self):
+        """Release ownership of this table's columns and leave it empty.
+
+        Returns
+        -------
+        list
+            The columns that were in this table.
+        """
+        cdef list columns = list(self._columns)
+        self._columns = ()
+        return columns
 
     cpdef tuple shape(self):
         """The shape of this table"""

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -40,7 +40,7 @@ std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Ki
 template std::pair<rmm::device_uvector<size_type>, bool> compute_single_pass_aggs<global_set_t>(
   global_set_t& global_set,
   bitmask_type const* row_bitmask,
-  host_span<aggregation_request const> requests,
+  std::span<aggregation_request const> requests,
   cudf::detail::result_cache* cache,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);

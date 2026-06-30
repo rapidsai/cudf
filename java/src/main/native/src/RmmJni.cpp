@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -871,7 +871,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Rmm_newLoggingResourceAdaptor(
       {
         cudf::jni::native_jstring path(env, jpath);
         return make_jni_resource(
-          rmm::mr::logging_resource_adaptor{upstream, path.get(), static_cast<bool>(auto_flush)});
+          rmm::mr::logging_resource_adaptor{upstream, path, static_cast<bool>(auto_flush)});
       }
       case 2:  // stdout
         return make_jni_resource(

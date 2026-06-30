@@ -664,7 +664,7 @@ parquet_metadata read_parquet_metadata(source_info const& src_info)
 }
 
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<cudf::io::datasource> const> sources)
+  std::span<std::unique_ptr<cudf::io::datasource> const> sources)
 {
   CUDF_FUNC_RANGE();
   return detail_parquet::read_parquet_footers(sources);

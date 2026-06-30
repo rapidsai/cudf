@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <span>
 
 namespace cudf {
 size_type state_null_count(mask_state state, size_type size)
@@ -573,7 +574,7 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
 
 // Count valid elements in the specified ranges of a validity bitmask
 std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
-                                             host_span<size_type const> indices,
+                                             std::span<size_type const> indices,
                                              rmm::cuda_stream_view stream)
 {
   return segmented_valid_count(bitmask, indices.begin(), indices.end(), stream);
@@ -581,7 +582,7 @@ std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
 
 // Count null elements in the specified ranges of a validity bitmask
 std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
-                                            host_span<size_type const> indices,
+                                            std::span<size_type const> indices,
                                             rmm::cuda_stream_view stream)
 {
   return segmented_null_count(bitmask, indices.begin(), indices.end(), stream);
@@ -907,7 +908,7 @@ std::vector<size_type> batch_null_count(host_span<bitmask_type const* const> bit
 }
 
 std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
-                                             host_span<size_type const> indices,
+                                             std::span<size_type const> indices,
                                              rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -915,7 +916,7 @@ std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
 }
 
 std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
-                                            host_span<size_type const> indices,
+                                            std::span<size_type const> indices,
                                             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
