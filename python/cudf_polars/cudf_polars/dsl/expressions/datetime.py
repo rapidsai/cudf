@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document TemporalFunction to remove noqa
 # ruff: noqa: D101
@@ -10,9 +10,11 @@ import re
 from enum import IntEnum, auto
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
+import polars as pl
+
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 
 if TYPE_CHECKING:
@@ -20,10 +22,19 @@ if TYPE_CHECKING:
 
     from polars import polars  # type: ignore[attr-defined]
 
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.expressions.literal import Literal
 
 __all__ = ["TemporalFunction"]
+
+
+_unit_to_nanoseconds_conversion = {
+    plc.TypeId.DURATION_NANOSECONDS: 1,
+    plc.TypeId.DURATION_MICROSECONDS: 1_000,
+    plc.TypeId.DURATION_MILLISECONDS: 1_000_000,
+    plc.TypeId.DURATION_SECONDS: 1_000_000_000,
+    plc.TypeId.DURATION_DAYS: 86_400_000_000_000,
+}
 
 
 class TemporalFunction(Expr):
@@ -112,6 +123,16 @@ class TemporalFunction(Expr):
         "ns": plc.datetime.RoundingFrequency.NANOSECOND,
     }
 
+    # Number of nanoseconds represented by one unit of each ``total_*`` component.
+    _TOTAL_COMPONENT_NANOSECONDS: ClassVar[dict[Name, int]] = {
+        Name.TotalDays: 86_400_000_000_000,
+        Name.TotalHours: 3_600_000_000_000,
+        Name.TotalMinutes: 60_000_000_000,
+        Name.TotalSeconds: 1_000_000_000,
+        Name.TotalMilliseconds: 1_000_000,
+        Name.TotalMicroseconds: 1_000,
+        Name.TotalNanoseconds: 1,
+    }
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
@@ -121,8 +142,10 @@ class TemporalFunction(Expr):
         Name.IsoYear,
         Name.MonthStart,
         Name.MonthEnd,
+        Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
     def __init__(
@@ -156,7 +179,43 @@ class TemporalFunction(Expr):
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
         columns = [child.evaluate(df, context=context) for child in self.children]
-        if self.name is TemporalFunction.Name.Truncate:
+        if self.name in self._TOTAL_COMPONENT_NANOSECONDS:
+            (column,) = columns
+            source_ns = _unit_to_nanoseconds_conversion[column.obj.type().id()]
+            target_ns = self._TOTAL_COMPONENT_NANOSECONDS[self.name]
+            # Reinterpret the duration's integer tick count as int64.
+            casted = column.astype(self.dtype, stream=df.stream)
+            if source_ns >= target_ns:
+                # Coarser (or equal) storage unit: exact integer multiply.
+                op = plc.binaryop.BinaryOperator.MUL
+                factor = source_ns // target_ns
+            else:
+                # Finer storage unit: integer divide. libcudf (like polars)
+                # truncates toward zero for signed integer division.
+                op = plc.binaryop.BinaryOperator.DIV
+                factor = target_ns // source_ns
+            if factor == 1:
+                # Storage unit already matches the requested unit.
+                return casted
+            result = plc.binaryop.binary_operation(
+                casted.obj,
+                plc.Scalar.from_py(
+                    factor, plc.DataType(plc.TypeId.INT64), stream=df.stream
+                ),
+                op,
+                self.dtype.plc_type,
+                stream=df.stream,
+            )
+            return Column(result, dtype=self.dtype)
+        if self.name is TemporalFunction.Name.TimeStamp:
+            (column,) = columns
+            (time_unit,) = self.options
+            # Rescale the timestamp to the requested resolution
+            df_stream = df.stream
+            return column.astype(
+                DataType(pl.Datetime(time_unit)), stream=df_stream
+            ).astype(self.dtype, stream=df_stream)
+        elif self.name is TemporalFunction.Name.Truncate:
             (column, _) = columns
             return Column(
                 plc.datetime.floor_datetimes(
@@ -246,7 +305,6 @@ class TemporalFunction(Expr):
                 self.dtype.plc_type,
                 stream=df.stream,
             )
-
             return Column(result, dtype=self.dtype)
         elif self.name is TemporalFunction.Name.MonthEnd:
             (column,) = columns

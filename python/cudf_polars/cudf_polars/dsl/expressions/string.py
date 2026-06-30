@@ -671,7 +671,7 @@ class StringFunction(Expr):
                     max_splits - 1,
                     stream=df.stream,
                 )
-                children = plc_table.columns()
+                children = plc_table.release()
                 ref_column = children[0]
                 if (remainder := n + int(not is_split_n) - len(children)) > 0:
                     # Reach expected number of splits by padding with nulls

@@ -24,8 +24,6 @@ namespace CUDF_EXPORT cudf {
 /**
  * @brief Count the distinct elements in the column_view.
  *
- * If `nulls_equal == nulls_equal::UNEQUAL`, all `null`s are distinct.
- *
  * Given an input column_view, number of distinct elements in this column_view is returned.
  *
  * If `null_handling` is null_policy::EXCLUDE and `nan_handling` is  nan_policy::NAN_IS_NULL, both

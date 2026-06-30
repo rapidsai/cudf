@@ -585,7 +585,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
                 ]
             )
             # Only need validity buffer for structs
-            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:1])
+            buffers = cast("list[pa.Buffer | None]", arrow_array.buffers()[:1])
             return pa.StructArray.from_buffers(
                 new_struct_type,
                 len(arrow_array),
@@ -605,7 +605,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
         )
 
         if new_values is not values or has_non_nullable_field:
-            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:2])
+            buffers = cast("list[pa.Buffer | None]", arrow_array.buffers()[:2])
             list_type = pa.list_(
                 pa.field(value_field.name, new_values.type, nullable=True)
             )
@@ -2136,7 +2136,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ColumnBase.create(gathered, self.dtype),
         )
 
-    def isin(self, values: Sequence) -> ColumnBase:
+    def isin(self, values: Sequence | ColumnBase) -> ColumnBase:
         """Check whether values are contained in the Column.
 
         Parameters
@@ -2175,7 +2175,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         """
         Helper function for `isin` which pre-process `values` based on `self`.

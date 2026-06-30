@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <limits>
 #include <numeric>
+#include <span>
 
 namespace cudf::io::parquet::experimental::detail {
 
@@ -58,7 +59,7 @@ namespace {
 struct page_stats_caster : public stats_caster_base {
   cudf::size_type total_rows;
   cudf::host_span<metadata_base const> per_file_metadata;
-  cudf::host_span<std::vector<size_type> const> row_group_indices;
+  std::span<std::vector<size_type> const> row_group_indices;
   bool const has_is_null_operator;
 
   /**
@@ -536,7 +537,7 @@ struct page_stats_caster : public stats_caster_base {
 struct page_stats_to_row_mask_converter : public page_stats_caster {
   page_stats_to_row_mask_converter(cudf::size_type total_rows,
                                    cudf::host_span<metadata_base const> per_file_metadata,
-                                   cudf::host_span<std::vector<size_type> const> row_group_indices,
+                                   std::span<std::vector<size_type> const> row_group_indices,
                                    bool has_is_null_operator)
     : page_stats_caster{.total_rows           = total_rows,
                         .per_file_metadata    = per_file_metadata,
@@ -849,9 +850,9 @@ struct search_fenwick_tree_functor {
 }  // namespace
 
 std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_page_index_stats(
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<cudf::data_type const> output_dtypes,
-  cudf::host_span<cudf::size_type const> output_column_schemas,
+  std::span<std::vector<size_type> const> row_group_indices,
+  std::span<cudf::data_type const> output_dtypes,
+  std::span<cudf::size_type const> output_column_schemas,
   std::reference_wrapper<ast::expression const> filter,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
@@ -974,8 +975,8 @@ std::unique_ptr<cudf::column> aggregate_reader_metadata::build_row_mask_with_pag
 template <typename ColumnView>
 thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   ColumnView const& row_mask,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
-  cudf::host_span<input_column_info const> input_columns,
+  std::span<std::vector<size_type> const> row_group_indices,
+  std::span<input_column_info const> input_columns,
   cudf::size_type row_mask_offset,
   rmm::cuda_stream_view stream) const
 {
@@ -1010,7 +1011,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Return early if page index is not present
   if (not has_page_index) {
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
-    return thrust::host_vector<bool>{};
+    return thrust::host_vector<bool>(0, stream);
   }
 
   // Collect column schema indices from the input columns.
@@ -1179,15 +1180,15 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
 // Instantiate the templates with ColumnView as cudf::column_view and cudf::mutable_column_view
 template thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
   cudf::column_view>(cudf::column_view const& row_mask,
-                     cudf::host_span<std::vector<size_type> const> row_group_indices,
-                     cudf::host_span<input_column_info const> input_columns,
+                     std::span<std::vector<size_type> const> row_group_indices,
+                     std::span<input_column_info const> input_columns,
                      cudf::size_type row_mask_offset,
                      rmm::cuda_stream_view stream) const;
 
 template thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask<
   cudf::mutable_column_view>(cudf::mutable_column_view const& row_mask,
-                             cudf::host_span<std::vector<size_type> const> row_group_indices,
-                             cudf::host_span<input_column_info const> input_columns,
+                             std::span<std::vector<size_type> const> row_group_indices,
+                             std::span<input_column_info const> input_columns,
                              cudf::size_type row_mask_offset,
                              rmm::cuda_stream_view stream) const;
 
