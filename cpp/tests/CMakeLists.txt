@@ -704,8 +704,8 @@ add_fragment(
   cudf_test_fragments FRAGMENT bankers_rounding SOURCE transform/fragments/bankers_rounding.cu
 )
 
-rtcx_embed(cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY
-      "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+rtcx_embed(
+  cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
 )
 
 ConfigureTest(

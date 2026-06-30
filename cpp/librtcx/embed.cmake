@@ -294,7 +294,9 @@ function(rtcx_embed TARGET)
   )
 
   set(RUNNER "${TARGET}__jit_embed_run")
-  add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}" ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/hash.cpp)
+  add_executable(
+    ${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}" ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/hash.cpp
+  )
   target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} xxhash zstd)
   target_include_directories(
     ${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${ZSTD_INCLUDE_DIR}

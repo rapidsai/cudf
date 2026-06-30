@@ -495,7 +495,9 @@ foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   )
 endforeach()
 
-rtcx_embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+rtcx_embed(
+  cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
 
 # This macro is used to create object libraries for JIT compilation fragments, and embed them as
 # fatbins in the final library. It compiles the specified source file with the appropriate flags to
@@ -672,7 +674,9 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
   endforeach()
 endforeach()
 
-rtcx_embed(cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+rtcx_embed(
+  cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------

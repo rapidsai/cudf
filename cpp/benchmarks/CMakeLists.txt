@@ -391,8 +391,9 @@ ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 rtcx_add_embed(cudf_benchmark_fragments)
 add_fragment(cudf_benchmark_fragments FRAGMENT add_f32 SOURCE binaryop/fragments/add_f32.cu)
 add_fragment(cudf_benchmark_fragments FRAGMENT mul_f32 SOURCE binaryop/fragments/mul_f32.cu)
-rtcx_embed(cudf_benchmark_fragments COMPRESSION none OUTPUT_DIRECTORY
-      "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+rtcx_embed(
+  cudf_benchmark_fragments COMPRESSION none OUTPUT_DIRECTORY
+  "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
 )
 
 # ##################################################################################################
