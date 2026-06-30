@@ -48,10 +48,7 @@ from cudf_polars.dsl.expressions import rolling, unary
 from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
-from cudf_polars.dsl.tracing import (
-    log_do_evaluate,
-    nvtx_annotate_cudf_polars,
-)
+from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
@@ -117,7 +114,26 @@ __all__ = [
 
 @dataclass(frozen=True)
 class CachedParquetInfo:
-    """Metadata for a parquet file."""
+    """
+    Metadata for a parquet file.
+
+    File metadata is only cached when the setting
+    ``ParquetOptions.prefetch_file_metadata`` is ``True``. Metadata is cached
+    for the duration of the query.
+
+    Parameters
+    ----------
+    path
+        The path of an individual parquet file. This is one element of a
+        ``paths`` tuple in a ``Scan`` node.
+    size
+        The size of the parquet file, in bytes. This is typically only set
+        for remote URLs, since it allows skipping subsequent HTTP HEAD requests
+        made by kvikio on operations involving that file.
+    file_metadata
+        The ``FileMetaData`` object for the parquet file returned from
+        ``read_parquet_footers``.
+    """
 
     path: str
     size: int
