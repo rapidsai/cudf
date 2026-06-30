@@ -516,16 +516,23 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
   CUDF_EXPECTS(options.get_filter().has_value(), "Empty input filter expression encountered");
-  CUDF_EXPECTS(not row_mask.is_empty(),
-               "Row mask must be non-empty when materializing filter columns");
 
   prepare_materialization(
     read_columns_mode::FILTER_COLUMNS, row_group_indices.size(), options, stream, mr);
 
   // Convert the input expression (must be done after prepare_materialization)
   _expr_conv = build_converted_expression(options);
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::FILTER_COLUMNS, row_mask);
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -547,12 +554,21 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
   CUDF_EXPECTS(row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
 
   prepare_materialization(
     read_columns_mode::PAYLOAD_COLUMNS, row_group_indices.size(), options, stream, mr);
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
@@ -602,10 +618,9 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Empty input filter expression encountered");
-  CUDF_EXPECTS(not row_mask.is_empty(),
-               "Row mask must be non-empty when setting up chunking for filter columns");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
 
   prepare_materialization(
     read_columns_mode::FILTER_COLUMNS, row_group_indices.size(), options, stream, mr);
@@ -615,6 +630,14 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 
   // Convert the input expression (must be done after prepare_materialization)
   _expr_conv = build_converted_expression(options);
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    return;
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -655,7 +678,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
   CUDF_EXPECTS(row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
 
@@ -664,6 +688,14 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    return;
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
@@ -1081,11 +1113,13 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
 
-  CUDF_EXPECTS(row_mask.is_empty() or row_mask.type().id() == type_id::BOOL8,
-               "Input row mask must be empty or a boolean column");
+  // If the input row mask is empty, all rows are pruned anyway.
+  if (row_mask.is_empty()) {
+    _output_chunk_produced = true;
+    return {std::move(read_table), std::move(out_metadata)};
+  }
 
-  // If the input row mask is empty, return the table as is.
-  if (row_mask.is_empty()) { return {std::move(read_table), std::move(out_metadata)}; }
+  CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8, "Input row mask must be a boolean column");
 
   // Get the current row mask offset
   auto const mask_offset = _row_mask_offset;

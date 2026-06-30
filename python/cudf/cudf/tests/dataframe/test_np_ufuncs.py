@@ -1,10 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import operator
 from functools import reduce
 
-import cupy as cp
 import numpy as np
 import pytest
 from packaging.version import parse
@@ -39,8 +38,8 @@ def test_ufunc_dataframe(request, numpy_ufunc, has_nulls, indexed):
         pytest.mark.xfail(
             condition=numpy_ufunc in {np.ceil, np.floor, np.trunc}
             and not has_nulls
-            and parse(np.__version__) >= parse("2.1")
-            and parse(cp.__version__) < parse("14"),
+            and parse(np.__version__) >= parse("2.0")
+            and parse(np.__version__) < parse("2.1"),
             reason="https://github.com/cupy/cupy/issues/9018",
         )
     )
