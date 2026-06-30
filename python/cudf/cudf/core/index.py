@@ -3384,7 +3384,9 @@ class DatetimeIndex(Index):
 
         if freq is None:
             if isinstance(data, type(self)):
-                freq = data.freq
+                # Use the internal cudf offset (public ``freq`` returns a
+                # pandas offset, which ``_validate_freq`` does not accept).
+                freq = data._freq
             if was_pd_index and data.freq is not None:
                 freq = data.freq.freqstr
 
@@ -3429,9 +3431,9 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def serialize(self):
         header, frames = super().serialize()
-        if self.freq is not None:
+        if self._freq is not None:
             header["freq"] = {
-                "kwds": self.freq.kwds,
+                "kwds": self._freq.kwds,
             }
         else:
             header["freq"] = None
@@ -3568,7 +3570,19 @@ class DatetimeIndex(Index):
         return self._column.astype(np.dtype(np.int64)).values
 
     @property
-    def inferred_freq(self) -> DateOffset | MonthEnd | YearEnd | None:
+    def inferred_freq(self):
+        # Public: return the canonical pandas offset (matching ``freq``) so
+        # the value is comparable to pandas and usable by pandas APIs.
+        result = self._inferred_freq
+        return (
+            result._maybe_as_fast_pandas_offset()
+            if result is not None
+            else None
+        )
+
+    @property
+    def _inferred_freq(self):
+        # Internal: cudf's native offset, used to populate ``_freq``.
         if self._freq:
             return self._freq
 
@@ -3699,8 +3713,14 @@ class DatetimeIndex(Index):
                 )
 
     @property
-    def freq(self) -> DateOffset | None:
-        return self._freq  # type: ignore[return-value]  # (validated setter stores DateOffset-compatible value)
+    def freq(self):
+        # Return the canonical pandas offset (e.g. ``Day``, ``Minute``) rather
+        # than cudf's internal ``DateOffset`` so the value matches pandas and
+        # is usable by pandas APIs (e.g. ``PeriodDtype(freq)``); the internal
+        # ``_freq`` keeps the cudf ``DateOffset`` for serialization/arithmetic.
+        if self._freq is None:
+            return None
+        return self._freq._maybe_as_fast_pandas_offset()
 
     @freq.setter
     def freq(self, value) -> None:
