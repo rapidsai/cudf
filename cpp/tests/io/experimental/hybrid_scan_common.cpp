@@ -265,28 +265,33 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
       cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
     auto const num_rows = static_cast<cudf::column_view>(col0).size();
 
+    auto const make_null_mask = [stream](auto begin, auto end) {
+      auto [null_mask, null_count] = cudf::test::detail::make_null_mask_vector(begin, end);
+      auto d_mask                  = rmm::device_buffer{
+        null_mask.data(), cudf::bitmask_allocation_size_bytes(cudf::distance(begin, end)), stream};
+      return std::pair{std::move(d_mask), null_count};
+    };
+
     columns.emplace_back(col0.release());
-    auto [nullmask, nullcount] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
+    auto [nullmask, nullcount] = make_null_mask(valids, valids + num_rows);
     columns.back()->set_null_mask(std::move(nullmask), nullcount);
 
     columns.emplace_back(col1.release());
-    std::tie(nullmask, nullcount) =
-      cudf::test::detail::make_null_mask(valids + num_rows, valids + 2 * num_rows);
+    std::tie(nullmask, nullcount) = make_null_mask(valids + num_rows, valids + 2 * num_rows);
     columns.back()->set_null_mask(std::move(nullmask), nullcount);
 
     columns.emplace_back(col2.release());
-    std::tie(nullmask, nullcount) =
-      cudf::test::detail::make_null_mask(valids + 2 * num_rows, valids + 3 * num_rows);
+    std::tie(nullmask, nullcount) = make_null_mask(valids + 2 * num_rows, valids + 3 * num_rows);
     columns.back()->set_null_mask(std::move(nullmask), nullcount);
 
     // Purge non-empty nulls from the strings column only
-    cudf::purge_nonempty_nulls(columns.back()->view());
+    columns.back() = cudf::purge_nonempty_nulls(columns.back()->view(), stream);
 
     // Update the output table view with the nullable columns
     output = table_view{{columns[0]->view(), columns[1]->view(), columns[2]->view()}};
   }
 
-  auto table = cudf::concatenate(std::vector<table_view>(NumTableConcats, output));
+  auto table = cudf::concatenate(std::vector<table_view>(NumTableConcats, output), stream);
   output     = table->view();
   cudf::io::table_input_metadata output_metadata(output);
   output_metadata.column_metadata[0].set_name("col0");
@@ -308,7 +313,7 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
     out_opts.set_max_page_size_rows(page_size_for_ordered_tests);
   }
 
-  cudf::io::write_parquet(out_opts);
+  cudf::io::write_parquet(out_opts, stream);
 
   return std::pair{std::move(table), std::move(buffer)};
 }

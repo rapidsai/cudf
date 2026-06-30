@@ -46,7 +46,8 @@ namespace {
  */
 template <int num_sources = 2, int num_rows = num_ordered_rows>
 void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
-                                bool case_sensitive_names = true)
+                                bool case_sensitive_names = true,
+                                uint32_t literal_value    = 100)
 {
   auto const table = cudf::table_view{columns};
   cudf::io::table_input_metadata expected_metadata(table);
@@ -65,9 +66,9 @@ void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
     cudf::io::write_parquet(out_opts);
   }
 
-  auto literal_value = cudf::numeric_scalar<uint32_t>(100);
-  auto literal       = cudf::ast::literal(literal_value);
-  auto col_ref_0     = cudf::ast::column_name_reference(case_sensitive_names ? "col0" : "Col0");
+  auto scalar    = cudf::numeric_scalar<uint32_t>(literal_value);
+  auto literal   = cudf::ast::literal(scalar);
+  auto col_ref_0 = cudf::ast::column_name_reference(case_sensitive_names ? "col0" : "CoL0");
   auto filter_expression =
     cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref_0, literal);
 
@@ -109,6 +110,20 @@ void test_hybrid_scan_multifile(std::vector<cudf::column_view> const& columns,
 }  // namespace
 
 struct HybridScanMultifileTest : public cudf::test::BaseFixture {};
+
+TEST_F(HybridScanMultifileTest, EmptyResult)
+{
+  std::mt19937 gen(0xc0c0a);
+
+  auto col0 = testdata::ascending<uint32_t>();
+  auto col1 = make_list_str_column(gen, false, false);
+  auto col2 = make_list_str_column(gen, false, true);
+  auto col3 = make_list_str_column(gen, true, false);
+  auto col4 = make_list_str_column(gen, true, true);
+
+  auto constexpr literal_value = uint32_t(200);
+  test_hybrid_scan_multifile({col0, *col1, *col2, *col3, *col4}, false, literal_value);
+}
 
 TEST_F(HybridScanMultifileTest, MaterializeLists)
 {
