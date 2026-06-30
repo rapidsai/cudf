@@ -30,6 +30,7 @@
 #include <functional>
 #include <mutex>
 #include <numeric>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -425,18 +426,17 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
 std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>
-fetch_byte_ranges_to_device_async(
-  cudf::io::datasource& datasource,
-  cudf::host_span<cudf::io::text::byte_range_info const> byte_ranges,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
+                                  std::span<cudf::io::text::byte_range_info const> byte_ranges,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
 
   // Wrap the inputs into arrays and delegate to the multi-source implementation
   std::array<std::reference_wrapper<cudf::io::datasource>, 1> datasources{std::ref(datasource)};
   std::array<cudf::host_span<cudf::io::text::byte_range_info const>, 1> byte_ranges_per_source{
-    byte_ranges};
+    cudf::host_span<cudf::io::text::byte_range_info const>{byte_ranges.data(), byte_ranges.size()}};
 
   auto [buffers, fetched_byte_ranges, fut] = fetch_byte_ranges_to_device_async_impl(
     {datasources.data(), datasources.size()},

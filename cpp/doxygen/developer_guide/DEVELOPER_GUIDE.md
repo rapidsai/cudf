@@ -381,6 +381,22 @@ template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 ```
 
+### When to use `host_span` vs `std::span`
+
+For host-side data, prefer `std::span` and reserve `cudf::host_span` for the cases where its
+libcudf-specific extensions are actually needed.
+
+Use `std::span<T>` when the parameter is purely a host buffer view and the function does not need
+to know whether the memory is device-accessible.
+
+Use `cudf::host_span<T>` only when one of the following applies:
+
+1. The function needs to query `is_device_accessible()` to take a different code path for pinned
+   or otherwise device-reachable host memory (for example, to enable copy-engine optimizations or
+   skip an explicit host-to-device copy).
+2. The function must accept a libcudf-specific container that `std::span` cannot be constructed
+   from directly.
+
 ## cudf::scalar
 
 A `cudf::scalar` is an object that can represent a singular, nullable value of any of the types
