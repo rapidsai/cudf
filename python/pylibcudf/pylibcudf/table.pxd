@@ -8,7 +8,7 @@ from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 cdef class Table:
     # Tuple[pylibcudf.Column]
-    cdef public tuple _columns
+    cdef tuple _columns
 
     cdef table_view view(self)
 
