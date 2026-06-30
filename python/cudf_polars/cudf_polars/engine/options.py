@@ -274,10 +274,6 @@ class StreamingOptions:
         :class:`~cudf_polars.utils.config.MemoryResourceConfig`.
         Env: ``CUDF_POLARS__MEMORY_RESOURCE_CONFIG__*``.
         Category: engine.
-    cuda_stream_policy
-        CUDA stream policy (``"default"``, ``"pool"`` or config dict).
-        Env: ``CUDF_POLARS__CUDA_STREAM_POLICY``.
-        Category: engine.
     hardware_binding
         Hardware binding policy. Pass a :class:`~cudf_polars.engine.hardware_binding.HardwareBindingPolicy`
         instance for fine-grained control.
@@ -362,9 +358,6 @@ class StreamingOptions:
     raise_on_fail: bool | Unspecified = _opt("engine")
     parquet_options: dict[str, Any] | ParquetOptions | Unspecified = _opt("engine")
     memory_resource_config: MemoryResourceConfig | Unspecified = _opt("engine")
-    cuda_stream_policy: Literal["default", "pool"] | dict[str, Any] | Unspecified = (
-        _opt("engine", "CUDF_POLARS__CUDA_STREAM_POLICY")
-    )
     hardware_binding: HardwareBindingPolicy | Unspecified = _opt(
         "engine", "CUDF_POLARS__HARDWARE_BINDING", _parse_hardware_binding
     )
@@ -505,10 +498,6 @@ class StreamingOptions:
         dyn = getattr(args, "dynamic_planning", None)
         dynamic_planning: Any = None if dyn is False else UNSPECIFIED
 
-        # Special: stream_policy "auto" or absent → UNSPECIFIED
-        sp = getattr(args, "stream_policy", None)
-        cuda_stream_policy: Any = UNSPECIFIED if (sp is None or sp == "auto") else sp
-
         # target_partition_size: canonical dest from _add_cli_args; fall back to
         # "blocksize" for legacy benchmark scripts that predate this module.
         target_partition_size = (
@@ -540,7 +529,6 @@ class StreamingOptions:
             raise_on_fail=_get("raise_on_fail"),
             parquet_options=_get("parquet_options"),
             memory_resource_config=_get("memory_resource_config"),
-            cuda_stream_policy=cuda_stream_policy,
         )
 
     @staticmethod
@@ -752,16 +740,6 @@ class StreamingOptions:
             help=textwrap.dedent("""\
                 Enable dynamic planning. Use --no-dynamic-planning to disable.
                 Env: CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING. Built-in default: enabled."""),
-        )
-        g.add_argument(
-            "--stream-policy",
-            dest="stream_policy",
-            default=None,
-            type=str,
-            choices=["auto", "default", "new", "pool"],
-            help=textwrap.dedent("""\
-                CUDA stream pool policy. "auto" defers to the built-in default.
-                Env: CUDF_POLARS__CUDA_STREAM_POLICY. Built-in default: default."""),
         )
         g.add_argument(
             "--parquet-options",
