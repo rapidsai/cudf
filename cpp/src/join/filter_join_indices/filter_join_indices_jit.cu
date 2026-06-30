@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -224,7 +224,7 @@ apply_join_semantics(cudf::table_view const& left,
       input_iter + left_indices.size(),
       cuda::counting_iterator<size_type>{0},
       output_iter,
-      [valid_predicate] __device__(size_type idx) { return valid_predicate(idx); },
+      [valid_predicate] __device__(size_type idx) -> bool { return valid_predicate(idx); },
       stream);
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
