@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -70,14 +70,14 @@ struct contains_scalar_dispatch {
       d_haystack->optional_begin<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
     auto const end = d_haystack->optional_end<DType>(cudf::nullate::DYNAMIC{haystack.has_nulls()});
 
-    return cudf::detail::count_if(
-             begin,
-             end,
-             [d_needle] __device__(auto const val_pair) {
-               auto needle = get_scalar_value<Element>(d_needle);
-               return val_pair.has_value() && (needle == *val_pair);
-             },
-             stream) > 0;
+    return cudf::detail::any_of(
+      begin,
+      end,
+      [d_needle] __device__(auto const val_pair) {
+        auto needle = get_scalar_value<Element>(d_needle);
+        return val_pair.has_value() && (needle == *val_pair);
+      },
+      stream);
   }
 
   template <typename Element>
@@ -127,10 +127,11 @@ struct contains_scalar_dispatch {
         return d_comp(idx, rhs_index_type{0});  // compare haystack[idx] == needle[0].
       });
 
-    return thrust::count(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                         d_results.begin(),
-                         d_results.end(),
-                         true) > 0;
+    return cudf::detail::any_of(
+      d_results.begin(),
+      d_results.end(),
+      [] __device__(auto const result) { return result; },
+      stream);
   }
 };
 
