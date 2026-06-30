@@ -25,7 +25,6 @@ from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
 
-import cudf_polars.quent._logging
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.quent._plan import build_plan
@@ -51,6 +50,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     import cudf_polars.quent
+    import cudf_polars.quent._logging
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.parallel import ConfigOptions
