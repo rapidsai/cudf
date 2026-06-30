@@ -6731,19 +6731,57 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Single    5
         dtype: int64
 
+        Count non-NA entries per row with ``axis=1``:
+
+        >>> df.count(axis=1)
+        0    3
+        1    2
+        2    3
+        3    3
+        4    3
+        dtype: int64
+
         .. pandas-compat::
             :meth:`pandas.DataFrame.count`
-
-            Parameters currently not supported are `axis` and `numeric_only`.
         """
         axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 is currently supported.")
-        return Series._from_column(
-            as_column([col.count for col in self._columns]),
-            index=Index(self._data.to_pandas_index),
-            attrs=self.attrs,
-        )
+        source = self
+        if numeric_only:
+            numeric_cols = (
+                name
+                for name, dtype in self._dtypes
+                if is_dtype_obj_numeric(dtype)
+            )
+            source = self._get_columns_by_label(numeric_cols)
+        if axis == 0:
+            return Series._from_column(
+                as_column([col.count for col in source._columns]),
+                index=Index(source._data.to_pandas_index),
+                attrs=self.attrs,
+            )
+        elif axis == 1:
+            # count non-NA cells per row, i.e. the row-wise sum of each
+            # column's validity. Implemented on-device to avoid a cudf.pandas
+            # fallback that would copy the whole frame to host.
+            if len(source._columns) == 0:
+                result_col = as_column(
+                    0, length=len(self), dtype=np.dtype(np.int64)
+                )
+            else:
+                result_col = functools.reduce(
+                    lambda left, right: left + right,
+                    (
+                        col.notnull().astype(np.dtype(np.int64))
+                        for col in source._columns
+                    ),
+                )
+            return Series._from_column(
+                result_col, index=self.index, attrs=self.attrs
+            )
+        else:
+            raise NotImplementedError(
+                "Only axis=0 and axis=1 are currently supported."
+            )
 
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
@@ -7480,6 +7518,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         index=True,
         encoding=None,
         compression=None,
+        quoting=None,
         lineterminator=None,
         chunksize=None,
         storage_options=None,
@@ -7502,6 +7541,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             encoding=encoding,
             compression=compression,
             storage_options=storage_options,
+            quoting=quoting,
         )
 
     @ioutils.doc_to_orc()
@@ -8536,22 +8576,44 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if len(diff) != 0:
                 raise KeyError(f"columns {diff} do not exist")
         columns = list(self._column_names) if subset is None else subset
+        name = "proportion" if normalize else "count"
+
+        df = self[columns].copy()
+        taken = set(df._column_names)
+
+        def _free_name(base: str) -> str:
+            while base in taken:
+                base = f"_{base}"
+            taken.add(base)
+            return base
+
+        cnt_col = _free_name("__count")
+        pos_col = _free_name("__pos")
+        # cudf's groupby does not preserve first-appearance order, so track the
+        # first row index of each unique row and order by it, matching pandas'
+        # stable handling of tied counts.
+        df[cnt_col] = 1
+        df[pos_col] = as_column(range(len(df)))
         result = (
-            self.groupby(
-                by=columns,
-                dropna=dropna,
-            )
-            .size()
-            .astype(np.dtype(np.int64))
+            df.groupby(by=columns, dropna=dropna, sort=False)
+            .agg({cnt_col: "count", pos_col: "min"})
+            .reset_index()
         )
+        result[cnt_col] = result[cnt_col].astype(np.dtype(np.int64))
+        result = result.sort_values(pos_col)
         if sort:
-            result = result.sort_values(ascending=ascending)
+            seq_col = _free_name("__seq")
+            result[seq_col] = as_column(range(len(result)))
+            result = result.sort_values(
+                [cnt_col, seq_col], ascending=[ascending, True]
+            )
+        result = result.set_index(columns)[cnt_col]
         if normalize:
             result = result / result._column.sum()
         # Pandas always returns MultiIndex even if only one column.
         if not isinstance(result.index, MultiIndex):
             result.index = MultiIndex._from_data(result.index._data)
-        result.name = "proportion" if normalize else "count"
+        result.name = name
         return result
 
     @_performance_tracking

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -977,11 +977,19 @@ struct target_type_impl<Source,
   using type = Source;
 };
 
-// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where sum type matches input
-// type, only supports signed integral types (excluding bool) and decimal types
+/**
+ * @brief Whether `Source` is a valid input type for the SUM_OVERFLOW aggregation.
+ *
+ * Supports signed integral types (excluding bool) and fixed-point (decimal) types.
+ */
 template <typename Source>
-  requires((cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
-           cudf::is_fixed_point<Source>())
+concept sum_overflow_supported =
+  (cudf::is_integral_not_bool<Source>() && cudf::is_signed<Source>()) ||
+  cudf::is_fixed_point<Source>();
+
+// SUM_WITH_OVERFLOW outputs a struct {sum: Source, overflow: bool} where the sum matches the input
+// type
+template <sum_overflow_supported Source>
 struct target_type_impl<Source, aggregation::SUM_WITH_OVERFLOW> {
   using type = struct_view;  // SUM_WITH_OVERFLOW outputs a struct with sum and overflow fields
 };

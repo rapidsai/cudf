@@ -601,7 +601,7 @@ async def _choose_strategy(
     output_count_limit = local_count if skip_global_comm else total_chunk_count
     output_count = min(ideal_count, output_count_limit)
     if not use_tree:
-        output_count = max(output_count, min_row_limit_count)
+        output_count = max(2, output_count, min_row_limit_count)
     if tracer is not None:
         tracer.decision = (
             "tree_local"
