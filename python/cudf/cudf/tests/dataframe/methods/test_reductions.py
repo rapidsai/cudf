@@ -238,7 +238,7 @@ def test_empty_numeric_only():
 
 @pytest.mark.parametrize(
     "op",
-    ["count", "kurt", "kurtosis", "skew"],
+    ["kurt", "kurtosis", "skew"],
 )
 def test_dataframe_axis1_unsupported_ops(op):
     df = cudf.DataFrame({"a": [1, 2, 3], "b": [8, 9, 10]})
@@ -247,6 +247,25 @@ def test_dataframe_axis1_unsupported_ops(op):
         NotImplementedError, match=r"Only axis=0 is currently supported."
     ):
         getattr(df, op)(axis=1)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [8, 9, 10]},
+        {"a": [1.0, np.nan, 3.0], "b": ["x", None, "z"], "c": [1, 2, None]},
+        {"a": [None, None], "b": [None, "y"]},
+        {"a": [1, 2, 3]},
+    ],
+)
+@pytest.mark.parametrize("numeric_only", [False, True])
+def test_dataframe_count_axis1(data, numeric_only):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+    assert_eq(
+        gdf.count(axis=1, numeric_only=numeric_only),
+        pdf.count(axis=1, numeric_only=numeric_only),
+    )
 
 
 @pytest.mark.parametrize(
