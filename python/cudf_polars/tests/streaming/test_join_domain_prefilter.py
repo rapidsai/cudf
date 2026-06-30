@@ -9,10 +9,11 @@ import polars as pl
 
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Join, Scan
+from cudf_polars.dsl.ir import Join, Scan, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.join_domain_prefilter import (
+    _smallest_node_containing_all,
     optimize_join_domain_prefilters,
 )
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
@@ -68,6 +69,19 @@ def _scan(name: str, columns: tuple[str, ...], *, predicate: bool = False) -> Sc
 
 def _key(node: IR, name: str) -> expr.NamedExpr:
     return expr.NamedExpr(name, expr.Col(node.schema[name], name))
+
+
+def _select(node: IR, **columns: str) -> Select:
+    schema = {output: node.schema[source] for output, source in columns.items()}
+    return Select(
+        schema,
+        tuple(
+            expr.NamedExpr(output, expr.Col(schema[output], source))
+            for output, source in columns.items()
+        ),
+        True,  # noqa: FBT003
+        node,
+    )
 
 
 def _join(
@@ -243,6 +257,80 @@ def test_rewritten_domain_filters_other_side_instead_of_stacking() -> None:
     semis = _joins(optimized, "Semi")
     assert sum(semi.children[0] is lineitem for semi in semis) == 1
     assert any(semi.children[0] is orders for semi in semis)
+
+
+def test_target_source_follows_join_key_through_rename() -> None:
+    big = _scan("big", ("left_key", "other"))
+    renamed_big = _select(big, foo="left_key", other="other")
+    small = _scan("small", ("left_key", "other2"))
+    joined = _join(
+        renamed_big,
+        small,
+        ("other",),
+        ("other2",),
+        maintain_order="left",
+    )
+    domain = _scan("domain", ("domain_key",), predicate=True)
+    root = _join(joined, domain, ("left_key",), ("domain_key",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(big=(big, 1_000), small=(small, 100), domain=(domain, 5)),
+        _config(),
+    )
+
+    semis = _joins(optimized, "Semi")
+    assert any(semi.children[0] is small for semi in semis)
+    assert not any(semi.children[0] is big for semi in semis)
+
+
+def test_domain_source_follows_join_key_through_rename() -> None:
+    target = _scan("target", ("target_key",))
+    unrelated = _scan("unrelated", ("domain_key", "other"), predicate=True)
+    renamed_unrelated = _select(unrelated, foo="domain_key", other="other")
+    domain_source = _scan("domain_source", ("domain_key", "other2"), predicate=True)
+    domain = _join(
+        renamed_unrelated,
+        domain_source,
+        ("other",),
+        ("other2",),
+        maintain_order="left",
+    )
+    root = _join(target, domain, ("target_key",), ("domain_key",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(
+            target=(target, 1_000),
+            unrelated=(unrelated, 1),
+            domain_source=(domain_source, 5),
+        ),
+        _config(),
+    )
+
+    semi = next(semi for semi in _joins(optimized, "Semi") if semi.children[0] is target)
+    selected_domain = semi.children[1]
+    assert isinstance(selected_domain, Select)
+    assert selected_domain.children[0] is domain
+
+
+def test_composite_domain_columns_follow_renames() -> None:
+    source = _scan("source", ("raw_key", "raw_constraint"))
+    renamed = _select(
+        source,
+        domain_key="raw_key",
+        domain_constraint="raw_constraint",
+    )
+
+    producer = _smallest_node_containing_all(
+        renamed,
+        ("domain_key", "domain_constraint"),
+        {renamed: 20, source: 10},
+    )
+
+    assert producer is not None
+    assert producer.node is source
+    assert producer.columns == ("raw_key", "raw_constraint")
 
 
 def test_no_domain_prefilter_for_outer_join() -> None:

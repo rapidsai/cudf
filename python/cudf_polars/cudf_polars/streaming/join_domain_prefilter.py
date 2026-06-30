@@ -21,6 +21,7 @@ from cudf_polars.dsl.ir import (
     Projection,
     Scan,
     Select,
+    Sort,
 )
 from cudf_polars.dsl.tracing import Scope, log
 from cudf_polars.dsl.traversal import (
@@ -41,11 +42,16 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class _Producer:
-    """A subtree that can provide a key domain."""
+    """A subtree and its bound column names at an insertion point."""
 
     node: IR
-    column: str
+    columns: tuple[str, ...]
     rows: int
+
+    @property
+    def column(self) -> str:
+        """First bound column in the producer."""
+        return self.columns[0]
 
 
 @dataclass(frozen=True)
@@ -54,7 +60,7 @@ class _Candidate:
 
     mode: Literal["simple", "composite"]
     target_side: Literal["left", "right"]
-    target: IR
+    target: _Producer
     target_key: expr.Col
     domain: _Producer
     domain_key: expr.Col
@@ -165,9 +171,9 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
     left, right = node.children
     target_filter = _make_target_filter(node, candidate)
     if candidate.target_side == "left":
-        (left,) = replace([left], {candidate.target: target_filter})
+        (left,) = replace([left], {candidate.target.node: target_filter})
     else:
-        (right,) = replace([right], {candidate.target: target_filter})
+        (right,) = replace([right], {candidate.target.node: target_filter})
     return node.reconstruct((left, right))
 
 
@@ -253,9 +259,6 @@ def _simple_candidates(
         target = _largest_key_source(target_child, target_key.name, row_estimates)
         if target is None:
             continue
-        target_rows = row_estimates.get(target)
-        if target_rows is None or target_rows <= 0:
-            continue
         domain = _smallest_key_producer(
             domain_child,
             domain_key.name,
@@ -265,9 +268,9 @@ def _simple_candidates(
         )
         if domain is None:
             continue
-        if _contains_identity(target, domain.node):
+        if _contains_identity(target.node, domain.node):
             continue
-        if domain.rows / target_rows > threshold:
+        if domain.rows / target.rows > threshold:
             continue
         yield _Candidate(
             mode="simple",
@@ -276,7 +279,7 @@ def _simple_candidates(
             target_key=target_key,
             domain=domain,
             domain_key=domain_key,
-            target_rows=target_rows,
+            target_rows=target.rows,
         )
 
 
@@ -299,9 +302,6 @@ def _composite_candidates(
         target = _largest_key_source(target_child, target_key.name, row_estimates)
         if target is None:
             continue
-        target_rows = row_estimates.get(target)
-        if target_rows is None or target_rows <= 0:
-            continue
 
         for constraint_index, (
             target_constraint_key,
@@ -322,15 +322,15 @@ def _composite_candidates(
                 row_estimates,
                 selective_nodes,
                 require_selective=True,
-                exclude=target,
+                exclude=target.node,
             )
             if constraint_domain is None:
                 continue
-            if _contains_identity(target, domain.node) or _contains_identity(
-                target, constraint_domain.node
+            if _contains_identity(target.node, domain.node) or _contains_identity(
+                target.node, constraint_domain.node
             ):
                 continue
-            if domain.rows / target_rows > threshold:
+            if domain.rows / target.rows > threshold:
                 continue
             if constraint_domain.rows / domain.rows > threshold:
                 continue
@@ -341,7 +341,7 @@ def _composite_candidates(
                 target_key=target_key,
                 domain=domain,
                 domain_key=domain_key,
-                target_rows=target_rows,
+                target_rows=target.rows,
                 constraint_domain=constraint_domain,
                 domain_constraint_key=domain_constraint_key,
                 target_constraint_key=target_constraint_key,
@@ -350,9 +350,10 @@ def _composite_candidates(
 
 def _make_target_filter(ir: Join, candidate: _Candidate) -> Join:
     domain = _make_domain(candidate, ir)
+    target = candidate.target
     return _make_semi_join(
-        candidate.target,
-        candidate.target_key,
+        target.node,
+        expr.Col(target.node.schema[target.column], target.column),
         domain,
         expr.Col(domain.schema[candidate.domain_key.name], candidate.domain_key.name),
         nulls_equal=ir.options[1],
@@ -380,8 +381,8 @@ def _make_domain(candidate: _Candidate, ir: Join) -> IR:
     constrained = _make_semi_join(
         candidate.domain.node,
         expr.Col(
-            candidate.domain.node.schema[candidate.domain_constraint_key.name],
-            candidate.domain_constraint_key.name,
+            candidate.domain.node.schema[candidate.domain.columns[1]],
+            candidate.domain.columns[1],
         ),
         constraint_domain,
         expr.Col(
@@ -433,15 +434,17 @@ def _smallest_key_producer(
     exclude: IR | None = None,
 ) -> _Producer | None:
     candidates = []
-    for node in traversal([root]):
-        if node is exclude or column not in node.schema:
+    for node, bound_column in _column_bindings(root, column):
+        if node is exclude:
             continue
         rows = row_estimates.get(node)
         if rows is None or rows <= 0:
             continue
         if require_selective and node not in selective_nodes:
             continue
-        candidates.append((rows, len(node.schema), _Producer(node, column, rows)))
+        candidates.append(
+            (rows, len(node.schema), _Producer(node, (bound_column,), rows))
+        )
     if not candidates:
         return None
     return min(candidates, key=lambda item: (item[0], item[1]))[2]
@@ -451,14 +454,30 @@ def _smallest_node_containing_all(
     root: IR, columns: Sequence[str], row_estimates: dict[IR, int | None]
 ) -> _Producer | None:
     candidates = []
-    needed = set(columns)
-    for node in traversal([root]):
-        if not needed.issubset(node.schema):
-            continue
-        rows = row_estimates.get(node)
-        if rows is None or rows <= 0:
-            continue
-        candidates.append((rows, len(node.schema), _Producer(node, columns[0], rows)))
+    lineages = [tuple(_column_bindings(root, column)) for column in columns]
+    if not lineages or any(not lineage for lineage in lineages):
+        return None
+    for node, first_column in lineages[0]:
+        bound_columns = [first_column]
+        for lineage in lineages[1:]:
+            match = next(
+                (bound_column for candidate, bound_column in lineage if candidate is node),
+                None,
+            )
+            if match is None:
+                break
+            bound_columns.append(match)
+        else:
+            rows = row_estimates.get(node)
+            if rows is None or rows <= 0:
+                continue
+            candidates.append(
+                (
+                    rows,
+                    len(node.schema),
+                    _Producer(node, tuple(bound_columns), rows),
+                )
+            )
     if not candidates:
         return None
     return min(candidates, key=lambda item: (item[0], item[1]))[2]
@@ -466,16 +485,14 @@ def _smallest_node_containing_all(
 
 def _largest_key_source(
     root: IR, column: str, row_estimates: dict[IR, int | None]
-) -> IR | None:
+) -> _Producer | None:
     source_candidates = []
     fallback_candidates = []
-    for node in traversal([root]):
-        if column not in node.schema:
-            continue
+    for node, bound_column in _column_bindings(root, column):
         rows = row_estimates.get(node)
         if rows is None or rows <= 0:
             continue
-        item = (rows, len(node.schema), node)
+        item = (rows, len(node.schema), _Producer(node, (bound_column,), rows))
         if isinstance(node, (Scan, DataFrameScan)):
             source_candidates.append(item)
         else:
@@ -484,6 +501,90 @@ def _largest_key_source(
     if not candidates:
         return None
     return max(candidates, key=lambda item: (item[0], -item[1]))[2]
+
+
+def _column_bindings(root: IR, column: str) -> Iterable[tuple[IR, str]]:
+    """Yield exact output-to-input bindings for a column through a subplan."""
+    node = root
+    while column in node.schema:
+        yield node, column
+        binding = _input_binding(node, column)
+        if binding is None:
+            return
+        node, column = binding
+
+
+def _input_binding(node: IR, column: str) -> tuple[IR, str] | None:
+    """Return a proven direct input binding, stopping at ambiguous operations."""
+    child = node.children[0] if len(node.children) == 1 else None
+    if isinstance(node, Select):
+        selected = next((item for item in node.exprs if item.name == column), None)
+        return _column_expression_binding(child, selected)
+    if isinstance(node, HStack):
+        stacked = next((item for item in node.columns if item.name == column), None)
+        if stacked is not None:
+            return _column_expression_binding(child, stacked)
+        return _passthrough_binding(child, column)
+    if isinstance(node, GroupBy):
+        if node.zlice is not None:
+            return None
+        key = next((item for item in node.keys if item.name == column), None)
+        return _column_expression_binding(child, key)
+    if isinstance(node, Join):
+        return _join_input_binding(node, column)
+    if isinstance(node, Distinct):
+        return (
+            None
+            if node.zlice is not None
+            else _passthrough_binding(child, column)
+        )
+    if isinstance(node, Sort):
+        return (
+            None
+            if node.zlice is not None
+            else _passthrough_binding(child, column)
+        )
+    if isinstance(node, (Cache, Filter, Projection)):
+        return _passthrough_binding(child, column)
+    return None
+
+
+def _column_expression_binding(
+    child: IR | None, expression: expr.NamedExpr | None
+) -> tuple[IR, str] | None:
+    if (
+        child is not None
+        and expression is not None
+        and isinstance(expression.value, expr.Col)
+        and expression.value.name in child.schema
+    ):
+        return child, expression.value.name
+    return None
+
+
+def _passthrough_binding(child: IR | None, column: str) -> tuple[IR, str] | None:
+    if child is not None and column in child.schema:
+        return child, column
+    return None
+
+
+def _join_input_binding(node: Join, column: str) -> tuple[IR, str] | None:
+    if node.options[0] != "Inner" or node.options[2] is not None:
+        return None
+    left, right = node.children
+    bindings = []
+    if column in left.schema:
+        bindings.append((left, column))
+    suffix = node.options[3]
+    for right_column in right.schema:
+        output_column = (
+            f"{right_column}{suffix}" if right_column in left.schema else right_column
+        )
+        if output_column == column and output_column in node.schema:
+            bindings.append((right, right_column))
+    if len(bindings) == 1:
+        return bindings[0]
+    return None
 
 
 def _estimate_row_counts(ir: IR, stats: StatsCollector) -> dict[IR, int | None]:
@@ -572,7 +673,7 @@ def _trace_decision(
                 "domain_key": candidate.domain_key.name,
                 "estimated_target_rows": candidate.target_rows,
                 "estimated_domain_rows": candidate.domain_rows,
-                "target_node_type": type(candidate.target).__name__,
+                "target_node_type": type(candidate.target.node).__name__,
                 "domain_node_type": type(candidate.domain.node).__name__,
             }
         )
