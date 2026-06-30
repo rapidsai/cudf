@@ -16,8 +16,8 @@ from cudf_polars.dsl.ir import (
     Empty,
     IRExecutionContext,
     Scan,
-    prefetch_parquet_file_metadata_for_ir,
 )
+from cudf_polars.dsl.utils.io import prefetch_parquet_file_metadata_for_ir
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
 from cudf_polars.streaming.io import (

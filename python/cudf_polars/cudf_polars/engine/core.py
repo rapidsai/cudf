@@ -28,9 +28,9 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import (
     IRExecutionContext,
     Scan,
-    prefetch_parquet_file_metadata_for_ir,
 )
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.utils.io import prefetch_parquet_file_metadata_for_ir
 from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id

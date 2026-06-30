@@ -14,7 +14,6 @@ can be considered as functions:
 from __future__ import annotations
 
 import asyncio
-import concurrent.futures
 import contextlib
 import contextvars
 import functools
@@ -49,7 +48,6 @@ from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.nodebase import Node
 from cudf_polars.dsl.to_ast import _DECIMAL_IDS, to_ast, to_parquet_filter
 from cudf_polars.dsl.tracing import log_do_evaluate, nvtx_annotate_cudf_polars
-from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.dsl.utils.windows import (
     offsets_to_windows,
@@ -67,6 +65,7 @@ from cudf_polars.utils.versions import (
 )
 
 if TYPE_CHECKING:
+    import concurrent.futures
     from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
     from typing import Literal, Self
 
@@ -75,7 +74,7 @@ if TYPE_CHECKING:
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers.dataframe import NamedColumn
-    from cudf_polars.streaming.base import StatsCollector
+    from cudf_polars.dsl.utils.io import CachedParquetInfo
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -110,34 +109,6 @@ __all__ = [
     "Sort",
     "Union",
 ]
-
-
-@dataclass(frozen=True)
-class CachedParquetInfo:
-    """
-    Metadata for a parquet file.
-
-    File metadata is only cached when the setting
-    ``ParquetOptions.prefetch_file_metadata`` is ``True``. Metadata is cached
-    for the duration of the query.
-
-    Parameters
-    ----------
-    path
-        The path of an individual parquet file. This is one element of a
-        ``paths`` tuple in a ``Scan`` node.
-    size
-        The size of the parquet file, in bytes. This is typically only set
-        for remote URLs, since it allows skipping subsequent HTTP HEAD requests
-        made by kvikio on operations involving that file.
-    file_metadata
-        The ``FileMetaData`` object for the parquet file returned from
-        ``read_parquet_footers``.
-    """
-
-    path: str
-    size: int
-    file_metadata: plc.io.parquet_metadata.FileMetaData
 
 
 @dataclass(frozen=True)
@@ -213,132 +184,6 @@ class IRExecutionContext:
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
         ) as result_stream:
             yield result_stream
-
-
-@nvtx_annotate_cudf_polars(message="fetch_parquet_footers_for_paths")
-def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetInfo]:
-    """
-    Prefetch parquet footers for a list of paths.
-
-    This is typically executed concurrently with prefetch operations for other
-    path groups for other parquet scan nodes.
-
-    Parameters
-    ----------
-    paths
-        The paths to prefetch.
-
-    Returns
-    -------
-    paths
-        The original input ``paths``.
-    metadata
-        The list of ``FileMetaData`` objects for the ``paths``.
-    """
-    # TODO: https://github.com/rapidsai/cudf/issues/22734, use object metadata from polars
-    # For now, we'll just use kvikio to explicitly get the size.
-    sizes = []
-
-    try:
-        import kvikio
-    except ImportError:
-        kvikio = None
-
-    for path in paths:
-        if paths and kvikio is not None and plc.io.SourceInfo._is_remote_uri(path):
-            # We're OK to use `kvikio.RemoteFile.open` here. It does make an HTTP HEAD
-            # request for S3/HTTP endpoints, but that's the entire reason we're running
-            # this code. So long as it makes just *one* HTTP request, there's no advantage
-            # to inferring the endpoint type.
-            with kvikio.RemoteFile.open(path) as remote_file:
-                sizes.append(remote_file.nbytes())
-        else:
-            sizes.append(None)
-
-    metadata = plc.io.parquet_metadata.read_parquet_footers(
-        plc.io.types.SourceInfo(
-            [
-                plc.io.types.FilepathSource(path, size)
-                for path, size in zip(paths, sizes, strict=True)
-            ]
-        )
-    )
-
-    return [
-        CachedParquetInfo(path, size, file_metadata)
-        for path, size, file_metadata in zip(paths, sizes, metadata, strict=True)
-    ]
-
-
-@nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")
-def prefetch_parquet_file_metadata_for_ir(
-    root: IR,
-    py_executor: concurrent.futures.Executor | None,
-    stats: StatsCollector | None = None,
-) -> dict[str, CachedParquetInfo]:
-    """
-    Prefetch parquet metadata for all parquet scans in an IR graph.
-
-    Parameters
-    ----------
-    root
-        The root of the IR graph, which will be traversed.
-    py_executor
-        The thread pool executor to use for fetching parquet metadata concurrently.
-    stats
-        The stats collector. The file metadata might have already been
-        prefetched during statistics collection, when the number of files
-        sampled equals the total number of files. Providing ``stats`` here will
-        skip rereading metadata for those files.
-
-    Returns
-    -------
-    A dictionary mapping each individual path to its cached parquet metadata.
-    """
-    from cudf_polars.streaming.io import ParquetSourceInfo, StreamingScan
-
-    all_paths: set[str] = set()
-
-    for node in traversal([root]):
-        if isinstance(node, StreamingScan):
-            for scan in node.scans:
-                for path in scan.paths:
-                    all_paths.add(path)
-        elif isinstance(node, Scan) and node.typ == "parquet":
-            for path in node.paths:
-                all_paths.add(path)
-
-    cached_parquet_info: dict[str, CachedParquetInfo] = {}
-    if stats is not None:
-        for node, datasource_info in stats.scan_stats.items():
-            if (
-                isinstance(node, Scan)
-                and node.typ == "parquet"
-                and isinstance(datasource_info, ParquetSourceInfo)
-                and datasource_info.cached_parquet_info is not None
-            ):
-                for info in datasource_info.cached_parquet_info:
-                    cached_parquet_info[info.path] = info
-
-    missing_paths = all_paths - set(cached_parquet_info.keys())
-    cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
-
-    if py_executor is None:
-        cm = py_executor = concurrent.futures.ThreadPoolExecutor()
-    else:
-        # We didn't create the executor, so we don't close it.
-        cm = contextlib.nullcontext()
-
-    with cm:
-        futures = [
-            py_executor.submit(_prefetch_parquet_footers_for_paths, [path])
-            for path in missing_paths
-        ]
-
-        for future in concurrent.futures.as_completed(futures):
-            for info in future.result():
-                cached_parquet_info[info.path] = info
-    return cached_parquet_info
 
 
 _BINOPS = {

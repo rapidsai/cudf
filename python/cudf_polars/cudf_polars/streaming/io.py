@@ -23,9 +23,9 @@ from cudf_polars.dsl.ir import (
     Empty,
     Scan,
     Sink,
-    _prefetch_parquet_footers_for_paths,
 )
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
+from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
