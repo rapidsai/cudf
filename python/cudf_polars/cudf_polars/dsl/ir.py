@@ -1063,9 +1063,9 @@ class Scan(IR):
                 chunk = reader.read_chunk()
                 # TODO: Nested column names
                 names = chunk.column_names(include_children=False)
-                concatenated_columns = chunk.tbl.columns()
+                concatenated_columns = chunk.tbl.release()
                 while reader.has_next():
-                    columns = reader.read_chunk().tbl.columns()
+                    columns = reader.read_chunk().tbl.release()
                     # Discard columns while concatenating to reduce memory footprint.
                     # Reverse order to avoid O(n^2) list popping cost.
                     for i in reversed(range(len(concatenated_columns))):
@@ -2575,7 +2575,7 @@ class Join(IR):
         *,
         left_primary: bool = True,
         stream: Stream,
-    ) -> list[plc.Column]:
+    ) -> tuple[plc.Column, ...]:
         """
         Reorder gather maps to satisfy polars join order restrictions.
 
@@ -2602,7 +2602,7 @@ class Join(IR):
 
         Returns
         -------
-        list[plc.Column]
+        tuple[plc.Column, ...]
             Reordered left and right gather maps.
 
         Notes
