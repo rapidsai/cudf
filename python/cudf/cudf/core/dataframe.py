@@ -6731,19 +6731,57 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Single    5
         dtype: int64
 
+        Count non-NA entries per row with ``axis=1``:
+
+        >>> df.count(axis=1)
+        0    3
+        1    2
+        2    3
+        3    3
+        4    3
+        dtype: int64
+
         .. pandas-compat::
             :meth:`pandas.DataFrame.count`
-
-            Parameters currently not supported are `axis` and `numeric_only`.
         """
         axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 is currently supported.")
-        return Series._from_column(
-            as_column([col.count for col in self._columns]),
-            index=Index(self._data.to_pandas_index),
-            attrs=self.attrs,
-        )
+        source = self
+        if numeric_only:
+            numeric_cols = (
+                name
+                for name, dtype in self._dtypes
+                if is_dtype_obj_numeric(dtype)
+            )
+            source = self._get_columns_by_label(numeric_cols)
+        if axis == 0:
+            return Series._from_column(
+                as_column([col.count for col in source._columns]),
+                index=Index(source._data.to_pandas_index),
+                attrs=self.attrs,
+            )
+        elif axis == 1:
+            # count non-NA cells per row, i.e. the row-wise sum of each
+            # column's validity. Implemented on-device to avoid a cudf.pandas
+            # fallback that would copy the whole frame to host.
+            if len(source._columns) == 0:
+                result_col = as_column(
+                    0, length=len(self), dtype=np.dtype(np.int64)
+                )
+            else:
+                result_col = functools.reduce(
+                    lambda left, right: left + right,
+                    (
+                        col.notnull().astype(np.dtype(np.int64))
+                        for col in source._columns
+                    ),
+                )
+            return Series._from_column(
+                result_col, index=self.index, attrs=self.attrs
+            )
+        else:
+            raise NotImplementedError(
+                "Only axis=0 and axis=1 are currently supported."
+            )
 
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
