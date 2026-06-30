@@ -232,9 +232,21 @@ template <typename T, size_t NumTableConcats, bool IsConstantStrings, bool IsNul
 std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_stats(
   cudf::size_type str_col_value,
   cudf::io::compression_type compression,
+  std::vector<std::string> column_names,
+  std::vector<cudf::size_type> column_order,
   rmm::cuda_stream_view stream)
 {
   static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
+  CUDF_EXPECTS(column_names.size() == column_order.size(),
+               "Column names and column order must have the same size");
+  CUDF_EXPECTS(column_order.size() == 3, "Column order must include all three test columns");
+  CUDF_EXPECTS(std::all_of(cuda::counting_iterator<cudf::size_type>{0},
+                           cuda::counting_iterator<cudf::size_type>{3},
+                           [&](auto const col_idx) {
+                             return std::count(column_order.begin(), column_order.end(), col_idx) ==
+                                    1;
+                           }),
+               "Column order must be a permutation of the three test columns");
 
   auto col0 = testdata::ascending<T>();
   auto col1 = []() {
@@ -291,12 +303,21 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
     output = table_view{{columns[0]->view(), columns[1]->view(), columns[2]->view()}};
   }
 
+  // Reorder the base [col0, col1, col2] columns into the requested physical order, naming them in
+  // that new order.
+  std::vector<cudf::column_view> reordered_columns;
+  reordered_columns.reserve(column_order.size());
+  for (auto const col_idx : column_order) {
+    reordered_columns.emplace_back(output.column(col_idx));
+  }
+  output = table_view{reordered_columns};
+
   auto table = cudf::concatenate(std::vector<table_view>(NumTableConcats, output), stream);
   output     = table->view();
   cudf::io::table_input_metadata output_metadata(output);
-  output_metadata.column_metadata[0].set_name("col0");
-  output_metadata.column_metadata[1].set_name("col1");
-  output_metadata.column_metadata[2].set_name("col2");
+  for (std::size_t i = 0; i < column_names.size(); ++i) {
+    output_metadata.column_metadata[i].set_name(column_names[i]);
+  }
 
   std::vector<char> buffer;
   cudf::io::parquet_writer_options out_opts =
@@ -321,7 +342,11 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
 #define INSTANTIATE_CREATE_PARQUET_WITH_STATS(T, NUM_CONCATS, CONSTANT_STRINGS, NULLABLE) \
   template std::pair<std::unique_ptr<cudf::table>, std::vector<char>>                     \
   create_parquet_with_stats<T, NUM_CONCATS, CONSTANT_STRINGS, NULLABLE>(                  \
-    cudf::size_type, cudf::io::compression_type, rmm::cuda_stream_view)
+    cudf::size_type,                                                                      \
+    cudf::io::compression_type,                                                           \
+    std::vector<std::string>,                                                             \
+    std::vector<cudf::size_type>,                                                         \
+    rmm::cuda_stream_view)
 
 #define INSTANTIATE_CREATE_PARQUET_WITH_STATS_DICT(T)       \
   INSTANTIATE_CREATE_PARQUET_WITH_STATS(T, 1, true, false); \

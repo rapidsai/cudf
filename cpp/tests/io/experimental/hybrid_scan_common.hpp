@@ -20,9 +20,9 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <algorithm>
 #include <functional>
 #include <memory>
 #include <random>
@@ -146,102 +146,4 @@ template <typename T,
   cudf::io::compression_type compression    = cudf::io::compression_type::AUTO,
   std::vector<std::string> column_names     = {"col0", "col1", "col2"},
   std::vector<cudf::size_type> column_order = {0, 1, 2},
-  rmm::cuda_stream_view stream              = cudf::get_default_stream())
-{
-  static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
-  CUDF_EXPECTS(column_names.size() == column_order.size(),
-               "Column names and column order must have the same size");
-  CUDF_EXPECTS(column_order.size() == 3, "Column order must include all three test columns");
-  CUDF_EXPECTS(std::all_of(cuda::counting_iterator<cudf::size_type>{0},
-                           cuda::counting_iterator<cudf::size_type>{3},
-                           [&](auto const col_idx) {
-                             return std::count(column_order.begin(), column_order.end(), col_idx) ==
-                                    1;
-                           }),
-               "Column order must be a permutation of the three test columns");
-
-  auto col0 = testdata::ascending<T>();
-  auto col1 = []() {
-    if constexpr (cudf::is_chrono<T>()) {
-      return descending_low_cardinality<T>();
-    } else {
-      return testdata::descending<T>();
-    }
-  }();
-
-  auto col2 = [&]() {
-    if constexpr (IsConstantStrings) {
-      return constant_strings(str_col_value);  // constant stringified value
-    } else {
-      return testdata::ascending<cudf::string_view>();  // ascending strings
-    }
-  }();
-
-  // Output table view
-  auto output = table_view{{col0, col1, col2}};
-
-  // Add nullmasks to the columns if specified
-  std::vector<std::unique_ptr<cudf::column>> columns;
-  if constexpr (IsNullable) {
-    std::mt19937 gen(0xc0ffee);
-    std::bernoulli_distribution bn(0.7f);
-    auto valids =
-      cudf::detail::make_counting_transform_iterator(0, [&](int index) { return bn(gen); });
-    auto const num_rows = static_cast<cudf::column_view>(col0).size();
-
-    columns.emplace_back(col0.release());
-    auto [nullmask, nullcount] = cudf::test::detail::make_null_mask(valids, valids + num_rows);
-    columns.back()->set_null_mask(std::move(nullmask), nullcount);
-
-    columns.emplace_back(col1.release());
-    std::tie(nullmask, nullcount) =
-      cudf::test::detail::make_null_mask(valids + num_rows, valids + 2 * num_rows);
-    columns.back()->set_null_mask(std::move(nullmask), nullcount);
-
-    columns.emplace_back(col2.release());
-    std::tie(nullmask, nullcount) =
-      cudf::test::detail::make_null_mask(valids + 2 * num_rows, valids + 3 * num_rows);
-    columns.back()->set_null_mask(std::move(nullmask), nullcount);
-
-    // Purge non-empty nulls from the strings column only
-    cudf::purge_nonempty_nulls(columns.back()->view());
-
-    // Update the output table view with the nullable columns
-    output = table_view{{columns[0]->view(), columns[1]->view(), columns[2]->view()}};
-  }
-
-  // Reorder the base [col0, col1, col2] columns into the requested physical order, naming them in
-  // that new order.
-  std::vector<cudf::column_view> reordered_columns;
-  reordered_columns.reserve(column_order.size());
-  for (auto const col_idx : column_order) {
-    reordered_columns.emplace_back(output.column(col_idx));
-  }
-  output = table_view{reordered_columns};
-
-  auto table = cudf::concatenate(std::vector<table_view>(NumTableConcats, output));
-  output     = table->view();
-  cudf::io::table_input_metadata output_metadata(output);
-  for (std::size_t i = 0; i < column_names.size(); ++i) {
-    output_metadata.column_metadata[i].set_name(column_names[i]);
-  }
-
-  std::vector<char> buffer;
-  cudf::io::parquet_writer_options out_opts =
-    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, output)
-      .metadata(std::move(output_metadata))
-      .row_group_size_rows(page_size_for_ordered_tests)
-      .max_page_size_rows(page_size_for_ordered_tests / 5)
-      .compression(compression)
-      .dictionary_policy(cudf::io::dictionary_policy::ALWAYS)
-      .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN);
-
-  if constexpr (NumTableConcats > 1) {
-    out_opts.set_row_group_size_rows(num_ordered_rows);
-    out_opts.set_max_page_size_rows(page_size_for_ordered_tests);
-  }
-
-  cudf::io::write_parquet(out_opts);
-
-  return std::pair{std::move(table), std::move(buffer)};
-}
+  rmm::cuda_stream_view stream              = cudf::get_default_stream());
