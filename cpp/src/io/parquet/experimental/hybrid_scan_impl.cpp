@@ -502,6 +502,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Empty input filter expression encountered");
+  CUDF_EXPECTS(not row_mask.is_empty(),
+               "Row mask must be non-empty when materializing filter columns");
 
   prepare_materialization(
     read_columns_mode::FILTER_COLUMNS, row_group_indices.size(), options, stream, mr);
@@ -510,7 +512,7 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   _expr_conv = build_converted_expression(options);
 
   auto data_page_mask = thrust::host_vector<bool>{};
-  if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
+  if (mask_data_pages == use_data_page_mask::YES) {
     data_page_mask = _extended_metadata->compute_data_page_mask(
       row_mask, row_group_indices, _input_columns, _row_mask_offset, stream);
   }
@@ -586,6 +588,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 {
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Empty input filter expression encountered");
+  CUDF_EXPECTS(not row_mask.is_empty(),
+               "Row mask must be non-empty when setting up chunking for filter columns");
 
   prepare_materialization(
     read_columns_mode::FILTER_COLUMNS, row_group_indices.size(), options, stream, mr);
@@ -597,7 +601,7 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   _expr_conv = build_converted_expression(options);
 
   auto data_page_mask = thrust::host_vector<bool>{};
-  if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
+  if (mask_data_pages == use_data_page_mask::YES) {
     data_page_mask = _extended_metadata->compute_data_page_mask(
       row_mask, row_group_indices, _input_columns, _row_mask_offset, stream);
   }
@@ -1061,8 +1065,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
 
-  CUDF_EXPECTS(row_mask.is_empty() or row_mask.type().id() == type_id::BOOL8,
-               "Input row mask must be empty or a boolean column");
+  CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8, "Input row mask must be a boolean column");
 
   // If the input row mask is empty, return the table as is.
   if (row_mask.is_empty()) {

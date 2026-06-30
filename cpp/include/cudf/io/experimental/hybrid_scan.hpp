@@ -564,7 +564,7 @@ class hybrid_scan_reader {
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
    * @param row_group_indices Input row groups indices
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param options Parquet reader options
