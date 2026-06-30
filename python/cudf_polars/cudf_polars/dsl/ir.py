@@ -406,8 +406,8 @@ class PythonScan(IR):
         schema
             The declared output schema, used for the empty-source fallback frame.
         rank_aware_source
-            The `RankAwareSource` captured by the registered scan function, when one was
-            found (see `cudf_polars.streaming.actor_graph.io._find_rank_aware_source`).
+            The `RankAwareSource` captured by the registered scan function, 
+            when one was found.
         rank
             Rank running this scan, passed to a `RankAwareSource`. Defaults to
             ``0`` for single-rank / in-memory execution.
@@ -432,11 +432,9 @@ class PythonScan(IR):
             If the source yields something other than a polars or cudf-polars
             DataFrame.
         """
-        # A pushed-down row limit is rejected during translation (see
-        # https://github.com/rapidsai/cudf/issues/22918), so n_rows is always
-        # None. We pass predicate=None to the source and apply any pushed
-        # predicate on the GPU in process_chunk.
         scan_fn, with_columns, _source_type, _ir_node_index = options
+        # We pass predicate=None and apply any pushed predicate on the
+        # GPU in process_chunk.
         if rank_aware_source is not None:
             source_chunks = rank_aware_source(
                 with_columns, None, None, None, rank=rank, nranks=nranks
@@ -508,8 +506,9 @@ class PythonScan(IR):
         # Validate against the declared (output) schema. Polars performs this
         # check for register_io_source(..., validate_schema=True), but the flag is
         # not exposed to the GPU plan, so we always validate.
+        # See https://github.com/rapidsai/cudf/issues/23043
         declared = pl.Schema(
-            (name, dtype.polars_type) for name, dtype in schema.items()
+            {name: dtype.polars_type for name, dtype in schema.items()}
         )
         produced = pl.Schema(
             zip(
@@ -520,8 +519,8 @@ class PythonScan(IR):
         )
         if produced != declared:
             raise pl.exceptions.SchemaError(
-                f"PythonScan source produced schema {produced} which does not "
-                f"match the declared schema {declared}"
+                f"user provided schema: {declared} doesn't match the "
+                f"DataFrame schema: {produced}"
             )
         return apply_predicate(df, predicate)
 

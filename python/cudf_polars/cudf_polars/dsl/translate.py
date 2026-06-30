@@ -382,9 +382,7 @@ def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -
         # The only other form is a pyarrow predicate, ("pyarrow", ...), which
         # Polars only emits for pyarrow-dataset scans, never for an
         # ``register_io_source`` plugin.
-        raise NotImplementedError(
-            f"Unsupported PythonScan predicate: {raw_predicate!r}"
-        )
+        assert_never(raw_predicate)
     return ir.PythonScan(schema, options, predicate)
 
 
