@@ -251,7 +251,7 @@ async def _sample_chunks_for_size_estimate(
     else:
         global_size = sample.total_size
 
-    num_partitions = max(1, global_size // target_partition_size)
+    num_partitions = max(1, -(-global_size // target_partition_size))
     return sample.chunks, num_partitions
 
 
