@@ -465,10 +465,9 @@ class FusedScan(IR):
     ) -> Self:
         """Create a new FusedScan node, with prefetched parquet metadata set."""
         cached_parquet_info = [cached_parquet_info_map[path] for path in node.paths]
-        if node.paths != [info.path for info in cached_parquet_info]:
-            raise AssertionError(
-                f"Paths do not match cached parquet info. {node.paths} != {[info.path for info in cached_parquet_info]}"
-            )
+        Scan._validate_cached_parquet_info(
+            node.paths, node.parquet_options, cached_parquet_info
+        )
         return cls(
             node.schema,
             node.base_scan,
