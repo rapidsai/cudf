@@ -1867,15 +1867,18 @@ class MultiIndex(Index):
         else:
             to_concat = [self, other]
 
-        for obj in to_concat:
-            if not isinstance(obj, MultiIndex):
-                raise TypeError(
-                    f"all objects should be of type "
-                    f"MultiIndex for MultiIndex.append, "
-                    f"found object of type: {type(obj)}"
-                )
+        non_mi_nonempty = [
+            obj
+            for obj in to_concat
+            if not isinstance(obj, MultiIndex) and len(obj) != 0
+        ]
+        if non_mi_nonempty:
+            return Index._concat(to_concat)
 
-        return type(self)._concat(to_concat)
+        # Only MultiIndex (and possibly empty non-MultiIndex) objects remain.
+        # Filter to just the MultiIndex objects for concatenation.
+        mi_objs = [obj for obj in to_concat if isinstance(obj, MultiIndex)]
+        return type(self)._concat(mi_objs)
 
     @_performance_tracking
     def __array_function__(self, func, types, args, kwargs):

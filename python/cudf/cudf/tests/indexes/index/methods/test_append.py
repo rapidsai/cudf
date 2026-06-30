@@ -8,6 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
+import cudf.utils
+import cudf.utils.dtypes
 from cudf.core.index import Index
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -290,3 +292,116 @@ def test_index_methods(index, func):
         actual = getattr(gidx, func)()
 
     assert_eq(expected, actual)
+
+
+def test_index_append_multiindex_returns_object_index():
+    pd_data = pd.Index([1, 2])
+    pd_other = pd.MultiIndex.from_tuples([(3, "a"), (4, "b")])
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+
+    assert_eq(expected, actual)
+
+
+def test_categorical_index_append_multiindex_returns_object_index():
+    pd_data = pd.CategoricalIndex(["a", "b"])
+    pd_other = pd.MultiIndex.from_tuples([("c", "d"), ("e", "f")])
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+
+    assert_eq(expected, actual)
+
+
+def test_empty_index_append_multiindex_returns_object_index():
+    pd_data = pd.Index([])
+    pd_other = pd.MultiIndex.from_tuples([(1, 2)])
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+
+    assert_eq(expected, actual)
+
+
+def test_index_append_empty_multiindex_preserves_pandas_result():
+    pd_data = pd.Index([1, 2])
+    pd_other = pd.MultiIndex.from_arrays([[], []])
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+
+    assert_eq(expected, actual)
+
+
+def test_index_append_list_with_multiindex_returns_object_index():
+    pd_data = pd.Index([1])
+    pd_other = [pd.MultiIndex.from_tuples([(2, "a")]), pd.Index([3])]
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = [cudf.from_pandas(other) for other in pd_other]
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+
+    assert_eq(expected, actual)
+
+
+def test_index_append_multiindex_name_mismatch_returns_none_name():
+    pd_data = pd.Index([1, 2], name="x")
+    pd_other = pd.MultiIndex.from_tuples([(3, 4)], names=["x", "y"])
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+
+    assert_eq(expected, actual)
+
+
+def test_string_index_append_multiindex_returns_object_index():
+    pd_data = pd.Index(["x", "y"])
+    pd_other = pd.MultiIndex.from_arrays([["a", "b"], [1, 2]])
+
+    gd_data = cudf.from_pandas(pd_data)
+    gd_other = cudf.from_pandas(pd_other)
+
+    expected = pd_data.append(pd_other)
+    actual = gd_data.append(gd_other)
+
+    assert_eq(expected, actual)
+
+
+def test_index_append_multiindex_name_propagation():
+    # When both operands are unnamed, the result name is None (preserved).
+    # When either operand is named, the result name is also None because
+    # cross-type append (Index + MultiIndex) never preserves a non-None name.
+    pd_data_named = pd.Index([1, 2], name="x")
+    pd_other_named = pd.MultiIndex.from_tuples([(3, 4)], names=["x", "y"])
+    pd_data_unnamed = pd.Index([1, 2])
+    pd_other_unnamed = pd.MultiIndex.from_tuples([(3, 4)])
+
+    for pd_data, pd_other in [
+        (pd_data_named, pd_other_named),
+        (pd_data_named, pd_other_unnamed),
+        (pd_data_unnamed, pd_other_named),
+        (pd_data_unnamed, pd_other_unnamed),
+    ]:
+        gd_data = cudf.from_pandas(pd_data)
+        gd_other = cudf.from_pandas(pd_other)
+        expected = pd_data.append(pd_other)
+        actual = gd_data.append(gd_other)
+        assert_eq(expected, actual)

@@ -55,6 +55,7 @@ from cudf.core.dtype.validators import (
 from cudf.core.dtypes import (
     CategoricalDtype,
     IntervalDtype,
+    StructDtype,
 )
 from cudf.core.join._join_helpers import _match_join_keys
 from cudf.core.single_column_frame import SingleColumnFrame
@@ -97,6 +98,11 @@ def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
     if not isinstance(index_like, Index):
         return Index(index_like, nan_as_null=nan_as_null)
     return index_like
+
+
+_FLATTENED_LABEL_KIND_FIELD = "__cudf_flattened_label_kind__"
+_FLATTENED_LABEL_SCALAR_FIELD_PREFIX = "__cudf_flattened_label_scalar_"
+_FLATTENED_LABEL_LEVEL_FIELD_PREFIX = "__cudf_flattened_label_level_"
 
 
 def _get_result_name(
@@ -1670,6 +1676,8 @@ class Index(SingleColumnFrame):
     def _concat(cls, objs):
         if all(isinstance(obj, RangeIndex) for obj in objs):
             result = _concat_range_index(objs)
+        elif any(isinstance(obj, cudf.MultiIndex) for obj in objs):
+            result = _concat_indexes_with_multiindex(objs)
         else:
             data = concat_columns([o._column for o in objs])
             if cls is IntervalIndex:
@@ -2111,6 +2119,10 @@ class Index(SingleColumnFrame):
     def to_pandas(
         self, *, nullable: bool = False, arrow_type: bool = False
     ) -> pd.Index:
+        if _is_flattened_label_column(self._column):
+            return _flattened_label_column_to_pandas_index(
+                self._column, self.name
+            )
         result = self._column.to_pandas(
             nullable=nullable, arrow_type=arrow_type
         )
@@ -2212,7 +2224,11 @@ class Index(SingleColumnFrame):
             this = self
             other = ensure_index(other)
 
-            if len(this) == 0 or len(other) == 0:
+            if isinstance(this, cudf.MultiIndex) or isinstance(
+                other, cudf.MultiIndex
+            ):
+                to_concat = [this, other]
+            elif len(this) == 0 or len(other) == 0:
                 # we'll filter out empties later in ._concat
                 to_concat = [this, other]
             else:
@@ -5679,6 +5695,170 @@ def _concat_range_index(indexes: list[RangeIndex]) -> Index:
 
     stop = non_empty_indexes[-1].stop if next_ is None else next_
     return RangeIndex(start, stop, step)
+
+
+@_performance_tracking
+def _concat_indexes_with_multiindex(indexes: list[Index]) -> Index:
+    if not any(
+        isinstance(obj, cudf.MultiIndex) and len(obj) != 0 for obj in indexes
+    ):
+        scalar_indexes = [
+            obj for obj in indexes if not isinstance(obj, cudf.MultiIndex)
+        ]
+        if scalar_indexes:
+            return Index._concat(scalar_indexes)
+
+    nlevels = max(
+        obj.nlevels if isinstance(obj, cudf.MultiIndex) else 1
+        for obj in indexes
+    )
+    scalar_dtype = _common_flattened_label_scalar_dtype(indexes)
+    level_dtypes = _common_flattened_label_level_dtypes(indexes, nlevels)
+    flattened = [
+        _flatten_index_for_concat(obj, nlevels, scalar_dtype, level_dtypes)
+        for obj in indexes
+    ]
+    return Index._from_column(concat_columns(flattened))
+
+
+def _common_flattened_label_scalar_dtype(indexes: list[Index]):
+    dtypes = [
+        obj._column.dtype
+        for obj in indexes
+        if not isinstance(obj, cudf.MultiIndex) and len(obj) != 0
+    ]
+    if any(isinstance(dtype, CategoricalDtype) for dtype in dtypes):
+        dtypes.append(DEFAULT_STRING_DTYPE)
+    return find_common_type(dtypes) if dtypes else np.dtype("object")
+
+
+def _common_flattened_label_level_dtypes(
+    indexes: list[Index], nlevels: int
+) -> list:
+    level_dtypes = []
+    for level in range(nlevels):
+        dtypes = [
+            obj._columns[level].dtype
+            for obj in indexes
+            if isinstance(obj, cudf.MultiIndex) and level < obj.nlevels
+        ]
+        if any(isinstance(dtype, CategoricalDtype) for dtype in dtypes):
+            dtypes.append(DEFAULT_STRING_DTYPE)
+        level_dtypes.append(
+            find_common_type(dtypes) if dtypes else np.dtype("object")
+        )
+    return level_dtypes
+
+
+def _flatten_index_for_concat(
+    index: Index, nlevels: int, scalar_dtype, level_dtypes: list
+) -> ColumnBase:
+    if isinstance(index, cudf.MultiIndex):
+        return _multiindex_as_flattened_label_column(
+            index, nlevels, scalar_dtype, level_dtypes
+        )
+    else:
+        return _index_as_flattened_label_column(
+            index, nlevels, scalar_dtype, level_dtypes
+        )
+
+
+def _multiindex_as_flattened_label_column(
+    index: MultiIndex, nlevels: int, scalar_dtype, level_dtypes: list
+) -> ColumnBase:
+    level_columns = list(index._columns)
+    children = [as_column(1, length=len(index), dtype=np.dtype("int8"))]
+    children.append(column_empty(len(index), dtype=scalar_dtype))
+    children.extend(
+        col.astype(level_dtypes[i])
+        if col.dtype != level_dtypes[i]
+        else col.copy(deep=True)
+        for i, col in enumerate(level_columns)
+    )
+    children.extend(
+        column_empty(len(index), dtype=level_dtypes[i])
+        for i in range(len(level_columns), nlevels)
+    )
+    return _flattened_label_column_from_children(
+        children, nlevels, scalar_dtype, level_dtypes
+    )
+
+
+def _index_as_flattened_label_column(
+    index: Index, nlevels: int, scalar_dtype, level_dtypes: list
+) -> ColumnBase:
+    children = [as_column(0, length=len(index), dtype=np.dtype("int8"))]
+    children.append(
+        index._column.astype(scalar_dtype)
+        if index._column.dtype != scalar_dtype
+        else index._column.copy(deep=True)
+    )
+    children.extend(
+        column_empty(len(index), dtype=level_dtype)
+        for level_dtype in level_dtypes
+    )
+    return _flattened_label_column_from_children(
+        children, nlevels, scalar_dtype, level_dtypes
+    )
+
+
+def _flattened_label_column_from_children(
+    children: list[ColumnBase], nlevels: int, scalar_dtype, level_dtypes: list
+) -> ColumnBase:
+    dtype = StructDtype(
+        {
+            _FLATTENED_LABEL_KIND_FIELD: np.dtype("int8"),
+            _FLATTENED_LABEL_SCALAR_FIELD_PREFIX + "0": scalar_dtype,
+            **{
+                _FLATTENED_LABEL_LEVEL_FIELD_PREFIX + str(i): level_dtypes[i]
+                for i in range(nlevels)
+            },
+        }
+    )
+    if len(children[0]) == 0:
+        return column_empty(0, dtype=dtype)
+    return ColumnBase.create(
+        plc.Column(
+            plc.DataType(plc.TypeId.STRUCT),
+            len(children[0]),
+            None,
+            None,
+            0,
+            0,
+            [child.copy(deep=True).plc_column for child in children],
+        ),
+        dtype,
+    )
+
+
+def _is_flattened_label_column(column: ColumnBase) -> bool:
+    return (
+        isinstance(column.dtype, StructDtype)
+        and _FLATTENED_LABEL_KIND_FIELD in column.dtype.fields
+    )
+
+
+def _flattened_label_column_to_pandas_index(
+    column: ColumnBase, name: Hashable | None
+) -> pd.Index:
+    values: list[Any] = []
+    for label in column.to_arrow().tolist():
+        if label is None:
+            values.append(None)
+            continue
+        if label[_FLATTENED_LABEL_KIND_FIELD] == 0:
+            values.append(label[_FLATTENED_LABEL_SCALAR_FIELD_PREFIX + "0"])
+        else:
+            values.append(
+                tuple(
+                    label[field]
+                    for field in label
+                    if field.startswith(_FLATTENED_LABEL_LEVEL_FIELD_PREFIX)
+                )
+            )
+    result = pd.Index(values, dtype="object", tupleize_cols=False)
+    result.name = name
+    return result
 
 
 @_performance_tracking
