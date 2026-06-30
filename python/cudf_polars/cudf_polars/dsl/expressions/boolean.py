@@ -420,8 +420,8 @@ class BooleanFunction(Expr):
             null_order = (
                 plc.types.NullOrder.AFTER if nulls_last else plc.types.NullOrder.BEFORE
             )
-            bool_result = plc.sorting.is_sorted(
-                plc.Table([column.obj]), [order], [null_order], stream=df.stream
+            bool_result: bool = column.check_sorted(
+                order=order, null_order=null_order, stream=df.stream
             )
             return Column(
                 plc.Column.from_scalar(
