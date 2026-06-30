@@ -638,6 +638,11 @@ def _(node: plrs._ir_nodes.Sort, translator: Translator, schema: Schema) -> ir.I
     order, null_order = sorting.sort_order(
         descending, nulls_last=nulls_last, num_keys=len(by)
     )
+    # TODO: use the DynamicPred hint from node.slice (offset, length,
+    # dynamic_pred_id). dynamic_pred_id is an int (u128 UUID) matching a
+    # DynamicPred Function node in an upstream scan. The sort actor could
+    # set a threshold predicate on it (e.g. col < max_seen) to prune rows
+    # at the source.
     if not POLARS_VERSION_LT_142 and node.slice is not None:
         offset, length, *_ = node.slice
         zlice: Zlice | None = (offset, length)
