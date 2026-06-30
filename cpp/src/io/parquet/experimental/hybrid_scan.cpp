@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -370,6 +370,8 @@ table_with_metadata hybrid_scan_reader::materialize_all_columns_chunk() const
 std::vector<std::vector<cudf::size_type>> hybrid_scan_reader::construct_row_group_passes(
   cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
 {
+  CUDF_FUNC_RANGE();
+
   auto const total_row_groups = row_group_indices.size();
 
   CUDF_EXPECTS(
