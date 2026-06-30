@@ -1,10 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
+import contextlib
 import copyreg
 import datetime
 import functools
-import importlib
 import inspect
 import os
 import pickle
@@ -17,7 +17,11 @@ import pandas as pd
 # I suspect it relates to pyarrow's pandas-shim that gets imported
 # with this module https://github.com/rapidsai/cudf/issues/14521#issue-2015198786
 import pyarrow.dataset as ds  # noqa: F401
+from pandas._libs.tslibs import offsets as liboffsets
 from pandas._testing import at, getitem, iat, iloc, loc, setitem
+from pandas.compat._optional import import_optional_dependency
+from pandas.io.excel._openpyxl import OpenpyxlWriter as pd_OpenpyxlWriter
+from pandas.io.excel._xlsxwriter import XlsxWriter as pd_XlsxWriter
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -35,7 +39,6 @@ from pandas.tseries.holiday import (
 )
 
 import cudf
-import cudf.core._compat
 
 from ..annotation import nvtx
 from ..fast_slow_proxy import (
@@ -67,49 +70,12 @@ from pandas.io.sas.sas_xport import (  # isort: skip
     XportReader as pd_XportReader,
 )
 
-# TODO(pandas2.1): Can import from pandas.api.typing
-from pandas.core.resample import (  # isort: skip
-    Resampler as pd_Resampler,
-    TimeGrouper as pd_TimeGrouper,
-    DatetimeIndexResampler as pd_DatetimeIndexResampler,
-)
-
 try:
     from IPython import get_ipython
 
     ipython_shell = get_ipython()
 except ImportError:
     ipython_shell = None
-
-
-def _pandas_util_dir():
-    # In pandas 2.0, pandas.util contains public APIs under
-    # __getattr__ but no __dir__ to find them
-    # https://github.com/pandas-dev/pandas/blob/2.2.x/pandas/util/__init__.py
-    res = list(
-        set(
-            [
-                *list(importlib.import_module("pandas.util").__dict__.keys()),
-                "Appender",
-                "Substitution",
-                "_exceptions",
-                "_print_versions",
-                "cache_readonly",
-                "hash_array",
-                "hash_pandas_object",
-                "version",
-                "_tester",
-                "_validators",
-                "_decorators",
-            ]
-        )
-    )
-    if cudf.core._compat.PANDAS_GE_220:
-        res.append("capitalize_first_letter")
-    return res
-
-
-pd.util.__dir__ = _pandas_util_dir
 
 
 def make_final_proxy_type(
@@ -134,20 +100,6 @@ def make_intermediate_proxy_type(
     return _make_intermediate_proxy_type(
         name, fast_type, slow_type, module=slow_type.__module__, **kwargs
     )
-
-
-try:
-    # List Accessor in pandas was introduced in 2.2.0 only
-    pd_ListAccessor = pd.core.arrays.arrow.accessors.ListAccessor
-except AttributeError:
-    pd_ListAccessor = _Unusable
-
-
-try:
-    # Struct Accessor in pandas was introduced in 2.2.0 only
-    pd_StructAccessor = pd.core.arrays.arrow.accessors.StructAccessor
-except AttributeError:
-    pd_StructAccessor = _Unusable
 
 
 class _AccessorAttr:
@@ -201,6 +153,7 @@ Timedelta = make_final_proxy_type(
         "__hash__": _FastSlowAttribute("__hash__"),
         "__new__": Timestamp_Timedelta__new__,
         "__init__": _DELETE,
+        "__array_priority__": 100,
     },
 )
 
@@ -216,6 +169,7 @@ Timestamp = make_final_proxy_type(
         "__hash__": _FastSlowAttribute("__hash__"),
         "__new__": Timestamp_Timedelta__new__,
         "__init__": _DELETE,
+        "__array_priority__": 100,
     },
 )
 
@@ -246,7 +200,7 @@ StringMethods = make_intermediate_proxy_type(
 ListMethods = make_intermediate_proxy_type(
     "ListMethods",
     cudf.core.accessors.lists.ListMethods,
-    pd_ListAccessor,
+    pd.core.arrays.arrow.accessors.ListAccessor,
 )
 
 SparseAccessor = make_intermediate_proxy_type(
@@ -258,7 +212,7 @@ SparseAccessor = make_intermediate_proxy_type(
 StructAccessor = make_intermediate_proxy_type(
     "StructAccessor",
     cudf.core.accessors.struct.StructMethods,
-    pd_StructAccessor,
+    pd.core.arrays.arrow.accessors.StructAccessor,
 )
 _CategoricalAccessor = make_intermediate_proxy_type(
     "CategoricalAccessor",
@@ -315,6 +269,40 @@ def _DataFrame_columns(self):
     return result
 
 
+def _to_xarray(self):
+    # Call xarray conversion functions directly with self (the proxy object).
+    # We must pass the proxy (self), not the slow pandas object, because xarray
+    # does isinstance checks against pd.MultiIndex and pd.api.extensions.ExtensionArray.
+    # After cudf.pandas.install(), these refer to proxy classes. The slow object
+    # contains real pandas types that don't pass isinstance checks against the proxy
+    # classes.
+    xr = import_optional_dependency("xarray")
+    if self.ndim == 1:
+        return xr.DataArray.from_series(self)
+    else:
+        return xr.Dataset.from_dataframe(self)
+
+
+# pandas.ExcelWriter uses __new__ to dispatch to the engine-specific subclass
+# (OpenpyxlWriter, XlsxWriter, etc.) based on the `engine` kwarg.  The proxy
+# must replicate this: construct the real writer with the accelerator disabled
+# (so we get the actual pandas writer, not a recursive proxy) then wrap the
+# result.  __init__ is a no-op because construction is fully handled in __new__.
+def _ExcelWriter__new__(cls, *args, **kwargs):
+    if cls is not ExcelWriter:
+        return object.__new__(cls)
+
+    from ..module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        writer = pd.ExcelWriter(*args, **kwargs)
+    return _maybe_wrap_result(writer, pd.ExcelWriter, *args, **kwargs)
+
+
+def _ExcelWriter__init__(self, *args, **kwargs):
+    pass
+
+
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -347,6 +335,7 @@ DataFrame = make_final_proxy_type(
         "flags": _FastSlowAttribute("flags", private=True),
         "memory_usage": _FastSlowAttribute("memory_usage"),
         "__sizeof__": _FastSlowAttribute("__sizeof__"),
+        "to_xarray": _to_xarray,
     },
 )
 
@@ -368,9 +357,19 @@ if ipython_shell:
 
 
 def _Series_dtype(self):
-    # Fast-path to extract dtype from the current
-    # object without round-tripping through the slow<->fast
-    return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
+    dtype = self._fsproxy_wrapped.dtype
+    if isinstance(
+        dtype,
+        (
+            cudf.ListDtype,
+            cudf.StructDtype,
+            cudf.Decimal32Dtype,
+            cudf.Decimal64Dtype,
+            cudf.Decimal128Dtype,
+        ),
+    ):
+        dtype = self._fsproxy_slow.dtype
+    return _maybe_wrap_result(dtype, None)
 
 
 _SeriesAtIndexer = make_intermediate_proxy_type(
@@ -420,9 +419,12 @@ Series = make_final_proxy_type(
         "_accessors": set(),
         "dtype": property(_Series_dtype),
         "argsort": _argsort,
+        "to_xarray": _to_xarray,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
         "array": _FastSlowAttribute("array", private=True),
+        "_values": _FastSlowAttribute("_values", private=True),
+        "values": _FastSlowAttribute("values"),
         "sparse": _FastSlowAttribute("sparse", private=True),
         "_AXIS_LEN": _FastSlowAttribute("_AXIS_LEN", private=True),
         "_AXIS_TO_AXIS_NUMBER": _FastSlowAttribute(
@@ -432,6 +434,23 @@ Series = make_final_proxy_type(
         "flags": _FastSlowAttribute("flags", private=True),
     },
 )
+
+
+def _Index_values(self):
+    from cudf.utils.dtypes import is_pandas_nullable_extension_dtype
+
+    # For nullable integer dtypes (Int8/Int16/Int32/Int64/UInt8/.../UInt64),
+    # cudf's .values returns a plain ndarray, but pandas returns an
+    # IntegerArray (ExtensionArray) that supports NA values.  Using the cudf
+    # fast path here produces the wrong result type, so we always use the
+    # slow (pandas) path for these dtypes.
+    # Access dtype directly from the wrapped object to stay out of the proxy
+    # dispatch path and to avoid mutating the proxy state.
+    dtype = self._fsproxy_wrapped.dtype
+    if is_pandas_nullable_extension_dtype(dtype):
+        slow = self._fsproxy_fast_to_slow()
+        return _maybe_wrap_result(slow.values, None)
+    return _fast_slow_function_call(getattr, None, self, "values")[0]
 
 
 def Index__new__(cls, *args, **kwargs):
@@ -495,6 +514,7 @@ Index = make_final_proxy_type(
         # TODO: Handle special cases like mergesort being unsupported
         # and raising for certain types like Categorical and RangeIndex
         "argsort": _argsort,
+        "values": property(_Index_values),
     },
 )
 
@@ -538,6 +558,7 @@ ArrowDtype = make_final_proxy_type(
     fast_to_slow=lambda fast: fast,
     slow_to_fast=lambda slow: slow,
     additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
         "pyarrow_dtype": _FastSlowAttribute("pyarrow_dtype"),
@@ -550,6 +571,9 @@ SparseArray = make_final_proxy_type(
     pd.arrays.SparseArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
+    },
 )
 
 CategoricalIndex = make_final_proxy_type(
@@ -576,6 +600,11 @@ Categorical = make_final_proxy_type(
     pd.Categorical,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionArray,),
+    additional_attributes={
+        "__array__": array_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+    },
 )
 
 CategoricalDtype = make_final_proxy_type(
@@ -615,9 +644,13 @@ DatetimeArray = make_final_proxy_type(
     pd.arrays.DatetimeArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array__": array_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -629,6 +662,7 @@ DatetimeTZDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
     },
 )
 
@@ -662,8 +696,10 @@ try:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
+            "_readonly": _FastSlowAttribute("_readonly", private=True),
         },
     )
 
@@ -677,8 +713,10 @@ except ImportError:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
+            "_readonly": _FastSlowAttribute("_readonly", private=True),
         },
     )
 
@@ -688,9 +726,13 @@ TimedeltaArray = make_final_proxy_type(
     pd.arrays.TimedeltaArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array__": array_method,
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -718,9 +760,12 @@ PeriodArray = make_final_proxy_type(
     pd.arrays.PeriodArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -744,6 +789,7 @@ Period = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__array_priority__": 100,
     },
 )
 
@@ -771,7 +817,7 @@ MultiIndex = make_final_proxy_type(
 TimeGrouper = make_intermediate_proxy_type(
     "TimeGrouper",
     _Unusable,
-    pd_TimeGrouper,
+    pd.api.typing.TimeGrouper,
 )
 
 Grouper = make_final_proxy_type(
@@ -792,6 +838,14 @@ Grouper = make_final_proxy_type(
             if getattr(slow, k, None) is not None
         }
     ),
+    additional_attributes={
+        "binner": _FastSlowAttribute("binner"),
+        "dropna": _FastSlowAttribute("dropna"),
+        "freq": _FastSlowAttribute("freq"),
+        "key": _FastSlowAttribute("key"),
+        "level": _FastSlowAttribute("level"),
+        "sort": _FastSlowAttribute("sort"),
+    },
 )
 
 StringArray = make_final_proxy_type(
@@ -800,36 +854,16 @@ StringArray = make_final_proxy_type(
     pd.arrays.StringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(NumpyExtensionArray, pd.api.extensions.ExtensionArray),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": _FastSlowAttribute("__array__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": _FastSlowAttribute("__arrow_array__"),
     },
 )
-
-if cudf.core._compat.PANDAS_GE_210:
-    ArrowStringArrayNumpySemantics = make_final_proxy_type(
-        "ArrowStringArrayNumpySemantics",
-        _Unusable,
-        pd.core.arrays.string_arrow.ArrowStringArrayNumpySemantics,
-        fast_to_slow=_Unusable(),
-        slow_to_fast=_Unusable(),
-        additional_attributes={
-            "_pa_array": _FastSlowAttribute("_pa_array", private=True),
-            "__array__": _FastSlowAttribute("__array__", private=True),
-        },
-    )
-
-if cudf.core._compat.PANDAS_GE_230:
-    StringArrayNumpySemantics = make_final_proxy_type(
-        "StringArrayNumpySemantics",
-        _Unusable,
-        pd.core.arrays.string_.StringArrayNumpySemantics,
-        bases=(StringArray,),
-        fast_to_slow=_Unusable(),
-        slow_to_fast=_Unusable(),
-    )
 
 
 ArrowStringArray = make_final_proxy_type(
@@ -838,8 +872,10 @@ ArrowStringArray = make_final_proxy_type(
     pd.core.arrays.string_arrow.ArrowStringArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
         "__invert__": _FastSlowAttribute("__invert__"),
         "__neg__": _FastSlowAttribute("__neg__"),
@@ -847,6 +883,7 @@ ArrowStringArray = make_final_proxy_type(
         "__abs__": _FastSlowAttribute("__abs__"),
         "__contains__": _FastSlowAttribute("__contains__"),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
+        "__arrow_array__": _FastSlowAttribute("__arrow_array__"),
     },
 )
 
@@ -877,9 +914,11 @@ BooleanArray = make_final_proxy_type(
     pd.arrays.BooleanArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.core.arrays.BaseMaskedArray,),
     additional_attributes={
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -890,8 +929,16 @@ BooleanDtype = make_final_proxy_type(
     pd.BooleanDtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        # Expose the slow type as ``__class__`` so that
+        # ``real_dtype == proxy_dtype`` is True: pandas' ExtensionDtype.__eq__
+        # checks ``isinstance(other, type(self))``, which otherwise fails for a
+        # proxy that only subclasses the abstract ExtensionDtype. These masked
+        # dtypes have empty ``_metadata`` so equality reduces to this check.
+        "__class__": pd.BooleanDtype,
     },
 )
 
@@ -901,10 +948,12 @@ IntegerArray = make_final_proxy_type(
     pd.arrays.IntegerArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.core.arrays.BaseMaskedArray,),
     additional_attributes={
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -914,8 +963,11 @@ Int8Dtype = make_final_proxy_type(
     pd.Int8Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int8Dtype,
     },
 )
 
@@ -926,8 +978,11 @@ Int16Dtype = make_final_proxy_type(
     pd.Int16Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int16Dtype,
     },
 )
 
@@ -937,8 +992,11 @@ Int32Dtype = make_final_proxy_type(
     pd.Int32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int32Dtype,
     },
 )
 
@@ -948,8 +1006,11 @@ Int64Dtype = make_final_proxy_type(
     pd.Int64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int64Dtype,
     },
 )
 
@@ -959,8 +1020,11 @@ UInt8Dtype = make_final_proxy_type(
     pd.UInt8Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt8Dtype,
     },
 )
 
@@ -970,8 +1034,11 @@ UInt16Dtype = make_final_proxy_type(
     pd.UInt16Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt16Dtype,
     },
 )
 
@@ -981,8 +1048,11 @@ UInt32Dtype = make_final_proxy_type(
     pd.UInt32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt32Dtype,
     },
 )
 
@@ -992,8 +1062,11 @@ UInt64Dtype = make_final_proxy_type(
     pd.UInt64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt64Dtype,
     },
 )
 
@@ -1021,9 +1094,14 @@ IntervalArray = make_final_proxy_type(
     pd.arrays.IntervalArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
+        "_left": _FastSlowAttribute("_left", private=True),
+        "_right": _FastSlowAttribute("_right", private=True),
     },
 )
 
@@ -1035,6 +1113,9 @@ IntervalDtype = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        # ``_closed`` is a pandas-private attribute; source it from the slow
+        # (pandas) object so cudf's IntervalDtype need not define it.
+        "_closed": _FastSlowAttribute("_closed", private=True),
     },
 )
 
@@ -1046,6 +1127,7 @@ Interval = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__array_priority__": 1000,
     },
 )
 
@@ -1055,10 +1137,12 @@ FloatingArray = make_final_proxy_type(
     pd.arrays.FloatingArray,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.core.arrays.BaseMaskedArray,),
     additional_attributes={
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
         "_data": _FastSlowAttribute("_data", private=True),
         "_mask": _FastSlowAttribute("_mask", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
     },
 )
 
@@ -1068,8 +1152,11 @@ Float32Dtype = make_final_proxy_type(
     pd.Float32Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Float32Dtype,
     },
 )
 
@@ -1079,10 +1166,14 @@ Float64Dtype = make_final_proxy_type(
     pd.Float64Dtype,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    bases=(pd.api.extensions.ExtensionDtype,),
     additional_attributes={
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Float64Dtype,
     },
 )
+
 
 SeriesGroupBy = make_intermediate_proxy_type(
     "SeriesGroupBy",
@@ -1153,6 +1244,10 @@ FixedForwardWindowIndexer = make_final_proxy_type(
     pd.api.indexers.FixedForwardWindowIndexer,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "index_array": _FastSlowAttribute("index_array"),
+        "window_size": _FastSlowAttribute("window_size"),
+    },
 )
 
 VariableOffsetWindowIndexer = make_final_proxy_type(
@@ -1161,6 +1256,12 @@ VariableOffsetWindowIndexer = make_final_proxy_type(
     pd.api.indexers.VariableOffsetWindowIndexer,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
+    additional_attributes={
+        "index": _FastSlowAttribute("index"),
+        "index_array": _FastSlowAttribute("index_array"),
+        "offset": _FastSlowAttribute("offset"),
+        "window_size": _FastSlowAttribute("window_size"),
+    },
 )
 
 Window = make_intermediate_proxy_type(
@@ -1187,6 +1288,12 @@ ExponentialMovingWindowGroupby = make_intermediate_proxy_type(
     pd.core.window.ewm.ExponentialMovingWindowGroupby,
 )
 
+OnlineExponentialMovingWindow = make_intermediate_proxy_type(
+    "OnlineExponentialMovingWindow",
+    _Unusable,
+    pd.core.window.ewm.OnlineExponentialMovingWindow,
+)
+
 EWMMeanState = make_intermediate_proxy_type(
     "EWMMeanState",
     _Unusable,
@@ -1206,25 +1313,41 @@ ExpandingGroupby = make_intermediate_proxy_type(
 )
 
 Resampler = make_intermediate_proxy_type(
-    "Resampler", cudf.core.resample._Resampler, pd_Resampler
+    "Resampler", cudf.core.resample._Resampler, pd.api.typing.Resampler
 )
 
 DataFrameResampler = make_intermediate_proxy_type(
-    "DataFrameResampler", cudf.core.resample.DataFrameResampler, pd_Resampler
+    "DataFrameResampler",
+    cudf.core.resample.DataFrameResampler,
+    pd.api.typing.Resampler,
 )
 
 SeriesResampler = make_intermediate_proxy_type(
-    "SeriesResampler", cudf.core.resample.SeriesResampler, pd_Resampler
+    "SeriesResampler",
+    cudf.core.resample.SeriesResampler,
+    pd.api.typing.Resampler,
 )
 
 DatetimeIndexResampler = make_intermediate_proxy_type(
-    "DatetimeIndexResampler", _Unusable, pd_DatetimeIndexResampler
+    "DatetimeIndexResampler",
+    _Unusable,
+    pd.core.resample.DatetimeIndexResampler,
 )
 
-StataReader = make_intermediate_proxy_type(
+StataReader = make_final_proxy_type(
     "StataReader",
     _Unusable,
     pd.io.stata.StataReader,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "_nvar": _FastSlowAttribute("_nvar", private=True),
+        "_typlist": _FastSlowAttribute("_typlist", private=True),
+        "_varlist": _FastSlowAttribute("_varlist", private=True),
+        "_fmtlist": _FastSlowAttribute("_fmtlist", private=True),
+        "_path_or_buf": _FastSlowAttribute("_path_or_buf", private=True),
+        "_chunk": _FastSlowAttribute("_chunk", private=True),
+    },
 )
 
 HDFStore = make_final_proxy_type(
@@ -1242,7 +1365,11 @@ ExcelFile = make_final_proxy_type(
     pd.ExcelFile,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
-    additional_attributes={"__hash__": _FastSlowAttribute("__hash__")},
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        "engine": _FastSlowAttribute("engine"),
+        "storage_options": _FastSlowAttribute("storage_options"),
+    },
 )
 
 ExcelWriter = make_final_proxy_type(
@@ -1254,9 +1381,35 @@ ExcelWriter = make_final_proxy_type(
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
         "__fspath__": _FastSlowAttribute("__fspath__"),
+        "__init__": _ExcelWriter__init__,
+        "__new__": _ExcelWriter__new__,
     },
     bases=(os.PathLike,),
     metaclasses=(abc.ABCMeta,),
+)
+
+OpenpyxlWriter = make_final_proxy_type(
+    "OpenpyxlWriter",
+    _Unusable,
+    pd_OpenpyxlWriter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(ExcelWriter,),
+)
+
+XlsxWriter = make_final_proxy_type(
+    "XlsxWriter",
+    _Unusable,
+    pd_XlsxWriter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(ExcelWriter,),
 )
 
 try:
@@ -1269,6 +1422,35 @@ try:
         pd_StylerRenderer,
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
+        additional_attributes={
+            "caption": _FastSlowAttribute("caption"),
+            "cell_context": _FastSlowAttribute("cell_context"),
+            "cell_ids": _FastSlowAttribute("cell_ids"),
+            "cellstyle_map": _FastSlowAttribute("cellstyle_map"),
+            "cellstyle_map_columns": _FastSlowAttribute(
+                "cellstyle_map_columns"
+            ),
+            "cellstyle_map_index": _FastSlowAttribute("cellstyle_map_index"),
+            "columns": _FastSlowAttribute("columns"),
+            "concatenated": _FastSlowAttribute("concatenated"),
+            "css": _FastSlowAttribute("css"),
+            "ctx": _FastSlowAttribute("ctx"),
+            "ctx_columns": _FastSlowAttribute("ctx_columns"),
+            "ctx_index": _FastSlowAttribute("ctx_index"),
+            "data": _FastSlowAttribute("data"),
+            "hidden_columns": _FastSlowAttribute("hidden_columns"),
+            "hidden_rows": _FastSlowAttribute("hidden_rows"),
+            "hide_column_names": _FastSlowAttribute("hide_column_names"),
+            "hide_columns_": _FastSlowAttribute("hide_columns_"),
+            "hide_index_": _FastSlowAttribute("hide_index_"),
+            "hide_index_names": _FastSlowAttribute("hide_index_names"),
+            "index": _FastSlowAttribute("index"),
+            "table_attributes": _FastSlowAttribute("table_attributes"),
+            "table_styles": _FastSlowAttribute("table_styles"),
+            "tooltips": _FastSlowAttribute("tooltips"),
+            "uuid": _FastSlowAttribute("uuid"),
+            "uuid_len": _FastSlowAttribute("uuid_len"),
+        },
     )
 
     Styler = make_final_proxy_type(
@@ -1286,6 +1468,7 @@ try:
             "_display_funcs": _FastSlowAttribute(
                 "_display_funcs", private=True
             ),
+            "_compute": _FastSlowAttribute("_compute", private=True),
             "table_styles": _FastSlowAttribute("table_styles"),
             "columns": _FastSlowAttribute("columns"),
             "caption": _FastSlowAttribute("caption"),
@@ -1295,12 +1478,30 @@ try:
             "_display_funcs_index": _FastSlowAttribute(
                 "_display_funcs_index", private=True
             ),
+            "_display_funcs_column_names": _FastSlowAttribute(
+                "_display_funcs_column_names", private=True
+            ),
+            "_display_funcs_index_names": _FastSlowAttribute(
+                "_display_funcs_index_names", private=True
+            ),
             "uuid": _FastSlowAttribute("uuid"),
             "hide_index_": _FastSlowAttribute("hide_index_"),
             "hide_index_names": _FastSlowAttribute("hide_index_names"),
             "hide_columns_": _FastSlowAttribute("hide_columns_"),
             "hide_column_names": _FastSlowAttribute("hide_column_names"),
             "table_attributes": _FastSlowAttribute("table_attributes"),
+            "cell_context": _FastSlowAttribute("cell_context"),
+            "cell_ids": _FastSlowAttribute("cell_ids"),
+            "cellstyle_map": _FastSlowAttribute("cellstyle_map"),
+            "cellstyle_map_columns": _FastSlowAttribute(
+                "cellstyle_map_columns"
+            ),
+            "cellstyle_map_index": _FastSlowAttribute("cellstyle_map_index"),
+            "concatenated": _FastSlowAttribute("concatenated"),
+            "hidden_columns": _FastSlowAttribute("hidden_columns"),
+            "hidden_rows": _FastSlowAttribute("hidden_rows"),
+            "tooltips": _FastSlowAttribute("tooltips"),
+            "uuid_len": _FastSlowAttribute("uuid_len"),
         },
     )
 except ImportError:
@@ -1308,13 +1509,16 @@ except ImportError:
     pass
 
 
-def _find_user_frame():
+def _find_user_frame(level=0):
     frame = inspect.currentframe()
+    skip = 0
     while frame:
         modname = frame.f_globals.get("__name__", "")
         # TODO: Remove "nvtx." entry once we cross nvtx-0.2.11 as minimum version
         if modname == "__main__" or not modname.startswith(("cudf.", "nvtx.")):
-            return frame
+            if skip == level:
+                return frame
+            skip += 1
         frame = frame.f_back
     raise RuntimeError("Could not find the user's frame.")
 
@@ -1338,7 +1542,7 @@ register_proxy_func(getitem)(getitem)
 
 
 def _get_eval_locals_and_globals(level, local_dict=None, global_dict=None):
-    frame = _find_user_frame()
+    frame = _find_user_frame(level=level)
     local_dict = dict(frame.f_locals) if local_dict is None else local_dict
     global_dict = dict(frame.f_globals) if global_dict is None else global_dict
     return local_dict, global_dict
@@ -1390,6 +1594,33 @@ def _register_series_accessor(name):
 @register_proxy_func(pd.core.accessor.register_index_accessor)
 def _register_index_accessor(name):
     return pd.core.accessor._register_accessor(name, Index)
+
+
+@contextlib.contextmanager
+def null_assert_produces_warning(*args, **kwargs):
+    # We do not want pandas unit tests to fail because
+    # assert_produces_warning doesn't see a warning.
+    # No an explicit public API
+    try:
+        yield []
+    finally:
+        pass
+
+
+@register_proxy_func(pd._testing.assert_produces_warning)
+def _register_assert_produces_warning(*args, **kwargs):
+    return null_assert_produces_warning(*args, **kwargs)
+
+
+def null_raises_chained_assignment_error(*args, **kwargs):
+    # This assertion function also uses assert_produces_warning
+    # we want to ignore in pandas unit tests.
+    return null_assert_produces_warning(*args, **kwargs)
+
+
+@register_proxy_func(pd._testing.raises_chained_assignment_error)
+def _register_raises_chained_assignment_error(*args, **kwargs):
+    return null_raises_chained_assignment_error(*args, **kwargs)
 
 
 @nvtx.annotate(
@@ -1501,6 +1732,16 @@ Holiday = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "day": _FastSlowAttribute("day"),
+        "days_of_week": _FastSlowAttribute("days_of_week"),
+        "end_date": _FastSlowAttribute("end_date"),
+        "exclude_dates": _FastSlowAttribute("exclude_dates"),
+        "month": _FastSlowAttribute("month"),
+        "name": _FastSlowAttribute("name"),
+        "observance": _FastSlowAttribute("observance"),
+        "offset": _FastSlowAttribute("offset"),
+        "start_date": _FastSlowAttribute("start_date"),
+        "year": _FastSlowAttribute("year"),
     },
 )
 USThanksgivingDay = make_final_proxy_type(
@@ -1607,6 +1848,28 @@ BDay = make_final_proxy_type(
     "BDay",
     _Unusable,
     pd.offsets.BDay,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+BHalfYearBegin = make_final_proxy_type(
+    "BHalfYearBegin",
+    _Unusable,
+    pd.offsets.BHalfYearBegin,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+BHalfYearEnd = make_final_proxy_type(
+    "BHalfYearEnd",
+    _Unusable,
+    pd.offsets.BHalfYearEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -1801,6 +2064,19 @@ CustomBusinessMonthEnd = make_final_proxy_type(
     },
 )
 
+# Pandas stores DateOffset kwargs (e.g., `day`, `months`) and the resolved
+# `_offset` directly on the instance __dict__, so they don't appear in
+# dir(pd.DateOffset) and aren't picked up by the proxy machinery. Register
+# each one explicitly so attribute lookup falls back to the wrapped instance.
+_DATEOFFSET_INSTANCE_ATTRS = {
+    name: _FastSlowAttribute(name, private=name.startswith("_"))
+    for name in (
+        *liboffsets._relativedelta_kwds,
+        "_offset",
+        "_use_relativedelta",
+    )
+}
+
 DateOffset = make_final_proxy_type(
     "DateOffset",
     _Unusable,
@@ -1809,6 +2085,7 @@ DateOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        **_DATEOFFSET_INSTANCE_ATTRS,
     },
 )
 
@@ -1820,6 +2097,7 @@ BaseOffset = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        **_DATEOFFSET_INSTANCE_ATTRS,
     },
 )
 
@@ -1849,6 +2127,28 @@ FY5253Quarter = make_final_proxy_type(
     "FY5253Quarter",
     _Unusable,
     pd.offsets.FY5253Quarter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+HalfYearBegin = make_final_proxy_type(
+    "HalfYearBegin",
+    _Unusable,
+    pd.offsets.HalfYearBegin,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+    },
+)
+
+HalfYearEnd = make_final_proxy_type(
+    "HalfYearEnd",
+    _Unusable,
+    pd.offsets.HalfYearEnd,
     fast_to_slow=_Unusable(),
     slow_to_fast=_Unusable(),
     additional_attributes={
@@ -2068,12 +2368,15 @@ Flags = make_final_proxy_type(
 
 NamedAgg = make_final_proxy_type(
     "NamedAgg",
-    _Unusable,
     pd.NamedAgg,
-    fast_to_slow=_Unusable(),
-    slow_to_fast=_Unusable(),
+    pd.NamedAgg,
+    fast_to_slow=lambda fast: fast,
+    slow_to_fast=lambda slow: slow,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "aggfunc": _FastSlowAttribute("aggfunc"),
+        "column": _FastSlowAttribute("column"),
+        "kwargs": _FastSlowAttribute("kwargs"),
     },
 )
 
@@ -2094,6 +2397,7 @@ ArrowExtensionArray = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "_pa_array": _FastSlowAttribute("_pa_array", private=True),
+        "_readonly": _FastSlowAttribute("_readonly", private=True),
         "__array__": _FastSlowAttribute("__array__", private=True),
         "__invert__": _FastSlowAttribute("__invert__"),
         "__neg__": _FastSlowAttribute("__neg__"),
@@ -2172,13 +2476,69 @@ NDArrayBackedExtensionIndex = make_final_proxy_type(
     },
 )
 
+# SQLTable and SQLiteTable set their instance attributes in __init__,
+# so they aren't visible via dir(cls). Forward them explicitly because
+# the proxy's __getattr__ fallback is only installed when the slow type
+# defines __getattr__.
+_SQL_TABLE_ATTRS = {
+    name: _FastSlowAttribute(name)
+    for name in (
+        "dtype",
+        "frame",
+        "if_exists",
+        "index",
+        "keys",
+        "name",
+        "pd_sql",
+        "prefix",
+        "schema",
+        "table",
+    )
+}
+
+SQLTable = make_final_proxy_type(
+    "SQLTable",
+    _Unusable,
+    pd.io.sql.SQLTable,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        **_SQL_TABLE_ATTRS,
+    },
+)
+
+SQLiteTable = make_final_proxy_type(
+    "SQLiteTable",
+    _Unusable,
+    pd.io.sql.SQLiteTable,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        **_SQL_TABLE_ATTRS,
+    },
+)
+
+SQLDatabase = make_final_proxy_type(
+    "SQLDatabase",
+    _Unusable,
+    pd.io.sql.SQLDatabase,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__hash__": _FastSlowAttribute("__hash__"),
+        **{
+            name: _FastSlowAttribute(name)
+            for name in ("con", "exit_stack", "meta", "returns_generator")
+        },
+    },
+)
+
 _PANDAS_OBJ_FINAL_TYPES = [
     pd.core.indexes.accessors.PeriodProperties,
     pd.core.indexes.accessors.Properties,
     pd.plotting._core.PlotAccessor,
-    pd.io.sql.SQLiteTable,
-    pd.io.sql.SQLTable,
-    pd.io.sql.SQLDatabase,
     pd.io.sql.SQLiteDatabase,
     pd.io.sql.PandasSQL,
 ]
@@ -2431,7 +2791,7 @@ def _unpickle_offset_obj(pickled_args):
         data = pickle.loads(pickled_args)
         data.pop("_offset")
         data.pop("_use_relativedelta")
-    obj = pd._libs.tslibs.offsets.DateOffset(**data)
+    obj = pd.DateOffset(**data)
     return obj
 
 
@@ -2470,4 +2830,20 @@ copyreg.dispatch_table[pd.MultiIndex] = lambda obj: _generic_reduce_obj(
     obj, _index_unpickle_obj
 )
 
-copyreg.dispatch_table[pd._libs.tslibs.offsets.DateOffset] = _reduce_offset_obj
+copyreg.dispatch_table[pd.DateOffset] = _reduce_offset_obj
+
+
+def _unpickle_NaT():
+    return pd.NaT
+
+
+def _reduce_NaT(obj):
+    # NaT.__reduce__ returns the cyfunction ``_nat_unpickle`` directly,
+    # but cudf.pandas replaces ``pandas._libs.tslibs.nattype._nat_unpickle``
+    # with a function proxy. Pickle's identity check between the cyfunction
+    # and the module-level proxy then raises ``PicklingError``. Round-trip
+    # NaT via our own helper to avoid the lookup.
+    return _unpickle_NaT, ()
+
+
+copyreg.dispatch_table[type(pd.NaT)] = _reduce_NaT

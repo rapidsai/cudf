@@ -1,13 +1,18 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
+
+#include <benchmarks/common/memory_stats.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/utilities/default_stream.hpp>
+
+#include <cuda/functional>
+#include <cuda/iterator>
 
 #include <nvbench/nvbench.cuh>
 
@@ -31,7 +36,7 @@ void bm_tdigest_merge(nvbench::state& state)
     0, cuda::proclaim_return_type<double>([tdigest_size](cudf::size_type i) {
       return static_cast<double>(base_value + (i % tdigest_size));
     }));
-  auto one_iter = thrust::make_constant_iterator(1);
+  auto one_iter = cuda::make_constant_iterator(1);
   cudf::test::fixed_width_column_wrapper<double> means(val_iter, val_iter + total_centroids);
   cudf::test::fixed_width_column_wrapper<double> weights(one_iter, one_iter + total_centroids);
   std::vector<std::unique_ptr<cudf::column>> inner_struct_children;
@@ -45,12 +50,12 @@ void bm_tdigest_merge(nvbench::state& state)
       return i * tdigest_size;
     }));
   cudf::test::fixed_width_column_wrapper<int> offsets(offset_iter, offset_iter + num_tdigests + 1);
-  auto list_col = cudf::make_lists_column(
-    num_tdigests, offsets.release(), inner_struct.release(), 0, {}, stream, mr);
+  auto list_col =
+    cudf::make_lists_column(num_tdigests, offsets.release(), inner_struct.release(), 0, {});
 
   // min and max columns
-  auto min_iter = thrust::make_constant_iterator(base_value);
-  auto max_iter = thrust::make_constant_iterator(base_value + (tdigest_size - 1));
+  auto min_iter = cuda::make_constant_iterator(base_value);
+  auto max_iter = cuda::make_constant_iterator(base_value + (tdigest_size - 1));
   cudf::test::fixed_width_column_wrapper<double> mins(min_iter, min_iter + num_tdigests);
   cudf::test::fixed_width_column_wrapper<double> maxes(max_iter, max_iter + num_tdigests);
 
@@ -81,8 +86,11 @@ void bm_tdigest_merge(nvbench::state& state)
   state.add_element_count(total_centroids);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
+               // re-fetch mr so allocations are routed through the statistics adaptor
+               auto mr = cudf::get_current_device_resource_ref();
                timer.start();
                auto result = cudf::tdigest::detail::group_merge_tdigest(tdigest,
                                                                         group_offsets->view(),
@@ -93,6 +101,8 @@ void bm_tdigest_merge(nvbench::state& state)
                                                                         mr);
                timer.stop();
              });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 void bm_tdigest_reduce(nvbench::state& state)
@@ -126,8 +136,11 @@ void bm_tdigest_reduce(nvbench::state& state)
   stream.synchronize();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::timer | nvbench::exec_tag::sync,
              [&](nvbench::launch& launch, auto& timer) {
+               // re-fetch mr so allocations are routed through the statistics adaptor
+               auto mr = cudf::get_current_device_resource_ref();
                timer.start();
                auto result = cudf::tdigest::detail::group_tdigest(*input,
                                                                   group_offsets->view(),
@@ -139,6 +152,8 @@ void bm_tdigest_reduce(nvbench::state& state)
                                                                   mr);
                timer.stop();
              });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
 NVBENCH_BENCH(bm_tdigest_merge)

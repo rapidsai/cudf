@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import string
@@ -82,3 +82,16 @@ def test_chunked_pack(bufsize, stream):
     )
 
     assert_table_eq(h_table, result)
+
+
+def test_unpack_from_memoryviews_empty_metadata_non_empty_data():
+    empty_metadata = memoryview(b"")
+    non_empty_data = plc.gpumemoryview(rmm.DeviceBuffer(size=64))
+
+    with pytest.raises(
+        ValueError,
+        match="Expected an empty gpu_data from unpacking an empty table",
+    ):
+        plc.contiguous_split.unpack_from_memoryviews(
+            empty_metadata, non_empty_data
+        )

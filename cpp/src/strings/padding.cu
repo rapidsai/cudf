@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <cuda/iterator>
 
 namespace cudf {
 namespace strings {
@@ -161,7 +163,7 @@ std::unique_ptr<column> zfill(strings_column_view const& input,
   if (input.is_empty()) return make_empty_column(type_id::STRING);
 
   auto d_strings = column_device_view::create(input.parent(), stream);
-  auto widths    = thrust::constant_iterator<size_type>(width);
+  auto widths    = cuda::constant_iterator<size_type>(width);
   auto [offsets_column, chars] =
     make_strings_children(zfill_fn<decltype(widths)>{*d_strings, widths}, input.size(), stream, mr);
 

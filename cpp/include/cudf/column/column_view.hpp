@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -452,26 +452,6 @@ class column_view : public detail::column_view_base {
     return device_span<T const>(data<T>(), size());
   }
 
-  /**
-   * @brief Converts a column view into a cuda::std::span.
-   *
-   * Only numeric and chrono data types are supported. The column view must not
-   * be nullable.
-   *
-   * @tparam T The device span type. Must be const and match the column view's type.
-   * @throws cudf::logic_error if the column view type does not match the span type.
-   * @throws cudf::logic_error if the column view is nullable.
-   * @return A span of the column view's data
-   */
-  template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() or cudf::is_chrono<T>())>
-  [[nodiscard]] operator cuda::std::span<T const>() const
-  {
-    CUDF_EXPECTS(type() == cudf::data_type{cudf::type_to_id<T>()},
-                 "Span type must match column view type");
-    CUDF_EXPECTS(!nullable(), "A nullable column view cannot be converted to a span.");
-    return cuda::std::span<T const>(data<T>(), size());
-  }
-
  protected:
   /**
    * @brief Returns pointer to the base device memory allocation.
@@ -489,7 +469,7 @@ class column_view : public detail::column_view_base {
 
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-};  // namespace cudf
+};
 
 /**
  * @brief A non-owning, mutable view of device data as a column of elements,

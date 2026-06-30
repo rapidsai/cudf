@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -37,7 +37,7 @@ class table {
   /**
    * @brief Construct a new table by copying the contents of another table.
    *
-   * Uses the specified `stream` and device_memory_resource for all allocations
+   * Uses the specified `stream` and device memory resource for all allocations
    * and copies.
    *
    * @param other The table to copy

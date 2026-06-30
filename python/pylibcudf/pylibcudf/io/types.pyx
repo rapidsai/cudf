@@ -1,11 +1,11 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from cpython.buffer cimport PyBUF_READ
 from cpython.memoryview cimport PyMemoryView_FromMemory
 
 from cython.operator cimport dereference
 
-from libc.stdint cimport int32_t, uint8_t
+from libc.stdint cimport int32_t, uint8_t, uintptr_t
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -22,16 +22,17 @@ from pylibcudf.libcudf.io.types cimport (
     column_encoding,
     column_in_metadata,
     column_name_info,
+    filepath_source,
     partition_info,
     source_info,
     table_input_metadata,
     table_with_metadata,
 )
 from pylibcudf.libcudf.types cimport size_type
-from pylibcudf.libcudf.utilities.span cimport host_span, device_span
+from pylibcudf.libcudf.utilities.span cimport device_span, host_span
 
-from rmm.pylibrmm.device_buffer cimport DeviceBuffer
-from rmm.pylibrmm.stream cimport Stream
+from pylibcudf.span import is_span
+
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 import codecs
@@ -55,6 +56,7 @@ __all__ = [
     "ColumnInMetadata",
     "CompressionType",
     "DictionaryPolicy",
+    "FilepathSource",
     "JSONRecoveryMode",
     "PartitionInfo",
     "QuoteStyle",
@@ -395,7 +397,7 @@ cdef class TableWithMetadata:
     @staticmethod
     cdef TableWithMetadata from_libcudf(
         table_with_metadata& tbl_with_meta,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     ):
         """Create a Python TableWithMetadata from a libcudf table_with_metadata"""
@@ -453,6 +455,27 @@ cdef class TableWithMetadata:
         return None
 
 
+cdef class FilepathSource:
+    """
+    A file path or URL with an optional known size in bytes.
+
+    When ``size`` is set for a remote URL, libcudf passes it to KvikIO at open
+    time so the remote server is not queried for file size (avoiding HEAD
+    requests). An incorrect size will cause read failures.
+
+    Parameters
+    ----------
+    path : str or os.PathLike
+        Path or URL of the input file.
+    size : int, optional
+        Known file size in bytes. Omit to query size via KvikIO (HEAD for remote URLs).
+    """
+
+    def __init__(self, path, size=None):
+        self.path = os.fspath(path)
+        self.size = size
+
+
 cdef class SourceInfo:
     """
     A class containing details on a source to read from.
@@ -464,6 +487,7 @@ cdef class SourceInfo:
     sources : List[Union[
         str,
         os.PathLike,
+        FilepathSource,
         bytes,
         io.BytesIO,
         DataSource,
@@ -480,9 +504,30 @@ cdef class SourceInfo:
             return
 
         cdef vector[string] c_files
+        cdef vector[filepath_source] c_filepath_sources
         cdef vector[datasource*] c_datasources
+        cdef filepath_source fs
 
-        if isinstance(sources[0], (os.PathLike, str)):
+        if isinstance(sources[0], FilepathSource):
+            c_filepath_sources.reserve(len(sources))
+
+            for src in sources:
+                if not isinstance(src, FilepathSource):
+                    raise ValueError("All sources must be of the same type!")
+                if not (
+                    os.path.isfile(src.path) or SourceInfo._is_remote_uri(src.path)
+                ):
+                    raise FileNotFoundError(
+                        errno.ENOENT, os.strerror(errno.ENOENT), src.path
+                    )
+                fs = filepath_source(<string> str(src.path).encode())
+                if src.size is not None:
+                    fs.size = <size_t> src.size
+                c_filepath_sources.push_back(fs)
+
+            self.c_obj = move(source_info(c_filepath_sources))
+            return
+        elif isinstance(sources[0], (os.PathLike, str)):
             c_files.reserve(len(sources))
 
             for src in sources:
@@ -525,20 +570,19 @@ cdef class SourceInfo:
             self._init_byte_like_sources(sources, bytes)
         elif isinstance(sources[0], io.BytesIO):
             self._init_byte_like_sources(sources, io.BytesIO)
-        elif isinstance(sources[0], DeviceBuffer):
-            if not all(isinstance(s, DeviceBuffer) for s in sources):
+        elif is_span(sources[0]):
+            if not all(is_span(s) for s in sources):
                 raise ValueError("All sources must be of the same type!")
             self.device_sources = sources
             for buf in sources:
-                d_buf = <DeviceBuffer>buf
                 d_span = device_span[const_byte](
-                    <const_byte *>d_buf.c_data(), d_buf.c_size()
+                    <const_byte *><uintptr_t>buf.ptr, <size_t>buf.size
                 )
                 d_spans.push_back(d_span)
             self.c_obj = move(source_info(host_span[device_span[const_byte]](d_spans)))
             return
         else:
-            raise ValueError("Sources must be a list of str/paths, "
+            raise ValueError("Sources must be a list of str/paths, FilepathSource, "
                              "bytes, io.BytesIO, io.StringIO, or a Datasource")
 
         self.c_obj = source_info(host_span[host_span[const_byte]](self._hspans))

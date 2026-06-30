@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,10 +10,11 @@ import numpy as np
 
 import pylibcudf as plc
 
-import cudf
+import cudf  # noqa: TC001 (used at runtime for cudf.DataFrame etc., not type-only)
 from cudf.api.types import (
     _is_scalar_or_zero_d_array,
     is_integer,
+    is_list_like,
 )
 from cudf.core.column.column import as_column
 from cudf.core.copy_types import BooleanMask, GatherMap
@@ -21,6 +22,7 @@ from cudf.core.dtypes import CategoricalDtype, IntervalDtype
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 from cudf.core.series import Series
+from cudf.utils.dtypes import dtype_from_pylibcudf_column
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -67,6 +69,52 @@ class ScalarIndexer:
 IndexingSpec: TypeAlias = (
     EmptyIndexer | MapIndexer | MaskIndexer | ScalarIndexer | SliceIndexer
 )
+
+
+def validate_scalar_key(key: Any, error_msg: str) -> None:
+    """Validate that key contains only scalar values for .at/.iat indexers.
+
+    Parameters
+    ----------
+    key : Any
+        The key to validate
+    error_msg : str
+        The error message to raise if validation fails
+
+    Raises
+    ------
+    ValueError
+        If the key contains list-like indexers
+    """
+    if not isinstance(key, tuple):
+        if is_list_like(key):
+            raise ValueError(error_msg)
+    else:
+        for k in key:
+            if is_list_like(k):
+                raise ValueError(error_msg)
+
+
+def check_dict_or_set_indexers(key: Any) -> None:
+    """Disallow using a set or dict (or a tuple nesting one) as an indexer.
+
+    Mirrors ``pandas.core.indexing.check_dict_or_set_indexers``. pandas
+    rejected set/dict indexers in 2.0 (GH#42825). The recursion into tuples
+    matches pandas' handling of nested ``.loc`` keys on a ``MultiIndex``
+    (e.g. ``df.loc[(({1}, 2), "a")]``).
+    """
+    if isinstance(key, set):
+        raise TypeError(
+            "Passing a set as an indexer is not supported. Use a list instead."
+        )
+    elif isinstance(key, dict):
+        raise TypeError(
+            "Passing a dict as an indexer is not supported. "
+            "Use a list instead."
+        )
+    elif isinstance(key, tuple):
+        for sub_key in key:
+            check_dict_or_set_indexers(sub_key)
 
 
 # Helpers for code-sharing between loc and iloc paths
@@ -543,7 +591,7 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
         plc.copying.OutOfBoundsPolicy.DONT_CHECK,
     ).columns()[0]
 
-    right_rows = plc.sorting.stable_sort_by_key(
+    plc_right_rows = plc.sorting.stable_sort_by_key(
         plc.Table([right_rows]),
         plc.Table([left_order, right_order]),
         [plc.types.Order.ASCENDING] * 2,
@@ -551,8 +599,11 @@ def ordered_find(needles: ColumnBase, haystack: ColumnBase) -> GatherMap:
     ).columns()[0]
     return GatherMap.from_column_unchecked(
         cast(
-            cudf.core.column.NumericalColumn,
-            type(haystack).from_pylibcudf(right_rows),
+            "cudf.core.column.NumericalColumn",
+            type(haystack).create(
+                plc_right_rows,
+                dtype=dtype_from_pylibcudf_column(plc_right_rows),
+            ),
         ),
         len(haystack),
         nullify=False,
@@ -631,6 +682,23 @@ def parse_single_row_loc_key(
         is_scalar = _is_scalar_or_zero_d_array(key)
         if is_scalar and isinstance(key, np.ndarray):
             key = as_column(key.item())
+        elif (
+            isinstance(key, Series)
+            and key.dtype.kind == "b"
+            and not key.index.equals(index)
+        ):
+            # A boolean Series indexer is aligned to the frame's index by
+            # label rather than applied positionally. Only labels missing
+            # from the mask make it unalignable; pre-existing NA values in
+            # the mask are treated as not-selected (matching pandas), so
+            # check for missing labels rather than for nulls post-reindex.
+            if len(index.difference(key.index)) > 0:
+                raise ValueError(
+                    "Unalignable boolean Series provided as indexer "
+                    "(index of the boolean Series and of the indexed "
+                    "object do not match)."
+                )
+            key = key.reindex(index)._column
         else:
             key = as_column(key)
         if (

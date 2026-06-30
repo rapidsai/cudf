@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,7 +9,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
 #include <cudf/detail/row_operator/preprocessed_table.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/list_device_view.cuh>
@@ -20,6 +19,7 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/equal.h>
 #include <thrust/execution_policy.h>
@@ -261,8 +261,11 @@ class device_row_comparator {
     }
 
     template <typename Element>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index) const noexcept
+#ifndef NDEBUG
+    __attribute__((noinline))
+#endif
+    __device__ bool
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
       requires(cudf::is_dictionary<Element>())
     {
       if (check_nulls) {
@@ -291,8 +294,11 @@ class device_row_comparator {
     }
 
     template <typename Element>
-    __device__ bool operator()(size_type const lhs_element_index,
-                               size_type const rhs_element_index) const noexcept
+#ifndef NDEBUG
+    __attribute__((noinline))
+#endif
+    __device__ bool
+    operator()(size_type const lhs_element_index, size_type const rhs_element_index) const noexcept
       requires(has_nested_columns and cudf::is_nested<Element>())
     {
       column_device_view lcol = lhs.slice(lhs_element_index, 1);
@@ -316,11 +322,11 @@ class device_row_comparator {
         }
         if (lcol.type().id() == type_id::STRUCT) {
           if (lcol.num_child_columns() == 0) { return true; }
-          lcol = detail::structs_column_device_view(lcol).get_sliced_child(0);
-          rcol = detail::structs_column_device_view(rcol).get_sliced_child(0);
+          lcol = structs_column_device_view(lcol).get_sliced_child(0);
+          rcol = structs_column_device_view(rcol).get_sliced_child(0);
         } else if (lcol.type().id() == type_id::LIST) {
-          auto l_list_col = detail::lists_column_device_view(lcol);
-          auto r_list_col = detail::lists_column_device_view(rcol);
+          auto l_list_col = lists_column_device_view(lcol);
+          auto r_list_col = lists_column_device_view(rcol);
 
           auto lsizes = make_list_size_iterator(l_list_col);
           auto rsizes = make_list_size_iterator(r_list_col);
@@ -361,8 +367,8 @@ class device_row_comparator {
         requires(cudf::is_equality_comparable<Element, Element>())
       {
         return thrust::all_of(thrust::seq,
-                              thrust::make_counting_iterator(0),
-                              thrust::make_counting_iterator(0) + size,
+                              cuda::counting_iterator<cudf::size_type>{0},
+                              cuda::counting_iterator<cudf::size_type>{0} + size,
                               [this](auto i) { return comp.template operator()<Element>(i, i); });
       }
 

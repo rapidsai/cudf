@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,7 +13,6 @@
 
 #include <cub/device/device_memcpy.cuh>
 #include <cuda/functional>
-#include <thrust/iterator/constant_iterator.h>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {

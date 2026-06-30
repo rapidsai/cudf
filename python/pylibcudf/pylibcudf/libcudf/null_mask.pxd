@@ -8,23 +8,23 @@ from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport bitmask_type, mask_state, size_type
 
 from rmm.librmm.device_buffer cimport device_buffer
-from rmm.librmm.cuda_stream_view cimport cuda_stream_view
-from rmm.librmm.memory_resource cimport device_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
+from rmm.librmm.memory_resource cimport device_async_resource_ref
 
 
 cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef device_buffer copy_bitmask (
         column_view view,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef device_buffer copy_bitmask (
         const bitmask_type* null_mask,
         size_type begin_bit,
         size_type end_bit,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef size_t bitmask_allocation_size_bytes (
@@ -35,25 +35,32 @@ cdef extern from "cudf/null_mask.hpp" namespace "cudf" nogil:
     cdef device_buffer create_null_mask (
         size_type size,
         mask_state state,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     ) except +libcudf_exception_handler
 
     cdef pair[device_buffer, size_type] bitmask_and(
         table_view view,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     )
 
     cdef pair[device_buffer, size_type] bitmask_or(
         table_view view,
-        cuda_stream_view stream,
-        device_memory_resource* mr
+        cudaStream_t stream,
+        device_async_resource_ref mr
     )
 
     cdef size_type null_count(
         const bitmask_type * bitmask,
         size_type start,
         size_type stop,
-        cuda_stream_view stream
+        cudaStream_t stream
+    )
+
+    cdef size_type index_of_first_set_bit(
+        const bitmask_type * bitmask,
+        size_type start,
+        size_type stop,
+        cudaStream_t stream
     )

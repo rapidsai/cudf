@@ -9,7 +9,12 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
+from cudf_polars.testing.engine_utils import is_streaming_engine
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 
 @pytest.mark.parametrize(
@@ -27,7 +32,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
     ],
 )
 @pytest.mark.parametrize("predicate_pushdown", [False, True])
-def test_scan_drop_nulls(subset, predicate_pushdown):
+def test_scan_drop_nulls(engine: pl.GPUEngine, subset, predicate_pushdown):
     df = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4],
@@ -42,13 +47,14 @@ def test_scan_drop_nulls(subset, predicate_pushdown):
 
     assert_gpu_result_equal(
         q,
+        engine=engine,
         collect_kwargs={
             "optimizations": pl.QueryOptFlags(predicate_pushdown=predicate_pushdown)
         },
     )
 
 
-def test_can_convert_lists():
+def test_can_convert_lists(engine: pl.GPUEngine):
     df = pl.LazyFrame(
         {
             "a": pl.Series([[1, 2], [3]], dtype=pl.List(pl.Int8())),
@@ -64,10 +70,10 @@ def test_can_convert_lists():
         }
     )
 
-    assert_gpu_result_equal(df)
+    assert_gpu_result_equal(df, engine=engine)
 
 
-def test_dataframescan_with_decimals():
+def test_dataframescan_with_decimals(engine: pl.GPUEngine):
     q = pl.LazyFrame(
         {
             "foo": [1, 2],
@@ -75,4 +81,26 @@ def test_dataframescan_with_decimals():
         },
         schema={"foo": pl.Int64, "bar": pl.Decimal(precision=15, scale=2)},
     )
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_138,
+    reason="height parameter added in Polars 1.38",
+)
+def test_dataframescan_zero_width_with_rows(engine: pl.GPUEngine, request):
+    request.applymarker(
+        pytest.mark.xfail(
+            is_streaming_engine(engine),
+            reason="https://github.com/rapidsai/cudf/issues/21644",
+        )
+    )
+    df = pl.LazyFrame(height=5)
+    q = df.select(pl.len())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_struct_literal_not_supported(engine: pl.GPUEngine):
+    dtype = pl.Struct([pl.Field("a", pl.Int64), pl.Field("b", pl.String)])
+    q = pl.LazyFrame().select(pl.lit(None, dtype=pl.Null).cast(dtype, strict=True))
+    assert_ir_translation_raises(q, engine, NotImplementedError)

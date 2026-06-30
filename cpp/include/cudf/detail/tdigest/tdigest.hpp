@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -218,7 +218,7 @@ std::unique_ptr<scalar> reduce_tdigest(column_view const& values,
  *   double       // max
  * }
  *
- * @param values tdigests to merge.
+ * @param input tdigests to merge.
  * @param max_centroids Parameter controlling the level of compression of the tdigest. Higher
  * values result in a larger, more precise tdigest.
  * @param stream CUDA stream used for device memory operations and kernel launches.

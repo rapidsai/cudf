@@ -35,18 +35,21 @@ namespace detail {
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] join_type The type of join to be performed
+ * @param[in] is_outer_join Whether this is an outer join
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  * @param[in] equality_probe The equality comparator used when probing the hash table.
  * @param[in] hash_table_storage Device span of the hash table storage
  * @param[in] input_pairs Precomputed input pairs for probing
  * @param[in] hash_indices Precomputed hash indices for efficient probing
- * @param[out] join_output_l The left result of the join operation
- * @param[out] join_output_r The right result of the join operation
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
+ * @param[out] join_output_l The left result of the join operation
+ * @param[out] join_output_r The right result of the join operation
  * @param[in] join_result_offsets Prefix sum of matches_per_row to get output offsets
- * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
- * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
+ * @param[in] config Grid configuration for the kernel launch
+ * @param[in] shmem_size_per_block Shared memory size per block
+ * @param[in] stream CUDA stream to use
  */
 template <bool has_nulls>
 void launch_mixed_join(

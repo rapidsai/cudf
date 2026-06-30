@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/export.hpp>
 
 #include <functional>
@@ -27,12 +28,6 @@ namespace CUDF_EXPORT cudf {
  * @{
  * @file
  */
-
-// forward declaration
-namespace detail {
-class simple_aggregations_collector;
-class aggregation_finalizer;
-}  // namespace detail
 
 /**
  * @brief Tie-breaker method to use for ranking the column.
@@ -79,62 +74,82 @@ enum class bitwise_op : int32_t {
 class aggregation {
  public:
   /**
-   * @brief Possible aggregation operations
+   * @brief Possible aggregation operations.
    */
-  enum Kind {
-    SUM,                ///< sum reduction
-    SUM_WITH_OVERFLOW,  ///< sum reduction with overflow detection
-    PRODUCT,            ///< product reduction
-    MIN,                ///< min reduction
-    MAX,                ///< max reduction
-    COUNT_VALID,        ///< count number of valid elements
-    COUNT_ALL,          ///< count number of elements
-    ANY,                ///< any reduction
-    ALL,                ///< all reduction
-    SUM_OF_SQUARES,     ///< sum of squares reduction
-    MEAN,               ///< arithmetic mean reduction
-    M2,                 ///< sum of squares of differences from the mean
-    VARIANCE,           ///< variance
-    STD,                ///< standard deviation
-    MEDIAN,             ///< median reduction
-    QUANTILE,           ///< compute specified quantile(s)
-    ARGMAX,             ///< Index of max element
-    ARGMIN,             ///< Index of min element
-    NUNIQUE,            ///< count number of unique elements
-    NTH_ELEMENT,        ///< get the nth element
-    ROW_NUMBER,         ///< get row-number of current index (relative to rolling window)
-    EWMA,               ///< get exponential weighted moving average at current index
-    RANK,               ///< get rank of current index
-    COLLECT_LIST,       ///< collect values into a list
-    COLLECT_SET,        ///< collect values into a list without duplicate entries
-    LEAD,               ///< window function, accesses row at specified offset following current row
-    LAG,                ///< window function, accesses row at specified offset preceding current row
-    PTX,                ///< PTX  based UDF aggregation
-    CUDA,               ///< CUDA based UDF aggregation
-    HOST_UDF,           ///< host based UDF aggregation
-    MERGE_LISTS,        ///< merge multiple lists values into one list
-    MERGE_SETS,         ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,           ///< merge partial values of M2 aggregation,
-    COVARIANCE,         ///< covariance between two sets of elements
-    CORRELATION,        ///< correlation between two sets of elements
-    TDIGEST,            ///< create a tdigest from a set of input values
-    MERGE_TDIGEST,      ///< create a tdigest by merging multiple tdigests together
-    HISTOGRAM,          ///< compute frequency of each element
-    MERGE_HISTOGRAM,    ///< merge partial values of HISTOGRAM aggregation
-    BITWISE_AGG,        ///< bitwise aggregation on numeric columns
-    TOP_K               ///< top k elements in a group
+  enum Kind : int32_t {
+    SUM = 0,       ///< sum reduction
+    SUM_OVERFLOW,  ///< sum reduction with overflow detection
+    /// @deprecated Use SUM_OVERFLOW instead.
+    SUM_WITH_OVERFLOW = SUM_OVERFLOW,
+    PRODUCT,          ///< product reduction
+    MIN,              ///< min reduction
+    MAX,              ///< max reduction
+    COUNT_VALID,      ///< count number of valid elements
+    COUNT_ALL,        ///< count number of elements
+    ANY,              ///< any reduction
+    ALL,              ///< all reduction
+    SUM_OF_SQUARES,   ///< sum of squares reduction
+    MEAN,             ///< arithmetic mean reduction
+    M2,               ///< sum of squares of differences from the mean
+    VARIANCE,         ///< variance
+    STD,              ///< standard deviation
+    MEDIAN,           ///< median reduction
+    QUANTILE,         ///< compute specified quantile(s)
+    ARGMAX,           ///< Index of max element
+    ARGMIN,           ///< Index of min element
+    NUNIQUE,          ///< count number of unique elements
+    NTH_ELEMENT,      ///< get the nth element
+    ROW_NUMBER,       ///< get row-number of current index (relative to rolling window)
+    EWMA,             ///< get exponential weighted moving average at current index
+    RANK,             ///< get rank of current index
+    COLLECT_LIST,     ///< collect values into a list
+    COLLECT_SET,      ///< collect values into a list without duplicate entries
+    LEAD,             ///< window function, accesses row at specified offset following current row
+    LAG,              ///< window function, accesses row at specified offset preceding current row
+    PTX,              ///< PTX  based UDF aggregation
+    CUDA,             ///< CUDA based UDF aggregation
+    HOST_UDF,         ///< host based UDF aggregation
+    MERGE_LISTS,      ///< merge multiple lists values into one list
+    MERGE_SETS,       ///< merge multiple lists values into one list then drop duplicate entries
+    MERGE_M2,         ///< merge partial values of M2 aggregation,
+    COVARIANCE,       ///< covariance between two sets of elements
+    CORRELATION,      ///< correlation between two sets of elements
+    TDIGEST,          ///< create a tdigest from a set of input values
+    MERGE_TDIGEST,    ///< create a tdigest by merging multiple tdigests together
+    HISTOGRAM,        ///< compute frequency of each element
+    MERGE_HISTOGRAM,  ///< merge partial values of HISTOGRAM aggregation
+    BITWISE_AGG,      ///< bitwise aggregation on numeric columns
+    TOP_K,            ///< top k elements in a group
+    INVALID           ///< invalid aggregation, used as a placeholder when default-constructed
   };
 
-  aggregation() = delete;
+  /**
+   * @brief Default constructor.
+   *
+   * This constructor should not be called at all. It only exists to satisfy the compiler
+   * requirements.
+   */
+  aggregation() : kind{Kind::INVALID}
+  {
+    CUDF_FAIL("No-parameter aggregation constructor should never be called");
+  }
 
   /**
-   * @brief Construct a new aggregation object
+   * @brief Construct a new aggregation object from a given aggregation kind.
    *
-   * @param a aggregation::Kind enum value
+   * @param kind_ aggregation::Kind enum value
    */
-  aggregation(aggregation::Kind a) : kind{a} {}
+  aggregation(Kind kind_) : kind{kind_} { CUDF_EXPECTS(is_valid(), "Invalid aggregation kind"); }
   Kind kind;  ///< The aggregation to perform
   virtual ~aggregation() = default;
+
+  /**
+   * @brief Checks if the aggregation is valid, i.e. it was constructed with a valid value for the
+   * aggregation kind.
+   *
+   * @return True if the aggregation is valid, false otherwise
+   */
+  [[nodiscard]] bool is_valid() const { return kind >= 0 && kind < Kind::INVALID; }
 
   /**
    * @brief Compares two aggregation objects for equality
@@ -157,101 +172,38 @@ class aggregation {
    * @return A copy of the aggregation object
    */
   [[nodiscard]] virtual std::unique_ptr<aggregation> clone() const = 0;
-
-  // override functions for compound aggregations
-  /**
-   * @pure @brief Get the simple aggregations that this aggregation requires to compute.
-   *
-   * @param col_type The type of the column to aggregate
-   * @param collector The collector visitor pattern to use to collect the simple aggregations
-   * @return Vector of pre-requisite simple aggregations
-   */
-  virtual std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, cudf::detail::simple_aggregations_collector& collector) const = 0;
-
-  /**
-   * @pure @brief Compute the aggregation after pre-requisite simple aggregations have been
-   * computed.
-   *
-   * @param finalizer The finalizer visitor pattern to use to compute the aggregation
-   */
-  virtual void finalize(cudf::detail::aggregation_finalizer& finalizer) const = 0;
 };
 
 /**
  * @brief Derived class intended for rolling_window specific aggregation usage.
- *
- * As an example, rolling_window will only accept rolling_aggregation inputs,
- * and the appropriate derived classes (sum_aggregation, mean_aggregation, etc)
- * derive from this interface to represent these valid options.
  */
-class rolling_aggregation : public virtual aggregation {
- public:
-  ~rolling_aggregation() override = default;
-
- protected:
-  rolling_aggregation() {}
-  /// constructor inherited from cudf::aggregation
-  using aggregation::aggregation;
-};
+class rolling_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for groupby specific aggregation usage.
  */
-class groupby_aggregation : public virtual aggregation {
- public:
-  ~groupby_aggregation() override = default;
-
- protected:
-  groupby_aggregation() {}
-};
+class groupby_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for groupby specific scan usage.
  */
-class groupby_scan_aggregation : public virtual aggregation {
- public:
-  ~groupby_scan_aggregation() override = default;
-
- protected:
-  groupby_scan_aggregation() {}
-};
+class groupby_scan_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for reduction usage.
  */
-class reduce_aggregation : public virtual aggregation {
- public:
-  ~reduce_aggregation() override = default;
-
- protected:
-  reduce_aggregation() {}
-};
+class reduce_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for scan usage.
  */
-class scan_aggregation : public virtual aggregation {
- public:
-  ~scan_aggregation() override = default;
-
- protected:
-  scan_aggregation() {}
-};
+class scan_aggregation : public virtual aggregation {};
 
 /**
  * @brief Derived class intended for segmented reduction usage.
  */
-class segmented_reduce_aggregation : public virtual aggregation {
- public:
-  ~segmented_reduce_aggregation() override = default;
+class segmented_reduce_aggregation : public virtual aggregation {};
 
- protected:
-  segmented_reduce_aggregation() {}
-};
-
-/// Type of code in the user defined function string.
-enum class udf_type : bool { CUDA, PTX };
 /// Type of correlation method.
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 /// Type of treatment of EWM input values' first value
@@ -262,8 +214,14 @@ enum class ewm_history : int32_t { INFINITE, FINITE };
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_aggregation();
 
+/// Factory to create a SUM_OVERFLOW aggregation
+/// @return A SUM_OVERFLOW aggregation object
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_sum_overflow_aggregation();
+
 /// Factory to create a SUM_WITH_OVERFLOW aggregation
 /// @return A SUM_WITH_OVERFLOW aggregation object
+/// @deprecated Use make_sum_overflow_aggregation() instead.
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_sum_with_overflow_aggregation();
 
@@ -595,14 +553,14 @@ std::unique_ptr<Base> make_lead_aggregation(size_type offset);
 /**
  * @brief Factory to create an aggregation base on UDF for PTX or CUDA
  *
- * @param[in] type: either udf_type::PTX or udf_type::CUDA
+ * @param[in] type The source type of the UDF aggregation
  * @param[in] user_defined_aggregator A string containing the aggregator code
  * @param[in] output_type expected output type
  *
  * @return An aggregation containing a user-defined aggregator string
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_udf_aggregation(udf_type type,
+std::unique_ptr<Base> make_udf_aggregation(udf_source_type type,
                                            std::string const& user_defined_aggregator,
                                            data_type output_type);
 

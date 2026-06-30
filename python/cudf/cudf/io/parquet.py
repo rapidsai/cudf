@@ -47,8 +47,7 @@ from cudf.utils.performance_tracking import _performance_tracking
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Hashable, Sequence
-
-    from typing_extensions import Self
+    from typing import Self
 
     from cudf._typing import DtypeObj
     from cudf.core.series import Series
@@ -943,6 +942,7 @@ def read_parquet(
     skip_rows=None,
     allow_mismatched_pq_schemas=False,
     ignore_missing_columns=True,
+    case_sensitive_names=True,
     *args,
     **kwargs,
 ):
@@ -1106,18 +1106,32 @@ def read_parquet(
         skip_rows=skip_rows,
         allow_mismatched_pq_schemas=allow_mismatched_pq_schemas,
         ignore_missing_columns=ignore_missing_columns,
+        case_sensitive_names=case_sensitive_names,
         filters=ast_filter,
         **kwargs,
     )
+    # Build a lookup from (possibly lowered) name -> actual DataFrame column name
+    _key = str.lower if not case_sensitive_names else str
+    col_names = {_key(name): name for name in df._column_names}
+
     # Apply filters row-wise (if any are defined), and return
     if ast_filter is None:
+        if not case_sensitive_names and filters:
+            filters = [
+                [
+                    (col_names[_key(col)], op, val)
+                    for col, op, val in conjunction
+                ]
+                for conjunction in filters
+            ]
         df = _apply_post_filters(df, filters)
 
     if projected_columns:
         # Elements of `projected_columns` may now be in the index.
-        # We must filter these names from our projection
+        # We must filter these names from our projection. For structs,
+        # only the top-level name needs remapping via col_names
         projected_columns = [
-            col for col in projected_columns if col in df._column_names
+            col_names[_key(col.split(".")[0])] for col in projected_columns
         ]
         return df[projected_columns]
     return df
@@ -1239,6 +1253,7 @@ def _parquet_to_frame(
     dataset_kwargs=None,
     nrows=None,
     skip_rows=None,
+    case_sensitive_names=True,
     **kwargs,
 ):
     # If this is not a partitioned read, only need
@@ -1248,6 +1263,7 @@ def _parquet_to_frame(
             paths_or_buffers,
             nrows=nrows,
             skip_rows=skip_rows,
+            case_sensitive_names=case_sensitive_names,
             *args,
             row_groups=row_groups,
             **kwargs,
@@ -1289,6 +1305,7 @@ def _parquet_to_frame(
                 key_paths,
                 *args,
                 row_groups=key_row_groups,
+                case_sensitive_names=case_sensitive_names,
                 **kwargs,
             )
         )
@@ -1297,14 +1314,18 @@ def _parquet_to_frame(
             _len = len(dfs[-1])
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
+                cat_dtype = CategoricalDtype(
+                    categories=partition_categories[name],
+                    ordered=False,
+                )
                 codes = as_column(
                     partition_categories[name].index(value),
                     length=_len,
+                    dtype=cat_dtype._codes_dtype,
                 )
-                col = codes._with_type_metadata(
-                    CategoricalDtype(
-                        categories=partition_categories[name], ordered=False
-                    )
+                col = ColumnBase.create(
+                    codes.plc_column,
+                    cat_dtype,
                 )
             else:
                 # Not building categorical columns, so
@@ -1320,10 +1341,7 @@ def _parquet_to_frame(
     if len(dfs) > 1:
         # Concatenate dfs and return.
         # Assume we can ignore the index if it has no name.
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            res = concat(dfs, ignore_index=dfs[-1].index.name is None)
-        return res
+        return concat(dfs, ignore_index=dfs[-1].index.name is None)
     else:
         return dfs[0]
 
@@ -1339,6 +1357,7 @@ def _read_parquet(
     skip_rows: int | None = None,
     allow_mismatched_pq_schemas: bool = False,
     ignore_missing_columns: bool = True,
+    case_sensitive_names: bool = True,
     filters: plc_expr.Expression | None = None,
     *args,
     **kwargs,
@@ -1376,6 +1395,7 @@ def _read_parquet(
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
                 .ignore_missing_columns(ignore_missing_columns)
+                .case_sensitive_names(case_sensitive_names)
                 .build()
             )
             if row_groups is not None:
@@ -1385,7 +1405,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 
@@ -1412,14 +1432,14 @@ def _read_parquet(
                         [concatenated_columns[i], columns.pop()]
                     )
 
-            data = {
-                name: ColumnBase.from_pylibcudf(col)
-                for name, col in zip(
-                    column_names, concatenated_columns, strict=True
-                )
-            }
-            df = DataFrame._from_data(data)
-            ioutils._add_df_col_struct_names(df, child_names)
+            plc_table = plc.Table(concatenated_columns)
+            df = DataFrame.from_pylibcudf(
+                plc_table,
+                metadata={
+                    "columns": column_names,
+                    "child_names": child_names,
+                },
+            )
             df = _process_metadata(
                 df,
                 column_names,
@@ -1444,6 +1464,7 @@ def _read_parquet(
                 .use_pandas_metadata(use_pandas_metadata)
                 .allow_mismatched_pq_schemas(allow_mismatched_pq_schemas)
                 .ignore_missing_columns(ignore_missing_columns)
+                .case_sensitive_names(case_sensitive_names)
                 .build()
             )
             if row_groups is not None:
@@ -1453,7 +1474,7 @@ def _read_parquet(
             if skip_rows != 0:
                 options.set_skip_rows(skip_rows)
             if columns is not None:
-                options.set_columns(columns)
+                options.set_column_names(columns)
             if filters is not None:
                 options.set_filter(filters)
 
@@ -2469,6 +2490,13 @@ def _process_metadata(
                 df._data[col].dtype.precision = meta_data_per_column[col][  # type: ignore[union-attr]
                     "metadata"
                 ]["precision"]
+            elif (
+                isinstance(df._data[col].dtype, pd.StringDtype)
+                and col in meta_data_per_column
+                and meta_data_per_column[col]["pandas_type"] == "empty"
+                and meta_data_per_column[col]["numpy_type"] == "object"
+            ):
+                df._data[col] = df._data[col].astype(np.dtype("object"))
 
     # Set the index column
     if index_col is not None and len(index_col) > 0:

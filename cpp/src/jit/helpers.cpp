@@ -1,19 +1,27 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "helpers.hpp"
 
+#include <cudf/detail/nvtx/ranges.hpp>
+
+#include <jit/cache.hpp>
+#include <rtcx.hpp>
+#include <runtime/context.hpp>
+
 namespace cudf {
 namespace jit {
+
+bool is_scalar(cudf::size_type base_column_size, cudf::size_type column_size)
+{
+  return column_size == 1 && column_size != base_column_size;
+}
 
 typename std::vector<column_view>::const_iterator get_transform_base_column(
   std::vector<column_view> const& inputs)
 {
-  // TODO(lamarrr): remove ambiguous row-size-related logic for processing scalars in transforms and
-  // filters and use strongly-typed scalars
-
   if (inputs.empty()) { return inputs.end(); }
 
   auto [smallest, largest] = std::minmax_element(
@@ -28,8 +36,26 @@ typename std::vector<column_view>::const_iterator get_transform_base_column(
   return largest;
 }
 
-std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const& output_typenames,
-                                                 std::vector<std::string> const& input_typenames,
+size_type get_projection_size(column_view const& col) { return col.size(); }
+
+/// @brief Scalar columns don't contribute to the row-size of a transform.
+size_type get_projection_size(scalar_column_view const& col) { return 0; }
+
+size_type get_projection_size(std::span<std::variant<column_view, scalar_column_view> const> inputs)
+{
+  CUDF_EXPECTS(
+    !inputs.empty(), "Transform must have at least 1 input column", std::invalid_argument);
+
+  auto get_size = [](auto const& var) {
+    return std::visit([](auto& a) { return get_projection_size(a); }, var);
+  };
+
+  return *std::max_element(thrust::make_transform_iterator(inputs.begin(), get_size),
+                           thrust::make_transform_iterator(inputs.end(), get_size));
+}
+
+std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> output_typenames,
+                                                 std::span<std::string const> input_typenames,
                                                  bool has_user_data)
 {
   std::map<uint32_t, std::string> params;
@@ -37,7 +63,7 @@ std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const&
 
   if (has_user_data) {
     params.emplace(index++, "void *");
-    params.emplace(index++, jitify2::reflection::reflect<cudf::size_type>());
+    params.emplace(index++, "cudf::size_type");
   }
 
   for (auto& name : output_typenames) {
@@ -51,22 +77,34 @@ std::map<uint32_t, std::string> build_ptx_params(std::vector<std::string> const&
   return params;
 }
 
-input_column_reflection reflect_input_column(size_type base_column_size, column_view column)
+std::vector<std::string> input_type_names(
+  std::span<std::variant<column_view, scalar_column_view> const> views)
 {
-  return input_column_reflection{type_to_name(column.type()),
-                                 is_scalar(base_column_size, column.size())};
+  std::vector<std::string> names;
+
+  std::transform(views.begin(), views.end(), std::back_inserter(names), [&](auto const& view) {
+    return std::visit([](auto& a) { return type_to_name(a.type()); }, view);
+  });
+
+  return names;
 }
 
-std::vector<input_column_reflection> reflect_input_columns(size_type base_column_size,
-                                                           std::vector<column_view> const& inputs)
+kernel get_udf_kernel(std::string const& source_file,
+                      std::string const& kernel_name,
+                      std::string const& cuda_source)
 {
-  std::vector<input_column_reflection> reflections;
-  std::transform(
-    inputs.begin(), inputs.end(), std::back_inserter(reflections), [&](auto const& view) {
-      return reflect_input_column(base_column_size, view);
-    });
+  CUDF_FUNC_RANGE();
 
-  return reflections;
+  auto kernel_instance_source = std::format(R"***(
+ #define CUDF_KERNEL_INSTANCE {}
+ )***",
+                                            kernel_name);
+  char const* include_names[] =  // NOLINT(modernize-avoid-c-arrays)
+    {"cudf/detail/operation_udf.cuh", "cudf/detail/kernel_instance.cuh"};
+  char const* include_headers[] =  // NOLINT(modernize-avoid-c-arrays)
+    {cuda_source.c_str(), kernel_instance_source.c_str()};
+
+  return get_kernel(source_file, source_file, include_names, include_headers, kernel_name);
 }
 
 }  // namespace jit

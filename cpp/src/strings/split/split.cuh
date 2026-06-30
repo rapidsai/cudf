@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,10 +10,10 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/strings/detail/split_utils.cuh>
@@ -26,11 +26,10 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/atomic>
+#include <cuda/iterator>
 #include <cuda/std/functional>
-#include <cuda/std/iterator>
 #include <thrust/copy.h>
 #include <thrust/for_each.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/transform.h>
 
 namespace cudf::strings::detail {
@@ -181,7 +180,8 @@ struct split_tokenizer_fn : base_split_tokenizer<split_tokenizer_fn> {
    * The tokens are processed from the beginning of each string ignoring overlapping
    * delimiters and honoring the `max_tokens` value.
    *
-   * @param d_str String to tokenize
+   * @param pos_begin Start position of the string in the character data
+   * @param pos_end End position of the string in the character data
    * @param d_delimiters Positions of delimiters for this string
    * @param d_tokens Output vector to store tokens for this string
    */
@@ -239,7 +239,8 @@ struct rsplit_tokenizer_fn : base_split_tokenizer<rsplit_tokenizer_fn> {
    * The tokens are processed from the end of each string ignoring overlapping
    * delimiters and honoring the `max_tokens` value.
    *
-   * @param d_str String to tokenize
+   * @param pos_begin Start position of the string in the character data
+   * @param pos_end End position of the string in the character data
    * @param d_delimiters Positions of delimiters for this string
    * @param d_tokens Output vector to store tokens for this string
    */
@@ -516,7 +517,7 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   delimiter_fn.chars_bytes         = chars_bytes;
 
   // count the number of delimiters in the entire column
-  cudf::detail::device_scalar<int64_t> d_count(0, stream);
+  cudf::detail::device_scalar<int64_t> d_count(0, stream, cudf::get_current_device_resource_ref());
   if (chars_bytes > 0) {
     constexpr int64_t block_size         = 512;
     constexpr size_type bytes_per_thread = 4;
@@ -524,17 +525,18 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
       util::div_rounding_up_safe(chars_bytes, static_cast<int64_t>(bytes_per_thread)), block_size);
     count_delimiters_kernel<DelimiterFn, block_size, bytes_per_thread>
       <<<num_blocks, block_size, 0, stream.value()>>>(delimiter_fn, chars_bytes, d_count.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // Create a vector of every delimiter position in the chars column.
   // These may include overlapping or otherwise out-of-bounds delimiters which
   // will be resolved during token processing.
   auto delimiter_positions = rmm::device_uvector<int64_t>(d_count.value(stream), stream);
-  cudf::detail::copy_if(thrust::counting_iterator<int64_t>(0),
-                        thrust::counting_iterator<int64_t>(chars_bytes),
-                        delimiter_positions.begin(),
-                        delimiter_fn,
-                        stream);
+  cudf::detail::copy_if_async(cuda::counting_iterator<int64_t>{0},
+                              cuda::counting_iterator<int64_t>{chars_bytes},
+                              delimiter_positions.begin(),
+                              delimiter_fn,
+                              stream);
 
   // create a vector of offsets to each string's delimiter set within delimiter_positions
   auto const delimiter_offsets =
@@ -545,9 +547,9 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
   // compute the number of tokens per string
   auto token_counts    = rmm::device_uvector<size_type>(input.size(), stream);
   auto d_positions     = delimiter_positions.data();
-  auto const zero_iter = thrust::make_counting_iterator<size_type>(0);
+  auto const zero_iter = cuda::counting_iterator<size_type>{0};
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     zero_iter,
     zero_iter + input.size(),
     token_counts.begin(),
@@ -569,7 +571,10 @@ std::pair<std::unique_ptr<column>, rmm::device_uvector<string_index_pair>> split
       size_type idx) {
       tokenizer.get_tokens(idx, d_tokens_offsets, d_positions, d_delimiter_offsets, d_tokens);
     };
-  thrust::for_each_n(rmm::exec_policy_nosync(stream), zero_iter, input.size(), get_tokens_fn);
+  thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     zero_iter,
+                     input.size(),
+                     get_tokens_fn);
 
   return std::make_pair(std::move(offsets), std::move(tokens));
 }

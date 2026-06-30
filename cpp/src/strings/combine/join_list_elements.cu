@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,7 +21,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 namespace cudf {
 namespace strings {
@@ -200,8 +200,8 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
 
   auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
-    cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(num_rows),
+    cudf::detail::valid_if(cuda::counting_iterator<size_type>{0},
+                           cuda::counting_iterator<size_type>{num_rows},
                            validities_fn{comp_fn},
                            stream,
                            mr);
@@ -275,8 +275,8 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
 
   auto [offsets_column, chars] = make_strings_children(comp_fn, num_rows, stream, mr);
   auto [null_mask, null_count] =
-    cudf::detail::valid_if(thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(num_rows),
+    cudf::detail::valid_if(cuda::counting_iterator<size_type>{0},
+                           cuda::counting_iterator<size_type>{num_rows},
                            validities_fn{comp_fn},
                            stream,
                            mr);

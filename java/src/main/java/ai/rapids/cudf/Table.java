@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -337,6 +337,8 @@ public final class Table implements AutoCloseable {
    * @param compression       native compression codec ID
    * @param rowGroupSizeRows  max #rows in a row group
    * @param rowGroupSizeBytes max #bytes in a row group
+   * @param maxDictionarySize maximum dictionary size in bytes (cuDF default 1 MiB)
+   * @param dictionaryPolicy  native dictionary policy ID
    * @param statsFreq         native statistics frequency ID
    * @param isInt96           true if timestamp type is int96
    * @param precisions        precision list containing all the precisions of the decimal types in
@@ -355,6 +357,8 @@ public final class Table implements AutoCloseable {
                                                    int compression,
                                                    int rowGroupSizeRows,
                                                    long rowGroupSizeBytes,
+                                                   long maxDictionarySize,
+                                                   int dictionaryPolicy,
                                                    int statsFreq,
                                                    boolean[] isInt96,
                                                    int[] precisions,
@@ -375,6 +379,8 @@ public final class Table implements AutoCloseable {
    * @param compression       native compression codec ID
    * @param rowGroupSizeRows  max #rows in a row group
    * @param rowGroupSizeBytes max #bytes in a row group
+   * @param maxDictionarySize maximum dictionary size in bytes (cuDF default 1 MiB)
+   * @param dictionaryPolicy  native dictionary policy ID
    * @param statsFreq         native statistics frequency ID
    * @param isInt96           true if timestamp type is int96
    * @param precisions        precision list containing all the precisions of the decimal types in
@@ -393,6 +399,8 @@ public final class Table implements AutoCloseable {
                                                      int compression,
                                                      int rowGroupSizeRows,
                                                      long rowGroupSizeBytes,
+                                                     long maxDictionarySize,
+                                                     int dictionaryPolicy,
                                                      int statsFreq,
                                                      boolean[] isInt96,
                                                      int[] precisions,
@@ -1672,6 +1680,8 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getRowGroupSizeRows(),
           options.getRowGroupSizeBytes(),
+          options.getMaxDictionarySize(),
+          options.getDictionaryPolicy().nativeId,
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
@@ -1694,6 +1704,8 @@ public final class Table implements AutoCloseable {
           options.getCompressionType().nativeId,
           options.getRowGroupSizeRows(),
           options.getRowGroupSizeBytes(),
+          options.getMaxDictionarySize(),
+          options.getDictionaryPolicy().nativeId,
           options.getStatisticsFrequency().nativeId,
           options.getFlatIsTimeTypeInt96(),
           options.getFlatPrecision(),
@@ -2170,11 +2182,11 @@ public final class Table implements AutoCloseable {
    * {@link Table} class
    */
   public PartitionedTable partition(ColumnView partitionMap, int numberOfPartitions) {
-    int[] partitionOffsets = new int[numberOfPartitions];
+    int[] partitionOffsets = new int[numberOfPartitions + 1];
     return new PartitionedTable(new Table(partition(
         getNativeView(),
         partitionMap.getNativeView(),
-        partitionOffsets.length,
+        numberOfPartitions,
         partitionOffsets)), partitionOffsets);
   }
 
@@ -2457,7 +2469,7 @@ public final class Table implements AutoCloseable {
    * {@link Table} class
    */
   public PartitionedTable roundRobinPartition(int numberOfPartitions, int startPartition) {
-    int[] partitionOffsets = new int[numberOfPartitions];
+    int[] partitionOffsets = new int[numberOfPartitions + 1];
     return new PartitionedTable(new Table(Table.roundRobinPartition(nativeHandle,
         numberOfPartitions, startPartition,
         partitionOffsets)), partitionOffsets);
@@ -4597,12 +4609,12 @@ public final class Table implements AutoCloseable {
      * @return Table that exposes a limited functionality of the {@link Table} class
      */
     public PartitionedTable hashPartition(HashType type, int numberOfPartitions, int seed) {
-      int[] partitionOffsets = new int[numberOfPartitions];
+      int[] partitionOffsets = new int[numberOfPartitions + 1];
       return new PartitionedTable(new Table(Table.hashPartition(
           operation.table.nativeHandle,
           operation.indices,
           type.nativeId,
-          partitionOffsets.length,
+          numberOfPartitions,
           seed,
           partitionOffsets)), partitionOffsets);
     }

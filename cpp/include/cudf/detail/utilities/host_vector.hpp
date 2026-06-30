@@ -1,5 +1,5 @@
 /*
- *  SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION
+ *  SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION
  *  SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <limits>
 #include <new>  // for bad_alloc
+#include <span>
 
 namespace CUDF_EXPORT cudf {
 namespace detail {
@@ -139,7 +140,7 @@ class rmm_host_allocator {
   inline pointer allocate(size_type cnt)
   {
     if (cnt > this->max_size()) { throw std::bad_alloc(); }  // end if
-    auto const result = mr.allocate(stream, cnt * sizeof(value_type));
+    auto const result = mr.allocate(stream, cnt * sizeof(value_type), alignof(value_type));
     // Synchronize to ensure the memory is allocated before thrust::host_vector initialization
     // TODO: replace thrust::host_vector with a type that does not require synchronization
     stream.synchronize();
@@ -151,14 +152,14 @@ class rmm_host_allocator {
    *  with this \c rmm_host_allocator.
    *
    *  @param p A \c pointer to the previously allocated memory.
-   *  @note The second parameter is the number of objects previously allocated.
+   *  @param cnt Number of objects that were previously allocated.
    *  @note This method does not invoke \p value_type's destructor.
    *        It is the responsibility of the caller to destroy
    *        the objects stored at \p p.
    */
   inline void deallocate(pointer p, size_type cnt) noexcept
   {
-    mr.deallocate(stream, p, cnt * sizeof(value_type));
+    mr.deallocate(stream, p, cnt * sizeof(value_type), alignof(value_type));
   }
 
   /**
@@ -223,6 +224,16 @@ class host_vector : public thrust::host_vector<T, rmm_host_allocator<T>> {
   [[nodiscard]] operator host_span<T>()
   {
     return host_span<T>{base::data(), base::size(), base::get_allocator().is_device_accessible()};
+  }
+
+  [[nodiscard]] operator std::span<T const>() const noexcept
+  {
+    return std::span<T const>(base::data(), base::size());
+  }
+
+  [[nodiscard]] operator std::span<T>() noexcept
+  {
+    return std::span<T>(base::data(), base::size());
   }
 };
 

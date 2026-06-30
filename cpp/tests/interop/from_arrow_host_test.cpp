@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/nanoarrow_utils.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -21,7 +22,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 // create a cudf::table and equivalent arrow table with host memory
 std::tuple<std::unique_ptr<cudf::table>, nanoarrow::UniqueSchema, nanoarrow::UniqueArray>
@@ -109,7 +110,7 @@ TEST_F(FromArrowHostDeviceTest, DateTimeTable)
 {
   auto data = std::vector<int64_t>{1, 2, 3, 4, 5, 6};
   auto col  = cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
-    data.begin(), data.end());
+    data.begin(), data.end(), cuda::constant_iterator<bool>(true));
   cudf::table_view expected_table_view({col});
 
   // construct equivalent arrow schema with nanoarrow
@@ -158,7 +159,7 @@ TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
   if (cudf::type_to_id<TypeParam>() == cudf::type_id::DURATION_DAYS) { return; }
 
   auto data = {T{1}, T{2}, T{3}, T{4}, T{5}, T{6}};
-  auto col  = cudf::test::fixed_width_column_wrapper<T>(data);
+  auto col  = cudf::test::fixed_width_column_wrapper<T>(data, cuda::constant_iterator<bool>(true));
 
   cudf::table_view expected_table_view({col});
   const ArrowTimeUnit time_unit = [&] {
@@ -219,8 +220,9 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTable)
 
   auto const precision = get_decimal_precision<T>();
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const data     = std::vector<T>{1, 2, 3, 4, 5, 6};
-    auto const col      = fp_wrapper<T>(data.cbegin(), data.cend(), scale_type{scale});
+    auto const data = std::vector<T>{1, 2, 3, 4, 5, 6};
+    auto const col  = fp_wrapper<T>(
+      data.cbegin(), data.cend(), cuda::constant_iterator<bool>(true), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
@@ -271,9 +273,10 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto iota           = thrust::make_counting_iterator(1);
-    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col      = fp_wrapper<T>(iota, iota + NUM_ELEMENTS, scale_type{scale});
+    auto iota       = cudf::detail::make_counting_transform_iterator(1, [](int i) { return T{i}; });
+    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col  = fp_wrapper<T>(
+      iota, iota + NUM_ELEMENTS, cuda::constant_iterator<bool>(true), scale_type{scale});
     auto const expected = cudf::table_view({col});
 
     nanoarrow::UniqueSchema input_schema;
@@ -377,9 +380,9 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
     auto every_other = [](auto i) { return i % 2 ? 0 : 1; };
     auto validity    = cudf::detail::make_counting_transform_iterator(0, every_other);
     std::vector<uint8_t> validity_vec(validity, validity + NUM_ELEMENTS);
-    auto iota           = thrust::make_counting_iterator(1);
-    auto const data     = std::vector<T>(iota, iota + NUM_ELEMENTS);
-    auto const col      = fp_wrapper<T>(iota,
+    auto iota       = cudf::detail::make_counting_transform_iterator(1, [](int i) { return T{i}; });
+    auto const data = std::vector<T>(iota, iota + NUM_ELEMENTS);
+    auto const col  = fp_wrapper<T>(iota,
                                    iota + NUM_ELEMENTS,
                                    cudf::detail::make_counting_transform_iterator(0, every_other),
                                    scale_type{scale});
@@ -425,9 +428,8 @@ TYPED_TEST(FromArrowHostDeviceTestDecimalsTest, FixedPointTableLargeNulls)
 
 TEST_F(FromArrowHostDeviceTest, NestedList)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::iterators::nulls_at_multiples_of(3);
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view expected_table_view({col});
 

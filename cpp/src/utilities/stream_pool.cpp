@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -108,7 +108,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
   rmm::cuda_stream_pool _pool;
 
  public:
-  rmm_cuda_stream_pool() : _pool{STREAM_POOL_SIZE} {}
+  rmm_cuda_stream_pool() : _pool{STREAM_POOL_SIZE, rmm::cuda_stream::flags::non_blocking} {}
   rmm::cuda_stream_view get_stream() override { return _pool.get_stream(); }
   rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
   {

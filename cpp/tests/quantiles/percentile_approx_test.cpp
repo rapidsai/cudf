@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/tdigest_utilities.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -19,6 +20,8 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+
+#include <cuda/iterator>
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
@@ -96,15 +99,6 @@ struct percentile_approx_dispatch {
                                            cudf::size_type ulps)
     requires(cudf::is_numeric<T>() || cudf::is_fixed_point<T>())
   {
-    // arrow implementation.
-    auto expected = [&]() {
-      // we're explicitly casting back to doubles here but this is ok because that is
-      // exactly what happens inside of the cudf implementation as values are processed as well. so
-      // this should not affect results.
-      auto as_doubles = cudf::cast(values, cudf::data_type{cudf::type_id::FLOAT64});
-      return arrow_percentile_approx(*as_doubles, delta, percentages);
-    }();
-
     // gpu implementation
     auto agg_result = op(values, delta);
 
@@ -113,6 +107,17 @@ struct percentile_approx_dispatch {
     cudf::tdigest::tdigest_column_view tdv(*agg_result);
     auto result = cudf::percentile_approx(tdv, g_percentages);
 
+    // disable checking logic during a racecheck run
+    if (getenv("LIBCUDF_RACECHECK_ENABLED")) { return result; }
+
+    // arrow implementation.
+    auto expected = [&]() {
+      // we're explicitly casting back to doubles here but this is ok because that is
+      // exactly what happens inside of the cudf implementation as values are processed as well.
+      // so this should not affect results.
+      auto as_doubles = cudf::cast(values, cudf::data_type{cudf::type_id::FLOAT64});
+      return arrow_percentile_approx(*as_doubles, delta, percentages);
+    }();
     cudf::test::detail::expect_columns_equivalent(
       *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, ulps);
 
@@ -268,7 +273,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
-  auto i      = thrust::make_counting_iterator(0);
+  auto i      = cuda::counting_iterator<int>{0};
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
   CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),
@@ -285,7 +290,7 @@ void grouped_test(cudf::data_type input_type, std::vector<std::pair<int, int>> p
 
 std::pair<rmm::device_buffer, cudf::size_type> make_null_mask(cudf::column_view const& col)
 {
-  auto itr = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto itr = cudf::test::iterators::valids_at_multiples_of(2);
   return cudf::test::detail::make_null_mask(itr, itr + col.size());
 }
 
@@ -315,7 +320,7 @@ void grouped_with_nulls_test(cudf::data_type input_type, std::vector<std::pair<i
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     cudf::data_type{cudf::type_id::INT32}, values->size(), cudf::mask_state::UNALLOCATED);
-  auto i      = thrust::make_counting_iterator(0);
+  auto i      = cuda::counting_iterator<int>{0};
   auto h_keys = std::vector<int32_t>(values->size());
   std::transform(i, i + values->size(), h_keys.begin(), group_index{});
   CUDF_CUDA_TRY(cudaMemcpyAsync(keys->mutable_view().data<int32_t>(),
@@ -371,7 +376,14 @@ TYPED_TEST(PercentileApproxInputTypesTest, Grouped)
                 {10, cudf::test::default_ulp * 10}});
 }
 
-TYPED_TEST(PercentileApproxInputTypesTest, SimpleWithNulls)
+using PercentileApproxMinimalTypes = testing::Types<int32_t, double, numeric::decimal64>;
+
+// no need to recheck all types to verify null handling
+template <typename T>
+struct PercentileApproxInputMinimalTypesTest : public cudf::test::BaseFixture {};
+TYPED_TEST_SUITE(PercentileApproxInputMinimalTypesTest, PercentileApproxMinimalTypes);
+
+TYPED_TEST(PercentileApproxInputMinimalTypesTest, SimpleWithNulls)
 {
   using T               = TypeParam;
   auto const input_type = get_appropriate_type<T>();
@@ -382,7 +394,7 @@ TYPED_TEST(PercentileApproxInputTypesTest, SimpleWithNulls)
                           {10, cudf::test::default_ulp * 11}});
 }
 
-TYPED_TEST(PercentileApproxInputTypesTest, GroupedWithNulls)
+TYPED_TEST(PercentileApproxInputMinimalTypesTest, GroupedWithNulls)
 {
   using T               = TypeParam;
   auto const input_type = get_appropriate_type<T>();

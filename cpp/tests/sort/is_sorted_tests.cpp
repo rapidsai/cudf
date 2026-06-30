@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -138,13 +138,13 @@ auto empty<cudf::string_view>()
 template <>
 auto nulls_after<cudf::string_view>()
 {
-  return cudf::test::strings_column_wrapper({"identical", "identical"}, {true, false});
+  return cudf::test::strings_column_wrapper({"identical", ""}, {true, false});
 }
 
 template <>
 auto nulls_before<cudf::string_view>()
 {
-  return cudf::test::strings_column_wrapper({"identical", "identical"}, {false, true});
+  return cudf::test::strings_column_wrapper({"", "identical"}, {false, true});
 }
 
 // ----- struct_view {"nestedInt" : {"Int" : 0 }, "float" : 1}

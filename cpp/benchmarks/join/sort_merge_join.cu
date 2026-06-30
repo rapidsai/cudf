@@ -40,10 +40,7 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
   auto const multiplicity = 1;
   auto const selectivity  = 0.3;
 
-  if (right_size > left_size) {
-    state.skip("Skip large right table");
-    return;
-  }
+  if (should_skip_large_sizes(state)) { return; }
 
   auto dtypes = cycle_dtypes(get_type_or_group(static_cast<int32_t>(DataType)), num_keys);
 
@@ -74,8 +71,8 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
         build_keys, NullEquality, cudf::compute_metrics::NO, cudf::get_default_stream());
 
       // Step 2: Remap build and probe keys to integers
-      auto remapped_build = remap.remap_build_keys();
-      auto remapped_probe = remap.remap_probe_keys(probe_keys);
+      auto remapped_build = remap.remap_right_keys();
+      auto remapped_probe = remap.remap_left_keys(probe_keys);
 
       // Step 3: Create table views from remapped columns
       cudf::table_view remapped_build_view({remapped_build->view()});
@@ -106,12 +103,15 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
 }
 
 // Sort-merge inner join with multiple data types and optional key remapping
-NVBENCH_BENCH_TYPES(
-  nvbench_sort_merge_inner_join,
-  NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE, JOIN_NULL_EQUALITY, JOIN_DATATYPES, JOIN_ALGORITHM))
+NVBENCH_BENCH_TYPES(nvbench_sort_merge_inner_join,
+                    NVBENCH_TYPE_AXES(JOIN_NULLABLE_RANGE,
+                                      JOIN_NULL_EQUALITY,
+                                      DEFAULT_JOIN_DATATYPES,
+                                      JOIN_ALGORITHM))
   .set_name("sort_merge_inner_join")
   .set_type_axes_names({"Nullable", "NullEquality", "DataType", "Algorithm"})
   .add_int64_axis("num_keys", nvbench::range(1, 3, 1))
   .add_int64_axis("left_size", {10'000, 100'000})
   .add_int64_axis("right_size", {10'000, 100'000})
-  .add_int64_axis("use_key_remap", {0, 1});
+  .add_int64_axis("use_key_remap", {0, 1})
+  .add_int64_axis("skip_large_sizes", {1});

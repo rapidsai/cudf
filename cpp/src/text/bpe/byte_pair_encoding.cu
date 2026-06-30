@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,12 +7,12 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/offsets_iterator_factory.cuh>
 #include <cudf/detail/sizes_to_offsets_iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/strings/detail/strings_children.cuh>
@@ -27,12 +27,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/merge.h>
 #include <thrust/remove.h>
 #include <thrust/unique.h>
@@ -78,7 +75,7 @@ struct bpe_unpairable_offsets_fn {
     if (!cudf::strings::detail::is_begin_utf8_char(d_chars[idx])) { return 0; }
 
     auto const itr  = d_chars.data() + idx;
-    auto const end  = d_chars.end();
+    auto const end  = d_chars.data() + d_chars.size();
     auto const lhs  = cudf::string_view(itr, cudf::strings::detail::bytes_in_utf8_byte(*itr));
     auto const next = itr + lhs.size_bytes();
     auto output     = 0L;
@@ -111,6 +108,7 @@ struct bpe_unpairable_offsets_fn {
  *
  * @tparam MapRefType The type of the map finder object
  * @param d_strings Input data
+ * @param d_input_chars Pointer to the input character data
  * @param d_map For looking up individual string candidates
  * @param d_spaces_data Output the location where separator will be inserted
  * @param d_ranks_data Working memory to hold pair ranks
@@ -283,6 +281,7 @@ CUDF_KERNEL void bpe_parallel_fn(cudf::column_device_view const d_strings,
  * the current string size to produce the total output bytes.
  *
  * @param d_strings Input data
+ * @param d_input_chars Pointer to the input character data
  * @param d_spaces_data Output the location where separator will be inserted
  * @param d_sizes Output sizes of each row
  */
@@ -360,8 +359,8 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
   // used for various purposes below: unpairable-offsets, pair ranks, separator insert positions
   rmm::device_uvector<int64_t> d_working(chars_size, stream);
 
-  auto const chars_begin = thrust::counting_iterator<int64_t>(0);
-  auto const chars_end   = thrust::counting_iterator<int64_t>(chars_size);
+  auto const chars_begin = cuda::counting_iterator<int64_t>{0};
+  auto const chars_end   = cuda::counting_iterator<int64_t>{chars_size};
 
   {
     // this kernel locates unpairable sections of strings to create artificial string row
@@ -370,16 +369,23 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     auto const mp_map = get_bpe_merge_pairs_impl(merge_pairs)->get_mp_table_ref();  // lookup table
     auto const d_chars_span = cudf::device_span<char const>(d_input_chars, chars_size);
     auto up_fn = bpe_unpairable_offsets_fn<decltype(mp_map)>{d_chars_span, first_offset, mp_map};
-    thrust::transform(rmm::exec_policy_nosync(stream), chars_begin, chars_end, d_up_offsets, up_fn);
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      chars_begin,
+                      chars_end,
+                      d_up_offsets,
+                      up_fn);
     auto const up_end =  // remove all but the unpairable offsets
-      thrust::remove(rmm::exec_policy_nosync(stream), d_up_offsets, d_up_offsets + chars_size, 0L);
+      thrust::remove(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     d_up_offsets,
+                     d_up_offsets + chars_size,
+                     0L);
     auto const unpairables = cuda::std::distance(d_up_offsets, up_end);  // number of unpairables
 
     // new string boundaries created by combining unpairable offsets with the existing offsets
     auto tmp_offsets = rmm::device_uvector<int64_t>(unpairables + input.size() + 1, stream);
     auto input_offsets =
       cudf::detail::offsetalator_factory::make_input_iterator(input.offsets(), input.offset());
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   input_offsets,
                   input_offsets + input.size() + 1,
                   d_up_offsets,
@@ -387,7 +393,9 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
                   tmp_offsets.begin());
     // remove any adjacent duplicate offsets (i.e. empty or null rows)
     auto const offsets_end =
-      thrust::unique(rmm::exec_policy_nosync(stream), tmp_offsets.begin(), tmp_offsets.end());
+      thrust::unique(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                     tmp_offsets.begin(),
+                     tmp_offsets.end());
     auto const offsets_total =
       static_cast<cudf::size_type>(cuda::std::distance(tmp_offsets.begin(), offsets_end));
     tmp_offsets.resize(offsets_total, stream);
@@ -405,12 +413,14 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     auto const pair_map = get_bpe_merge_pairs_impl(merge_pairs)->get_merge_pairs_ref();
     bpe_parallel_fn<decltype(pair_map)><<<tmp_size, block_size, 0, stream.value()>>>(
       *d_tmp_strings, d_input_chars, pair_map, d_spaces.data(), d_ranks.data(), d_rerank.data());
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // compute the output sizes
   auto output_sizes = rmm::device_uvector<cudf::size_type>(input.size(), stream);
   bpe_finalize<<<input.size(), block_size, 0, stream.value()>>>(
     *d_strings, d_input_chars, d_spaces.data(), output_sizes.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   // convert sizes to offsets in-place
   auto [offsets, bytes] = cudf::strings::detail::make_offsets_child_column(
@@ -428,15 +438,15 @@ std::unique_ptr<cudf::column> byte_pair_encoding(cudf::strings_column_view const
     cudf::detail::copy_if(chars_begin + 1, chars_end, d_inserts, offsets_at_non_zero, stream);
 
   // this will insert the single-byte separator into positions specified in d_inserts
-  auto const sep_char = thrust::constant_iterator<char>(separator.to_string(stream)[0]);
-  thrust::merge_by_key(rmm::exec_policy_nosync(stream),
+  auto const sep_char = cuda::constant_iterator<char>(separator.to_string(stream)[0]);
+  thrust::merge_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                        d_inserts,      // where to insert separator byte
                        copy_end,       //
                        chars_begin,    // all indices
                        chars_end,      //
                        sep_char,       // byte to insert
                        d_input_chars,  // original data
-                       thrust::make_discard_iterator(),
+                       cuda::make_discard_iterator(),
                        d_chars);  // result
 
   return cudf::make_strings_column(input.size(),

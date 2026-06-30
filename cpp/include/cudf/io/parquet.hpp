@@ -66,8 +66,11 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Path in schema of column to read; `nullopt` is all
-  std::optional<std::vector<std::string>> _columns;
+  // Path in schema of column names to read; `nullopt` is all
+  std::optional<std::vector<std::string>> _column_names;
+  // Indices of top-level columns to read; `nullopt` is all (cannot be used alongside
+  // `_column_names`)
+  std::optional<std::vector<cudf::size_type>> _column_indices;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -96,8 +99,13 @@ class parquet_reader_options {
   bool _ignore_missing_columns = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
+  // Cast decimal columns to a specific width
+  type_id _decimal_width{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
+  // Whether column name matching is case sensitive. In case of multiple
+  // case-insensitive matches, the first matched column is selected
+  bool _case_sensitive_names = true;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -226,7 +234,24 @@ class parquet_reader_options {
    *
    * @return Names of column to be read; `nullopt` if the option is not set
    */
-  [[nodiscard]] auto const& get_columns() const { return _columns; }
+  [[nodiscard]] [[deprecated("Use `get_column_names` instead.")]] auto const& get_columns() const
+  {
+    return _column_names;
+  }
+
+  /**
+   * @brief Returns names of column to be read, if set.
+   *
+   * @return Names of column to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_names() const { return _column_names; }
+
+  /**
+   * @brief Returns indices of top-level columns to be read, if set.
+   *
+   * @return Indices of top-level columns to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_indices() const { return _column_indices; }
 
   /**
    * @brief Returns list of individual row groups to be read.
@@ -250,11 +275,28 @@ class parquet_reader_options {
   [[nodiscard]] data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
+   * @brief Returns decimal width used to cast decimal columns.
+   *
+   * @return Decimal type_id used to cast decimal columns
+   */
+  [[nodiscard]] type_id get_decimal_width() const { return _decimal_width; }
+
+  /**
    * @brief Returns whether to use JIT compilation for filtering.
    *
    * @return `true` if JIT compilation should be used for filtering
    */
   [[nodiscard]] bool is_enabled_use_jit_filter() const { return _use_jit_filter; }
+
+  /**
+   * @brief Returns whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
+   *
+   * @return `true` if column name matching is case sensitive (default)
+   */
+  [[nodiscard]] bool is_enabled_case_sensitive_names() const { return _case_sensitive_names; }
 
   /**
    * @brief Set a new source location
@@ -266,11 +308,14 @@ class parquet_reader_options {
   /**
    * @brief Sets the names of columns to be read from all input sources.
    *
+   * @deprecated Deprecated in 26.04 and will be removed in 26.06+. Use `set_column_names` instead.
+   *
    * Applies the same list of column names across all sources. Unlike `set_row_groups`,
    * which allows per-source configuration, `set_columns` applies globally.
    *
-   * Columns that do not exist in the input files will be ignored silently.
-   * The output table will only include the columns that are actually found.
+   * Columns that do not exist in the input files will be ignored silently and the output table will
+   * only include the columns that are actually found. This behavior can be changed by setting
+   * `enable_ignore_missing_columns` to false.
    *
    * To select a nested column (e.g., a struct member), use dot notation.
    *
@@ -280,9 +325,58 @@ class parquet_reader_options {
    *
    * @note This function does not currently support per-source column selection.
    *
-   * @param col_names A vector of column names to attempt to read from each input source.
+   * @param column_names A vector of column names to attempt to read from each input source.
    */
-  void set_columns(std::vector<std::string> col_names) { _columns = std::move(col_names); }
+  [[deprecated("Use `set_column_names` instead.")]] void set_columns(
+    std::vector<std::string> column_names)
+  {
+    set_column_names(std::move(column_names));
+  }
+
+  /**
+   * @brief Sets the names of columns to be read from all input sources.
+   *
+   * Applies the same list of column names across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_columns` applies globally.
+   *
+   * Columns that do not exist in the input files will be ignored silently and the output table will
+   * only include the columns that are actually found. This behavior can be changed by setting
+   * `enable_ignore_missing_columns` to false.
+   *
+   * To select a nested column (e.g., a struct member), use dot notation.
+   *
+   * Example:
+   * To read only the `bar` and `baz` fields, call:
+   *   set_column_names({"foo.bar", "foo.baz"});
+   *
+   * @note This function does not currently support per-source column selection.
+   *
+   * @param column_names A vector of column names to attempt to read from each input source.
+   */
+  void set_column_names(std::vector<std::string> column_names)
+  {
+    CUDF_EXPECTS(not _column_indices.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
+    _column_names = std::move(column_names);
+  }
+
+  /**
+   * @brief Sets the indices of top-level columns to be read from all input sources.
+   *
+   * Applies the same list of top-level column indices across all sources. Unlike `set_row_groups`,
+   * which allows per-source configuration, `set_column_indices` applies globally.
+   *
+   * Note that `set_column_indices` can only be used to select top-level columns. unlike
+   * `set_columns` which can also select nested columns.
+   *
+   * @param col_indices A vector of column indices to attempt to read from each input source.
+   */
+  void set_column_indices(std::vector<cudf::size_type> col_indices)
+  {
+    CUDF_EXPECTS(not _column_names.has_value(),
+                 "Cannot select columns by indices and names simultaneously");
+    _column_indices = std::move(col_indices);
+  }
 
   /**
    * @brief Specifies which row groups to read from each input source.
@@ -297,6 +391,15 @@ class parquet_reader_options {
    * Example:
    * To read row groups [0, 2] from the first input and [1] from the second input, call:
    *   set_row_groups({{0, 2}, {1}});
+   *
+   * Output ordering: rows are emitted in input-source order; all rows selected from source 0
+   * are emitted before rows selected from source 1, and so on. Within each source, row groups
+   * appear in the exact order given by the inner vector; the reader does not sort or deduplicate
+   * the indices, and repeated indices are emitted multiple times. An empty inner vector means that
+   * source contributes no rows but does not affect the order of the remaining sources. When this
+   * setter is not called, all row groups are read in source order, then in on-disk order within
+   * each source. Row groups removed by standard `read_parquet` predicate pushdown (statistics or
+   * bloom filter pruning) are dropped in place; the remaining row groups keep their relative order.
    *
    * @param row_groups A vector of vectors, one per input source, each specifying the
    *                   row group indices to read from that source.
@@ -421,6 +524,24 @@ class parquet_reader_options {
    * @param type The timestamp data_type to which all timestamp columns need to be cast
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
+
+  /**
+   * @brief Sets decimal width used to cast decimal columns.
+   *
+   * @param width The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which all decimal
+   * columns need to be cast. The scale of each column is preserved from the file.
+   */
+  void set_decimal_width(type_id width) { _decimal_width = width; }
+
+  /**
+   * @brief Sets whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
+   *
+   * @param val Boolean indicating whether to enable case-sensitive matching.
+   */
+  void enable_case_sensitive_names(bool val) { _case_sensitive_names = val; }
 };
 
 /**
@@ -448,19 +569,43 @@ class parquet_reader_options_builder {
   /**
    * @brief Sets names of the columns to be read.
    *
-   * @param col_names Vector of column names
+   * @deprecated Deprecated in 26.04 and will be removed in 26.06+. Use `column_names` instead.
+   *
+   * @param column_names Vector of column names
    * @return this for chaining
    */
-  parquet_reader_options_builder& columns(std::vector<std::string> col_names)
+  [[deprecated("Use `column_names` instead.")]] parquet_reader_options_builder& columns(
+    std::vector<std::string> column_names)
   {
-    options._columns = std::move(col_names);
+    return this->column_names(std::move(column_names));
+  }
+
+  /**
+   * @brief Sets names of the columns to be read.
+   *
+   * @param column_names Vector of column names
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& column_names(std::vector<std::string> column_names)
+  {
+    options.set_column_names(std::move(column_names));
     return *this;
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
+   * @brief Sets the indices of top-level columns to be read from all input sources.
    *
-   * @param row_groups Vector of row groups to read
+   * @param col_indices A vector of column indices to attempt to read from each input source.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& column_indices(std::vector<cudf::size_type> col_indices)
+  {
+    options.set_column_indices(std::move(col_indices));
+    return *this;
+  }
+
+  /**
+   * @copydoc parquet_reader_options::set_row_groups
    * @return this for chaining
    */
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
@@ -619,6 +764,19 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets the decimal width used to cast decimal columns.
+   *
+   * @param width The decimal type_id (DECIMAL32, DECIMAL64, or DECIMAL128) to which all decimal
+   * columns need to be cast. The scale of each column is preserved from the file.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& decimal_width(type_id width)
+  {
+    options._decimal_width = width;
+    return *this;
+  }
+
+  /**
    * @brief Enable/disable use of JIT for filter step.
    *
    * @param use_jit_filter Boolean value whether to use JIT filter
@@ -627,6 +785,21 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& use_jit_filter(bool use_jit_filter)
   {
     options._use_jit_filter = use_jit_filter;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether column name matching is case sensitive.
+   *
+   * @note When disabled, if there are multiple case-insensitive matches, the first
+   * matched column is selected from the Parquet schema.
+   *
+   * @param val Boolean indicating whether to enable case-sensitive matching
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& case_sensitive_names(bool val)
+  {
+    options._case_sensitive_names = val;
     return *this;
   }
 
@@ -655,6 +828,9 @@ class parquet_reader_options_builder {
  *  auto result  = cudf::io::read_parquet(options);
  * @endcode
  *
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
+ *
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
@@ -678,6 +854,9 @@ table_with_metadata read_parquet(
  *  auto options = cudf::io::parquet_reader_options::builder();
  *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
  * @endcode
+ *
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
  *
  * @param sources Input `datasource` objects to read the dataset from
  * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty
@@ -1602,10 +1781,12 @@ class parquet_writer_options_builder
  *  cudf::io::write_parquet(options);
  * @endcode
  *
+ * @note If an exception is thrown during encoding or compression, no data is written to the sink.
+ *
  * @param options Settings for controlling writing behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @return A blob that contains the file metadata (parquet FileMetadata thrift message) if
- *         requested in parquet_writer_options (empty blob otherwise).
+ * @return A parquet-compatible blob that contains the file metadata (parquet FileMetadata thrift
+ * message).
  */
 
 std::unique_ptr<std::vector<uint8_t>> write_parquet(
@@ -1723,6 +1904,9 @@ class chunked_parquet_writer {
   /**
    * @brief Writes table to output.
    *
+   * @note If an exception is thrown during encoding or compression, the data from the failing call
+   * is not written to the sink. Data from previous successful calls is unaffected.
+   *
    * @param[in] table Table that needs to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
    * size as number of sinks.
@@ -1737,13 +1921,14 @@ class chunked_parquet_writer {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_paths Column chunks file path to be set in the raw output
+   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output
    * metadata
-   * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
-   * `column_chunks_file_paths` is provided, else null.
+   * @return A parquet-compatible blob that contains the file header and footer metadata. If
+   * `column_chunks_file_path` is non-empty, the output metadata blob will also have row group file
+   * paths set.
    */
   std::unique_ptr<std::vector<uint8_t>> close(
-    std::vector<std::string> const& column_chunks_file_paths = {});
+    std::vector<std::string> const& column_chunks_file_path = {});
 
   /// Unique pointer to impl writer class
   std::unique_ptr<parquet::detail::writer> writer;

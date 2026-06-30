@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -114,9 +114,18 @@ struct DeviceCount {
 struct DeviceMin {
   template <typename T>
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
-    -> decltype(cudf::detail::min(lhs, rhs))
+    -> decltype(numeric::detail::min(lhs, rhs))
+    requires(cudf::is_fixed_width<T>())
   {
     return numeric::detail::min(lhs, rhs);
+  }
+
+  template <typename T>
+  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
+    -> decltype(cudf::detail::min(lhs, rhs))
+    requires(not cudf::is_fixed_width<T>())
+  {
+    return cudf::detail::min(lhs, rhs);
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() && !cudf::is_fixed_point<T>())>
@@ -163,9 +172,18 @@ struct DeviceMin {
 struct DeviceMax {
   template <typename T>
   CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
-    -> decltype(cudf::detail::max(lhs, rhs))
+    -> decltype(numeric::detail::max(lhs, rhs))
+    requires(cudf::is_fixed_width<T>())
   {
     return numeric::detail::max(lhs, rhs);
+  }
+
+  template <typename T>
+  CUDF_HOST_DEVICE inline auto operator()(T const& lhs, T const& rhs)
+    -> decltype(cudf::detail::max(lhs, rhs))
+    requires(not cudf::is_fixed_width<T>())
+  {
+    return cudf::detail::max(lhs, rhs);
   }
 
   template <typename T, CUDF_ENABLE_IF(cudf::is_numeric<T>() && !cudf::is_fixed_point<T>())>

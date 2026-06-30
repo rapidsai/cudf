@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,6 +11,7 @@
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/resource_ref.hpp>
 
@@ -133,7 +134,7 @@ struct rolling_request {
  * @param preceding Type of the preceding window.
  * @param following Type of the following window.
  * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
+ * @param mr Device memory resource used to allocate the returned columns' device memory
  * @return pair of preceding and following columns that define the window bounds for each row,
  * suitable for passing to `rolling_window`.
  */
@@ -172,8 +173,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> make_range_windows(
  * @param[in] input The input column
  * @param[in] preceding_window The static rolling window size in the backward direction
  * @param[in] following_window The static rolling window size in the forward direction
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result. If the number of valid observations is less than
+ *                        `min_periods`, the result for element `i` is null, except when
+ *                        `min_periods=0`. When `min_periods=0`, aggregations return identity values
+ *                        for windows with insufficient observations: SUM and COUNT return 0, MIN
+ *                        returns the maximum value for the type, MAX returns the minimum value for
+ *                        the type. Note: MEAN behavior is undefined for empty windows.
  * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -346,8 +352,9 @@ struct window_bounds {
  * positive values), or forward direction (for negative values)
  * @param[in] following_window The static rolling window size in the forward direction (for positive
  * values), or backward direction (for negative values)
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result, otherwise element `i` is null. Must be positive
+ *                        (>= 1).
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -539,8 +546,9 @@ std::unique_ptr<column> grouped_rolling_window(
  * @param[in] input The input column (to be aggregated)
  * @param[in] preceding The interval value in the backward direction
  * @param[in] following The interval value in the forward direction
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result, otherwise element `i` is null. Must be positive
+ *                        (>= 1).
  * @param[in] aggr The rolling window aggregation type (SUM, MAX, MIN, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory
@@ -586,6 +594,39 @@ std::unique_ptr<table> grouped_range_rolling_window(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Apply a grouping-aware range-based rolling window function to a sequence of columns,
+ * using one or more sorted order-by columns to identify peer rows.
+ *
+ * This overload is equivalent to the single-column `grouped_range_rolling_window` overload when
+ * `orderby` contains one column. When `orderby` contains multiple columns, bounded scalar RANGE
+ * endpoints are not supported because a scalar distance is only well-defined for one order-by
+ * column. Multi-column order-by windows support peer-frame endpoints: `unbounded` and
+ * `current_row`.
+ *
+ * @param group_keys Possibly empty table of sorted keys defining groups.
+ * @param orderby Table defining sorted order-by keys. If `group_keys` is non-empty, must be sorted
+ * groupwise.
+ * @param orders Sort order for each order-by column.
+ * @param null_orders Null sort order for each order-by column.
+ * @param preceding Type of the preceding window.
+ * @param following Type of the following window.
+ * @param requests Columns to aggregate and the aggregation for each column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned table's device memory.
+ * @return A table of results, one column per input request.
+ */
+std::unique_ptr<table> grouped_range_rolling_window(
+  table_view const& group_keys,
+  table_view const& orderby,
+  host_span<order const> orders,
+  host_span<null_order const> null_orders,
+  range_window_type preceding,
+  range_window_type following,
+  host_span<rolling_request const> requests,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief  Applies a variable-size rolling window function to the values in a column.
  *
  * This function aggregates values in a window around each element i of the input column, and
@@ -618,8 +659,13 @@ std::unique_ptr<table> grouped_range_rolling_window(
  * @param[in] following_window A non-nullable column of INT32 window sizes in the backward
  *                             direction. `following_window[i]` specifies following window size
  *                             for element `i`.
- * @param[in] min_periods Minimum number of observations in window required to have a value,
- *                        otherwise element `i` is null.
+ * @param[in] min_periods Minimum number of valid (non-null) observations in window required to
+ *                        produce a valid result. If the number of valid observations is less than
+ *                        `min_periods`, the result for element `i` is null, except when
+ *                        `min_periods=0`. When `min_periods=0`, aggregations return identity values
+ *                        for windows with insufficient observations: SUM and COUNT return 0, MIN
+ *                        returns the maximum value for the type, MAX returns the minimum value for
+ *                        the type. Note: MEAN behavior is undefined for empty windows.
  * @param[in] agg The rolling window aggregation type (sum, max, min, etc.)
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned column's device memory

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,6 +8,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -24,7 +25,7 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 
 #include <arrow/c/bridge.h>
 
@@ -242,9 +243,8 @@ TYPED_TEST(ToArrowTestDurationsTest, DurationTable)
 
 TEST_F(ToArrowTest, NestedList)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3 != 0; });
-  auto col = cudf::test::lists_column_wrapper<int64_t>(
+  auto valids = cudf::test::iterators::nulls_at_multiples_of(3);
+  auto col    = cudf::test::lists_column_wrapper<int64_t>(
     {{{{{1, 2}, valids}, {{3, 4}, valids}, {5}}, {{6}, {{7, 8, 9}, valids}}}, valids});
   cudf::table_view input_view({col});
 
@@ -411,7 +411,7 @@ TEST_F(ToArrowTest, FixedPoint64TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota        = thrust::make_counting_iterator(1);
+    auto const iota        = cuda::counting_iterator<int64_t>{1};
     auto const col         = fp_wrapper<int64_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input       = cudf::table_view({col});
     auto const expect_data = std::vector<int64_t>{iota, iota + NUM_ELEMENTS};
@@ -434,7 +434,7 @@ TEST_F(ToArrowTest, FixedPoint128TableLarge)
   auto constexpr NUM_ELEMENTS = 1000;
 
   for (auto const scale : {3, 2, 1, 0, -1, -2, -3}) {
-    auto const iota        = thrust::make_counting_iterator(1);
+    auto const iota        = cuda::counting_iterator<__int128_t>{1};
     auto const col         = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{scale});
     auto const input       = cudf::table_view({col});
     auto const expect_data = std::vector<__int128_t>{iota, iota + NUM_ELEMENTS};
@@ -660,7 +660,7 @@ TEST_F(ToArrowDecimalScalarTest, Basic)
 
   auto const get_ref_scalar = [&](std::shared_ptr<arrow::DataType> type) {
     auto const maybe_ref_scalar = arrow::MakeScalar(type, value);
-    if (!maybe_ref_scalar.ok()) { CUDF_FAIL("Failed to construct reference scalar"); }
+    CUDF_EXPECTS(maybe_ref_scalar.ok(), "Failed to construct reference scalar");
     return *maybe_ref_scalar;
   };
 

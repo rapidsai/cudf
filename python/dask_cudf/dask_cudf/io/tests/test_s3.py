@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import os
@@ -143,13 +143,7 @@ def test_read_parquet_open_file_options_raises():
 @pytest.mark.parametrize(
     "filesystem",
     [
-        pytest.param(
-            "arrow",
-            marks=pytest.mark.skipif(
-                not dask_cudf.backends.PYARROW_GE_15,
-                reason="Not supported",
-            ),
-        ),
+        "arrow",
         "fsspec",
     ],
 )

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -619,7 +619,7 @@ def test_windowing_n(func, n, getter):
 
 
 @pytest.mark.parametrize("func", [lambda x: x.sum(), lambda x: x.mean()])
-@pytest.mark.parametrize("value", ["10h", "1d"])
+@pytest.mark.parametrize("value", ["10h", "1D"])
 @pytest.mark.parametrize("getter", [lambda df: df, lambda df: df.x])
 @pytest.mark.parametrize(
     "grouper", [lambda a: "y", lambda a: a.index, lambda a: ["y"]]
@@ -839,11 +839,11 @@ def test_rolling_aggs_with_start_state(stream):
     )
     assert assert_eq(
         output0[-1][1].reset_index(drop=True),
-        cudf.Series([450], name="amount"),
+        cudf.Series([450.0], name="amount"),
     )
 
     stream = Stream()
-    example = cudf.DataFrame({"name": [], "amount": []})
+    example = cudf.DataFrame({"name": [], "amount": []}, dtype="float64")
     sdf = DataFrame(stream, example=example)
     output1 = (
         sdf.rolling(2, with_state=True, start=output0[-1][0])
@@ -859,7 +859,7 @@ def test_rolling_aggs_with_start_state(stream):
     )
     assert assert_eq(
         output1[-1][1].reset_index(drop=True),
-        cudf.Series([300], name="amount"),
+        cudf.Series([300.0], name="amount"),
     )
 
 

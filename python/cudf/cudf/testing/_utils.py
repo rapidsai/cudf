@@ -17,6 +17,8 @@ from cudf.utils import dtypes as dtypeutils
 from cudf.utils.temporal import unit_to_nanoseconds_conversion
 
 if TYPE_CHECKING:
+    import pylibcudf as plc
+
     from cudf.core.column.column import ColumnBase
 
 supported_numpy_dtypes = [
@@ -70,10 +72,10 @@ SERIES_OR_INDEX_NAMES = [
 ]
 
 
-def set_random_null_mask_inplace(series, null_probability=0.5, seed=None):
+def set_random_null_mask_inplace(series, null_probability=0.5):
     """Randomly nullify elements in series with the provided probability."""
     probs = [null_probability, 1 - null_probability]
-    rng = np.random.default_rng(seed=seed)
+    rng = np.random.default_rng(seed=0)
     mask = rng.choice([False, True], size=len(series), p=probs)
     series.iloc[mask] = None
 
@@ -244,7 +246,7 @@ def _decimal_series(input, dtype):
     )
 
 
-def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
+def _assert_column_memory_eq(lhs: plc.Column, rhs: plc.Column):
     """Assert the memory location and size of `lhs` and `rhs` are equivalent.
 
     Both data pointer and mask pointer are checked. Also recursively check for
@@ -255,19 +257,30 @@ def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
     def get_ptr(x) -> int:
         return x.ptr if x else 0
 
-    assert get_ptr(lhs.data) == get_ptr(rhs.data)
-    assert get_ptr(lhs.mask) == get_ptr(rhs.mask)
-    assert lhs.size == rhs.size
-    assert lhs.offset == rhs.offset
-    assert lhs.size == rhs.size
-    assert lhs.plc_column.num_children() == rhs.plc_column.num_children()
-    for lhs_child, rhs_child in zip(lhs.children, rhs.children, strict=True):
-        assert_column_memory_eq(lhs_child, rhs_child)
+    assert get_ptr(lhs.data()) == get_ptr(rhs.data())
+    assert get_ptr(lhs.null_mask()) == get_ptr(rhs.null_mask())
+    assert lhs.size() == rhs.size()
+    assert lhs.offset() == rhs.offset()
+    assert lhs.num_children() == rhs.num_children()
+    for lhs_child, rhs_child in zip(
+        lhs.children(), rhs.children(), strict=True
+    ):
+        _assert_column_memory_eq(lhs_child, rhs_child)
+
+
+def assert_column_memory_eq(lhs: ColumnBase, rhs: ColumnBase):
+    """Assert the memory location and size of `lhs` and `rhs` are equivalent.
+
+    Both data pointer and mask pointer are checked. Also recursively check for
+    children to the same constraints. Also fails check if the number of
+    children mismatches at any level.
+    """
+
+    _assert_column_memory_eq(lhs.plc_column, rhs.plc_column)
     if isinstance(lhs, cudf.core.column.CategoricalColumn) and isinstance(
         rhs, cudf.core.column.CategoricalColumn
     ):
         assert_column_memory_eq(lhs.categories, rhs.categories)
-        assert_column_memory_eq(lhs.codes, rhs.codes)
 
 
 def assert_column_memory_ne(lhs: ColumnBase, rhs: ColumnBase):

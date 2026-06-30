@@ -1,13 +1,14 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <benchmarks/common/generate_input.hpp>
+#include <benchmarks/common/memory_stats.hpp>
 #include <benchmarks/common/nvbench_utilities.hpp>
 
+#include <cudf/aggregation.hpp>
 #include <cudf/column/column_view.hpp>
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/types.hpp>
 
@@ -42,6 +43,7 @@ static void reduction(nvbench::state& state, nvbench::type_list<DataType, nvbenc
 {
   if (cudf::is_chrono<DataType>() && kind != cudf::aggregation::MIN) {
     state.skip("Skip chrono types for some aggregations");
+    return;
   }
 
   auto const size      = static_cast<cudf::size_type>(state.get_int64("size"));
@@ -67,10 +69,13 @@ static void reduction(nvbench::state& state, nvbench::type_list<DataType, nvbenc
   state.add_global_memory_reads<DataType>(size);
   state.add_global_memory_writes<DataType>(1);
 
-  auto agg = make_reduce_aggregation<kind>();
+  auto agg                    = make_reduce_aggregation<kind>();
+  auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync, [&input_column, output_type, &agg](nvbench::launch&) {
     cudf::reduce(*input_column, *agg, output_type);
   });
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 
   set_throughputs(state);
 }

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document BooleanFunction to remove noqa
 # ruff: noqa: D101
@@ -19,9 +19,10 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.expressions.literal import LiteralColumn
 
 if TYPE_CHECKING:
-    from typing_extensions import Self
+    from typing import Self
 
     import polars.type_aliases as pl_types
     from polars import polars  # type: ignore[attr-defined]
@@ -33,6 +34,15 @@ if TYPE_CHECKING:
 __all__ = ["BooleanFunction"]
 
 
+def _nesting_level(dtype: pl.DataType) -> int:
+    level = 0
+    current = dtype
+    while isinstance(current, pl.List):
+        level += 1
+        current = cast("pl.DataType", current.inner)
+    return level
+
+
 class BooleanFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `BooleanFunction`."""
@@ -41,9 +51,11 @@ class BooleanFunction(Expr):
         AllHorizontal = auto()
         Any = auto()
         AnyHorizontal = auto()
+        HasNulls = auto()
         IsBetween = auto()
         IsClose = auto()
         IsDuplicated = auto()
+        IsEmpty = auto()
         IsFinite = auto()
         IsFirstDistinct = auto()
         IsIn = auto()
@@ -91,11 +103,29 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsUnique,
         )
         if self.name in {
+            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsClose,
+            BooleanFunction.Name.IsEmpty,
         }:
             raise NotImplementedError(
                 f"Boolean function {self.name}"
             )  # pragma: no cover
+        if self.name is BooleanFunction.Name.IsIn and len(children) == 2:
+            # TODO: Polars should raise an error ahead of time
+            # for us for these kind of shape mismatches
+            needles, haystack = children
+            if (
+                isinstance(needles, LiteralColumn)
+                and isinstance(haystack, LiteralColumn)
+                and len(needles.value) != len(haystack.value)
+            ):
+                needles_level = _nesting_level(needles.dtype.polars_type)
+                haystack_level = _nesting_level(haystack.dtype.polars_type)
+
+                if needles_level != haystack_level:
+                    raise NotImplementedError(
+                        f"arguments for `is_in` have different lengths ({len(needles.value)} != {len(haystack.value)})"
+                    )
 
     @staticmethod
     def _distinct(
@@ -357,7 +387,8 @@ class BooleanFunction(Expr):
                     haystack.obj.children()[1],
                     dtype=DataType(
                         cast(
-                            pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner
+                            "pl.DataType",
+                            cast("pl.List", haystack.dtype.polars_type).inner,
                         )
                     ),
                 ).astype(needles.dtype, stream=df.stream)

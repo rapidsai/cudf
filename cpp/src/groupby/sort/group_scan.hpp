@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -169,6 +169,7 @@ std::unique_ptr<column> average_rank_scan(column_view const& grouped_values,
  * @brief Internal API to calculate groupwise dense rank value
  *
  * @param grouped_values column or struct column that rows within a group are sorted by
+ * @param value_order Order of values within groups
  * @param group_labels ID of group that the corresponding value belongs to
  * @param group_offsets group index offsets with group ID indices
  * @param stream CUDA stream used for device memory operations and kernel launches

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ def gather(
             if nullify
             else plc.copying.OutOfBoundsPolicy.DONT_CHECK,
         )
-        return plc_tbl.columns()
+    return plc_tbl.columns()
 
 
 def scatter(
@@ -66,7 +66,7 @@ def scatter(
         *target_columns, mode="write", scope="internal"
     ) as target_columns:
         plc_tbl = plc.copying.scatter(
-            cast(list[plc.Scalar], sources)
+            cast("list[plc.Scalar]", sources)
             if isinstance(sources[0], plc.Scalar)
             else plc.Table(
                 [col.plc_column for col in cast("list[ColumnBase]", sources)]

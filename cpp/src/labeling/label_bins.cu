@@ -23,16 +23,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
 
 #include <cuda/std/iterator>
+#include <cuda/std/limits>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
 #include <thrust/transform.h>
-
-#include <limits>
 
 namespace cudf {
 namespace detail {
@@ -65,7 +62,7 @@ auto dispatch_inclusive(inclusive i, Func&& func)
 // bin.
 // NOTE: In theory if a user decided to specify 2^31 bins this would fail. We
 // could make this an error in Python, but that is such a crazy edge case...
-constexpr size_type NULL_VALUE{std::numeric_limits<size_type>::max()};
+__device__ constexpr size_type NULL_VALUE{cuda::std::numeric_limits<size_type>::max()};
 
 /*
  * Functor for finding bins using thrust::transform.
@@ -148,7 +145,7 @@ std::unique_ptr<column> label_bins(column_view const& input,
   using RandomAccessIterator = decltype(left_edges_device_view->begin<T>());
 
   dispatch_bool(input.has_nulls(), [&](auto has_nulls) {
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       input_device_view->pair_begin<T, has_nulls>(),
                       input_device_view->pair_end<T, has_nulls>(),
                       output_begin,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -49,7 +49,8 @@ auto column_view_with_common_nulls(column_view const& column_0,
                                    column_view const& column_1,
                                    rmm::cuda_stream_view stream)
 {
-  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}}, stream);
+  auto [new_nullmask, null_count] = cudf::bitmask_and(
+    table_view{{column_0, column_1}}, stream, cudf::get_current_device_resource_ref());
   if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
   auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
     return column_view(col.type(),
@@ -140,6 +141,18 @@ void aggregate_result_functor::operator()<aggregation::SUM>(aggregation const& a
 }
 
 template <>
+void aggregate_result_functor::operator()<aggregation::SUM_OVERFLOW>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) return;
+
+  cache.add_result(
+    values,
+    agg,
+    detail::group_sum_overflow(
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
+}
+
+template <>
 void aggregate_result_functor::operator()<aggregation::PRODUCT>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
@@ -210,7 +223,7 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
                              null_removed_map,
                              argmin_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
                                                       : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             cudf::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
       return std::move(transformed_result->release()[0]);
@@ -249,7 +262,7 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
                              null_removed_map,
                              argmax_result.nullable() ? cudf::out_of_bounds_policy::NULLIFY
                                                       : cudf::out_of_bounds_policy::DONT_CHECK,
-                             cudf::detail::negative_index_policy::NOT_ALLOWED,
+                             cudf::negative_index_policy::NOT_ALLOWED,
                              stream,
                              mr);
       return std::move(transformed_result->release()[0]);
@@ -877,11 +890,6 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
     auto store_functor =
       detail::aggregate_result_functor(request.values, helper(), cache, stream, mr);
     for (auto const& agg : request.aggregations) {
-      // SUM_WITH_OVERFLOW is only supported with hash-based groupby, not sort-based
-      CUDF_EXPECTS(agg->kind != aggregation::SUM_WITH_OVERFLOW,
-                   "SUM_WITH_OVERFLOW aggregation is only supported with hash-based groupby, not "
-                   "sort-based groupby");
-
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(agg->kind, store_functor, *agg);
     }

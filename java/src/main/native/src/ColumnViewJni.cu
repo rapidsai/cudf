@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,21 +8,21 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/labeling/label_segments.cuh>
-#include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/stream_compaction.hpp>
-#include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/list_device_view.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
+#include <cudf/null_mask.hpp>
+#include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/transform.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/functional>
 #include <thrust/logical.h>
 #include <thrust/scan.h>
@@ -63,8 +63,8 @@ namespace {
 __device__ bool list_has_nulls(list_device_view list)
 {
   return thrust::any_of(thrust::seq,
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(list.size()),
+                        cuda::counting_iterator{cudf::size_type{0}},
+                        cuda::counting_iterator{list.size()},
                         [&list](auto const idx) { return list.is_null(idx); });
 }
 
@@ -91,8 +91,8 @@ void post_process_list_overlap(cudf::column_view const& lhs,
     rmm::exec_policy_nosync(stream),
     validity.begin(),
     validity.end(),
-    [lhs            = cudf::detail::lists_column_device_view{*lhs_cdv_ptr},
-     rhs            = cudf::detail::lists_column_device_view{*rhs_cdv_ptr},
+    [lhs            = cudf::lists_column_device_view{*lhs_cdv_ptr},
+     rhs            = cudf::lists_column_device_view{*rhs_cdv_ptr},
      overlap_result = *overlap_cdv_ptr] __device__(auto const idx) {
       if (overlap_result.is_null(idx) || overlap_result.template element<bool>(idx)) {
         return true;
@@ -119,19 +119,17 @@ void post_process_list_overlap(cudf::column_view const& lhs,
 
   // Create a new nullmask from the validity data.
   auto [new_null_mask, new_null_count] =
-    cudf::detail::valid_if(validity.begin(),
-                           validity.end(),
-                           cuda::std::identity{},
-                           cudf::get_default_stream(),
-                           cudf::get_current_device_resource_ref());
+    cudf::bools_to_mask(cudf::device_span<bool const>(validity),
+                        cudf::get_default_stream(),
+                        cudf::get_current_device_resource_ref());
 
   if (new_null_count > 0) {
     // If the `overlap_result` column is nullable, perform `bitmask_and` of its nullmask and the
     // new nullmask.
     if (overlap_cv.nullable()) {
-      auto [null_mask, null_count] = cudf::detail::bitmask_and(
+      auto [null_mask, null_count] = cudf::bitmask_and(
         std::vector<bitmask_type const*>{overlap_cv.null_mask(),
-                                         static_cast<bitmask_type const*>(new_null_mask.data())},
+                                         static_cast<bitmask_type const*>(new_null_mask->data())},
         std::vector<cudf::size_type>{0, 0},
         overlap_cv.size(),
         stream,
@@ -139,7 +137,7 @@ void post_process_list_overlap(cudf::column_view const& lhs,
       overlap_result->set_null_mask(std::move(null_mask), null_count);
     } else {
       // Just set the output nullmask as the new nullmask.
-      overlap_result->set_null_mask(std::move(new_null_mask), new_null_count);
+      overlap_result->set_null_mask(std::move(*new_null_mask.release()), new_null_count);
     }
   }
 }
@@ -159,17 +157,17 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
   // Use `cudf::duplicate_keep_option::KEEP_LAST` so this will produce the desired behavior when
   // being called in `create_map` in spark-rapids.
   // Other options comparing nulls and NaNs are set as all-equal.
-  auto out_columns = cudf::detail::stable_distinct(
-                       table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}},
-                                   child.child(0),
-                                   child.child(1)}},  // input table
-                       std::vector<size_type>{0, 1},  // key columns
-                       cudf::duplicate_keep_option::KEEP_LAST,
-                       cudf::null_equality::EQUAL,
-                       cudf::nan_equality::ALL_EQUAL,
-                       stream,
-                       cudf::get_current_device_resource_ref())
-                       ->release();
+  auto out_columns =
+    cudf::stable_distinct(table_view{{column_view{cudf::device_span<cudf::size_type const>{labels}},
+                                      child.child(0),
+                                      child.child(1)}},  // input table
+                          std::vector<size_type>{0, 1},  // key columns
+                          cudf::duplicate_keep_option::KEEP_LAST,
+                          cudf::null_equality::EQUAL,
+                          cudf::nan_equality::ALL_EQUAL,
+                          stream,
+                          cudf::get_current_device_resource_ref())
+      ->release();
   auto const out_labels = out_columns.front()->view();
 
   // Assemble a structs column of <out_keys, out_vals>.
@@ -195,8 +193,7 @@ std::unique_ptr<cudf::column> lists_distinct_by_key(cudf::lists_column_view cons
     std::move(out_offsets),
     std::move(out_structs),
     input.null_count(),
-    cudf::detail::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()),
-    stream);
+    cudf::copy_bitmask(input.parent(), stream, cudf::get_current_device_resource_ref()));
 }
 
 }  // namespace cudf::jni
