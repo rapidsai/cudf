@@ -188,21 +188,23 @@ def _select_candidate(
     right_keys = _simple_keys(ir.right_on)
     if len(left_keys) != len(ir.left_on) or len(right_keys) != len(ir.right_on):
         return None, "non_column_join_key"
-    if len(left_keys) != len(right_keys):
-        return None, "key_count_mismatch"
 
     candidates: list[_Candidate] = []
-    for target_side in ("left", "right"):
-        target_child, domain_child = (
-            (ir.children[0], ir.children[1])
-            if target_side == "left"
-            else (ir.children[1], ir.children[0])
-        )
-        target_keys, domain_keys = (
-            (left_keys, right_keys)
-            if target_side == "left"
-            else (right_keys, left_keys)
-        )
+    left: tuple[Literal["left", "right"], IR, tuple[expr.Col, ...]] = (
+        "left",
+        ir.children[0],
+        left_keys,
+    )
+    right: tuple[Literal["left", "right"], IR, tuple[expr.Col, ...]] = (
+        "right",
+        ir.children[1],
+        right_keys,
+    )
+    for (target_side, target_child, target_keys), (
+        _,
+        domain_child,
+        domain_keys,
+    ) in ((left, right), (right, left)):
         candidates.extend(
             _composite_candidates(
                 target_side,
@@ -508,7 +510,7 @@ def _estimate_row_counts(ir: IR, stats: StatsCollector) -> dict[IR, int | None]:
                 for child in node.children
                 if (estimate := estimates[child]) is not None
             ]
-            rows = max(child_estimates) if child_estimates else None
+            rows = max(child_estimates, default=None)
         estimates[node] = rows
     return estimates
 
