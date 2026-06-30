@@ -79,7 +79,7 @@ static void detail_anyall(nvbench::state& state, nvbench::type_list<DataType>)
     auto const input = values->view();
     auto const begin = input.template begin<DataType>();
     auto const end   = input.template end<DataType>();
-    auto predicate   = [] __device__(DataType value) { return value != DataType{0}; };
+    auto predicate   = [] __device__(DataType value) -> bool { return value != DataType{0}; };
 
     result = kind_str == "any" ? cudf::detail::any_of(begin, end, predicate, stream)
                                : cudf::detail::all_of(begin, end, predicate, stream);
