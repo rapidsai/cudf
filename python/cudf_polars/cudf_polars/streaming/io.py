@@ -25,7 +25,6 @@ from cudf_polars.dsl.ir import (
     Sink,
 )
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
-from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
 from cudf_polars.streaming.base import (
     IOPartitionFlavor,
     IOPartitionPlan,
@@ -1032,6 +1031,8 @@ class ParquetMetadata:
 
     @nvtx_annotate_cudf_polars(message="ParquetMetadata")
     def __init__(self, paths: tuple[str, ...], max_footer_samples: int):
+        from cudf_polars.dsl.utils.io import _prefetch_parquet_footers_for_paths
+
         self.paths = paths
         self.max_footer_samples = max_footer_samples
         self.row_count = None
