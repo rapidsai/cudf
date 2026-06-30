@@ -1332,11 +1332,15 @@ def run_polars_spmd(
             run_config, engine=engine, gather_client_logs=False
         )
 
-    if _HAS_STRUCTLOG and run_config.collect_traces and is_rank_0:
-        _write_quent_traces(engine=engine, run_id=run_config.run_id)
-        _finalize_benchmark_run(
-            args, run_config, validation_failures, query_failures, engine=engine
+    if is_rank_0:
+        _write_quent_traces(
+            engine=engine,
+            run_id=run_config.run_id,
+            collect_traces=run_config.collect_traces,
         )
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=engine
+    )
 
 
 def run_polars_ray(
@@ -1382,11 +1386,14 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
 
-    if _HAS_STRUCTLOG and run_config.collect_traces:
-        _write_quent_traces(engine=engine, run_id=run_config.run_id)
-        _finalize_benchmark_run(
-            args, run_config, validation_failures, query_failures, engine=engine
-        )
+    _write_quent_traces(
+        engine=engine,
+        run_id=run_config.run_id,
+        collect_traces=run_config.collect_traces,
+    )
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=engine
+    )
 
 
 def run_polars_dask(
@@ -1438,8 +1445,11 @@ def run_polars_dask(
             )
             run_config = _consolidate_logs(run_config, engine)
 
-        if _HAS_STRUCTLOG and run_config.collect_traces:
-            _write_quent_traces(engine=engine, run_id=run_config.run_id)
+        _write_quent_traces(
+            engine=engine,
+            run_id=run_config.run_id,
+            collect_traces=run_config.collect_traces,
+        )
     finally:
         if dask_client is not None:
             dask_client.close()
@@ -1521,8 +1531,16 @@ def setup_logging(query_id: int, iteration: int) -> None:
         )
 
 
-def _write_quent_traces(engine: StreamingEngine, run_id: uuid.UUID) -> None:
+def _write_quent_traces(
+    engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
+) -> None:
     """Write collected Quent events to logs/{run_id}.ndjson."""
+    if not _HAS_STRUCTLOG:
+        return
+
+    if not collect_traces:
+        return
+
     quent_logs = list(engine._quent_events)
 
     # The quent UI currently requires the filename to match the engine's ID.

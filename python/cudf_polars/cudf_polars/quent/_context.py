@@ -299,7 +299,7 @@ class QuentContext:
 @dataclasses.dataclass(frozen=True, kw_only=True)
 class LocalQuentContext:
     """
-    A Quent Context that is only ever used locally.
+    A Quent Context that is only ever used on the local worker rank.
 
     This can contain non-serializable objects (like a QuentLogger)
     and entities that are only valid on the local rank.
