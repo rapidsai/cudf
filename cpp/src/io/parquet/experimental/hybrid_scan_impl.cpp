@@ -283,11 +283,14 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
   CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   auto [expr_conv, output_dtypes] = prepare_filter_and_output_types(options);
 
+  // Single source: keep only the bloom filter byte ranges, not the source map
   auto const bloom_filter_bytes =
-    _extended_metadata->get_bloom_filter_bytes(row_group_indices,
-                                               output_dtypes,
-                                               _output_column_schemas,
-                                               expr_conv.get_converted_expr().value());
+    _extended_metadata
+      ->bloom_filters_byte_ranges(row_group_indices,
+                                  output_dtypes,
+                                  _output_column_schemas,
+                                  expr_conv.get_converted_expr().value())
+      .first;
   auto const dictionary_page_bytes =
     _extended_metadata->get_dictionary_page_bytes(row_group_indices,
                                                   output_dtypes,
@@ -295,6 +298,20 @@ hybrid_scan_reader_impl::secondary_filters_byte_ranges(
                                                   expr_conv.get_converted_expr().value());
 
   return {bloom_filter_bytes, dictionary_page_bytes};
+}
+
+std::pair<std::vector<byte_range_info>, std::vector<size_type>>
+hybrid_scan_reader_impl::bloom_filters_byte_ranges(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  parquet_reader_options const& options)
+{
+  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  auto [expr_conv, output_dtypes] = prepare_filter_and_output_types(options);
+
+  return _extended_metadata->bloom_filters_byte_ranges(row_group_indices,
+                                                       output_dtypes,
+                                                       _output_column_schemas,
+                                                       expr_conv.get_converted_expr().value());
 }
 
 std::vector<std::vector<size_type>>
