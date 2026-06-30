@@ -12,7 +12,7 @@ import struct
 import time
 from collections import deque
 from contextlib import asynccontextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
@@ -743,8 +743,8 @@ def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...
 class TableSizeStats:
     """Sampled chunks and aggregate size/row stats for a table channel."""
 
-    chunks: ChunkStore | dict[int, TableChunk] = field(default_factory=dict)
-    """The sampled chunks/messages, keyed or ordered by sequence number."""
+    chunks: ChunkStore
+    """The sampled chunks/messages in replay order."""
     total_size: int = 0
     """The total estimated size of the table in bytes."""
     total_rows: int = 0
