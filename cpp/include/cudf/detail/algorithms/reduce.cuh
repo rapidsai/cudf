@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -12,12 +12,57 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_find.cuh>
 #include <cub/device/device_reduce.cuh>
 #include <cuda/iterator>
 #include <cuda/std/functional>
 #include <cuda/stream_ref>
 
 namespace cudf::detail {
+
+/**
+ * @brief Check if a predicate is true for any element in a device-accessible range using
+ * `cub::DeviceFind::FindIf`
+ *
+ * @tparam Predicate **[inferred]** Type of the unary predicate
+ * @tparam InputIterator **[inferred]** Type of device-accessible input iterator
+ *
+ * @param begin Device-accessible iterator to start of input values
+ * @param end Device-accessible iterator to end of input values
+ * @param predicate Predicate operator to apply to each element
+ * @param stream CUDA stream to use
+ * @return true if the predicate is true for any element, false otherwise
+ */
+template <typename Predicate, typename InputIterator>
+bool device_find_if(InputIterator begin,
+                    InputIterator end,
+                    Predicate predicate,
+                    rmm::cuda_stream_view stream)
+{
+  auto const num_items = cuda::std::distance(begin, end);
+  if (num_items == 0) { return false; }
+
+  using offset_type = cub::detail::choose_offset_t<decltype(num_items)>;
+
+  auto result =
+    cudf::detail::device_scalar<offset_type>(stream, cudf::get_current_device_resource_ref());
+
+  size_t temp_storage_bytes = 0;
+  CUDF_CUDA_TRY(cub::DeviceFind::FindIf(
+    nullptr, temp_storage_bytes, begin, result.data(), predicate, num_items, stream.value()));
+
+  rmm::device_buffer d_temp_storage(
+    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
+  CUDF_CUDA_TRY(cub::DeviceFind::FindIf(d_temp_storage.data(),
+                                        temp_storage_bytes,
+                                        begin,
+                                        result.data(),
+                                        predicate,
+                                        num_items,
+                                        stream.value()));
+
+  return result.value(stream) != static_cast<offset_type>(num_items);
+}
 
 /**
  * @brief Helper to reduce a device-accessible iterator using a binary operation
@@ -274,7 +319,8 @@ OutputType transform_reduce(InputIterator begin,
 template <typename TransformOp, typename InputIterator>
 bool all_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
-  return transform_reduce(begin, end, op, true, cuda::std::logical_and<bool>{}, stream);
+  return not device_find_if(
+    begin, end, [op] __device__(auto const& val) { return not op(val); }, stream);
 }
 
 /**
@@ -295,7 +341,7 @@ bool all_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_st
 template <typename TransformOp, typename InputIterator>
 bool any_of(InputIterator begin, InputIterator end, TransformOp op, rmm::cuda_stream_view stream)
 {
-  return transform_reduce(begin, end, op, false, cuda::std::logical_or<bool>{}, stream);
+  return device_find_if(begin, end, op, stream);
 }
 
 /**
