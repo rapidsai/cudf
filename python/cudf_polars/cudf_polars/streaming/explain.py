@@ -488,8 +488,8 @@ def _predicate_to_str(expr: Expr) -> str:
             sym = _BINOP_SYMBOLS.get(op, op.name)
             return f"({_predicate_to_str(left)} {sym} {_predicate_to_str(right)})"
         case UnaryFunction(name=name):
-            (child,) = expr.children
-            return f"{name}({_predicate_to_str(child)})"
+            args = ", ".join(_predicate_to_str(child) for child in expr.children)
+            return f"{name}({args})"
         case Ternary():
             when, then, otherwise = expr.children
             return f"when({_predicate_to_str(when)}).then({_predicate_to_str(then)}).otherwise({_predicate_to_str(otherwise)})"
