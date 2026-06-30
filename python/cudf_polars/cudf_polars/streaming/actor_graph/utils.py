@@ -52,7 +52,6 @@ if TYPE_CHECKING:
         Coroutine,
         Generator,
         Iterator,
-        Mapping,
         Sequence,
     )
 
@@ -92,17 +91,6 @@ class ChunkStore:
         """Yield messages in insertion order, draining the store."""
         while self._mids:
             yield self._store.extract(mid=self._mids.popleft())
-
-
-def buffered_chunk_messages(
-    buffered_chunks: ChunkStore | Mapping[int, TableChunk],
-) -> Iterator[Message]:
-    """Yield buffered chunks as messages, consuming the buffer."""
-    if isinstance(buffered_chunks, ChunkStore):
-        yield from buffered_chunks
-    else:
-        for seq_num, chunk in buffered_chunks.items():
-            yield Message(seq_num, chunk)
 
 
 @contextlib.contextmanager
@@ -810,7 +798,7 @@ async def replay_buffered_channel(
     context: Context,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    buffered_chunks: ChunkStore | Mapping[int, TableChunk],
+    buffered_chunks: ChunkStore,
     metadata: ChannelMetadata,
     *,
     trace_ir: IR,
@@ -835,7 +823,7 @@ async def replay_buffered_channel(
     """
     async with shutdown_on_error(context, ch_out, ch_in, trace_ir=trace_ir):
         await send_metadata(ch_out, context, metadata)
-        for msg in buffered_chunk_messages(buffered_chunks):
+        for msg in buffered_chunks:
             await ch_out.send(context, msg)
         while (msg := await ch_in.recv(context)) is not None:
             await ch_out.send(context, msg)
