@@ -1,12 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Regex patterns derived from spark-rapids integration tests:
-# https://github.com/NVIDIA/spark-rapids/blob/main/integration_tests/src/main/python/regexp_test.py
+# Regex patterns derived from cudf-spark integration tests:
+# https://github.com/NVIDIA/cudf-spark/blob/main/integration_tests/src/main/python/regexp_test.py
 #
-# Tests both Thompson NFA (DEFAULT) and Glushkov NFA (GLUSHKOV) engines.
-# Patterns using assertions (^, $, \b, \B) or >64 positions automatically
-# fall back to Thompson inside cuDF, so all patterns are valid for both flags.
 
 import pyarrow as pa
 import pyarrow.compute as pc
@@ -15,14 +12,10 @@ from utils import assert_column_eq
 
 import pylibcudf as plc
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture(scope="module")
 def spark_strings():
-    """Rich string array that exercises the spark-rapids regex patterns."""
+    """Rich string array that exercises the cudf-spark regex patterns."""
     return pa.array(
         [
             "abc",
@@ -59,30 +52,9 @@ def spark_strings():
     )
 
 
-@pytest.fixture(
-    params=[
-        pytest.param(
-            plc.strings.regex_flags.RegexFlags.DEFAULT,
-            id="DEFAULT",
-        ),
-        pytest.param(
-            plc.strings.regex_flags.RegexFlags.GLUSHKOV,
-            id="GLUSHKOV",
-        ),
-    ],
-    scope="module",
-)
-def regex_flags(request):
-    return request.param
-
-
-def _make_prog(pattern, flags):
+def _make_prog(pattern):
+    flags = plc.strings.regex_flags.RegexFlags.DEFAULT
     return plc.strings.regex_program.RegexProgram.create(pattern, flags)
-
-
-# ---------------------------------------------------------------------------
-# contains_re tests — patterns from spark-rapids rlike / regexp / regexp_like
-# ---------------------------------------------------------------------------
 
 
 # Basic quantifiers (test_rlike, test_regexp, test_regexp_like)
@@ -95,10 +67,10 @@ def _make_prog(pattern, flags):
         "a[bc]d",
     ],
 )
-def test_contains_re_basic(spark_strings, regex_flags, pattern):
+def test_contains_re_basic(spark_strings, pattern):
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
     )
     expect = pc.match_substring_regex(spark_strings, pattern)
     assert_column_eq(expect, got)
@@ -119,10 +91,10 @@ def test_contains_re_basic(spark_strings, regex_flags, pattern):
         "[ab]+|^cd1",
     ],
 )
-def test_contains_re_alternation(spark_strings, regex_flags, pattern):
+def test_contains_re_alternation(spark_strings, pattern):
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
     )
     expect = pc.match_substring_regex(spark_strings, pattern)
     assert_column_eq(expect, got)
@@ -141,10 +113,10 @@ def test_contains_re_alternation(spark_strings, regex_flags, pattern):
         "(.*)(.*)abb",
     ],
 )
-def test_contains_re_anchors_wildcards(spark_strings, regex_flags, pattern):
+def test_contains_re_anchors_wildcards(spark_strings, pattern):
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
     )
     expect = pc.match_substring_regex(spark_strings, pattern)
     assert_column_eq(expect, got)
@@ -164,10 +136,10 @@ def test_contains_re_anchors_wildcards(spark_strings, regex_flags, pattern):
         "a{1,6}",
     ],
 )
-def test_contains_re_bounded_repetition(spark_strings, regex_flags, pattern):
+def test_contains_re_bounded_repetition(spark_strings, pattern):
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
     )
     expect = pc.match_substring_regex(spark_strings, pattern)
     assert_column_eq(expect, got)
@@ -183,10 +155,10 @@ def test_contains_re_bounded_repetition(spark_strings, regex_flags, pattern):
         "(1)(2)(3)",
     ],
 )
-def test_contains_re_groups(spark_strings, regex_flags, pattern):
+def test_contains_re_groups(spark_strings, pattern):
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
     )
     expect = pc.match_substring_regex(spark_strings, pattern)
     assert_column_eq(expect, got)
@@ -210,10 +182,10 @@ def test_contains_re_groups(spark_strings, regex_flags, pattern):
         r"[^\n\r]",
     ],
 )
-def test_contains_re_char_classes(spark_strings, regex_flags, pattern):
+def test_contains_re_char_classes(spark_strings, pattern):
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
     )
     expect = pc.match_substring_regex(spark_strings, pattern)
     assert_column_eq(expect, got)
@@ -221,13 +193,13 @@ def test_contains_re_char_classes(spark_strings, regex_flags, pattern):
 
 # \W: cuDF uses ASCII semantics — only [^a-zA-Z0-9_] are non-word chars,
 # unlike pyarrow/RE2 which is Unicode-aware. Test with hardcoded expectations.
-def test_contains_re_nonword(regex_flags):
+def test_contains_re_nonword():
     arr = pa.array(
         ["abc", "abc123", "abc!", "a b", "aa|bb", "12345", "", None]
     )
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(arr),
-        _make_prog(r"\W", regex_flags),
+        _make_prog(r"\W"),
     )
     # cuDF \W matches non-ASCII-word characters: space, !, |
     expect = pa.array([False, False, True, True, True, False, False, None])
@@ -245,18 +217,14 @@ def test_contains_re_nonword(regex_flags):
         r"^[A-Z]{2,}",
     ],
 )
-def test_contains_re_escape_edge_cases(spark_strings, regex_flags, pattern):
+def test_contains_re_escape_edge_cases(spark_strings, pattern):
     got = plc.strings.contains.contains_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
     )
     expect = pc.match_substring_regex(spark_strings, pattern)
     assert_column_eq(expect, got)
 
-
-# ---------------------------------------------------------------------------
-# replace_re tests — patterns from spark-rapids regexp_replace
-# ---------------------------------------------------------------------------
 
 REPLACE_REPL = "X"  # replacement string used in all replace tests
 
@@ -272,10 +240,10 @@ REPLACE_REPL = "X"  # replacement string used in all replace tests
         "a|b|c",
     ],
 )
-def test_replace_re_basic(spark_strings, regex_flags, pattern):
+def test_replace_re_basic(spark_strings, pattern):
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pc.replace_substring_regex(spark_strings, pattern, REPLACE_REPL)
@@ -291,10 +259,10 @@ def test_replace_re_basic(spark_strings, regex_flags, pattern):
         "[A-Z]+",
     ],
 )
-def test_replace_re_quantifiers(spark_strings, regex_flags, pattern):
+def test_replace_re_quantifiers(spark_strings, pattern):
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pc.replace_substring_regex(spark_strings, pattern, REPLACE_REPL)
@@ -312,10 +280,10 @@ def test_replace_re_quantifiers(spark_strings, regex_flags, pattern):
         r"[^\n]",
     ],
 )
-def test_replace_re_negated_classes(spark_strings, regex_flags, pattern):
+def test_replace_re_negated_classes(spark_strings, pattern):
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pc.replace_substring_regex(spark_strings, pattern, REPLACE_REPL)
@@ -336,10 +304,10 @@ def test_replace_re_negated_classes(spark_strings, regex_flags, pattern):
         r"[^a-zA-Z_0-9]",
     ],
 )
-def test_replace_re_digit_word(spark_strings, regex_flags, pattern):
+def test_replace_re_digit_word(spark_strings, pattern):
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pc.replace_substring_regex(spark_strings, pattern, REPLACE_REPL)
@@ -347,11 +315,11 @@ def test_replace_re_digit_word(spark_strings, regex_flags, pattern):
 
 
 # \D replace: cuDF ASCII semantics — non-digits include letters, spaces, punctuation
-def test_replace_re_nondigit(regex_flags):
+def test_replace_re_nondigit():
     arr = pa.array(["abc", "a1b2", "123", "a b", "", None])
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(arr),
-        _make_prog(r"\D", regex_flags),
+        _make_prog(r"\D"),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pa.array(["XXX", "X1X2", "123", "XXX", "", None])
@@ -359,11 +327,11 @@ def test_replace_re_nondigit(regex_flags):
 
 
 # \W replace: cuDF ASCII semantics — non-word chars are non-[a-zA-Z0-9_]
-def test_replace_re_nonword(regex_flags):
+def test_replace_re_nonword():
     arr = pa.array(["abc", "a b", "a!b", "aa|bb", "123", "", None])
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(arr),
-        _make_prog(r"\W", regex_flags),
+        _make_prog(r"\W"),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pa.array(["abc", "aXb", "aXb", "aaXbb", "123", "", None])
@@ -384,10 +352,10 @@ def test_replace_re_nonword(regex_flags):
         "(aa|bb)|(cc|dd)",
     ],
 )
-def test_replace_re_multi_alternation(spark_strings, regex_flags, pattern):
+def test_replace_re_multi_alternation(spark_strings, pattern):
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pc.replace_substring_regex(spark_strings, pattern, REPLACE_REPL)
@@ -402,10 +370,10 @@ def test_replace_re_multi_alternation(spark_strings, regex_flags, pattern):
         "([^x])|([^y])",
     ],
 )
-def test_replace_re_noncapturing(spark_strings, regex_flags, pattern):
+def test_replace_re_noncapturing(spark_strings, pattern):
     got = plc.strings.replace_re.replace_re(
         plc.Column.from_arrow(spark_strings),
-        _make_prog(pattern, regex_flags),
+        _make_prog(pattern),
         plc.Scalar.from_arrow(pa.scalar(REPLACE_REPL)),
     )
     expect = pc.replace_substring_regex(spark_strings, pattern, REPLACE_REPL)

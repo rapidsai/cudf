@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -36,7 +36,8 @@ struct replace_regex_fn {
   char* d_chars{};
   cudf::detail::input_offsetalator d_offsets;
 
-  __device__ void operator()(size_type const idx, reprog_device const prog, int32_t const prog_idx)
+  template <typename ProgDevice>
+  __device__ void operator()(size_type const idx, ProgDevice const prog, int32_t const prog_idx)
   {
     if (d_strings.is_null(idx)) {
       if (!d_chars) { d_sizes[idx] = 0; }
@@ -100,15 +101,21 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   string_view d_repl(replacement.data(), replacement.size());
 
-  // create device object from regex_program
-  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-
   auto const maxrepl = max_replace_count.value_or(-1);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  auto [offsets_column, chars] = make_strings_children(
-    replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
+  auto [offsets_column, chars] = [&] {
+    if (regex_device_builder::glushkov_fast_path_supported(prog)) {
+      auto d_prog = regex_device_builder::create_gkprog_device(prog, stream);
+      return make_strings_children(
+        replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
+    } else {
+      auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+      return make_strings_children(
+        replace_regex_fn{*d_strings, d_repl, maxrepl}, *d_prog, input.size(), stream, mr);
+    }
+  }();
 
   return make_strings_column(input.size(),
                              std::move(offsets_column),

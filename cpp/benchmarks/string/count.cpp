@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,8 +44,7 @@ static void bench_count(nvbench::state& state)
   cudf::strings_column_view input(table->view().column(0));
 
   auto const pattern = patterns[pattern_index];
-  auto flags         = cudf::strings::regex_flags::GLUSHKOV;  // DEFAULT
-  auto prog          = cudf::strings::regex_program::create(pattern, flags);
+  auto prog          = cudf::strings::regex_program::create(pattern);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
@@ -66,4 +65,3 @@ NVBENCH_BENCH(bench_count)
   .add_int64_axis("max_width", {64, 128, 256})
   .add_int64_axis("num_rows", {262144, 2097152})
   .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6});
-//.add_string_axis("engine", {"thompson", "glushkov"});

@@ -31,17 +31,13 @@ static void bench_split_re(nvbench::state& state)
   auto const min_width     = static_cast<cudf::size_type>(state.get_int64("min_width"));
   auto const max_width     = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const pattern_index = state.get_int64("pattern");
-  // auto const engine        = state.get_string("engine");
 
   if (pattern_index < 0 || std::cmp_greater_equal(pattern_index, patterns.size())) {
     state.skip("invalid pattern index");
     return;
   }
 
-  // auto flags = (engine == "glushkov") ? cudf::strings::regex_flags::GLUSHKOV
-  //                                    : cudf::strings::regex_flags::DEFAULT;
-  auto flags = cudf::strings::regex_flags::GLUSHKOV;  // DEFAULT
-  auto prog  = cudf::strings::regex_program::create(patterns[pattern_index], flags);
+  auto prog = cudf::strings::regex_program::create(patterns[pattern_index]);
 
   data_profile const profile = data_profile_builder().distribution(
     cudf::type_id::STRING, distribution_id::NORMAL, min_width, max_width);
@@ -68,4 +64,3 @@ NVBENCH_BENCH(bench_split_re)
   .add_int64_axis("max_width", {64, 128, 256})
   .add_int64_axis("num_rows", {262144, 2097152})
   .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6});
-//.add_string_axis("engine", {"thompson", "glushkov"});

@@ -30,13 +30,6 @@ static void bench_replace(nvbench::state& state)
   auto const max_width     = static_cast<cudf::size_type>(state.get_int64("max_width"));
   auto const pattern_index = state.get_int64("pattern");
   auto const rtype         = state.get_string("type");
-  // auto const engine        = state.get_string("engine");
-
-  // replace_with_backrefs requires capture groups; Glushkov doesn't support extract/backrefs
-  // if (engine == "glushkov" && rtype == "backref") {
-  //  state.skip("backref replace — Glushkov doesn't support capture groups");
-  //  return;
-  //}
 
   if (pattern_index < 0 || std::cmp_greater_equal(pattern_index, patterns.size())) {
     state.skip("invalid pattern index");
@@ -48,11 +41,10 @@ static void bench_replace(nvbench::state& state)
   auto const column = create_random_column(cudf::type_id::STRING, row_count{num_rows}, profile);
   cudf::strings_column_view input(column->view());
 
-  auto flags = cudf::strings::regex_flags::GLUSHKOV;  // DEFAULT
   // Wrap in a capture group for backref replace so \1 references the whole match
   auto const pat =
     (rtype == "backref") ? "(" + patterns[pattern_index] + ")" : patterns[pattern_index];
-  auto program = cudf::strings::regex_program::create(pat, flags);
+  auto program = cudf::strings::regex_program::create(pat);
 
   auto const data_size = column->alloc_size();
   state.add_global_memory_reads<nvbench::int8_t>(data_size);
@@ -80,5 +72,4 @@ NVBENCH_BENCH(bench_replace)
   .add_int64_axis("max_width", {64, 128, 256})
   .add_int64_axis("num_rows", {262144, 2097152})
   .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6})
-  .add_string_axis("type", {"replace"});  //, "backref"});
-//.add_string_axis("engine", {"thompson", "glushkov"});
+  .add_string_axis("type", {"replace", "backref"});
