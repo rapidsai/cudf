@@ -99,7 +99,10 @@ class RankAwareSource(abc.ABC):
     A single `RankAwareSource` instance may be invoked concurrently (the same
     source can appear in more than one scan of a query, and the streaming engine
     runs scans on separate threads). Implementations must therefore be safe to
-    call concurrently.
+    call concurrently. The streaming engine also advances a single returned
+    iterator on a worker thread pool, so successive chunks may be produced on
+    different threads thus do not hold thread-affine state across chunks (see the
+    Threading section of the IO-plugins guide).
 
     Pass the `RankAwareSource` instance directly to `register_io_source`; do not
     wrap it in another callable. To inject rank information, cudf-polars must

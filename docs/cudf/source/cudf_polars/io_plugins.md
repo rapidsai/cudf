@@ -164,6 +164,17 @@ to also work with the default Polars CPU engine must still handle `n_rows` corre
 
 Distributed support for a global row limit is tracked in [cudf#22918](https://github.com/rapidsai/cudf/issues/22918).
 
+## Threading
+
+Under a streaming engine, cudf-polars runs IO sources on a worker thread pool.
+A source is created on a worker thread, and successive chunks are pulled on
+worker threads that may differ from the one that created the source and from
+each other. A source must therefore not depend on thread-affine state that is
+created up front and reused across chunks, for example a `sqlite3.Connection`
+(which by default may only be used on the thread that opened it). Open such
+resources inside the function that produces each chunk, or use a thread-safe
+equivalent.
+
 ## API
 
 ```{eval-rst}
