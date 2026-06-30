@@ -257,6 +257,10 @@ def test_rewritten_domain_filters_other_side_instead_of_stacking() -> None:
     semis = _joins(optimized, "Semi")
     assert sum(semi.children[0] is lineitem for semi in semis) == 1
     assert any(semi.children[0] is orders for semi in semis)
+    assert not any(
+        isinstance(semi.children[0], Join) and semi.children[0].options[0] == "Semi"
+        for semi in semis
+    )
 
 
 def test_target_source_follows_join_key_through_rename() -> None:

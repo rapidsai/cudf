@@ -567,9 +567,13 @@ def _passthrough_binding(child: IR | None, column: str) -> tuple[IR, str] | None
 
 
 def _join_input_binding(node: Join, column: str) -> tuple[IR, str] | None:
-    if node.options[0] != "Inner" or node.options[2] is not None:
+    if node.options[2] is not None:
         return None
     left, right = node.children
+    if node.options[0] in ("Semi", "Anti"):
+        return _passthrough_binding(left, column)
+    if node.options[0] != "Inner":
+        return None
     bindings = []
     if column in left.schema:
         bindings.append((left, column))
