@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "hybrid_scan_common.hpp"
 #include "hybrid_scan_composer.hpp"
+#include "tests/io/parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
@@ -29,52 +30,6 @@
 #include <cuda/iterator>
 
 namespace {
-
-/**
- * @brief Helper to construct a random list<str> column
- *
- * @param gen Random engine
- * @param is_str_nullable Whether the string column should be nullable
- * @param is_list_nullable Whether the list column should be nullable
- *
- * @return Unique pointer to the constructed list<str> column
- */
-auto make_list_str_column(std::mt19937& gen, bool is_str_nullable, bool is_list_nullable)
-{
-  auto constexpr num_rows        = num_ordered_rows;
-  auto constexpr string_per_row  = 3;
-  auto constexpr num_string_rows = num_rows * string_per_row;
-
-  // str and list<str> helpers
-  std::vector<std::string> strings{
-    "abc", "x", "bananas", "gpu", "minty", "backspace", "", "cayenne", "turbine", "soft"};
-  std::uniform_int_distribution<int> uni(0, strings.size() - 1);
-  auto string_iter = cudf::detail::make_counting_transform_iterator(
-    0, [&](cudf::size_type idx) { return strings[uni(gen)]; });
-
-  std::bernoulli_distribution bn(0.7f);
-  auto string_valids = cudf::detail::make_counting_transform_iterator(
-    0, [&](int index) { return is_str_nullable ? bn(gen) : true; });
-  cudf::test::strings_column_wrapper string_col{
-    string_iter, string_iter + num_string_rows, string_valids};
-
-  auto offset_iter = cudf::detail::make_counting_transform_iterator(
-    0, [](cudf::size_type idx) { return idx * string_per_row; });
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets(offset_iter,
-                                                                  offset_iter + num_rows + 1);
-
-  auto list_valids =
-    cudf::detail::make_counting_transform_iterator(0, [&](int index) { return index % 100; });
-  auto [null_mask, null_count] = [&]() {
-    if (is_list_nullable) {
-      return cudf::test::detail::make_null_mask(list_valids, list_valids + num_rows);
-    } else {
-      return std::make_pair(rmm::device_buffer{}, 0);
-    }
-  }();
-  return cudf::make_lists_column(
-    num_rows, offsets.release(), string_col.release(), null_count, std::move(null_mask));
-}
 
 /**
  * @brief Helper to test the hybrid scan reader

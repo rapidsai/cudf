@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from cython.operator cimport dereference
 import warnings
@@ -46,6 +46,7 @@ from pylibcudf.libcudf.io.types cimport (
     statistics_freq,
     table_with_metadata,
 )
+from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport size_type, type_id
 from pylibcudf.table cimport Table
 from pylibcudf.utils cimport _get_stream, _get_memory_resource
@@ -145,8 +146,19 @@ cdef class ParquetReaderOptions:
 
         Parameters
         ----------
-        row_groups : list
-            List of row groups to read
+        row_groups : list[list[int]]
+            Row groups to read, one inner list per input source.
+
+        Notes
+        -----
+        Rows are emitted in input-source order; all rows selected from
+        source 0 are emitted before rows selected from source 1, and so on.
+        Within each source, row groups are read in the order provided;
+        indices are not sorted or deduplicated, and repeated indices are
+        emitted multiple times. Empty inner lists contribute no rows.
+        When unset, all row groups are read in source order, then in
+        on-disk order within each source. Predicate pushdown drops row
+        groups in place; remaining row groups keep their relative order.
 
         Returns
         -------
@@ -730,8 +742,9 @@ cdef class ChunkedParquetWriter:
                 partitions.push_back(
                     partition_info(part[0], part[1])
                 )
+        cdef table_view c_table = table.view()
         with nogil:
-            self.c_obj.get()[0].write(table.view(), partitions)
+            self.c_obj.get()[0].write(c_table, partitions)
 
     @staticmethod
     def from_options(ChunkedParquetWriterOptions options, object stream = None):

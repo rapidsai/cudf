@@ -11,7 +11,6 @@ from rapidsmpf.communicator import COMMUNICATORS
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.buffer_resource import BufferResource
 from rapidsmpf.progress_thread import ProgressThread
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.streaming.core.context import Context
 from rmm.pylibrmm.stream import DEFAULT_STREAM
 
@@ -72,6 +71,21 @@ def comm(
 
 
 @pytest.fixture
+def device_mr() -> Generator[rmm.mr.CudaMemoryResource, None, None]:
+    """
+    Fixture for creating a new cuda memory resource and making it the
+    current rmm resource temporarily.
+    """
+    prior_mr = rmm.mr.get_current_device_resource()
+    try:
+        mr = rmm.mr.CudaMemoryResource()
+        rmm.mr.set_current_device_resource(mr)
+        yield mr
+    finally:
+        rmm.mr.set_current_device_resource(prior_mr)
+
+
+@pytest.fixture
 def stream() -> Stream:
     """CUDA stream for test operations."""
     return DEFAULT_STREAM
@@ -81,8 +95,7 @@ def stream() -> Stream:
 def context(comm: Communicator) -> Generator[Context, None, None]:
     """Streaming context backed by a fresh memory resource."""
     options = Options(get_environment_variables())
-    mr = RmmResourceAdaptor(rmm.mr.CudaMemoryResource())
-    br = BufferResource(mr)
+    br = BufferResource(rmm.mr.CudaMemoryResource())
 
     with Context(comm.logger, br, options) as ctx:
         yield ctx

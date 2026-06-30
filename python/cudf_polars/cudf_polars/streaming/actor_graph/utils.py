@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Utility functions and classes for the RapidsMPF streaming runtime."""
 
@@ -18,14 +18,14 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 import pylibcudf as plc
 import rmm.mr
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import (
+from cudf_streaming.table_chunk import (
     TableChunk,
     make_table_chunks_available_or_wait,
 )
@@ -41,7 +41,7 @@ from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection,
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.naming import names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
-from cudf_polars.streaming.actor_graph.tracing import ActorTracer
+from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
 from cudf_polars.streaming.utils import _concat
 from cudf_polars.utils.dtypes import make_empty_column
 
@@ -69,6 +69,11 @@ if TYPE_CHECKING:
 
 InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
+
+# cuDF column/concatenate row limit (int32)
+CUDF_ROW_LIMIT = 2**31 - 1
+# Stay well below the cuDF row limit when forming a single table/partition.
+MAX_ROWS_PER_PARTITION = CUDF_ROW_LIMIT // 4
 
 
 class ChunkStore:
@@ -201,6 +206,7 @@ async def shutdown_on_error(
                     record["row_count"] = tracer.row_count
                 if tracer.decision is not None:
                     record["decision"] = tracer.decision
+                record.update(tracer.extra)
             cudf_polars.dsl.tracing.log(
                 "Streaming Actor", start=start, stop=stop, **record
             )
@@ -691,17 +697,13 @@ async def chunkwise_evaluate(
                 ir_context=ir_context,
             )
         del msg, cd
-        if tracer is not None:
-            tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(seq_num, result))
+        await send_chunk(context, ch_out, result, seq_num, tracer=tracer)
 
     if handle_empty_input and not received_any:
         chunk = empty_table_chunk(ir.children[0], context, ir_context.get_cuda_stream())
         result = await evaluate_chunk(context, chunk, ir, ir_context=ir_context)
         del chunk
-        if tracer is not None:
-            tracer.add_chunk(table=result.table_view())
-        await ch_out.send(context, Message(0, result))
+        await send_chunk(context, ch_out, result, 0, tracer=tracer)
 
     await ch_out.drain(context)
 
@@ -829,7 +831,7 @@ async def replay_buffered_channel(
 
 
 @dataclass(frozen=True)
-class NormalizedPartitioning:
+class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ even with custom __eq__)
     """
     Normalized view of channel partitioning for a set of key column indices.
 

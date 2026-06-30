@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -500,16 +500,23 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
   CUDF_EXPECTS(options.get_filter().has_value(), "Empty input filter expression encountered");
-  CUDF_EXPECTS(not row_mask.is_empty(),
-               "Row mask must be non-empty when materializing filter columns");
 
   prepare_materialization(
     read_columns_mode::FILTER_COLUMNS, row_group_indices.size(), options, stream, mr);
 
   // Convert the input expression (must be done after prepare_materialization)
   _expr_conv = build_converted_expression(options);
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::FILTER_COLUMNS, row_mask);
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -531,12 +538,21 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
   CUDF_EXPECTS(row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
 
   prepare_materialization(
     read_columns_mode::PAYLOAD_COLUMNS, row_group_indices.size(), options, stream, mr);
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
@@ -586,10 +602,9 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
   CUDF_EXPECTS(options.get_filter().has_value(), "Empty input filter expression encountered");
-  CUDF_EXPECTS(not row_mask.is_empty(),
-               "Row mask must be non-empty when setting up chunking for filter columns");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
 
   prepare_materialization(
     read_columns_mode::FILTER_COLUMNS, row_group_indices.size(), options, stream, mr);
@@ -599,6 +614,14 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
 
   // Convert the input expression (must be done after prepare_materialization)
   _expr_conv = build_converted_expression(options);
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    return;
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (mask_data_pages == use_data_page_mask::YES) {
@@ -639,7 +662,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(std::cmp_equal(row_mask.size(), total_rows_in_row_groups(row_group_indices)),
+               "Row mask must span across all input row groups");
   CUDF_EXPECTS(row_mask.null_count() == 0,
                "Row mask must not have any nulls when materializing payload column");
 
@@ -648,6 +672,14 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
 
   _input_pass_read_limit   = pass_read_limit;
   _output_chunk_read_limit = chunk_read_limit;
+
+  // Return early if all rows are pruned
+  if (are_all_rows_pruned(row_mask, stream)) {
+    auto const empty_row_groups =
+      std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
+    prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    return;
+  }
 
   auto data_page_mask = thrust::host_vector<bool>{};
   if (not row_mask.is_empty() and mask_data_pages == use_data_page_mask::YES) {
@@ -723,40 +755,55 @@ table_with_metadata hybrid_scan_reader_impl::materialize_all_columns_chunk()
   return result;
 }
 
-std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row_group_passes(
-  cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const
+std::pair<std::vector<std::vector<cudf::size_type>>, std::vector<cudf::size_type>>
+hybrid_scan_reader_impl::construct_row_group_passes(
+  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::size_t total_row_groups,
+  std::size_t pass_read_limit) const
 {
-  CUDF_EXPECTS(not row_group_indices.empty(), "Empty input row group indices encountered");
+  CUDF_EXPECTS(
+    total_row_groups > 0, "Empty input row group indices encountered", std::invalid_argument);
 
-  // If pass_read_limit is 0 or there is only one row group, return all in a single pass
-  if (pass_read_limit == 0 or row_group_indices.size() == 1) {
-    return {{row_group_indices.begin(), row_group_indices.end()}};
+  CUDF_EXPECTS(row_group_indices.size() == _extended_metadata->get_num_sources(),
+               "Mismatch in the number of row group indices vectors and the number of input "
+               "datasources",
+               std::invalid_argument);
+
+  if (pass_read_limit == 0) {
+    return {
+      std::vector<std::vector<cudf::size_type>>{row_group_indices.begin(), row_group_indices.end()},
+      std::vector<cudf::size_type>{}};
   }
 
-  // TODO(mh): Need to handle multiple sources in the future
-  auto constexpr source_index = 0;
+  CUDF_EXPECTS(
+    pass_read_limit > 0, "Pass read limit must be greater than 0", std::invalid_argument);
 
-  // Construct row group information
   auto row_groups_info = std::vector<row_group_info>{};
-  row_groups_info.reserve(row_group_indices.size());
+  row_groups_info.reserve(total_row_groups);
   size_t start_row = 0;
-  std::transform(row_group_indices.begin(),
-                 row_group_indices.end(),
-                 std::back_inserter(row_groups_info),
-                 [&](auto const& rg_index) {
-                   auto const& row_group =
-                     _extended_metadata->get_row_group(rg_index, source_index);
-                   auto const [compressed_size, total_size, num_rows, max_leaf_values] =
-                     _extended_metadata->get_row_group_properties(row_group);
-                   auto rg_info = row_group_info{.index               = rg_index,
-                                                 .start_row           = start_row,
-                                                 .unadjusted_num_rows = num_rows,
-                                                 .source_index        = source_index,
-                                                 .compressed_size     = compressed_size,
-                                                 .max_leaf_values     = max_leaf_values};
-                   start_row += num_rows;
-                   return rg_info;
-                 });
+  std::for_each(cuda::counting_iterator<cudf::size_type>(0),
+                cuda::counting_iterator<cudf::size_type>(row_group_indices.size()),
+                [&](auto const source_index) {
+                  auto const& src_row_groups = row_group_indices[source_index];
+                  std::transform(
+                    src_row_groups.begin(),
+                    src_row_groups.end(),
+                    std::back_inserter(row_groups_info),
+                    [&](auto const rg_index) {
+                      auto const& row_group =
+                        _extended_metadata->get_row_group(rg_index, source_index);
+                      auto const [compressed_size, total_size, num_rows, max_leaf_values] =
+                        _extended_metadata->get_row_group_properties(row_group);
+                      auto rg_info = row_group_info{.index               = rg_index,
+                                                    .start_row           = start_row,
+                                                    .unadjusted_num_rows = num_rows,
+                                                    .source_index        = source_index,
+                                                    .compressed_size     = compressed_size,
+                                                    .max_leaf_values     = max_leaf_values};
+                      start_row += num_rows;
+                      return rg_info;
+                    });
+                });
 
   auto const comp_read_limit = static_cast<std::size_t>(
     pass_read_limit * cudf::io::parquet::detail::input_limit_compression_reserve);
@@ -768,15 +815,27 @@ std::vector<std::vector<cudf::size_type>> hybrid_scan_reader_impl::construct_row
   auto const& offsets = pass_data.pass_row_group_offsets;
   auto passes         = std::vector<std::vector<cudf::size_type>>{};
   passes.reserve(offsets.size() - 1);
+  auto row_group_source_map       = std::vector<cudf::size_type>{};
+  auto const has_multiple_sources = row_group_indices.size() > 1;
+  if (has_multiple_sources) { row_group_source_map.reserve(row_groups_info.size()); }
   std::transform(offsets.begin(),
                  offsets.end() - 1,
                  offsets.begin() + 1,
                  std::back_inserter(passes),
                  [&](auto const start, auto const end) {
-                   return std::vector<cudf::size_type>{row_group_indices.begin() + start,
-                                                       row_group_indices.begin() + end};
+                   auto pass = std::vector<cudf::size_type>{};
+                   pass.reserve(end - start);
+                   std::for_each(row_groups_info.begin() + start,
+                                 row_groups_info.begin() + end,
+                                 [&](auto const& rg_info) {
+                                   pass.emplace_back(rg_info.index);
+                                   if (has_multiple_sources) {
+                                     row_group_source_map.emplace_back(rg_info.source_index);
+                                   }
+                                 });
+                   return pass;
                  });
-  return passes;
+  return {std::move(passes), std::move(row_group_source_map)};
 }
 
 bool hybrid_scan_reader_impl::has_next_table_chunk()
@@ -1038,11 +1097,13 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
 
-  CUDF_EXPECTS(row_mask.is_empty() or row_mask.type().id() == type_id::BOOL8,
-               "Input row mask must be empty or a boolean column");
+  // If the input row mask is empty, all rows are pruned anyway.
+  if (row_mask.is_empty()) {
+    _output_chunk_produced = true;
+    return {std::move(read_table), std::move(out_metadata)};
+  }
 
-  // If the input row mask is empty, return the table as is.
-  if (row_mask.is_empty()) { return {std::move(read_table), std::move(out_metadata)}; }
+  CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8, "Input row mask must be a boolean column");
 
   // Get the current row mask offset
   auto const mask_offset = _row_mask_offset;

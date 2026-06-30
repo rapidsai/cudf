@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -1423,13 +1423,13 @@ def _read_parquet(
             column_names = tbl_w_meta.column_names(include_children=False)
             child_names = tbl_w_meta.child_names
             per_file_user_data = tbl_w_meta.per_file_user_data
-            concatenated_columns = tbl_w_meta.tbl.columns()
+            concatenated_columns = tbl_w_meta.tbl.release()
 
             # save memory
             del tbl_w_meta
 
             while reader.has_next():
-                columns = reader.read_chunk().tbl.columns()
+                columns = reader.read_chunk().tbl.release()
                 # Iterate in reverse to avoid O(n²) cost from popping
                 for i in range(len(concatenated_columns) - 1, -1, -1):
                     concatenated_columns[i] = plc.concatenate.concatenate(
