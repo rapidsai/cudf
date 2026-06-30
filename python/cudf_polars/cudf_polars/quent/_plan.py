@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import functools
 from typing import TYPE_CHECKING
 
 from cudf_polars.quent._types import (
@@ -22,7 +23,6 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent import Query, Worker
-    from cudf_polars.streaming.explain import SerializableIRNode
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 _JOIN_TYPES = frozenset({"Join", "ConditionalJoin"})
@@ -101,7 +101,9 @@ def build_plan(
         operator_by_ir_id[node_id] = operator
         operators.append(operator)
 
-        for port_name in port_names_for_node(serializable_node):
+        for port_name in port_names_for_node(
+            len(serializable_node.children), serializable_node.type
+        ):
             port = Port(new_quent_id(), operator=operator, instance_name=port_name)
             all_ports.append(port)
             port_lookup[(operator_id, port_name)] = port
@@ -109,7 +111,9 @@ def build_plan(
     for node_id in sorted(serializable_plan.nodes.keys(), key=int):
         serializable_node = serializable_plan.nodes[node_id]
         operator = operator_by_ir_id[node_id]
-        input_port_names = port_names_for_node(serializable_node)[1:]
+        input_port_names = port_names_for_node(
+            len(serializable_node.children), serializable_node.type
+        )[1:]
 
         for i, child_id in enumerate(serializable_node.children):
             child_operator = operator_by_ir_id[child_id]
@@ -124,21 +128,27 @@ def build_plan(
             strict=True,
         )
     )
-
     return plan, operators, all_ports, op_by_id
 
 
-def port_names_for_node(node: SerializableIRNode) -> list[str]:
+@functools.cache
+def port_names_for_node(n_children: int, node_type: str) -> tuple[str, ...]:
     """Determine port names for an IR node based on its children count and type."""
-    n_children = len(node.children)
     if n_children == 0:
-        return ["out"]
+        return ("out",)
     elif n_children == 1:
-        return ["out", "in"]
-    elif n_children == 2 and node.type in _JOIN_TYPES:
-        return ["out", "left", "right"]
+        return (
+            "out",
+            "in",
+        )
+    elif n_children == 2 and node_type in _JOIN_TYPES:
+        return (
+            "out",
+            "left",
+            "right",
+        )
     else:
-        return ["out"] + [f"in_{i}" for i in range(n_children)]
+        return ("out", *tuple(f"in_{i}" for i in range(n_children)))
 
 
 def build_parent_operators_map(

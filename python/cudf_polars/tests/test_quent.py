@@ -394,7 +394,7 @@ def test_port_names_for_node_leaf() -> None:
     node = SerializableIRNode(
         id="1", children=[], schema={}, properties={}, type="Scan"
     )
-    assert port_names_for_node(node) == ["out"]
+    assert port_names_for_node(len(node.children), node.type) == ("out",)
 
 
 def test_port_names_for_node_single_child() -> None:
@@ -403,7 +403,7 @@ def test_port_names_for_node_single_child() -> None:
     node = SerializableIRNode(
         id="1", children=["2"], schema={}, properties={}, type="Filter"
     )
-    assert port_names_for_node(node) == ["out", "in"]
+    assert port_names_for_node(len(node.children), node.type) == ("out", "in")
 
 
 def test_port_names_for_node_join() -> None:
@@ -412,7 +412,11 @@ def test_port_names_for_node_join() -> None:
     node = SerializableIRNode(
         id="1", children=["2", "3"], schema={}, properties={}, type="Join"
     )
-    assert port_names_for_node(node) == ["out", "left", "right"]
+    assert port_names_for_node(len(node.children), node.type) == (
+        "out",
+        "left",
+        "right",
+    )
 
 
 def test_port_names_for_node_multi_child() -> None:
@@ -425,12 +429,13 @@ def test_port_names_for_node_multi_child() -> None:
         properties={},
         type="Union",
     )
-    assert port_names_for_node(node) == [
+
+    assert port_names_for_node(len(node.children), node.type) == (
         "out",
         "in_0",
         "in_1",
         "in_2",
-    ]
+    )
 
 
 def test_lower_ir_graph_with_node_map() -> None:
