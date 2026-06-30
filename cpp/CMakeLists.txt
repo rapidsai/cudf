@@ -620,6 +620,7 @@ add_library(
   src/groupby/sort/group_replace_nulls.cu
   src/groupby/sort/group_std.cu
   src/groupby/sort/group_sum.cu
+  src/groupby/sort/group_sum_overflow.cu
   src/groupby/sort/group_sum_scan.cu
   src/groupby/sort/group_topk.cu
   src/groupby/sort/host_udf_aggregation.cpp

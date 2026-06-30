@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1074,14 +1074,16 @@ reprog reprog::create_from(std::string_view pattern,
                            regex_flags const flags,
                            capture_groups const capture)
 {
-  reprog rtn;
+  reprog rtn(flags);
   auto pattern32 = string_to_char32_vector(pattern);
   regex_compiler const compiler(pattern32.data(), flags, capture, rtn);
-  // for debugging, it can be helpful to call rtn.print(flags) here to dump
+  // for debugging, it can be helpful to call rtn.print() here to dump
   // out the instructions that have been created from the given pattern
   // rtn.print(flags);
   return rtn;
 }
+
+reprog::reprog(regex_flags flags) : _flags{flags} {}
 
 void reprog::optimize() { collapse_nops(); }
 
@@ -1251,9 +1253,9 @@ match_flags reprog::compute_match_flags() const
 }
 
 #ifndef NDEBUG
-void reprog::print(regex_flags const flags)
+void reprog::print() const
 {
-  printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
+  printf("Flags = 0x%08x\n", static_cast<uint32_t>(_flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
     reinst const& inst = _insts[i];
