@@ -9,15 +9,18 @@
 #include "io/parquet/reader_impl_preprocess_utils.cuh"
 #include "io/utilities/time_utils.hpp"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_transform.cuh>
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <thrust/sequence.h>
@@ -104,6 +107,13 @@ void hybrid_scan_reader_impl::prepare_row_groups(
     "READ_ALL mode does not support reading number of rows more than cudf's column size limit. "
     "For reading larger number of rows, please use chunked_parquet_reader.",
     std::overflow_error);
+
+  // Inclusive scan the number of rows per source
+  _file_itm_data.exclusive_sum_num_rows_per_source.resize(
+    _file_itm_data.num_rows_per_source.size());
+  std::inclusive_scan(_file_itm_data.num_rows_per_source.cbegin(),
+                      _file_itm_data.num_rows_per_source.cend(),
+                      _file_itm_data.exclusive_sum_num_rows_per_source.begin());
 
   // check for page indexes
   _has_page_index = std::all_of(_file_itm_data.row_groups.cbegin(),
@@ -293,6 +303,52 @@ hybrid_scan_reader_impl::prepare_dictionaries(
   return {has_compressed_data, std::move(chunks), std::move(pages)};
 }
 
+namespace {
+
+/**
+ * @brief Computes the updated row mask value such that out_row_mask[i] = true, iff in_row_mask[i]
+ * is valid and true. This is inline with the masking behavior of cudf::apply_boolean_mask.
+ */
+struct row_mask_update_fn {
+  bool is_nullable;
+  bool const* in_row_mask;
+  bitmask_type const* in_bitmask;
+
+  __device__ bool operator()(cudf::size_type row_idx) const
+  {
+    if (is_nullable and not bit_is_set(in_bitmask, row_idx)) { return false; }
+    return in_row_mask[row_idx];
+  }
+};
+
+/**
+ * @brief Checks if a row is pruned (valid and false)
+ */
+struct is_row_pruned_fn {
+  bool is_nullable;
+  bool const* row_mask;
+  bitmask_type const* bitmask;
+  __device__ bool operator()(cudf::size_type row_idx) const
+  {
+    if (is_nullable and not bit_is_set(bitmask, row_idx)) { return false; }
+    return not row_mask[row_idx];
+  }
+};
+
+}  // namespace
+
+bool hybrid_scan_reader_impl::are_all_rows_pruned(cudf::column_view const& row_mask,
+                                                  rmm::cuda_stream_view stream) const
+{
+  CUDF_EXPECTS(row_mask.type().id() == type_id::BOOL8,
+               "Input row mask column must be a boolean column");
+  return cudf::detail::all_of(
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{row_mask.size()},
+    is_row_pruned_fn{row_mask.nullable(), row_mask.begin<bool>(), row_mask.null_mask()},
+    stream);
+}
+
 void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_mask,
                                               cudf::mutable_column_view& out_row_mask,
                                               cudf::size_type out_row_mask_offset,
@@ -300,6 +356,7 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_ma
 {
   CUDF_FUNC_RANGE();
 
+  // Total number of output row mask rows to be updated from the input
   auto const total_rows = static_cast<cudf::size_type>(in_row_mask.size());
 
   CUDF_EXPECTS(out_row_mask_offset + total_rows <= out_row_mask.size(),
@@ -309,30 +366,23 @@ void hybrid_scan_reader_impl::update_row_mask(cudf::column_view const& in_row_ma
   CUDF_EXPECTS(in_row_mask.type().id() == type_id::BOOL8,
                "Input row mask column must be a boolean column");
 
-  // Update output row mask such that out_row_mask[i] = true, iff in_row_mask[i] is valid and true.
-  // This is inline with the masking behavior of cudf::detail::apply_boolean_mask.
-  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                    cuda::counting_iterator<cudf::size_type>{0},
-                    cuda::counting_iterator{total_rows},
-                    out_row_mask.begin<bool>() + out_row_mask_offset,
-                    [is_nullable = in_row_mask.nullable(),
-                     in_row_mask = in_row_mask.begin<bool>(),
-                     in_bitmask  = in_row_mask.null_mask()] __device__(auto row_idx) {
-                      auto const is_valid = not is_nullable or bit_is_set(in_bitmask, row_idx);
-                      auto const is_true  = in_row_mask[row_idx];
-                      if (is_nullable) {
-                        return is_valid and is_true;
-                      } else {
-                        return is_true;
-                      }
-                    });
+  CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
+    cuda::counting_iterator<cudf::size_type>{0},
+    out_row_mask.begin<bool>() + out_row_mask_offset,
+    total_rows,
+    row_mask_update_fn{in_row_mask.nullable(), in_row_mask.begin<bool>(), in_row_mask.null_mask()},
+    stream.value()));
 
   // Make sure the null mask of the output row mask column is all valid after the update. This is
   // to correctly assess if a payload column data page can be pruned. An invalid row in the row mask
   // column means the corresponding data page cannot be pruned.
   if (out_row_mask.nullable()) {
-    cudf::set_null_mask(out_row_mask.null_mask(), 0, total_rows, true, stream);
-    out_row_mask.set_null_count(0);
+    cudf::set_null_mask(out_row_mask.null_mask(),
+                        out_row_mask_offset,
+                        out_row_mask_offset + total_rows,
+                        true,
+                        stream);
+    out_row_mask.set_null_count(out_row_mask.null_count(0, out_row_mask.size(), stream));
   }
 }
 
