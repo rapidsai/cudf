@@ -22,6 +22,7 @@ import polars as pl
 try:
     from cudf_polars.streaming.benchmarks.utils import (
         COUNT_DTYPE,
+        _CPU_ENGINES,
         QueryResult,
         RunConfig,
         build_parser,
@@ -1799,7 +1800,7 @@ class PDSHDuckDBQueries:
 if __name__ == "__main__":
     parser = build_parser(num_queries=22)
     args = parse_args(parser=parser)
-    if args.frontend != "polars-cpu":
+    if args.frontend not in _CPU_ENGINES:
         os.environ["POLARS_MAX_THREADS"] = os.environ.get("POLARS_MAX_THREADS", "1")
         os.environ["OMP_NUM_THREADS"] = os.environ.get("OMP_NUM_THREADS", "1")
     run_polars(PDSHQueries, args)
