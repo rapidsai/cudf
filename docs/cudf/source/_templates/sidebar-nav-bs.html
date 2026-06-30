@@ -1,4 +1,18 @@
-{# Display top-level section landing pages one level below the primary nav. #}
+{#
+  Override PyData Sphinx Theme's sidebar-nav-bs.html component.
+
+  NVIDIA Sphinx Theme inherits PyData's default primary sidebar configuration,
+  which includes this component by template name. Placing a file with the same
+  name in the project's _templates directory makes Sphinx use this version.
+
+  PyData's generate_toctree_html("sidebar", startdepth=1, ...) returns the
+  normal sidebar tree rooted at the currently active top-level toctree item.
+  That is correct for nested pages such as cudf/api_docs/index, where the
+  sidebar should still show the active API reference node and its foldable
+  children. For top-level section landing pages such as cudf_pandas/index,
+  that output duplicates the primary navbar item in the sidebar, so we render
+  only the active section's child <ul> on those landing pages.
+#}
 {% set show_nav_level = meta['html_theme.show_nav_level'] if (meta is defined and meta is not none and 'html_theme.show_nav_level' in meta) else theme_show_nav_level %}
 {% set special_page = pagename == root_doc or pagename in ["genindex", "py-modindex", "search"] %}
 {% if not special_page %}
