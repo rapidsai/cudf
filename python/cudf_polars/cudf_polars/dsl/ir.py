@@ -435,6 +435,8 @@ class PythonScan(IR):
         scan_fn, with_columns, _source_type, _ir_node_index = options
         # We pass predicate=None and apply any pushed predicate on the
         # GPU in process_chunk.
+        # TODO: forward the pushed predicate to a RankAwareSource so a GPU-aware source
+        # can apply it at read time. See https://github.com/rapidsai/cudf/issues/22917.
         if rank_aware_source is not None:
             source_chunks = rank_aware_source(
                 with_columns, None, None, None, rank=rank, nranks=nranks
