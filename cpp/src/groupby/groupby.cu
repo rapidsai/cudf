@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -52,7 +52,7 @@ groupby::groupby(table_view const& keys,
 
 // Select hash vs. sort groupby implementation
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::dispatch_aggregation(
-  host_span<aggregation_request const> requests,
+  std::span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -154,7 +154,7 @@ struct empty_column_constructor {
 
 /// Make an empty table with appropriate types for requested aggs
 template <typename RequestType>
-auto empty_results(host_span<RequestType const> requests,
+auto empty_results(std::span<RequestType const> requests,
                    rmm::cuda_stream_view stream,
                    rmm::device_async_resource_ref mr)
 {
@@ -184,7 +184,7 @@ auto empty_results(host_span<RequestType const> requests,
 
 /// Verifies the agg requested on the request's values is valid
 template <typename RequestType>
-void verify_valid_requests(host_span<RequestType const> requests)
+void verify_valid_requests(std::span<RequestType const> requests)
 {
   CUDF_EXPECTS(
     std::all_of(
@@ -218,7 +218,7 @@ void verify_valid_requests(host_span<RequestType const> requests)
 
 // Compute aggregation requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggregate(
-  host_span<aggregation_request const> requests,
+  std::span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -238,7 +238,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::aggr
 
 // Compute scan requests
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::scan(
-  host_span<scan_request const> requests,
+  std::span<scan_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -284,7 +284,7 @@ groupby::groups groupby::get_groups(table_view values,
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::replace_nulls(
   table_view const& values,
-  host_span<cudf::replace_policy const> replace_policies,
+  std::span<cudf::replace_policy const> replace_policies,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
@@ -327,7 +327,7 @@ detail::sort::sort_groupby_helper& groupby::helper()
 
 std::pair<std::unique_ptr<table>, std::unique_ptr<table>> groupby::shift(
   table_view const& values,
-  host_span<size_type const> offsets,
+  std::span<size_type const> offsets,
   std::vector<std::reference_wrapper<scalar const>> const& fill_values,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
