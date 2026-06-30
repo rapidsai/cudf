@@ -103,6 +103,7 @@ class UnaryFunction(Expr):
     }
     _supported_misc_fns = frozenset(
         {
+            "approx_n_unique",
             "as_struct",
             "drop_nans",
             "drop_nulls",
@@ -382,6 +383,22 @@ class UnaryFunction(Expr):
         elif self.name == "rechunk":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return column
+        elif self.name == "approx_n_unique":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            count = plc.reduce.distinct_count(
+                column.obj,
+                plc.types.NullPolicy.INCLUDE,
+                plc.types.NanPolicy.NAN_IS_VALID,
+                stream=df.stream,
+            )
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(count, self.dtype.plc_type, stream=df.stream),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
         elif self.name == "search_sorted":
             side, descending = self.options
             column = self.children[0].evaluate(df, context=context)
