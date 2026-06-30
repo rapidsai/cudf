@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1010,7 +1010,7 @@ thrust::host_vector<bool> aggregate_reader_metadata::compute_data_page_mask(
   // Return early if page index is not present
   if (not has_page_index) {
     CUDF_LOG_WARN("Encountered missing Parquet page index for one or more output columns");
-    return thrust::host_vector<bool>{};
+    return thrust::host_vector<bool>(0, stream);
   }
 
   // Collect column schema indices from the input columns.

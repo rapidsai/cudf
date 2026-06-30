@@ -22,9 +22,9 @@ license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "cudf==26.8.*,>=0.0.0a0",
-    "cupy-cuda13x>=13.6.0,!=14.0.0,!=14.1.0",
+    "cupy-cuda13x[ctk]>=14.0.1,!=14.1.0",
     "fsspec>=0.6.0",
-    "numpy>=1.26,<3.0",
+    "numpy>=2.0,<3.0",
     "nvidia-ml-py>=12",
     "pandas>=3.0.0,<3.0.4a0",
     "rapids-dask-dependency==26.8.*,>=0.0.0a0",
