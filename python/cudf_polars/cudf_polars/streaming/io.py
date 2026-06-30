@@ -286,17 +286,6 @@ class SplitScan(IR):
             cached_parquet_info,
         )
 
-    def is_equal(self, other: Self) -> bool:  # noqa: D102
-        # This needs to exclude 'cached_parquet_info' from the equality check.
-        if type(other) is not type(self):
-            return False
-        return self is other or (
-            self.base_scan.is_equal(other.base_scan)
-            and self.paths == other.paths
-            and self.split_index == other.split_index
-            and self.total_splits == other.total_splits
-        )
-
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
         return (
@@ -486,16 +475,6 @@ class FusedScan(IR):
             node.paths,
             node.parquet_options,
             cached_parquet_info,
-        )
-
-    def is_equal(self, other: Self) -> bool:  # noqa: D102
-        # This needs to exclude 'cached_parquet_info' from the equality check.
-        if type(other) is not type(self):
-            return False
-        return self is other or (
-            self.base_scan.is_equal(other.base_scan)
-            and self.paths == other.paths
-            and self.parquet_options == other.parquet_options
         )
 
     def get_hashable(self) -> Hashable:
@@ -800,20 +779,17 @@ class StreamingScan(IR):
         local_offset, local_count = _rank_slice(partition_count, rank, nranks)
         paths_start = local_offset * plan.factor
         paths_end = paths_start + plan.factor * local_count
-        scans = []
-        for offset in range(paths_start, paths_end, plan.factor):
-            paths = base_scan.paths[offset : offset + plan.factor]
-            if paths:
-                scans.append(
-                    FusedScan(
-                        base_scan.schema,
-                        base_scan,
-                        paths,
-                        parquet_options,
-                        None,
-                    )
-                )
-
+        scans = [
+            FusedScan(
+                base_scan.schema,
+                base_scan,
+                base_scan.paths[offset : offset + plan.factor],
+                parquet_options,
+                None,
+            )
+            for offset in range(paths_start, paths_end, plan.factor)
+            if base_scan.paths[offset : offset + plan.factor]
+        ]
         return cls(scans, base_scan, "fused")
 
     def get_hashable(self) -> Hashable:

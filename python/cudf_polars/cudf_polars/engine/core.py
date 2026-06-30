@@ -30,6 +30,7 @@ from cudf_polars.dsl.ir import (
     Scan,
     prefetch_parquet_file_metadata_for_ir,
 )
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
@@ -683,7 +684,7 @@ def evaluate_on_rank(
     metadata
         Collected channel metadata.
     """
-    from cudf_polars.dsl.traversal import traversal
+    from cudf_polars.streaming.io import StreamingScan
 
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
     ir, partition_info = lower_ir_graph(
@@ -705,32 +706,26 @@ def evaluate_on_rank(
             ir_context.py_executor,
             stats=stats,
         )
-        # Build a mapping {Scan: Scan} where the values have the prefetched metadata set.
-        # This is complicated by StreamingScan, SplitScan, and FusedScan, but whatever.
+        # We'll replace scan nodes with variants that have the prefetched metadata set.
+        # We also update partition_info to point to the new nodes.
         replacements: dict[IR, IR] = {}
-        from cudf_polars.streaming.io import FusedScan, SplitScan, StreamingScan
 
+        new_node: Scan | StreamingScan
         for node in traversal([ir]):
             if isinstance(node, Scan):
-                replacements[node] = Scan.with_prefetched_parquet_metadata(
+                new_node = Scan.with_prefetched_parquet_metadata(
                     node, [cached_parquet_info_map[path] for path in node.paths]
                 )
+                replacements[node] = new_node
+                partition_info[new_node] = partition_info[node]
             elif isinstance(node, StreamingScan):
-                x = StreamingScan.with_prefetched_parquet_metadata(
+                new_node = StreamingScan.with_prefetched_parquet_metadata(
                     node, cached_parquet_info_map
                 )
-                assert node in partition_info
-                assert node.is_equal(x)
-                assert x in partition_info
-                replacements[node] = x
-            elif isinstance(node, (SplitScan, FusedScan)):
-                raise NotImplementedError(
-                    f"Prefetching is not supported for StreamingScan, SplitScan, and FusedScan.: {type(node)}"
-                )
+                replacements[node] = new_node
+                partition_info[new_node] = partition_info[node]
 
         ir = replace([ir], replacements)[0]
-        # Now we want to rewrite the Scan nodes. We need to insert the prefetched
-        # parquet metadata for the paths in that node.
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(

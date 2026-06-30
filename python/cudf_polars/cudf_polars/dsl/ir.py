@@ -293,7 +293,7 @@ def prefetch_parquet_file_metadata_for_ir(
 
     Returns
     -------
-    A dictionary mapping file paths to their cached parquet metadata.
+    A dictionary mapping each individual path to its cached parquet metadata.
     """
     from cudf_polars.streaming.io import ParquetSourceInfo, StreamingScan
 
@@ -677,6 +677,9 @@ class Scan(IR):
         self.children = ()
         self.parquet_options = parquet_options
         self.cached_parquet_info = cached_parquet_info
+
+        # Scan._validate_cached_parquet_info(self.paths, self.parquet_options, self.cached_parquet_info)
+
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
             # on the polars side
@@ -777,18 +780,22 @@ class Scan(IR):
             cached_parquet_info,
         )
 
-    def is_equal(self, other: Self) -> bool:  # noqa: D102
-        # This needs to exclude 'cached_parquet_info' from the equality check.
-        if self is other:
-            return True
-        result = (
-            self._ctor_arguments(self.children)[:-1]
-            == other._ctor_arguments(other.children)[:-1]
-        )
-        # Eager CSE for nodes that match.
-        if result:
-            self.children = other.children
-        return result
+    @staticmethod
+    def _validate_cached_parquet_info(
+        paths: list[str],
+        parquet_options: ParquetOptions,
+        cached_parquet_info: list[CachedParquetInfo] | None,
+    ) -> None:
+        if parquet_options.prefetch_file_metadata and not cached_parquet_info:
+            raise AssertionError(
+                "Prefetching is enabled, but no cached parquet info was provided."
+            )
+        elif cached_parquet_info is not None and paths != [
+            info.path for info in cached_parquet_info
+        ]:
+            raise AssertionError(
+                f"Paths do not match cached parquet info. {paths} != {[info.path for info in cached_parquet_info]}"
+            )
 
     def get_hashable(self) -> Hashable:
         """
@@ -856,15 +863,10 @@ class Scan(IR):
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
         if parquet_options.prefetch_file_metadata:
-            if cached_parquet_info is None:
-                raise AssertionError(
-                    "Prefetching is enabled, but no cached parquet info was provided."
-                )
-            if paths != [info.path for info in cached_parquet_info]:
-                raise AssertionError(
-                    f"Paths do not match cached parquet info. {paths} != {[info.path for info in cached_parquet_info]}"
-                )
-            parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
+            Scan._validate_cached_parquet_info(
+                paths, parquet_options, cached_parquet_info
+            )
+            parquet_metadatas = [info.file_metadata for info in cached_parquet_info]  # type: ignore[union-attr]
             num_rows = sum(metadata.num_rows for metadata in parquet_metadatas)
         else:
             meta = plc.io.parquet_metadata.read_parquet_metadata(
@@ -1010,21 +1012,16 @@ class Scan(IR):
                 )
         elif typ == "parquet":
             if parquet_options.prefetch_file_metadata:
-                if cached_parquet_info is None:
-                    raise AssertionError(
-                        "Prefetching is enabled, but no cached parquet info was provided."
-                    )
-                if paths != [info.path for info in cached_parquet_info]:
-                    raise AssertionError(
-                        f"Paths do not match cached parquet info. {paths} != {[info.path for info in cached_parquet_info]}"
-                    )
+                Scan._validate_cached_parquet_info(
+                    paths, parquet_options, cached_parquet_info
+                )
                 source_info = plc.io.SourceInfo(
                     [
                         plc.io.types.FilepathSource(info.path, info.size)
-                        for info in cached_parquet_info
+                        for info in cached_parquet_info  # type: ignore[union-attr]
                     ]
                 )
-                parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
+                parquet_metadatas = [info.file_metadata for info in cached_parquet_info]  # type: ignore[union-attr]
             else:
                 parquet_metadatas = None
                 source_info = plc.io.SourceInfo(paths)
@@ -1100,7 +1097,7 @@ class Scan(IR):
                 col_names = tbl_w_meta.column_names(include_children=False)
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(
-                        paths, skip_rows, n_rows, parquet_options, context
+                        paths, skip_rows, n_rows, parquet_options, cached_parquet_info
                     )
                     if not col_names
                     else None
@@ -1779,7 +1776,11 @@ class Select(IR):
             stream = context.get_cuda_stream()
             scan = self.children[0]
             effective_rows = Scan._get_parquet_row_count_from_metadata(
-                scan.paths, scan.skip_rows, scan.n_rows, scan.parquet_options, context
+                scan.paths,
+                scan.skip_rows,
+                scan.n_rows,
+                scan.parquet_options,
+                None,
             )
             dtype = DataType(pl.UInt32())
             col = Column(

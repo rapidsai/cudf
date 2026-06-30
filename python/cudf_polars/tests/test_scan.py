@@ -17,7 +17,7 @@ from werkzeug import Response
 import polars as pl
 
 from cudf_polars.containers import DataType
-from cudf_polars.dsl.ir import CachedParquetInfo, IRExecutionContext, Scan
+from cudf_polars.dsl.ir import IRExecutionContext, Scan
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
@@ -855,47 +855,3 @@ def test_scan_parquet_is_between_literal_dtype_mismatch_22622(
     )
 
     assert_gpu_result_equal(q, engine=engine)
-
-
-def test_scan_is_equal() -> None:
-    parquet_options = ParquetOptions(prefetch_file_metadata=True)
-    kwargs = {
-        "schema": {"a": DataType(pl.Int64())},
-        "typ": "parquet",
-        "reader_options": {},
-        "cloud_options": {},
-        "paths": ["file.parquet"],
-        "with_columns": None,
-        "skip_rows": 0,
-        "n_rows": -1,
-        "row_index": None,
-        "include_file_paths": None,
-        "predicate": None,
-        "parquet_options": parquet_options,
-        "cached_parquet_info": None,
-    }
-
-    scan_1 = Scan(**kwargs)  # type: ignore[arg-type]
-    scan_2 = Scan(**kwargs)  # type: ignore[arg-type]
-
-    assert scan_1.is_equal(scan_2)
-    assert hash(scan_1) == hash(scan_2)
-
-    kwargs3 = {
-        **kwargs,
-        "cached_parquet_info": [
-            CachedParquetInfo(path="file.parquet", size=100, file_metadata=None)  # type: ignore[arg-type]
-        ],
-    }
-
-    scan_3 = Scan(**kwargs3)  # type: ignore[arg-type]
-    assert scan_1.is_equal(scan_3)
-    assert hash(scan_1) == hash(scan_3)
-
-    kwargs4 = {
-        **kwargs,
-        "paths": ["file2.parquet"],
-    }
-    scan_4 = Scan(**kwargs4)  # type: ignore[arg-type]
-    assert not scan_1.is_equal(scan_4)
-    assert hash(scan_1) != hash(scan_4)
