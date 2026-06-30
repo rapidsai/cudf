@@ -7,6 +7,7 @@ import gzip
 import zlib
 from decimal import Decimal
 from typing import TYPE_CHECKING
+from urllib.parse import quote
 
 import numpy as np
 import pytest
@@ -40,10 +41,10 @@ NO_CHUNK_ENGINE = pl.GPUEngine(
 
 
 @pytest.fixture(
-    params=[(None, None), ("row-index", 0), ("index", 10)],
+    params=[(None, 0), ("row-index", 0), ("index", 10)],
     ids=["no_row_index", "zero_offset_row_index", "offset_row_index"],
 )
-def row_index(request):
+def row_index(request) -> tuple[str | None, int]:
     return request.param
 
 
@@ -474,13 +475,14 @@ def test_select_arbitrary_order_with_row_index_column(engine: pl.GPUEngine, tmp_
 )
 def test_scan_csv_with_and_without_header(
     engine: pl.GPUEngine,
-    df,
-    tmp_path,
-    has_header,
-    new_columns,
-    row_index,
-    columns,
-    zlice,
+    df: pl.DataFrame,
+    tmp_path: Path,
+    *,
+    has_header: bool,
+    new_columns: list[str] | None,
+    row_index: tuple[str | None, int],
+    columns: list[str] | None,
+    zlice: tuple[int, int] | None,
 ):
     path = tmp_path / "test.csv"
     make_partitioned_source(
@@ -523,13 +525,28 @@ def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_scan_from_file_uri(engine: pl.GPUEngine, tmp_path: Path) -> None:
-    tmp_path.mkdir(exist_ok=True)
-    path = tmp_path / "out.parquet"
+@pytest.mark.parametrize(
+    "subdir",
+    [
+        "foo",
+        pytest.param(
+            "foo=bar",
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pola-rs/polars/issues/27840",
+                strict=True,
+            ),
+        ),
+    ],
+)
+def test_scan_from_file_uri(engine: pl.GPUEngine, tmp_path: Path, subdir: str) -> None:
+    target_dir = tmp_path / subdir
+    target_dir.mkdir()
+    path = target_dir / "out.parquet"
     df = pl.DataFrame({"a": 1})
     df.write_parquet(path)
-    q = pl.scan_parquet(f"file://{path}")
-    assert_ir_translation_raises(q, engine, NotImplementedError)
+    encoded = quote(str(path), safe="/")
+    q = pl.scan_parquet(f"file://{encoded}")
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("chunked", [False, True])

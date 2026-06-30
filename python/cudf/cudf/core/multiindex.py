@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -6,7 +6,6 @@ from __future__ import annotations
 import itertools
 import numbers
 import operator
-import warnings
 from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
@@ -244,7 +243,7 @@ class MultiIndex(Index):
         self._name = None
         self.names = names
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def names(self):
         return self._names
@@ -448,7 +447,7 @@ class MultiIndex(Index):
         mi._name = name
         return mi
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def name(self):
         return self._name
@@ -647,7 +646,7 @@ class MultiIndex(Index):
             for idx, name in zip(self._levels, self.names, strict=True)  # type: ignore[arg-type]
         ]
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def ndim(self) -> int:
         """Dimension of the data. For MultiIndex ndim is always 2."""
@@ -873,6 +872,9 @@ class MultiIndex(Index):
             isinstance(result, cudf.DataFrame)
             and len(result) == 1  # only downcast if we have a single row
             and not slice_access  # never downcast if we sliced
+            # On a 1-level MultiIndex, keep the result a DataFrame (with the
+            # MultiIndex preserved) rather than downcasting to a Series.
+            and self.nlevels > 1
             and (
                 size == 0  # index_key was an integer
                 # we indexed into a single row directly, using its label:
@@ -986,7 +988,7 @@ class MultiIndex(Index):
             )
         return NotImplemented
 
-    @property  # type: ignore[explicit-override]
+    @property
     @_performance_tracking
     def size(self) -> int:
         # The size of a MultiIndex is only dependent on the number of rows.
@@ -1294,28 +1296,10 @@ class MultiIndex(Index):
 
     @_performance_tracking
     def to_numpy(self) -> np.ndarray:
-        return self.to_pandas().values
-
-    def to_flat_index(self):
-        """
-        Convert a MultiIndex to an Index of Tuples containing the level values.
-
-        This is not currently implemented
-        """
-        # TODO: Could implement as Index of ListDtype?
-        raise NotImplementedError("to_flat_index is not currently supported.")
-
-    @property
-    @_performance_tracking
-    def values_host(self) -> np.ndarray:
         """
         Return a numpy representation of the MultiIndex.
 
         Only the values in the MultiIndex will be returned.
-
-        .. deprecated:: 26.04
-            `values_host` is deprecated and will be removed in a future version.
-            Use `to_numpy()` instead.
 
         Returns
         -------
@@ -1330,18 +1314,21 @@ class MultiIndex(Index):
         ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
         ...         names=["x", "y"],
         ...     )
-        >>> midx.values_host  # doctest: +SKIP
+        >>> midx.to_numpy()
         array([(1, 1), (1, 5), (3, 2), (4, 2), (5, 1)], dtype=object)
-        >>> type(midx.values_host)  # doctest: +SKIP
+        >>> type(midx.to_numpy())
         <class 'numpy.ndarray'>
         """
-        warnings.warn(
-            "values_host is deprecated and will be removed in a future version. "
-            "Use to_numpy() instead.",
-            FutureWarning,
-            stacklevel=2,
-        )
         return self.to_pandas().values
+
+    def to_flat_index(self):
+        """
+        Convert a MultiIndex to an Index of Tuples containing the level values.
+
+        This is not currently implemented
+        """
+        # TODO: Could implement as Index of ListDtype?
+        raise NotImplementedError("to_flat_index is not currently supported.")
 
     @property
     @_performance_tracking
@@ -1724,7 +1711,7 @@ class MultiIndex(Index):
             names=self.names,
         )
 
-    @cached_property  # type: ignore[explicit-override]
+    @cached_property
     @_performance_tracking
     def is_unique(self) -> bool:
         return len(self) == self.nunique(dropna=False)

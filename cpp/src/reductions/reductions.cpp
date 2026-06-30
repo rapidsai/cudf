@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -95,8 +95,7 @@ struct reduction_function<Source, cudf::aggregation::SUM> : public base_reductio
   }
 };
 
-template <typename Source>
-  requires(std::is_same_v<Source, int64_t>)  // only int64_t is supported for SUM_WITH_OVERFLOW
+template <cudf::detail::sum_overflow_supported Source>
 struct reduction_function<Source, cudf::aggregation::SUM_WITH_OVERFLOW>
   : public base_reduction_function {
   [[nodiscard]] std::unique_ptr<scalar> reduce(reduction_parameters const& params) const

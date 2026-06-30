@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -432,7 +432,7 @@ def test_groupby_apply_jit_no_df_ops(groupby_jit_data_small):
 
     with pytest.raises(
         UDFError,
-        match="JIT GroupBy.apply\\(\\) does not support DataFrame.sum\\(\\)",
+        match=r"JIT GroupBy.apply\(\) does not support DataFrame.sum\(\)",
     ):
         run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1"])
 
@@ -852,6 +852,24 @@ def test_groupby_apply_series_args(func, args):
     expect = pdf.groupby("x", group_keys=False).y.apply(func, *args)
 
     assert_groupby_results_equal(expect, got)
+
+
+def test_groupby_apply_series_preserves_multiindex_names():
+    pdf = pd.DataFrame(
+        {"value": [1.0, 2.0, 3.0, 4.0]},
+        index=pd.MultiIndex.from_product([range(2), range(2)]),
+    )
+    gdf = cudf.from_pandas(pdf)
+    by = np.array([0, 0, 1, 1])
+
+    expect = pdf.groupby(by=by, group_keys=False)["value"].apply(
+        lambda x: x.cumprod()
+    )
+    got = gdf.groupby(by=by, group_keys=False)["value"].apply(
+        lambda x: x.cumprod()
+    )
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("group_keys", [None, True, False])
