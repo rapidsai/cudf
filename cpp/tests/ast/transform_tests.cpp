@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -574,6 +574,17 @@ TEST_F(ComputeColumnTest, MultiTypeOperationFailure)
   // Operations on different types are not allowed
   EXPECT_THROW(cudf::compute_column(table, expression_0_plus_1), cudf::logic_error);
   EXPECT_THROW(cudf::compute_column(table, expression_1_plus_0), cudf::logic_error);
+}
+
+TEST_F(ComputeColumnTest, ColumnReferenceExceed)
+{
+  auto c_0   = column_wrapper<int32_t>{3, 20, 1, 50};
+  auto c_1   = column_wrapper<int32_t>{10, 7, 20, 0};
+  auto table = cudf::table_view{{c_0, c_1}};
+
+  auto col_ref_0 = cudf::ast::column_reference(2);
+
+  EXPECT_THROW(cudf::compute_column(table, col_ref_0), std::out_of_range);
 }
 
 TYPED_TEST(TransformTest, LiteralComparison)
