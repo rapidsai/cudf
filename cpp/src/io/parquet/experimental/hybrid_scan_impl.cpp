@@ -83,7 +83,7 @@ namespace {
  * @return Number of row groups
  */
 [[nodiscard]] inline size_type count_row_groups(
-  cudf::host_span<std::vector<size_type> const> row_group_indices)
+  std::span<std::vector<size_type> const> row_group_indices)
 {
   return std::accumulate(
     row_group_indices.begin(),
@@ -365,8 +365,7 @@ hybrid_scan_reader_impl::filter_row_groups_with_dictionary_pages(
   auto const mr                          = cudf::get_current_device_resource_ref();
   auto decompressed_dictionary_page_data = std::optional<rmm::device_buffer>{};
   if (has_compressed_data) {
-    // Use the `decompress_page_data` utility to decompress dictionary pages (passed as
-    // pass_pages)
+    // Use the `decompress_page_data` utility to decompress dictionary pages (passed as pass_pages)
     decompressed_dictionary_page_data =
       std::get<0>(parquet::detail::decompress_page_data(chunks, pages, {}, {}, stream, mr));
     pages.host_to_device_async(stream);
@@ -998,8 +997,7 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   // Copy number of total input row groups and number of surviving row groups from predicate
   // pushdown.
   out_metadata.num_input_row_groups = _file_itm_data.num_input_row_groups;
-  // Copy the number surviving row groups from each predicate pushdown only if the filter has
-  // value
+  // Copy the number surviving row groups from each predicate pushdown only if the filter has value
   if (_expr_conv.get_converted_expr().has_value()) {
     out_metadata.num_row_groups_after_stats_filter =
       _file_itm_data.surviving_row_groups.after_stats_filter;
@@ -1027,8 +1025,8 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
   // account. PageInfo::skipped_values, which tells us where to start decoding in the input to
-  // respect the user bounds. It is only necessary to do this second pass if
-  // uses_custom_row_bounds is set (if the user has specified artificial bounds).
+  // respect the user bounds. It is only necessary to do this second pass if uses_custom_row_bounds
+  // is set (if the user has specified artificial bounds).
   if (uses_custom_row_bounds(mode)) {
     compute_page_sizes(subpass.pages,
                        pass.chunks,
