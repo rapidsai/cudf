@@ -170,6 +170,8 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
 
     left, right = node.children
     target_filter = _make_target_filter(node, candidate)
+    # A DAG may share the target with the domain side, so only rewrite the
+    # side for which this candidate was selected.
     if candidate.target_side == "left":
         (left,) = replace([left], {candidate.target.node: target_filter})
     else:

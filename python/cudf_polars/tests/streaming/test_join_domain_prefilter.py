@@ -333,6 +333,34 @@ def test_composite_domain_columns_follow_renames() -> None:
     assert producer.columns == ("raw_key", "raw_constraint")
 
 
+def test_target_replacement_does_not_rewrite_shared_domain_side() -> None:
+    shared = _scan("shared", ("target_key", "other"))
+    domain_source = _scan(
+        "domain_source", ("domain_key", "other2"), predicate=True
+    )
+    domain = _join(
+        shared,
+        domain_source,
+        ("other",),
+        ("other2",),
+        maintain_order="left",
+    )
+    root = _join(shared, domain, ("target_key",), ("domain_key",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(shared=(shared, 1_000), domain_source=(domain_source, 5)),
+        _config(),
+    )
+
+    assert isinstance(optimized, Join)
+    assert isinstance(optimized.children[0], Join)
+    assert optimized.children[0].options[0] == "Semi"
+    assert optimized.children[0].children[0] is shared
+    assert optimized.children[1] is domain
+    assert domain.children[0] is shared
+
+
 def test_no_domain_prefilter_for_outer_join() -> None:
     part = _scan("part", ("p_partkey",), predicate=True)
     lineitem = _scan("lineitem", ("l_partkey",))
