@@ -80,9 +80,8 @@ std::unique_ptr<cudf::column> make_template_column(cudf::size_type template_widt
 {
   std::vector<std::string> repeated;
   repeated.reserve(template_strings.size());
-  for (auto const& str : template_strings) {
-    repeated.push_back(repeat_to_width(str, template_width));
-  }
+  std::transform( template_strings.begin(), template_strings.end(), repeated.begin(), 
+    [template_width] (std::string_view str) { return repeat_to_width(str, template_width); });
   return cudf::test::strings_column_wrapper(repeated.begin(), repeated.end()).release();
 }
 
