@@ -47,19 +47,11 @@ bool device_find_if(InputIterator begin,
   auto result =
     cudf::detail::device_scalar<offset_type>(stream, cudf::get_current_device_resource_ref());
 
-  size_t temp_storage_bytes = 0;
-  CUDF_CUDA_TRY(cub::DeviceFind::FindIf(
-    nullptr, temp_storage_bytes, begin, result.data(), predicate, num_items, stream.value()));
-
-  rmm::device_buffer d_temp_storage(
-    temp_storage_bytes, stream, cudf::get_current_device_resource_ref());
-  CUDF_CUDA_TRY(cub::DeviceFind::FindIf(d_temp_storage.data(),
-                                        temp_storage_bytes,
-                                        begin,
-                                        result.data(),
-                                        predicate,
-                                        num_items,
-                                        stream.value()));
+  auto env = cuda::std::execution::env{
+    cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
+    cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
+                               cudf::get_current_device_resource_ref()}};
+  CUDF_CUDA_TRY(cub::DeviceFind::FindIf(begin, result.data(), predicate, num_items, env));
 
   return result.value(stream) != static_cast<offset_type>(num_items);
 }
