@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -519,6 +519,7 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
     auto const& keys    = child(dictionary_keys_column_index);
     auto const index    = indices.template element<typename T::index_type>(element_index);
     return keys.template element<typename T::key_type>(index);
+  }
 
   /**
    * @brief Returns a nullable element at the specified index. If the element is null, returns
@@ -594,7 +595,8 @@ class alignas(16) column_device_view_core : public detail::column_device_view_ba
 
 /**
  * @brief A mutable, non-owning view of device data as a column of elements
- * that is trivially copyable and usable in CUDA device code and offline-compiled code (i.e. NVRTC).
+ * that is trivially copyable and usable in CUDA device code and offline-compiled code (i.e.
+ * NVRTC).
  *
  * @ingroup column_classes
  */

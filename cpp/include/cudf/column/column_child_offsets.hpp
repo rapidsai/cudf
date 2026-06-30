@@ -1,8 +1,13 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
+
+/**
+ * @file column_child_offsets.hpp
+ * @brief Constants for child column indices within compound column types
+ */
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
