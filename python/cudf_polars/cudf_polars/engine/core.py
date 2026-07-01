@@ -10,6 +10,7 @@ import json
 import os
 import socket
 import threading
+import uuid
 import weakref
 from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
@@ -26,19 +27,19 @@ from rapidsmpf.streaming.core.actor import run_actor_network
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.quent._plan import build_plan
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
 from cudf_polars.streaming.actor_graph.tracing import log_query_plan
 from cudf_polars.streaming.actor_graph.utils import empty_table_chunk
 from cudf_polars.streaming.base import StatsCollector
-from cudf_polars.streaming.parallel import lower_ir_graph
+from cudf_polars.streaming.parallel import lower_ir_graph_with_node_map
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.streaming.utils import _concat
 from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable, MutableMapping
     from concurrent.futures import Executor, ThreadPoolExecutor
 
@@ -48,7 +49,10 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
 
+    import cudf_polars.quent
+    import cudf_polars.quent._logging
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.quent._context import LocalQuentContext
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
@@ -160,6 +164,7 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    _quent_logger: cudf_polars.quent._logging.QuentLogger
     rapidsmpf_options: rapidsmpf.config.Options
     # Process-wide registry of every live :class:`StreamingEngine`. Used by
     # :class:`DefaultSingletonEngine` to enforce that no other engine is
@@ -183,6 +188,7 @@ class StreamingEngine(pl.GPUEngine):
 
         check_no_live_default_singleton(self)
         self._nranks = nranks
+        self._quent_events_raw: list[dict[str, Any]] = []  # populated on shutdown
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
@@ -374,6 +380,12 @@ class StreamingEngine(pl.GPUEngine):
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
 
+    @property
+    def _quent_events(self) -> list[dict[str, Any]]:
+        """Return all Quent telemetry events collected during the engine's lifecycle."""
+        # Not ready to make this public yet.
+        return [x["event"] for x in self._quent_events_raw]
+
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         """
         Execute a function on all ranks.
@@ -443,7 +455,7 @@ def execute_ir_on_rank(
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
     query_id
-        Unique identifier for the query, propagated into actor traces.
+        A unique identifier for the query.
 
     Returns
     -------
@@ -650,6 +662,8 @@ def evaluate_on_rank(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     *,
+    collect_metadata: bool = False,
+    local_quent_context: LocalQuentContext,
     query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
@@ -675,8 +689,12 @@ def evaluate_on_rank(
         Root of the **pre-lowered** IR graph.
     config_options
         Executor configuration forwarded from the client.
+    collect_metadata
+        Whether to collect channel metadata during execution.
+    local_quent_context
+        The local Quent context for this rank.
     query_id
-        Unique identifier for the query, propagated into actor traces.
+        A unique identifier for the query.
 
     Returns
     -------
@@ -686,14 +704,42 @@ def evaluate_on_rank(
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
-    ir, partition_info = lower_ir_graph(
+    logical_plan_id = ir.get_stable_plan_id()
+
+    physical_plan_id = uuid.uuid4()
+
+    plan, ops, ports, logical_op_by_id = build_plan(
+        ir,
+        config_options,
+        query=local_quent_context.context.query,
+        plan_id=logical_plan_id,
+        worker=local_quent_context.worker,
+        instance_name="logical",
+        parent_plan=None,
+        parent_operators_by_node_id=None,
+    )
+    if comm.rank == 0:
+        local_quent_context.context._emit_plan_declarations(
+            local_quent_context.logger, plan, ops, ports
+        )
+
+    ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
 
     if comm.rank == 0:
-        # At least for now, the query plan is identical on all ranks,
-        # so we only log it once.
         log_query_plan(ir, config_options)
+
+    local_quent_context.context._emit_physical_plan_events(
+        local_quent_context.logger,
+        ir,
+        config_options,
+        plan_id=physical_plan_id,
+        worker=local_quent_context.worker,
+        parent_plan=plan,
+        node_map=node_map,
+        logical_op_by_id=logical_op_by_id,
+    )
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(

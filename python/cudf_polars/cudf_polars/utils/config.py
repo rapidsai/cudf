@@ -30,6 +30,7 @@ import os
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
@@ -43,6 +44,8 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.engine.ray import RankActor
+    from cudf_polars.quent._context import QuentContext
+    from cudf_polars.quent._logging import QuentLogger
 
 
 __all__ = [
@@ -527,6 +530,9 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+    engine_id: uuid.UUID
+    worker_id: uuid.UUID
+    quent_logger: QuentLogger
 
 
 @dataclasses.dataclass(frozen=True)
@@ -549,6 +555,7 @@ class RayContext:
     """
 
     rank_actors: list[ActorHandle[RankActor]]
+    quent_logger: QuentLogger
 
 
 @dataclasses.dataclass(frozen=True)
@@ -578,8 +585,16 @@ class DaskContext:
 
     client: distributed.Client
     rapidsmpf_id: str
+    quent_logger: QuentLogger
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
+
+
+def default_quent_context() -> QuentContext:
+    # Just avoiding a circular import
+    from cudf_polars.quent import QuentContext
+
+    return QuentContext()
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -722,6 +737,9 @@ class StreamingExecutor:
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
+    quent_context: QuentContext = dataclasses.field(
+        default_factory=default_quent_context
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.cluster is None:
@@ -790,6 +808,13 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
+
+        # Hash the quent context UUIDs as ints
+        quent_context = d["quent_context"]
+        for key in ["engine", "query_group", "query"]:
+            quent_context[key]["id"] = int(quent_context[key]["id"])
+
+        d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
 
 

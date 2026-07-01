@@ -87,6 +87,9 @@ def evaluate_logical_plan(
                     comm=engine.comm,
                     context=engine.context,
                     py_executor=engine.py_executor,
+                    engine_id=config_options.executor.quent_context.engine.id,
+                    worker_id=engine._quent_worker.id,
+                    quent_logger=engine._quent_logger,
                 ),
             ),
         )
