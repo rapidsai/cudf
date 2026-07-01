@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -79,6 +79,32 @@ TEST_F(FromArrowDeviceTest, EmptyTable)
   cudf::table_view from_struct{
     std::vector<cudf::column_view>(got_cudf_col->child_begin(), got_cudf_col->child_end())};
   CUDF_TEST_EXPECT_TABLES_EQUAL(*got_cudf_table, from_struct);
+}
+
+TEST_F(FromArrowDeviceTest, ZeroColumnsWithRows)
+{
+  constexpr cudf::size_type num_rows = 5;
+
+  nanoarrow::UniqueSchema input_schema;
+  ArrowSchemaInit(input_schema.get());
+  NANOARROW_THROW_NOT_OK(ArrowSchemaSetTypeStruct(input_schema.get(), 0));
+
+  nanoarrow::UniqueArray input_array;
+  NANOARROW_THROW_NOT_OK(ArrowArrayInitFromSchema(input_array.get(), input_schema.get(), nullptr));
+  input_array->length     = num_rows;
+  input_array->null_count = 0;
+  NANOARROW_THROW_NOT_OK(
+    ArrowArrayFinishBuilding(input_array.get(), NANOARROW_VALIDATION_LEVEL_MINIMAL, nullptr));
+
+  ArrowDeviceArray input;
+  memcpy(&input.array, input_array.get(), sizeof(ArrowArray));
+  input.device_id   = rmm::get_current_cuda_device().value();
+  input.device_type = ARROW_DEVICE_CUDA;
+  input.sync_event  = nullptr;
+
+  auto got_cudf_table = cudf::from_arrow_device(input_schema.get(), &input);
+  EXPECT_EQ(got_cudf_table->num_columns(), 0);
+  EXPECT_EQ(got_cudf_table->num_rows(), num_rows);
 }
 
 TEST_F(FromArrowDeviceTest, DateTimeTable)

@@ -38,8 +38,10 @@ A type representing a single element of a data type.
 
 ### Table
 
-A table is a collection of columns with equal number of elements. A table is the C++ equivalent to
-a cuDF Python [DataFrame](https://docs.rapids.ai/api/cudf/stable/api_docs/dataframe.html).
+A table is a collection of columns that all have the same number of elements (rows). A table may
+also have zero columns while still carrying a row count, mirroring an `(N, 0)` DataFrame. A table is
+the C++ equivalent to a cuDF Python
+[DataFrame](https://docs.rapids.ai/api/cudf/stable/api_docs/dataframe.html).
 
 ### View
 

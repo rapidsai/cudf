@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
@@ -375,7 +376,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<scalar const>>
                                                                  mr);
                  });
 
-  return std::make_unique<table>(std::move(result));
+  return std::make_unique<table>(std::move(result), target.num_rows());
 }
 
 std::unique_ptr<column> boolean_mask_scatter(column_view const& input,
@@ -439,6 +440,24 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                cudf::data_type_error);
 
   if (target.num_rows() != 0) {
+    if (input.num_columns() == 0) {
+      // With no columns the per-column scatter below never runs, so the
+      // precondition that the number of `true` values in the mask does not
+      // exceed input.num_rows() is never reached. That check normally lives
+      // in detail::scatter (see cudf/detail/scatter.cuh), enforce it here.
+      auto const d_mask   = cudf::column_device_view::create(boolean_mask, stream);
+      auto const num_true = cudf::detail::count_if(
+        cuda::counting_iterator<size_type>{0},
+        cuda::counting_iterator<size_type>{boolean_mask.size()},
+        [mask = *d_mask] __device__(size_type i) {
+          return mask.is_valid(i) && mask.element<bool>(i);
+        },
+        stream);
+      CUDF_EXPECTS(num_true <= static_cast<std::size_t>(input.num_rows()),
+                   "scatter map size should be <= to number of rows in source");
+      return std::make_unique<table>(std::vector<std::unique_ptr<column>>{}, target.num_rows());
+    }
+
     std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
     std::transform(
       input.begin(),
@@ -449,7 +468,7 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
         return boolean_mask_scatter(input_column, target_column, boolean_mask, stream, mr);
       });
 
-    return std::make_unique<table>(std::move(out_columns));
+    return std::make_unique<table>(std::move(out_columns), target.num_rows());
   } else {
     return empty_like(target);
   }
@@ -492,7 +511,7 @@ std::unique_ptr<table> boolean_mask_scatter(
                        scalar.get(), target_column, boolean_mask, stream, mr);
                    });
 
-    return std::make_unique<table>(std::move(out_columns));
+    return std::make_unique<table>(std::move(out_columns), target.num_rows());
   } else {
     return empty_like(target);
   }
