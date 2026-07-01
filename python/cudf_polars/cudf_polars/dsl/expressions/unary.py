@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
 
 import pylibcudf as plc
 
@@ -232,6 +232,15 @@ class UnaryFunction(Expr):
         if evaluated.obj.type().id() != out_type.id():
             return plc.unary.cast(evaluated.obj, out_type, stream=df.stream)
         return evaluated.obj
+
+    @staticmethod
+    def _is_clamp_scalar(
+        operand: plc.Column | plc.Scalar | None, out_type: plc.DataType
+    ) -> TypeGuard[plc.Scalar | None]:
+        """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
+        return operand is None or (
+            isinstance(operand, plc.Scalar) and operand.type().id() == out_type.id()
+        )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -608,23 +617,42 @@ class UnaryFunction(Expr):
             has_min, has_max = self.options
             out_type = self.dtype.plc_type
             bound_children = iter(self.children[1:])
+            lower = (
+                self.bound_clip_operand(next(bound_children), out_type, df, context)
+                if has_min
+                else None
+            )
+            upper = (
+                self.bound_clip_operand(next(bound_children), out_type, df, context)
+                if has_max
+                else None
+            )
+            if self._is_clamp_scalar(lower, out_type) and self._is_clamp_scalar(
+                upper, out_type
+            ):
+                null_bound = plc.Scalar.from_py(None, out_type, stream=df.stream)
+                return Column(
+                    plc.replace.clamp(
+                        column.obj,
+                        lower if lower is not None else null_bound,
+                        upper if upper is not None else null_bound,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             clamped = column.obj
-            if has_min:
+            if lower is not None:
                 clamped = plc.binaryop.binary_operation(
                     clamped,
-                    self.bound_clip_operand(
-                        next(bound_children), out_type, df, context
-                    ),
+                    lower,
                     plc.binaryop.BinaryOperator.NULL_MAX,
                     out_type,
                     stream=df.stream,
                 )
-            if has_max:
+            if upper is not None:
                 clamped = plc.binaryop.binary_operation(
                     clamped,
-                    self.bound_clip_operand(
-                        next(bound_children), out_type, df, context
-                    ),
+                    upper,
                     plc.binaryop.BinaryOperator.NULL_MIN,
                     out_type,
                     stream=df.stream,
