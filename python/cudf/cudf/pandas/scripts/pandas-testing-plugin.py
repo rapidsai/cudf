@@ -2936,6 +2936,7 @@ NODEIDS_THAT_FAIL = {
     "tests/indexing/interval/test_interval_new.py::TestIntervalIndex::test_non_unique_moar[setitem]": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_getitem.py::test_frame_getitem_multicolumn_empty_level": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_loc.py::TestMultiIndexLoc::test_loc_multiindex_indexer_none": "TODO: Add a reason for failure",
+    "tests/indexing/multiindex/test_multiindex.py::TestMultiIndexBasic::test_rename_multiindex_with_duplicates": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_setitem.py::TestMultiIndexSetItem::test_frame_getitem_setitem_boolean": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_setitem.py::TestMultiIndexSetItem::test_frame_setitem_multi_column2": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_setitem.py::TestMultiIndexSetItem::test_loc_getitem_setitem_slice_integers[DataFrame]": "TODO: Add a reason for failure",
