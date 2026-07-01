@@ -77,7 +77,6 @@ dependencies:
 - polars>=1.35,<1.43
 - pre-commit
 - pyarrow>=19.0.0,<24
-- pydata-sphinx-theme>=0.15.4
 - pytables
 - pytest-benchmark
 - pytest-cases>=3.8.2
@@ -118,4 +117,6 @@ dependencies:
 - xlsxwriter
 - zlib>=1.2.13
 - zstandard
+- pip:
+  - nvidia-sphinx-theme
 name: all_cuda-129_arch-aarch64
