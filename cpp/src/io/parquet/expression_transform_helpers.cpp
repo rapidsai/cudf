@@ -18,6 +18,10 @@
 
 #include <cuda/iterator>
 
+#include <algorithm>
+#include <string>
+#include <utility>
+
 namespace cudf::io::parquet::detail {
 
 namespace {
@@ -235,17 +239,20 @@ void names_from_expression::visit_operands(
 
 [[nodiscard]] std::unordered_map<cudf::size_type, std::string> map_column_indices_to_names(
   cudf::io::parquet_reader_options const& options,
-  std::vector<SchemaElement> const& schema_tree,
+  std::span<SchemaElement const> schema_tree,
   bool case_sensitive_names)
 {
   std::unordered_map<cudf::size_type, std::string> column_indices_to_names;
 
-  auto const& selected_column_names   = options.get_column_names();
-  auto const& selected_column_indices = options.get_column_indices();
+  auto const& selected_column_names     = options.get_column_names();
+  auto const& selected_column_indices   = options.get_column_indices();
+  auto const& selected_column_field_ids = options.get_column_field_ids();
 
-  CUDF_EXPECTS(
-    not(selected_column_names.has_value() and selected_column_indices.has_value()),
-    "Parquet reader encountered column selection by both names and indices simultaneously");
+  CUDF_EXPECTS(static_cast<int>(selected_column_names.has_value()) +
+                   static_cast<int>(selected_column_indices.has_value()) +
+                   static_cast<int>(selected_column_field_ids.has_value()) <=
+                 1,
+               "Parquet reader encountered multiple column selection modes");
 
   // Map counting indices to the selected column by names
   if (selected_column_names.has_value()) {
@@ -257,32 +264,60 @@ void names_from_expression::visit_operands(
                      return std::make_pair(col_index,
                                            normalize_column_path(col_name, case_sensitive_names));
                    });
-  } else {
-    // Map selected top-level column indices to their names from the schema tree
+  }
+  // Map selected top-level column indices to their names from the schema tree
+  else if (selected_column_indices.has_value()) {
     auto const& root = schema_tree.front();
 
-    if (selected_column_indices.has_value()) {
-      std::transform(selected_column_indices->begin(),
-                     selected_column_indices->end(),
-                     cuda::counting_iterator<cudf::size_type>{0},
-                     std::inserter(column_indices_to_names, column_indices_to_names.end()),
-                     [&](auto selected_col_idx, auto const mapped_col_idx) {
-                       auto const schema_idx = root.children_idx[selected_col_idx];
-                       return std::make_pair(
-                         mapped_col_idx,
-                         normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names));
-                     });
-    } else {
-      // Map all top-level column indices to their names from the schema tree
-      std::for_each(
-        cuda::counting_iterator<int32_t>{0},
-        cuda::counting_iterator{static_cast<int32_t>(root.children_idx.size())},
-        [&](auto col_idx) {
-          auto const schema_idx = root.children_idx[col_idx];
-          column_indices_to_names.insert(
-            {col_idx, normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names)});
-        });
-    }
+    std::transform(
+      selected_column_indices->begin(),
+      selected_column_indices->end(),
+      cuda::counting_iterator<cudf::size_type>{0},
+      std::inserter(column_indices_to_names, column_indices_to_names.end()),
+      [&](auto selected_col_idx, auto const mapped_col_idx) {
+        CUDF_EXPECTS(
+          selected_col_idx >= 0 and std::cmp_less(selected_col_idx, root.children_idx.size()),
+          "Encountered an invalid col index in the top-level column selection",
+          std::invalid_argument);
+        auto const schema_idx = root.children_idx[selected_col_idx];
+        return std::make_pair(
+          mapped_col_idx,
+          normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names));
+      });
+  }
+  // Map selected field ids to column paths from the schema tree
+  else if (selected_column_field_ids.has_value()) {
+    std::transform(
+      selected_column_field_ids->begin(),
+      selected_column_field_ids->end(),
+      cuda::counting_iterator<cudf::size_type>{0},
+      std::inserter(column_indices_to_names, column_indices_to_names.end()),
+      [&](auto const& field_id, auto const mapped_col_idx) {
+        auto const schema_iter =
+          std::find_if(schema_tree.begin() + 1, schema_tree.end(), [field_id](auto const& schema) {
+            return schema.field_id.has_value() and schema.field_id.value() == field_id;
+          });
+        CUDF_EXPECTS(schema_iter != schema_tree.end(),
+                     "Encountered a non-existent Parquet field ID in selected columns",
+                     std::invalid_argument);
+        auto const schema_idx = static_cast<int>(std::distance(schema_tree.begin(), schema_iter));
+        return std::make_pair(mapped_col_idx,
+                              normalize_column_path(column_path_from_index(schema_tree, schema_idx),
+                                                    case_sensitive_names));
+      });
+  }
+  // Map all top-level column indices to their names from the schema tree
+  else {
+    auto const& root = schema_tree.front();
+
+    std::for_each(
+      cuda::counting_iterator<int32_t>{0},
+      cuda::counting_iterator{static_cast<int32_t>(root.children_idx.size())},
+      [&](auto col_idx) {
+        auto const schema_idx = root.children_idx[col_idx];
+        column_indices_to_names.insert(
+          {col_idx, normalize_column_path(schema_tree[schema_idx].name, case_sensitive_names)});
+      });
   }
 
   return column_indices_to_names;

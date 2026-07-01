@@ -379,7 +379,20 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
   auto d = cudf::test::strings_column_wrapper{"ducks", "sheep", "cows", "fish", "birds", "ants"};
 
   cudf::table_view tbl{{a, b, c, d}};
-  auto filepath = write_parquet_temp_file(tbl, "ReorderedColumns3.parquet", {"a", "b", "c", "d"});
+  auto filepath = temp_env->get_temp_filepath("ReorderedColumns3.parquet");
+  cudf::io::table_input_metadata md(tbl);
+  md.column_metadata[0].set_name("a");
+  md.column_metadata[0].set_parquet_field_id(10);
+  md.column_metadata[1].set_name("b");
+  md.column_metadata[1].set_parquet_field_id(11);
+  md.column_metadata[2].set_name("c");
+  md.column_metadata[2].set_parquet_field_id(12);
+  md.column_metadata[3].set_name("d");
+  md.column_metadata[3].set_parquet_field_id(13);
+  cudf::io::parquet_writer_options opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, tbl)
+      .metadata(std::move(md));
+  cudf::io::write_parquet(opts);
 
   {
     // read them out of order using indices
@@ -392,6 +405,29 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), a);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), b);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(3), c);
+  }
+
+  {
+    // read them out of order using Parquet field IDs
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .column_field_ids({13, 10, 11, 12});
+    auto result = cudf::io::read_parquet(read_opts);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(0), d);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(1), a);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(2), b);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->view().column(3), c);
+  }
+
+  {
+    // missing Parquet field IDs are errors when ignore_missing_columns is disabled
+    cudf::io::parquet_reader_options read_opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+        .column_field_ids({999})
+        .ignore_missing_columns(false);
+
+    EXPECT_THROW(cudf::io::read_parquet(read_opts), std::invalid_argument);
   }
 
   {
@@ -463,10 +499,15 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
 
   cudf::io::table_input_metadata input_metadata(input);
   input_metadata.column_metadata[0].set_name("being");
+  input_metadata.column_metadata[0].set_parquet_field_id(1);
   input_metadata.column_metadata[0].child(0).set_name("human?");
+  input_metadata.column_metadata[0].child(0).set_parquet_field_id(2);
   input_metadata.column_metadata[0].child(1).set_name("particulars");
+  input_metadata.column_metadata[0].child(1).set_parquet_field_id(3);
   input_metadata.column_metadata[0].child(1).child(0).set_name("weight");
+  input_metadata.column_metadata[0].child(1).child(0).set_parquet_field_id(4);
   input_metadata.column_metadata[0].child(1).child(1).set_name("age");
+  input_metadata.column_metadata[0].child(1).child(1).set_parquet_field_id(5);
 
   auto filepath = temp_env->get_temp_filepath("SelectNestedColumn.parquet");
   cudf::io::parquet_writer_options args =
@@ -475,15 +516,8 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
   cudf::io::write_parquet(args);
 
   {  // Test selecting a single leaf from the table
-    cudf::io::parquet_reader_options read_args =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath))
-        .column_names({"being.particulars.age"});
-    auto const result = cudf::io::read_parquet(read_args);
-
-    auto expect_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-      {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
     auto expect_s_1 =
-      cudf::test::structs_column_wrapper{{expect_ages_col}, {true, true, true, true, false, true}};
+      cudf::test::structs_column_wrapper{{ages_col}, {true, true, true, true, false, true}};
     auto expect_s_2 =
       cudf::test::structs_column_wrapper{{expect_s_1}, {false, true, true, true, true, true}}
         .release();
@@ -494,24 +528,24 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
     expected_metadata.column_metadata[0].child(0).set_name("particulars");
     expected_metadata.column_metadata[0].child(0).child(0).set_name("age");
 
+    cudf::io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath))
+        .column_names({"being.particulars.age"});
+    auto result = cudf::io::read_parquet(read_args);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+
+    // Test selecting a single leaf by Parquet field ID
+    read_args = cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath))
+                  .column_field_ids({5});
+    result = cudf::io::read_parquet(read_args);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
     cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
   }
 
   {  // Test selecting a non-leaf and expecting all hierarchy from that node onwards
-    cudf::io::parquet_reader_options read_args =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath))
-        .column_names({"being.particulars"});
-    auto const result = cudf::io::read_parquet(read_args);
-
-    auto expected_weights_col =
-      cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
-
-    auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-      {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
-
-    auto expected_s_1 = cudf::test::structs_column_wrapper{
-      {expected_weights_col, expected_ages_col}, {true, true, true, true, false, true}};
+    auto expected_s_1 = cudf::test::structs_column_wrapper{{weights_col, ages_col},
+                                                           {true, true, true, true, false, true}};
 
     auto expect_s_2 =
       cudf::test::structs_column_wrapper{{expected_s_1}, {false, true, true, true, true, true}}
@@ -524,6 +558,17 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
     expected_metadata.column_metadata[0].child(0).child(0).set_name("weight");
     expected_metadata.column_metadata[0].child(0).child(1).set_name("age");
 
+    cudf::io::parquet_reader_options read_args =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath))
+        .column_names({"being.particulars"});
+    auto result = cudf::io::read_parquet(read_args);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+    cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+
+    // Test selecting a non-leaf by Parquet field ID
+    read_args = cudf::io::parquet_reader_options::builder(cudf::io::source_info(filepath))
+                  .column_field_ids({3});
+    result = cudf::io::read_parquet(read_args);
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
     cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
   }
@@ -534,19 +579,10 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
         .column_names({"being.particulars.age", "being.particulars.weight", "being.human?"});
     auto const result = cudf::io::read_parquet(read_args);
 
-    auto expected_weights_col =
-      cudf::test::fixed_width_column_wrapper<float>{1.1, 2.4, 5.3, 8.0, 9.6, 6.9};
-
-    auto expected_ages_col = cudf::test::fixed_width_column_wrapper<int32_t>{
-      {48, 27, 25, 31, 351, 351}, {true, true, true, true, true, false}};
-
-    auto expected_is_human_col = cudf::test::fixed_width_column_wrapper<bool>{
-      {true, true, false, false, false, false}, {true, true, false, true, true, false}};
-
-    auto expect_s_1 = cudf::test::structs_column_wrapper{{expected_ages_col, expected_weights_col},
+    auto expect_s_1 = cudf::test::structs_column_wrapper{{ages_col, weights_col},
                                                          {true, true, true, true, false, true}};
 
-    auto expect_s_2 = cudf::test::structs_column_wrapper{{expect_s_1, expected_is_human_col},
+    auto expect_s_2 = cudf::test::structs_column_wrapper{{expect_s_1, is_human_col},
                                                          {false, true, true, true, true, true}}
                         .release();
 
@@ -562,6 +598,54 @@ TEST_F(ParquetReaderTest, SelectNestedColumn)
     CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
     cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
   }
+}
+
+TEST_F(ParquetReaderTest, SelectMismatchedStructChildByFieldId)
+{
+  auto x_a      = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto y_a      = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30};
+  auto struct_a = cudf::test::structs_column_wrapper{{x_a, y_a}, {true, true, true}}.release();
+  cudf::table_view const table_a{{*struct_a}};
+
+  auto path_a = temp_env->get_temp_filepath("SelectNestedFieldIdChildOrderA.parquet");
+  cudf::io::table_input_metadata metadata_a(table_a);
+  metadata_a.column_metadata[0].set_name("record").set_parquet_field_id(1);
+  metadata_a.column_metadata[0].child(0).set_name("x").set_parquet_field_id(2);
+  metadata_a.column_metadata[0].child(1).set_name("y").set_parquet_field_id(3);
+  auto write_args_a =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{path_a}, table_a)
+      .metadata(std::move(metadata_a));
+  cudf::io::write_parquet(write_args_a);
+
+  auto y_b      = cudf::test::fixed_width_column_wrapper<int32_t>{40, 50};
+  auto x_b      = cudf::test::fixed_width_column_wrapper<int32_t>{4, 5};
+  auto struct_b = cudf::test::structs_column_wrapper{{y_b, x_b}, {true, true}}.release();
+  cudf::table_view const table_b{{*struct_b}};
+
+  auto path_b = temp_env->get_temp_filepath("SelectNestedFieldIdChildOrderB.parquet");
+  cudf::io::table_input_metadata metadata_b(table_b);
+  metadata_b.column_metadata[0].set_name("record").set_parquet_field_id(1);
+  metadata_b.column_metadata[0].child(0).set_name("y").set_parquet_field_id(3);
+  metadata_b.column_metadata[0].child(1).set_name("x").set_parquet_field_id(2);
+  auto write_args_b =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{path_b}, table_b)
+      .metadata(std::move(metadata_b));
+  cudf::io::write_parquet(write_args_b);
+
+  auto expected_x = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5};
+  auto expected_y = cudf::test::fixed_width_column_wrapper<int32_t>{10, 20, 30, 40, 50};
+  auto expected_struct =
+    cudf::test::structs_column_wrapper{{expected_x, expected_y}, {true, true, true, true, true}}
+      .release();
+  cudf::table_view const expected{{*expected_struct}};
+
+  auto const read_args =
+    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+      .allow_mismatched_pq_schemas(true)
+      .column_field_ids({1})
+      .build();
+  auto const result = cudf::io::read_parquet(read_args);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(ParquetReaderTest, DecimalRead)
@@ -1417,8 +1501,11 @@ auto create_parquet_with_stats(std::string const& filename)
 
   cudf::io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_uint32");
+  expected_metadata.column_metadata[0].set_parquet_field_id(10);
   expected_metadata.column_metadata[1].set_name("col_int64");
+  expected_metadata.column_metadata[1].set_parquet_field_id(11);
   expected_metadata.column_metadata[2].set_name("col_double");
+  expected_metadata.column_metadata[2].set_parquet_field_id(12);
 
   auto const filepath = temp_env->get_temp_filepath(filename);
   cudf::io::parquet_writer_options const out_opts =
@@ -1459,7 +1546,7 @@ TEST_F(ParquetReaderTest, FilterIdentity)
 
 TEST_F(ParquetReaderTest, FilterWithColumnProjection)
 {
-  // col_uint32, col_int64, col_double
+  // col_uint32 (field_id: 10), col_int64 (field_id: 11), col_double (field_id: 12)
   auto [src, filepath] = create_parquet_with_stats("FilterWithColumnProjection.parquet");
   auto val             = cudf::numeric_scalar<uint32_t>{10};
   auto lit             = cudf::ast::literal{val};
@@ -1490,6 +1577,14 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
                   .filter(read_expr);
     result = cudf::io::read_parquet(read_opts);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
+
+    // Repeat but select columns using field IDs instead of names
+    read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                  .column_field_ids({12})
+                  .case_sensitive_names(false)
+                  .filter(read_expr);
+    result = cudf::io::read_parquet(read_opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *expected);
   }
 
   {  // column_reference in parquet filter (indices as per order of column projection)
@@ -1510,6 +1605,12 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
                   .column_indices({2, 0})
                   .filter(read_ref_expr);
     CUDF_TEST_EXPECT_TABLES_EQUAL(*(cudf::io::read_parquet(read_opts).tbl), *expected);
+
+    // Repeat but select columns using field IDs instead of names
+    read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                  .column_field_ids({12, 10})
+                  .filter(read_ref_expr);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(*(cudf::io::read_parquet(read_opts).tbl), *expected);
   }
 
   // Error cases
@@ -1526,6 +1627,12 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
       // Repeat but select columns using indices instead of names
       read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
                     .column_indices({2, 0})
+                    .filter(read_ref_expr);
+      EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
+
+      // Repeat but select columns using field IDs instead of names
+      read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                    .column_field_ids({12, 10})
                     .filter(read_ref_expr);
       EXPECT_ANY_THROW(cudf::io::read_parquet(read_opts));
     }
@@ -4886,63 +4993,92 @@ TEST_F(ParquetReaderTest, MismatchedSchemaFilterColumnCollision)
   auto const price_a = column_wrapper<double>{50.0, 150.0, 75.0};
   cudf::table_view const table_a{{id_a, price_a}};
   auto const path_a =
-    write_parquet_temp_file(table_a, "MismatchCollisionA.parquet", {"id", "price"});
+    write_parquet_temp_file(table_a, "MismatchCollisionA.parquet", {"id", "price"}, {1, 2});
 
   auto const category_b = column_wrapper<cudf::string_view>{"x", "y", "z"};
   auto const id_b       = column_wrapper<int64_t>{1000, 1001, 1002};
   auto const price_b    = column_wrapper<double>{40.0, 200.0, 99.0};
   cudf::table_view const table_b{{category_b, id_b, price_b}};
-  auto const path_b =
-    write_parquet_temp_file(table_b, "MismatchCollisionB.parquet", {"category", "id", "price"});
+  auto const path_b = write_parquet_temp_file(
+    table_b, "MismatchCollisionB.parquet", {"category", "id", "price"}, {3, 1, 2});
 
   auto value  = cudf::numeric_scalar<double>(100.0);
   auto lit    = cudf::ast::literal(value);
   auto col    = cudf::ast::column_name_reference("price");
   auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
-  auto const opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
-      .allow_mismatched_pq_schemas(true)
-      .column_names({"id", "price"})
-      .filter(filter)
-      .build();
 
   auto const exp_id    = column_wrapper<int64_t>{1, 3, 1000, 1002};
   auto const exp_price = column_wrapper<double>{50.0, 75.0, 40.0, 99.0};
   cudf::table_view const expected{{exp_id, exp_price}};
-  auto const result = cudf::io::read_parquet(opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  {
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+        .allow_mismatched_pq_schemas(true)
+        .column_names({"id", "price"})
+        .filter(filter)
+        .build();
+    auto const result = cudf::io::read_parquet(opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  }
+  {
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+        .allow_mismatched_pq_schemas(true)
+        .column_field_ids({1, 2})
+        .filter(filter)
+        .build();
+    auto const result = cudf::io::read_parquet(opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  }
 }
 
 TEST_F(ParquetReaderTest, MismatchedSchemaFilterSameTypeCollisionWrongResult)
 {
-  // Same-type collision: source 0's int64 `a` lands on source 1's int64 `b`.
+  // Same-type collision: source 0's int64 `a` (field_id: 1) lands on source 1's int64 `b`
+  // (field_id: 2).
   auto const a_a = column_wrapper<int64_t>{1, 2, 3};
   auto const b_a = column_wrapper<int64_t>{7, 8, 9};
   cudf::table_view const table_a{{a_a, b_a}};
-  auto const path_a = write_parquet_temp_file(table_a, "MismatchSameTypeA.parquet", {"a", "b"});
+  auto const path_a =
+    write_parquet_temp_file(table_a, "MismatchSameTypeA.parquet", {"a", "b"}, {1, 2});
 
   auto const b_b = column_wrapper<int64_t>{1000, 2000, 3000};  // B's `b` lands at a's index
   auto const a_b = column_wrapper<int64_t>{10, 20, 30};        // B's `a` (all < 100)
   cudf::table_view const table_b{{b_b, a_b}};
-  auto const path_b = write_parquet_temp_file(table_b, "MismatchSameTypeB.parquet", {"b", "a"});
+  auto const path_b =
+    write_parquet_temp_file(table_b, "MismatchSameTypeB.parquet", {"b", "a"}, {2, 1});
 
   auto value  = cudf::numeric_scalar<int64_t>(100);
   auto lit    = cudf::ast::literal(value);
   auto col    = cudf::ast::column_name_reference("a");
   auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
-  auto const opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
-      .allow_mismatched_pq_schemas(true)
-      .column_names({"a", "b"})
-      .filter(filter)
-      .build();
 
   // All rows have a < 100, so none should be pruned.
   auto const exp_a = column_wrapper<int64_t>{1, 2, 3, 10, 20, 30};
   auto const exp_b = column_wrapper<int64_t>{7, 8, 9, 1000, 2000, 3000};
   cudf::table_view const expected{{exp_a, exp_b}};
-  auto const result = cudf::io::read_parquet(opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  {
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+        .allow_mismatched_pq_schemas(true)
+        .column_names({"a", "b"})
+        .filter(filter)
+        .build();
+    auto const result = cudf::io::read_parquet(opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  }
+  {
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+        .allow_mismatched_pq_schemas(true)
+        .column_field_ids({1, 2})
+        .filter(filter)
+        .build();
+    auto const result = cudf::io::read_parquet(opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  }
 }
 
 TEST_F(ParquetReaderTest, MismatchedSchemaFilterOnlyColumnCollision)
@@ -4952,28 +5088,41 @@ TEST_F(ParquetReaderTest, MismatchedSchemaFilterOnlyColumnCollision)
   auto const price_a = column_wrapper<double>{10.0, 200.0, 30.0};
   cudf::table_view const table_a{{id_a, price_a}};
   auto const path_a =
-    write_parquet_temp_file(table_a, "MismatchFilterOnlyA.parquet", {"id", "price"});
+    write_parquet_temp_file(table_a, "MismatchFilterOnlyA.parquet", {"id", "price"}, {10, 11});
 
   auto const category_b = column_wrapper<cudf::string_view>{"x", "y", "z"};
   auto const id_b       = column_wrapper<int64_t>{1000, 1001, 1002};
   auto const price_b    = column_wrapper<double>{40.0, 500.0, 60.0};
   cudf::table_view const table_b{{category_b, id_b, price_b}};
-  auto const path_b =
-    write_parquet_temp_file(table_b, "MismatchFilterOnlyB.parquet", {"category", "id", "price"});
+  auto const path_b = write_parquet_temp_file(
+    table_b, "MismatchFilterOnlyB.parquet", {"category", "id", "price"}, {12, 10, 11});
 
   auto value  = cudf::numeric_scalar<double>(100.0);
   auto lit    = cudf::ast::literal(value);
   auto col    = cudf::ast::column_name_reference("price");
   auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
-  auto const opts =
-    cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
-      .allow_mismatched_pq_schemas(true)
-      .column_names({"id"})  // `price` is filter-only
-      .filter(filter)
-      .build();
 
   auto const exp_id = column_wrapper<int64_t>{1, 3, 1000, 1002};
   cudf::table_view const expected{{exp_id}};
-  auto const result = cudf::io::read_parquet(opts);
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+
+  {
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+        .allow_mismatched_pq_schemas(true)
+        .column_names({"id"})  // `price` is filter-only
+        .filter(filter)
+        .build();
+    auto const result = cudf::io::read_parquet(opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  }
+  {
+    auto const opts =
+      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path_a, path_b}})
+        .allow_mismatched_pq_schemas(true)
+        .column_field_ids({10})  // `price` is filter-only
+        .filter(filter)
+        .build();
+    auto const result = cudf::io::read_parquet(opts);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  }
 }
