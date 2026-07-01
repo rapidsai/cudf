@@ -361,19 +361,31 @@ async def _process_and_send_chunk(
     seq_num: int,
 ) -> None:
     """Move a raw chunk to the device, validate and filter it, then send it."""
-    # A host chunk must be copied to the device, so we reserve room sized from
-    # the host chunk.
     process = functools.partial(
         ir.process_chunk, chunk, ir.schema, ir.predicate, context=ir_context
     )
 
-    # A GPU chunk needs no copy, so its size is 0. When a predicate is applied,
-    # the filter briefly holds both the input and its (smaller) output, so we
-    # reserve double for that transient peak.
-    size = 0 if isinstance(chunk, DataFrame) else chunk.estimated_size()
-    reservation = size * 2 if ir.predicate is not None else size
+    # Reserve memory for allocations introduced by this step:
+    #
+    #   host input, no predicate  -> 1x input size (host->device)
+    #   host input, predicate     -> 2x input size (host->device + filter output)
+    #   GPU input,  no predicate  -> 0
+    #   GPU input,  predicate     -> 1x input size (filter output)
+    #
+    # The net memory increase is the retained host->device copy for host inputs,
+    # and 0 for GPU-resident inputs.
+    if isinstance(chunk, DataFrame):
+        input_bytes = sum(col.device_buffer_size() for col in chunk.table.columns())
+        net_memory_delta = 0
+        reservation = input_bytes * (ir.predicate is not None)
+    else:  # pl.DataFrame
+        input_bytes = int(chunk.estimated_size())
+        net_memory_delta = input_bytes
+        reservation = input_bytes * (1 + (ir.predicate is not None))
     with opaque_memory_usage(
-        await reserve_memory(context, size=reservation, net_memory_delta=size)
+        await reserve_memory(
+            context, size=reservation, net_memory_delta=net_memory_delta
+        )
     ):
         df = await ir_context.to_thread(process)
     chunk_out = TableChunk.from_pylibcudf_table(
