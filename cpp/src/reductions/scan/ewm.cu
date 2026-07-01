@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,7 +46,7 @@ class recurrence_functor {
 template <typename T>
 struct ewma_functor_base {
   T beta;
-  const pair_type<T> IDENTITY{1.0, 0.0};
+  pair_type<T> const IDENTITY{1.0, 0.0};
 };
 
 template <typename T, bool is_numerator>
