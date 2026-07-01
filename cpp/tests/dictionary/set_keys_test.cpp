@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -113,8 +113,8 @@ TEST_F(DictionarySetKeysTest, DuplicateKeys)
     "eee", "aaa", "ddd", "bbb", "ccc", "ccc", "ccc", "eee", "aaa"};
   auto dictionary = cudf::dictionary::encode(input);
 
-  cudf::test::strings_column_wrapper new_keys{"fff", "eee", "ccc", "aaa", "ccc"};
-  auto result = cudf::dictionary::set_keys(dictionary->view(), new_keys);
+  auto new_keys = cudf::test::strings_column_wrapper{"fff", "eee", "ccc", "aaa", "ccc"};
+  auto result   = cudf::dictionary::set_keys(dictionary->view(), new_keys);
 
   auto expected = cudf::test::strings_column_wrapper(
     {"eee", "aaa", "", "", "ccc", "ccc", "ccc", "eee", "aaa"}, {1, 1, 0, 0, 1, 1, 1, 1, 1});

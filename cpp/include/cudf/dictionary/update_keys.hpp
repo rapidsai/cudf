@@ -117,8 +117,8 @@ std::unique_ptr<column> remove_unused_keys(
  * The indices are updated to reflect the position values of the new keys.
  * Any indices pointing to removed keys sets those rows to null.
  *
- * Although duplicate keys are allowed, indices in the returned dictionary
- * may only reference one of the duplicates.
+ * Although duplicate keys are allowed, indices in the returned dictionary may
+ * only reference one of the duplicates.
  *
  * @code{.pseudo}
  * d1 = {keys=["a", "b", "c"], indices=[2, 0, 1, 2, 1]}

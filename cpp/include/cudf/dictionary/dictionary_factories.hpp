@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -59,7 +59,6 @@ std::unique_ptr<column> make_dictionary_column(
  * and indices columns.
  *
  * The keys_column and indices columns must contain no nulls.
- *
  * The indices values must be in the range [0,keys_column.size()).
  *
  * @throw std::invalid_argument if keys_column or indices_column contains nulls

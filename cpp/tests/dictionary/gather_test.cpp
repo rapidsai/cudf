@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -56,7 +56,7 @@ TEST_F(DictionaryGatherTest, DuplicateKeys)
 
   auto dictionary =
     cudf::make_dictionary_column(keys.release(), values.release(), rmm::device_buffer{}, 0);
-  cudf::dictionary_column_view view(dictionary->view());
+  auto view = cudf::dictionary_column_view(dictionary->view());
 
   auto gather_map   = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 3, 1});
   auto table_result = cudf::gather(cudf::table_view{{view.parent()}}, gather_map)->release();

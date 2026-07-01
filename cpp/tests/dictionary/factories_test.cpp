@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -91,8 +91,9 @@ TEST_F(DictionaryFactoriesTest, DuplicateKeys)
     cudf::make_dictionary_column(keys.release(), values.release(), rmm::device_buffer{}, 0);
   cudf::dictionary_column_view view(dictionary->view());
 
-  cudf::test::strings_column_wrapper keys_expected(h_keys.begin(), h_keys.end());
-  cudf::test::fixed_width_column_wrapper<int32_t> values_expected(h_values.begin(), h_values.end());
+  auto keys_expected = cudf::test::strings_column_wrapper(h_keys.begin(), h_keys.end());
+  auto values_expected =
+    cudf::test::fixed_width_column_wrapper<int32_t>(h_values.begin(), h_values.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.keys(), keys_expected);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(view.indices(), values_expected);
 }
