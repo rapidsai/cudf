@@ -1648,7 +1648,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         result = cls._from_column(col, name=name, index=result_index)
         if isinstance(result.index, DatetimeIndex):
             try:
-                result.index._freq = result.index.inferred_freq
+                result.index._freq = result.index._inferred_freq
             except NotImplementedError:
                 result.index._freq = None
         return result
