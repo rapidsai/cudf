@@ -508,7 +508,7 @@ class reader_impl {
     // Whether to prepend the source file index column to the output
     bool prepend_source_index_column = false;
     // Whether to try outputting DICTIONARY32 columns for fully dict-encoded string columns
-    bool try_output_dict_columns = false;
+    bool output_dict_columns = false;
   } _options;
 
   // name to reference converter to extract AST output filter

@@ -10,9 +10,12 @@
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/batched_memset.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <cuda/iterator>
 
@@ -109,7 +112,7 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
  *
  * We scan host-side `pass.chunks` and `pass.pages` here rather than `subpass.pages` because
  * `subpass.pages` may be a subset. For single-pass single-subpass reads (the only configuration
- * in which `try_output_dict_columns` is supported), `subpass.pages == pass.pages`.
+ * in which `output_dict_columns` is supported), `subpass.pages == pass.pages`.
  *
  * @param pass The pass intermediate data holding host-side chunks and pages
  * @param input_columns The reader's input column descriptors
@@ -124,14 +127,13 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
   auto const num_input_cols = input_columns.size();
   std::vector<column_eligibility> elig(num_input_cols);
 
-  // Check if the output buffer is a flat string column
-  std::for_each(
-    cuda::counting_iterator<size_t>{0}, cuda::counting_iterator{num_input_cols}, [&](size_t i) {
-      auto const& input_col = input_columns[i];
-      if (input_col.nesting_depth() != 1) { return; }
-      if (output_buffers[input_col.nesting[0]].type.id() == type_id::STRING) {
-        elig[i].has_string_buffer = true;
-      }
+  // Mark columns whose output buffer is a flat string column.
+  std::transform(
+    input_columns.begin(), input_columns.end(), elig.begin(), [&](input_column_info const& col) {
+      column_eligibility e{};
+      e.has_string_buffer =
+        col.nesting_depth() == 1 and output_buffers[col.nesting[0]].type.id() == type_id::STRING;
+      return e;
     });
 
   // Fold per-chunk info into the per-column eligibility flags.
@@ -182,7 +184,13 @@ bool reader_impl::prepare_dict_transcode()
 
   _dict_transcode_eligible.assign(_input_columns.size(), false);
 
-  if (not _options.try_output_dict_columns) { return false; }
+  if (not _options.output_dict_columns) { return false; }
+
+  // The fast path requires the whole column to live in a single subpass. For chunked / multi-pass
+  // reads (non-zero chunk or pass read limit) we skip it and let `finalize_output` produce the
+  // DICTIONARY32 columns via a post-hoc `dictionary::detail::encode` instead.
+  if (_output_chunk_read_limit != 0 or _input_pass_read_limit != 0) { return false; }
+
   if (_pass_itm_data == nullptr or _pass_itm_data->subpass == nullptr) { return false; }
 
   auto& pass    = *_pass_itm_data;
@@ -253,17 +261,25 @@ void reader_impl::zero_init_dict_transcoded_index_buffers()
   // null positions. Zero them here so null rows carry a well-defined (valid) index into the
   // dictionary keys -- a requirement for `cudf::dictionary::detail::concatenate` to correctly
   // remap indices below.
-  std::for_each(
-    cuda::counting_iterator<size_t>{0},
-    cuda::counting_iterator{_input_columns.size()},
-    [&](size_t i) {
-      if (not _dict_transcode_eligible[i]) { return; }
-      auto& out_buf = _output_buffers[_input_columns[i].nesting[0]];
-      if (out_buf.type.id() != type_id::INT32) { return; }
-      if (out_buf.data() == nullptr or out_buf.size == 0) { return; }
-      CUDF_CUDA_TRY(cudaMemsetAsync(
-        out_buf.data(), 0, static_cast<size_t>(out_buf.size) * sizeof(int32_t), _stream.value()));
-    });
+  std::vector<cudf::device_span<int32_t>> index_bufs;
+  index_bufs.reserve(_input_columns.size());
+  std::for_each(cuda::counting_iterator<size_t>{0},
+                cuda::counting_iterator{_input_columns.size()},
+                [&](size_t i) {
+                  if (not _dict_transcode_eligible[i]) { return; }
+                  auto& out_buf = _output_buffers[_input_columns[i].nesting[0]];
+                  if (out_buf.type.id() != type_id::INT32) { return; }
+                  if (out_buf.data() == nullptr or out_buf.size == 0) { return; }
+                  index_bufs.emplace_back(static_cast<int32_t*>(out_buf.data()),
+                                          static_cast<std::size_t>(out_buf.size));
+                });
+
+  if (index_bufs.empty()) { return; }
+
+  // Zero all eligible index buffers in a single batched operation instead of one memset per column.
+  auto const pinned_index_bufs = cudf::detail::make_pinned_vector(
+    cudf::host_span<cudf::device_span<int32_t> const>{index_bufs}, _stream);
+  cudf::detail::batched_memset<int32_t>(pinned_index_bufs, 0, _stream);
 }
 
 void reader_impl::assemble_dict_transcoded_columns(
@@ -297,6 +313,13 @@ void reader_impl::assemble_dict_transcoded_columns(
                    [&](size_t c) { return pass.chunks[c].src_col_index == static_cast<int>(i); });
       if (chunk_indices.empty()) { return; }
 
+      // `out_columns` is indexed by output-buffer (root column) ordinal, not input-column
+      // ordinal: a nested struct/list column contributes one entry to `_output_buffers` but one
+      // entry per leaf to `_input_columns`, so `i` and the corresponding root index can diverge
+      // as soon as any nested column precedes this one. Eligibility requires a flat (depth-1)
+      // column, so `nesting[0]` is the correct, and only, output-buffer index to use here.
+      auto const out_idx = static_cast<size_t>(_input_columns[i].nesting[0]);
+
       // Per-chunk key counts from the dictionary page's `num_input_values`, mirrored back to
       // host when `pass.pages` was copied by `decode_page_headers`.
       std::vector<size_type> chunk_key_counts(chunk_indices.size(), 0);
@@ -317,7 +340,7 @@ void reader_impl::assemble_dict_transcoded_columns(
       // Grab ownership of the decoded INT32 indices column. Its buffer is shared (aliased) by
       // every per-chunk DICTIONARY32 view below via the parent view's offset/size, so it must
       // stay alive until the per-column concatenate/assembly completes.
-      auto& indices_col = out_columns[i];
+      auto& indices_col = out_columns[out_idx];
       CUDF_EXPECTS(indices_col != nullptr and indices_col->type().id() == type_id::INT32,
                    "Expected INT32 indices column for dict-transcoded flat string column");
       auto indices_owner = std::move(indices_col);
@@ -370,11 +393,16 @@ void reader_impl::assemble_dict_transcoded_columns(
       if (dict_segment_views.size() == 1) {
         // Single row group: the parquet dictionary page keys are already unique, so no dedup is
         // needed. Take ownership of the decoded INT32 indices buffer directly (zero copy).
-        out_columns[i] = cudf::make_dictionary_column(
+        out_columns[out_idx] = cudf::make_dictionary_column(
           std::move(seg_keys_owners.front()), std::move(indices_owner), _stream, _mr);
       } else {
-        // `cudf::detail::concatenate` deduplicates + sorts keys and recomputes indices.
-        out_columns[i] = cudf::detail::concatenate(dict_segment_views, _stream, _mr);
+        // `cudf::detail::concatenate` deduplicates + sorts keys and recomputes indices. This is
+        // required today because DICTIONARY32 keys are assumed unique and sorted. When
+        // https://github.com/rapidsai/cudf/pull/22839 lands and relaxes that constraint, this
+        // could be replaced with a cheaper path: plain-concatenate the per-chunk keys columns
+        // (keeping cross-chunk duplicates) and offset-shift each chunk's row-group-local indices
+        // by the running total of prior chunks' key counts, avoiding the dedup/sort entirely.
+        out_columns[out_idx] = cudf::detail::concatenate(dict_segment_views, _stream, _mr);
       }
     });
 }

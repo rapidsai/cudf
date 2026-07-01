@@ -113,7 +113,7 @@ void write_parquet(cudf::table_view const& input, std::string const& filepath)
 cudf::io::table_with_metadata read_parquet_as_dict(std::string const& filepath)
 {
   auto const read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
-                           .try_output_dict_columns(true)
+                           .output_dict_columns(true)
                            .build();
   return cudf::io::read_parquet(read_opts);
 }
@@ -123,7 +123,7 @@ cudf::io::table_with_metadata read_parquet_as_dict(std::string const& filepath)
 struct ParquetReaderDictTest : public cudf::test::BaseFixture {};
 
 // A flat string column that is fully dictionary-encoded in every row group should be returned
-// as a DICTIONARY32 column when `try_output_dict_columns` is enabled, and the decoded keys
+// as a DICTIONARY32 column when `output_dict_columns` is enabled, and the decoded keys
 // should match the original input.
 TEST_F(ParquetReaderDictTest, FlatStringDictTranscode)
 {
@@ -143,7 +143,7 @@ TEST_F(ParquetReaderDictTest, FlatStringDictTranscode)
 
   auto const read_col = read_table->view().column(0);
   ASSERT_EQ(read_col.type().id(), cudf::type_id::DICTIONARY32)
-    << "Expected the reader to produce a DICTIONARY32 column when try_output_dict_columns is on";
+    << "Expected the reader to produce a DICTIONARY32 column when output_dict_columns is on";
 
   cudf::dictionary_column_view dict_read_view(read_col);
   auto const decoded_read = cudf::dictionary::decode(dict_read_view);
@@ -173,7 +173,7 @@ TEST_F(ParquetReaderDictTest, FlatStringNoTranscodeByDefault)
 }
 
 // List<string> is not eligible for Parquet-dictionary → DICTIONARY32 transcode (flat string columns
-// only). With `try_output_dict_columns` enabled, the reader still round-trips as LIST<STRING>.
+// only). With `output_dict_columns` enabled, the reader still round-trips as LIST<STRING>.
 TEST_F(ParquetReaderDictTest, ListOfStringsDictEncodedWithTryOutputDictOption)
 {
   auto list_col = make_low_cardinality_lists_of_strings();
@@ -189,7 +189,7 @@ TEST_F(ParquetReaderDictTest, ListOfStringsDictEncodedWithTryOutputDictOption)
 
   auto const read_col = read_table->view().column(0);
   ASSERT_EQ(read_col.type().id(), cudf::type_id::LIST)
-    << "List<string> must remain LIST when try_output_dict_columns is on (transcode is flat-only)";
+    << "List<string> must remain LIST when output_dict_columns is on (transcode is flat-only)";
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(list_col->view(), read_col);
 }
 
