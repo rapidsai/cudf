@@ -39,7 +39,7 @@ class QuentLogger:
         )
         self._lock = threading.Lock()
 
-    if _HAS_STRUCTLOG:
+    if _HAS_STRUCTLOG:  # pragma: no cover; depends on structlog
 
         def _get_logger(self, **initial_values: Any) -> Any:
             return structlog.wrap_logger(
