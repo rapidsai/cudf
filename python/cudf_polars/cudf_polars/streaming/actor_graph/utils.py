@@ -744,8 +744,8 @@ class TableSizeStats:
 async def _sample_chunks(
     context: Context,
     ch: Channel[TableChunk],
-    sample_chunk_count: int,
-    target_partition_size: int,
+    max_sample_chunks: int,
+    max_sample_bytes: int,
     local_count: int,
 ) -> TableSizeStats:
     """
@@ -757,12 +757,10 @@ async def _sample_chunks(
         The context.
     ch
         The channel to sample from.
-    sample_chunk_count
-        Sampling budget multiplier. Sampling continues until
-        ``target_partition_size * sample_chunk_count`` bytes have been sampled
-        or the local input is exhausted.
-    target_partition_size
-        The target partition size used to derive the byte sampling budget.
+    max_sample_chunks
+        The maximum number of non-empty chunks to sample.
+    max_sample_bytes
+        The maximum number of bytes to sample.
     local_count
         The expected number of local chunks (used for extrapolation).
 
@@ -771,19 +769,24 @@ async def _sample_chunks(
     Sampled chunks and the extrapolated total size/rows for this rank.
     """
     sampled_chunks = ChunkStore(context)
-    sample_byte_limit = target_partition_size * sample_chunk_count
+    sampled_nonempty_count = 0
     sampled_count = 0
     total_size = 0
     total_rows = 0
-    while sampled_count < local_count and total_size < sample_byte_limit:
+    while sampled_nonempty_count < max_sample_chunks:
         msg = await ch.recv(context)
         if msg is None:
             break
         chunk = TableChunk.from_message(msg, br=context.br())
+        nrows = chunk.shape[0]
         total_size += chunk.data_alloc_size()
-        total_rows += chunk.shape[0]
+        total_rows += nrows
         sampled_count += 1
+        if nrows > 0:
+            sampled_nonempty_count += 1
         sampled_chunks.insert(Message(msg.sequence_number, chunk))
+        if total_size >= max_sample_bytes:
+            break
     if sampled_count:
         total_size = int((total_size / sampled_count) * local_count)
         total_rows = int((total_rows / sampled_count) * local_count)
