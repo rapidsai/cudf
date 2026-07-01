@@ -41,7 +41,7 @@ using text::byte_range_info;
 namespace {
 
 /**
- * @brief Tests the logical type for a FLBA column to see if it should be
+ * @brief Tests the logical type for a fixed length byte array column to see if it should be
  * treated as a string.
  *
  * Currently the only logical type that has special handling is DECIMAL. Other valid types in the

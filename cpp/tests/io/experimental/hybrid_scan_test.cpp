@@ -931,7 +931,7 @@ TEST_F(HybridScanTest, AllRowsPrunedReportsInputRowGroups)
   auto const filter_result = reader->materialize_filter_columns(
     row_groups, filter_data, row_mask_view, use_data_page_mask::YES, options, stream, mr);
   EXPECT_EQ(filter_result.tbl->num_rows(), 0);
-  EXPECT_EQ(filter_result.metadata.num_input_row_groups, row_groups.size());
+  EXPECT_EQ(filter_result.metadata.num_input_row_groups, static_cast<cudf::size_type>(row_groups.size()));
 
   // Payload columns: same expectation
   auto const payload_byte_ranges = reader->payload_column_chunks_byte_ranges(row_groups, options);
@@ -943,7 +943,7 @@ TEST_F(HybridScanTest, AllRowsPrunedReportsInputRowGroups)
   auto const payload_result = reader->materialize_payload_columns(
     row_groups, payload_data, row_mask_view, use_data_page_mask::YES, options, stream, mr);
   EXPECT_EQ(payload_result.tbl->num_rows(), 0);
-  EXPECT_EQ(payload_result.metadata.num_input_row_groups, row_groups.size());
+  EXPECT_EQ(payload_result.metadata.num_input_row_groups, static_cast<cudf::size_type>(row_groups.size()));
 }
 
 TEST_F(HybridScanTest, ChunkedReadRowMaskPerPass)
