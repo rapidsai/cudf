@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Parallel Join Logic."""
 
@@ -8,6 +8,7 @@ import operator
 from functools import reduce
 from typing import TYPE_CHECKING
 
+from cudf_polars.dsl.expr import Col
 from cudf_polars.dsl.ir import ConditionalJoin, Join, Slice
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
@@ -207,6 +208,17 @@ def _(
             *ir.children,
         )
         return rec(Slice(ir.schema, offset, length, new_join))
+
+    # Hash shuffle requires physical column keys. Computed join keys must
+    # fall back until they are materialized before shuffling.
+    for keys in [ir.left_on, ir.right_on]:
+        col_keys: list[Col] = [ne.value for ne in keys if isinstance(ne.value, Col)]
+        if len(col_keys) != len(keys):
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="Multi-partition Join not supported for keys with expressions.",
+            )
 
     # Lower children
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
