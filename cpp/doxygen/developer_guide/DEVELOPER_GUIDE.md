@@ -641,6 +641,30 @@ Notes on `nosync`:
 - All new code should use `rmm::exec_policy_nosync(stream)` rather than `rmm::exec_policy(stream)`.
   If a stream sync is needed, call `stream.synchronize()` explicitly.
 
+### Device lambdas
+
+Always declare the return type of an extended `__device__` lambda that is passed to a device
+algorithm. A bare `__device__` lambda cannot have its return type queried from host code, and some
+host-side APIs (for example CUB device algorithms such as `cub::DeviceSelect::If`, and the transform
+iterators) do exactly that, failing to compile with a static assertion in `<cuda/std/functional>`.
+Not every API requires it, but declaring it uniformly keeps call sites correct as the underlying
+APIs evolve.
+
+Prefer a trailing return type; it is the lightest and most readable. Fall back to
+`cuda::proclaim_return_type<T>(lambda)` only when a trailing return type is impractical.
+
+```c++
+// Fails: return type of a bare __device__ lambda is not visible to host code
+cudf::detail::copy_if(begin, end, output, [d] __device__(auto i) { return d[i] > 0; }, stream);
+
+// Preferred: trailing return type
+cudf::detail::copy_if(begin, end, output, [d] __device__(auto i) -> bool { return d[i] > 0; }, stream);
+
+// Alternative: proclaim_return_type
+cudf::detail::copy_if(
+  begin, end, output, cuda::proclaim_return_type<bool>([d] __device__(auto i) { return d[i] > 0; }), stream);
+```
+
 ## Memory Allocation
 
 Device [memory resources](#rmmdevice_memory_resource) are used in libcudf to abstract and control
