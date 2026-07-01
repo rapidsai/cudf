@@ -2893,7 +2893,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
         >>> ser1.cov(ser2)
-        -0.015750000000000004
+        np.float64(-0.015750000000000004)
 
         .. pandas-compat::
             :meth:`pandas.Series.cov`
@@ -3028,9 +3028,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
         >>> ser1.corr(ser2, method="pearson")
-        -0.20454263717316126
+        np.float64(-0.20454263717316126)
         >>> ser1.corr(ser2, method="spearman")
-        -0.5
+        np.float64(-0.5)
         """
 
         if method not in {"pearson", "spearman"}:
@@ -3076,9 +3076,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> import cudf
         >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05, 0.17])
         >>> s.autocorr()
-        0.1438853844...
+        np.float64(0.1438853844...)
         >>> s.autocorr(lag=2)
-        -0.9647548490...
+        np.float64(-0.9647548490...)
         """
         return self.corr(self.shift(lag))
 
@@ -3424,7 +3424,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3    4
         dtype: int64
         >>> series.quantile(0.5)
-        2.5
+        np.float64(2.5)
         >>> series.quantile([0.25, 0.5, 0.75])
         0.25    1.75
         0.50    2.50
