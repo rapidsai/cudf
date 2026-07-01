@@ -157,11 +157,14 @@ fetch_byte_ranges_to_device_async(
  *
  * @ingroup io_utils
  *
+ * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte aligned
+ *       memory resource
+ *
  * @param datasource Input datasource
  * @param bloom_filter_byte_ranges Byte ranges of complete bloom filters to fetch, must span a
  * complete bloom filter
  * @param stream CUDA stream
- * @param mr Device memory resource
+ * @param aligned_mr Device memory resource to allocate aligned memory for bloom filters
  *
  * @return A tuple containing the device buffers, the device spans of the bitset data, and a future
  * to wait on the read tasks
@@ -172,18 +175,21 @@ std::tuple<std::vector<rmm::device_buffer>,
 fetch_bloom_filters_to_device_async(cudf::io::datasource& datasource,
                                     cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
                                     rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref mr);
+                                    rmm::device_async_resource_ref aligned_mr);
 
 /**
  * @brief Fetches Parquet bloom filter bitsets from multiple datasources into device buffers
  *
  * @ingroup io_utils
  *
+ * @note Device buffers for bloom filter byte ranges must be allocated using a 32 byte aligned
+ *       memory resource
+ *
  * @param datasources Input datasources
  * @param bloom_filter_byte_ranges_per_source Byte ranges of complete bloom filters to fetch, one
  * vector per datasource. Each byte range must span a complete bloom filter.
  * @param stream CUDA stream
- * @param mr Device memory resource
+ * @param aligned_mr Device memory resource to allocate aligned memory for bloom filters
  *
  * @return A tuple containing a vector of device buffers, a vector of vectors of device spans, and a
  * future to wait on the read tasks
@@ -195,7 +201,7 @@ fetch_bloom_filters_to_device_async(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr);
+  rmm::device_async_resource_ref aligned_mr);
 
 /** @} */  // end of group
 }  // namespace io::parquet

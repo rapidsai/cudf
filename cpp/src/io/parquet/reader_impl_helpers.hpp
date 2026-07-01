@@ -247,16 +247,17 @@ class aggregate_reader_metadata {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
    *
-   * @return A flattened list of bloom filter bitset device buffers for each predicate column across
-   * row group
+   * @return A pair of the device buffers backing the bloom filter bitsets and a flattened,
+   * per-chunk list of bitset device spans (empty spans for chunks without a bloom filter)
    */
-  [[nodiscard]] std::vector<rmm::device_buffer> read_bloom_filters(
-    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<int const> column_schemas,
-    size_type num_row_groups,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref aligned_mr) const;
+  [[nodiscard]] std::pair<std::vector<rmm::device_buffer>,
+                          std::vector<cudf::device_span<cuda::std::byte const>>>
+  read_bloom_filters(host_span<std::unique_ptr<datasource> const> sources,
+                     host_span<std::vector<size_type> const> row_group_indices,
+                     host_span<int const> column_schemas,
+                     size_type num_row_groups,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref aligned_mr) const;
 
   /**
    * @brief Collects Parquet types for the columns with the specified schema indices

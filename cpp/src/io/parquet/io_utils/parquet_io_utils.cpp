@@ -51,17 +51,17 @@ namespace cudf::io::parquet {
 namespace {
 
 /**
- * @brief Dispatches a fetch task for each task index and collects the results
+ * @brief Dispatches a task for each task index and collects the results
  *
  * Dispatches sequentially or using host worker pool depending on the number of tasks.
  *
- * @tparam Task Callable invocable as `fetch_task(std::size_t task_idx)`
+ * @tparam Task Callable invocable as `task(std::size_t task_idx)`
  * @param num_tasks Number of tasks to dispatch
- * @param fetch_task Task to run for each task index
+ * @param task Task to run for each task index
  * @return Vector of results, one per task, in task-index order
  */
 template <typename Task>
-auto dispatch_fetch_tasks(std::size_t num_tasks, Task fetch_task)
+auto dispatch_tasks(std::size_t num_tasks, Task task)
 {
   using result_type = std::invoke_result_t<Task, std::size_t>;
 
@@ -74,19 +74,19 @@ auto dispatch_fetch_tasks(std::size_t num_tasks, Task fetch_task)
     // Run sequentially to avoid task dispatch overhead
     std::for_each(cuda::counting_iterator<std::size_t>(0),
                   cuda::counting_iterator<std::size_t>(num_tasks),
-                  [&](std::size_t task_idx) { results.emplace_back(fetch_task(task_idx)); });
+                  [&](std::size_t task_idx) { results.emplace_back(task(task_idx)); });
   } else {
     // Dispatch the tasks to the host worker pool
-    std::vector<std::future<result_type>> tasks;
-    tasks.reserve(num_tasks);
+    std::vector<std::future<result_type>> futures;
+    futures.reserve(num_tasks);
     std::for_each(cuda::counting_iterator<std::size_t>(0),
                   cuda::counting_iterator<std::size_t>(num_tasks),
                   [&](std::size_t task_idx) {
-                    tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-                      [&fetch_task, task_idx]() { return fetch_task(task_idx); }));
+                    futures.emplace_back(cudf::detail::host_worker_pool().submit_task(
+                      [&task, task_idx]() { return task(task_idx); }));
                   });
-    std::transform(tasks.begin(), tasks.end(), std::back_inserter(results), [](auto& task) {
-      return task.get();
+    std::transform(futures.begin(), futures.end(), std::back_inserter(results), [](auto& fut) {
+      return fut.get();
     });
   }
   return results;
@@ -152,7 +152,7 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_footers_to_host
     return cudf::io::datasource::buffer::create(std::move(footer_bytes));
   };
 
-  return dispatch_fetch_tasks(datasources.size(), [&](std::size_t source_idx) {
+  return dispatch_tasks(datasources.size(), [&](std::size_t source_idx) {
     return fetch_footer(datasources[source_idx].get());
   });
 }
@@ -181,7 +181,7 @@ std::vector<std::unique_ptr<cudf::io::datasource::buffer>> fetch_page_indexes_to
     return datasource.host_read(page_index_bytes.offset(), page_index_bytes.size());
   };
 
-  return dispatch_fetch_tasks(datasources.size(), [&](std::size_t source_idx) {
+  return dispatch_tasks(datasources.size(), [&](std::size_t source_idx) {
     return fetch_page_index(datasources[source_idx].get(), page_index_bytes_per_source[source_idx]);
   });
 }
@@ -388,7 +388,7 @@ fetch_bloom_filters_to_device_async_impl(
   cudf::host_span<cudf::host_span<cudf::io::text::byte_range_info const> const>
     bloom_filter_byte_ranges_per_source,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::device_async_resource_ref aligned_mr)
 {
   auto const num_sources = datasources.size();
   CUDF_EXPECTS(num_sources == bloom_filter_byte_ranges_per_source.size(),
@@ -410,58 +410,54 @@ fetch_bloom_filters_to_device_async_impl(
     return {bloom_range.offset() + header_size, static_cast<int64_t>(bitset_size)};
   };
 
-  // Flatten to one (source index, bloom filter byte range) entry per bloom filter
-  std::vector<std::tuple<std::size_t, cudf::io::text::byte_range_info>> bloom_header_tasks;
-  bloom_header_tasks.reserve(std::accumulate(
-    bloom_filter_byte_ranges_per_source.begin(),
-    bloom_filter_byte_ranges_per_source.end(),
-    std::size_t{0},
-    [](auto acc, auto const& bloom_ranges) { return acc + bloom_ranges.size(); }));
-  for (std::size_t source_idx = 0; source_idx < num_sources; ++source_idx) {
-    auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[source_idx];
-    std::transform(bloom_ranges.begin(),
-                   bloom_ranges.end(),
-                   std::back_inserter(bloom_header_tasks),
-                   [source_idx](auto const& bloom_range) {
-                     return std::tuple{source_idx, bloom_range};
-                   });
-  }
+  // Flatten to one (source index, index within source, bloom filter byte range) entry per bloom
+  // filter
+  std::vector<std::tuple<std::size_t, std::size_t, cudf::io::text::byte_range_info>>
+    bloom_header_tasks;
+  bloom_header_tasks.reserve(
+    std::accumulate(bloom_filter_byte_ranges_per_source.begin(),
+                    bloom_filter_byte_ranges_per_source.end(),
+                    std::size_t{0},
+                    [](auto acc, auto const& bloom_ranges) { return acc + bloom_ranges.size(); }));
+  std::for_each(cuda::counting_iterator<std::size_t>(0),
+                cuda::counting_iterator<std::size_t>(num_sources),
+                [&](std::size_t outer_idx) {
+                  auto const& bloom_ranges = bloom_filter_byte_ranges_per_source[outer_idx];
+                  std::transform(cuda::counting_iterator<std::size_t>(0),
+                                 cuda::counting_iterator<std::size_t>(bloom_ranges.size()),
+                                 std::back_inserter(bloom_header_tasks),
+                                 [&](std::size_t inner_idx) {
+                                   return std::tuple{outer_idx, inner_idx, bloom_ranges[inner_idx]};
+                                 });
+                });
 
-  // Dispatch one header read+parse per bloom filter
-  auto const flat_bitset_ranges =
-    dispatch_fetch_tasks(bloom_header_tasks.size(), [&](std::size_t task_idx) {
-      auto const& [source_idx, bloom_range] = bloom_header_tasks[task_idx];
-      return fetch_bitset_range(datasources[source_idx].get(), bloom_range);
-    });
-
-  // Regroup the flat results into per-source bitset ranges
-  std::vector<std::vector<cudf::io::text::byte_range_info>> bitset_byte_ranges_per_source;
-  bitset_byte_ranges_per_source.reserve(num_sources);
+  // Mirror the input so each fetched range can be gathered back to its slot
+  std::vector<std::vector<cudf::io::text::byte_range_info>> bitset_byte_ranges_per_source(
+    num_sources);
   std::transform(bloom_filter_byte_ranges_per_source.begin(),
                  bloom_filter_byte_ranges_per_source.end(),
-                 std::back_inserter(bitset_byte_ranges_per_source),
-                 [next = flat_bitset_ranges.begin()](auto const& bloom_ranges) mutable {
-                   auto const first = next;
-                   std::advance(next, bloom_ranges.size());
-                   return std::vector<cudf::io::text::byte_range_info>(first, next);
+                 bitset_byte_ranges_per_source.begin(),
+                 [](auto const& bloom_ranges) {
+                   return std::vector<cudf::io::text::byte_range_info>(bloom_ranges.size());
                  });
 
+  // Dispatch one header read+parse per bloom filter, then gather each bitset range into its slot
+  auto const flat_bitset_ranges =
+    dispatch_tasks(bloom_header_tasks.size(), [&](std::size_t task_idx) {
+      auto const& task = bloom_header_tasks[task_idx];
+      return fetch_bitset_range(datasources[std::get<0>(task)].get(), std::get<2>(task));
+    });
+  std::for_each(cuda::counting_iterator<std::size_t>(0),
+                cuda::counting_iterator<std::size_t>(bloom_header_tasks.size()),
+                [&](std::size_t task_idx) {
+                  auto const& task = bloom_header_tasks[task_idx];
+                  bitset_byte_ranges_per_source[std::get<0>(task)][std::get<1>(task)] =
+                    flat_bitset_ranges[task_idx];
+                });
+
   // Fetch only the header-free bitsets to device
-  auto result =
-    fetch_byte_ranges_to_device_async(datasources, bitset_byte_ranges_per_source, stream, mr);
-
-  auto const& bitset_spans_per_source = std::get<1>(result);
-  CUDF_EXPECTS(std::all_of(bitset_spans_per_source.begin(),
-                           bitset_spans_per_source.end(),
-                           [](auto const& spans) {
-                             return std::all_of(spans.begin(), spans.end(), [](auto const& span) {
-                               return span.empty() or
-                                      (reinterpret_cast<std::uintptr_t>(span.data()) % 32) == 0;
-                             });
-                           }),
-               "Bloom filter bitset is not 32-byte aligned");
-
-  return result;
+  return fetch_byte_ranges_to_device_async(
+    datasources, bitset_byte_ranges_per_source, stream, aligned_mr);
 }
 
 }  // namespace
@@ -566,7 +562,7 @@ fetch_bloom_filters_to_device_async(
   cudf::io::datasource& datasource,
   cudf::host_span<cudf::io::text::byte_range_info const> bloom_filter_byte_ranges,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::device_async_resource_ref aligned_mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -579,7 +575,7 @@ fetch_bloom_filters_to_device_async(
     {datasources.data(), datasources.size()},
     {bloom_filter_byte_ranges_per_source.data(), bloom_filter_byte_ranges_per_source.size()},
     stream,
-    mr);
+    aligned_mr);
 
   return {std::move(buffers), std::move(fetched_byte_ranges.front()), std::move(fut)};
 }
@@ -592,7 +588,7 @@ fetch_bloom_filters_to_device_async(
   cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>
     bloom_filter_byte_ranges_per_source,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
+  rmm::device_async_resource_ref aligned_mr)
 {
   CUDF_FUNC_RANGE();
 
@@ -607,7 +603,7 @@ fetch_bloom_filters_to_device_async(
                                                   {bloom_filter_byte_range_spans_per_source.data(),
                                                    bloom_filter_byte_range_spans_per_source.size()},
                                                   stream,
-                                                  mr);
+                                                  aligned_mr);
 }
 
 }  // namespace cudf::io::parquet
