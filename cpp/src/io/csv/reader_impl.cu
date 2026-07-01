@@ -204,7 +204,7 @@ template <typename C>
 void erase_except_last(C& container, rmm::cuda_stream_view stream)
 {
   cudf::detail::device_single_thread(
-    [span = device_span<typename C::value_type>{container}] __device__() mutable {
+    [span = device_span<typename C::value_type>{container}] __device__() mutable -> void {
       span.front() = span.back();
     },
     stream);
@@ -996,7 +996,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
         auto const is_quoted = device_span<bool>(is_quoted_flags[str_col_idx]);
         auto* buffer         = &out_buffers[col_idx];
 
-        auto const is_quoted_row = [] __device__(auto const flag) { return flag; };
+        auto const is_quoted_row = [] __device__(auto const flag) -> bool { return flag; };
         if (cudf::detail::none_of(is_quoted.begin(), is_quoted.end(), is_quoted_row, col_stream)) {
           // Fast path: no rows were quoted, skip replacement entirely
           out_columns[col_idx] = make_column(*buffer, nullptr, std::nullopt, col_stream);
@@ -1037,7 +1037,7 @@ table_with_metadata read_csv(cudf::io::datasource* source,
               replaced_all_iter,
               replaced_all_iter + num_records,
               original_iter,
-              [is_quoted] __device__(size_type idx) { return is_quoted[idx]; },
+              [is_quoted] __device__(size_type idx) -> bool { return is_quoted[idx]; },
               col_stream,
               mr);
           }

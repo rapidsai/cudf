@@ -73,7 +73,7 @@ struct contains_scalar_dispatch {
     return cudf::detail::any_of(
       begin,
       end,
-      [d_needle] __device__(auto const val_pair) {
+      [d_needle] __device__(auto const val_pair) -> bool {
         auto needle = get_scalar_value<Element>(d_needle);
         return val_pair.has_value() && (needle == *val_pair);
       },
@@ -120,7 +120,7 @@ struct contains_scalar_dispatch {
       begin,
       end,
       d_results.begin(),
-      [d_comp, check_nulls, d_haystack = *haystack_cdv_ptr] __device__(auto const idx) {
+      [d_comp, check_nulls, d_haystack = *haystack_cdv_ptr] __device__(auto const idx) -> bool {
         if (check_nulls && d_haystack.is_null_nocheck(static_cast<size_type>(idx))) {
           return false;
         }
@@ -130,7 +130,7 @@ struct contains_scalar_dispatch {
     return cudf::detail::any_of(
       d_results.begin(),
       d_results.end(),
-      [] __device__(auto const result) { return result; },
+      [] __device__(auto const result) -> bool { return result; },
       stream);
   }
 };

@@ -387,7 +387,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
     auto is_before = cudf::detail::any_of(
       it,
       it + offsets.size() - 1,
-      [] __device__(bool has_boundary_null) { return has_boundary_null; },
+      [] __device__(bool has_boundary_null) -> bool { return has_boundary_null; },
       stream);
     return is_before ? null_order::BEFORE : null_order::AFTER;
   } else {
@@ -408,7 +408,7 @@ std::unique_ptr<table> grouped_range_rolling_window(table_view const& group_keys
     auto is_before = cudf::detail::any_of(
       it,
       it + offsets.size() - 1,
-      [] __device__(bool has_boundary_null) { return has_boundary_null; },
+      [] __device__(bool has_boundary_null) -> bool { return has_boundary_null; },
       stream);
     return is_before ? null_order::BEFORE : null_order::AFTER;
   }
