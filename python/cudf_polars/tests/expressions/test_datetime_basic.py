@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -55,6 +55,16 @@ datetime_extract_fields = [
     "millisecond",
     "microsecond",
     "nanosecond",
+]
+
+duration_extract_fields = [
+    "total_seconds",
+    "total_milliseconds",
+    "total_microseconds",
+    "total_nanoseconds",
+    "total_days",
+    "total_hours",
+    "total_minutes",
 ]
 
 
@@ -169,6 +179,38 @@ def test_strftime_duration(engine: pl.GPUEngine, format):
 
     q = ldf.select(pl.col("durations").dt.strftime(format))
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize("field", duration_extract_fields)
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+def test_duration_total_component_extract(engine: pl.GPUEngine, field, dtype):
+    ldf = pl.LazyFrame(
+        {
+            "durations": pl.Series(
+                [
+                    0,
+                    1,
+                    15,
+                    -1500,
+                    1000,
+                    1111,
+                    1500,
+                    11111,
+                    -134234534,
+                    134234534,
+                    # values beyond float64's exact-integer range to guard
+                    # against precision loss in the unit conversion
+                    5857593848682946,
+                    -5857593848682946,
+                ],
+                dtype=dtype,
+            ),
+        }
+    )
+    q = ldf.select(getattr(pl.col("durations").dt, field)())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
@@ -298,6 +340,31 @@ def test_isoyear(engine: pl.GPUEngine):
 
     q = df.with_columns(pl.col("date").dt.iso_year().alias("isoyear"))
 
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")],
+    ids=repr,
+)
+@pytest.mark.parametrize("time_unit", ["ms", "us", "ns", "s", "d"])
+def test_epoch(engine: pl.GPUEngine, dtype, time_unit):
+    ldf = pl.LazyFrame(
+        {
+            "datetimes": pl.Series(
+                [
+                    datetime.datetime(2001, 1, 1),
+                    datetime.datetime(2001, 1, 2, 12, 30, 15),
+                    datetime.datetime(2020, 2, 29, 23, 59, 59),
+                    datetime.datetime(2024, 12, 31, 23, 59, 59),
+                ],
+                dtype=dtype,
+            )
+        }
+    )
+
+    q = ldf.select(pl.col("datetimes").dt.epoch(time_unit))
     assert_gpu_result_equal(q, engine=engine)
 
 

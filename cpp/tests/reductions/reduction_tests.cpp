@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -3470,10 +3470,10 @@ struct sum_overflow_rep<T, true> {
 template <typename T>
 using sum_overflow_rep_t = typename sum_overflow_rep<T>::type;
 
-// Test for SUM_WITH_OVERFLOW aggregation using regular reduce() function.
+// Test for SUM_OVERFLOW aggregation using regular reduce() function.
 // Parametrized on signed integer types AND decimal types.
 template <typename T>
-struct ReduceWithOverflowTest : public cudf::test::BaseFixture {
+struct ReduceOverflowTest : public cudf::test::BaseFixture {
   using Rep = sum_overflow_rep_t<T>;
   static constexpr numeric::scale_type scale{0};
 
@@ -3547,22 +3547,22 @@ struct ReduceWithOverflowTest : public cudf::test::BaseFixture {
                           cudf::get_element(table_view.column(1), 0));
   }
 };
-using ReduceWithOverflowTypes = ::testing::Types<int8_t,
-                                                 int16_t,
-                                                 int32_t,
-                                                 int64_t,
-                                                 numeric::decimal32,
-                                                 numeric::decimal64,
-                                                 numeric::decimal128>;
-TYPED_TEST_SUITE(ReduceWithOverflowTest, ReduceWithOverflowTypes);
+using ReduceOverflowTypes = ::testing::Types<int8_t,
+                                             int16_t,
+                                             int32_t,
+                                             int64_t,
+                                             numeric::decimal32,
+                                             numeric::decimal64,
+                                             numeric::decimal128>;
+TYPED_TEST_SUITE(ReduceOverflowTest, ReduceOverflowTypes);
 
-TYPED_TEST(ReduceWithOverflowTest, SumWithoutOverflow)
+TYPED_TEST(ReduceOverflowTest, SumWithoutOverflow)
 {
   using Rep = typename TestFixture::Rep;
   auto col  = this->make_col({Rep{1}, Rep{2}, Rep{3}, Rep{4}, Rep{5}});
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
@@ -3573,52 +3573,52 @@ TYPED_TEST(ReduceWithOverflowTest, SumWithoutOverflow)
   EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, PositiveOverflow)
+TYPED_TEST(ReduceOverflowTest, PositiveOverflow)
 {
   using Rep = typename TestFixture::Rep;
   auto col  = this->make_col({std::numeric_limits<Rep>::max(), Rep{1}});
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
   EXPECT_TRUE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, NegativeOverflow)
+TYPED_TEST(ReduceOverflowTest, NegativeOverflow)
 {
   using Rep = typename TestFixture::Rep;
   auto col  = this->make_col({std::numeric_limits<Rep>::min(), Rep{-1}});
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
   EXPECT_TRUE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, AccumulatingOverflow)
+TYPED_TEST(ReduceOverflowTest, AccumulatingOverflow)
 {
   using Rep      = typename TestFixture::Rep;
   auto const big = static_cast<Rep>(std::numeric_limits<Rep>::max() / Rep{3});
   auto col       = this->make_col({big, big, big, big});  // 4 * (max/3) > max
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
   EXPECT_TRUE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, EmptyColumn)
+TYPED_TEST(ReduceOverflowTest, EmptyColumn)
 {
   auto empty_col = this->make_col({});
 
   auto result = cudf::reduce(empty_col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
@@ -3627,13 +3627,13 @@ TYPED_TEST(ReduceWithOverflowTest, EmptyColumn)
   EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, AllNullColumn)
+TYPED_TEST(ReduceOverflowTest, AllNullColumn)
 {
   using Rep     = typename TestFixture::Rep;
   auto null_col = this->make_null_col({Rep{1}, Rep{2}, Rep{3}}, {false, false, false});
 
   auto result = cudf::reduce(null_col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
@@ -3641,14 +3641,14 @@ TYPED_TEST(ReduceWithOverflowTest, AllNullColumn)
   EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, WithInitialValue)
+TYPED_TEST(ReduceOverflowTest, WithInitialValue)
 {
   using Rep        = typename TestFixture::Rep;
   auto col         = this->make_col({Rep{1}, Rep{2}, Rep{3}});
   auto init_scalar = this->make_init_scalar(Rep{10});
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT},
                              *init_scalar);
 
@@ -3658,7 +3658,7 @@ TYPED_TEST(ReduceWithOverflowTest, WithInitialValue)
   EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, InitialValuePositiveOverflow)
+TYPED_TEST(ReduceOverflowTest, InitialValuePositiveOverflow)
 {
   using Rep = typename TestFixture::Rep;
   auto col  = this->make_col({Rep{1}, Rep{2}, Rep{3}});
@@ -3667,7 +3667,7 @@ TYPED_TEST(ReduceWithOverflowTest, InitialValuePositiveOverflow)
     this->make_init_scalar(static_cast<Rep>(std::numeric_limits<Rep>::max() - Rep{3}));
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT},
                              *init_scalar);
 
@@ -3675,7 +3675,7 @@ TYPED_TEST(ReduceWithOverflowTest, InitialValuePositiveOverflow)
   EXPECT_TRUE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, InitialValueNegativeOverflow)
+TYPED_TEST(ReduceOverflowTest, InitialValueNegativeOverflow)
 {
   using Rep = typename TestFixture::Rep;
   auto col  = this->make_col({Rep{-1}, Rep{-2}, Rep{-3}});
@@ -3684,7 +3684,7 @@ TYPED_TEST(ReduceWithOverflowTest, InitialValueNegativeOverflow)
     this->make_init_scalar(static_cast<Rep>(std::numeric_limits<Rep>::min() + Rep{3}));
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT},
                              *init_scalar);
 
@@ -3692,7 +3692,7 @@ TYPED_TEST(ReduceWithOverflowTest, InitialValueNegativeOverflow)
   EXPECT_TRUE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, SlicedColumn)
+TYPED_TEST(ReduceOverflowTest, SlicedColumn)
 {
   using Rep = typename TestFixture::Rep;
   auto full =
@@ -3701,7 +3701,7 @@ TYPED_TEST(ReduceWithOverflowTest, SlicedColumn)
   ASSERT_EQ(sliced.size(), 1);
 
   auto result = cudf::reduce(sliced.front(),
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
@@ -3710,7 +3710,7 @@ TYPED_TEST(ReduceWithOverflowTest, SlicedColumn)
   EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, SlicedColumnWithNulls)
+TYPED_TEST(ReduceOverflowTest, SlicedColumnWithNulls)
 {
   using Rep = typename TestFixture::Rep;
   auto full = this->make_null_col(
@@ -3720,7 +3720,7 @@ TYPED_TEST(ReduceWithOverflowTest, SlicedColumnWithNulls)
   ASSERT_EQ(sliced.size(), 1);
 
   auto result = cudf::reduce(sliced.front(),
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
@@ -3729,7 +3729,7 @@ TYPED_TEST(ReduceWithOverflowTest, SlicedColumnWithNulls)
   EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, MultiBlockInputNoOverflow)
+TYPED_TEST(ReduceOverflowTest, MultiBlockInputNoOverflow)
 {
   using Rep = typename TestFixture::Rep;
   // Alternating +1/-1 exercises both pairwise-overflow branches on every combine; the
@@ -3743,7 +3743,7 @@ TYPED_TEST(ReduceWithOverflowTest, MultiBlockInputNoOverflow)
   auto col = this->make_col_from_vec(data);
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT});
 
   auto [sum_result, overflow_flag] = this->extract_sum_overflow(result);
@@ -3752,7 +3752,7 @@ TYPED_TEST(ReduceWithOverflowTest, MultiBlockInputNoOverflow)
   EXPECT_FALSE(static_cast<cudf::numeric_scalar<bool> const*>(overflow_flag.get())->value());
 }
 
-TYPED_TEST(ReduceWithOverflowTest, InvalidInit)
+TYPED_TEST(ReduceOverflowTest, InvalidInit)
 {
   using Rep = typename TestFixture::Rep;
   auto col  = this->make_col({Rep{1}, Rep{2}, Rep{3}});
@@ -3761,7 +3761,7 @@ TYPED_TEST(ReduceWithOverflowTest, InvalidInit)
   init_scalar->set_valid_async(false, cudf::get_default_stream());
 
   auto result = cudf::reduce(col,
-                             *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                             *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                              cudf::data_type{cudf::type_id::STRUCT},
                              *init_scalar);
 
@@ -3771,26 +3771,26 @@ TYPED_TEST(ReduceWithOverflowTest, InvalidInit)
 }
 
 // Non-typed fixture used by the error-handling test.
-struct ReduceWithOverflowErrorTest : public cudf::test::BaseFixture {};
+struct ReduceOverflowErrorTest : public cudf::test::BaseFixture {};
 
-TEST_F(ReduceWithOverflowErrorTest, UnsupportedTypes)
+TEST_F(ReduceOverflowErrorTest, UnsupportedTypes)
 {
   // Unsigned, floating-point, and string columns must be rejected.
   cudf::test::fixed_width_column_wrapper<uint32_t> uint_col{1u, 2u, 3u};
   EXPECT_THROW(cudf::reduce(uint_col,
-                            *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                            *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                             cudf::data_type{cudf::type_id::STRUCT}),
                std::invalid_argument);
 
   cudf::test::fixed_width_column_wrapper<float> float_col{1.0f, 2.0f, 3.0f};
   EXPECT_THROW(cudf::reduce(float_col,
-                            *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                            *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                             cudf::data_type{cudf::type_id::STRUCT}),
                std::invalid_argument);
 
   cudf::test::strings_column_wrapper string_col{"a", "b", "c"};
   EXPECT_THROW(cudf::reduce(string_col,
-                            *cudf::make_sum_with_overflow_aggregation<reduce_aggregation>(),
+                            *cudf::make_sum_overflow_aggregation<reduce_aggregation>(),
                             cudf::data_type{cudf::type_id::STRUCT}),
                std::invalid_argument);
 }
@@ -3808,8 +3808,7 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMAX));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ARGMIN));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM));
-  EXPECT_TRUE(
-    cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM_WITH_OVERFLOW));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::SUM_OVERFLOW));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::PRODUCT));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MIN));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MAX));
@@ -3837,8 +3836,7 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::MERGE_TDIGEST));
 
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM));
-  EXPECT_TRUE(
-    cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM_WITH_OVERFLOW));
+  EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM_OVERFLOW));
   EXPECT_TRUE(
     cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::SUM_OF_SQUARES));
   EXPECT_TRUE(cudf::reduction::is_valid_aggregation(decimal_type, cudf::aggregation::MEDIAN));
@@ -3855,8 +3853,7 @@ TEST_F(ReductionIsValidTest, IsValidAggregation)
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::ANY));
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(string_type, cudf::aggregation::ALL));
 
-  EXPECT_FALSE(
-    cudf::reduction::is_valid_aggregation(float_type, cudf::aggregation::SUM_WITH_OVERFLOW));
+  EXPECT_FALSE(cudf::reduction::is_valid_aggregation(float_type, cudf::aggregation::SUM_OVERFLOW));
 
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::ROW_NUMBER));
   EXPECT_FALSE(cudf::reduction::is_valid_aggregation(int64_type, cudf::aggregation::RANK));

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -163,24 +163,26 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
   switch (info.type()) {
     case io_type::FILEPATH: {
       std::vector<std::unique_ptr<cudf::io::datasource>> sources;
-      sources.reserve(info.filepaths().size());
+      sources.reserve(info.filepath_sources().size());
       // Creating sources in a single thread is faster for a small number of sources
       auto const pool_use_threshold =
         cudf::detail::getenv_or("LIBCUDF_DATASOURCE_PARALLEL_CREATION_THRESHOLD", 8ul);
-      if (info.filepaths().size() >= pool_use_threshold) {
+      if (info.filepath_sources().size() >= pool_use_threshold) {
         std::vector<std::future<std::unique_ptr<cudf::io::datasource>>> source_tasks;
-        source_tasks.reserve(info.filepaths().size());
-        for (auto const& path : info.filepaths()) {
-          source_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task(
-            [=] { return cudf::io::datasource::create(path, offset, max_size_estimate); }));
+        source_tasks.reserve(info.filepath_sources().size());
+        for (auto const& fs : info.filepath_sources()) {
+          source_tasks.emplace_back(cudf::detail::host_worker_pool().submit_task([=] {
+            return cudf::io::datasource::create(fs.path, offset, max_size_estimate, fs.size);
+          }));
         }
         std::transform(
           source_tasks.begin(), source_tasks.end(), std::back_inserter(sources), [](auto& task) {
             return task.get();
           });
       } else {
-        for (auto const& filepath : info.filepaths()) {
-          sources.emplace_back(cudf::io::datasource::create(filepath, offset, max_size_estimate));
+        for (auto const& fs : info.filepath_sources()) {
+          sources.emplace_back(
+            cudf::io::datasource::create(fs.path, offset, max_size_estimate, fs.size));
         }
       }
       return sources;
@@ -662,7 +664,7 @@ parquet_metadata read_parquet_metadata(source_info const& src_info)
 }
 
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<cudf::io::datasource> const> sources)
+  std::span<std::unique_ptr<cudf::io::datasource> const> sources)
 {
   CUDF_FUNC_RANGE();
   return detail_parquet::read_parquet_footers(sources);
