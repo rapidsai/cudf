@@ -144,6 +144,15 @@ def _make_bcast_join(
     return new_node, partition_info
 
 
+def _has_expression_keys(ir: Join) -> bool:
+    """Return true if any join key is not a physical column reference."""
+    return any(
+        not isinstance(ne.value, Col)
+        for keys in (ir.left_on, ir.right_on)
+        for ne in keys
+    )
+
+
 @lower_ir_node.register(ConditionalJoin)
 def _(
     ir: ConditionalJoin, rec: LowerIRTransformer
@@ -209,17 +218,6 @@ def _(
         )
         return rec(Slice(ir.schema, offset, length, new_join))
 
-    # Hash shuffle requires physical column keys. Computed join keys must
-    # fall back until they are materialized before shuffling.
-    for keys in [ir.left_on, ir.right_on]:
-        col_keys: list[Col] = [ne.value for ne in keys if isinstance(ne.value, Col)]
-        if len(col_keys) != len(keys):
-            return _lower_ir_fallback(
-                ir,
-                rec,
-                msg="Multi-partition Join not supported for keys with expressions.",
-            )
-
     # Lower children
     children, _partition_info = zip(*(rec(c) for c in ir.children), strict=True)
     partition_info = reduce(operator.or_, _partition_info)
@@ -230,6 +228,7 @@ def _(
 
     left, right = children
     output_count = max(partition_info[left].count, partition_info[right].count)
+    has_expression_keys = _has_expression_keys(ir)
     if output_count == 1 and not dynamic_planning:
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=1)
@@ -249,6 +248,12 @@ def _(
 
     # Check for dynamic planning - defer broadcast vs shuffle decision to runtime
     if dynamic_planning:  # pragma: no cover; Requires rapidsmpf runtime
+        if has_expression_keys:
+            return _lower_ir_fallback(
+                ir,
+                rec,
+                msg="Multi-partition Join not supported for keys with expressions.",
+            )
         new_node = ir.reconstruct(children)
         partition_info[new_node] = PartitionInfo(count=output_count)
         return new_node, partition_info
@@ -269,6 +274,14 @@ def _(
             partition_info,
             left,
             right,
+        )
+    elif has_expression_keys:
+        # Hash shuffle requires physical column keys. Computed join keys must
+        # fall back until they are materialized before shuffling.
+        return _lower_ir_fallback(
+            ir,
+            rec,
+            msg="Multi-partition Join not supported for keys with expressions.",
         )
     else:
         # Create a hash join
