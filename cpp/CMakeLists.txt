@@ -809,6 +809,7 @@ add_library(
   src/join/mixed_join_size_kernel.cu
   src/join/mixed_join_size_kernel_nulls.cu
   src/join/sort_merge_join.cu
+  src/join/streaming_hash_join.cu
   src/json/json_path.cu
   src/lists/contains.cu
   src/lists/combine/concatenate_list_elements.cu
