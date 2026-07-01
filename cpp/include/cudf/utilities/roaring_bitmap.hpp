@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,6 +18,7 @@
 #include <cuda/std/cstddef>
 
 #include <memory>
+#include <span>
 
 namespace CUDF_EXPORT cudf {
 
@@ -65,7 +66,7 @@ class roaring_bitmap {
    * @throw std::invalid_argument if the serialized bitmap data is empty
    */
   explicit roaring_bitmap(roaring_bitmap_type type,
-                          cudf::host_span<cuda::std::byte const> serialized_bitmap_data);
+                          std::span<cuda::std::byte const> serialized_bitmap_data);
 
   /**
    * @brief Destructor for the roaring bitmap class
