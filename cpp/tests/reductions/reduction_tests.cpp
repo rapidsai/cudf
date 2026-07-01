@@ -12,6 +12,8 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/dictionary/update_keys.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -2516,6 +2518,34 @@ TEST_P(DictionaryStringReductionTest, MinMax)
                        output_type);
 }
 
+TEST_P(DictionaryStringReductionTest, MinMaxUnsortedDuplicateKeys)
+{
+  std::vector<std::string> host_strings(GetParam());
+  cudf::data_type output_type{cudf::type_id::STRING};
+
+  cudf::test::dictionary_column_wrapper<std::string> col(host_strings.begin(), host_strings.end());
+  cudf::test::strings_column_wrapper new_keys{
+    "nine", "two", "eight", "five", "six", "three", "two"};
+  auto const dict = cudf::dictionary::set_keys(col, new_keys);
+
+  auto const min_it = std::min_element(host_strings.begin(), host_strings.end());
+  auto const max_it = std::max_element(host_strings.begin(), host_strings.end());
+
+  // MIN/MAX
+  this->reduction_test(
+    dict->view(), *min_it, true, *cudf::make_min_aggregation<reduce_aggregation>(), output_type);
+  this->reduction_test(
+    dict->view(), *max_it, true, *cudf::make_max_aggregation<reduce_aggregation>(), output_type);
+
+  // ARGMIN/ARGMAX
+  this->reduction_test<int>(dict->view(),
+                            static_cast<int>(std::distance(host_strings.begin(), min_it)),
+                            *cudf::make_argmin_aggregation<reduce_aggregation>());
+  this->reduction_test<int>(dict->view(),
+                            static_cast<int>(std::distance(host_strings.begin(), max_it)),
+                            *cudf::make_argmax_aggregation<reduce_aggregation>());
+}
+
 template <typename T>
 struct DictionaryAnyAllTest : public ReductionTest<bool> {};
 using DictionaryAnyAllTypes = cudf::test::Types<int32_t, int64_t, float, double, bool>;
@@ -2604,6 +2634,56 @@ TYPED_TEST(DictionaryReductionTest, Sum)
                 col_nulls, *cudf::make_sum_aggregation<reduce_aggregation>(), output_type)
               .first,
             expected_value);
+}
+
+TYPED_TEST(DictionaryReductionTest, MinMaxUnsortedDuplicateKeys)
+{
+  using T = TypeParam;
+  std::vector<int> int_values({50, 10, 40, 20, 30, 10, 50});
+  std::vector<T> v = convert_values<T>(int_values);
+  cudf::data_type output_type{cudf::type_to_id<T>()};
+
+  cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
+  std::vector<int> key_values({30, 50, 10, 40, 20, 10});
+  std::vector<T> new_key_values = convert_values<T>(key_values);
+  cudf::test::fixed_width_column_wrapper<T> new_keys(new_key_values.begin(), new_key_values.end());
+  auto const dict = cudf::dictionary::set_keys(col, new_keys);
+
+  auto const min_it = std::min_element(v.begin(), v.end());
+  auto const max_it = std::max_element(v.begin(), v.end());
+
+  EXPECT_EQ(this
+              ->template reduction_test<T>(
+                dict->view(), *cudf::make_min_aggregation<reduce_aggregation>(), output_type)
+              .first,
+            *min_it);
+  EXPECT_EQ(this
+              ->template reduction_test<T>(
+                dict->view(), *cudf::make_max_aggregation<reduce_aggregation>(), output_type)
+              .first,
+            *max_it);
+
+  auto const res        = cudf::minmax(dict->view());
+  using ScalarType      = cudf::scalar_type_t<T>;
+  auto const min_result = static_cast<ScalarType*>(res.first.get());
+  auto const max_result = static_cast<ScalarType*>(res.second.get());
+  EXPECT_EQ(T{min_result->value()}, *min_it);
+  EXPECT_EQ(T{max_result->value()}, *max_it);
+
+  EXPECT_EQ(
+    this
+      ->template reduction_test<int32_t>(dict->view(),
+                                         *cudf::make_argmin_aggregation<reduce_aggregation>(),
+                                         cudf::data_type{cudf::type_id::INT32})
+      .first,
+    static_cast<int32_t>(std::distance(v.begin(), min_it)));
+  EXPECT_EQ(
+    this
+      ->template reduction_test<int32_t>(dict->view(),
+                                         *cudf::make_argmax_aggregation<reduce_aggregation>(),
+                                         cudf::data_type{cudf::type_id::INT32})
+      .first,
+    static_cast<int32_t>(std::distance(v.begin(), max_it)));
 }
 
 TYPED_TEST(DictionaryReductionTest, Product)
