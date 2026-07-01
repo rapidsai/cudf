@@ -363,7 +363,7 @@ void build_shift_masks(gkprog& gp)
     while (src) {
       auto const p = std::countr_zero(src);
       src &= src - 1;
-      uint32_t const q = static_cast<uint32_t>(static_cast<int32_t>(p) + s);
+      auto const q = static_cast<uint32_t>(static_cast<int32_t>(p) + s);
       gp.exception_mask |= glushkov_state_t(1) << p;
       gp.exception_successors[p] |= glushkov_state_t(1) << q;
     }
