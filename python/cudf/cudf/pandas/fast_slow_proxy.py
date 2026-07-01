@@ -426,6 +426,10 @@ def make_intermediate_proxy_type(
         # live parent (e.g. a column added to a frame after its groupby).
         if self._fsproxy_parents_changed():
             result = super(type(self), self)._fsproxy_slow_to_fast()
+            # Refresh the cache (not just the parent-id snapshot) so later
+            # conversions return the re-derived object instead of falling back
+            # to the stale one once the snapshot matches the live parents again.
+            self._fsproxy_wrapped = result
             self._fsproxy_record_parent_ids()
             return result
         return self._fsproxy_wrapped
@@ -442,6 +446,9 @@ def make_intermediate_proxy_type(
         # was mutated/replaced since creation (see _fsproxy_slow_to_fast).
         if self._fsproxy_parents_changed():
             result = super(type(self), self)._fsproxy_fast_to_slow()
+            # See _fsproxy_slow_to_fast: refresh the cache so subsequent
+            # conversions don't revert to the stale wrapped object.
+            self._fsproxy_wrapped = result
             self._fsproxy_record_parent_ids()
             return result
         return self._fsproxy_wrapped
