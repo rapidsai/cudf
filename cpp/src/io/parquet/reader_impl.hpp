@@ -401,6 +401,18 @@ class reader_impl {
   }
 
   /**
+   * @brief Offset the column references in `_expr_conv` by the number of columns prepended to
+   * the output
+   *
+   * @return Offsetted expression converter
+   */
+  [[nodiscard]] inline offset_column_references compute_offset_filter() const
+  {
+    auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
+    return offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
+  }
+
+  /**
    * @brief Calculate the number of rows read from each source in the output chunk
    *
    * @param chunk_start_row The offset of the first row in the output chunk
@@ -418,18 +430,6 @@ class reader_impl {
    */
   void prepend_source_index_column(std::span<std::size_t const> num_rows_per_source,
                                    std::vector<std::unique_ptr<column>>& out_columns);
-
-  /**
-   * @brief Offset the column references in `_expr_conv` by the number of columns prepended to
-   * the output
-   *
-   * @return Offsetted expression converter
-   */
-  [[nodiscard]] offset_column_references compute_offset_filter() const
-  {
-    auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
-    return offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
-  }
 
   /**
    * @brief Computes the names of columns to be read from the file, if specified.
