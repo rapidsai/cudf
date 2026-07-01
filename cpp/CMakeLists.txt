@@ -881,7 +881,7 @@ add_library(
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
-  src/reductions/sum_with_overflow.cu
+  src/reductions/sum_overflow.cu
   src/reductions/unique_count.cu
   src/reductions/unique_count_column.cu
   src/reductions/var.cu
