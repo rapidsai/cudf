@@ -414,3 +414,19 @@ def test_split_scan_do_evaluate_missing_prefetch_metadata() -> None:
             [],
             context=context,
         )
+
+
+def test_prefetch_file_metadata_join(
+    tmp_path: Path, streaming_engine_factory: Callable[..., StreamingEngine]
+) -> None:
+    p1 = tmp_path / "f1.parquet"
+    p2 = tmp_path / "f2.parquet"
+    pl.DataFrame({"k": [1, 2, 3], "a": [4, 5, 6]}).write_parquet(p1)
+    pl.DataFrame({"k": [1, 2, 3], "b": [7, 8, 9]}).write_parquet(p2)
+
+    engine = streaming_engine_factory(
+        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
+    )
+
+    q = pl.scan_parquet(p1).join(pl.scan_parquet(p2), on="k")
+    q.collect(engine=engine)

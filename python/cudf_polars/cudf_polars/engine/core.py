@@ -717,15 +717,20 @@ def evaluate_on_rank(
                     node, [cached_parquet_info_map[path] for path in node.paths]
                 )
                 replacements[node] = new_node
-                partition_info[new_node] = partition_info[node]
             elif isinstance(node, StreamingScan):
                 new_node = StreamingScan.with_prefetched_parquet_metadata(
                     node, cached_parquet_info_map
                 )
                 replacements[node] = new_node
-                partition_info[new_node] = partition_info[node]
 
+        old_ir = ir
         ir = replace([ir], replacements)[0]
+        partition_info = {
+            new_node: partition_info[old_node]
+            for old_node, new_node in zip(
+                traversal([old_ir]), traversal([ir]), strict=True
+            )
+        }
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
