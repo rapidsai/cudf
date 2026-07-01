@@ -44,7 +44,10 @@ template <bool has_nested_columns>
     },
     stream.value()));
   return cudf::detail::all_of(
-    eq_rows.begin(), eq_rows.end(), [] __device__(bool row_equal) { return row_equal; }, stream);
+    eq_rows.begin(),
+    eq_rows.end(),
+    [] __device__(bool row_equal) -> bool { return row_equal; },
+    stream);
 }
 
 }  // namespace

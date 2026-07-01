@@ -48,7 +48,10 @@ bool is_sorted(cudf::table_view const& in,
                       });
 
     return cudf::detail::all_of(
-      d_results.begin(), d_results.end(), [] __device__(bool result) { return result; }, stream);
+      d_results.begin(),
+      d_results.end(),
+      [] __device__(bool result) -> bool { return result; },
+      stream);
   } else {
     auto const device_comparator = comparator.less<false>(has_nested_nulls(in));
 
