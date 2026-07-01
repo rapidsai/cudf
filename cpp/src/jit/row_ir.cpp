@@ -40,6 +40,9 @@ enum class [[nodiscard]] null_output : uint8_t {
                                           std::span<int32_t const> arg_scales,
                                           std::optional<int32_t> target_scale)
 {
+  // this implementation must be kept in sync with the implementation of
+  // `cudf::ast::detail::operator_functor::fixed_point_result_scale`
+  // (https://github.com/rapidsai/cudf/blob/a5dccda20a74fe61e3c4491b0e74bdc0321d60d5/cpp/include/cudf/ast/detail/operator_functor.cuh#L161)
   switch (op) {
     // pseudo-opcode with no argument
     case opcode::GET_INPUT: return 0;
@@ -675,13 +678,11 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
           } else {
             if (error_policy_ != cudf::error_policy::NULLIFY) {
               sink.emit(std::format(
-                R"***({0} {1}{{}};
-auto {1}__expected = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
-if(!{1}__expected.has_value()) {{
-  return {1}__expected.error();
+                R"***(auto expected__{1} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
+if(!expected__{1}.has_value()) {{
+ return expected__{1}.error();
 }}
-
-{1} = {1}__expected.value();
+{0} {1} = expected__{1}.value();
 )***",
                 type,
                 id_,
@@ -691,9 +692,9 @@ if(!{1}__expected.has_value()) {{
             } else {
               sink.emit(std::format(
                 R"***({0} {1}{{}};
-auto {1}__expected = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
-if({1}__expected.has_value()) {{
-  {1} = {1}__expected.value();
+auto expected__{1} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
+if(expected__{1}.has_value()) {{
+  {1} = expected__{1}.value();
 }} else {{
   {1} = {{}};
 }}
