@@ -195,8 +195,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 # A genuine row-label miss must raise, not retry positionally.
                 raise KeyError(*e.args) from None
             except (TypeError, KeyError, IndexError, ValueError):
-                # The retry reinterprets ``arg`` as the full per-level row key
-                # (pandas "Form A"), so scalar-selected levels are dropped.
+                # Retry treating ``arg`` as a row-only key that selects across
+                # the MultiIndex levels (e.g. ``df.loc[("a", "b")]`` matching
+                # the first two index levels), with all columns selected via
+                # ``slice(None)``. ``per_level=True`` applies the per-level
+                # lookup and drops the scalar-selected index levels from the
+                # result.
                 return self._getitem_tuple_arg(
                     (arg, slice(None)), per_level=True
                 )

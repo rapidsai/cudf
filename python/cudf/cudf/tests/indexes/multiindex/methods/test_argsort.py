@@ -1,7 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -53,16 +52,3 @@ def test_multiindex_argsort(pdi, ascending, request):
     actual = gdi.argsort(ascending=ascending)
 
     assert_eq(expected, actual)
-
-
-def test_multiindex_argsort_dtype_pandas_compatible():
-    # In pandas-compatible mode argsort returns np.intp (int64) to match
-    # pandas; classic cuDF keeps its documented int32 gather-map dtype.
-    pmi = pd.MultiIndex.from_arrays([[2, 1, 3], [1, 2, 3]])
-    gmi = cudf.from_pandas(pmi)
-
-    assert gmi.argsort().dtype == np.dtype(np.int32)
-    with cudf.option_context("mode.pandas_compatible", True):
-        result = gmi.argsort()
-    assert result.dtype == np.dtype(np.intp)
-    assert_eq(result, pmi.argsort(), check_dtype=True)

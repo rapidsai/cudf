@@ -442,24 +442,17 @@ def test_loc_wrong_type_slice_datetimeindex():
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def mi_series():
+def test_series_loc_multiindex_scalar_selection():
     mi = pd.MultiIndex.from_tuples([(0, 0), (1, 1), (2, 1)], names=["A", "B"])
     psr = pd.Series([1, 2, 3], index=mi)
-    return cudf.from_pandas(psr), psr
+    gsr = cudf.from_pandas(psr)
 
-
-def test_series_loc_drops_scalar_selected_level(mi_series):
-    gsr, psr = mi_series
-    # selecting the second level by a scalar drops it, keeping level "A".
+    # Selecting the second level by a scalar drops it, keeping level "A".
     assert_eq(gsr.loc[:, 1], psr.loc[:, 1])
     assert isinstance(gsr.loc[:, 1].index, cudf.Index)
     assert not isinstance(gsr.loc[:, 1].index, cudf.MultiIndex)
 
-
-def test_series_loc_full_scalar_tuple_returns_scalar(mi_series):
-    gsr, psr = mi_series
-    # every level selected by a scalar -> scalar
+    # Every level selected by a scalar -> scalar.
     assert gsr.loc[(1, 1)] == psr.loc[(1, 1)]
 
 

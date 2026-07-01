@@ -1603,23 +1603,9 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if isinstance(by, str):
             by = [by]
-        result = self._get_sorted_inds(
+        return self._get_sorted_inds(
             by=by, ascending=ascending, na_position=na_position
         ).values
-        if cudf.get_option("mode.pandas_compatible"):
-            # pandas returns ``np.intp`` (int64) positional indexers; cuDF's
-            # gather map is int32. Match pandas in pandas-compatible mode so
-            # dtype-strict comparisons (e.g. ``assert_numpy_array_equal``)
-            # succeed.
-            #
-            # This is gated rather than applied unconditionally because the
-            # int32 return is a long-standing, *documented* part of cuDF's
-            # public ``argsort`` API (see the ``dtype=int32`` examples in this
-            # method's docstring and in ``Series``/``Index.argsort``). Widening
-            # it for everyone would break those doctests and silently double the
-            # size of every gather map for classic-cuDF users who rely on int32.
-            result = result.astype(np.intp)
-        return result
 
     @_performance_tracking
     def _get_sorted_inds(

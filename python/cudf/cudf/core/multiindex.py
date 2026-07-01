@@ -869,18 +869,16 @@ class MultiIndex(Index):
             # monotonically increasing (so indexer order == natural order).
             # Otherwise it returns rows in the order the labels appear in the
             # indexer.
-            if len(lookup._columns) <= 1:
+            if lookup._num_columns <= 1:
                 lookup_monotonic = (
-                    len(lookup._columns) == 0
+                    lookup._num_columns == 0
                     or lookup._columns[0].is_monotonic_increasing
                 )
             else:
-                lookup_monotonic = (
+                lookup_monotonic = pd.MultiIndex.from_frame(
                     lookup.to_pandas()
-                    .apply(tuple, axis=1)
-                    .is_monotonic_increasing
-                )
-            natural_order = index.is_monotonic_increasing and lookup_monotonic
+                ).is_monotonic_increasing
+            natural_order = lookup_monotonic and index.is_monotonic_increasing
             lookup_order = "_" + "_".join(map(str, lookup._column_names))
             lookup[lookup_order] = ColumnBase.from_range(range(len(lookup)))
             if natural_order:
@@ -901,9 +899,16 @@ class MultiIndex(Index):
                     continue
                 level_col = index.levels[idx]._column
                 if is_list_like(row) and not isinstance(row, tuple):
-                    for element in row:
-                        if element not in level_col:
-                            raise KeyError(element)
+                    # Bulk membership check (one pass) rather than a scan per
+                    # element; only fall back to a host loop to surface the
+                    # first missing label when something is actually absent.
+                    present = as_column(list(row)).isin(level_col)
+                    if not present.all():
+                        for element, ok in zip(
+                            row, present.values.get(), strict=True
+                        ):
+                            if not ok:
+                                raise KeyError(element)
                 elif row not in level_col:
                     raise KeyError(row)
             if len(result) == 0:
