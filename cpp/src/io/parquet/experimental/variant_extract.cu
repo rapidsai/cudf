@@ -376,10 +376,15 @@ constexpr bool is_variant_int =
   cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
   cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
 
-// The output types a VARIANT value can be cast to: the fixed-width signed integers plus strings.
+// The floating-point types a VARIANT value can be cast to: FLOAT{32,64}.
+template <typename T>
+constexpr bool is_variant_float = cuda::std::is_same_v<T, float> || cuda::std::is_same_v<T, double>;
+
+// The output types a VARIANT value can be cast to: the fixed-width signed integers, floats, and
+// strings.
 template <typename T>
 constexpr bool is_variant_castable =
-  is_variant_int<T> || cuda::std::is_same_v<T, cudf::string_view>;
+  is_variant_int<T> || is_variant_float<T> || cuda::std::is_same_v<T, cudf::string_view>;
 
 // Variant primitive ints: basic_type == primitive, value_header maps INT{8,16,32,64}.
 template <typename T>
@@ -399,6 +404,33 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
     return cuda::std::nullopt;
   }
   return cudf::io::unaligned_load<T>(enc.data() + 1);
+}
+
+/**
+ * @brief Decode a single VARIANT value blob into a float of type `T`.
+ *
+ * Matches only when the blob is a primitive value whose physical type id is the exact-width float
+ * header for `T` (FLOAT32 for `float`, FLOAT64 for `double`); there is no widening between float32
+ * and float64. `unaligned_load` is constrained to integral types, so the payload is copied via
+ * `memcpy` instead.
+ */
+template <typename T>
+__device__ inline cuda::std::optional<T> decode_float(device_span<uint8_t const> enc)
+{
+  static_assert(is_variant_float<T>, "decode_float: T must be float or double");
+
+  if (cuda::std::cmp_less(enc.size(), 1 + sizeof(T))) { return cuda::std::nullopt; }
+
+  constexpr primitive_type expected =
+    cuda::std::is_same_v<T, float> ? primitive_type::float32 : primitive_type::float64;
+  uint8_t const value_metadata = enc[0];
+  if (variant_basic_type(value_metadata) != basic_type::primitive ||
+      variant_value_header(value_metadata) != static_cast<uint8_t>(expected)) {
+    return cuda::std::nullopt;
+  }
+  T value;
+  cuda::std::memcpy(&value, enc.data() + 1, sizeof(T));
+  return value;
 }
 
 __device__ device_span<uint8_t const> resolve_path(device_span<uint8_t const> meta,
@@ -544,6 +576,44 @@ CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_int_kernel(
 }
 
 /**
+ * @brief Per-row kernel: decode each VARIANT value blob into a float of type `T`.
+ *
+ * Writes the decoded value to `d_output[row]` for non-null rows whose blob is a variant primitive
+ * float whose physical type id matches `T` exactly (e.g. a float32 value does not decode into a
+ * float64 output; there is no widening). Rows that are null, or whose value is not an exact-width
+ * match for `T`, are marked null in `d_null_mask` with an output of 0.
+ */
+template <typename T>
+CUDF_KERNEL __launch_bounds__(block_size) void cast_variant_float_kernel(
+  cudf::lists_column_device_view values, device_span<T> d_output, bitmask_type* d_null_mask)
+{
+  auto const num_rows = static_cast<size_type>(d_output.size());
+  auto const tid      = cudf::detail::grid_1d::global_thread_id<block_size>();
+  auto const stride   = cudf::detail::grid_1d::grid_stride<block_size>();
+
+  for (auto row = tid; row < num_rows; row += stride) {
+    if (!cudf::bit_is_set(d_null_mask, row)) {
+      d_output[row] = 0;
+      continue;
+    }
+
+    auto const val_begin = values.offset_at(row);
+    auto const val_end   = values.offset_at(row + 1);
+    auto const val_child = values.child();
+    device_span<uint8_t const> const val{val_child.data<uint8_t>() + val_begin,
+                                         static_cast<std::size_t>(val_end - val_begin)};
+
+    auto const decoded = decode_float<T>(val);
+    if (decoded.has_value()) {
+      d_output[row] = *decoded;
+    } else {
+      d_output[row] = 0;
+      cudf::clear_bit(d_null_mask, row);
+    }
+  }
+}
+
+/**
  * @brief Strings-children functor: decode each VARIANT value blob into a string.
  *
  * Used with `make_strings_children`, so it runs in two passes. On the sizing pass (`d_chars ==
@@ -613,6 +683,26 @@ struct cast_variant_fn {
 
     auto grid = cudf::detail::grid_1d{num_rows, block_size};
     cast_variant_int_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+      values, {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
+    CUDF_CUDA_TRY(cudaGetLastError());
+
+    auto const null_count =
+      num_rows - cudf::detail::count_set_bits(d_null_mask, 0, num_rows, stream);
+    return std::make_unique<column>(desired_type,
+                                    num_rows,
+                                    std::move(data),
+                                    null_count > 0 ? std::move(null_mask) : rmm::device_buffer{},
+                                    null_count);
+  }
+
+  template <typename T>
+  std::unique_ptr<column> operator()()
+    requires(is_variant_float<T>)
+  {
+    rmm::device_buffer data{num_rows * sizeof(T), stream, mr};
+
+    auto grid = cudf::detail::grid_1d{num_rows, block_size};
+    cast_variant_float_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
       values, {static_cast<T*>(data.data()), static_cast<std::size_t>(num_rows)}, d_null_mask);
     CUDF_CUDA_TRY(cudaGetLastError());
 

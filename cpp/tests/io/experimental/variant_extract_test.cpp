@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -658,6 +658,23 @@ TEST_F(CastVariantTest, ApachePrimitiveInts)
   cast(avf::primitive_int64, int64_t{1234567890123456789LL});
 }
 
+TEST_F(CastVariantTest, ApachePrimitiveFloats)
+{
+  auto stream     = cudf::test::get_default_stream();
+  auto const cast = [&](auto const& fixture, auto expected_val) {
+    using T          = decltype(expected_val);
+    auto col         = make_apache_variant(fixture);
+    auto const value = cudf::structs_column_view{col}.get_sliced_child(1, stream);
+    auto got         = cudf::io::parquet::experimental::cast_variant(
+      value, cudf::data_type{cudf::type_to_id<T>()}, stream);
+    cudf::test::fixed_width_column_wrapper<T> expected{expected_val};
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+  };
+
+  cast(avf::primitive_float, float{1234567936.0f});
+  cast(avf::primitive_double, double{1234567890.1234});
+}
+
 TEST_F(CastVariantTest, ApacheShortString)
 {
   auto col         = make_apache_variant(avf::short_string);
@@ -709,7 +726,10 @@ TEST_F(CastVariantTest, EmptyInput)
   auto const values =
     cudf::empty_like(cudf::structs_column_view{make_xyz_three_row_variant()}.child(1));
 
-  for (auto const id : {cudf::type_id::INT32, cudf::type_id::STRING}) {
+  for (auto const id : {cudf::type_id::INT32,
+                        cudf::type_id::STRING,
+                        cudf::type_id::FLOAT32,
+                        cudf::type_id::FLOAT64}) {
     auto got = cudf::io::parquet::experimental::cast_variant(*values, cudf::data_type{id}, stream);
     EXPECT_EQ(got->type().id(), id);
     EXPECT_EQ(got->size(), 0);
