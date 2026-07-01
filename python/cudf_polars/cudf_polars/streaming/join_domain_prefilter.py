@@ -361,20 +361,20 @@ def _composite_candidates(
 
 def _make_domain(candidate: _Candidate, ir: Join) -> IR:
     if candidate.mode == "simple":
-        return _select_key(
+        return _project_bound_key(
             candidate.domain.node,
             candidate.domain.column,
-            candidate.domain_key.name,
+            candidate.domain_key,
         )
 
     assert candidate.constraint_domain is not None
     assert candidate.domain_constraint_key is not None
     assert candidate.target_constraint_key is not None
 
-    constraint_domain = _select_key(
+    constraint_domain = _project_bound_key(
         candidate.constraint_domain.node,
         candidate.constraint_domain.column,
-        candidate.target_constraint_key.name,
+        candidate.target_constraint_key,
     )
     constrained = _make_semi_join(
         candidate.domain.node,
@@ -390,14 +390,18 @@ def _make_domain(candidate: _Candidate, ir: Join) -> IR:
         nulls_equal=ir.options[1],
         suffix=ir.options[3],
     )
-    return _select_key(constrained, candidate.domain.column, candidate.domain_key.name)
+    return _project_bound_key(
+        constrained, candidate.domain.column, candidate.domain_key
+    )
 
 
-def _select_key(source: IR, source_column: str, output_column: str) -> Select:
-    dtype = source.schema[source_column]
+def _project_bound_key(source: IR, bound_column: str, output_key: expr.Col) -> Select:
+    """Project a bound source column under its join-visible key name."""
+    dtype = source.schema[bound_column]
+    assert dtype == output_key.dtype
     return Select(
-        {output_column: dtype},
-        (expr.NamedExpr(output_column, expr.Col(dtype, source_column)),),
+        {output_key.name: dtype},
+        (expr.NamedExpr(output_key.name, expr.Col(dtype, bound_column)),),
         True,  # noqa: FBT003
         source,
     )
