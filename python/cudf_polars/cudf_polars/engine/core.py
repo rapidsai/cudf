@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     import cudf_polars.quent
     import cudf_polars.quent._logging
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.quent._context import LocalQuentContext
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
@@ -662,7 +663,7 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-    local_quent_context: cudf_polars.quent.LocalQuentContext,
+    local_quent_context: LocalQuentContext,
     query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """

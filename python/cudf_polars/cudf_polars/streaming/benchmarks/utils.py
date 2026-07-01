@@ -1535,10 +1535,7 @@ def _write_quent_traces(
     engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
 ) -> None:
     """Write collected Quent events to logs/{run_id}.ndjson."""
-    if not _HAS_STRUCTLOG:
-        return
-
-    if not collect_traces:
+    if not (_HAS_STRUCTLOG or collect_traces):
         return
 
     quent_logs = list(engine._quent_events)

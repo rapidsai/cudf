@@ -5,15 +5,26 @@
 
 from __future__ import annotations
 
-from cudf_polars.quent._context import LocalQuentContext, QuentContext
-from cudf_polars.quent._types import Engine, Implementation, Query, QueryGroup, Worker
+from cudf_polars.quent._context import QuentContext
+from cudf_polars.quent._types import (
+    Attribute,
+    Engine,
+    HomogeneousListValue,
+    Implementation,
+    Query,
+    QueryGroup,
+    ScalarValue,
+    Value,
+)
 
 __all__ = [
+    "Attribute",
     "Engine",
+    "HomogeneousListValue",
     "Implementation",
-    "LocalQuentContext",
     "QuentContext",
     "Query",
     "QueryGroup",
-    "Worker",
+    "ScalarValue",
+    "Value",
 ]

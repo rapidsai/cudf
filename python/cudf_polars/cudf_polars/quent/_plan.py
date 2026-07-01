@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     import uuid
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.quent import Query, Worker
+    from cudf_polars.quent._types import Query, Worker
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 _JOIN_TYPES = frozenset({"Join", "ConditionalJoin"})

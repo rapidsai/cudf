@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 
 import cudf_polars.dsl.tracing
-import cudf_polars.quent
 from cudf_polars.dsl.ir import (
     DataFrameScan,
     Join,

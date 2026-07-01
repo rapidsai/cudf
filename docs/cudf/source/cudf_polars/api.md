@@ -81,10 +81,13 @@ used to profile your queries.
 ```{eval-rst}
 .. automodule:: cudf_polars.quent
    :members:
+      Attribute,
+      Engine,
+      HomogeneousListValue,
+      Implementation,
       QuentContext,
       Query,
       QueryGroup,
-      Engine,
-      Implementation,
-      Worker,
+      ScalarValue,
+      Value,
 ```

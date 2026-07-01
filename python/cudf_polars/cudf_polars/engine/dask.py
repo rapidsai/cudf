@@ -41,6 +41,7 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.quent._context import LocalQuentContext
 from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 
 if TYPE_CHECKING:
@@ -476,7 +477,7 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
-    local_quent_context = cudf_polars.quent.LocalQuentContext(
+    local_quent_context = LocalQuentContext(
         context=quent_context,
         worker=mp_ctx.quent_worker,
         logger=mp_ctx.quent_logger,

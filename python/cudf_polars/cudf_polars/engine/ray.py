@@ -39,6 +39,8 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._types import Worker
 from cudf_polars.utils.config import MemoryResourceConfig, RayContext
 
 if TYPE_CHECKING:
@@ -217,7 +219,7 @@ class RankActor:
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
         self._quent_logger = cudf_polars.quent._logging.QuentLogger()
-        self._quent_worker = cudf_polars.quent._types.Worker(
+        self._quent_worker = Worker(
             id=worker_id,
             engine=engine,
             instance_name=f"RankActor-{worker_id.hex[:8]}",
@@ -433,7 +435,7 @@ class RankActor:
         # object store (pickle / Arrow IPC). The DataFrame is already on CPU at
         # this point (to_polars() copies the result off-GPU), so no GPU memory
         # crosses process boundaries.
-        local_quent_context = cudf_polars.quent.LocalQuentContext(
+        local_quent_context = LocalQuentContext(
             context=quent_context,
             worker=self._quent_worker,
             logger=self._quent_logger,

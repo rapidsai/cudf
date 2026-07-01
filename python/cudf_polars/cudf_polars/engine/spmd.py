@@ -43,6 +43,8 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._types import Worker
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.utils import set_memory_resource
 from cudf_polars.utils.config import (
@@ -119,9 +121,9 @@ def evaluate_pipeline_spmd_mode(
     quent_context._emit_query_events(config_options.executor.spmd_context.quent_logger)
 
     # I don't like recreating the Worker here...
-    local_quent_context = cudf_polars.quent.LocalQuentContext(
+    local_quent_context = LocalQuentContext(
         context=quent_context,
-        worker=cudf_polars.quent.Worker(
+        worker=Worker(
             id=config_options.executor.spmd_context.worker_id,
             engine=quent_context.engine,
             instance_name=f"rank-{comm.rank}",
@@ -463,7 +465,7 @@ class SPMDEngine(StreamingEngine):
             executor_options["quent_context"] = quent_context
             quent_context._emit_engine_init_events(self._quent_logger)
 
-            self._quent_worker = cudf_polars.quent.Worker(
+            self._quent_worker = Worker(
                 id=uuid.uuid4(),
                 engine=quent_context.engine,
                 instance_name=f"rank-{self.rank}",  # relies on self.comm
