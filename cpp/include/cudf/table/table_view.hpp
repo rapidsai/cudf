@@ -77,7 +77,8 @@ class table_view_base {
    * a non-zero row count (the row count is normally derived from the columns). When
    * `cols` is non-empty, `num_rows` must equal the size of every column.
    *
-   * @throws cudf::logic_error If `cols` is non-empty and any view's size does not equal `num_rows`
+   * @throws std::invalid_argument If `cols` is non-empty and any view's size does not equal
+   * `num_rows`
    *
    * @param cols The vector of columns to construct the table from
    * @param num_rows The number of rows in the table

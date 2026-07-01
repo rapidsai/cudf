@@ -60,9 +60,11 @@ table_view_base<ColumnView>::table_view_base(std::vector<ColumnView> const& cols
   : _columns{cols}, _num_rows{num_rows}
 {
   CUDF_EXPECTS(num_rows >= 0, "Number of rows cannot be negative.", std::invalid_argument);
-  std::for_each(_columns.begin(), _columns.end(), [num_rows](ColumnView col) {
-    CUDF_EXPECTS(col.size() == num_rows, "Column size mismatch.");
-  });
+  CUDF_EXPECTS(std::all_of(cols.begin(),
+                           cols.end(),
+                           [num_rows](ColumnView const& col) { return col.size() == num_rows; }),
+               "Column size mismatch",
+               std::invalid_argument);
 }
 
 // Explicit instantiation for a table of `column_view`s

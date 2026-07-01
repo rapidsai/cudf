@@ -2016,14 +2016,17 @@ struct contiguous_split_state {
       // represented as a metadata-only packed table that records its row count.
       std::vector<packed_table> result;
       result.reserve(num_partitions);
-      for (auto const partition_rows : partition_row_counts) {
-        auto partition = cudf::table_view{std::vector<column_view>{}, partition_rows};
-        result.emplace_back(packed_table{
-          partition,
-          packed_columns{
-            std::make_unique<std::vector<uint8_t>>(cudf::pack_metadata(partition, nullptr, 0)),
-            std::make_unique<rmm::device_buffer>()}});
-      }
+      std::transform(
+        partition_row_counts.begin(),
+        partition_row_counts.end(),
+        std::back_inserter(result),
+        [](size_type partition_rows) {
+          auto partition = cudf::table_view{std::vector<column_view>{}, partition_rows};
+          return packed_table{partition,
+                              packed_columns{std::make_unique<std::vector<uint8_t>>(
+                                               cudf::pack_metadata(partition, nullptr, 0)),
+                                             std::make_unique<rmm::device_buffer>()}};
+        });
       return result;
     }
     if (is_empty) { return make_empty_packed_table(); }

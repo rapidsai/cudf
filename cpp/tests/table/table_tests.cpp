@@ -60,7 +60,7 @@ TEST_F(TableTest, ZeroColumnConstructors)
   column_wrapper<int32_t> col{{1, 2, 3}};
   std::vector<column_view> cols{col};
   EXPECT_NO_THROW((TView{cols, 3}));
-  EXPECT_THROW((TView{cols, 4}), cudf::logic_error);
+  EXPECT_THROW((TView{cols, 4}), std::invalid_argument);
   {
     CVector owning_cols;
     owning_cols.push_back(column_wrapper<int32_t>{1, 2, 3}.release());
@@ -69,7 +69,7 @@ TEST_F(TableTest, ZeroColumnConstructors)
   {
     CVector owning_cols;
     owning_cols.push_back(column_wrapper<int32_t>{1, 2, 3}.release());
-    EXPECT_THROW(Table(std::move(owning_cols), 4), cudf::logic_error);
+    EXPECT_THROW(Table(std::move(owning_cols), 4), std::invalid_argument);
   }
 
   // A negative explicit row count is rejected by both.
@@ -85,7 +85,7 @@ TEST_F(TableTest, ZeroColumnConstructors)
   auto owned = column_wrapper<int32_t>{1, 2, 3}.release();
   std::vector<cudf::mutable_column_view> mcols{owned->mutable_view()};
   EXPECT_NO_THROW((MView{mcols, 3}));
-  EXPECT_THROW((MView{mcols, 4}), cudf::logic_error);
+  EXPECT_THROW((MView{mcols, 4}), std::invalid_argument);
   EXPECT_THROW((MView{std::vector<cudf::mutable_column_view>{}, -1}), std::invalid_argument);
 }
 

@@ -49,7 +49,8 @@ table::table(std::vector<std::unique_ptr<column>>&& columns, size_type num_rows)
     CUDF_EXPECTS(c, "Unexpected null column");
     CUDF_EXPECTS(
       c->size() == num_rows,
-      "Column size mismatch: " + std::to_string(c->size()) + " != " + std::to_string(num_rows));
+      "Column size mismatch: " + std::to_string(c->size()) + " != " + std::to_string(num_rows),
+      std::invalid_argument);
   }
 }
 

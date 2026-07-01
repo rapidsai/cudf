@@ -68,7 +68,7 @@ class table {
    * that has a non-zero length. When `columns` is non-empty, `num_rows` must equal
    * the size of every column.
    *
-   * @throws cudf::logic_error if `columns` is non-empty and `num_rows` does not
+   * @throws std::invalid_argument if `columns` is non-empty and `num_rows` does not
    * match the size of every column.
    *
    * @param columns The vector of `unique_ptr`s to columns whose contents will
