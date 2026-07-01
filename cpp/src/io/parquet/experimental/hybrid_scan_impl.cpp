@@ -1084,7 +1084,7 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 
   apply_decimal_width_cast(out_columns);
 
-  // Prepend the source index column to filter columns or all columns
+  // Prepend the source index column to filter columns only
   if (_options.prepend_source_index_column and
       read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
     prepend_source_index_column(out_metadata.num_rows_per_source, out_columns);
