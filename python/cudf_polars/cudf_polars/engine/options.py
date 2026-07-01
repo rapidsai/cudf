@@ -25,6 +25,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.utils.config import (
         DynamicPlanningOptions,
+        JoinDomainPrefilterOptions,
         ParquetOptions,
     )
 
@@ -247,6 +248,12 @@ class StreamingOptions:
         Env: ``CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING``.
         Default: enabled.
         Category: executor.
+    join_domain_prefilter
+        Join-domain prefilter config, dict or
+        :class:`~cudf_polars.utils.config.JoinDomainPrefilterOptions`.
+        Env: ``CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER__*``.
+        Default: enabled.
+        Category: executor.
     sink_to_directory
         Whether multi-partition sink operations should write to a directory
         rather than a single file. The ``spmd``/``ray``/``dask`` engines
@@ -339,6 +346,9 @@ class StreamingOptions:
         "executor", "CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", int
     )
     dynamic_planning: dict[str, Any] | DynamicPlanningOptions | None | Unspecified = (
+        _opt("executor")
+    )
+    join_domain_prefilter: dict[str, Any] | JoinDomainPrefilterOptions | Unspecified = (
         _opt("executor")
     )
     sink_to_directory: bool | Unspecified = _opt(

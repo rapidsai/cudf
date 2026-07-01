@@ -104,12 +104,11 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    if _dynamic_planning_on(config_options):
-        from cudf_polars.streaming.join_domain_prefilter import (
-            optimize_join_domain_prefilters,
-        )
+    from cudf_polars.streaming.join_domain_prefilter import (
+        optimize_join_domain_prefilters,
+    )
 
-        ir = optimize_join_domain_prefilters(ir, stats, config_options)
+    ir = optimize_join_domain_prefilters(ir, stats, config_options)
 
     state: State = {
         "config_options": config_options,

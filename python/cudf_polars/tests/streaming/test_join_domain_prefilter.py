@@ -112,16 +112,16 @@ def _stats(**row_counts: tuple[Scan, int]) -> StatsCollector:
     return stats
 
 
-def _config() -> ConfigOptions:
+def _config(*, dynamic_planning: bool = True) -> ConfigOptions:
+    executor_options: dict[str, object] = {
+        "join_domain_prefilter": {"enabled": True, "trace": False}
+    }
+    if not dynamic_planning:
+        executor_options["dynamic_planning"] = None
     return ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
-            executor_options={
-                "dynamic_planning": {
-                    "join_domain_prefilter_enabled": True,
-                    "join_domain_prefilter_trace": False,
-                }
-            },
+            executor_options=executor_options,
         )
     )
 
@@ -151,6 +151,20 @@ def test_simple_domain_prefilter_filters_large_side() -> None:
     assert optimized.children[1].options[0] == "Semi"
     assert optimized.children[1].children[0] is lineitem
     assert optimized.children[0] is part
+
+
+def test_domain_prefilter_is_independent_of_dynamic_planning() -> None:
+    part = _scan("part", ("p_partkey",), predicate=True)
+    lineitem = _scan("lineitem", ("l_partkey",))
+    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
+        _config(dynamic_planning=False),
+    )
+
+    assert _joins(optimized, "Semi")
 
 
 def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:

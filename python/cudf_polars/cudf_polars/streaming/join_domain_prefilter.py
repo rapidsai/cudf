@@ -111,12 +111,12 @@ def optimize_join_domain_prefilters(
     column equality keys are considered, and the original full join remains
     after every inserted row-reduction semi join.
     """
-    dynamic_options = config_options.executor.dynamic_planning
-    if dynamic_options is None or not dynamic_options.join_domain_prefilter_enabled:
+    options = config_options.executor.join_domain_prefilter
+    if not options.enabled:
         return ir
-    threshold = dynamic_options.join_domain_prefilter_threshold
-    trace = dynamic_options.join_domain_prefilter_trace
-    if threshold is None or threshold == 0 or trace is None:
+    threshold = options.threshold
+    trace = options.trace
+    if threshold == 0:
         return ir
 
     state = _RewriteState(
