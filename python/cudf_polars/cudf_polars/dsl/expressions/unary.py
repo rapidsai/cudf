@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
+import math
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
 
 import pylibcudf as plc
 
@@ -104,12 +105,20 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "clip",
+            "diff",
             "drop_nulls",
+            "extend_constant",
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "gather_every",
             "null_count",
+            "pct_change",
             "rank",
+            "reinterpret",
+            "reverse",
+            "round_sig_figs",
             "round",
             "set_sorted",
             "shift",
@@ -127,18 +136,33 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    _supported_math_fns = frozenset(
+        {
+            "cot",
+            "degrees",
+            "radians",
+            "log1p",
+            "sign",
+        }
+    )
     _supported_fns = frozenset().union(
-        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+        _supported_misc_fns,
+        _supported_cum_aggs,
+        _supported_math_fns,
+        _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
+            "clip",
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "reinterpret",
             "round",
+            "round_sig_figs",
             "set_sorted",
         }
-    ).union(_OP_MAPPING.keys())
+    ).union(_supported_math_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -167,6 +191,56 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "reinterpret":
+            source = children[0].dtype.plc_type
+            target = self.dtype.plc_type
+            if plc.traits.is_floating_point(source) != plc.traits.is_floating_point(
+                target
+            ):
+                raise NotImplementedError(
+                    "reinterpret between integer and floating-point types is not "
+                    "supported"
+                )
+
+    @staticmethod
+    def _evaluate_n(n_expr: Expr, df: DataFrame, context: ExecutionContext) -> int:
+        """Evaluate the integer ``n`` offset for ``diff`` and ``pct_change``."""
+        if isinstance(n_expr, Literal):
+            value = n_expr.value
+        else:
+            value = (
+                n_expr.evaluate(df, context=context)
+                .obj_scalar(stream=df.stream)
+                .to_py(stream=df.stream)
+            )
+        assert isinstance(value, int)
+        return value
+
+    @staticmethod
+    def bound_clip_operand(
+        expr: Expr,
+        out_type: plc.DataType,
+        df: DataFrame,
+        context: ExecutionContext,
+    ) -> plc.Column | plc.Scalar:
+        """Evaluate a ``clip`` bound as a scalar or column in ``out_type``."""
+        if isinstance(expr, Literal):
+            return plc.Scalar.from_py(expr.value, out_type, stream=df.stream)
+        evaluated = expr.evaluate(df, context=context)
+        if evaluated.is_scalar:
+            return evaluated.obj_scalar(stream=df.stream)
+        if evaluated.obj.type().id() != out_type.id():
+            return plc.unary.cast(evaluated.obj, out_type, stream=df.stream)
+        return evaluated.obj
+
+    @staticmethod
+    def _is_clamp_scalar(
+        operand: plc.Column | plc.Scalar | None, out_type: plc.DataType
+    ) -> TypeGuard[plc.Scalar | None]:
+        """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
+        return operand is None or (
+            isinstance(operand, plc.Scalar) and operand.type().id() == out_type.id()
+        )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -536,6 +610,343 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "clip":
+            column = self.children[0].evaluate(df, context=context)
+            has_min, has_max = self.options
+            out_type = self.dtype.plc_type
+            bound_children = iter(self.children[1:])
+            lower = (
+                self.bound_clip_operand(next(bound_children), out_type, df, context)
+                if has_min
+                else None
+            )
+            upper = (
+                self.bound_clip_operand(next(bound_children), out_type, df, context)
+                if has_max
+                else None
+            )
+            if self._is_clamp_scalar(lower, out_type) and self._is_clamp_scalar(
+                upper, out_type
+            ):
+                null_bound = plc.Scalar.from_py(None, out_type, stream=df.stream)
+                return Column(
+                    plc.replace.clamp(
+                        column.obj,
+                        lower if lower is not None else null_bound,
+                        upper if upper is not None else null_bound,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            clamped = column.obj
+            if lower is not None:
+                clamped = plc.binaryop.binary_operation(
+                    clamped,
+                    lower,
+                    plc.binaryop.BinaryOperator.NULL_MAX,
+                    out_type,
+                    stream=df.stream,
+                )
+            if upper is not None:
+                clamped = plc.binaryop.binary_operation(
+                    clamped,
+                    upper,
+                    plc.binaryop.BinaryOperator.NULL_MIN,
+                    out_type,
+                    stream=df.stream,
+                )
+            is_float = plc.traits.is_floating_point(out_type)
+            if column.null_count > 0 or is_float:
+                clampable = plc.unary.is_valid(column.obj, stream=df.stream)
+                if is_float:
+                    not_nan = plc.unary.unary_operation(
+                        plc.unary.is_nan(column.obj, stream=df.stream),
+                        plc.unary.UnaryOperator.NOT,
+                        stream=df.stream,
+                    )
+                    clampable = plc.binaryop.binary_operation(
+                        clampable,
+                        not_nan,
+                        plc.binaryop.BinaryOperator.LOGICAL_AND,
+                        plc.DataType(plc.TypeId.BOOL8),
+                        stream=df.stream,
+                    )
+                clamped = plc.copying.copy_if_else(
+                    clamped,
+                    column.obj,
+                    clampable,
+                    stream=df.stream,
+                )
+            return Column(clamped, dtype=self.dtype)
+        elif self.name == "extend_constant":
+            column = self.children[0].evaluate(df, context=context)
+            value_expr = self.children[1]
+            n_expr = self.children[2]
+            if isinstance(n_expr, Literal):
+                count = n_expr.value
+            else:
+                count = (
+                    n_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            if count == 0:
+                return column
+            if isinstance(value_expr, Literal):
+                fill = plc.Scalar.from_py(
+                    value_expr.value, self.dtype.plc_type, stream=df.stream
+                )
+            else:
+                fill = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+            extension = plc.Column.from_scalar(fill, count, stream=df.stream)
+            return Column(
+                plc.concatenate.concatenate([column.obj, extension], stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "gather_every":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            offset, n = self.options
+            size = column.obj.size()
+            if size == 0 or (offset == 0 and n == 1):
+                return column
+            if offset >= size:
+                return Column(
+                    plc.copying.empty_like(column.obj, stream=df.stream),
+                    dtype=self.dtype,
+                )
+            count = (size - offset + n - 1) // n
+            indices = plc.filling.sequence(
+                count,
+                plc.Scalar.from_py(
+                    offset, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                ),
+                plc.Scalar.from_py(n, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            return Column(
+                plc.copying.gather(
+                    plc.Table([column.obj]),
+                    indices,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
+        elif self.name == "reverse":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            return Column(
+                plc.copying.reverse(column.obj, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "diff":
+            column = self.children[0].evaluate(df, context=context)
+            (null_behavior,) = self.options
+            offset = self._evaluate_n(self.children[1], df, context)
+            shifted = plc.copying.shift(
+                column.obj,
+                offset,
+                plc.Scalar.from_py(None, column.dtype.plc_type, stream=df.stream),
+                stream=df.stream,
+            )
+            diffed = Column(
+                plc.binaryop.binary_operation(
+                    column.obj,
+                    shifted,
+                    plc.binaryop.BinaryOperator.SUB,
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+            if null_behavior == "drop":
+                if offset >= 0:
+                    diffed = diffed.slice((offset, None), stream=df.stream)
+                else:
+                    diffed = diffed.slice(
+                        (0, column.obj.size() + offset), stream=df.stream
+                    )
+            return diffed
+        elif self.name == "pct_change":
+            column = self.children[0].evaluate(df, context=context)
+            offset = self._evaluate_n(self.children[1], df, context)
+            out_type = self.dtype.plc_type
+            operand = plc.unary.cast(column.obj, out_type, stream=df.stream)
+            shifted = plc.copying.shift(
+                operand,
+                offset,
+                plc.Scalar.from_py(None, out_type, stream=df.stream),
+                stream=df.stream,
+            )
+            expression = plc.expressions.Operation(
+                plc.expressions.ASTOperator.SUB,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV,
+                    plc.expressions.ColumnReference(0),
+                    plc.expressions.ColumnReference(1),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+                ),
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([operand, shifted]), expression, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "reinterpret":
+            column = self.children[0].evaluate(df, context=context)
+            return column.astype(self.dtype, stream=df.stream)
+        elif self.name == "round_sig_figs":
+            column = self.children[0].evaluate(df, context=context)
+            (digits,) = self.options
+            out_type = self.dtype.plc_type
+            is_float = plc.traits.is_floating_point(out_type)
+            work_type = out_type if is_float else plc.DataType(plc.TypeId.FLOAT64)
+            operand = column.obj
+            if operand.type().id() != work_type.id():
+                operand = plc.unary.cast(operand, work_type, stream=df.stream)
+            zero = plc.Scalar.from_py(0.0, work_type, stream=df.stream)
+            column_ref = plc.expressions.ColumnReference(0)
+            log10 = plc.expressions.Operation(
+                plc.expressions.ASTOperator.MUL,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.LOG,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.ABS, column_ref
+                    ),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(
+                        1.0 / math.log(10.0), work_type, stream=df.stream
+                    )
+                ),
+            )
+            scale_expr = plc.expressions.Operation(
+                plc.expressions.ASTOperator.POW,
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(10.0, work_type, stream=df.stream)
+                ),
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB,
+                    plc.expressions.Literal(
+                        plc.Scalar.from_py(
+                            float(digits - 1), work_type, stream=df.stream
+                        )
+                    ),
+                    plc.expressions.Operation(plc.expressions.ASTOperator.FLOOR, log10),
+                ),
+            )
+            scale = plc.transform.compute_column(
+                plc.Table([operand]), scale_expr, stream=df.stream
+            )
+            scaled = plc.binaryop.binary_operation(
+                operand,
+                scale,
+                plc.binaryop.BinaryOperator.MUL,
+                work_type,
+                stream=df.stream,
+            )
+            rounded = plc.round.round(
+                scaled, 0, plc.round.RoundingMethod.HALF_UP, stream=df.stream
+            )
+            unscaled = plc.binaryop.binary_operation(
+                rounded,
+                scale,
+                plc.binaryop.BinaryOperator.DIV,
+                work_type,
+                stream=df.stream,
+            )
+            is_zero = plc.binaryop.binary_operation(
+                operand,
+                zero,
+                plc.binaryop.BinaryOperator.EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            result = plc.copying.copy_if_else(zero, unscaled, is_zero, stream=df.stream)
+            if not is_float:
+                result = plc.unary.cast(result, out_type, stream=df.stream)
+            return Column(result, dtype=self.dtype)
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            operand = column.obj
+            if self.name == "sign":
+                is_float = plc.traits.is_floating_point(out_type)
+                zero_py = 0.0 if is_float else 0
+                one_py = zero_py + 1
+                neg_one_py = -one_py
+                zero = plc.Scalar.from_py(zero_py, out_type, stream=df.stream)
+                positive = plc.binaryop.binary_operation(
+                    operand,
+                    zero,
+                    plc.binaryop.BinaryOperator.GREATER,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
+                signed = plc.copying.copy_if_else(
+                    plc.Scalar.from_py(one_py, out_type, stream=df.stream),
+                    operand,
+                    positive,
+                    stream=df.stream,
+                )
+                if not plc.traits.is_unsigned(out_type):
+                    negative = plc.binaryop.binary_operation(
+                        operand,
+                        zero,
+                        plc.binaryop.BinaryOperator.LESS,
+                        plc.DataType(plc.TypeId.BOOL8),
+                        stream=df.stream,
+                    )
+                    signed = plc.copying.copy_if_else(
+                        plc.Scalar.from_py(neg_one_py, out_type, stream=df.stream),
+                        signed,
+                        negative,
+                        stream=df.stream,
+                    )
+                return Column(signed, dtype=self.dtype)
+            if operand.type().id() != out_type.id():
+                operand = plc.unary.cast(operand, out_type, stream=df.stream)
+            if self.name in ("degrees", "radians"):
+                factor = 180.0 / math.pi if self.name == "degrees" else math.pi / 180.0
+                return Column(
+                    plc.binaryop.binary_operation(
+                        operand,
+                        plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                        plc.binaryop.BinaryOperator.MUL,
+                        out_type,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+            )
+            column_ref = plc.expressions.ColumnReference(0)
+            if self.name == "cot":
+                expression = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV,
+                    one,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.TAN, column_ref
+                    ),
+                )
+            else:
+                expression = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.LOG,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.ADD, column_ref, one
+                    ),
+                )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([operand]), expression, stream=df.stream
+                ),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
