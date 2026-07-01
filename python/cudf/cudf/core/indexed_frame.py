@@ -4069,8 +4069,15 @@ class IndexedFrame(Frame):
                 # A numpy integer dtype cannot hold NA, so pandas upcasts an
                 # all-null reindexed column to float64. Match that here,
                 # mirroring the upcast applied to existing integer columns
-                # below so both paths agree.
-                if isinstance(target, np.dtype) and target.kind in "iu":
+                # below so both paths agree. An empty result (row_count == 0)
+                # holds no NA, so the integer dtype is preserved -- matching
+                # pandas and cudf's prior behavior for e.g. reindex to an
+                # empty index.
+                if (
+                    isinstance(target, np.dtype)
+                    and target.kind in "iu"
+                    and len(index) > 0
+                ):
                     target = np.dtype(np.float64)
                 return column_empty(dtype=target, row_count=len(index))
             # Non-null fill. A numeric scalar fill on a brand-new column of a
