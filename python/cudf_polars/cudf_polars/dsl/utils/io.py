@@ -72,13 +72,15 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
     # For now, we'll just use kvikio to explicitly get the size.
     sizes = []
 
-    try:
+    try:  # pragma: no cover; kvikio is optional
         import kvikio
     except ImportError:
         kvikio = None
 
     for path in paths:
-        if paths and kvikio is not None and plc.io.SourceInfo._is_remote_uri(path):
+        if (
+            paths and kvikio is not None and plc.io.SourceInfo._is_remote_uri(path)
+        ):  # pragma: no cover; kvikio is optional
             # We're OK to use `kvikio.RemoteFile.open` here. It does make an HTTP HEAD
             # request for S3/HTTP endpoints, but that's the entire reason we're running
             # this code. So long as it makes just *one* HTTP request, there's no advantage
