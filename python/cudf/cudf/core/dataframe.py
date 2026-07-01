@@ -5027,8 +5027,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         )
                     else:
                         key_names = list(
-                            set(self._column_names)
-                            & set(right._column_names)
+                            set(self._column_names) & set(right._column_names)
                         )
                     for name in key_names:
                         if name not in self._data:

@@ -18,7 +18,6 @@ from cudf.core.dtype.validators import (
     is_dtype_obj_numeric,
     is_dtype_obj_string,
 )
-from cudf.core.dtypes import CategoricalDtype
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
     _ColumnIndexer,
@@ -309,12 +308,12 @@ class Merge:
                 # (a numeric-looking string is NOT silently parsed). Empty
                 # keys are inferred as ``empty`` rather than ``string`` by
                 # pandas and so are exempt from this check.
-                l_num = is_dtype_obj_numeric(lcol.dtype) and lcol.dtype.kind in (
-                    "iuf"
-                )
-                r_num = is_dtype_obj_numeric(rcol.dtype) and rcol.dtype.kind in (
-                    "iuf"
-                )
+                l_num = is_dtype_obj_numeric(
+                    lcol.dtype
+                ) and lcol.dtype.kind in ("iuf")
+                r_num = is_dtype_obj_numeric(
+                    rcol.dtype
+                ) and rcol.dtype.kind in ("iuf")
                 l_str = is_dtype_obj_string(lcol.dtype)
                 r_str = is_dtype_obj_string(rcol.dtype)
                 if (l_str and r_num) or (r_str and l_num):
@@ -458,8 +457,12 @@ class Merge:
         # A renamed label colliding with a non-renamed label on the other side.
         right_not_renamed = set(right_names) - set(to_rename)
         left_not_renamed = set(left_names) - set(to_rename)
-        dups.extend(label for label in set(llabels) if label in right_not_renamed)
-        dups.extend(label for label in set(rlabels) if label in left_not_renamed)
+        dups.extend(
+            label for label in set(llabels) if label in right_not_renamed
+        )
+        dups.extend(
+            label for label in set(rlabels) if label in left_not_renamed
+        )
         if dups:
             from pandas.errors import MergeError
 
@@ -638,9 +641,7 @@ class Merge:
             )
         )
         index: Index | None
-        if (
-            self._left_index_flag and self._right_index_flag
-        ) or both_on_index:
+        if (self._left_index_flag and self._right_index_flag) or both_on_index:
             index = left_result.index
         elif self._right_index_flag:
             # right_index (+ left_on): result index is the mapped left index.
