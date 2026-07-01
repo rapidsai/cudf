@@ -4950,55 +4950,97 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 result = result.iloc[:, new_indices]
 
         if how != "cross":
-            # pandas presents a retained (shared-name) join key with the LEFT
-            # operand's original dtype. When at least one side is a pandas
-            # extension dtype (nullable/pyarrow), cudf's internal common-type
-            # promotion can change the presented dtype, so restore it here.
-            # (Purely numpy<->numpy key promotion is left untouched.)
+            orig_how = "right" if is_right_join else how
             if is_right_join:
                 key_on, key_lon, key_ron = orig_on, orig_left_on, orig_right_on
                 key_li, key_ri = orig_left_index, orig_right_index
             else:
                 key_on, key_lon, key_ron = on, left_on, right_on
                 key_li, key_ri = left_index, right_index
+
+            def _restore_key_dtype(name, target, right_dtype):
+                # Restore a result key column to ``target`` to match pandas.
+                if name not in result._data:
+                    return
+                # Categorical keys follow the (de)categorization rules applied
+                # during the join itself.
+                if isinstance(target, CategoricalDtype) or isinstance(
+                    right_dtype, CategoricalDtype
+                ):
+                    return
+                if result._data[name].dtype == target:
+                    return
+                # Do not undo the numpy int -> float64 upcast that unmatched
+                # rows require.
+                if (
+                    isinstance(target, np.dtype)
+                    and result._data[name].null_count
+                ):
+                    return
+                result[name] = result[name].astype(target)
+
+            def _keep_left_dtype(target, right_dtype):
+                # pandas presents a shared-name key with the LEFT dtype when an
+                # extension dtype is involved (all joins) or for inner/left
+                # joins; right/outer numpy keys take the common type.
+                one_extension = (not isinstance(target, np.dtype)) or (
+                    right_dtype is not None
+                    and not isinstance(right_dtype, np.dtype)
+                )
+                return one_extension or orig_how in {
+                    "inner",
+                    "left",
+                    "leftsemi",
+                    "leftanti",
+                }
+
             if not key_li and not key_ri:
-                if key_on is not None:
-                    key_names = (
-                        [key_on] if is_scalar(key_on) else list(key_on)
-                    )
-                elif key_lon is not None and key_ron is not None:
+                if key_lon is not None and key_ron is not None:
                     lon = [key_lon] if is_scalar(key_lon) else list(key_lon)
                     ron = [key_ron] if is_scalar(key_ron) else list(key_ron)
-                    key_names = [
-                        lk
-                        for lk, rk in zip(lon, ron, strict=True)
-                        if lk == rk
-                    ]
+                    for lk, rk in zip(lon, ron, strict=True):
+                        if lk == rk:
+                            if lk in self._data:
+                                target = self._data[lk].dtype
+                                rd = (
+                                    right._data[lk].dtype
+                                    if lk in right._data
+                                    else None
+                                )
+                                if _keep_left_dtype(target, rd):
+                                    _restore_key_dtype(lk, target, rd)
+                        else:
+                            # Differently-named keys both survive, each with
+                            # its own operand's dtype.
+                            if lk in self._data:
+                                _restore_key_dtype(
+                                    lk, self._data[lk].dtype, None
+                                )
+                            if rk in right._data:
+                                _restore_key_dtype(
+                                    rk, right._data[rk].dtype, None
+                                )
                 else:
-                    key_names = list(
-                        set(self._column_names) & set(right._column_names)
-                    )
-                for name in key_names:
-                    if name not in self._data or name not in result._data:
-                        continue
-                    target = self._data[name].dtype
-                    right_dtype = (
-                        right._data[name].dtype
-                        if name in right._data
-                        else None
-                    )
-                    # Categorical keys follow pandas' (de)categorization rules
-                    # handled during the join itself, not this restoration.
-                    if isinstance(target, CategoricalDtype) or isinstance(
-                        right_dtype, CategoricalDtype
-                    ):
-                        continue
-                    one_extension = (not isinstance(target, np.dtype)) or (
-                        right_dtype is not None
-                        and not isinstance(right_dtype, np.dtype)
-                    )
-                    if one_extension and result._data[name].dtype != target:
-                        result[name] = result[name].astype(target)
+                    if key_on is not None:
+                        key_names = (
+                            [key_on] if is_scalar(key_on) else list(key_on)
+                        )
+                    else:
+                        key_names = list(
+                            set(self._column_names)
+                            & set(right._column_names)
+                        )
+                    for name in key_names:
+                        if name not in self._data:
+                            continue
+                        target = self._data[name].dtype
+                        rd = (
+                            right._data[name].dtype
+                            if name in right._data
+                            else None
+                        )
+                        if _keep_left_dtype(target, rd):
+                            _restore_key_dtype(name, target, rd)
 
         return result
 

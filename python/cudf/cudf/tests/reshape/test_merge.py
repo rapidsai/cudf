@@ -828,7 +828,8 @@ def test_typecast_on_join_no_float_round():
     exp_join_data = [1, 2, 3, 4, 5]
     exp_Bx = ["a", "b", "c", "d", "e"]
     exp_By = ["a", "b", "c", None, None]
-    exp_join_col = cudf.Series(exp_join_data, dtype="float32")
+    # A left join keeps the left key's dtype (int8), matching pandas.
+    exp_join_col = cudf.Series(exp_join_data, dtype="int8")
 
     expect = cudf.DataFrame(
         {"join_col": exp_join_col, "B_x": exp_Bx, "B_y": exp_By}
