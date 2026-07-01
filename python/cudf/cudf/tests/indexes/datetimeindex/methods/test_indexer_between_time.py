@@ -96,6 +96,29 @@ def test_indexer_between_time_nanosecond_resolution():
     )
 
 
+@pytest.mark.parametrize("tz", ["US/Eastern", "UTC", "Asia/Kolkata"])
+@pytest.mark.parametrize(
+    "start_time, end_time", [("08:00", "10:00"), ("23:00", "01:00")]
+)
+def test_indexer_between_time_timezone(tz, start_time, end_time):
+    # A tz-aware index must filter on local wall-clock time, matching pandas
+    # (which uses the local timestamps), including the wrap-around branch.
+    pd_dti = pd.DatetimeIndex(
+        [
+            "2024-01-01 09:00:00",
+            "2024-01-01 23:30:00",
+            "2024-01-02 00:30:00",
+        ],
+        tz=tz,
+    )
+    cudf_dti = cudf.from_pandas(pd_dti)
+
+    assert_eq(
+        cudf_dti.indexer_between_time(start_time, end_time),
+        pd_dti.indexer_between_time(start_time, end_time),
+    )
+
+
 def test_indexer_between_time_empty():
     pd_dti = pd.DatetimeIndex([])
     cudf_dti = cudf.from_pandas(pd_dti)
