@@ -242,6 +242,7 @@ repos:
             recipe[.]yaml$|
             dependencies[.]yaml$|
             pytest[.]ini$|
+            ^[.]clang-format$|
             ^[.]pre-commit-config[.]yaml$|
             Makefile$
         # TODO: Remove FindCUDAToolkit once we require CMake 4.4
