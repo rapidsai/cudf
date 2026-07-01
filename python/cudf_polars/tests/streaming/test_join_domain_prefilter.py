@@ -5,8 +5,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+import pytest
+
 import polars as pl
 
+from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import Join, Scan, Select
@@ -16,9 +19,13 @@ from cudf_polars.streaming.join_domain_prefilter import (
     _smallest_node_containing_all,
     optimize_join_domain_prefilters,
 )
+from cudf_polars.streaming.statistics import collect_statistics
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
+    import concurrent.futures
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import SerializedDataSourceInfo
 
@@ -165,6 +172,46 @@ def test_domain_prefilter_is_independent_of_dynamic_planning() -> None:
     )
 
     assert _joins(optimized, "Semi")
+
+
+@pytest.mark.parametrize(
+    "nulls_equal", [False, True], ids=["nulls_not_equal", "nulls_equal"]
+)
+def test_nullable_join_keys_preserve_results(
+    nulls_equal: bool,  # noqa: FBT001
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+) -> None:
+    domain = pl.LazyFrame(
+        {
+            "key": [None, 1, 2, 9],
+            "active": [True, True, True, False],
+        }
+    ).filter("active")
+    target = pl.LazyFrame(
+        {
+            "key": [None, 1, 2, 3] * 10,
+            "value": range(40),
+        }
+    )
+    query = domain.join(target, on="key", nulls_equal=nulls_equal)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"join_domain_prefilter": {"enabled": True, "threshold": 0.5}},
+    )
+
+    ir = Translator(query._ldf.visit(), engine).translate_ir()
+    config = ConfigOptions.from_polars_engine(engine)
+    optimized = optimize_join_domain_prefilters(
+        ir,
+        collect_statistics(ir, config, parquet_stats_executor),
+        config,
+    )
+
+    semi_joins = _joins(optimized, "Semi")
+    assert semi_joins
+    assert all(join.options[1] is nulls_equal for join in semi_joins)
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:
