@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -311,6 +312,17 @@ constexpr inline auto is_byte_like_type()
 }
 
 /**
+ * @brief A file path with an optional known size in bytes.
+ *
+ * When `size` is set for a remote URL, the IO backend may skip querying the remote server for file
+ * size at open time.
+ */
+struct filepath_source {
+  std::string path;                   ///< Path or URL of the input file
+  std::optional<std::size_t> size{};  ///< Known file size; omit to query size at open time
+};
+
+/**
  * @brief Source information for read interfaces
  */
 struct source_info {
@@ -325,8 +337,13 @@ struct source_info {
    * @param file_paths Input files paths
    */
   explicit source_info(std::vector<std::string> file_paths)
-    : _type(io_type::FILEPATH), _num_sources(file_paths.size()), _filepaths(std::move(file_paths))
+    : _type(io_type::FILEPATH), _num_sources(file_paths.size())
   {
+    _filepath_sources.reserve(file_paths.size());
+    for (auto& path : file_paths) {
+      _filepath_sources.push_back({std::move(path), std::nullopt});
+    }
+    rebuild_filepaths();
   }
 
   /**
@@ -335,8 +352,19 @@ struct source_info {
    * @param file_path Single input file
    */
   explicit source_info(std::string file_path)
-    : _type(io_type::FILEPATH), _num_sources(1), _filepaths({std::move(file_path)})
+    : source_info(std::vector<std::string>{std::move(file_path)})
   {
+  }
+
+  /**
+   * @brief Construct a new source info object from filepath sources with optional known sizes
+   *
+   * @param sources Input filepath sources
+   */
+  explicit source_info(std::vector<filepath_source> sources)
+    : _type(io_type::FILEPATH), _num_sources(sources.size()), _filepath_sources(std::move(sources))
+  {
+    rebuild_filepaths();
   }
 
   /**
@@ -425,6 +453,12 @@ struct source_info {
    */
   [[nodiscard]] auto type() const { return _type; }
   /**
+   * @brief Get the filepath sources of the input
+   *
+   * @return The filepath sources of the input
+   */
+  [[nodiscard]] auto const& filepath_sources() const { return _filepath_sources; }
+  /**
    * @brief Get the filepaths of the input
    *
    * @return The filepaths of the input
@@ -457,8 +491,18 @@ struct source_info {
   [[nodiscard]] auto num_sources() const { return _num_sources; }
 
  private:
+  void rebuild_filepaths()
+  {
+    _filepaths.clear();
+    _filepaths.reserve(_filepath_sources.size());
+    for (auto const& source : _filepath_sources) {
+      _filepaths.push_back(source.path);
+    }
+  }
+
   io_type _type       = io_type::VOID;
   size_t _num_sources = 0;
+  std::vector<filepath_source> _filepath_sources;
   std::vector<std::string> _filepaths;
   std::vector<cudf::host_span<std::byte const>> _host_buffers;
   std::vector<cudf::device_span<std::byte const>> _device_buffers;
@@ -964,7 +1008,7 @@ class reader_column_schema {
    *
    * @param child_span span of child schema objects
    */
-  reader_column_schema(host_span<reader_column_schema> const& child_span)
+  reader_column_schema(std::span<reader_column_schema> const& child_span)
   {
     children.assign(child_span.begin(), child_span.end());
   }
