@@ -3154,18 +3154,74 @@ class Series(SingleColumnFrame, IndexedFrame):
             #    match), and
             #  * the result is a nullable BooleanDtype with no missing values.
             numpy_dtype = self.dtype.numpy_dtype
-            na_mask = self._column.isnull()
-            placeholder = False if numpy_dtype.kind == "b" else 0
-            data_col = self._column.astype(numpy_dtype).fillna(placeholder)
-            # NA-like sentinels (pd.NA/None/NaT) never match a real value and
-            # would otherwise raise when mixed with numeric values; NA rows
-            # are handled by the mask below instead.
-            cleaned_values = [
-                value for value in values if not is_na_like(value)
-            ]
-            result_col = data_col.isin(cleaned_values)
+            # Validity-only nulls (ColumnBase.isnull): a genuine NaN value
+            # in a masked float column is data, not NA - it must keep
+            # matching a NaN needle instead of being folded into the mask
+            # (NumericalColumn.isnull would count it as null).
+            na_mask = ColumnBase.isnull(self._column)
+            # View the column through its numpy dtype (identical physical
+            # layout). astype is not used because casting a masked column
+            # with nulls to numpy raises in pandas-compatible mode, and
+            # its short-circuit mutates the live column's dtype in place;
+            # fillna is not used because it folds genuine NaN values into
+            # the fill. Null rows come back False from ``isin`` (the
+            # needles below never contain nulls) and are then corrected
+            # from ``na_mask``.
+            data_col = ColumnBase.create(self._column.plc_column, numpy_dtype)
+            # Bring device-backed ``values`` to host in a single transfer;
+            # the per-element inspection below would otherwise read them
+            # element-wise or fail on non-iterable cudf objects.
+            if isinstance(values, (Series, Index)):
+                values = values.to_pandas()
+            elif isinstance(values, cp.ndarray):
+                values = cp.asnumpy(values)
+            elif isinstance(values, (pa.Array, pa.ChunkedArray)):
+                values = values.to_pylist()
+            if isinstance(
+                values, (pd.Series, pd.Index, pd.api.extensions.ExtensionArray)
+            ):
+                # np.asarray mirrors pandas' BaseMaskedArray.isin: a masked
+                # (or other extension) container decays to numpy, where
+                # pd.NA becomes NaN and no longer matches NA rows - only
+                # object containers can carry pd.NA identity.
+                values = np.asarray(values)
+            elif not isinstance(values, np.ndarray):
+                # Materialize one-shot iterators so the single pass below
+                # is the only traversal.
+                values = list(values)
+            # NA-like sentinels never match a real value and would otherwise
+            # raise when mixed with numeric values, so they are dropped from
+            # the needles; NA rows are handled by the mask below instead.
+            if isinstance(values, np.ndarray) and values.dtype != object:
+                # A non-object array cannot hold pd.NA, and NaT is the only
+                # NA-like value it can hold (NaN is a matchable value), so
+                # no Python-level scan is needed.
+                values_have_NA = False
+                cleaned_values = (
+                    values[~np.isnat(values)]
+                    if values.dtype.kind in "mM"
+                    else values
+                )
+            else:
+                # ``values`` is a list or an object array here; a single
+                # Python pass mirrors pandas' pd.NA identity scan.
+                cleaned_values = []
+                values_have_NA = False
+                for value in values:
+                    if value is pd.NA:
+                        values_have_NA = True
+                    elif not is_na_like(value):
+                        cleaned_values.append(value)
+            if len(cleaned_values) == 0:
+                # Nothing can match; also avoids the object-dtype column an
+                # empty needle list produces, which an all-null data_col
+                # cannot be compared against in pandas-compatible mode.
+                result_col = as_column(
+                    False, length=len(self), dtype=np.dtype(np.bool_)
+                )
+            else:
+                result_col = data_col.isin(cleaned_values)
             if na_mask.any():
-                values_have_NA = any(value is pd.NA for value in values)
                 result_col = (
                     result_col | na_mask
                     if values_have_NA
