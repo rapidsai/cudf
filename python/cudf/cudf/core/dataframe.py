@@ -581,8 +581,16 @@ def _listlike_to_column_accessor(
         if index is None:
             index = cudf.RangeIndex(0)
         if columns is not None:
+            # An empty (zero-row) column with no data has no inferable type;
+            # default it to ``object`` to match pandas (cudf otherwise uses
+            # the default string dtype). Scoped to zero-row columns so the
+            # padded case keeps the string dtype and does not surface the
+            # inherent None-vs-NaN difference.
+            empty_col_dtype = (
+                np.dtype("object") if len(index) == 0 else DEFAULT_STRING_DTYPE
+            )
             col_data = {
-                col_label: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
+                col_label: column_empty(len(index), dtype=empty_col_dtype)
                 for col_label in columns
             }
         else:
@@ -1097,7 +1105,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     index = index[:0]
                     col_accessor = ColumnAccessor(
                         {
-                            col: column_empty(0, dtype=DEFAULT_STRING_DTYPE)
+                            # Zero-row no-data columns default to ``object``
+                            # to match pandas.
+                            col: column_empty(0, dtype=np.dtype("object"))
                             for col in columns
                         },
                         verify=False,
@@ -1115,9 +1125,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if index is None:
                 index = RangeIndex(0)
             if columns is not None:
+                # Zero-row no-data columns default to ``object`` to match
+                # pandas; padded columns keep the string dtype.
+                empty_col_dtype = (
+                    np.dtype("object")
+                    if len(index) == 0
+                    else DEFAULT_STRING_DTYPE
+                )
                 col_accessor = ColumnAccessor(
                     {
-                        k: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
+                        k: column_empty(len(index), dtype=empty_col_dtype)
                         for k in columns
                     },
                     verify=False,
