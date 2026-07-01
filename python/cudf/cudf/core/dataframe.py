@@ -4240,16 +4240,27 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
             if level is not None and isinstance(self.index, MultiIndex):
-                level = self.index._get_level_label(level)
+                # Resolve to the ColumnAccessor label (e.g. the positional key
+                # ``0`` for an unnamed level), NOT the level *name* (which is
+                # ``None`` for unnamed levels and would insert a spurious extra
+                # column rather than overwrite the level being renamed).
+                ca_label, _ = self.index._level_to_ca_label(level)
                 level_values = self.index.get_level_values(level)
                 ca = self.index._data.copy(deep=copy)
-                ca[level] = level_values._column.find_and_replace(
+                vals = list(index.values())
+                is_all_na = all(val is None for val in vals)
+                ca[ca_label] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
-                    replacement=list(index.values()),
+                    replacement=vals,
+                    all_nan=is_all_na,
                 )
                 out_index = type(self.index)._from_data(
                     ca, name=self.index.name
                 )
+                # ``_from_data`` derives level names from the ColumnAccessor
+                # keys (positional ints for an unnamed MultiIndex); restore the
+                # original level names so renaming a level does not rename it.
+                out_index.names = self.index.names
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())

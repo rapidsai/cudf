@@ -148,3 +148,24 @@ def test_rename_for_level_is_None_MC():
     got = gdf.rename(columns={"a": "f"}, level=None)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("level", [0, 1])
+def test_rename_for_level_unnamed_MultiIndex_dataframe(level):
+    # GH: renaming a level of an *unnamed* MultiIndex must overwrite that
+    # level rather than insert a spurious extra level (the level name is
+    # ``None``, so it cannot be used as the ColumnAccessor key).
+    pdf = pd.DataFrame(
+        {"d": [0, 1, 2]},
+        index=pd.MultiIndex.from_arrays(
+            [["A", "B", "B"], ["cat", "cat", "cat"]]
+        ),
+    )
+    gdf = cudf.from_pandas(pdf)
+    mapper = {"A": "Apple", "B": "B"}
+
+    expect = pdf.rename(index=mapper, level=level)
+    got = gdf.rename(index=mapper, level=level)
+
+    assert_eq(expect, got)
+    assert got.index.nlevels == 2
