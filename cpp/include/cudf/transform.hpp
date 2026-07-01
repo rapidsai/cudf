@@ -180,6 +180,63 @@ std::unique_ptr<table> multi_transform(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief The type of LTO Binary
+ */
+enum class lto_binary_type : uint8_t {
+  LTO_IR,  //< LTO-IR binary
+  FATBIN   //< FATBIN binary
+};
+
+/**
+ * @brief Creates a new column by applying a transform function against every
+ * element of the input columns.
+ *
+ * Computes:
+ * `(output[i]) =  UDF(input[i])`.
+ *
+ *
+ * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
+ * @throws std::invalid_argument if `output_type` or any of the inputs are not fixed-width or string
+ * types
+ * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
+ * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
+ * this case.
+ * @throws std::invalid_argument if string offsets are provided for non-string output columns, or
+ * if the number of string offsets does not match the number of output columns.
+ *
+ * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
+ * the input and pre-allocated output columns.
+ *
+ * @param udf The LTO-IR string of the transform function to apply. The UDF must be named
+ * `transform` and follow the CUDF UDF ABI.
+ * @param binary_type   The type of the LTO binary provided in `udf`
+ * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param user_data     User-defined device data to pass to the UDF.
+ * @param inputs        Immutable view of the input to transform
+ * @param outputs       Specification of the output columns to be created
+ * @param string_offsets For string output columns, the offsets can be pre-allocated and passed in
+ * to prevent overhead of compacting string views into run-end strings column.
+ * @param row_size   The row size of the transform operation. If not provided, it is inferred
+ * from the input columns.
+ * @param stream        CUDA stream used for device memory operations and kernel launches
+ * @param mr            Device memory resource used to allocate the returned column's device memory
+ * @return              A table resulting from applying the transform function to every element of
+ * the input according to the output specifications
+ *
+ */
+std::unique_ptr<table> transform_lto(
+  std::span<uint8_t const> udf,
+  lto_binary_type binary_type,
+  null_aware is_null_aware,
+  std::optional<void*> user_data,
+  std::span<transform_input const> inputs,
+  std::span<transform_output const> outputs,
+  std::vector<std::unique_ptr<column>>&& string_offsets,
+  std::optional<size_type> row_size,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Creates a null_mask from `input` by converting `NaN` to null and
  * preserving existing null values and also returns new null_count.
  *

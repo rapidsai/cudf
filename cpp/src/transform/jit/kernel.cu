@@ -32,8 +32,26 @@
 #include <cudf/detail/operation_udf.cuh>
 // clang-format on
 
+#ifndef CUDF_LTO_MODE
+#define CUDF_UDF_TYPE int()
+#endif
+
+// Use LTO-dispatch for transform operators if we're in LTO mode. This allows the operator to be
+// defined in a separate translation unit and compiled with LTO, which can result in better
+// performance due to more optimization opportunities
+#ifdef CUDF_LTO_MODE
+#define GENERIC_TRANSFORM_OP(...) ::cudf::jit::lto::transform(__VA_ARGS__)
+#endif
+
 namespace cudf {
 namespace jit {
+namespace lto {
+
+using transform_type = CUDF_UDF_TYPE;
+
+extern "C" __device__ transform_type transform;
+
+}  // namespace lto
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
 template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
