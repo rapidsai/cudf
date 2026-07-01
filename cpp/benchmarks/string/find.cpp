@@ -109,7 +109,7 @@ static void bench_find_string_skewed(nvbench::state& state)
 
   auto const mem_stats_logger = cudf::memory_stats_logger();
   state.exec(nvbench::exec_tag::sync,
-             [&](nvbench::launch& launch) { cudf::strings::contains(input, target); });
+             [&](nvbench::launch&) { cudf::strings::contains(input, target); });
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
