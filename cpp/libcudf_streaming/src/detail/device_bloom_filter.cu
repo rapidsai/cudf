@@ -33,7 +33,9 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <cudf_streaming/detail/device_bloom_filter.hpp>
+#include <cudf_streaming/detail/large_arrow_filter_policy.cuh>
 
+#include <rmm/aligned.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/resource_ref.hpp>
 
@@ -58,16 +60,25 @@ using BloomFilterRefType =
   cuco::bloom_filter_ref<KeyType,
                          cuco::extent<std::size_t>,
                          cuco::thread_scope_device,
-                         cuco::arrow_filter_policy<KeyType, cuco::identity_hash>>;
+                         large_arrow_filter_policy<KeyType, cuco::identity_hash>>;
 using StorageType = BloomFilterRefType::filter_block_type;
+
+std::size_t num_blocks(std::size_t filter_size)
+{
+  RAPIDSMPF_EXPECTS(filter_size >= sizeof(StorageType),
+                    "Bloom filter storage must contain at least one filter block");
+  RAPIDSMPF_EXPECTS(filter_size == device_bloom_filter::aligned_size(filter_size),
+                    "Bloom filter storage size must be a multiple of the filter block size");
+  return filter_size / sizeof(StorageType);
+}
 
 }  // namespace
 
-device_bloom_filter::device_bloom_filter(std::size_t num_blocks,
+device_bloom_filter::device_bloom_filter(std::size_t filter_size,
                                          std::uint64_t seed,
                                          void* storage,
                                          rmm::cuda_stream_view stream)
-  : num_blocks_{num_blocks}, seed_{seed}, storage_{storage}, stream_{stream}
+  : num_blocks_{num_blocks(filter_size)}, seed_{seed}, storage_{storage}, stream_{stream}
 {
   // TODO: use an aligned allocator adaptor to ensure this holds.
   // Today all RMM device allocators guarantee at least 256 byte alignment, but that is
@@ -77,21 +88,27 @@ device_bloom_filter::device_bloom_filter(std::size_t num_blocks,
     "Allocation for bloom filter is not aligned.");
 }
 
-device_bloom_filter const device_bloom_filter::view(std::size_t num_blocks,
+device_bloom_filter const device_bloom_filter::view(std::size_t filter_size,
                                                     std::uint64_t seed,
                                                     void const* storage,
                                                     rmm::cuda_stream_view stream)
 {
   // const-cast is safe because the returned object is also const and therefore can't
   // call methods that throw away constness.
-  return device_bloom_filter(num_blocks, seed, const_cast<void*>(storage), stream);
+  return device_bloom_filter(filter_size, seed, const_cast<void*>(storage), stream);
 }
 
-std::unique_ptr<rmm::device_buffer> device_bloom_filter::storage(std::size_t num_blocks,
+std::unique_ptr<rmm::device_buffer> device_bloom_filter::storage(std::size_t filter_size,
                                                                  rmm::cuda_stream_view stream,
                                                                  rmm::device_async_resource_ref mr)
 {
-  return std::make_unique<rmm::device_buffer>(num_blocks * sizeof(StorageType), stream, mr);
+  return std::make_unique<rmm::device_buffer>(
+    num_blocks(filter_size) * sizeof(StorageType), stream, mr);
+}
+
+std::size_t device_bloom_filter::aligned_size(std::size_t size) noexcept
+{
+  return rmm::align_down(size, sizeof(StorageType));
 }
 
 void device_bloom_filter::add(cudf::table_view const& values_to_hash,
@@ -133,11 +150,6 @@ rmm::device_uvector<bool> device_bloom_filter::contains(cudf::table_view const& 
   rmm::device_uvector<bool> result{static_cast<std::size_t>(view.size()), stream, mr};
   filter_ref.contains_async(view.begin<KeyType>(), view.end<KeyType>(), result.begin(), stream);
   return result;
-}
-
-std::size_t device_bloom_filter::fitting_num_blocks(std::size_t l2size) noexcept
-{
-  return (l2size * 2) / (3 * sizeof(StorageType));
 }
 
 rmm::cuda_stream_view device_bloom_filter::stream() const noexcept { return stream_; }
