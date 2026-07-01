@@ -14,6 +14,7 @@ from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.utility cimport move
 
 from pylibcudf.libcudf.column.column cimport column, column_contents
+from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.column.column_factories cimport make_column_from_scalar
 from pylibcudf.libcudf.copying cimport get_element
 from pylibcudf.libcudf.interop cimport (
@@ -332,7 +333,7 @@ cdef class Column:
         The number of null rows in the column.
     offset : int
         The offset into the data buffer where the column's data begins.
-    children : list
+    children : Iterable[Column]
         The children of this column if it is a compound column type.
     validate : bool, default True
         Whether to validate that data and mask satisfy Span protocol.
@@ -342,8 +343,9 @@ cdef class Column:
     def __init__(
         self, DataType data_type not None, size_type size, object data,
         object mask, size_type null_count, size_type offset,
-        list children, bint validate=True
+        children, bint validate=True
     ):
+        children = list(children)
         if not all(isinstance(c, Column) for c in children):
             raise ValueError("All children must be pylibcudf Column objects")
 
@@ -533,7 +535,7 @@ cdef class Column:
         else:
             raise ValueError("Invalid Arrow-like object")
 
-    cdef column_view view(self) nogil:
+    cdef column_view view(self):
         """Generate a libcudf column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -545,37 +547,26 @@ cdef class Column:
         cdef size_t data_ptr
         cdef size_t mask_ptr
 
-        with gil:
-            if self._data is not None:
-                data_ptr = <size_t>self._data.ptr
-                data = <void*>data_ptr
-            if self._mask is not None:
-                mask_ptr = <size_t>self._mask.ptr
-                null_mask = <bitmask_type*>mask_ptr
+        if self._data is not None:
+            data_ptr = <size_t>self._data.ptr
+            data = <void*>data_ptr
+        if self._mask is not None:
+            mask_ptr = <size_t>self._mask.ptr
+            null_mask = <bitmask_type*>mask_ptr
 
         # TODO: Check if children can ever change. If not, this could be
         # computed once in the constructor and always be reused.
         cdef vector[column_view] c_children
-        with gil:
-            if self._children is not None:
-                for child in self._children:
-                    # Need to cast to Column here so that Cython knows that
-                    # `view` returns a typed object, not a Python object. We
-                    # cannot use a typed variable for `child` because cdef
-                    # declarations cannot be inside nested blocks (`if` or
-                    # `with` blocks) so we cannot declare it inside the `with
-                    # gil` block, but we also cannot declare it outside the
-                    # `with gil` block because it is erroneous to declare a
-                    # variable of a cdef class type in a `nogil` context (which
-                    # this whole function is).
-                    c_children.push_back((<Column> child).view())
+        if self._children is not None:
+            for child in self._children:
+                c_children.push_back((<Column> child).view())
 
         return column_view(
             self._data_type.c_obj, self._size, data, null_mask,
             self._null_count, self._offset, c_children
         )
 
-    cdef mutable_column_view mutable_view(self) nogil:
+    cdef mutable_column_view mutable_view(self):
         """Generate a libcudf mutable_column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -587,20 +578,18 @@ cdef class Column:
         cdef size_t data_ptr
         cdef size_t mask_ptr
 
-        with gil:
-            if self._data is not None:
-                data_ptr = <size_t>self._data.ptr
-                data = <void*>data_ptr
-            if self._mask is not None:
-                mask_ptr = <size_t>self._mask.ptr
-                null_mask = <bitmask_type*>mask_ptr
+        if self._data is not None:
+            data_ptr = <size_t>self._data.ptr
+            data = <void*>data_ptr
+        if self._mask is not None:
+            mask_ptr = <size_t>self._mask.ptr
+            null_mask = <bitmask_type*>mask_ptr
 
         cdef vector[mutable_column_view] c_children
-        with gil:
-            if self._children is not None:
-                for child in self._children:
-                    # See the view method for why this needs to be cast.
-                    c_children.push_back((<Column> child).mutable_view())
+        if self._children is not None:
+            for child in self._children:
+                # See the view method for why this needs to be cast.
+                c_children.push_back((<Column> child).mutable_view())
 
         return mutable_column_view(
             self._data_type.c_obj, self._size, data, null_mask,
@@ -612,7 +601,7 @@ cdef class Column:
         DeviceBuffer buff,
         DataType dtype,
         size_type size,
-        list children,
+        children,
     ):
         """
         Create a Column from an RMM DeviceBuffer.
@@ -625,14 +614,15 @@ cdef class Column:
             The number of rows in the column.
         dtype : DataType
             The type of the data in the buffer.
-        children : list
-            List of child columns.
+        children : Iterable[Column]
+            The child columns.
 
         Notes
         -----
         To provide a mask and null count, use `Column.with_mask` after
         this method.
         """
+        children = list(children)
         if plc_is_fixed_width(dtype) and len(children) != 0:
             raise ValueError("Fixed-width types must have zero children.")
         elif dtype.id() == type_id.STRING and len(children) != 1:
@@ -1271,6 +1261,8 @@ cdef class Column:
         NotImplementedError
             If the column type is not fixed-width or string.
         """
+        cdef column_view c_self
+
         cdef type_id dtype = self.type().id()
         cdef bint large_offsets = (
             dtype == type_id.STRING
@@ -1280,8 +1272,9 @@ cdef class Column:
         cdef Stream _stream = _get_stream(None)
         cdef cudaStream_t _cs = _stream.view().value()
         cdef ArrowArray* raw_host_array_ptr = NULL
+        c_self = self.view()
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
+            raw_host_array_ptr = to_arrow_host_raw(c_self, _cs)
         try:
             return _arrow_to_pylist_impl(dtype, raw_host_array_ptr, large_offsets)
         finally:
@@ -1408,9 +1401,11 @@ cdef class Column:
         cdef unique_ptr[column] c_result
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
+
         mr = _get_memory_resource(mr)
+        cdef column_view c_self = self.view()
         with nogil:
-            c_result = make_unique[column](self.view(), _cs, mr.get_mr())
+            c_result = make_unique[column](c_self, _cs, mr.get_mr())
         return Column.from_libcudf(move(c_result), _stream, mr)
 
     cpdef uint64_t device_buffer_size(self):
@@ -1446,6 +1441,9 @@ cdef class Column:
 
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this Column."""
+
+        cdef column_view c_self
+
         if metadata is None:
             metadata = self._create_nested_column_metadata()
         elif isinstance(metadata, str):
@@ -1454,8 +1452,9 @@ cdef class Column:
         cdef column_metadata c_metadata = _metadata_to_libcudf(metadata)
 
         cdef ArrowSchema* raw_schema_ptr
+        c_self = self.view()
         with nogil:
-            raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
+            raw_schema_ptr = to_arrow_schema_raw(c_self, c_metadata)
 
         return PyCapsule_New(<void*>raw_schema_ptr, 'arrow_schema', _release_schema)
 
@@ -1463,15 +1462,19 @@ cdef class Column:
         cdef ArrowArray* raw_host_array_ptr
         cdef Stream _stream = _get_stream(stream)
         cdef cudaStream_t _cs = _stream.view().value()
+
+        cdef column_view c_self = self.view()
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view(), _cs)
+            raw_host_array_ptr = to_arrow_host_raw(c_self, _cs)
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
     def _to_device_array(self):
         cdef ArrowDeviceArray* raw_device_array_ptr
+
+        cdef column_view c_self = self.view()
         with nogil:
-            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
+            raw_device_array_ptr = to_arrow_device_raw(c_self, self)
 
         return PyCapsule_New(
             <void*>raw_device_array_ptr,
@@ -1517,7 +1520,7 @@ cdef class ListsColumnView:
         """The offsets column of the underlying list column."""
         return self._column.child(0)
 
-    cdef lists_column_view view(self) nogil:
+    cdef lists_column_view view(self):
         """Generate a libcudf lists_column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -1555,7 +1558,7 @@ cdef class StructsColumnView:
 
     __hash__ = None
 
-    cdef structs_column_view view(self) nogil:
+    cdef structs_column_view view(self):
         """Generate a libcudf structs_column_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
