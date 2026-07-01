@@ -169,7 +169,16 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
         return node
 
     left, right = node.children
-    target_filter = _make_target_filter(node, candidate)
+    domain = _make_domain(candidate, node)
+    target = candidate.target
+    target_filter = _make_semi_join(
+        target.node,
+        expr.Col(target.node.schema[target.column], target.column),
+        domain,
+        expr.Col(domain.schema[candidate.domain_key.name], candidate.domain_key.name),
+        nulls_equal=node.options[1],
+        suffix=node.options[3],
+    )
     # A DAG may share the target with the domain side, so only rewrite the
     # side for which this candidate was selected.
     if candidate.target_side == "left":
@@ -348,19 +357,6 @@ def _composite_candidates(
                 domain_constraint_key=domain_constraint_key,
                 target_constraint_key=target_constraint_key,
             )
-
-
-def _make_target_filter(ir: Join, candidate: _Candidate) -> Join:
-    domain = _make_domain(candidate, ir)
-    target = candidate.target
-    return _make_semi_join(
-        target.node,
-        expr.Col(target.node.schema[target.column], target.column),
-        domain,
-        expr.Col(domain.schema[candidate.domain_key.name], candidate.domain_key.name),
-        nulls_equal=ir.options[1],
-        suffix=ir.options[3],
-    )
 
 
 def _make_domain(candidate: _Candidate, ir: Join) -> IR:
