@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/ast/detail/expression_parser.hpp>
@@ -277,6 +277,59 @@ cudf::size_type expression_parser::visit(operation const& expr)
   _operator_source_indices.insert(_operator_source_indices.end(),
                                   operand_data_ref_indices.cbegin(),
                                   operand_data_ref_indices.cend());
+  _operator_source_indices.push_back(index);
+  return index;
+}
+
+cudf::size_type expression_parser::visit(cast const& expr)
+{
+  auto const expression_index = _expression_count++;
+  // Visit the operand
+  auto const operand_index = expr.get_operand().accept(*this);
+
+  // Give back intermediate storage consumed by the operand
+  auto const& operand_ref = _data_references[operand_index];
+  if (operand_ref.reference_type == detail::device_data_reference_type::INTERMEDIATE) {
+    _intermediate_counter.give(operand_ref.data_index);
+  }
+
+  // Determine the operator based on target type
+  auto const target_type = expr.get_target_type();
+  ast_operator op;
+  switch (target_type.id()) {
+    case type_id::DECIMAL32: op = ast_operator::CAST_TO_DECIMAL32; break;
+    case type_id::DECIMAL64: op = ast_operator::CAST_TO_DECIMAL64; break;
+    case type_id::DECIMAL128: op = ast_operator::CAST_TO_DECIMAL128; break;
+    case type_id::INT64: op = ast_operator::CAST_TO_INT64; break;
+    case type_id::UINT64: op = ast_operator::CAST_TO_UINT64; break;
+    case type_id::FLOAT64: op = ast_operator::CAST_TO_FLOAT64; break;
+    default: CUDF_FAIL("Unsupported cast target type."); break;
+  }
+
+  _operators.push_back(op);
+  _operator_arities.push_back(1);
+
+  // Use the target type directly (including scale for decimals) — bypass ast_operator_return_type
+  auto const output = [&]() {
+    if (expression_index == 0) {
+      return detail::device_data_reference(
+        detail::device_data_reference_type::COLUMN, target_type, 0, table_reference::OUTPUT);
+    } else {
+      if (!cudf::is_fixed_width(target_type)) {
+        CUDF_FAIL(
+          "The output data type is not a fixed-width type but must be stored in an intermediate.");
+      } else if (cudf::size_of(target_type) > (_has_nulls ? sizeof(IntermediateDataType<true>)
+                                                          : sizeof(IntermediateDataType<false>))) {
+        CUDF_FAIL("The output data type is too large to be stored in an intermediate.");
+      }
+      return detail::device_data_reference(detail::device_data_reference_type::INTERMEDIATE,
+                                           target_type,
+                                           _intermediate_counter.take());
+    }
+  }();
+
+  auto const index = add_data_reference(output);
+  _operator_source_indices.push_back(operand_index);
   _operator_source_indices.push_back(index);
   return index;
 }

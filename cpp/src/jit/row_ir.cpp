@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -72,6 +72,9 @@ inline ast::ast_operator as_ast_op(opcode op)
     case opcode::CAST_TO_INT64: return ast::ast_operator::CAST_TO_INT64;
     case opcode::CAST_TO_UINT64: return ast::ast_operator::CAST_TO_UINT64;
     case opcode::CAST_TO_FLOAT64: return ast::ast_operator::CAST_TO_FLOAT64;
+    case opcode::CAST_TO_DECIMAL32: return ast::ast_operator::CAST_TO_DECIMAL32;
+    case opcode::CAST_TO_DECIMAL64: return ast::ast_operator::CAST_TO_DECIMAL64;
+    case opcode::CAST_TO_DECIMAL128: return ast::ast_operator::CAST_TO_DECIMAL128;
     default: CUDF_FAIL("Invalid operator type.");
   }
 }
@@ -129,6 +132,9 @@ inline opcode as_opcode(ast::ast_operator op)
     case ast::ast_operator::CAST_TO_INT64: return opcode::CAST_TO_INT64;
     case ast::ast_operator::CAST_TO_UINT64: return opcode::CAST_TO_UINT64;
     case ast::ast_operator::CAST_TO_FLOAT64: return opcode::CAST_TO_FLOAT64;
+    case ast::ast_operator::CAST_TO_DECIMAL32: return opcode::CAST_TO_DECIMAL32;
+    case ast::ast_operator::CAST_TO_DECIMAL64: return opcode::CAST_TO_DECIMAL64;
+    case ast::ast_operator::CAST_TO_DECIMAL128: return opcode::CAST_TO_DECIMAL128;
     default: CUDF_FAIL("Invalid operator type.");
   }
 }
@@ -312,6 +318,15 @@ void node::instantiate(instance_context& ctx)
                    std::runtime_error);
       type_ = data_type{type_id::BOOL8};
     } break;
+    case opcode::CAST_TO_DECIMAL32: {
+      type_ = data_type{type_id::DECIMAL32, target_scale_.value_or(0)};
+    } break;
+    case opcode::CAST_TO_DECIMAL64: {
+      type_ = data_type{type_id::DECIMAL64, target_scale_.value_or(0)};
+    } break;
+    case opcode::CAST_TO_DECIMAL128: {
+      type_ = data_type{type_id::DECIMAL128, target_scale_.value_or(0)};
+    } break;
     default: {
       std::vector<data_type> arg_types;
       for (auto& arg : args_) {
@@ -353,6 +368,113 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
             args_[0]->get_id(),
             instance.get_output_vars()[std::get<output_reference>(reference_).index].id,
             id_));
+        } break;
+
+        case opcode::CAST_TO_DECIMAL32:
+        case opcode::CAST_TO_DECIMAL64:
+        case opcode::CAST_TO_DECIMAL128: {
+          CUDF_EXPECTS(
+            target_scale_.has_value(), "Decimal cast requires target scale", std::runtime_error);
+          auto const scale       = *target_scale_;
+          auto const neg_scale   = static_cast<int32_t>(-scale);
+          auto const& operand_id = args_[0]->get_id();
+
+          // Determine the rep type name and target decimal type name
+          std::string_view rep_type_name;
+          std::string_view decimal_type_name;
+          switch (op_) {
+            case opcode::CAST_TO_DECIMAL32:
+              rep_type_name     = "int32_t";
+              decimal_type_name = "numeric::decimal32";
+              break;
+            case opcode::CAST_TO_DECIMAL64:
+              rep_type_name     = "int64_t";
+              decimal_type_name = "numeric::decimal64";
+              break;
+            case opcode::CAST_TO_DECIMAL128:
+              rep_type_name     = "__int128_t";
+              decimal_type_name = "numeric::decimal128";
+              break;
+            default: CUDF_UNREACHABLE("Invalid decimal cast opcode");
+          }
+
+          // Determine the conversion code based on source operand type
+          // We check at codegen time to avoid if-constexpr issues in NVRTC
+          auto const src_type_id = args_[0]->get_type().id();
+          std::string conversion_code;
+          if (src_type_id == type_id::DECIMAL32 || src_type_id == type_id::DECIMAL64 ||
+              src_type_id == type_id::DECIMAL128) {
+            // Decimal-to-decimal: rescale using raw rep and scale difference
+            conversion_code = std::format(
+              "  auto _src_neg_ = static_cast<int32_t>(-_raw_.scale());\n"
+              "  auto _combined_ = {} - _src_neg_;\n"
+              "  if (_combined_ >= 0) {{\n"
+              "    _rep_ = static_cast<_RepT_>(_raw_.value()) * "
+              "numeric::detail::exp10<_RepT_>(_combined_);\n"
+              "  }} else {{\n"
+              "    _rep_ = static_cast<_RepT_>(_raw_.value()) / "
+              "numeric::detail::exp10<_RepT_>(-_combined_);\n"
+              "  }}\n",
+              neg_scale);
+          } else if (src_type_id == type_id::FLOAT32 || src_type_id == type_id::FLOAT64) {
+            // Float-to-decimal: multiply by 10^neg_scale
+            conversion_code = std::format(
+              "  auto _mult_ = numeric::detail::exp10<double>({});\n"
+              "  _rep_ = static_cast<_RepT_>(_raw_ * _mult_);\n",
+              neg_scale);
+          } else {
+            // Integer-to-decimal: multiply or divide depending on scale sign
+            if (neg_scale >= 0) {
+              conversion_code = std::format(
+                "  auto _mult_ = numeric::detail::exp10<_RepT_>({});\n"
+                "  _rep_ = static_cast<_RepT_>(_raw_) * _mult_;\n",
+                neg_scale);
+            } else {
+              conversion_code = std::format(
+                "  auto _div_ = numeric::detail::exp10<_RepT_>({});\n"
+                "  _rep_ = static_cast<_RepT_>(_raw_) / _div_;\n",
+                -neg_scale);
+            }
+          }
+
+          if (instance.has_nulls()) {
+            sink.emit(
+              std::format("{} {} = [&]() {{\n"
+                          "  auto _val_ = {};\n"
+                          "  if (!_val_.has_value()) return {{}};\n"
+                          "  auto _raw_ = *_val_;\n"
+                          "  using _RepT_ = {};\n"
+                          "  _RepT_ _rep_;\n"
+                          "{}"
+                          "  return {}{{{}{{numeric::scaled_integer<_RepT_>{{_rep_, "
+                          "numeric::scale_type{{{}}}}}}}}};\n"
+                          "}}();\n",
+                          type,
+                          id_,
+                          operand_id,
+                          rep_type_name,
+                          conversion_code,
+                          type,
+                          decimal_type_name,
+                          scale));
+          } else {
+            sink.emit(
+              std::format("{} {} = [&]() {{\n"
+                          "  auto _raw_ = {};\n"
+                          "  using _RepT_ = {};\n"
+                          "  _RepT_ _rep_;\n"
+                          "{}"
+                          "  return {}{{numeric::scaled_integer<_RepT_>{{_rep_, "
+                          "numeric::scale_type{{{}}}}}}};\n"
+                          "}}();\n",
+                          type,
+                          id_,
+                          operand_id,
+                          rep_type_name,
+                          conversion_code,
+                          decimal_type_name,
+                          scale));
+          }
         } break;
 
         default: {
@@ -426,6 +548,37 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::operation const& e
   }
   return std::make_unique<row_ir::node>(
     as_opcode(expr.get_operator()), std::nullopt, std::move(args));
+}
+
+std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::cast const& expr)
+{
+  auto operand     = expr.get_operand().accept(*this);
+  auto target_type = expr.get_target_type();
+
+  // Map the cast target type to the appropriate opcode
+  opcode cast_op;
+  switch (target_type.id()) {
+    case type_id::DECIMAL32: cast_op = opcode::CAST_TO_DECIMAL32; break;
+    case type_id::DECIMAL64: cast_op = opcode::CAST_TO_DECIMAL64; break;
+    case type_id::DECIMAL128: cast_op = opcode::CAST_TO_DECIMAL128; break;
+    case type_id::INT64: cast_op = opcode::CAST_TO_INT64; break;
+    case type_id::UINT64: cast_op = opcode::CAST_TO_UINT64; break;
+    case type_id::FLOAT64: cast_op = opcode::CAST_TO_FLOAT64; break;
+    default:
+      CUDF_FAIL("Unsupported cast target type for JIT: " +
+                  std::to_string(static_cast<int>(target_type.id())),
+                std::invalid_argument);
+  }
+
+  std::optional<int32_t> scale = std::nullopt;
+  if (target_type.id() == type_id::DECIMAL32 || target_type.id() == type_id::DECIMAL64 ||
+      target_type.id() == type_id::DECIMAL128) {
+    scale = target_type.scale();
+  }
+
+  std::vector<std::unique_ptr<row_ir::node>> args;
+  args.emplace_back(std::move(operand));
+  return std::make_unique<row_ir::node>(cast_op, scale, std::move(args));
 }
 
 std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::detail::predicate const& expr)

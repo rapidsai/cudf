@@ -10,6 +10,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <stdexcept>
 
@@ -29,6 +30,30 @@ operation::operation(ast_operator op, expression const& left, expression const& 
   CUDF_EXPECTS(cudf::ast::detail::ast_operator_arity(op) == 2,
                "The provided operator is not a binary operator.",
                std::invalid_argument);
+}
+
+cast::cast(expression const& operand, cudf::data_type target_type)
+  : operand_{operand}, target_type_{target_type}
+{
+  CUDF_EXPECTS(cudf::is_fixed_width(target_type),
+               "Cast target type must be fixed-width.",
+               std::invalid_argument);
+}
+
+cudf::size_type cast::accept(detail::expression_parser& visitor) const
+{
+  return visitor.visit(*this);
+}
+
+std::reference_wrapper<expression const> cast::accept(detail::expression_transformer& visitor) const
+{
+  return visitor.visit(*this);
+}
+
+std::unique_ptr<cudf::detail::row_ir::node> cast::accept(
+  cudf::detail::row_ir::ast_converter& converter) const
+{
+  return converter.add_ir_node(*this);
 }
 
 cudf::size_type literal::accept(detail::expression_parser& visitor) const
@@ -132,6 +157,12 @@ auto column_name_reference::accept(detail::expression_transformer& visitor) cons
   -> decltype(visitor.visit(*this))
 {
   return visitor.visit(*this);
+}
+
+std::reference_wrapper<expression const> detail::expression_transformer::visit(cast const& expr)
+{
+  CUDF_FAIL("cast expression is not supported by this expression transformer.",
+            std::invalid_argument);
 }
 
 std::unique_ptr<cudf::detail::row_ir::node> literal::accept(

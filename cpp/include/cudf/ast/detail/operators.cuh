@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -139,6 +139,15 @@ CUDF_HOST_DEVICE inline constexpr decltype(auto) ast_operator_dispatcher(ast_ope
       return f.template operator()<ast_operator::CAST_TO_UINT64>(cuda::std::forward<Ts>(args)...);
     case ast_operator::CAST_TO_FLOAT64:
       return f.template operator()<ast_operator::CAST_TO_FLOAT64>(cuda::std::forward<Ts>(args)...);
+    case ast_operator::CAST_TO_DECIMAL32:
+      return f.template operator()<ast_operator::CAST_TO_DECIMAL32>(
+        cuda::std::forward<Ts>(args)...);
+    case ast_operator::CAST_TO_DECIMAL64:
+      return f.template operator()<ast_operator::CAST_TO_DECIMAL64>(
+        cuda::std::forward<Ts>(args)...);
+    case ast_operator::CAST_TO_DECIMAL128:
+      return f.template operator()<ast_operator::CAST_TO_DECIMAL128>(
+        cuda::std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid operator.");

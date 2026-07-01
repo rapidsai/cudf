@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -10,6 +10,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -22,6 +23,15 @@
 #include <cuda/std/utility>
 
 namespace cudf::ast::detail {
+
+/**
+ * @brief Check if an operator is a cast-to-decimal operator.
+ */
+CUDF_HOST_DEVICE inline constexpr bool is_cast_to_decimal(ast_operator op)
+{
+  return op == ast_operator::CAST_TO_DECIMAL32 || op == ast_operator::CAST_TO_DECIMAL64 ||
+         op == ast_operator::CAST_TO_DECIMAL128;
+}
 
 /**
  * @brief Maps void for string and decimal types
@@ -214,6 +224,187 @@ struct single_dispatch_binary_operator {
   __device__ inline auto operator()(F&& f, Ts&&... args)
   {
     f.template operator()<LHS, LHS>(cuda::std::forward<Ts>(args)...);
+  }
+};
+
+/**
+ * @brief Functor that converts a value to a decimal representation with scaling.
+ *
+ * Used for CAST_TO_DECIMAL32/64/128 operators. The target scale is obtained from the output
+ * data reference's data_type. The result is stored as the raw representation type (int32/int64/
+ * __int128) so it fits in intermediates and is compatible with resolve_output.
+ */
+template <bool has_nulls>
+struct cast_to_decimal_dispatch {
+  cudf::data_type target_type;
+
+  template <typename InputT, typename RepT>
+  __device__ inline RepT convert_to_rep(InputT val, numeric::scale_type scale) const
+  {
+    auto const neg_scale = static_cast<int32_t>(-scale);
+    if constexpr (cuda::std::is_floating_point_v<InputT>) {
+      auto const multiplier = numeric::detail::exp10<double>(neg_scale);
+      return static_cast<RepT>(val * multiplier);
+    } else if constexpr (cudf::is_fixed_point<InputT>()) {
+      // Decimal-to-decimal: rescale from source scale to target scale
+      // val.value() gives the raw rep at source scale; we need rep at target scale
+      auto const source_neg_scale = static_cast<int32_t>(-val.scale());
+      auto const combined_exp     = neg_scale - source_neg_scale;
+      if (combined_exp >= 0) {
+        auto const multiplier = numeric::detail::exp10<RepT>(combined_exp);
+        return static_cast<RepT>(val.value()) * multiplier;
+      } else {
+        auto const divisor = numeric::detail::exp10<RepT>(-combined_exp);
+        return static_cast<RepT>(val.value()) / divisor;
+      }
+    } else if constexpr (cuda::std::is_integral_v<InputT>) {
+      if (neg_scale >= 0) {
+        auto const multiplier = numeric::detail::exp10<RepT>(neg_scale);
+        return static_cast<RepT>(val) * multiplier;
+      } else {
+        // Positive scale means large units; divide to get the rep
+        auto const divisor = numeric::detail::exp10<RepT>(-neg_scale);
+        return static_cast<RepT>(val) / divisor;
+      }
+    } else {
+      // Unsupported types (timestamps, durations, structs, etc.) - this branch is
+      // instantiated by type_dispatcher but never reached at runtime.
+      return RepT{};
+    }
+  }
+
+  template <typename InputT,
+            typename RepT,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls>
+  __device__ inline void cast_and_store(
+    possibly_null_value_t<InputT, has_nulls> const& input_val,
+    numeric::scale_type target_scale,
+    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+    detail::device_data_reference const& output_ref,
+    cudf::size_type output_row_index,
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  {
+    possibly_null_value_t<RepT, has_nulls> result{};
+    if constexpr (has_nulls) {
+      if (input_val.has_value()) {
+        result = possibly_null_value_t<RepT, has_nulls>{
+          convert_to_rep<InputT, RepT>(*input_val, target_scale)};
+      }
+    } else {
+      result = convert_to_rep<InputT, RepT>(input_val, target_scale);
+    }
+
+    if (output_ref.reference_type == detail::device_data_reference_type::COLUMN) {
+      output_object.template set_value<RepT>(output_row_index, result);
+    } else {
+      IntermediateDataType<has_nulls> tmp{};
+      memcpy(&tmp, &result, sizeof(result));
+      thread_intermediate_storage[output_ref.data_index] = tmp;
+    }
+  }
+
+  template <typename InputT, typename ResultSubclass, typename T, bool result_has_nulls>
+    requires(!cuda::std::is_void_v<InputT>)
+  __device__ inline void operator()(
+    possibly_null_value_t<InputT, has_nulls> const& input_val,
+    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+    detail::device_data_reference const& output_ref,
+    cudf::size_type output_row_index,
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  {
+    auto const scale = numeric::scale_type{target_type.scale()};
+    switch (target_type.id()) {
+      case type_id::DECIMAL32:
+        cast_and_store<InputT, int32_t>(input_val,
+                                        scale,
+                                        output_object,
+                                        output_ref,
+                                        output_row_index,
+                                        thread_intermediate_storage);
+        break;
+      case type_id::DECIMAL64:
+        cast_and_store<InputT, int64_t>(input_val,
+                                        scale,
+                                        output_object,
+                                        output_ref,
+                                        output_row_index,
+                                        thread_intermediate_storage);
+        break;
+      case type_id::DECIMAL128:
+        cast_and_store<InputT, __int128_t>(input_val,
+                                           scale,
+                                           output_object,
+                                           output_ref,
+                                           output_row_index,
+                                           thread_intermediate_storage);
+        break;
+      default: CUDF_UNREACHABLE("Unsupported decimal target type");
+    }
+  }
+
+  template <typename InputT, typename ResultSubclass, typename T, bool result_has_nulls>
+    requires(cuda::std::is_void_v<InputT>)
+  __device__ inline void operator()(possibly_null_value_t<InputT, has_nulls> const&,
+                                    expression_result<ResultSubclass, T, result_has_nulls>&,
+                                    detail::device_data_reference const&,
+                                    cudf::size_type,
+                                    IntermediateDataType<has_nulls>*) const
+  {
+    CUDF_UNREACHABLE("Unsupported input type for cast to decimal.");
+  }
+};
+
+/**
+ * @brief Dispatches cast-to-decimal operations: resolves input, converts, and stores result.
+ *
+ * Called by the evaluator when a CAST_TO_DECIMAL* operator is encountered. Dispatches on the
+ * input data type and delegates to cast_to_decimal_dispatch for the actual conversion.
+ */
+template <bool has_nulls, bool has_complex_type>
+struct cast_to_decimal_evaluator_dispatch {
+  cudf::data_type target_type;
+
+  template <typename InputT,
+            typename Evaluator,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls>
+    requires(!cuda::std::is_void_v<InputT>)
+  __device__ inline void operator()(
+    Evaluator const& evaluator,
+    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+    detail::device_data_reference const& input_ref,
+    detail::device_data_reference const& output_ref,
+    cudf::size_type left_row_index,
+    cudf::size_type right_row_index,
+    cudf::size_type output_row_index,
+    IntermediateDataType<has_nulls>* thread_intermediate_storage) const
+  {
+    auto const input_val = evaluator.template resolve_input<InputT>(
+      input_ref, thread_intermediate_storage, left_row_index, right_row_index);
+
+    cast_to_decimal_dispatch<has_nulls>{target_type}.template operator()<InputT>(
+      input_val, output_object, output_ref, output_row_index, thread_intermediate_storage);
+  }
+
+  template <typename InputT,
+            typename Evaluator,
+            typename ResultSubclass,
+            typename T,
+            bool result_has_nulls>
+    requires(cuda::std::is_void_v<InputT>)
+  __device__ inline void operator()(Evaluator const&,
+                                    expression_result<ResultSubclass, T, result_has_nulls>&,
+                                    detail::device_data_reference const&,
+                                    detail::device_data_reference const&,
+                                    cudf::size_type,
+                                    cudf::size_type,
+                                    cudf::size_type,
+                                    IntermediateDataType<has_nulls>*) const
+  {
+    CUDF_UNREACHABLE("Unsupported input type for cast to decimal.");
   }
 };
 
@@ -529,7 +720,33 @@ struct expression_evaluator {
           plan.data_references[plan.operator_source_indices[operator_source_index++]];
         auto input_row_index =
           input.table_source == table_reference::LEFT ? left_row_index : right_row_index;
-        if constexpr (has_complex_type) {
+        if (is_cast_to_decimal(op)) {
+          if constexpr (has_complex_type) {
+            type_dispatcher(
+              input.data_type,
+              cast_to_decimal_evaluator_dispatch<has_nulls, has_complex_type>{output.data_type},
+              *this,
+              output_object,
+              input,
+              output,
+              left_row_index,
+              right_row_index,
+              output_row_index,
+              thread_intermediate_storage);
+          } else {
+            type_dispatcher<dispatch_void_if_complex>(
+              input.data_type,
+              cast_to_decimal_evaluator_dispatch<has_nulls, has_complex_type>{output.data_type},
+              *this,
+              output_object,
+              input,
+              output,
+              left_row_index,
+              right_row_index,
+              output_row_index,
+              thread_intermediate_storage);
+          }
+        } else if constexpr (has_complex_type) {
           type_dispatcher(input.data_type,
                           *this,
                           output_object,

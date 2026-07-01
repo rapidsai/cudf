@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -154,6 +154,14 @@ class expression_parser {
    * @return cudf::size_type Index of device data reference for the expression.
    */
   cudf::size_type visit(operation const& expr);
+
+  /**
+   * @brief Visit a cast expression.
+   *
+   * @param expr Cast expression.
+   * @return cudf::size_type Index of device data reference for the expression.
+   */
+  cudf::size_type visit(cast const& expr);
 
   /**
    * @brief Visit a column name reference expression.

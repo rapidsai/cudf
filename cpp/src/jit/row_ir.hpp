@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -258,7 +258,10 @@ enum class opcode : int32_t {
   NOT,
   CAST_TO_INT64,
   CAST_TO_UINT64,
-  CAST_TO_FLOAT64
+  CAST_TO_FLOAT64,
+  CAST_TO_DECIMAL32,
+  CAST_TO_DECIMAL64,
+  CAST_TO_DECIMAL128
 };
 
 struct [[nodiscard]] node {
@@ -466,6 +469,8 @@ struct [[nodiscard]] ast_converter {
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::operation const& expr);
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::detail::predicate const& expr);
+
+  [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::cast const& expr);
 
   [[nodiscard]] std::tuple<std::string, null_aware, output_nullability> generate_code(
     target target, ast::expression const& expr, std::string_view function_name);

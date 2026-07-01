@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -48,6 +48,14 @@ class expression_transformer {
    * @return Reference wrapper of transformed expression
    */
   virtual std::reference_wrapper<expression const> visit(column_name_reference const& expr) = 0;
+
+  /**
+   * @brief Visit a cast expression.
+   *
+   * @param expr Cast expression
+   * @return Reference wrapper of transformed expression
+   */
+  virtual std::reference_wrapper<expression const> visit(cast const& expr);
 
   virtual ~expression_transformer() {}
 };

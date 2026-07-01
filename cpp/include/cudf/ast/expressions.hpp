@@ -497,6 +497,66 @@ class operation : public expression {
   std::vector<std::reference_wrapper<expression const>> operands;
 };
 
+/**
+ * @brief A cast expression that converts the result of a sub-expression to a target data type.
+ *
+ * Unlike the enum-based cast operators (CAST_TO_INT64, etc.), this expression node can target
+ * types that require runtime parameters, such as fixed-point/decimal types where the target
+ * scale must be specified. It also subsumes the existing cast operators for convenience.
+ */
+class cast : public expression {
+ public:
+  /**
+   * @brief Construct a new cast expression.
+   *
+   * @param operand The expression whose result will be cast
+   * @param target_type The target data type (carries scale for decimal targets)
+   */
+  cast(expression const& operand, cudf::data_type target_type);
+
+  cast(expression&& operand, cudf::data_type target_type) = delete;
+
+  /**
+   * @brief Get the target data type.
+   * @return The target data type of the cast
+   */
+  [[nodiscard]] cudf::data_type get_target_type() const { return target_type_; }
+
+  /**
+   * @brief Get the operand expression.
+   * @return The operand expression
+   */
+  [[nodiscard]] expression const& get_operand() const { return operand_.get(); }
+
+  /**
+   * @copydoc expression::accept
+   */
+  cudf::size_type accept(detail::expression_parser& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  std::reference_wrapper<expression const> accept(
+    detail::expression_transformer& visitor) const override;
+
+  /**
+   * @copydoc expression::accept
+   */
+  [[nodiscard]] std::unique_ptr<cudf::detail::row_ir::node> accept(
+    cudf::detail::row_ir::ast_converter& visitor) const override;
+
+  [[nodiscard]] bool may_evaluate_null(table_view const& left,
+                                       table_view const& right,
+                                       rmm::cuda_stream_view stream) const override
+  {
+    return operand_.get().may_evaluate_null(left, right, stream);
+  }
+
+ private:
+  std::reference_wrapper<expression const> operand_;
+  cudf::data_type target_type_;
+};
+
 namespace detail {
 
 /// @brief An expression that represents a predicate.
