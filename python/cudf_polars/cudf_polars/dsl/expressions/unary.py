@@ -710,26 +710,8 @@ class UnaryFunction(Expr):
             )
         elif self.name == "reverse":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
-            size = column.obj.size()
-            if size == 0 or column.null_count == size:
-                return column
-            indices = plc.filling.sequence(
-                size,
-                plc.Scalar.from_py(
-                    size - 1, plc.DataType(plc.TypeId.INT32), stream=df.stream
-                ),
-                plc.Scalar.from_py(
-                    -1, plc.DataType(plc.TypeId.INT32), stream=df.stream
-                ),
-                stream=df.stream,
-            )
             return Column(
-                plc.copying.gather(
-                    plc.Table([column.obj]),
-                    indices,
-                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-                    stream=df.stream,
-                ).columns()[0],
+                plc.copying.reverse(column.obj, stream=df.stream),
                 dtype=self.dtype,
             )
         elif self.name == "diff":
