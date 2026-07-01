@@ -174,10 +174,11 @@ TEST_F(HybridScanMultifileTest, PrependSourceIndexColumn)
   cudf::io::table_input_metadata expected_metadata(table);
   expected_metadata.column_metadata[0].set_name("col0");
 
-  std::vector<std::vector<char>> parquet_buffers(num_sources);
-  for (auto& parquet_buffer : parquet_buffers) {
+  // Write the table once and reference the same file for all sources
+  auto const parquet_filepath = temp_env->get_temp_filepath("PrependSourceIndexColumn.parquet");
+  {
     auto out_opts =
-      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&parquet_buffer}, table)
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath}, table)
         .metadata(expected_metadata)
         .build();
     cudf::io::write_parquet(out_opts);
@@ -195,7 +196,9 @@ TEST_F(HybridScanMultifileTest, PrependSourceIndexColumn)
 
   auto const stream = cudf::get_default_stream();
   auto const mr     = cudf::get_current_device_resource_ref();
-  auto source_info  = build_source_info(parquet_buffers);
+
+  auto const parquet_filepaths = std::vector<std::string>(num_sources, parquet_filepath);
+  auto source_info             = cudf::io::source_info(parquet_filepaths);
 
   // Expected table read via the mainline multi-source parquet reader
   auto const expected_options = cudf::io::parquet_reader_options::builder(source_info)
