@@ -239,15 +239,12 @@ def test_dataframe_join_mismatch_cats(how):
     got = join_gdf.fillna(-1).to_pandas()
     expect = join_pdf.fillna(-1)  # note: cudf join doesn't mask NA
 
-    # We yield a categorical here whereas pandas gives Object.
-    expect.index = expect.index.astype("category")
     # cudf creates the columns in different order than pandas for right join
     if how == "right":
         got = got[["data_col_left", "data_col_right"]]
 
-    expect.data_col_right = expect.data_col_right.astype(np.int64)
-    expect.data_col_left = expect.data_col_left.astype(np.int64)
-
+    # Unmatched rows introduce NaN, upcasting the integer data columns to
+    # float64 (matching pandas).
     assert_join_results_equal(expect, got, how=how, check_categorical=False)
 
 

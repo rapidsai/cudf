@@ -10,6 +10,7 @@ import numpy as np
 
 import pylibcudf as plc
 
+import cudf
 from cudf.core._internals import sorting
 from cudf.core.column import ColumnBase, access_columns
 from cudf.core.copy_types import GatherMap
@@ -165,6 +166,16 @@ class Merge:
         }
         self.lsuffix, self.rsuffix = suffixes
 
+        # Record whether the caller passed the ``left_index``/``right_index``
+        # boolean flags. This is distinct from ``_using_{left,right}_index``
+        # below, which is also True when ``on``/``left_on``/``right_on`` names
+        # an index *level*. pandas takes the result index from a frame's index
+        # (and coalesces the opposite key into it) only when that frame joined
+        # via the ``*_index`` flag; an index level used as a key via ``on=`` is
+        # treated like a column and yields a default RangeIndex.
+        self._left_index_flag = bool(left_index)
+        self._right_index_flag = bool(right_index)
+
         # At this point validation guarantees that if on is not None we
         # don't have any other args, so we can apply it directly to left_on and
         # right_on.
@@ -208,26 +219,6 @@ class Merge:
             self._using_right_index = any(
                 isinstance(idx, _IndexIndexer) for idx in self._right_keys
             )
-            # For left/right merges, joining on an index and column should result in a RangeIndex
-            # if sort is False.
-            self._return_rangeindex = (
-                not self.sort
-                and self.how in {"left", "right"}
-                and not (
-                    all(
-                        isinstance(idx, _IndexIndexer)
-                        for idx in itertools.chain(
-                            self._left_keys, self._right_keys
-                        )
-                    )
-                    or all(
-                        isinstance(idx, _ColumnIndexer)
-                        for idx in itertools.chain(
-                            self._left_keys, self._right_keys
-                        )
-                    )
-                )
-            )
         else:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
@@ -237,7 +228,6 @@ class Merge:
             self._right_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._using_left_index = False
             self._using_right_index = False
-            self._return_rangeindex = False
 
         self._key_columns_with_same_name = (
             set(_coerce_to_tuple(on))
@@ -429,8 +419,6 @@ class Merge:
 
         if self.sort:
             result = self._sort_result(result)
-        if self._return_rangeindex:
-            result = result.reset_index(drop=True)
         # Mirror pandas' merge `__finalize__` with `input_objs`: propagate
         # attrs only when both inputs have equal non-empty attrs, and AND
         # ``allows_duplicate_labels`` across inputs.
@@ -480,6 +468,31 @@ class Merge:
                 f"{set(dups)} is not allowed."
             )
 
+    @staticmethod
+    def _promote_column_with_nulls(col: ColumnBase) -> ColumnBase:
+        # pandas upcasts a numpy integer column that has acquired missing
+        # values (from unmatched rows) to float64. cudf represents nulls
+        # natively via a mask; upcast here to match pandas' output dtype.
+        if (
+            isinstance(col.dtype, np.dtype)
+            and col.dtype.kind in "iu"
+            and col.null_count
+        ):
+            return col.astype(np.dtype(np.float64))
+        return col
+
+    @staticmethod
+    def _promote_index_with_nulls(index: Index) -> Index:
+        # A gathered index carrying unmatched rows has nulls; pandas drops the
+        # index name(s) and upcasts a numpy integer index to float64.
+        if isinstance(index, cudf.MultiIndex):
+            return index
+        col = index._column
+        if col.null_count == 0:
+            return index
+        col = Merge._promote_column_with_nulls(col)
+        return cudf.Index._from_column(col, name=None)
+
     def _merge_results(self, left_result: DataFrame, right_result: DataFrame):
         # Merge the DataFrames `left_result` and `right_result` into a single
         # `DataFrame`, suffixing column names if necessary.
@@ -498,6 +511,26 @@ class Merge:
                     lkey.set(
                         left_result,
                         lkey.get(left_result).fillna(rkey.get(right_result)),
+                    )
+
+        # For a single-flag mixed merge (left_on + right_index, or
+        # left_index + right_on), pandas fills the surviving column key with
+        # the opposite frame's index values for the unmatched rows.
+        if self._left_index_flag != self._right_index_flag:
+            for lkey, rkey in zip(
+                self._left_keys, self._right_keys, strict=True
+            ):
+                if self._right_index_flag and isinstance(lkey, _ColumnIndexer):
+                    lkey.set(
+                        left_result,
+                        lkey.get(left_result).fillna(rkey.get(right_result)),
+                    )
+                elif self._left_index_flag and isinstance(
+                    rkey, _ColumnIndexer
+                ):
+                    rkey.set(
+                        right_result,
+                        rkey.get(right_result).fillna(lkey.get(left_result)),
                     )
 
         # All columns from the left table make it into the output. Non-key
@@ -554,8 +587,10 @@ class Merge:
                 "duplicate column label, which is not supported."
             )
 
+        # pandas has no integer missing-value sentinel, so a merge that
+        # introduces nulls into a numpy integer column upcasts it to float64.
         data = {
-            label: col
+            label: self._promote_column_with_nulls(col)
             for label, (_, col) in zip(
                 llabels + rlabels, left_items + right_items, strict=True
             )
@@ -586,15 +621,29 @@ class Merge:
                 self.lhs._data.rangeindex and self.rhs._data.rangeindex
             )
 
+        # The result keeps a frame's index only when that frame joined via the
+        # ``left_index``/``right_index`` flag. An index *level* used as a key
+        # via ``on``/``left_on``/``right_on`` (no flag) is treated like a
+        # column and yields a default RangeIndex.
         index: Index | None
-        if self._using_right_index:
-            # right_index and left_on
+        if self._left_index_flag and self._right_index_flag:
             index = left_result.index
-        elif self._using_left_index:
-            # left_index and right_on
+        elif self._right_index_flag:
+            # right_index (+ left_on): result index is the mapped left index.
+            index = left_result.index
+        elif self._left_index_flag:
+            # left_index (+ right_on): result index is the mapped right index.
             index = right_result.index
         else:
             index = None
+
+        # For a single-flag mixed merge, unmatched rows introduce nulls into
+        # the mapped index; pandas drops the index name and upcasts a numpy
+        # integer index to float64.
+        if index is not None and (
+            self._left_index_flag != self._right_index_flag
+        ):
+            index = self._promote_index_with_nulls(index)
 
         # Construct result from data and index:
         return (
