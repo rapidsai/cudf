@@ -59,7 +59,7 @@ template mutable_column_view slice<mutable_column_view>(mutable_column_view cons
                                                         rmm::cuda_stream_view);
 
 std::vector<column_view> slice(column_view const& input,
-                               host_span<size_type const> indices,
+                               std::span<size_type const> indices,
                                rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even", std::invalid_argument);
@@ -95,7 +95,7 @@ std::vector<column_view> slice(column_view const& input,
 }
 
 std::vector<table_view> slice(table_view const& input,
-                              host_span<size_type const> indices,
+                              std::span<size_type const> indices,
                               rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even", std::invalid_argument);
@@ -143,20 +143,20 @@ std::vector<column_view> slice(column_view const& input,
                                std::initializer_list<size_type> indices,
                                rmm::cuda_stream_view stream)
 {
-  return detail::slice(input, host_span<size_type const>(indices.begin(), indices.size()), stream);
+  return detail::slice(input, std::span<size_type const>(indices.begin(), indices.size()), stream);
 }
 
 std::vector<table_view> slice(table_view const& input,
                               std::initializer_list<size_type> indices,
                               rmm::cuda_stream_view stream)
 {
-  return detail::slice(input, host_span<size_type const>(indices.begin(), indices.size()), stream);
+  return detail::slice(input, std::span<size_type const>(indices.begin(), indices.size()), stream);
 };
 
 }  // namespace detail
 
 std::vector<column_view> slice(column_view const& input,
-                               host_span<size_type const> indices,
+                               std::span<size_type const> indices,
                                rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
@@ -164,7 +164,7 @@ std::vector<column_view> slice(column_view const& input,
 }
 
 std::vector<table_view> slice(table_view const& input,
-                              host_span<size_type const> indices,
+                              std::span<size_type const> indices,
                               rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
