@@ -877,7 +877,7 @@ void aggregate_result_functor::operator()<aggregation::HOST_UDF>(aggregation con
 
 // Sort-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort_aggregate(
-  host_span<aggregation_request const> requests,
+  std::span<aggregation_request const> requests,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {

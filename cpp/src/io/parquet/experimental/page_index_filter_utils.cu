@@ -36,7 +36,7 @@ size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_
 }
 
 bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
-                            cudf::host_span<std::vector<size_type> const> row_group_indices)
+                            std::span<std::vector<size_type> const> row_group_indices)
 {
   // For all parquet data sources
   return std::all_of(
@@ -128,7 +128,7 @@ compute_page_row_offsets_and_colchunk_page_offsets(
 
 std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::span<std::vector<size_type> const> row_group_indices,
   cudf::size_type schema_idx)
 {
   // Compute total number of row groups

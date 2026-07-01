@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -62,7 +62,7 @@ abstract class Aggregation {
         HISTOGRAM(34),
         MERGE_HISTOGRAM(35),
         BITWISE_AGG(36),
-        SUM_WITH_OVERFLOW(37);
+        SUM_OVERFLOW(37);
 
         final int nativeId;
 
@@ -534,9 +534,9 @@ abstract class Aggregation {
         return new SumAggregation();
     }
 
-    static final class SumWithOverflowAggregation extends NoParamAggregation {
-        private SumWithOverflowAggregation() {
-            super(Kind.SUM_WITH_OVERFLOW);
+    static final class SumOverflowAggregation extends NoParamAggregation {
+        private SumOverflowAggregation() {
+            super(Kind.SUM_OVERFLOW);
         }
     }
 
@@ -549,8 +549,16 @@ abstract class Aggregation {
      * truth. Sort-based groupby, scan, segmented reduce, and rolling are not
      * supported by cudf.
      */
-    static SumWithOverflowAggregation sumWithOverflow() {
-        return new SumWithOverflowAggregation();
+    static SumOverflowAggregation sumOverflow() {
+        return new SumOverflowAggregation();
+    }
+
+    /**
+     * @deprecated Use {@link #sumOverflow()} instead.
+     */
+    @Deprecated
+    static SumOverflowAggregation sumWithOverflow() {
+        return sumOverflow();
     }
 
     static final class ProductAggregation extends NoParamAggregation {
