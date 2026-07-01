@@ -1569,7 +1569,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         0    1
         1    2
         2    0
-        dtype: int32
+        dtype: int64
         >>> s[s.argsort()]
         1    1
         2    2
@@ -1580,13 +1580,13 @@ class Frame(BinaryOperand, Scannable, Serializable):
         >>> import cudf
         >>> df = cudf.DataFrame({'foo': [3, 1, 2]})
         >>> df.argsort()
-        array([1, 2, 0], dtype=int32)
+        array([1, 2, 0])
 
         **Index**
         >>> import cudf
         >>> idx = cudf.Index([3, 1, 2])
         >>> idx.argsort()
-        array([1, 2, 0], dtype=int32)
+        array([1, 2, 0])
         """
         if na_position not in {"first", "last"}:
             raise ValueError(f"invalid na_position: {na_position}")
@@ -1603,9 +1603,11 @@ class Frame(BinaryOperand, Scannable, Serializable):
 
         if isinstance(by, str):
             by = [by]
+        # numpy and pandas return ``np.intp`` (int64) positional indexers;
+        # return the same so cuDF's ``argsort`` output dtype matches.
         return self._get_sorted_inds(
             by=by, ascending=ascending, na_position=na_position
-        ).values
+        ).values.astype(np.intp)
 
     @_performance_tracking
     def _get_sorted_inds(
