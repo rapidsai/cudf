@@ -152,14 +152,6 @@ struct assign_min_max {
  * @brief Computes a minmax_pair<T> reduction directly over a dictionary column's decoded key
  * values, i.e. `keys[indices[i]]` for each row `i`.
  *
- * This is used instead of decoding the whole column up front because:
- * - Dictionary keys are not required to be sorted (e.g. via `make_dictionary_column` or
- *   `set_keys`), so the position of the min/max index does not identify the min/max key.
- * - It reads each key value through a lazy iterator instead of materializing (and, for strings,
- *   copying) a fully decoded column.
- * - It works correctly on a sliced dictionary column since it looks up exactly the keys
- *   referenced by the (sliced) indices, rather than operating on a sub-range of the keys column.
- *
  * @tparam T The dictionary's key type
  */
 template <typename T>
@@ -198,11 +190,11 @@ struct minmax_dictionary_functor {
     using storage_type = device_storage_type_t<T>;
     auto dev_result    = reduce_dictionary<storage_type>(col, stream);
     using ScalarType   = cudf::scalar_type_t<T>;
-    auto minimum       = new ScalarType(T{}, true, stream, mr);
-    auto maximum       = new ScalarType(T{}, true, stream, mr);
+    auto minimum       = std::make_unique<ScalarType>(T{}, true, stream, mr);
+    auto maximum       = std::make_unique<ScalarType>(T{}, true, stream, mr);
     cudf::detail::device_single_thread(
       assign_min_max<storage_type>{dev_result.data(), minimum->data(), maximum->data()}, stream);
-    return {std::unique_ptr<scalar>(minimum), std::unique_ptr<scalar>(maximum)};
+    return {std::move(minimum), std::move(maximum)};
   }
 
   template <typename T>
