@@ -631,6 +631,7 @@ nitpick_ignore = [
     # unqualified strings in type annotations. The ``rapidsmpf.*`` regex below
     # only matches fully qualified targets, so the bare leaf names are listed
     # explicitly here.
+    ("py:class", "SizedIterator"),
     ("py:class", "Statistics"),
     ("py:class", "Communicator"),
     ("py:class", "Options"),
