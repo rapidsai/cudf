@@ -427,6 +427,58 @@ def test_merge_suffixes_non_sequence_raises(suffixes):
         a.merge(b, left_index=True, right_index=True, suffixes=suffixes)
 
 
+@pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
+def test_merge_left_on_right_index_pandas_semantics(how):
+    # For left_on + right_index, the result index is the mapped left index
+    # (unmatched rows -> NaN, upcasting a numpy int index to float64 and
+    # dropping the name), and the key column is coalesced from the right index.
+    pl = pd.DataFrame({"a": [0, 1, 2], "key": [0, 1, 2]}, index=[10, 20, 30])
+    pr = pd.DataFrame({"b": [0, 1, 2, 3, 4, 5]})
+    gl = cudf.from_pandas(pl)
+    gr = cudf.from_pandas(pr)
+    expect = pl.merge(pr, left_on="key", right_index=True, how=how)
+    got = gl.merge(gr, left_on="key", right_index=True, how=how)
+    assert_eq(expect, got)
+
+
+def test_merge_numeric_vs_string_key_raises():
+    # pandas refuses to merge a numeric key against a string key.
+    left = cudf.DataFrame({"A": [0, 1, 2]})
+    right = cudf.DataFrame({"A": ["0", "1", "2"]})
+    with pytest.raises(ValueError, match="You are trying to merge on"):
+        left.merge(right, on="A")
+
+
+def test_merge_unmatched_rows_upcast_int_to_float():
+    # Unmatched rows introduce NaN, upcasting a numpy integer column to
+    # float64 (matching pandas).
+    left = cudf.DataFrame({"key": [1, 2, 3], "a": [1, 2, 3]})
+    right = cudf.DataFrame({"key": [1, 2], "b": [4, 5]})
+    got = left.merge(right, on="key", how="left")
+    assert got["b"].dtype == np.dtype("float64")
+    assert_eq(
+        left.to_pandas().merge(right.to_pandas(), on="key", how="left"), got
+    )
+
+
+def test_merge_differently_named_keys_keep_own_dtype():
+    # Each surviving key retains its own operand's dtype.
+    left = cudf.DataFrame({"X": [1, 2, 3]})
+    right = cudf.DataFrame({"Y": [1.0, 2.0, 3.0]})
+    got = left.merge(right, left_on="X", right_on="Y")
+    assert got["X"].dtype == np.dtype("int64")
+    assert got["Y"].dtype == np.dtype("float64")
+
+
+@pytest.mark.parametrize("suffixes", [("_dup", ""), ("", "_dup")])
+def test_merge_suffix_duplicate_columns_raises(suffixes):
+    # Suffixing that collides with a pre-existing column raises MergeError.
+    df1 = cudf.DataFrame({"col1": [1], "col2": [2]})
+    df2 = cudf.DataFrame({"col1": [1], "col2": [2], "col2_dup": [3]})
+    with pytest.raises(pd.errors.MergeError, match="duplicate columns"):
+        df1.merge(df2, on="col1", suffixes=suffixes)
+
+
 def test_merge_left_on_right_on():
     left = pd.DataFrame({"xx": [1, 2, 3, 4, 5, 6]})
     right = pd.DataFrame({"xx": [10, 20, 30, 6, 5, 4]})
