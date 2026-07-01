@@ -24,8 +24,7 @@ scoped_current_device_resource::scoped_current_device_resource(
 
 scoped_current_device_resource::~scoped_current_device_resource()
 {
-  auto replaced = cudf::set_current_device_resource(std::move(_previous));
-  static_cast<void>(replaced);
+  std::ignore = cudf::set_current_device_resource(std::move(_previous));
 }
 
 memory_resource_test_harness::memory_resource_test_harness(rmm::device_async_resource_ref upstream)
