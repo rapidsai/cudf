@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -177,6 +177,10 @@ std::unique_ptr<column> like(
  * is expected to be an ASCII character.
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * The escape_character parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw std::invalid_argument if `patterns` contains nulls or `escape_character` is invalid
  * @throw std::invalid_argument if `patterns.size() != input.size()`

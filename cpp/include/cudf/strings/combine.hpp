@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -44,6 +44,10 @@ enum class output_if_empty_list {
  *
  * This returns a column with one string. Any null entries are ignored unless
  * the @p narep parameter specifies a replacement string.
+ *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
  *
  * @code{.pseudo}
  * Example:
@@ -112,6 +116,10 @@ std::unique_ptr<column> join_strings(
  * out is ['aa::bb', 'cc%%', '^^dd', 'ee', '', 'ff+gg+hh']
  * @endcode
  *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
+ *
  * @throw cudf::logic_error if no input columns are specified - table view is empty
  * @throw cudf::logic_error if input columns are not all strings columns.
  * @throw cudf::logic_error if the number of rows from @p separators and @p strings_columns
@@ -169,6 +177,10 @@ std::unique_ptr<column> concatenate(
  * out = concatenate({s1, s2}, ':', '', separator_on_nulls::NO)
  * out is ['aa:', 'bb', ':cc', 'dd']
  * @endcode
+ *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
  *
  * @throw cudf::logic_error if input columns are not all strings columns.
  * @throw cudf::logic_error if separator is not valid.
@@ -230,6 +242,10 @@ std::unique_ptr<column> concatenate(
  * out = join_list_elements(s, sep, ':', '', separator_on_nulls::NO)
  * out is ['aa::bb::cc', null,  '!dd', 'ee', 'ff:gg']
  * @endcode
+ *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
  *
  * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if the number of rows from `separators` and `lists_strings_column` do
@@ -293,6 +309,10 @@ std::unique_ptr<column> join_list_elements(
  * out = join_list_elements(s, ':', '', separator_on_nulls::NO)
  * out is ['aa:bb:cc', null,  ':dd', 'ee', 'ff']
  * @endcode
+ *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
  *
  * @throw cudf::logic_error if input column is not lists of strings column.
  * @throw cudf::logic_error if separator is not valid.

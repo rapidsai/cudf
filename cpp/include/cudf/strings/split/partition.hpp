@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -39,6 +39,10 @@ namespace strings {
  * r[2] is ["cd","g_h"]
  * @endcode
  *
+ * The `delimiter` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
+ *
  * @param input Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating where to split each string.
  *        Default of empty string indicates split on whitespace.
@@ -72,6 +76,10 @@ std::unique_ptr<table> partition(
  * r[1] is ["_","_"]
  * r[2] is ["cd","h"]
  * @endcode
+ *
+ * The `delimiter` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @param input Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating where to split each string.

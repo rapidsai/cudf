@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -34,6 +34,10 @@ namespace strings {
  * out = repeat_strings(s, 3)
  * out is '123XYZ-123XYZ-123XYZ-'
  * @endcode
+ *
+ * The `input` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw std::overflow_error if the size of the output string scalar exceeds the maximum value that
  *        can be stored by the scalar: `input.size() * repeat_times > max of size_type`

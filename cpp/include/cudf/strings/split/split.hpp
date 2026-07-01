@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -31,6 +31,10 @@ namespace strings {
  *
  * Any null string entries return corresponding null output columns.
  *
+ * The `delimiter` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
+ *
  * @param strings_column Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating the split points in each string;
  *        Default of empty string indicates split on whitespace.
@@ -60,6 +64,10 @@ std::unique_ptr<table> split(
  * in the input column.
  *
  * Any null string entries return corresponding null output columns.
+ *
+ * The `delimiter` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @param strings_column Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating the split points in each string;
@@ -130,6 +138,10 @@ std::unique_ptr<table> rsplit(
  * @endcode
  *
  * A null string element will result in a null list item for that row.
+ *
+ * The `delimiter` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw cudf::logic_error if `delimiter` is invalid.
  *
@@ -210,6 +222,10 @@ std::unique_ptr<column> split_record(
  *
  * A null string element will result in a null list item for that row.
  *
+ * The `delimiter` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
+ *
  * @throw cudf::logic_error if `delimiter` is invalid.
  *
  * @param strings A column of string elements to be split
@@ -237,6 +253,10 @@ std::unique_ptr<column> rsplit_record(
  * Any null rows in the input return corresponding null output rows.
  * A null row is also returned if the number of tokens computed by splitting
  * the string for that row is less than the `index`.
+ *
+ * The `delimiter` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @param input Strings instance for this operation
  * @param delimiter UTF-8 encoded string indicating the split points in each string;

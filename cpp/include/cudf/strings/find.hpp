@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -28,6 +28,10 @@ namespace strings {
  * end of each string becomes the final position to include in the search.
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * The `target` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw cudf::logic_error if start position is greater than stop position.
  *
@@ -59,6 +63,10 @@ std::unique_ptr<column> find(
  * end of each string becomes the final position to include in the search.
  *
  * Any null string entries return corresponding null output column entries.
+ *
+ * The `target` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw cudf::logic_error if start position is greater than stop position.
  *
@@ -125,6 +133,10 @@ std::unique_ptr<column> find(
  * Any null input rows return corresponding null output column rows.
  * This API produces the same output as `find()` when `instance == 0`.
  *
+ * The `target` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
+ *
  * @param input Strings for this operation
  * @param target UTF-8 encoded string to search for in each string
  * @param instance The instance of the target string to locate (0-based index)
@@ -147,6 +159,10 @@ std::unique_ptr<column> find_instance(
  * If `target` is an empty string, true is returned for all non-null entries in the output column.
  *
  * Any null string entries return corresponding null entries in the output columns.
+ *
+ * The `target` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @param input Strings instance for this operation
  * @param target UTF-8 encoded string to search for in each string
@@ -194,6 +210,10 @@ std::unique_ptr<column> contains(
  * If `target` is an empty string, true is returned for all non-null entries in the output column.
  *
  * Any null string entries return corresponding null entries in the output columns.
+ *
+ * The `target` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @param input Strings instance for this operation
  * @param target UTF-8 encoded string to search for in each string
@@ -243,6 +263,10 @@ std::unique_ptr<column> starts_with(
  *
  * Any null string entries return corresponding null entries in the output columns.
  *
+ * The `target` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
+ *
  * @param input Strings instance for this operation
  * @param target UTF-8 encoded string to search for in each string
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -287,6 +311,10 @@ std::unique_ptr<column> ends_with(
  *
  * Counting proceeds left to right within the row and does not include
  * overlapping matches.
+ *
+ * The `target` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @code{.pseudo}
  * Example:
