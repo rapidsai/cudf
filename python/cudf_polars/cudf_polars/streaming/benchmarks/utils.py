@@ -121,6 +121,26 @@ _CPU_ENGINES = frozenset({"polars-cpu", "duckdb"})
 
 
 @dataclasses.dataclass
+class NightlyRole:
+    """Role indicating a nightly benchmark run."""
+
+    type: Literal["nightly"] = dataclasses.field(default="nightly", init=False)
+    date: str = dataclasses.field(
+        default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds")
+    )
+
+
+@dataclasses.dataclass
+class NsysRole:
+    """Role indicating a benchmark run with nsys profiling enabled."""
+
+    type: Literal["nsys"] = dataclasses.field(default="nsys", init=False)
+
+
+Role = NightlyRole | NsysRole
+
+
+@dataclasses.dataclass
 class ValidationResult:
     """
     Result of a validation run.
@@ -500,6 +520,7 @@ class RunConfig:
     )
     command_line: str
     capture_env_vars: str
+    roles: list[Role] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.io_mode == "hot" and self.iterations < 2:
@@ -595,6 +616,12 @@ class RunConfig:
         else:
             engine_name = "cudf-polars"
 
+        roles: list[Role] = []
+        if args.role_nightly:
+            roles.append(NightlyRole())
+        if args.role_nsys:
+            roles.append(NsysRole())
+
         return cls(
             engine_name=engine_name,
             queries=args.query,
@@ -622,6 +649,7 @@ class RunConfig:
             hardware=HardwareInfo.collect(
                 collect_gpus=args.frontend not in _CPU_ENGINES
             ),
+            roles=roles,
         )
 
     def serialize(self, engine: StreamingEngine | None) -> dict:
@@ -660,6 +688,7 @@ class RunConfig:
             "validation_method": dataclasses.asdict(self.validation_method)
             if self.validation_method
             else None,
+            "roles": [dataclasses.asdict(r) for r in self.roles],
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
@@ -2047,6 +2076,18 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         type=str,
         default="CUDF_POLARS_LOG_TRACES_MEMORY,CUDF_POLARS_LOG_TRACES,DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT,DASK_DISTRIBUTED__COMM__UCX__CONNECT_TIMEOUT,KVIKIO_NTHREADS,LIBCUDF_NUM_HOST_WORKERS,OMP_NUM_THREADS,POLARS_MAX_THREADS,RAPIDSMPF_num_streaming_threads,UCX_MAX_RNDV_RAILS,UCX_PROTO_ENABLE,UCX_RNDV_FRAG_MEM_TYPES,UCX_RNDV_MTYPE_WORKER_FC_ENABLE,UCX_RNDV_MTYPE_WORKER_MAX_MEM,UCX_RNDV_PIPELINE_ERROR_HANDLING",
         help="Comma-separated list of environment variables to capture. Written to ``extra_info.environment``.",
+    )
+    parser.add_argument(
+        "--role-nightly",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Add the 'nightly' role to the benchmark run output.",
+    )
+    parser.add_argument(
+        "--role-nsys",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Add the 'nsys' role to the benchmark run output.",
     )
 
     StreamingOptions._add_cli_args(parser)
