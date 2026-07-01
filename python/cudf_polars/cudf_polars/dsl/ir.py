@@ -20,6 +20,7 @@ import functools
 import itertools
 import json
 import random
+import reprlib
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -633,8 +634,11 @@ class Scan(IR):
         if cached_parquet_info is not None and paths != [
             info.path for info in cached_parquet_info
         ]:
+            missing = reprlib.repr(
+                set(paths) - {info.path for info in cached_parquet_info}
+            )
             raise AssertionError(
-                f"Paths do not match cached parquet info. {paths} != {[info.path for info in cached_parquet_info]}"
+                f"Paths do not match cached parquet info. Missing paths: {missing}"
             )
 
     def get_hashable(self) -> Hashable:
