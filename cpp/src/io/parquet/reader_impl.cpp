@@ -533,26 +533,21 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.is_enabled_case_sensitive_names(),
              options.is_enabled_prepend_source_index_column(),
              options.is_enabled_prepend_row_index_column(),
-             options.is_enabled_try_output_dict_columns()},
+             options.is_enabled_output_dict_columns()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
 {
-  // Direct parquet-dict → DICTIONARY32 transcode currently only supports single-pass, non-chunked
-  // reads. Splitting rowgroups across passes/subpasses would require aligning dictionary keys
-  // across passes, which we don't support yet.
-  CUDF_EXPECTS(
-    not _options.try_output_dict_columns or (chunk_read_limit == 0 and pass_read_limit == 0),
-    "try_output_dict_columns is only supported for single-pass reads; it cannot be combined "
-    "with a non-zero chunk_read_limit or pass_read_limit.");
-
-  // AST filters do not support dictionary columns yet (see the column selection below). The
-  // transcode fast path and the `finalize_output` fallback both convert flat STRING columns to
-  // DICTIONARY32 *before* the filter is evaluated, which would feed dictionary columns to the AST.
-  // Since `try_output_dict_columns` is best-effort, we silently disable it for filtered reads so
-  // the filter still operates on STRING columns (the columns are simply returned as STRING).
-  if (_options.try_output_dict_columns and options.get_filter().has_value()) {
-    _options.try_output_dict_columns = false;
+  // The direct parquet-dict → DICTIONARY32 transcode fast path only supports single-pass,
+  // non-chunked reads. Splitting rowgroups across passes/subpasses would require aligning
+  // dictionary keys across passes, which are not supported yet. In that scenario, we silently
+  // skip the fast path in `prepare_dict_transcode` and still produce DICTIONARY32 output
+  // via the post-hoc `dictionary::detail::encode` fallback in `finalize_output`.
+  if (_options.output_dict_columns and (chunk_read_limit != 0 or pass_read_limit != 0)) {
+    CUDF_LOG_WARN(
+      "output_dict_columns: the direct parquet-dict transcode fast path is disabled for chunked / "
+      "multi-pass reads (non-zero chunk_read_limit or pass_read_limit); falling back to encoding "
+      "DICTIONARY32 columns at the output.");
   }
 
   // Open and parse the source dataset metadata
@@ -968,7 +963,7 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // with mixed or non-dictionary encodings, nested schemas, or columns added as empty columns
   // above), fall back to a post-hoc `dictionary::detail::encode` so the user still gets a
   // DICTIONARY32 column from every flat string column in the output table.
-  if (_options.try_output_dict_columns) {
+  if (_options.output_dict_columns) {
     for (auto& col : out_columns) {
       if (col and col->type().id() == type_id::STRING) {
         col =

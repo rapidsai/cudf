@@ -110,8 +110,8 @@ class parquet_reader_options {
   type_id _decimal_width{type_id::EMPTY};
   // Whether to use JIT compilation for filtering
   bool _use_jit_filter = false;
-  // Best-effort: try to output DICTIONARY32 columns for fully dict-encoded string columns
-  bool _try_output_dict_columns = false;
+  // For flat string columns, output DICT32 encoded string columns
+  bool _output_dict_columns = false;
   // Whether column name matching is case sensitive. In case of multiple
   // case-insensitive matches, the first matched column is selected
   bool _case_sensitive_names = true;
@@ -345,14 +345,19 @@ class parquet_reader_options {
   /**
    * @brief Returns whether the reader should try to output DICTIONARY32 columns.
    *
-   * When true, the reader may output DICTIONARY32 columns for fully dict-encoded
+   * When true, the reader outputs DICTIONARY32 columns for fully dict-encoded
    * string columns instead of fully decoded STRING columns. A DICTIONARY32 column
    * consists of an INT32 indices child and a STRING keys child.
-   * Best-effort: falls back to STRING if the column has mixed encoding.
    *
-   * @return `true` if the reader should try to output DICTIONARY32 columns
+   * AST filters do not support dictionary columns yet, so when a filter is set this option is
+   * silently disabled and the columns are returned as STRING for the filter to operate on.
+   *
+   * @return `true` if the reader should output DICTIONARY32 columns for flat string columns
    */
-  [[nodiscard]] bool is_enabled_try_output_dict_columns() const { return _try_output_dict_columns; }
+  [[nodiscard]] bool is_enabled_output_dict_columns() const
+  {
+    return _output_dict_columns and not _filter.has_value();
+  }
 
   /**
    * @brief Set a new source location
@@ -651,9 +656,9 @@ class parquet_reader_options {
   /**
    * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
    *
-   * @param val Boolean indicating whether to try to output DICTIONARY32 columns
+   * @param val Boolean indicating whether to output DICTIONARY32 columns for flat string columns
    */
-  void enable_try_output_dict_columns(bool val) { _try_output_dict_columns = val; }
+  void enable_output_dict_columns(bool val) { _output_dict_columns = val; }
 };
 
 /**
@@ -929,26 +934,14 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets whether to prepend a source file index column to the output.
+   * @brief Sets to enable/disable trying to output DICTIONARY32 columns.
    *
-   * @param val Boolean indicating whether to prepend a source file index column
+   * @param val Boolean value whether to try to output DICTIONARY32 columns
    * @return this for chaining
    */
   parquet_reader_options_builder& prepend_source_index_column(bool val)
   {
-    options.enable_prepend_source_index_column(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets whether to prepend a file-local row index column to the output.
-   *
-   * @param val Boolean indicating whether to prepend a row index column
-   * @return this for chaining
-   */
-  parquet_reader_options_builder& prepend_row_index_column(bool val)
-  {
-    options.enable_prepend_row_index_column(val);
+    options._prepend_source_index_column = val;
     return *this;
   }
 
@@ -960,7 +953,7 @@ class parquet_reader_options_builder {
    */
   parquet_reader_options_builder& try_output_dict_columns(bool val)
   {
-    options._try_output_dict_columns = val;
+    options._output_dict_columns = val;
     return *this;
   }
 
