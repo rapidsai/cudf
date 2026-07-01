@@ -122,7 +122,7 @@ _CPU_ENGINES = frozenset({"polars-cpu", "duckdb"})
 
 @dataclasses.dataclass
 class NightlyRole:
-    """A role for a benchmark run."""
+    """Role indicating a nightly benchmark run."""
 
     type: Literal["nightly"] = dataclasses.field(default="nightly", init=False)
     date: str = dataclasses.field(
@@ -132,7 +132,7 @@ class NightlyRole:
 
 @dataclasses.dataclass
 class NsysRole:
-    """A role for a benchmark run."""
+    """Role indicating a benchmark run with nsys profiling enabled."""
 
     type: Literal["nsys"] = dataclasses.field(default="nsys", init=False)
 
