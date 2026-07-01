@@ -1509,16 +1509,19 @@ def test_categorical_typecast(data, categories):
 @pytest.mark.parametrize(
     ("values", "expected"),
     [
-        ([1], np.uint8),
-        ([1, None], np.uint8),
-        (np.arange(np.iinfo(np.int8).max), np.uint8),
-        (np.append(np.arange(np.iinfo(np.int8).max), [None]), np.uint8),
-        (np.arange(np.iinfo(np.int16).max), np.uint16),
-        (np.append(np.arange(np.iinfo(np.int16).max), [None]), np.uint16),
-        (np.arange(np.iinfo(np.uint8).max), np.uint8),
-        (np.append(np.arange(np.iinfo(np.uint8).max), [None]), np.uint8),
-        (np.arange(np.iinfo(np.uint16).max), np.uint16),
-        (np.append(np.arange(np.iinfo(np.uint16).max), [None]), np.uint16),
+        # cat.codes uses a signed dtype matching pandas (which widens
+        # int8 -> int16 -> int32 once the category count reaches each type's
+        # max), so e.g. 127 categories -> int16 and 32767 categories -> int32.
+        ([1], np.int8),
+        ([1, None], np.int8),
+        (np.arange(np.iinfo(np.int8).max), np.int16),
+        (np.append(np.arange(np.iinfo(np.int8).max), [None]), np.int16),
+        (np.arange(np.iinfo(np.int16).max), np.int32),
+        (np.append(np.arange(np.iinfo(np.int16).max), [None]), np.int32),
+        (np.arange(np.iinfo(np.uint8).max), np.int16),
+        (np.append(np.arange(np.iinfo(np.uint8).max), [None]), np.int16),
+        (np.arange(np.iinfo(np.uint16).max), np.int32),
+        (np.append(np.arange(np.iinfo(np.uint16).max), [None]), np.int32),
     ],
 )
 def test_astype_dtype(values, expected):
