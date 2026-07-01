@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -90,11 +90,15 @@ class CategoricalAccessor(BaseAccessor):
         Return Series of codes as well as the index.
         """
         from cudf.core.series import Series
+        from cudf.utils.dtypes import min_signed_type
 
         index = (
             self._parent.index if isinstance(self._parent, Series) else None
         )
-        return Series._from_column(self._column.codes, index=index)
+        codes = self._column.codes.astype(
+            min_signed_type(len(self._column.dtype.categories))
+        )
+        return Series._from_column(codes, index=index)
 
     @property
     def ordered(self) -> bool | None:

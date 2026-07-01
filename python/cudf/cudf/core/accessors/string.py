@@ -100,8 +100,23 @@ class StringMethods(BaseAccessor):
             # Validate dtype is suitable for string operations
             is_valid_string = is_string_dtype(value_type)
         if not is_valid_string:
+            # Mirror pandas' inferred-type naming in the error message
+            # (see pandas lib.infer_dtype) so error messages match.
+            kind_to_inferred = {
+                "i": "integer",
+                "u": "integer",
+                "f": "floating",
+                "b": "boolean",
+                "c": "complex",
+                "M": "datetime64",
+                "m": "timedelta64",
+            }
+            inferred_dtype = kind_to_inferred.get(
+                getattr(value_type, "kind", ""), str(value_type)
+            )
             raise AttributeError(
-                "Can only use .str accessor with string values"
+                "Can only use .str accessor with string values, "
+                f"not {inferred_dtype}"
             )
         super().__init__(parent=parent)
 
