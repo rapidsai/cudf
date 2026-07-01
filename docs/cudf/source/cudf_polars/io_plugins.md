@@ -35,10 +35,14 @@ lf = register_io_source(source, schema={"a": pl.Int64, "b": pl.Int64})
 result = lf.select("a").collect(engine=pl.GPUEngine())
 ```
 
-Each chunk is either a host `polars.DataFrame` or an already-GPU-resident
-`cudf_polars.containers.DataFrame`, and a source may mix the two. Returning
-GPU-resident frames skips the host-to-device copy, but such a source can only be
-collected with a cudf-polars engine.
+Chunks are normally returned as regular host-resident `polars.DataFrame`
+objects, but cudf-polars internally represents GPU-resident data using
+`cudf_polars.containers.DataFrame`.
+
+An IO source may return `cudf_polars.containers.DataFrame` objects directly.
+Doing so avoids the host-to-device copy, but restricts the source to
+cudf-polars engines, since the default Polars CPU engine cannot consume
+`cudf_polars.containers.DataFrame` objects.
 
 The source may yield multiple chunks, which cudf-polars combines into the scan
 output (under a streaming engine the chunks are forwarded individually; see
