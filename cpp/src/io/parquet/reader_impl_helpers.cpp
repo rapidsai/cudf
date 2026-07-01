@@ -1990,7 +1990,7 @@ aggregate_reader_metadata::select_columns(
       std::transform(index_names.cbegin(),
                      index_names.cend(),
                      std::back_inserter(selected_columns),
-                     [](std::string const& name) { return column_name_info(name); });
+                     [](std::string const& name) { return column_name_info{.name = name}; });
     }
     // Merge the vector use_names into a set of hierarchical column_name_info objects
     /* This is because if we have columns like this:
