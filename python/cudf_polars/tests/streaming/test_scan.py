@@ -94,7 +94,7 @@ def test_scan_parquet_use_rapidsmpf_native(tmp_path, df, streaming_engine_factor
 
 
 @pytest.mark.parametrize(
-    "target_partition_size_and_n_files", [(1_000, 1), (1_000, 2), (1_000_000, 3)]
+    "target_partition_size_and_n_files", [(1_000, 1), (1_000, 2), (1_000_000, 5)]
 )
 def test_scan_parquet_prefetch_file_metadata(
     tmp_path: Path,
