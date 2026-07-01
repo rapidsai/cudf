@@ -856,6 +856,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _pass_page_mask.clear();
   _subpass_page_mask.reset();
   _output_metadata.reset();
+
   _options.timestamp_type = cudf::data_type{};
   _options.decimal_width  = type_id::EMPTY;
   _options.num_rows       = std::nullopt;
@@ -863,10 +864,11 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _options.use_jit_filter              = false;
   _options.case_sensitive_names        = true;
   _options.prepend_source_index_column = false;
-  _num_sources                         = 0;
-  _input_pass_read_limit               = 0;
-  _output_chunk_read_limit             = 0;
-  _strings_to_categorical              = false;
+
+  _num_sources             = 0;
+  _input_pass_read_limit   = 0;
+  _output_chunk_read_limit = 0;
+  _strings_to_categorical  = false;
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
   _mr        = cudf::get_current_device_resource_ref();
@@ -1090,10 +1092,8 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     prepend_source_index_column(out_metadata.num_rows_per_source, out_columns);
   }
 
-  // Offset column references in `_expr_conv` by the number of prepended columns
-  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
-  auto const final_filter =
-    parquet::detail::offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
+  // Compute the final filter expression incorporating any column reference offsets in _expr_conv
+  auto const final_filter      = compute_offset_filter();
   auto const final_filter_expr = final_filter.get_converted_expr();
 
   // Create a table from the output columns.
