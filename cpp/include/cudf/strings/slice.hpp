@@ -34,6 +34,10 @@ namespace strings {
  *
  * Null string entries will return null output string entries.
  *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
+ *
  * @code{.pseudo}
  * Example:
  * s = ["hello", "goodbye"]
