@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -422,6 +422,7 @@ class GroupedWindow(Expr):
 
         # Instead of calling self._gather_columns, let's call plc.copying.gather directly
         # since we need plc.Column objects, not cudf_polars Column objects
+        val_cols: Sequence[plc.Column]
         if order_index is not None:
             plc_cols = [
                 ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
@@ -694,15 +695,16 @@ class GroupedWindow(Expr):
                 eval_cols.append(child.evaluate(df, context=ExecutionContext.FRAME).obj)
                 val_nodes.append((ne, val))
 
+        gathered_cols: Sequence[plc.Column] = eval_cols
         if order_index is not None and eval_cols:
-            eval_cols = plc.copying.gather(
+            gathered_cols = plc.copying.gather(
                 plc.Table(eval_cols),
                 order_index,
                 plc.copying.OutOfBoundsPolicy.NULLIFY,
                 stream=df.stream,
             ).columns()
 
-        gathered_iter = iter(eval_cols)
+        gathered_iter = iter(gathered_cols)
         for ne in named_exprs:
             val = ne.value
             if isinstance(val, expr.Len):
