@@ -5790,10 +5790,16 @@ def _get_nearest_indexer(
 
 
 def _validate_freq(freq: Any) -> DateOffset | MonthEnd | YearEnd | None:
+    if isinstance(freq, pd.tseries.offsets.BaseOffset):
+        # The public ``freq``/``inferred_freq`` getters return a canonical
+        # pandas offset (e.g. ``Day``, ``Minute``, ``MonthEnd``). Normalize it
+        # back to cudf's internal ``DateOffset`` via its freq string so that
+        # ``idx.freq = idx.freq`` (and assigning any pandas offset) round-trips.
+        freq = freq.freqstr
     if isinstance(freq, str):
         return cudf.DateOffset._from_freqstr(freq)
     elif freq is None:
         return freq
-    elif freq is not None and not isinstance(freq, cudf.DateOffset):
+    elif not isinstance(freq, cudf.DateOffset):
         raise ValueError(f"Invalid frequency: {freq}")
     return cast("cudf.DateOffset", freq)
