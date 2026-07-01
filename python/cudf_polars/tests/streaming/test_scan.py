@@ -127,6 +127,20 @@ def test_prefetch_parquet_file_metadata_no_parquet_scans() -> None:
     assert result == {}
 
 
+def test_prefetch_file_metadata_select_fast_count(
+    df: pl.DataFrame,
+    streaming_engine_factory: Callable[..., StreamingEngine],
+    tmp_path: Path,
+) -> None:
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
+    )
+    source = tmp_path / "data.parquet"
+    df.write_parquet(source)
+    q = pl.scan_parquet(source).select(pl.len())
+    assert_gpu_result_equal(q, engine=streaming_engine)
+
+
 # ---------------------------------------------------------------------------
 # Tests migrated from tests/streaming/test_scan.py
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections import defaultdict
 from typing import TYPE_CHECKING
 
@@ -438,8 +439,10 @@ def _(
             scan_child.paths,
             scan_child.skip_rows,
             scan_child.n_rows,
-            scan_child.parquet_options,
-            context=None,
+            dataclasses.replace(
+                scan_child.parquet_options, prefetch_file_metadata=False
+            ),
+            None,
         )
         dtype = ir.exprs[0].value.dtype
 
