@@ -878,9 +878,10 @@ class UnaryFunction(Expr):
             operand = column.obj
             if self.name == "sign":
                 is_float = plc.traits.is_floating_point(out_type)
-                zero = plc.Scalar.from_py(
-                    0.0 if is_float else 0, out_type, stream=df.stream
-                )
+                zero_py = 0.0 if is_float else 0
+                one_py = zero_py + 1
+                neg_one_py = -one_py
+                zero = plc.Scalar.from_py(zero_py, out_type, stream=df.stream)
                 positive = plc.binaryop.binary_operation(
                     operand,
                     zero,
@@ -888,29 +889,26 @@ class UnaryFunction(Expr):
                     plc.DataType(plc.TypeId.BOOL8),
                     stream=df.stream,
                 )
-                negative = plc.binaryop.binary_operation(
-                    operand,
-                    zero,
-                    plc.binaryop.BinaryOperator.LESS,
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                )
                 signed = plc.copying.copy_if_else(
-                    plc.Scalar.from_py(
-                        1.0 if is_float else 1, out_type, stream=df.stream
-                    ),
+                    plc.Scalar.from_py(one_py, out_type, stream=df.stream),
                     operand,
                     positive,
                     stream=df.stream,
                 )
-                signed = plc.copying.copy_if_else(
-                    plc.Scalar.from_py(
-                        -1.0 if is_float else -1, out_type, stream=df.stream
-                    ),
-                    signed,
-                    negative,
-                    stream=df.stream,
-                )
+                if not plc.traits.is_unsigned(out_type):
+                    negative = plc.binaryop.binary_operation(
+                        operand,
+                        zero,
+                        plc.binaryop.BinaryOperator.LESS,
+                        plc.DataType(plc.TypeId.BOOL8),
+                        stream=df.stream,
+                    )
+                    signed = plc.copying.copy_if_else(
+                        plc.Scalar.from_py(neg_one_py, out_type, stream=df.stream),
+                        signed,
+                        negative,
+                        stream=df.stream,
+                    )
                 return Column(signed, dtype=self.dtype)
             if operand.type().id() != out_type.id():
                 operand = plc.unary.cast(operand, out_type, stream=df.stream)
