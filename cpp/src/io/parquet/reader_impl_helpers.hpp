@@ -15,10 +15,12 @@
 
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace cudf::io::parquet::detail {
@@ -142,6 +144,22 @@ struct surviving_row_group_metrics {
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
 
+/**
+ * @brief Upper bound on the size in bytes of a Parquet `BloomFilterHeader`
+ */
+inline constexpr int64_t bloom_filter_header_max_size = 256;
+
+/**
+ * @brief Parses and validates a Parquet `BloomFilterHeader` from the front of `bytes`
+ *
+ * @param bytes Host bytes starting at the beginning of a bloom filter (header followed by bitset)
+ *
+ * @return A pair of the bloom filter header size and the bitset size in bytes, or `std::nullopt`
+ * if the header is missing or unsupported
+ */
+[[nodiscard]] std::optional<std::pair<int64_t, std::size_t>> parse_bloom_filter_header(
+  host_span<uint8_t const> bytes);
+
 class aggregate_reader_metadata {
  protected:
   std::vector<metadata> per_file_metadata;
@@ -229,16 +247,17 @@ class aggregate_reader_metadata {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param aligned_mr Aligned device memory resource to allocate bloom filter buffers
    *
-   * @return A flattened list of bloom filter bitset device buffers for each predicate column across
-   * row group
+   * @return A pair of the device buffers backing the bloom filter bitsets and a flattened,
+   * per-chunk list of bitset device spans (empty spans for chunks without a bloom filter)
    */
-  [[nodiscard]] std::vector<rmm::device_buffer> read_bloom_filters(
-    host_span<std::unique_ptr<datasource> const> sources,
-    host_span<std::vector<size_type> const> row_group_indices,
-    host_span<int const> column_schemas,
-    size_type num_row_groups,
-    rmm::cuda_stream_view stream,
-    rmm::device_async_resource_ref aligned_mr) const;
+  [[nodiscard]] std::pair<std::vector<rmm::device_buffer>,
+                          std::vector<cudf::device_span<cuda::std::byte const>>>
+  read_bloom_filters(host_span<std::unique_ptr<datasource> const> sources,
+                     host_span<std::vector<size_type> const> row_group_indices,
+                     host_span<int const> column_schemas,
+                     size_type num_row_groups,
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref aligned_mr) const;
 
   /**
    * @brief Collects Parquet types for the columns with the specified schema indices
