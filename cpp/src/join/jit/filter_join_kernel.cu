@@ -39,10 +39,10 @@ __device__ void execute_predicate_op(void* user_data,
                                      cuda::std::tuple<T...> args)
 {
   if constexpr (has_user_data) {
-    cuda::std::apply([&](auto&&... args) { GENERIC_JOIN_FILTER_OP(user_data, row_index, args...); },
-                     args);
+    cuda::std::apply(
+      [&](auto&&... args) { (void)GENERIC_JOIN_FILTER_OP(user_data, row_index, args...); }, args);
   } else {
-    cuda::std::apply([&](auto&&... args) { GENERIC_JOIN_FILTER_OP(args...); }, args);
+    cuda::std::apply([&](auto&&... args) { (void)GENERIC_JOIN_FILTER_OP(args...); }, args);
   }
 }
 

@@ -284,6 +284,8 @@ __device__ constexpr auto evaluate(cuda::std::optional<T>... args)
     using value_t          = result_t;
     using optional_value_t = cuda::std::optional<value_t>;
 
+    if ((!args.has_value() || ...)) { return optional_value_t{}; }
+
     return optional_value_t{opcode_evaluator<op>::eval(args.value()...)};
   }
 }
