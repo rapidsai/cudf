@@ -301,12 +301,19 @@ class _SeriesLocIndexer(_FrameIndexer):
                 row_arg = (arg,)
             else:
                 row_arg = arg
-            result = self._frame.index._get_row_major(self._frame, row_arg)
+            result = self._frame.index._get_row_major(
+                self._frame, row_arg, per_level=True
+            )
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame.index.nlevels
-                and not any(isinstance(x, slice) for x in arg)
+                and all(is_scalar(x) for x in arg)
+                and len(result) == 1
             ):
+                # Only collapse to a scalar when every level was selected by a
+                # scalar label and the key matched exactly one row; a tuple
+                # containing list-likes/slices, or a scalar key matching
+                # multiple rows of a non-unique MultiIndex, must stay a Series.
                 result = result.iloc[0]
             return result
         try:
