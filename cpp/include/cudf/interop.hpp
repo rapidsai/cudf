@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,7 @@
 
 #include <rmm/resource_ref.hpp>
 
+#include <span>
 #include <utility>
 
 struct DLManagedTensor;
@@ -354,7 +355,7 @@ class arrow_table {
    * @param mr Device memory resource used for any allocations during conversion
    */
   arrow_table(cudf::table&& input,
-              cudf::host_span<column_metadata const> metadata,
+              std::span<column_metadata const> metadata,
               rmm::cuda_stream_view stream      = cudf::get_default_stream(),
               rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -470,7 +471,7 @@ class arrow_table {
  * @return ArrowSchema generated from `input`
  */
 unique_schema_t to_arrow_schema(cudf::table_view const& input,
-                                cudf::host_span<column_metadata const> metadata);
+                                std::span<column_metadata const> metadata);
 
 /**
  * @brief Create `ArrowDeviceArray` from cudf table and metadata

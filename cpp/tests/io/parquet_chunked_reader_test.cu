@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "compression_common.hpp"
+#include "io_test_utils.hpp"
 #include "parquet_common.hpp"
 
 #include <cudf_test/base_fixture.hpp>
@@ -38,6 +39,7 @@
 #include <cuda/iterator>
 
 #include <fstream>
+#include <optional>
 #include <type_traits>
 
 namespace {
@@ -1119,12 +1121,13 @@ TEST_F(ParquetChunkedReaderTest, TestChunkedReadNullCount)
   auto const byte_limit = page_limit_rows * sizeof(int);
   auto const read_opts =
     cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath}).build();
-  auto reader = cudf::io::chunked_parquet_reader(byte_limit, read_opts);
+  auto reader = std::optional<cudf::io::chunked_parquet_reader>{};
+  EXPECT_CUDF_LOG_WARN(reader.emplace(byte_limit, read_opts));
 
   do {
     // Every fourth row is null
-    EXPECT_EQ(reader.read_chunk().tbl->get_column(0).null_count(), page_limit_rows / 4);
-  } while (reader.has_next());
+    EXPECT_EQ(reader->read_chunk().tbl->get_column(0).null_count(), page_limit_rows / 4);
+  } while (reader->has_next());
 }
 
 namespace {

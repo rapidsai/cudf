@@ -12,8 +12,10 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/resource_ref.hpp>
 
+#include <cstddef>
 #include <functional>
 #include <future>
+#include <span>
 #include <tuple>
 #include <vector>
 
@@ -33,6 +35,25 @@ namespace io::parquet {
 
 //! Using `byte_range_info` from cudf::io::text
 using cudf::io::text::byte_range_info;
+
+/**
+ * @brief Returns the Parquet reader's footer speculative read size in bytes.
+ *
+ * @ingroup io_utils
+ *
+ * Controlled by the `LIBCUDF_PARQUET_METADATA_SIZE_HINT` environment variable.
+ * Defaults to 64 KiB.
+ *
+ * When the footer is smaller than the speculative read size, the footer metadata
+ * is loaded in a single read, which is especially useful for high-latency, remote
+ * storage systems. When the footer is larger than the speculative read size, the
+ * footer metadata will be loaded in two reads.
+ *
+ * Set `LIBCUDF_PARQUET_METADATA_SIZE_HINT=0` to disable speculative reads.
+ *
+ * @return Number of bytes to speculatively read from the end of the source.
+ */
+[[nodiscard]] std::size_t metadata_size_hint();
 
 /**
  * @brief Fetches a host buffer of Parquet footer bytes from the input data source
@@ -105,7 +126,7 @@ std::tuple<std::vector<rmm::device_buffer>,
            std::vector<cudf::device_span<uint8_t const>>,
            std::future<void>>
 fetch_byte_ranges_to_device_async(cudf::io::datasource& datasource,
-                                  cudf::host_span<byte_range_info const> byte_ranges,
+                                  std::span<byte_range_info const> byte_ranges,
                                   rmm::cuda_stream_view stream,
                                   rmm::device_async_resource_ref mr);
 

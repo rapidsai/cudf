@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -159,7 +159,7 @@ ConfigureTest(
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/sum_with_overflow_tests.cpp
+  groupby/sum_overflow_tests.cpp
   groupby/tdigest_tests.cpp
   groupby/topk_tests.cpp
   groupby/var_tests.cpp
@@ -320,6 +320,7 @@ ConfigureTest(
 # * io tests --------------------------------------------------------------------------------------
 ConfigureTest(COMPRESSION_TEST io/comp/comp_test.cpp)
 ConfigureTest(ROW_SELECTION_TEST io/row_selection_test.cpp)
+ConfigureTest(FILEPATH_SOURCE_TEST io/filepath_source_test.cpp)
 
 ConfigureTest(
   CSV_TEST io/csv_test.cpp
@@ -347,13 +348,17 @@ ConfigureTest(
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_common.cpp
   io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_composer.cpp
   io/experimental/hybrid_scan_multifile_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_test.cpp
   io/experimental/hybrid_scan_test.cpp
   io/parquet_common.cpp
   io/parquet_test.cpp
 )
+ConfigureTest(VARIANT_EXTRACT_TEST io/experimental/variant_extract_test.cpp)
 ConfigureTest(
   PARQUET_DELETION_VECTORS_TEST
   io/parquet_deletion_vectors_test.cpp

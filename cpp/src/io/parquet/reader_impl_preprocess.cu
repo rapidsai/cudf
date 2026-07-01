@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -562,7 +563,11 @@ void reader_impl::read_compressed_data()
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
                                            : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
-  rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
+
+  // Zero out the vector before `decode_page_headers` as it may not write every byte of the buffer,
+  // and`sort_pages` copies `PageInfo` as whole objects.
+  auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+    total_pages, _stream, cudf::get_current_device_resource_ref());
 
   // decoding of column/page information
   decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);

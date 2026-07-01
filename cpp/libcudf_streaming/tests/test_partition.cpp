@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,8 +14,9 @@
 #include <cudf/contiguous_split.hpp>
 #include <cudf/utilities/traits.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
-#include <cudf_streaming/integrations/utils.hpp>
+#include <cudf_streaming/partition_utils.hpp>
+#include <cudf_streaming/utils.hpp>
+
 #include <rapidsmpf/memory/buffer.hpp>
 #include <rapidsmpf/memory/buffer_resource.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
@@ -24,7 +25,7 @@
 
 #include <memory>
 
-using namespace cudf_streaming::integrations;
+using namespace cudf_streaming;
 
 class NumOfPartitions : public cudf::test::BaseFixtureWithParam<std::tuple<int, int>> {};
 
