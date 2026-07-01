@@ -1223,7 +1223,7 @@ class IndexedFrame(Frame):
         1    26
         dtype: int64
         >>> [1, 2, 3, 4] @ s
-        10
+        np.int64(10)
         """
         # TODO: This function does not currently support nulls.
         lhs = self.values
@@ -1644,7 +1644,7 @@ class IndexedFrame(Frame):
         5     6
         dtype: int64
         >>> ser.median()
-        17.0
+        np.float64(17.0)
         """
         if "overwrite_input" in kwargs:
             raise ValueError(
@@ -1800,7 +1800,7 @@ class IndexedFrame(Frame):
         >>> import cudf
         >>> series = cudf.Series([1, 2, 3, 4])
         >>> series.kurtosis()
-        -1.200000000000001
+        np.float64(-1.200000000000001)
 
         **DataFrame**
 
@@ -2583,7 +2583,7 @@ class IndexedFrame(Frame):
         dtype: int64
 
         >>> even_primes.squeeze()
-        2
+        np.int64(2)
 
         Squeezing objects with more than one value in every axis does nothing:
 
@@ -2641,7 +2641,7 @@ class IndexedFrame(Frame):
         Squeezing all axes will project directly into a scalar:
 
         >>> df_0a.squeeze()
-        1
+        np.int64(1)
         """
         axes = (
             range(self.ndim)
@@ -3455,7 +3455,7 @@ class IndexedFrame(Frame):
             )
 
             def split_with_dtypes(
-                split: list[plc.Column],
+                split: tuple[plc.Column, ...],
             ) -> list[ColumnBase]:
                 return [
                     ColumnBase.create(col, dtype)

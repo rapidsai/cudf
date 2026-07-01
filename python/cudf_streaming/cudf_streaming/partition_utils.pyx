@@ -321,7 +321,7 @@ cpdef object packed_data_from_cudf_packed_columns(
     cdef cpp_BufferResource* _br = br.ptr()
     cdef PackedData ret = PackedData.__new__(PackedData)
     with nogil:
-        if not (packed_columns.c_obj != NULL and
+        if not (packed_columns.c_obj.get() != NULL and
                 deref(packed_columns.c_obj).metadata and
                 deref(packed_columns.c_obj).gpu_data):
             raise ValueError("Cannot release empty PackedColumns")

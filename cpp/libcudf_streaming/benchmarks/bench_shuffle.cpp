@@ -304,7 +304,7 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
   // Check the shuffle result (this test only works for non-empty partitions
   // thus we only check large shuffles).
   if (args.num_local_rows >= 1000000) {
-    for (const auto& output_partition : output_partitions) {
+    for (auto const& output_partition : output_partitions) {
       auto [parts, owner] =
         cudf_streaming::partition_and_split(output_partition->view(),
                                             {0},
