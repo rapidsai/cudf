@@ -394,11 +394,8 @@ fetch_bloom_filters_to_device_async_impl(
   CUDF_EXPECTS(num_sources == bloom_filter_byte_ranges_per_source.size(),
                "Encountered mismatch in number of datasources and bloom filter byte range spans");
 
-  // Read a filter whole in one host read (up to the reader's speculative read size) and copy its
-  // bitset to device; larger filters read only the header and stream the bitset to device.
-  auto const speculative_read_size =
-    std::max(cudf::io::parquet::metadata_size_hint(),
-             static_cast<std::size_t>(detail::bloom_filter_header_max_size));
+  // Speculatively read each filter in one host read (its serialized length when known, else a
+  // header-sized guess), then copy the bitset to device if covered, otherwise stream the bitset.
 
   // Flatten to one (source index, index within source, bloom filter byte range) task per filter
   std::vector<std::tuple<std::size_t, std::size_t, cudf::io::text::byte_range_info>>
@@ -432,11 +429,8 @@ fetch_bloom_filters_to_device_async_impl(
       auto const& [source_idx, inner_idx, bloom_range] = bloom_filter_tasks[task_idx];
       // placeholder for a chunk whose column has no bloom filter written
       if (bloom_range.is_empty()) { return {}; }
-      auto const total_size = static_cast<std::size_t>(bloom_range.size());
-      // Whole filter in one read when its known length is within the cap; else just the header.
-      auto const read_size = total_size <= speculative_read_size
-                               ? total_size
-                               : static_cast<std::size_t>(detail::bloom_filter_header_max_size);
+      // Read the whole filter when its length is known, else guess
+      auto const read_size = static_cast<std::size_t>(bloom_range.size());
       auto host_buffer     = datasources[source_idx].get().host_read(
         static_cast<std::size_t>(bloom_range.offset()), read_size);
       auto const header_info =
