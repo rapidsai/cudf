@@ -10,7 +10,7 @@ import operator
 import pickle
 import types
 import warnings
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import IntEnum
 from typing import Any, Literal
 
@@ -860,6 +860,13 @@ class _IntermediateProxy(_FastSlowProxy):
     """
 
     _method_chain: tuple[Callable, tuple, dict]
+    # The proxy objects this intermediate was derived from and a snapshot of
+    # their wrapped objects' identities. Both are always (re)assigned together
+    # in ``_fsproxy_wrap`` / ``__setstate__`` / ``_fsproxy_record_parent_ids``;
+    # the empty class-level defaults just guarantee the attributes always exist
+    # (e.g. on a bare ``object.__new__`` instance before it is populated).
+    _fsproxy_parents: Sequence[_FastSlowProxy] = ()
+    _fsproxy_parent_ids: Sequence[int] = ()
 
     @classmethod
     def _fsproxy_wrap(
@@ -884,10 +891,14 @@ class _IntermediateProxy(_FastSlowProxy):
         return proxy
 
     def _fsproxy_record_parent_ids(self) -> None:
-        """Snapshot the identity of each parent proxy's wrapped object."""
+        """Snapshot the identity of each parent proxy's wrapped object.
+
+        ``_fsproxy_parent_ids[i]`` is the recorded identity of
+        ``_fsproxy_parents[i]``: the two lists are built from the same source
+        in the same order, so they stay positionally aligned.
+        """
         self._fsproxy_parent_ids = [
-            id(parent._fsproxy_wrapped)
-            for parent in getattr(self, "_fsproxy_parents", ())
+            id(parent._fsproxy_wrapped) for parent in self._fsproxy_parents
         ]
 
     def _fsproxy_parents_changed(self) -> bool:
@@ -897,9 +908,16 @@ class _IntermediateProxy(_FastSlowProxy):
         intermediate was last derived from it. When that happens the cached
         wrapped object is stale and must be re-derived from the live parents.
         """
-        parents = getattr(self, "_fsproxy_parents", ())
+        parents = self._fsproxy_parents
         if not parents:
             return False
+        # ``_fsproxy_parent_ids`` was recorded from ``_fsproxy_parents`` in the
+        # same order (see ``_fsproxy_record_parent_ids``), so the ``zip`` pairs
+        # each parent with its own prior identity. The comparison is
+        # deliberately positional rather than set-based: we must detect whether
+        # a *given* parent's object was replaced, which a set of identities
+        # would lose (and it would not save any re-derivation, since parents are
+        # already de-duplicated when collected).
         return any(
             id(parent._fsproxy_wrapped) != old_id
             for parent, old_id in zip(
