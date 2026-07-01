@@ -438,8 +438,17 @@ class Merge:
             if self.how == "cross"
             else common_names - self._key_columns_with_same_name
         )
+
+        def _suffixed(name, suffix):
+            # Mirror pandas: a ``None`` suffix leaves the label (and its type,
+            # e.g. an integer column name) unchanged, while a string suffix is
+            # appended (coercing the label to a string).
+            if name in cols_to_suffix and suffix is not None:
+                return f"{name}{suffix}"
+            return name
+
         data = {
-            (f"{name}{self.lsuffix}" if name in cols_to_suffix else name): col
+            _suffixed(name, self.lsuffix): col
             for name, col in left_result._column_labels_and_values
         }
 
@@ -451,7 +460,7 @@ class Merge:
                     self.how == "cross"
                     or name not in self._key_columns_with_same_name
                 ):
-                    r_label = f"{name}{self.rsuffix}"
+                    r_label = _suffixed(name, self.rsuffix)
                     if r_label in data:
                         raise NotImplementedError(
                             f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
@@ -573,6 +582,13 @@ class Merge:
             raise TypeError("left must be a Series or DataFrame")
         if not isinstance(rhs, (Series, DataFrame)):
             raise TypeError("right must be a Series or DataFrame")
+        # ``suffixes`` must be an ordered pair; pandas rejects unordered/mapping
+        # containers such as sets and dicts.
+        if not isinstance(suffixes, (list, tuple)):
+            raise TypeError(
+                f"Passing 'suffixes' as a {type(suffixes)}, is not supported. "
+                "Provide 'suffixes' as a tuple instead."
+            )
         # We must actually support the requested merge type
         if how not in {
             "left",
