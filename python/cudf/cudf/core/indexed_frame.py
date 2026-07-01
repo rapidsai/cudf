@@ -3456,7 +3456,7 @@ class IndexedFrame(Frame):
             )
 
             def split_with_dtypes(
-                split: list[plc.Column],
+                split: tuple[plc.Column, ...],
             ) -> list[ColumnBase]:
                 return [
                     ColumnBase.create(col, dtype)
