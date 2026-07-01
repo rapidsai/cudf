@@ -14,10 +14,10 @@
 #include <nvbench/nvbench.cuh>
 
 // Benchmark for the parquet-dictionary -> cudf DICTIONARY32 transcode fast path enabled by
-// `parquet_reader_options::try_output_dict_columns`. It reads a fully dictionary-encoded set of
+// `parquet_reader_options::output_dict_columns`. It reads a fully dictionary-encoded set of
 // low-cardinality string columns both with the option off (the column materializes as STRING) and
 // with the option on (the reader keeps the dictionary representation and emits DICTIONARY32). The
-// `try_output_dict_columns` axis lets the two paths be compared directly.
+// `output_dict_columns` axis lets the two paths be compared directly.
 
 namespace {
 
@@ -46,7 +46,7 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
   auto const data_size         = static_cast<size_t>(state.get_int64("data_size"));
   auto const num_cols          = static_cast<cudf::size_type>(state.get_int64("num_cols"));
   auto const rg_size_rows      = state.get_int64("row_group_size_rows");
-  auto const try_dict          = static_cast<bool>(state.get_int64("try_output_dict_columns"));
+  auto const output_dict       = static_cast<bool>(state.get_int64("output_dict_columns"));
   auto const avg_string_length = static_cast<cudf::size_type>(state.get_int64("avg_string_length"));
   auto const source_type       = retrieve_io_type_enum(state.get_string("io_type"));
 
@@ -71,15 +71,15 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
 
   cudf::io::parquet_reader_options read_opts =
     cudf::io::parquet_reader_options::builder(source_sink.make_source_info())
-      .try_output_dict_columns(try_dict);
+      .output_dict_columns(output_dict);
 
   // Sanity check (outside the timed region): when the option is on the eligible string columns must
   // come back as DICTIONARY32, otherwise the benchmark would silently measure the plain path.
-  if (try_dict) {
+  if (output_dict) {
     auto const probe = cudf::io::read_parquet(read_opts);
     CUDF_EXPECTS(probe.tbl->num_columns() == num_cols, "Unexpected number of columns");
     CUDF_EXPECTS(probe.tbl->view().column(0).type().id() == cudf::type_id::DICTIONARY32,
-                 "try_output_dict_columns did not produce a DICTIONARY32 column; check that the "
+                 "output_dict_columns did not produce a DICTIONARY32 column; check that the "
                  "generated data is fully dictionary-encoded");
   }
 
@@ -108,7 +108,7 @@ NVBENCH_BENCH(BM_parquet_read_dict_transcode)
   .set_name("parquet_read_dict_transcode")
   .add_string_axis("io_type", {"DEVICE_BUFFER"})
   .set_min_samples(4)
-  .add_int64_axis("try_output_dict_columns", {0, 1})
+  .add_int64_axis("output_dict_columns", {0, 1})
   .add_int64_axis("cardinality", {100, 1'000, 10'000})
   .add_int64_axis("num_cols", {1, 8})
   .add_int64_axis("data_size", {512 << 20})
