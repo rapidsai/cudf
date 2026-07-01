@@ -449,6 +449,15 @@ class reader_impl {
                                                                          size_t chunk_num_rows);
 
   /**
+   * @brief Construct and prepend the source index column to the output columns
+   *
+   * @param num_rows_per_source Number of rows per parquet source
+   * @param out_columns Current output columns
+   */
+  void prepend_source_index_column(std::span<std::size_t const> num_rows_per_source,
+                                   std::vector<std::unique_ptr<column>>& out_columns);
+
+  /**
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
@@ -486,6 +495,8 @@ class reader_impl {
     bool use_jit_filter = false;
     // Whether to use case-sensitive matching for column names
     bool case_sensitive_names = true;
+    // Whether to prepend the source file index column to the output
+    bool prepend_source_index_column = false;
   } _options;
 
   // name to reference converter to extract AST output filter

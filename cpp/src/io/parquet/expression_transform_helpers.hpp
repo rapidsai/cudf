@@ -222,15 +222,18 @@ class named_to_reference_converter : public ast::detail::expression_transformer 
    * @copydoc ast::detail::expression_transformer::visit(ast::literal const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::literal const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
    */
   std::reference_wrapper<ast::expression const> visit(
     ast::column_name_reference const& expr) override;
+
   /**
    * @copydoc ast::detail::expression_transformer::visit(ast::operation const& )
    */
@@ -309,6 +312,33 @@ class equality_literals_collector : public ast::detail::expression_transformer {
  private:
   cudf::host_span<cudf::size_type const> _output_column_schemas;
   cudf::host_span<SchemaElement const> _schema_tree;
+};
+
+/**
+ * @brief Offsets every column referencein an expression by the specified value
+ *
+ */
+class offset_column_references : public named_to_reference_converter {
+ public:
+  offset_column_references(std::optional<std::reference_wrapper<ast::expression const>> expr,
+                           size_type offset);
+
+  // Use `visit` overloads from named_to_reference_converter
+  using named_to_reference_converter::visit;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(ast::column_reference const& expr) override;
+
+  /**
+   * @copydoc ast::detail::expression_transformer::visit(ast::column_name_reference const& )
+   */
+  std::reference_wrapper<ast::expression const> visit(
+    ast::column_name_reference const& expr) override;
+
+ private:
+  size_type _offset{0};
 };
 
 /**
