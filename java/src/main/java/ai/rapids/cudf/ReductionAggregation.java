@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -59,8 +59,16 @@ public final class ReductionAggregation {
    * (DECIMAL32/64/128). On overflow the sum value is unspecified; the boolean flag
    * is the source of truth.
    */
+  public static ReductionAggregation sumOverflow() {
+    return new ReductionAggregation(Aggregation.sumOverflow());
+  }
+
+  /**
+   * @deprecated Use {@link #sumOverflow()} instead.
+   */
+  @Deprecated
   public static ReductionAggregation sumWithOverflow() {
-    return new ReductionAggregation(Aggregation.sumWithOverflow());
+    return sumOverflow();
   }
 
   /**

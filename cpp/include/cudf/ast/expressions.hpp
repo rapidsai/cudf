@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -384,10 +384,7 @@ class column_reference : public expression {
    * @param table Table used to determine types
    * @return The data type of the column
    */
-  [[nodiscard]] cudf::data_type get_data_type(table_view const& table) const
-  {
-    return table.column(get_column_index()).type();
-  }
+  [[nodiscard]] cudf::data_type get_data_type(table_view const& table) const;
 
   /**
    * @brief Get the data type.
@@ -397,19 +394,7 @@ class column_reference : public expression {
    * @return The data type of the column
    */
   [[nodiscard]] cudf::data_type get_data_type(table_view const& left_table,
-                                              table_view const& right_table) const
-  {
-    auto const table = [&] {
-      if (get_table_source() == table_reference::LEFT) {
-        return left_table;
-      } else if (get_table_source() == table_reference::RIGHT) {
-        return right_table;
-      } else {
-        CUDF_FAIL("Column reference data type cannot be determined from unknown table.");
-      }
-    }();
-    return table.column(get_column_index()).type();
-  }
+                                              table_view const& right_table) const;
 
   /**
    * @copydoc expression::accept
