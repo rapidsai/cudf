@@ -659,19 +659,51 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
               std::format("{}, {}", args_str, instance.get_input_vars()[scale_reference_.index].id);
           }
 
-          sink.emit(std::format(
-            R"***({} {} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{}, {}>(&error_flag, {});
-)***",
-            type,
-            id_,
-            op_info.name,
-            error_policy_ == cudf::error_policy::NULLIFY ? "cudf::error_policy::NULLIFY"
-                                                         : "cudf::error_policy::PROPAGATE",
-            args_str));
+          auto error_policy = error_policy_ == cudf::error_policy::NULLIFY
+                                ? "cudf::error_policy::NULLIFY"
+                                : "cudf::error_policy::PROPAGATE";
 
-          if (op_info.is_fallible) {
-            sink.emit(R"***(CUDF_CHECK_OPCODE_ERROR_FLAG(error_flag);
-)***");
+          if (!op_info.is_fallible) {
+            sink.emit(std::format(
+              R"***({0} {1} = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
+)***",
+              type,
+              id_,
+              op_info.name,
+              error_policy,
+              args_str));
+          } else {
+            if (error_policy_ != cudf::error_policy::NULLIFY) {
+              sink.emit(std::format(
+                R"***({0} {1}{{}};
+auto {1}__expected = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
+if(!{1}__expected.has_value()) {{
+  return {1}__expected.error();
+}}
+
+{1} = {1}__expected.value();
+)***",
+                type,
+                id_,
+                op_info.name,
+                error_policy,
+                args_str));
+            } else {
+              sink.emit(std::format(
+                R"***({0} {1}{{}};
+auto {1}__expected = cudf::detail::row_ir::evaluate<cudf::detail::row_ir::opcode::{2}, {3}>({4});
+if({1}__expected.has_value()) {{
+  {1} = {1}__expected.value();
+}} else {{
+  {1} = {{}};
+}}
+)***",
+                type,
+                id_,
+                op_info.name,
+                error_policy,
+                args_str));
+            }
           }
         }
       }
@@ -818,7 +850,6 @@ std::tuple<std::string, null_aware, fallible, output_nullability> ast_converter:
   sink.emit(std::format("__device__ cudf::errc {}(", function_name));
   sink.emit(args_decl);
   sink.emit(")\n{\n");
-  sink.emit("[[maybe_unused]] cudf::errc error_flag = cudf::errc::SUCCESS;\n");
   for (auto& ir : output_irs_) {
     ir->emit_code(instance_, target, sink);
   }

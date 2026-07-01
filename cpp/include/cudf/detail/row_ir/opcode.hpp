@@ -8,12 +8,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 
-#define CUDF_CHECK_OPCODE_ERROR_FLAG(flag)              \
-  do {                                                  \
-    if (flag != ::cudf::errc::SUCCESS) { return flag; } \
-    flag = ::cudf::errc::SUCCESS;                       \
-  } while (0)
-
 namespace CUDF_EXPORT cudf {
 namespace detail::row_ir {
 
@@ -221,90 +215,76 @@ concept evaluable = requires(T... args) { opcode_evaluator<op>::eval(args...); }
 
 // evaluation of non-nullable values
 template <opcode op, cudf::error_policy error_policy, typename... T>
-__device__ constexpr auto evaluate(cudf::errc* error, T... args)
+__device__ constexpr auto evaluate(T... args)
   requires(!cudf::detail::ops::nullable<T> && ... && evaluable<op, T...>)
 {
   static_assert(error_policy != cudf::error_policy::NULLIFY,
                 "cudf::error_policy::NULLIFY is not supported for non-nullable types");
+  return opcode_evaluator<op>::eval(args...);
+}
+
+// null-aware evaluation
+template <opcode op, cudf::error_policy error_policy, typename... T>
+__device__ constexpr auto evaluate(cuda::std::optional<T>... args)
+  requires(evaluable<op, cuda::std::optional<T>...>)
+{
   using result_t = decltype(opcode_evaluator<op>::eval(args...));
 
   if constexpr (is_fallible_result<result_t>) {
-    using return_t = typename result_t::value_type;
-    auto result    = opcode_evaluator<op>::eval(args...);
-    if (!result.has_value()) {
-      *error = result.error();
-      return return_t{};
+    // unwrap the result of the operator and propagate errors
+    using optional_value_t = typename result_t::value_type;
+    auto result            = opcode_evaluator<op>::eval(args...);
+    if constexpr (error_policy == cudf::error_policy::NULLIFY) {
+      if (!result.has_value()) {
+        return optional_value_t{};
+      } else {
+        return result.value();
+      }
+    } else {
+      return result;
     }
-    return result.value();
   } else {
-    *error = cudf::errc::SUCCESS;
     return opcode_evaluator<op>::eval(args...);
   }
 }
 
-// evaluation of nullable values
+// null-propagating evaluation
 template <opcode op, cudf::error_policy error_policy, typename... T>
-__device__ constexpr auto evaluate(cudf::errc* error, cuda::std::optional<T>... args)
-  requires((evaluable<op, cuda::std::optional<T>...> || evaluable<op, T...>))
+__device__ constexpr auto evaluate(cuda::std::optional<T>... args)
+  requires(!evaluable<op, cuda::std::optional<T>...> && evaluable<op, T...>)
 {
-  // if the operator can handle nullable types, use it.
-  // otherwise propagate nulls.
-  if constexpr (evaluable<op, cuda::std::optional<T>...>) {
-    using result_t = decltype(opcode_evaluator<op>::eval(args...));
+  using result_t = decltype(opcode_evaluator<op>::eval(args.value()...));
 
-    if constexpr (is_fallible_result<result_t>) {
-      // unwrap the result of the operator and propagate errors
-      using return_t = typename result_t::value_type;
-      auto result    = opcode_evaluator<op>::eval(args...);
-      if (!result.has_value()) {
-        if constexpr (error_policy == cudf::error_policy::NULLIFY) {
-          *error = cudf::errc::SUCCESS;
-          return return_t{};
-        } else {
-          *error = result.error();
-          return return_t{};
-        }
+  if constexpr (is_fallible_result<result_t>) {
+    using value_t          = typename result_t::value_type;
+    using optional_value_t = cuda::std::optional<value_t>;
+    using expected_t       = cuda::std::expected<optional_value_t, errc>;
+
+    if ((!args.has_value() || ...)) {
+      if constexpr (error_policy == cudf::error_policy::NULLIFY) {
+        return optional_value_t{};
+      } else {
+        return expected_t{optional_value_t{}};
       }
-      return result.value();
+    }
+
+    auto result = opcode_evaluator<op>::eval(args.value()...);
+
+    if constexpr (error_policy == cudf::error_policy::NULLIFY) {
+      if (!result.has_value()) {
+        return optional_value_t{};
+      } else {
+        return optional_value_t{result.value()};
+      }
+
     } else {
-      *error = cudf::errc::SUCCESS;
-      return opcode_evaluator<op>::eval(args...);
+      return expected_t{optional_value_t{result.value()}};
     }
   } else {
-    using result_t = decltype(opcode_evaluator<op>::eval(args.value()...));
+    using value_t          = result_t;
+    using optional_value_t = cuda::std::optional<value_t>;
 
-    if constexpr (is_fallible_result<result_t>) {
-      using value_t  = typename result_t::value_type;
-      using return_t = cuda::std::optional<value_t>;
-
-      // if any of the arguments are null, return null without calling the operator and set error to
-      // SUCCESS.
-      if ((!args.has_value() || ...)) {
-        *error = cudf::errc::SUCCESS;
-        return return_t{};
-      }
-
-      auto result = opcode_evaluator<op>::eval(args.value()...);
-
-      if (!result.has_value()) {
-        if constexpr (error_policy == cudf::error_policy::NULLIFY) {
-          *error = cudf::errc::SUCCESS;
-        } else {
-          *error = result.error();
-        }
-        return return_t{};
-      }
-
-      return return_t{result.value()};
-    } else {
-      *error = cudf::errc::SUCCESS;
-
-      using return_t = cuda::std::optional<result_t>;
-
-      if ((!args.has_value() || ...)) { return return_t{}; }
-
-      return return_t{opcode_evaluator<op>::eval(args.value()...)};
-    }
+    return optional_value_t{opcode_evaluator<op>::eval(args.value()...)};
   }
 }
 
