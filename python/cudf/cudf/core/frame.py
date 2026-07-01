@@ -1947,7 +1947,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         b    7
         dtype: int64
         >>> min_series.min()
-        1
+        np.int64(1)
 
         .. pandas-compat::
             :meth:`pandas.DataFrame.min`, :meth:`pandas.Series.min`
