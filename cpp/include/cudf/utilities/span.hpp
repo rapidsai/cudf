@@ -169,7 +169,7 @@ struct host_span {
   /**
    * @brief Returns a reference to the last element in the span.
    *
-   * Calling last on an empty span results in undefined behavior.
+   * Calling back on an empty span results in undefined behavior.
    *
    * @return Reference to the last element in the span
    */
@@ -225,10 +225,10 @@ struct host_span {
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool empty() const noexcept { return _span.empty(); }
 
   /**
-   * @brief Obtains a subspan consisting of the first N elements of the sequence
+   * @brief Obtains a subspan consisting of the first count elements of the sequence
    *
    * @param count Number of elements from the beginning of this span to put in the subspan.
-   * @return A subspan of the first N elements of the sequence
+   * @return A subspan of the first count elements of the sequence
    */
   [[nodiscard]] constexpr host_span first(size_type count) const noexcept
   {
@@ -236,10 +236,10 @@ struct host_span {
   }
 
   /**
-   * @brief Obtains a subspan consisting of the last N elements of the sequence
+   * @brief Obtains a subspan consisting of the last count elements of the sequence
    *
    * @param count Number of elements from the end of this span to put in the subspan
-   * @return A subspan of the last N elements of the sequence
+   * @return A subspan of the last count elements of the sequence
    */
   [[nodiscard]] constexpr host_span last(size_type count) const noexcept
   {
