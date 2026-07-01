@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,7 +19,8 @@ public abstract class AstExpression {
     NULL_LITERAL(1),
     COLUMN_REFERENCE(2),
     UNARY_EXPRESSION(3),
-    BINARY_EXPRESSION(4);
+    BINARY_EXPRESSION(4),
+    COLUMN_NAME_REFERENCE(5);
 
     private final byte nativeId;
 

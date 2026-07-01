@@ -1,0 +1,688 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package ai.rapids.cudf;
+
+import ai.rapids.cudf.ast.CompiledExpression;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+
+/**
+ * Experimental Parquet hybrid-scan reader.
+ *
+ * <p>This class is the Java binding for
+ * {@code cudf::io::parquet::experimental::hybrid_scan_reader}. It is designed for highly
+ * selective filter expressions over Parquet files and exposes the multi-step pipeline that
+ * the C++ reader uses internally:
+ * <ol>
+ *   <li>Read the Parquet footer (and optional page index) to drive row-group / page-level
+ *       pruning.</li>
+ *   <li>Filter the row groups using statistics, bloom filters, and dictionary pages.</li>
+ *   <li>Materialize the <em>filter</em> columns; the reader builds an initial row mask from
+ *       the chosen {@link RowMaskKind} and then mutates it down to only the rows that
+ *       survive the AST filter.</li>
+ *   <li>Materialize the <em>payload</em> columns using the surviving row mask.</li>
+ * </ol>
+ *
+ * <p>Single-shot convenience methods are provided for the common cases
+ * ({@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], UseDataPageMask, RowMaskKind)}
+ * and {@link #materializeAllColumns(int[], DeviceMemoryBuffer[])}).
+ *
+ * <p>Chunked / streaming materialization is also supported via the
+ * {@code setupChunkingFor*} + {@code materialize*Chunk} family of methods, mirroring the C++
+ * chunked reader pipeline.
+ *
+ * <p>The APIs in this file are experimental and subject to change.
+ */
+@Experimental
+public class HybridScanReader implements AutoCloseable {
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
+  /**
+   * Selects which row mask is built internally by
+   * {@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], UseDataPageMask, RowMaskKind)}
+   * and
+   * {@link #setupChunkingForFilterColumns(long, long, int[], UseDataPageMask, RowMaskKind, DeviceMemoryBuffer[])}.
+   */
+  public enum RowMaskKind {
+    /** All rows initially visible — no page-level pruning. */
+    ALL_TRUE,
+    /**
+     * Row visibility seeded from page-index statistics. Requires that
+     * {@link #setupPageIndex(HostMemoryBuffer)} has already been called.
+     */
+    PAGE_INDEX_STATS
+  }
+
+  /**
+   * The result of a combined row-mask-build + filter-column-materialization call.
+   *
+   * <p>Both the filter {@link Table} and the mutated row {@link ColumnVector} mask are
+   * owned by this object. Close via try-with-resources to release both.
+   */
+  public static final class FilterMaterializationResult implements AutoCloseable {
+    private final Table table;
+    private final ColumnVector rowMask;
+    private boolean closed = false;
+
+    FilterMaterializationResult(Table table, ColumnVector rowMask) {
+      this.table = table;
+      this.rowMask = rowMask;
+    }
+
+    /** @return the materialized filter column table. */
+    public Table table() { return table; }
+
+    /** @return the (mutated) row mask after the filter expression was applied. */
+    public ColumnVector rowMask() { return rowMask; }
+
+    @Override
+    public synchronized void close() {
+      if (closed) return;
+      try { table.close(); } finally {
+        try { rowMask.close(); } finally { closed = true; }
+      }
+    }
+  }
+
+  private static final Logger log = LoggerFactory.getLogger(HybridScanReader.class);
+
+  private static final class HybridScanReaderCleaner extends MemoryCleaner.Cleaner {
+    private long nativeHandle;
+
+    HybridScanReaderCleaner(long nativeHandle) {
+      this.nativeHandle = nativeHandle;
+    }
+
+    @Override
+    protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
+      long origAddress = nativeHandle;
+      boolean neededCleanup = nativeHandle != 0;
+      if (neededCleanup) {
+        try {
+          destroy(nativeHandle);
+        } finally {
+          nativeHandle = 0;
+        }
+        if (logErrorIfNotClean) {
+          log.error("A HYBRID SCAN READER WAS LEAKED (ID: {} {})", id,
+              Long.toHexString(origAddress));
+        }
+      }
+      return neededCleanup;
+    }
+
+    @Override
+    public boolean isClean() {
+      return nativeHandle == 0;
+    }
+  }
+
+  private final HybridScanReaderCleaner cleaner;
+  // Strong ref so the native options' raw pointer to the AST is not collected
+  // while this reader is alive.
+  private final CompiledExpression filter;
+  private boolean isClosed = false;
+
+  /**
+   * Create a hybrid scan reader from the bytes of a Parquet file footer.
+   *
+   * <p>The {@code footerBuffer} can be obtained by reading the last few bytes of a Parquet
+   * file. See the {@code hybrid_scan_io} example for a helper that does exactly that.
+   *
+   * @param footerBuffer host-resident footer bytes (must remain valid until this constructor
+   *                     returns; the JNI reads the bytes synchronously)
+   * @param opts         Parquet reader options. {@link ParquetOptions#DEFAULT} by default.
+   * @param filter       optional compiled AST filter expression. May be {@code null}.
+   *                     The expression typically uses {@link ai.rapids.cudf.ast.ColumnNameReference}
+   *                     to refer to columns by name. If non-{@code null}, it must remain
+   *                     unclosed for the entire lifetime of this reader.
+   */
+  public HybridScanReader(HostMemoryBuffer footerBuffer,
+                          ParquetOptions opts,
+                          CompiledExpression filter) {
+    if (footerBuffer == null) {
+      throw new IllegalArgumentException("footerBuffer must not be null");
+    }
+    if (opts == null) {
+      opts = ParquetOptions.DEFAULT;
+    }
+    this.filter = filter;
+    long filterHandle = (filter != null) ? filter.getNativeHandle() : 0;
+    String[] columnNames = opts.getIncludeColumnNames();
+    boolean[] readBinaryAsString = opts.getReadBinaryAsString();
+    DType timeUnit = opts.timeUnit();
+    long handle = createFromFooter(
+        footerBuffer.getAddress(),
+        footerBuffer.getLength(),
+        filterHandle,
+        columnNames,
+        readBinaryAsString,
+        timeUnit.getTypeId().getNativeId());
+    this.cleaner = new HybridScanReaderCleaner(handle);
+    MemoryCleaner.register(this, cleaner);
+    cleaner.addRef();
+  }
+
+  // ----------------------------------------------------------------------
+  // Metadata
+  // ----------------------------------------------------------------------
+
+  /** @return the byte range of the page index in the Parquet file. */
+  public ByteRange pageIndexByteRange() {
+    assertNotClosed();
+    long[] offsetSize = pageIndexByteRange(cleaner.nativeHandle);
+    return new ByteRange(offsetSize[0], offsetSize[1]);
+  }
+
+  /**
+   * Materialize the {@code ColumnIndex} / {@code OffsetIndex} structs (collectively, the page
+   * index) from the supplied bytes so that subsequent calls using
+   * {@link RowMaskKind#PAGE_INDEX_STATS} can use them.
+   *
+   * @param pageIndexBuffer host-resident page index bytes
+   */
+  public void setupPageIndex(HostMemoryBuffer pageIndexBuffer) {
+    assertNotClosed();
+    if (pageIndexBuffer == null) {
+      throw new IllegalArgumentException("pageIndexBuffer must not be null");
+    }
+    setupPageIndex(cleaner.nativeHandle,
+        pageIndexBuffer.getAddress(),
+        pageIndexBuffer.getLength());
+  }
+
+  // ----------------------------------------------------------------------
+  // Row group enumeration
+  // ----------------------------------------------------------------------
+
+  /** @return all row group indices in the Parquet file. */
+  public int[] allRowGroups() {
+    assertNotClosed();
+    return allRowGroups(cleaner.nativeHandle);
+  }
+
+  /** @return the total number of top-level rows in the supplied row groups. */
+  public long totalRowsInRowGroups(int[] rowGroupIndices) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    return totalRowsInRowGroups(cleaner.nativeHandle, rowGroupIndices);
+  }
+
+  // ----------------------------------------------------------------------
+  // Row group filtering
+  // ----------------------------------------------------------------------
+
+  /** Filter row groups using column-chunk statistics from the file footer. */
+  public int[] filterRowGroupsWithStats(int[] rowGroupIndices) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    return filterRowGroupsWithStats(cleaner.nativeHandle, rowGroupIndices);
+  }
+
+  /**
+   * Get the byte ranges in the source file that hold the bloom filter and dictionary page
+   * data needed for the next round of row-group pruning.
+   */
+  public SecondaryFilterRanges secondaryFiltersByteRanges(int[] rowGroupIndices) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    long[] packed = secondaryFiltersByteRanges(cleaner.nativeHandle, rowGroupIndices);
+    // Layout: [numBloomRanges, bloom_o0, bloom_s0, ..., dict_o0, dict_s0, ...]
+    int numBloom = (int) packed[0];
+    int totalRanges = (packed.length - 1) / 2;
+    int numDict = totalRanges - numBloom;
+    ByteRange[] bloom = new ByteRange[numBloom];
+    ByteRange[] dict = new ByteRange[numDict];
+    int idx = 1;
+    for (int i = 0; i < numBloom; i++) {
+      bloom[i] = new ByteRange(packed[idx], packed[idx + 1]);
+      idx += 2;
+    }
+    for (int i = 0; i < numDict; i++) {
+      dict[i] = new ByteRange(packed[idx], packed[idx + 1]);
+      idx += 2;
+    }
+    return new SecondaryFilterRanges(bloom, dict);
+  }
+
+  // TODO: add filterRowGroupsWithBloomFilters(int[] rowGroups) once the Java Parquet
+  //       writer can emit bloom filter blocks. The C++ writer exposes this via
+  //       parquet_writer_options::set_column_chunks_bloom_filter_params, which has not
+  //       yet been surfaced in ParquetWriterOptions / TableJni.cpp. Until then, any
+  //       file written from Java contains no bloom filter blocks and the method would
+  //       always return the input row groups unchanged.
+
+  /** Filter row groups using column-chunk dictionary pages loaded into device memory. */
+  public int[] filterRowGroupsWithDictionaryPages(DeviceMemoryBuffer[] dictionaryPageData,
+                                                  int[] rowGroupIndices) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    if (dictionaryPageData == null) {
+      throw new IllegalArgumentException("dictionaryPageData must not be null");
+    }
+    long[] addrs = new long[dictionaryPageData.length];
+    long[] lens = new long[dictionaryPageData.length];
+    for (int i = 0; i < dictionaryPageData.length; i++) {
+      addrs[i] = dictionaryPageData[i].getAddress();
+      lens[i] = dictionaryPageData[i].getLength();
+    }
+    return filterRowGroupsWithDictionaryPages(cleaner.nativeHandle, addrs, lens,
+        rowGroupIndices);
+  }
+
+  // ----------------------------------------------------------------------
+  // Byte ranges
+  // ----------------------------------------------------------------------
+
+  /** @return byte ranges for the column chunks of <em>filter</em> columns. */
+  public ByteRange[] filterColumnChunksByteRanges(int[] rowGroupIndices) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    return decodeRanges(filterColumnChunksByteRanges(cleaner.nativeHandle, rowGroupIndices));
+  }
+
+  /** @return byte ranges for the column chunks of <em>payload</em> columns. */
+  public ByteRange[] payloadColumnChunksByteRanges(int[] rowGroupIndices) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    return decodeRanges(payloadColumnChunksByteRanges(cleaner.nativeHandle, rowGroupIndices));
+  }
+
+  /** @return byte ranges for all column chunks (filter + payload) of the selected columns. */
+  public ByteRange[] allColumnChunksByteRanges(int[] rowGroupIndices) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    return decodeRanges(allColumnChunksByteRanges(cleaner.nativeHandle, rowGroupIndices));
+  }
+
+  // ----------------------------------------------------------------------
+  // Single-shot materialize
+  // ----------------------------------------------------------------------
+
+  /**
+   * Build a row mask according to {@code kind} and materialize the filter columns, applying
+   * the compiled filter expression. The row mask and the resulting filter table are returned
+   * together as a {@link FilterMaterializationResult}; close it via try-with-resources.
+   *
+   * <p>Pass {@link RowMaskKind#ALL_TRUE} when no page-index-based pruning is needed.
+   * Pass {@link RowMaskKind#PAGE_INDEX_STATS} to seed the mask from page-level statistics
+   * (requires {@link #setupPageIndex(HostMemoryBuffer)} to have been called first).
+   *
+   * @param rowGroupIndices  row groups to read
+   * @param columnChunkData  device buffers holding the filter column chunks, in the order
+   *                         returned by {@link #filterColumnChunksByteRanges(int[])}
+   * @param mode             whether to compute and use a data page mask
+   * @param kind             how to initialise the row mask
+   * @return combined filter table and mutated row mask; caller must close this result
+   */
+  public FilterMaterializationResult materializeFilterColumns(int[] rowGroupIndices,
+                                                              DeviceMemoryBuffer[] columnChunkData,
+                                                              UseDataPageMask mode,
+                                                              RowMaskKind kind) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    long[] addrs = bufferAddrs(columnChunkData);
+    long[] lens = bufferLens(columnChunkData);
+    boolean allTrue = (kind == RowMaskKind.ALL_TRUE);
+    long[] handles = materializeFilterColumnsWithKind(cleaner.nativeHandle, rowGroupIndices,
+        addrs, lens, mode.getNativeValue(), allTrue);
+    ColumnVector rowMask = new ColumnVector(handles[0]);
+    try {
+      long[] tableHandles = Arrays.copyOfRange(handles, 1, handles.length);
+      Table table = new Table(tableHandles);
+      return new FilterMaterializationResult(table, rowMask);
+    } catch (Throwable t) {
+      rowMask.close();
+      throw t;
+    }
+  }
+
+  /**
+   * Materialize only the payload columns, applying the supplied row mask to the output.
+   *
+   * @param rowGroupIndices  row groups to read
+   * @param columnChunkData  device buffers holding the payload column chunks, in the order
+   *                         returned by {@link #payloadColumnChunksByteRanges(int[])}
+   * @param rowMask          row mask (read-only)
+   * @param mode             whether to compute and use a data page mask
+   * @return the materialized payload column table
+   */
+  public Table materializePayloadColumns(int[] rowGroupIndices,
+                                         DeviceMemoryBuffer[] columnChunkData,
+                                         ColumnVector rowMask,
+                                         UseDataPageMask mode) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    requireNonNullRowMask(rowMask);
+    long[] addrs = bufferAddrs(columnChunkData);
+    long[] lens = bufferLens(columnChunkData);
+    long[] handles = materializePayloadColumns(cleaner.nativeHandle, rowGroupIndices,
+        addrs, lens, rowMask.getNativeView(), mode.getNativeValue());
+    return new Table(handles);
+  }
+
+  /**
+   * Materialize all (or selected) columns in a single pass. The filter expression is applied
+   * <em>after</em> reading, so this is most efficient for small files or when most rows
+   * survive the filter. For highly-selective filters, prefer the explicit two-step flow.
+   */
+  public Table materializeAllColumns(int[] rowGroupIndices,
+                                     DeviceMemoryBuffer[] columnChunkData) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    long[] addrs = bufferAddrs(columnChunkData);
+    long[] lens = bufferLens(columnChunkData);
+    long[] handles = materializeAllColumns(cleaner.nativeHandle, rowGroupIndices, addrs, lens);
+    return new Table(handles);
+  }
+
+  // ----------------------------------------------------------------------
+  // Chunked materialize
+  // ----------------------------------------------------------------------
+
+  /**
+   * Build a row mask according to {@code kind} and set up chunking state for filter-column
+   * materialization. The row mask is owned internally by the reader for the duration of
+   * the chunked filter pipeline; subsequent calls to {@link #materializeFilterColumnsChunk()}
+   * mutate it in place. After all chunks are drained, call {@link #takeFilterRowMask()} to
+   * transfer ownership of the row mask to the caller (typically to feed it into
+   * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, UseDataPageMask)}).
+   *
+   * <p>Calling this method again before {@link #takeFilterRowMask()} discards the previous
+   * chunked-filter row mask.
+   *
+   * <p>Caller must keep {@code columnChunkData} open until {@link #takeFilterRowMask()} (or
+   * a re-setup); the native reader holds references to it across chunk calls.
+   *
+   * @param chunkReadLimit  per-chunk byte limit, or 0 for no limit
+   * @param passReadLimit   per-pass byte limit, or 0 for no limit
+   * @param kind            how to initialise the row mask
+   */
+  public void setupChunkingForFilterColumns(long chunkReadLimit,
+                                            long passReadLimit,
+                                            int[] rowGroupIndices,
+                                            UseDataPageMask mode,
+                                            RowMaskKind kind,
+                                            DeviceMemoryBuffer[] columnChunkData) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    long[] addrs = bufferAddrs(columnChunkData);
+    long[] lens = bufferLens(columnChunkData);
+    boolean allTrue = (kind == RowMaskKind.ALL_TRUE);
+    setupChunkingForFilterColumnsWithKind(cleaner.nativeHandle,
+        chunkReadLimit, passReadLimit, rowGroupIndices, mode.getNativeValue(), allTrue,
+        addrs, lens);
+  }
+
+  /**
+   * @return the next filter-column chunk; throws if no chunk is available or if no chunked
+   *         filter pipeline is active. The internal row mask owned by this reader is
+   *         updated in place.
+   */
+  public Table materializeFilterColumnsChunk() {
+    assertNotClosed();
+    long[] handles = materializeFilterColumnsChunk(cleaner.nativeHandle);
+    return new Table(handles);
+  }
+
+  /**
+   * Transfer ownership of the row mask produced by the chunked filter-column materialization
+   * to the caller. Typically called after all {@link #materializeFilterColumnsChunk()} calls
+   * complete and immediately before
+   * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, UseDataPageMask)}.
+   *
+   * <p>After this call the reader has no chunked-filter row mask; subsequent
+   * {@link #materializeFilterColumnsChunk()} calls will fail until
+   * {@link #setupChunkingForFilterColumns(long, long, int[], UseDataPageMask, RowMaskKind, DeviceMemoryBuffer[])}
+   * is invoked again. If never called, the row mask is freed when the reader is closed.
+   *
+   * @return the owned row mask {@link ColumnVector}; caller must close it.
+   */
+  public ColumnVector takeFilterRowMask() {
+    assertNotClosed();
+    return new ColumnVector(takeFilterRowMask(cleaner.nativeHandle));
+  }
+
+  /**
+   * Set up chunking state for payload-column materialization. Subsequent calls to
+   * {@link #materializePayloadColumnsChunk(ColumnVector)} will yield successive chunks.
+   *
+   * <p>Caller must keep {@code columnChunkData} open until {@link #hasNextTableChunk()}
+   * returns {@code false}; the native reader holds references to it across chunk calls.
+   */
+  public void setupChunkingForPayloadColumns(long chunkReadLimit,
+                                             long passReadLimit,
+                                             int[] rowGroupIndices,
+                                             ColumnVector rowMask,
+                                             UseDataPageMask mode,
+                                             DeviceMemoryBuffer[] columnChunkData) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    requireNonNullRowMask(rowMask);
+    long[] addrs = bufferAddrs(columnChunkData);
+    long[] lens = bufferLens(columnChunkData);
+    setupChunkingForPayloadColumns(cleaner.nativeHandle, chunkReadLimit, passReadLimit,
+        rowGroupIndices, rowMask.getNativeView(), mode.getNativeValue(), addrs, lens);
+  }
+
+  /** @return the next payload-column chunk; throws if no chunk is available. */
+  public Table materializePayloadColumnsChunk(ColumnVector rowMask) {
+    assertNotClosed();
+    requireNonNullRowMask(rowMask);
+    long[] handles = materializePayloadColumnsChunk(cleaner.nativeHandle,
+        rowMask.getNativeView());
+    return new Table(handles);
+  }
+
+  /**
+   * Set up chunking state for all-column materialization (single-pass mode). Subsequent calls
+   * to {@link #materializeAllColumnsChunk()} will yield successive chunks.
+   *
+   * <p>Caller must keep {@code columnChunkData} open until {@link #hasNextTableChunk()}
+   * returns {@code false}; the native reader holds references to it across chunk calls.
+   */
+  public void setupChunkingForAllColumns(long chunkReadLimit,
+                                         long passReadLimit,
+                                         int[] rowGroupIndices,
+                                         DeviceMemoryBuffer[] columnChunkData) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    long[] addrs = bufferAddrs(columnChunkData);
+    long[] lens = bufferLens(columnChunkData);
+    setupChunkingForAllColumns(cleaner.nativeHandle, chunkReadLimit, passReadLimit,
+        rowGroupIndices, addrs, lens);
+  }
+
+  /** @return the next all-columns chunk; throws if no chunk is available. */
+  public Table materializeAllColumnsChunk() {
+    assertNotClosed();
+    long[] handles = materializeAllColumnsChunk(cleaner.nativeHandle);
+    return new Table(handles);
+  }
+
+  /** @return {@code true} when a subsequent {@code materialize*Chunk} call would return data. */
+  public boolean hasNextTableChunk() {
+    assertNotClosed();
+    return hasNextTableChunk(cleaner.nativeHandle);
+  }
+
+  /**
+   * Partition the supplied row groups into passes whose total uncompressed size respects the
+   * given limit. The returned array contains one inner array per pass.
+   *
+   * @param rowGroupIndices row groups to partition
+   * @param passReadLimit   limit on the amount of memory used by a single pass, or 0 for no limit
+   * @return an array of arrays of row group indices, one per pass
+   */
+  public int[][] constructRowGroupPasses(int[] rowGroupIndices, long passReadLimit) {
+    assertNotClosed();
+    requireNonNullRowGroups(rowGroupIndices);
+    return constructRowGroupPasses(cleaner.nativeHandle, rowGroupIndices, passReadLimit);
+  }
+
+  // ----------------------------------------------------------------------
+  // Lifecycle
+  // ----------------------------------------------------------------------
+
+  @Override
+  public synchronized void close() {
+    if (isClosed) {
+      return;
+    }
+    cleaner.delRef();
+    cleaner.clean(false);
+    isClosed = true;
+  }
+
+  // ----------------------------------------------------------------------
+  // Helpers
+  // ----------------------------------------------------------------------
+
+  private void assertNotClosed() {
+    if (isClosed) {
+      throw new IllegalStateException("HybridScanReader has been closed");
+    }
+  }
+
+  private static void requireNonNullRowGroups(int[] rowGroupIndices) {
+    if (rowGroupIndices == null) {
+      throw new IllegalArgumentException("rowGroupIndices must not be null");
+    }
+  }
+
+  private static void requireNonNullRowMask(ColumnVector rowMask) {
+    if (rowMask == null) {
+      throw new IllegalArgumentException("rowMask must not be null");
+    }
+  }
+
+  private static long[] bufferAddrs(DeviceMemoryBuffer[] buffers) {
+    if (buffers == null) {
+      return new long[0];
+    }
+    long[] addrs = new long[buffers.length];
+    for (int i = 0; i < buffers.length; i++) {
+      addrs[i] = buffers[i].getAddress();
+    }
+    return addrs;
+  }
+
+  private static long[] bufferLens(DeviceMemoryBuffer[] buffers) {
+    if (buffers == null) {
+      return new long[0];
+    }
+    long[] lens = new long[buffers.length];
+    for (int i = 0; i < buffers.length; i++) {
+      lens[i] = buffers[i].getLength();
+    }
+    return lens;
+  }
+
+  private static ByteRange[] decodeRanges(long[] packed) {
+    if (packed == null || packed.length == 0) {
+      return new ByteRange[0];
+    }
+    int n = packed.length / 2;
+    ByteRange[] out = new ByteRange[n];
+    for (int i = 0; i < n; i++) {
+      out[i] = new ByteRange(packed[2 * i], packed[2 * i + 1]);
+    }
+    return out;
+  }
+
+  // ----------------------------------------------------------------------
+  // Native methods
+  // ----------------------------------------------------------------------
+
+  private static native long createFromFooter(long footerAddress,
+                                              long footerLength,
+                                              long filterHandle,
+                                              String[] columnNames,
+                                              boolean[] readBinaryAsString,
+                                              int timeUnitTypeId);
+
+  private static native void destroy(long handle);
+
+  // Metadata
+  private static native long[] pageIndexByteRange(long handle);
+  private static native void setupPageIndex(long handle, long bufferAddress, long bufferLength);
+
+  // Row group enumeration
+  private static native int[] allRowGroups(long handle);
+  private static native long totalRowsInRowGroups(long handle, int[] rowGroupIndices);
+
+  // Filtering
+  private static native int[] filterRowGroupsWithStats(long handle, int[] rowGroupIndices);
+  private static native long[] secondaryFiltersByteRanges(long handle, int[] rowGroupIndices);
+  private static native int[] filterRowGroupsWithDictionaryPages(long handle,
+                                                                 long[] bufferAddresses,
+                                                                 long[] bufferLengths,
+                                                                 int[] rowGroupIndices);
+
+  // Byte ranges
+  private static native long[] filterColumnChunksByteRanges(long handle, int[] rowGroupIndices);
+  private static native long[] payloadColumnChunksByteRanges(long handle, int[] rowGroupIndices);
+  private static native long[] allColumnChunksByteRanges(long handle, int[] rowGroupIndices);
+
+  // Single-shot materialize
+  // Returns: [row_mask_col_handle, table_col0_handle, ..., table_colN_handle]
+  private static native long[] materializeFilterColumnsWithKind(long handle,
+                                                                int[] rowGroupIndices,
+                                                                long[] bufferAddresses,
+                                                                long[] bufferLengths,
+                                                                boolean useDataPageMask,
+                                                                boolean allTrue);
+  private static native long[] materializePayloadColumns(long handle,
+                                                         int[] rowGroupIndices,
+                                                         long[] bufferAddresses,
+                                                         long[] bufferLengths,
+                                                         long rowMaskViewHandle,
+                                                         boolean useDataPageMask);
+  private static native long[] materializeAllColumns(long handle,
+                                                     int[] rowGroupIndices,
+                                                     long[] bufferAddresses,
+                                                     long[] bufferLengths);
+
+  // Chunked
+  // Builds the row mask, sets up chunking state, and stores the owned row mask column on
+  // the C++ wrapper. Subsequent materializeFilterColumnsChunk calls mutate that column in
+  // place; takeFilterRowMask transfers it out to Java.
+  private static native void setupChunkingForFilterColumnsWithKind(long handle,
+                                                                   long chunkReadLimit,
+                                                                   long passReadLimit,
+                                                                   int[] rowGroupIndices,
+                                                                   boolean useDataPageMask,
+                                                                   boolean allTrue,
+                                                                   long[] bufferAddresses,
+                                                                   long[] bufferLengths);
+  private static native long[] materializeFilterColumnsChunk(long handle);
+  private static native long takeFilterRowMask(long handle);
+  private static native void setupChunkingForPayloadColumns(long handle,
+                                                            long chunkReadLimit,
+                                                            long passReadLimit,
+                                                            int[] rowGroupIndices,
+                                                            long rowMaskViewHandle,
+                                                            boolean useDataPageMask,
+                                                            long[] bufferAddresses,
+                                                            long[] bufferLengths);
+  private static native long[] materializePayloadColumnsChunk(long handle,
+                                                              long rowMaskViewHandle);
+  private static native void setupChunkingForAllColumns(long handle,
+                                                        long chunkReadLimit,
+                                                        long passReadLimit,
+                                                        int[] rowGroupIndices,
+                                                        long[] bufferAddresses,
+                                                        long[] bufferLengths);
+  private static native long[] materializeAllColumnsChunk(long handle);
+  private static native boolean hasNextTableChunk(long handle);
+  private static native int[][] constructRowGroupPasses(long handle,
+                                                        int[] rowGroupIndices,
+                                                        long passReadLimit);
+}

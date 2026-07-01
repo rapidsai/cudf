@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -45,6 +45,15 @@ class compiled_expr {
   {
     expressions.push_back(std::move(ref_ptr));
     return static_cast<cudf::ast::column_reference&>(*expressions.back());
+  }
+
+  /** @brief Take ownership of @p ref_ptr; returns a reference stable for the lifetime of this
+   * compiled_expr. */
+  cudf::ast::column_name_reference& add_column_name_ref(
+    std::unique_ptr<cudf::ast::column_name_reference> ref_ptr)
+  {
+    expressions.push_back(std::move(ref_ptr));
+    return static_cast<cudf::ast::column_name_reference&>(*expressions.back());
   }
 
   cudf::ast::operation& add_operation(std::unique_ptr<cudf::ast::operation> expr_ptr)
