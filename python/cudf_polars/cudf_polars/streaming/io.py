@@ -251,7 +251,7 @@ class SplitScan(IR):
     def with_prefetched_parquet_metadata(
         cls,
         node: SplitScan,
-        cached_parquet_info: list[CachedParquetInfo],
+        cached_parquet_info_map: dict[str, CachedParquetInfo],
     ) -> Self:
         """
         Create a new SplitScan node, with prefetched parquet metadata set.
@@ -263,20 +263,21 @@ class SplitScan(IR):
         ----------
         node
             The SplitScan node to create a new node from.
-        cached_parquet_info
-            The cached parquet metadata to set on the new node. This will be a
-            length-1 list, matching the length-1 ``path`` for the base scan node.
+        cached_parquet_info_map
+            A dictionary mapping file paths to cached parquet metadata. This should contain
+            all the file paths, including those from the base scan (which has been split
+            into multiple SplitScan nodes).
 
         Returns
         -------
         The new SplitScan node.
         """
-        new_base = Scan.with_prefetched_parquet_metadata(
-            node.base_scan, cached_parquet_info
-        )
+        # cached_parquet_info_map *might* not contain all the paths for the base scan,
+        # if, e.g., this worker has only been assigned a subset of the paths.
+        cached_parquet_info = [cached_parquet_info_map[path] for path in node.paths]
         return cls(
             node.schema,
-            new_base,
+            node.base_scan,
             node.paths,
             node.split_index,
             node.total_splits,
@@ -463,9 +464,7 @@ class FusedScan(IR):
     ) -> Self:
         """Create a new FusedScan node, with prefetched parquet metadata set."""
         cached_parquet_info = [cached_parquet_info_map[path] for path in node.paths]
-        Scan._validate_cached_parquet_info(
-            node.paths, node.parquet_options, cached_parquet_info
-        )
+        Scan._validate_cached_parquet_info(node.paths, cached_parquet_info)
         return cls(
             node.schema,
             node.base_scan,
@@ -694,13 +693,10 @@ class StreamingScan(IR):
         if node.scan_type == "split":
             new_scans = []
             for scan in node.scans:
-                new_parquet_info = [
-                    cached_parquet_info_map[path] for path in scan.paths
-                ]
                 # SplitScan should be generic / overload based on type.
                 new_scan = SplitScan.with_prefetched_parquet_metadata(
                     scan,  # type: ignore[arg-type]
-                    new_parquet_info,
+                    cached_parquet_info_map,
                 )
                 assert new_scan.cached_parquet_info is not None
                 assert new_scan.paths == [

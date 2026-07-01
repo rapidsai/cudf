@@ -523,7 +523,7 @@ class Scan(IR):
         self.parquet_options = parquet_options
         self.cached_parquet_info = cached_parquet_info
 
-        # Scan._validate_cached_parquet_info(self.paths, self.parquet_options, self.cached_parquet_info)
+        Scan._validate_cached_parquet_info(self.paths, self.cached_parquet_info)
 
         if self.typ not in ("csv", "parquet", "ndjson"):  # pragma: no cover
             # This line is unhittable ATM since IPC/Anonymous scan raise
@@ -628,14 +628,9 @@ class Scan(IR):
     @staticmethod
     def _validate_cached_parquet_info(
         paths: list[str],
-        parquet_options: ParquetOptions,
         cached_parquet_info: list[CachedParquetInfo] | None,
     ) -> None:
-        if parquet_options.prefetch_file_metadata and not cached_parquet_info:
-            raise AssertionError(
-                "Prefetching is enabled, but no cached parquet info was provided."
-            )
-        elif cached_parquet_info is not None and paths != [
+        if cached_parquet_info is not None and paths != [
             info.path for info in cached_parquet_info
         ]:
             raise AssertionError(
@@ -708,10 +703,13 @@ class Scan(IR):
         # Zero-width parquet files lose their row count when read through
         # pylibcudf. See https://github.com/rapidsai/cudf/issues/21428
         if parquet_options.prefetch_file_metadata:
-            Scan._validate_cached_parquet_info(
-                paths, parquet_options, cached_parquet_info
-            )
-            parquet_metadatas = [info.file_metadata for info in cached_parquet_info]  # type: ignore[union-attr]
+            if cached_parquet_info is None:
+                raise AssertionError(
+                    "Cached parquet info is required when prefetching file metadata is enabled"
+                )
+
+            Scan._validate_cached_parquet_info(paths, cached_parquet_info)
+            parquet_metadatas = [info.file_metadata for info in cached_parquet_info]
             num_rows = sum(metadata.num_rows for metadata in parquet_metadatas)
         else:
             meta = plc.io.parquet_metadata.read_parquet_metadata(
@@ -857,16 +855,19 @@ class Scan(IR):
                 )
         elif typ == "parquet":
             if parquet_options.prefetch_file_metadata:
-                Scan._validate_cached_parquet_info(
-                    paths, parquet_options, cached_parquet_info
-                )
-                source_info = plc.io.SourceInfo(
-                    [
+                if cached_parquet_info is None:
+                    raise AssertionError(
+                        "Cached parquet info is required when prefetching file metadata is enabled"
+                    )
+                Scan._validate_cached_parquet_info(paths, cached_parquet_info)
+                filepath_sources = []
+                parquet_metadatas = []
+                for info in cached_parquet_info:
+                    filepath_sources.append(
                         plc.io.types.FilepathSource(info.path, info.size)
-                        for info in cached_parquet_info  # type: ignore[union-attr]
-                    ]
-                )
-                parquet_metadatas = [info.file_metadata for info in cached_parquet_info]  # type: ignore[union-attr]
+                    )
+                    parquet_metadatas.append(info.file_metadata)
+                source_info = plc.io.SourceInfo(filepath_sources)
             else:
                 parquet_metadatas = None
                 source_info = plc.io.SourceInfo(paths)

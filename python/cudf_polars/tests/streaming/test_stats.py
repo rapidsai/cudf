@@ -290,10 +290,6 @@ def test_parquet_source_info_omits_footers_when_paths_are_sampled(
     assert info.cached_parquet_info is None
 
 
-# TODO: Add a test that calls prefetch_parquet_file_metadata_for_ir
-# and ensure that we don't refetch the metadata from stats
-
-
 def test_parquet_metadata_reads_footers(
     tmp_path: pathlib.Path,
     df_and_schema: tuple[pl.DataFrame, Schema],
