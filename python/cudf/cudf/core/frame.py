@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -249,7 +249,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         keys: list[int],
         keep: Literal["first", "last", False],
         nulls_are_equal: bool,
-    ) -> list[plc.Column]:
+    ) -> tuple[plc.Column, ...]:
         """Core stable_distinct implementation shared by Index and IndexedFrame."""
         _keep_options = {
             "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
@@ -277,7 +277,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         keys: list[int],
         how: Literal["any", "all"],
         thresh: int | None = None,
-    ) -> list[plc.Column]:
+    ) -> tuple[plc.Column, ...]:
         """Core drop_nulls implementation shared by Index and IndexedFrame."""
         if how not in {"any", "all"}:
             raise ValueError("how must be 'any' or 'all'")
@@ -705,6 +705,19 @@ class Frame(BinaryOperand, Scannable, Serializable):
         if dtype is None:
             if ncol == 1:
                 to_dtype = next(self._dtypes)[1]
+                if (na_value is no_default or na_value is None) and (
+                    isinstance(to_dtype, np.dtype)
+                    and to_dtype.kind in "iu"
+                    and self._columns[0].has_nulls()
+                ):
+                    # A single nullable integer column must be promoted to
+                    # float64 so its nulls can be represented as NaN, matching
+                    # Series.to_numpy()/.values and the multi-column path
+                    # below. ``na_value`` is left unset (``no_default`` for
+                    # ``to_numpy`` / ``None`` for ``to_cupy``), so the nulls
+                    # are not being filled and the integer output buffer would
+                    # otherwise store the null sentinel instead.
+                    to_dtype = np.dtype("float64")
             else:
                 to_dtype = find_common_type(
                     [dtype for _, dtype in self._dtypes]

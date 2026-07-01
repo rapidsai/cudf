@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,12 +9,15 @@
 #include "reader_impl_chunking_utils.cuh"
 #include "reader_impl_preprocess_utils.cuh"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/batched_memset.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/exec_policy.hpp>
@@ -561,7 +564,11 @@ void reader_impl::read_compressed_data()
   auto const total_pages = _has_page_index ? count_page_headers_with_pgidx(chunks, _stream)
                                            : count_page_headers(chunks, _stream);
   if (total_pages <= 0) { return; }
-  rmm::device_uvector<PageInfo> unsorted_pages(total_pages, _stream);
+
+  // Zero out the vector before `decode_page_headers` as it may not write every byte of the buffer,
+  // and`sort_pages` copies `PageInfo` as whole objects.
+  auto unsorted_pages = cudf::detail::make_zeroed_device_uvector_async<PageInfo>(
+    total_pages, _stream, cudf::get_current_device_resource_ref());
 
   // decoding of column/page information
   decode_page_headers(pass, unsorted_pages, _has_page_index, _stream);
@@ -608,7 +615,7 @@ void reader_impl::preprocess_file(read_mode mode)
     std::overflow_error);
 
   // Inclusive scan the number of rows per source
-  if (not _expr_conv.get_converted_expr().has_value() and mode == read_mode::CHUNKED_READ) {
+  if (mode == read_mode::CHUNKED_READ) {
     _file_itm_data.exclusive_sum_num_rows_per_source.resize(
       _file_itm_data.num_rows_per_source.size());
     thrust::inclusive_scan(_file_itm_data.num_rows_per_source.cbegin(),
@@ -1116,6 +1123,58 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               _stream);
 
   return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
+}
+
+void reader_impl::prepend_source_index_column(std::span<std::size_t const> num_rows_per_source,
+                                              std::vector<std::unique_ptr<column>>& out_columns)
+{
+  if (not _options.prepend_source_index_column) { return; }
+
+  using column_type    = cudf::size_type;
+  auto constexpr dtype = cudf::data_type{cudf::type_to_id<column_type>()};
+
+  auto const num_rows =
+    std::accumulate(num_rows_per_source.begin(), num_rows_per_source.end(), std::size_t{0});
+
+  auto const prepend_column = [&](auto&& column) {
+    out_columns.emplace(out_columns.begin(), std::move(column));
+  };
+
+  // Empty column
+  if (num_rows == 0) {
+    prepend_column(cudf::make_empty_column(dtype));
+    return;
+  }
+
+  // Single source
+  auto const num_sources = num_rows_per_source.size();
+  if (num_sources == 1) {
+    auto const scalar = cudf::numeric_scalar<column_type>(0, true, _stream, _mr);
+    prepend_column(cudf::make_column_from_scalar(scalar, num_rows, _stream, _mr));
+    return;
+  }
+
+  // Multiple sources
+  auto col_data = rmm::device_uvector<column_type>(num_rows, _stream, _mr);
+  {
+    auto temp_mr = cudf::get_current_device_resource_ref();
+
+    // Host per-source row offsets, including the final total row count.
+    auto host_row_offsets =
+      cudf::detail::make_empty_pinned_vector<cudf::size_type>(num_sources + 1, _stream);
+    host_row_offsets.resize(num_sources + 1);
+    host_row_offsets.front() = cudf::size_type{0};
+    std::inclusive_scan(
+      num_rows_per_source.begin(), num_rows_per_source.end(), host_row_offsets.begin() + 1);
+
+    auto const row_offsets =
+      cudf::detail::make_device_uvector_async(host_row_offsets, _stream, temp_mr);
+
+    cudf::detail::label_segments(
+      row_offsets.begin(), row_offsets.end(), col_data.begin(), col_data.end(), _stream);
+  }
+
+  prepend_column(std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{}, 0));
 }
 
 }  // namespace cudf::io::parquet::detail

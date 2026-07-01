@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Sort logic for the RapidsMPF streaming runtime."""
 
@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     OrderKey,
     OrderScheme,
     Partitioning,
 )
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.shuffler import PartitionAssignment
 from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.message import Message
@@ -453,12 +453,32 @@ async def _extract_partitions_and_send(
     await ch_out.drain(context)
 
 
+def _sort_by_column_names(ir: Sort) -> list[str]:
+    """
+    Resolve the underlying column names for a ``Sort`` node's keys.
+
+    A sort key's ``NamedExpr.name`` reflects its output alias, which may differ from
+    the referenced column after upstream renames. E.g., a join dedup may leave
+    ``ORDER BY df2.text`` represented as ``Col('text:df2').alias('text')``. Resolve
+    through the underlying ``Col`` so schema lookups use the actual column name.
+
+    Raises
+    ------
+    NotImplementedError
+        If any sort key is not a bare column reference.
+    """
+    by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
+    if len(by) != len(ir.by):
+        raise NotImplementedError("Sorting columns must be column names.")
+    return by
+
+
 def _sort_to_order_keys(ir: Sort) -> list[OrderKey]:
     """Convert Sort IR to list of OrderKeys."""
     return [
         OrderKey(index, order, null_order)
         for index, order, null_order in zip(
-            names_to_indices(ir.by, ir.schema),
+            names_to_indices(tuple(_sort_by_column_names(ir)), ir.schema),
             ir.order,
             ir.null_order,
             strict=False,
@@ -714,9 +734,7 @@ def _sort_rapidsmpf_network(ir: Sort, rec: SubNetGenerator) -> tuple[dict, dict]
 
     (child,) = ir.children
     nodes, channels = rec(child)
-    by = [ne.value.name for ne in ir.by if isinstance(ne.value, Col)]
-    if len(by) != len(ir.by):
-        raise NotImplementedError("Sorting columns must be column names.")
+    by = _sort_by_column_names(ir)
 
     collective_ids = list(rec.state["collective_id_map"][ir])
     expected_id_count = 3 if dynamic else 2

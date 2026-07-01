@@ -117,7 +117,6 @@ Environment variables follow these patterns:
 | `raise_on_fail`          | Raise an error instead of falling back to CPU execution.                                                                      | `False`                   |
 | `parquet_options`        | Parquet configuration, dict or {class}`~cudf_polars.utils.config.ParquetOptions`.                                             | —                         |
 | `memory_resource_config` | RMM configuration, dict or {class}`~cudf_polars.utils.config.MemoryResourceConfig`.                                           | —                         |
-| `cuda_stream_policy`     | CUDA stream policy (`"default"`, `"pool"`, or a configuration dict).                                                          | —                         |
 | `hardware_binding`       | Hardware binding policy. Pass a {class}`~cudf_polars.engine.hardware_binding.HardwareBindingPolicy` for fine-grained control. | `HardwareBindingPolicy()` |
 | `allow_gpu_sharing`      | When `False` (default), the engine raises if multiple ranks share the same physical GPU.                                      | `False`                   |
 

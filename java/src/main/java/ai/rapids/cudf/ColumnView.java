@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -4309,7 +4309,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Segmented sort of the elements within a list in each row of a list column.
-   * NOTICE: list columns with nested child are NOT supported yet.
+   * The list child may be of any type whose leaf elements are relationally comparable, including
+   * arbitrarily nested LIST and STRUCT children.
    *
    * @param isDescending   whether sorting each row with descending order (or ascending order)
    * @param isNullSmallest whether to regard the null value as the min value (or the max value)

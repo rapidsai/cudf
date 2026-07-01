@@ -1,6 +1,6 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "concatenate.hpp"
@@ -21,15 +21,14 @@
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cudf_streaming/parquet.hpp>
+#include <cudf_streaming/table_chunk.hpp>
+
 #include <rmm/mr/cuda_async_memory_resource.hpp>
 
 #include <cuda_runtime_api.h>
 
-#include <cudf_streaming/streaming/parquet.hpp>
-#include <cudf_streaming/streaming/table_chunk.hpp>
-#include <mpi.h>
 #include <rapidsmpf/communicator/communicator.hpp>
-#include <rapidsmpf/communicator/mpi.hpp>
 #include <rapidsmpf/nvtx.hpp>
 #include <rapidsmpf/streaming/coll/allgather.hpp>
 #include <rapidsmpf/streaming/core/actor.hpp>
@@ -64,7 +63,7 @@ rapidsmpf::streaming::Actor read_lineitem(std::shared_ptr<rapidsmpf::streaming::
                      "l_tax"             // 5
                    })
                    .build();
-  auto stream = ctx->br()->stream_pool().get_stream();
+  auto stream = ctx->br()->stream_pool()->get_stream();
   // l_shipdate <= DATE '1998-09-02'
   constexpr auto date = cuda::std::chrono::year_month_day(
     cuda::std::chrono::year(1998), cuda::std::chrono::month(9), cuda::std::chrono::day(2));
@@ -73,7 +72,7 @@ rapidsmpf::streaming::Actor read_lineitem(std::shared_ptr<rapidsmpf::streaming::
                            stream, date, "l_shipdate", cudf::ast::ast_operator::LESS_EQUAL)
                        : rapidsmpf::ndsh::make_date_filter<cudf::timestamp_ms>(
                            stream, date, "l_shipdate", cudf::ast::ast_operator::LESS_EQUAL);
-  return cudf_streaming::streaming::actor::read_parquet(
+  return cudf_streaming::actor::read_parquet(
     ctx, comm, ch_out, num_producers, options, num_rows_per_chunk, std::move(filter_expr));
 }
 
@@ -118,7 +117,7 @@ rapidsmpf::streaming::Actor postprocess_group_by(
   auto msg = co_await ch_in->receive();
   RAPIDSMPF_EXPECTS((co_await ch_in->receive()).empty(),
                     "Expecting concatenated input at this point");
-  auto chunk   = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+  auto chunk   = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
   auto stream  = chunk.stream();
   auto columns = cudf::table{chunk.table_view(), stream, ctx->br()->device_mr()}.release();
   std::ignore  = std::move(chunk);
@@ -141,10 +140,10 @@ rapidsmpf::streaming::Actor postprocess_group_by(
                                            stream,
                                            ctx->br()->device_mr()));
   columns.push_back(std::move(count));
-  co_await ch_out->send(cudf_streaming::streaming::to_message(
-    msg.sequence_number(),
-    std::make_unique<cudf_streaming::streaming::TableChunk>(
-      std::make_unique<cudf::table>(std::move(columns)), stream)));
+  co_await ch_out->send(
+    cudf_streaming::to_message(msg.sequence_number(),
+                               std::make_unique<cudf_streaming::table_chunk>(
+                                 std::make_unique<cudf::table>(std::move(columns)), stream)));
   co_await ch_out->drain(ctx->executor());
 }
 
@@ -165,7 +164,7 @@ rapidsmpf::streaming::Actor select_columns_for_groupby(
   while (!ch_out->is_shutdown()) {
     auto msg = co_await ch_in->receive();
     if (msg.empty()) { break; }
-    auto chunk = co_await msg.release<cudf_streaming::streaming::TableChunk>().make_available(ctx);
+    auto chunk           = co_await msg.release<cudf_streaming::table_chunk>().make_available(ctx);
     auto chunk_stream    = chunk.stream();
     auto sequence_number = msg.sequence_number();
     auto table           = chunk.table_view();
@@ -216,9 +215,9 @@ static __device__ void calculate_charge(double *charge, double discprice, double
     // l_discount
     result.push_back(
       std::make_unique<cudf::column>(discount, chunk_stream, ctx->br()->device_mr()));
-    co_await ch_out->send(cudf_streaming::streaming::to_message(
+    co_await ch_out->send(cudf_streaming::to_message(
       sequence_number,
-      std::make_unique<cudf_streaming::streaming::TableChunk>(
+      std::make_unique<cudf_streaming::table_chunk>(
         std::make_unique<cudf::table>(std::move(result)), chunk_stream)));
   }
   co_await ch_out->drain(ctx->executor());

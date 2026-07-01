@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -173,7 +173,13 @@ filters : list of tuple, list of lists of tuples, default None
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
-    for each input.
+    for each input. Rows are returned in input order, and in the given
+    row-group order within each input; row groups are not sorted or
+    deduplicated, so repeated indices are read multiple times.
+
+    .. note::
+       When ``filters`` are also provided, the given order and any repeated
+       indices may not be preserved.
 categorical_partitions : boolean, default True
     Whether directory-partitioned columns should be interpreted as categorical
     or raw dtypes.
@@ -1299,6 +1305,10 @@ encoding : str, default 'utf-8'
 compression : str, None
     A string representing the compression scheme to use in the output file
     Compression while writing csv is not supported currently
+quoting : int, optional
+    Control field quoting behavior per ``csv.QUOTE_*`` constants.
+    Use one of ``csv.QUOTE_MINIMAL`` (0) or ``csv.QUOTE_NONE`` (3).
+    Default is ``csv.QUOTE_MINIMAL``.
 lineterminator : str, optional
     The newline character or character sequence to use in the output file.
     Defaults to :data:`os.linesep`.
@@ -1320,7 +1330,8 @@ None or str
 
 Notes
 -----
-- Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+- Supports ``csv.QUOTE_MINIMAL`` and ``csv.QUOTE_NONE`` quoting styles,
+  consistent with pandas. Other quoting styles raise ``NotImplementedError``.
 - The default behaviour is to write all rows of the dataframe at once.
   This can lead to memory or overflow errors for large tables. If this
   happens, consider setting the ``chunksize`` argument to some
