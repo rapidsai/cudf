@@ -758,7 +758,7 @@ async def _sample_chunks(
     ch
         The channel to sample from.
     max_sample_chunks
-        The maximum number of non-empty chunks to sample.
+        The maximum number of chunks to sample.
     max_sample_bytes
         The maximum number of bytes to sample.
     local_count
@@ -769,21 +769,17 @@ async def _sample_chunks(
     Sampled chunks and the extrapolated total size/rows for this rank.
     """
     sampled_chunks = ChunkStore(context)
-    sampled_nonempty_count = 0
     sampled_count = 0
     total_size = 0
     total_rows = 0
-    while sampled_nonempty_count < max_sample_chunks:
+    for _ in range(max_sample_chunks):
         msg = await ch.recv(context)
         if msg is None:
             break
         chunk = TableChunk.from_message(msg, br=context.br())
-        nrows = chunk.shape[0]
         total_size += chunk.data_alloc_size()
-        total_rows += nrows
+        total_rows += chunk.shape[0]
         sampled_count += 1
-        if nrows > 0:
-            sampled_nonempty_count += 1
         sampled_chunks.insert(Message(msg.sequence_number, chunk))
         if total_size >= max_sample_bytes:
             break
