@@ -11200,4 +11200,20 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  void testWindowOptionsRowsFrameOrderByGettersReturnNull() {
+    // A ROWS-frame WindowOptions sets no order-by, so the parallel order-by arrays stay null and
+    // their getters must return null rather than NPE on an unguarded copy.
+    try (Scalar one = Scalar.fromInt(1);
+         WindowOptions rowsWindow = WindowOptions.builder()
+             .minPeriods(1)
+             .window(one, one)
+             .build()) {
+      assertEquals(WindowOptions.FrameType.ROWS, rowsWindow.getFrameType());
+      assertNull(rowsWindow.getOrderByColumnIndices());
+      assertNull(rowsWindow.getOrderByAscending());
+      assertNull(rowsWindow.getOrderByNullsFirst());
+    }
+  }
 }

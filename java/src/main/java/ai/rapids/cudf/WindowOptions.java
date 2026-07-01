@@ -160,28 +160,29 @@ public class WindowOptions implements AutoCloseable {
 
   /**
    * Order-by column indices for this RANGE window. The single-column builder setters normalize
-   * to a length-1 array, so this is always non-null and non-empty for a RANGE window. Call only
-   * on a RANGE-frame WindowOptions; the backing array is null for a ROWS frame.
+   * to a length-1 array, so this is non-null and non-empty for a RANGE window.
+   * @return a copy of the order-by column indices, or null when no order-by was set (ROWS frame).
    */
   int[] getOrderByColumnIndices() {
-    return Arrays.copyOf(orderByColumnIndices, orderByColumnIndices.length);
+    return orderByColumnIndices != null ? Arrays.copyOf(orderByColumnIndices, orderByColumnIndices.length) : null;
   }
 
   /**
    * Per-order-by-column ascending flags, parallel to {@link #getOrderByColumnIndices()}.
-   * Call only on a RANGE-frame WindowOptions; the backing array is null for a ROWS frame.
+   * @return a copy of the ascending flags, or null when no order-by was set (ROWS frame).
    */
   boolean[] getOrderByAscending() {
-    return Arrays.copyOf(orderByAscendingFlags, orderByAscendingFlags.length);
+    return orderByAscendingFlags != null ? Arrays.copyOf(orderByAscendingFlags, orderByAscendingFlags.length) : null;
   }
 
   /**
    * Per-order-by-column null-placement flags (true == nulls first), parallel to
    * {@link #getOrderByColumnIndices()}. Only consumed for multi-column RANGE windows; the
    * single-column path deduces null placement natively, so the returned value is unused there.
+   * @return a copy of the null-placement flags, or null when no order-by was set (ROWS frame).
    */
   boolean[] getOrderByNullsFirst() {
-    return Arrays.copyOf(orderByNullsFirstFlags, orderByNullsFirstFlags.length);
+    return orderByNullsFirstFlags != null ? Arrays.copyOf(orderByNullsFirstFlags, orderByNullsFirstFlags.length) : null;
   }
 
   boolean isUnboundedPreceding() { return this.precedingBoundsExtent == RangeExtentType.UNBOUNDED; }
