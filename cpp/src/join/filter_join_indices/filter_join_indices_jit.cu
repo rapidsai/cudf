@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -224,7 +224,7 @@ apply_join_semantics(cudf::table_view const& left,
       input_iter + left_indices.size(),
       cuda::counting_iterator<size_type>{0},
       output_iter,
-      [valid_predicate] __device__(size_type idx) { return valid_predicate(idx); },
+      [valid_predicate] __device__(size_type idx) -> bool { return valid_predicate(idx); },
       stream);
 
     return std::pair{std::move(filtered_left_indices), std::move(filtered_right_indices)};
@@ -249,7 +249,7 @@ apply_join_semantics(cudf::table_view const& left,
                                    {},
                                    stream.value()};
 
-    auto predicate_func = [predicate_results_ptr] __device__(std::size_t idx) {
+    auto predicate_func = [predicate_results_ptr] __device__(std::size_t idx) -> bool {
       return static_cast<bool>(predicate_results_ptr[idx]);
     };
     auto const num_filter_passing =
@@ -288,7 +288,7 @@ apply_join_semantics(cudf::table_view const& left,
     }
     if (num_invalid > 0) {
       auto filter_passing_indices_ref = filter_passing_indices.ref(cuco::contains);
-      auto is_unmatched_idx           = [filter_passing_indices_ref] __device__(size_type idx) {
+      auto is_unmatched_idx = [filter_passing_indices_ref] __device__(size_type idx) -> bool {
         auto is_unmatched = !filter_passing_indices_ref.contains(idx);
         return is_unmatched;
       };
