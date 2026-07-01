@@ -621,12 +621,26 @@ class Merge:
                 self.lhs._data.rangeindex and self.rhs._data.rangeindex
             )
 
-        # The result keeps a frame's index only when that frame joined via the
-        # ``left_index``/``right_index`` flag. An index *level* used as a key
-        # via ``on``/``left_on``/``right_on`` (no flag) is treated like a
-        # column and yields a default RangeIndex.
+        # The result keeps a frame's index when that frame joined via the
+        # ``left_index``/``right_index`` flag, or when the *same* index level
+        # is used as the key on both sides (e.g. ``on=<index level>``). An
+        # index level used as a key on only one side (via ``left_on``/
+        # ``right_on``), or with differing names, is treated like a column and
+        # yields a default RangeIndex.
+        both_on_index = (
+            self._using_left_index
+            and self._using_right_index
+            and all(
+                lkey.name == rkey.name
+                for lkey, rkey in zip(
+                    self._left_keys, self._right_keys, strict=True
+                )
+            )
+        )
         index: Index | None
-        if self._left_index_flag and self._right_index_flag:
+        if (
+            self._left_index_flag and self._right_index_flag
+        ) or both_on_index:
             index = left_result.index
         elif self._right_index_flag:
             # right_index (+ left_on): result index is the mapped left index.
