@@ -192,7 +192,11 @@ def test_implode_agg_unsupported(engine: pl.GPUEngine):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_decimal_aggs(engine: pl.GPUEngine, decimal_df: pl.LazyFrame) -> None:
+def test_decimal_aggs(
+    engine: pl.GPUEngine,
+    decimal_df: pl.LazyFrame,
+    xfail_decimal_sum_precision_polars_140,
+) -> None:
     q = decimal_df.with_columns(
         sum=pl.col("a").sum(),
         min=pl.col("a").min(),
@@ -231,7 +235,9 @@ def test_invalid_agg(engine: pl.GPUEngine, request):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_sum_all_null_decimal_dtype(engine: pl.GPUEngine):
+def test_sum_all_null_decimal_dtype(
+    engine: pl.GPUEngine, xfail_decimal_sum_precision_polars_140
+):
     df = pl.LazyFrame({"foo": pl.Series([None], dtype=pl.Decimal(9, 2))})
     q = df.select(pl.col("foo").sum())
     assert_gpu_result_equal(q, engine=engine)
@@ -240,5 +246,34 @@ def test_sum_all_null_decimal_dtype(engine: pl.GPUEngine):
 @pytest.mark.parametrize("expr", [pl.col("a").median(), pl.col("a").quantile(0.5)])
 def test_temporal_quantile_median_not_supported(engine: pl.GPUEngine, expr):
     df = pl.LazyFrame({"a": [date(2025, 1, 1), date(2025, 1, 2), date(2025, 1, 3)]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.col("a").mode(),
+        pl.col("a").entropy(),
+        pl.col("a").skew(),
+        pl.col("a").kurtosis(),
+        pl.col("a").arg_min(),
+        pl.col("a").arg_max(),
+        pl.col("a").arg_sort(),
+        pl.col("a").arg_unique(),
+    ],
+    ids=[
+        "mode",
+        "entropy",
+        "skew",
+        "kurtosis",
+        "arg_min",
+        "arg_max",
+        "arg_sort",
+        "arg_unique",
+    ],
+)
+def test_agg_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3, 2, 1]})
     q = df.select(expr)
     assert_ir_translation_raises(q, engine, NotImplementedError)

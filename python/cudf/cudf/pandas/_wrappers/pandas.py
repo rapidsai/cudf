@@ -20,6 +20,8 @@ import pyarrow.dataset as ds  # noqa: F401
 from pandas._libs.tslibs import offsets as liboffsets
 from pandas._testing import at, getitem, iat, iloc, loc, setitem
 from pandas.compat._optional import import_optional_dependency
+from pandas.io.excel._openpyxl import OpenpyxlWriter as pd_OpenpyxlWriter
+from pandas.io.excel._xlsxwriter import XlsxWriter as pd_XlsxWriter
 from pandas.tseries.holiday import (
     AbstractHolidayCalendar as pd_AbstractHolidayCalendar,
     EasterMonday as pd_EasterMonday,
@@ -281,6 +283,26 @@ def _to_xarray(self):
         return xr.Dataset.from_dataframe(self)
 
 
+# pandas.ExcelWriter uses __new__ to dispatch to the engine-specific subclass
+# (OpenpyxlWriter, XlsxWriter, etc.) based on the `engine` kwarg.  The proxy
+# must replicate this: construct the real writer with the accelerator disabled
+# (so we get the actual pandas writer, not a recursive proxy) then wrap the
+# result.  __init__ is a no-op because construction is fully handled in __new__.
+def _ExcelWriter__new__(cls, *args, **kwargs):
+    if cls is not ExcelWriter:
+        return object.__new__(cls)
+
+    from ..module_accelerator import disable_module_accelerator
+
+    with disable_module_accelerator():
+        writer = pd.ExcelWriter(*args, **kwargs)
+    return _maybe_wrap_result(writer, pd.ExcelWriter, *args, **kwargs)
+
+
+def _ExcelWriter__init__(self, *args, **kwargs):
+    pass
+
+
 DataFrame = make_final_proxy_type(
     "DataFrame",
     cudf.DataFrame,
@@ -335,9 +357,19 @@ if ipython_shell:
 
 
 def _Series_dtype(self):
-    # Fast-path to extract dtype from the current
-    # object without round-tripping through the slow<->fast
-    return _maybe_wrap_result(self._fsproxy_wrapped.dtype, None)
+    dtype = self._fsproxy_wrapped.dtype
+    if isinstance(
+        dtype,
+        (
+            cudf.ListDtype,
+            cudf.StructDtype,
+            cudf.Decimal32Dtype,
+            cudf.Decimal64Dtype,
+            cudf.Decimal128Dtype,
+        ),
+    ):
+        dtype = self._fsproxy_slow.dtype
+    return _maybe_wrap_result(dtype, None)
 
 
 _SeriesAtIndexer = make_intermediate_proxy_type(
@@ -570,6 +602,7 @@ Categorical = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     bases=(pd.api.extensions.ExtensionArray,),
     additional_attributes={
+        "__array__": array_method,
         "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
     },
 )
@@ -629,6 +662,7 @@ DatetimeTZDtype = make_final_proxy_type(
     slow_to_fast=_Unusable(),
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
     },
 )
 
@@ -662,6 +696,7 @@ try:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
             "_readonly": _FastSlowAttribute("_readonly", private=True),
@@ -678,6 +713,7 @@ except ImportError:
         fast_to_slow=_Unusable(),
         slow_to_fast=_Unusable(),
         additional_attributes={
+            "__array_ufunc__": _FastSlowAttribute("__array_ufunc__"),
             "_ndarray": _FastSlowAttribute("_ndarray"),
             "_dtype": _FastSlowAttribute("_dtype"),
             "_readonly": _FastSlowAttribute("_readonly", private=True),
@@ -897,6 +933,12 @@ BooleanDtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        # Expose the slow type as ``__class__`` so that
+        # ``real_dtype == proxy_dtype`` is True: pandas' ExtensionDtype.__eq__
+        # checks ``isinstance(other, type(self))``, which otherwise fails for a
+        # proxy that only subclasses the abstract ExtensionDtype. These masked
+        # dtypes have empty ``_metadata`` so equality reduces to this check.
+        "__class__": pd.BooleanDtype,
     },
 )
 
@@ -925,6 +967,7 @@ Int8Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int8Dtype,
     },
 )
 
@@ -939,6 +982,7 @@ Int16Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int16Dtype,
     },
 )
 
@@ -952,6 +996,7 @@ Int32Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int32Dtype,
     },
 )
 
@@ -965,6 +1010,7 @@ Int64Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int64Dtype,
     },
 )
 
@@ -978,6 +1024,7 @@ UInt8Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt8Dtype,
     },
 )
 
@@ -991,6 +1038,7 @@ UInt16Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt16Dtype,
     },
 )
 
@@ -1004,6 +1052,7 @@ UInt32Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt32Dtype,
     },
 )
 
@@ -1017,6 +1066,7 @@ UInt64Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt64Dtype,
     },
 )
 
@@ -1063,6 +1113,9 @@ IntervalDtype = make_final_proxy_type(
     slow_to_fast=cudf.from_pandas,
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
+        # ``_closed`` is a pandas-private attribute; source it from the slow
+        # (pandas) object so cudf's IntervalDtype need not define it.
+        "_closed": _FastSlowAttribute("_closed", private=True),
     },
 )
 
@@ -1103,6 +1156,7 @@ Float32Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Float32Dtype,
     },
 )
 
@@ -1116,6 +1170,7 @@ Float64Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Float64Dtype,
     },
 )
 
@@ -1233,6 +1288,12 @@ ExponentialMovingWindowGroupby = make_intermediate_proxy_type(
     pd.core.window.ewm.ExponentialMovingWindowGroupby,
 )
 
+OnlineExponentialMovingWindow = make_intermediate_proxy_type(
+    "OnlineExponentialMovingWindow",
+    _Unusable,
+    pd.core.window.ewm.OnlineExponentialMovingWindow,
+)
+
 EWMMeanState = make_intermediate_proxy_type(
     "EWMMeanState",
     _Unusable,
@@ -1320,9 +1381,35 @@ ExcelWriter = make_final_proxy_type(
     additional_attributes={
         "__hash__": _FastSlowAttribute("__hash__"),
         "__fspath__": _FastSlowAttribute("__fspath__"),
+        "__init__": _ExcelWriter__init__,
+        "__new__": _ExcelWriter__new__,
     },
     bases=(os.PathLike,),
     metaclasses=(abc.ABCMeta,),
+)
+
+OpenpyxlWriter = make_final_proxy_type(
+    "OpenpyxlWriter",
+    _Unusable,
+    pd_OpenpyxlWriter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(ExcelWriter,),
+)
+
+XlsxWriter = make_final_proxy_type(
+    "XlsxWriter",
+    _Unusable,
+    pd_XlsxWriter,
+    fast_to_slow=_Unusable(),
+    slow_to_fast=_Unusable(),
+    additional_attributes={
+        "__fspath__": _FastSlowAttribute("__fspath__"),
+    },
+    bases=(ExcelWriter,),
 )
 
 try:

@@ -11,7 +11,6 @@ from packaging import version
 
 import cudf
 
-pytestmark = pytest.mark.filterwarnings("ignore::FutureWarning")
 _SKIP_DOCTESTS = frozenset(
     {
         "register_dataframe_accessor",
@@ -88,6 +87,19 @@ def _find_doctests_in_obj(obj, finder=None, criteria=None):
                     yield docstring
 
 
+marks_for_doctests = {
+    "register_dataframe_accessor": pytest.mark.filterwarnings(
+        "ignore:Attribute .* will be overridden:UserWarning"
+    ),
+    "register_index_accessor": pytest.mark.filterwarnings(
+        "ignore:Attribute .* will be overridden:UserWarning"
+    ),
+    "register_series_accessor": pytest.mark.filterwarnings(
+        "ignore:Attribute .* will be overridden:UserWarning"
+    ),
+}
+
+
 def _collect_doctests():
     """Eagerly collect all unique doctests into a list.
 
@@ -98,7 +110,11 @@ def _collect_doctests():
     results = []
     for mod in tests:
         for docstring in _find_doctests_in_obj(mod):
-            results.append(docstring)
+            if (mark := marks_for_doctests.get(docstring.name)) is not None:
+                doc = pytest.param(docstring, marks=mark)
+            else:
+                doc = docstring
+            results.append(doc)
     return results
 
 
@@ -122,8 +138,6 @@ class TestDoctests:
         ids=lambda docstring: docstring.name,
     )
     def test_docstring(self, docstring, monkeypatch, tmp_path):
-        if docstring.name in _SKIP_DOCTESTS:
-            pytest.skip(f"{docstring.name} doctest is not runnable")
         # We ignore differences in whitespace in the doctest output, and enable
         # the use of an ellipsis "..." to match any string in the doctest
         # output. An ellipsis is useful for, e.g., memory addresses or

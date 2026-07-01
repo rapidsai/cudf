@@ -5,10 +5,11 @@ from __future__ import annotations
 import decimal
 import inspect
 import operator
+import re
 import textwrap
 import warnings
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import numpy as np
 import pandas as pd
@@ -547,28 +548,6 @@ class ListDtype(_BaseDtype):
     def itemsize(self) -> int:
         return self.element_type.itemsize
 
-    def _recursively_replace_fields(self, result: list) -> list:
-        """
-        Return a new list result but with the keys of dict element by the keys in StructDtype.fields.keys().
-
-        Intended when result comes from pylibcudf without preserved nested field names.
-        """
-        if isinstance(self.element_type, StructDtype):
-            return [
-                self.element_type._recursively_replace_fields(res)
-                if isinstance(res, dict)
-                else res
-                for res in result
-            ]
-        elif isinstance(self.element_type, ListDtype):
-            return [
-                self.element_type._recursively_replace_fields(res)
-                if isinstance(res, list)
-                else res
-                for res in result
-            ]
-        return result
-
     @classmethod
     def from_list_dtype(cls, obj) -> Self:
         if isinstance(obj, ListDtype):
@@ -734,26 +713,6 @@ class StructDtype(_BaseDtype):
     @cached_property
     def itemsize(self) -> int:
         return sum(field.itemsize for field in self.fields.values())
-
-    def _recursively_replace_fields(self, result: dict) -> dict:
-        """
-        Return a new dict result but with the keys replaced by the keys in self.fields.keys().
-
-        Intended when result comes from pylibcudf without preserved nested field names.
-        """
-        new_result = {}
-        for (new_field, field_dtype), result_value in zip(
-            self.fields.items(), result.values(), strict=True
-        ):
-            if isinstance(field_dtype, StructDtype) and isinstance(
-                result_value, dict
-            ):
-                new_result[new_field] = (
-                    field_dtype._recursively_replace_fields(result_value)
-                )
-            else:
-                new_result[new_field] = result_value
-        return new_result
 
     @classmethod
     def from_struct_dtype(cls, obj) -> Self:
@@ -996,38 +955,92 @@ class IntervalDtype(_BaseDtype):
     closed: {'right', 'left', 'both', 'neither'}, default 'right'
         Whether the interval is closed on the left-side, right-side,
         both or neither. See the Notes for more detailed explanation.
+
+    Attributes
+    ----------
+    fields
+    type
+
+    Methods
+    -------
+    from_arrow
+    to_arrow
     """
 
     name = "interval"
+    closed: Literal["left", "right", "neither", "both"] | None
 
     def __init__(
         self,
         subtype: None | Dtype = None,
-        closed: Literal["left", "right", "neither", "both", None] = "right",
+        closed: Literal["left", "right", "neither", "both", None] = None,
     ) -> None:
-        if closed in {"left", "right", "neither", "both"}:
-            self.closed = closed
-        elif closed is None:
-            self.closed = "right"
-        else:
+        if closed not in {"left", "right", "neither", "both", None}:
             raise ValueError(f"{closed=} is not valid")
+
+        # If subtype is already an IntervalDtype (cudf or pandas), unwrap it,
+        # validating any closed conflict.
+        if isinstance(subtype, (IntervalDtype, pd.IntervalDtype)):
+            inner_closed = cast(
+                "Literal['left', 'right', 'neither', 'both'] | None",
+                subtype.closed,
+            )
+            if (
+                closed is not None
+                and inner_closed is not None
+                and closed != inner_closed
+            ):
+                raise ValueError(
+                    "dtype.closed and 'closed' do not match. "
+                    "Try IntervalDtype(dtype.subtype, closed) instead."
+                )
+            closed = closed if closed is not None else inner_closed
+            subtype = subtype.subtype
+
+        # If subtype is an "interval[...]" spec string, let pandas parse it
+        # ("interval", "interval[int64]", "interval[int64, right]"),
+        # reconciling any explicitly-passed ``closed`` (pandas raises on a
+        # closed-keyword conflict or an unsupported subtype). This avoids
+        # re-implementing pandas' parsing logic. A bare subtype string (e.g.
+        # "int64") falls through to ``dtype(subtype)`` below.
+        if isinstance(subtype, str) and subtype.lower().startswith("interval"):
+            parsed = pd.IntervalDtype(subtype, closed)
+            closed = cast(
+                "Literal['left', 'right', 'neither', 'both'] | None",
+                parsed.closed,
+            )
+            subtype = parsed.subtype  # may be None for bare "interval"
+
         if subtype is None:
             self._subtype = None
             self._fields = {}
         else:
-            self._subtype = dtype(subtype)
-            # TODO: Remove self._subtype.kind == "U" once cudf.dtype no longer accepts
+            try:
+                resolved = dtype(subtype)
+            except TypeError as err:
+                raise TypeError(
+                    f"could not construct IntervalDtype from {subtype!r}"
+                ) from err
+            # TODO: Remove resolved.kind == "U" once cudf.dtype no longer accepts
             # numpy string types
             if (
-                isinstance(self._subtype, CategoricalDtype)
-                or is_dtype_obj_string(self._subtype)
-                or self._subtype.kind == "U"
+                isinstance(resolved, CategoricalDtype)
+                or is_dtype_obj_string(resolved)
+                or getattr(resolved, "kind", None) == "U"
             ):
                 raise TypeError(
                     "category, object, and string subtypes are not supported "
                     "for IntervalDtype"
                 )
-            self._fields = {"left": self._subtype, "right": self._subtype}
+            self._subtype = resolved
+            self._fields = {"left": resolved, "right": resolved}
+
+        self.closed = closed
+
+    @classmethod
+    def construct_from_string(cls, string: str) -> Self:
+        # Defer string validation/parsing to pandas, then wrap the result.
+        return cls(pd.IntervalDtype.construct_from_string(string))
 
     @property
     def subtype(self) -> DtypeObj | None:
@@ -1057,6 +1070,8 @@ class IntervalDtype(_BaseDtype):
     def __repr__(self) -> str:
         if self.subtype is None:
             return "interval"
+        if self.closed is None:
+            return f"interval[{self.subtype}]"
         return f"interval[{self.subtype}, {self.closed}]"
 
     def __str__(self) -> str:
@@ -1068,7 +1083,8 @@ class IntervalDtype(_BaseDtype):
 
     def to_arrow(self) -> ArrowIntervalType:
         return ArrowIntervalType(
-            cudf_dtype_to_pa_type(self.subtype), self.closed
+            cudf_dtype_to_pa_type(self.subtype),
+            self.closed if self.closed is not None else "right",
         )
 
     def to_pandas(self) -> pd.IntervalDtype:
@@ -1090,44 +1106,6 @@ class IntervalDtype(_BaseDtype):
 
     def __hash__(self) -> int:
         return hash((self.subtype, self.closed))
-
-    def _recursively_replace_fields(self, result: dict) -> dict:
-        """
-        Return a new dict result but with the keys replaced by "left" and "right".
-
-        Intended when result comes from pylibcudf without preserved nested field names.
-        Converts dict with numeric/string keys to {"left": ..., "right": ...}.
-        Handles nested StructDtype and ListDtype recursively.
-        """
-        # Convert the dict keys (which may be numeric like 0, 1 or string like "0", "1")
-        # to the proper field names "left" and "right"
-        values = list(result.values())
-        if len(values) != 2:
-            raise ValueError(
-                f"Expected 2 fields for IntervalDtype, got {len(values)}"
-            )
-
-        new_result = {}
-        for field_name, result_value in zip(
-            ["left", "right"], values, strict=True
-        ):
-            if self._subtype is None:
-                new_result[field_name] = result_value
-            elif isinstance(self._subtype, StructDtype) and isinstance(
-                result_value, dict
-            ):
-                new_result[field_name] = (
-                    self._subtype._recursively_replace_fields(result_value)
-                )
-            elif isinstance(self._subtype, ListDtype) and isinstance(
-                result_value, list
-            ):
-                new_result[field_name] = (
-                    self._subtype._recursively_replace_fields(result_value)
-                )
-            else:
-                new_result[field_name] = result_value
-        return new_result
 
     def serialize(self) -> tuple[dict, list]:
         header = {
@@ -1308,6 +1286,16 @@ def is_decimal_dtype(obj):
     )
 
 
+# Regex used only to detect whether a string names an IntervalDtype; actual
+# parsing of such strings is delegated to pandas in ``IntervalDtype``. Matches
+# "interval", "Interval", "interval[<sub>]", "interval[<sub>, <closed>]"
+# (subtype itself may contain "[...]" e.g. "datetime64[ns]").
+_INTERVAL_DTYPE_STRING_MATCH = re.compile(
+    r"^(I|i)nterval"
+    r"(\[(?P<subtype>[^,]+?)(,\s*(?P<closed>left|right|both|neither))?\])?$"
+)
+
+
 def _is_interval_dtype(obj):
     return (
         isinstance(
@@ -1322,7 +1310,10 @@ def _is_interval_dtype(obj):
             isinstance(obj, cudf.Index)
             and isinstance(obj.dtype, IntervalDtype)
         )
-        or (isinstance(obj, str) and obj == IntervalDtype.name)
+        or (
+            isinstance(obj, str)
+            and _INTERVAL_DTYPE_STRING_MATCH.match(obj) is not None
+        )
         or (
             isinstance(
                 getattr(obj, "dtype", None),
