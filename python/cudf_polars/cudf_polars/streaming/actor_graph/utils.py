@@ -734,11 +734,11 @@ class TableSizeStats:
     chunks: ChunkStore
     """The sampled chunks/messages in replay order."""
     total_size: int = 0
-    """The total estimated size of the table in bytes."""
+    """The estimated table size in bytes for the represented scope."""
     total_rows: int = 0
-    """The total estimated number of rows in the table."""
+    """The estimated number of rows for the represented scope."""
     total_chunks: int = 0
-    """The total estimated number of chunks in the table."""
+    """The estimated number of chunks for the represented scope."""
 
 
 async def _sample_chunks(

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -251,7 +252,7 @@ async def _sample_chunks_for_size_estimate(
     else:
         global_size = sample.total_size
 
-    num_partitions = max(1, -(-global_size // target_partition_size))
+    num_partitions = max(1, math.ceil(global_size / target_partition_size))
     return sample.chunks, num_partitions
 
 
