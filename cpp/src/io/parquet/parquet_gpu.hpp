@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -303,6 +303,19 @@ struct PageNestingInfo {
 struct PageInfo {
   uint8_t* page_data;  // Compressed page data before decompression, or uncompressed data after
                        // decompression
+  size_t str_offset;   // offset into string data for this page
+  // nesting information (input/output) for each page. this array contains
+  // input column nesting information, output column nesting information and
+  // mappings between the two. the length of the array, nesting_info_size is
+  // max(num_output_nesting_levels, max_definition_levels + 1)
+  PageNestingInfo* nesting;
+  PageNestingDecodeInfo* nesting_decode;
+  // level decode buffers
+  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
+  // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
+  int64_t temp_string_size;
+  uint8_t* temp_string_buf;
+
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
@@ -317,10 +330,8 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;          // starting row of this page relative to the start of the chunk
-  int32_t num_rows;           // number of rows in this page
-  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
-                              // adjusted to compensate for the list row size estimates.
+  int32_t chunk_row;  // starting row of this page relative to the start of the chunk
+  int32_t num_rows;   // number of rows in this page
   // the next four are calculated in compute_page_string_sizes_kernel
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
@@ -328,12 +339,6 @@ struct PageInfo {
   int32_t end_val;         // index of last value in string data stream
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
-  uint8_t flags;           // PAGEINFO_FLAGS_XXX
-  Encoding encoding;       // Encoding for data or dictionary page
-  Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
-  Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
-  bool is_compressed;                  // Whether the page is compressed (V2 header)
-
   // for nested types, we run a preprocess step in order to determine output
   // column sizes. Because of this, we can jump directly to the position in the
   // input data to start decoding instead of reading all of the data and discarding
@@ -348,36 +353,27 @@ struct PageInfo {
   int32_t skipped_leaf_values;
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
-  size_t str_offset;      // offset into string data for this page
   int32_t str_bytes;      // in the case where we have selected a subset of rows, this will
                           // reflect the subset
   int32_t str_bytes_all;  // this reflects all rows
-  bool has_page_index;    // true if str_bytes, num_valids, etc are derivable from page indexes
-
-  // nesting information (input/output) for each page. this array contains
-  // input column nesting information, output column nesting information and
-  // mappings between the two. the length of the array, nesting_info_size is
-  // max(num_output_nesting_levels, max_definition_levels + 1)
   int32_t num_output_nesting_levels;
   int32_t nesting_info_size;
-  PageNestingInfo* nesting;
-  PageNestingDecodeInfo* nesting_decode;
-
-  // level decode buffers
-  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
   // Number of level values actually decoded (may be less than num_input_values when using
   // skip_rows/num_rows). Kernels must clamp level buffer accesses to this.
   int32_t num_decoded_level_values{};
-
-  // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
-  int64_t temp_string_size;
-  uint8_t* temp_string_buf;
-
-  decode_kernel_mask kernel_mask;
-
   // str_bytes from page index. because str_bytes needs to be reset each iteration
   // while doing chunked reads, persist the value from the page index here.
   int32_t str_bytes_from_index;
+  decode_kernel_mask kernel_mask;
+
+  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
+                              // adjusted to compensate for the list row size estimates.
+  uint8_t flags;              // PAGEINFO_FLAGS_XXX
+  Encoding encoding;          // Encoding for data or dictionary page
+  Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
+  Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
+  bool is_compressed;                  // Whether the page is compressed (V2 header)
+  bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
 };
 
 // forward declaration
