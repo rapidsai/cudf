@@ -17,8 +17,40 @@
 
 namespace cudf {
 
+namespace {
+
+int32_t get_driver_version()
+{
+  int32_t driver_version;
+  CUDF_CUDA_TRY(cudaDriverGetVersion(&driver_version));
+  return driver_version;
+}
+
+int32_t get_runtime_version()
+{
+  int32_t runtime_version;
+  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
+  return runtime_version;
+}
+
+int32_t get_current_device_compute_capability()
+{
+  int32_t device;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+
+  cudaDeviceProp props;
+  CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, device));
+
+  return props.major * 10 + props.minor;
+}
+
+}  // namespace
+
 context::context(context_config cfg, init_flags flags)
-  : _config{std::move(cfg)}, _jit_cache_init_flag{}
+  : _config{std::move(cfg)},
+    _jit_cache_init_flag{},
+    _device_properties{
+      get_driver_version(), get_runtime_version(), get_current_device_compute_capability()}
 {
   initialize_components(flags);
 }
@@ -78,7 +110,14 @@ bool context::dump_codegen() const { return _config.dump_codegen; }
 
 bool context::use_jit() const { return _config.use_jit; }
 
+context_config const& context::config() const { return _config; }
+
 std::string const& context::get_jit_pch_dir() const { return _config.jit_pch_dir; }
+
+context::device_properties const& context::get_device_properties() const
+{
+  return _device_properties;
+}
 
 void context::initialize_components(init_flags flags)
 {

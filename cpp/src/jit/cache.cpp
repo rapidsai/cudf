@@ -202,31 +202,6 @@ constexpr int MIN_CUDA_VERSION_PCH =
 constexpr int MIN_CUDA_VERSION_MINIMAL =
   make_cuda_version(12, 8, 0);  // minimum CUDA version for the "--minimal" NVRTC flag
 
-int32_t get_driver_version()
-{
-  int32_t driver_version;
-  CUDF_CUDA_TRY(cudaDriverGetVersion(&driver_version));
-  return driver_version;
-}
-
-int32_t get_runtime_version()
-{
-  int32_t runtime_version;
-  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
-  return runtime_version;
-}
-
-int32_t get_current_device_compute_capability()
-{
-  int32_t device;
-  CUDF_CUDA_TRY(cudaGetDevice(&device));
-
-  cudaDeviceProp props;
-  CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, device));
-
-  return props.major * 10 + props.minor;
-}
-
 std::tuple<rtcx::library, rtcx::blob> compile_library(
   char const* name,
   char const* cuda_code,
@@ -236,11 +211,12 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
 {
   CUDF_FUNC_RANGE();
 
-  auto& ctx    = cudf::get_context();
-  auto& cfg    = ctx.config();
-  auto& bundle = ctx.jit_bundle();
-  auto sm      = get_current_device_compute_capability();
-  auto runtime = get_runtime_version();
+  auto& ctx               = cudf::get_context();
+  auto& cfg               = ctx.config();
+  auto& bundle            = ctx.jit_bundle();
+  auto& device_properties = ctx.get_device_properties();
+  auto sm                 = device_properties.compute_capability;
+  auto runtime            = device_properties.runtime_version;
 
   auto include_dirs = bundle.get_include_directories();
   auto use_pch      = runtime >= MIN_CUDA_VERSION_PCH;
@@ -314,11 +290,12 @@ rtcx::blob compile_fragment(char const* name,
 {
   CUDF_FUNC_RANGE();
 
-  auto& ctx    = cudf::get_context();
-  auto& cfg    = ctx.config();
-  auto& bundle = ctx.jit_bundle();
-  auto sm      = get_current_device_compute_capability();
-  auto runtime = get_runtime_version();
+  auto& ctx               = cudf::get_context();
+  auto& cfg               = ctx.config();
+  auto& bundle            = ctx.jit_bundle();
+  auto& device_properties = ctx.get_device_properties();
+  auto sm                 = device_properties.compute_capability;
+  auto runtime            = device_properties.runtime_version;
 
   auto include_dirs = bundle.get_include_directories();
   auto pch_dir      = ctx.get_jit_pch_dir();
@@ -395,13 +372,15 @@ kernel get_kernel(std::string const& name,
 {
   CUDF_FUNC_RANGE();
 
-  auto& cache  = cudf::get_context().rtcx_cache();
-  auto& bundle = cudf::get_context().jit_bundle();
+  auto& ctx               = cudf::get_context();
+  auto& cache             = ctx.rtcx_cache();
+  auto& bundle            = ctx.jit_bundle();
+  auto& device_properties = ctx.get_device_properties();
+  auto sm                 = device_properties.compute_capability;
+  auto runtime            = device_properties.runtime_version;
+  auto driver             = device_properties.driver_version;
+  auto bundle_hash        = bundle.get_hash();
 
-  auto runtime     = get_runtime_version();
-  auto driver      = get_driver_version();
-  auto sm          = get_current_device_compute_capability();
-  auto bundle_hash = bundle.get_hash();
   auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
   auto spec = std::format(R"***(cuLibrary
@@ -454,13 +433,15 @@ rtcx::blob get_kernel_fragment(std::string const& name,
 {
   CUDF_FUNC_RANGE();
 
-  auto& cache  = cudf::get_context().rtcx_cache();
-  auto& bundle = cudf::get_context().jit_bundle();
+  auto& ctx               = cudf::get_context();
+  auto& cache             = ctx.rtcx_cache();
+  auto& bundle            = ctx.jit_bundle();
+  auto& device_properties = ctx.get_device_properties();
+  auto runtime            = device_properties.runtime_version;
+  auto driver             = device_properties.driver_version;
+  auto sm                 = device_properties.compute_capability;
+  auto bundle_hash        = bundle.get_hash();
 
-  auto runtime     = get_runtime_version();
-  auto driver      = get_driver_version();
-  auto sm          = get_current_device_compute_capability();
-  auto bundle_hash = bundle.get_hash();
   auto source_file = std::format("{}/{}", bundle.get_directory(), source_file_id);
 
   auto spec = std::format(R"***(objectFile
@@ -511,9 +492,10 @@ std::tuple<rtcx::library, rtcx::blob> link_library_uncached(
 {
   CUDF_FUNC_RANGE();
 
-  auto sm   = get_current_device_compute_capability();
-  auto& ctx = cudf::get_context();
-  auto& cfg = ctx.config();
+  auto& ctx               = cudf::get_context();
+  auto& device_properties = ctx.get_device_properties();
+  auto sm                 = device_properties.compute_capability;
+  auto& cfg               = ctx.config();
 
   std::vector<std::string> options;
 
@@ -551,12 +533,14 @@ kernel get_lto_linked_kernel(std::string const& name,
 {
   CUDF_FUNC_RANGE();
 
-  auto& cache      = cudf::get_context().rtcx_cache();
-  auto& bundle     = cudf::get_context().jit_bundle();
-  auto runtime     = get_runtime_version();
-  auto driver      = get_driver_version();
-  auto sm          = get_current_device_compute_capability();
-  auto bundle_hash = bundle.get_hash();
+  auto& ctx               = cudf::get_context();
+  auto& cache             = ctx.rtcx_cache();
+  auto& bundle            = ctx.jit_bundle();
+  auto& device_properties = ctx.get_device_properties();
+  auto runtime            = device_properties.runtime_version;
+  auto driver             = device_properties.driver_version;
+  auto sm                 = device_properties.compute_capability;
+  auto bundle_hash        = bundle.get_hash();
 
   auto spec = std::format(R"***(cuLibrary
 name={}
