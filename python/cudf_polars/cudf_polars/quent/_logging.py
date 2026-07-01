@@ -54,7 +54,9 @@ class QuentLogger:
             )
     else:
 
-        def _get_logger(self, **initial_values: Any) -> Any:
+        def _get_logger(
+            self, **initial_values: Any
+        ) -> Any:  # pragma: no cover; depends on no structlog
             return logging.getLogger(__name__)
 
     def emit(self, event: Event) -> None:
