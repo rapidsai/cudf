@@ -122,11 +122,14 @@ struct schema_child_lookup {
 
   schema_child_lookup(get_schema_fn&& schema_fn,
                       bool case_sensitive_names,
-                      bool match_schema_by_field_id)
+                      column_selection_mode selection_mode)
     : schema_fn{std::move(schema_fn)},
       case_sensitive_names{case_sensitive_names},
-      match_schema_by_field_id{match_schema_by_field_id}
+      match_schema_by_field_id{selection_mode == column_selection_mode::BY_FIELD_ID}
   {
+    CUDF_EXPECTS(selection_mode == column_selection_mode::BY_NAME or
+                   selection_mode == column_selection_mode::BY_FIELD_ID,
+                 "Invalid column selection mode");
   }
 
   /**
@@ -1789,20 +1792,23 @@ std::tuple<std::vector<input_column_info>,
 aggregate_reader_metadata::select_columns(
   std::optional<std::vector<std::string>> const& use_names,
   std::optional<std::vector<std::string>> const& filter_columns_names,
-  bool include_index,
-  bool strings_to_categorical,
-  bool ignore_missing_columns,
-  type_id timestamp_type_id,
-  type_id decimal_type_id,
-  bool case_sensitive_names,
-  bool match_schema_by_field_id)
+  column_selection_options const& selection_options)
 {
+  auto const include_index          = selection_options.include_index;
+  auto const strings_to_categorical = selection_options.strings_to_categorical;
+  auto const ignore_missing_columns = selection_options.ignore_missing_columns;
+  auto const timestamp_type_id      = selection_options.timestamp_type_id;
+  auto const decimal_type_id        = selection_options.decimal_type_id;
+  auto const case_sensitive_names   = selection_options.case_sensitive_names;
+  auto const selection_mode         = selection_options.selection_mode;
+
+  // Setup schema lookup helper
   auto schema_lookup =
     schema_child_lookup{[&](int const schema_idx, int const src_idx) -> SchemaElement const& {
                           return get_schema(schema_idx, src_idx);
                         },
                         case_sensitive_names,
-                        match_schema_by_field_id};
+                        selection_mode};
 
   std::vector<cudf::io::detail::inline_column_buffer> output_columns;
   std::vector<input_column_info> input_columns;
@@ -1916,9 +1922,10 @@ aggregate_reader_metadata::select_columns(
     };
 
   // Compares two schema elements to be equal except their number of children
-  auto const equal_to_except_num_children = [match_schema_by_field_id](SchemaElement const& lhs,
-                                                                       SchemaElement const& rhs) {
+  auto const equal_to_except_num_children = [selection_mode](SchemaElement const& lhs,
+                                                             SchemaElement const& rhs) {
     // Match by field ID if enabled, otherwise match by name
+    auto const match_schema_by_field_id = selection_mode == column_selection_mode::BY_FIELD_ID;
     auto const names_match =
       (match_schema_by_field_id and lhs.field_id.has_value() and rhs.field_id.has_value())
         ? lhs.field_id == rhs.field_id

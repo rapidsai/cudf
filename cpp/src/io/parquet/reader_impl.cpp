@@ -555,16 +555,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
       options.get_filter(), *select_column_names, options, _metadata->get_schema_tree());
     _num_filter_only_columns = filter_only_columns_names->size();
   }
-  std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-    _metadata->select_columns(select_column_names,
-                              filter_only_columns_names,
-                              options.is_enabled_use_pandas_metadata(),
-                              _strings_to_categorical,
-                              options.is_enabled_ignore_missing_columns(),
-                              _options.timestamp_type.id(),
-                              _options.decimal_width,
-                              _options.case_sensitive_names,
-                              options.get_column_field_ids().has_value());
+  std::tie(_input_columns, _output_buffers, _output_column_schemas) = _metadata->select_columns(
+    select_column_names, filter_only_columns_names, make_column_selection_options(options));
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -882,6 +874,38 @@ void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>&
         cudf::cast(col->view(), data_type{_options.decimal_width, col_type.scale()}, _stream, _mr);
     }
   }
+}
+
+column_selection_options reader_impl::make_column_selection_options(
+  parquet_reader_options const& options) const
+{
+  auto constexpr max_allowed_col_selection_modes = 1;
+  CUDF_EXPECTS(static_cast<int>(options.get_column_names().has_value()) +
+                   static_cast<int>(options.get_column_indices().has_value()) +
+                   static_cast<int>(options.get_column_field_ids().has_value()) <=
+                 max_allowed_col_selection_modes,
+               "Parquet reader encountered more than one column selection mode");
+
+  auto const selection_mode = [&]() {
+    if (options.get_column_names().has_value()) {
+      return column_selection_mode::BY_NAME;
+    } else if (options.get_column_indices().has_value()) {
+      return column_selection_mode::BY_INDEX;
+    } else if (options.get_column_field_ids().has_value()) {
+      return column_selection_mode::BY_FIELD_ID;
+    } else {
+      return column_selection_mode::NONE;
+    }
+  }();
+
+  return column_selection_options{
+    .include_index          = options.is_enabled_use_pandas_metadata(),
+    .strings_to_categorical = _strings_to_categorical,
+    .ignore_missing_columns = options.is_enabled_ignore_missing_columns(),
+    .timestamp_type_id      = _options.timestamp_type.id(),
+    .decimal_type_id        = _options.decimal_width,
+    .case_sensitive_names   = _options.case_sensitive_names,
+    .selection_mode         = selection_mode};
 }
 
 table_with_metadata reader_impl::finalize_output(read_mode mode,

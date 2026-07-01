@@ -142,6 +142,36 @@ struct surviving_row_group_metrics {
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
 
+/**
+ * @brief Column selection mode
+ */
+enum class column_selection_mode : uint8_t {
+  NONE        = 0,  // No column selection
+  BY_NAME     = 1,  // Select columns by name
+  BY_INDEX    = 2,  // Select columns by top-levelindex
+  BY_FIELD_ID = 3,  // Select columns by field ID
+};
+
+/**
+ * @brief Bundle of column selection parameters
+ */
+struct column_selection_options {
+  // Whether to always include the PANDAS index column(s)
+  bool include_index = false;
+  // Type conversion parameter: convert strings to categorical columns
+  bool strings_to_categorical = false;
+  // Whether to ignore non-existent projected columns
+  bool ignore_missing_columns = false;
+  // Type conversion parameter for timestamp columns
+  type_id timestamp_type_id = type_id::EMPTY;
+  // Type conversion parameter for decimal columns
+  type_id decimal_type_id = type_id::EMPTY;
+  // Whether column name matching is case sensitive
+  bool case_sensitive_names = true;
+  // Column selection mode
+  column_selection_mode selection_mode = column_selection_mode::NONE;
+};
+
 class aggregate_reader_metadata {
  protected:
   std::vector<metadata> per_file_metadata;
@@ -624,14 +654,7 @@ class aggregate_reader_metadata {
    * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
    * @param filter_columns_names List of paths of column names that are present only in filter
-   * @param include_index Whether to always include the PANDAS index column(s)
-   * @param strings_to_categorical Type conversion parameter
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
-   * @param timestamp_type_id Type conversion parameter
-   * @param decimal_type_id Type conversion parameter
-   * @param case_sensitive_names Whether column name matching is case sensitive
-   * @param match_schema_by_field_id Whether multi-source schema matching should use Parquet field
-   * IDs
+   * @param selection_options Column selection options
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -641,13 +664,7 @@ class aggregate_reader_metadata {
                            std::vector<size_type>>
   select_columns(std::optional<std::vector<std::string>> const& use_names,
                  std::optional<std::vector<std::string>> const& filter_columns_names,
-                 bool include_index,
-                 bool strings_to_categorical,
-                 bool ignore_missing_columns,
-                 type_id timestamp_type_id,
-                 type_id decimal_type_id,
-                 bool case_sensitive_names,
-                 bool match_schema_by_field_id);
+                 column_selection_options const& selection_options);
 };
 
 }  // namespace cudf::io::parquet::detail

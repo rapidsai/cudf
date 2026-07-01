@@ -216,6 +216,18 @@ class reader_impl {
   std::pair<bool, std::future<void>> read_column_chunks();
 
   /**
+   * @brief Build the `column_selection_options` bundle for `select_columns()`.
+   *
+   * Type-conversion and case-sensitivity settings are read from the cached `_options` (which must
+   * already be populated); selection-only settings are taken from @p options.
+   *
+   * @param options Reader options
+   * @return Column selection options
+   */
+  [[nodiscard]] column_selection_options make_column_selection_options(
+    parquet_reader_options const& options) const;
+
+  /**
    * @brief Read compressed data and page information for the current pass.
    */
   void read_compressed_data();
