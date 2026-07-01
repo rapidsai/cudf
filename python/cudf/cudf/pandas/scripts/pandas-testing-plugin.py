@@ -2387,8 +2387,6 @@ NODEIDS_THAT_FAIL = {
     "tests/indexes/datetimes/methods/test_factorize.py::TestDatetimeIndexFactorize::test_factorize_tz['US/Eastern'-series]": "AssertionError: numpy array are different",
     "tests/indexes/datetimes/methods/test_insert.py::TestInsert::test_insert_empty_preserves_freq[None]": "AssertionError: assert <Week: weekday=None> is None",
     "tests/indexes/datetimes/methods/test_isocalendar.py::test_dti_timestamp_isocalendar_fields": "TODO: Add a reason for failure",
-    "tests/indexes/datetimes/methods/test_isocalendar.py::test_isocalendar_returns_correct_values_close_to_new_year_with_tz": "AssertionError: Attributes of DataFrame.iloc[:, 0] (column name='year') are different",
-    "tests/indexes/datetimes/methods/test_round.py::TestDatetimeIndexRound::test_round_daily": "TODO: Add a reason for failure",
     "tests/indexes/datetimes/methods/test_shift.py::TestDatetimeIndexShift::test_dti_shift_across_dst[ms]": "AssertionError: Series.index are different",
     "tests/indexes/datetimes/methods/test_shift.py::TestDatetimeIndexShift::test_dti_shift_across_dst[ns]": "AssertionError: Series.index are different",
     "tests/indexes/datetimes/methods/test_shift.py::TestDatetimeIndexShift::test_dti_shift_across_dst[s]": "AssertionError: Series.index are different",

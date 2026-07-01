@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 from cudf.core.accessors.base_accessor import BaseAccessor
 from cudf.core.dtypes import CategoricalDtype
 
@@ -90,14 +92,22 @@ class CategoricalAccessor(BaseAccessor):
         Return Series of codes as well as the index.
         """
         from cudf.core.series import Series
-        from cudf.utils.dtypes import min_signed_type
 
         index = (
             self._parent.index if isinstance(self._parent, Series) else None
         )
-        codes = self._column.codes.astype(
-            min_signed_type(len(self._column.dtype.categories))
-        )
+        # Match pandas' categorical code dtype: a signed integer that widens
+        # int8 -> int16 -> int32 -> int64 as the category count grows. pandas
+        # switches once the count reaches the next type's max (see
+        # pandas.core.arrays.categorical.coerce_indexer_dtype), i.e. int8 is
+        # used only for fewer than ``np.iinfo(np.int8).max`` (127) categories.
+        n_categories = len(self._column.dtype.categories)
+        code_dtype: np.dtype[Any] = np.dtype(np.int64)
+        for candidate in (np.int8, np.int16, np.int32):
+            if n_categories < np.iinfo(candidate).max:
+                code_dtype = np.dtype(candidate)
+                break
+        codes = self._column.codes.astype(code_dtype)
         return Series._from_column(codes, index=index)
 
     @property
