@@ -169,31 +169,32 @@ def _cast_masked_to_masked(context, builder, fromty, toty, val):
     return _pack_masked(builder, toty, casted, m_valid)
 
 
-# ``m is NA`` and ``NA is m`` -> ``not m.valid`` (i.e. invalid means "is NA").
-def _lower_masked_is_na(masked_arg):
-    def _impl(builder, target, args, kwargs):
-        m = builder.load_var(masked_arg(args))
-        st = llvm.StructType(m.type)
-        _, valid = _extract_masked_value_valid(
-            m, st.body[0], st.body[1]
-        )
-        one = arith.constant(valid.type, 1)
-        builder.store_var(target, arith.xori(valid, one))
-
-    return _impl
+# ``is``/``is not`` against NA are registered for both operand orders
+# (``m is NA`` and ``NA is m``), so find the MaskedType operand rather than
+# assuming which position it is in.
+def _masked_operand(builder, args):
+    """Return the ``MaskedType`` operand of a ``Masked``/``NA`` comparison."""
+    for arg in args:
+        if isinstance(builder.get_numba_type(arg.name), MaskedType):
+            return arg
+    raise TypeError("expected a MaskedType operand")
 
 
-# ``m is not NA`` and ``NA is not m`` -> ``m.valid``.
-def _lower_masked_is_not_na(masked_arg):
-    def _impl(builder, target, args, kwargs):
-        m = builder.load_var(masked_arg(args))
-        st = llvm.StructType(m.type)
-        _, valid = _extract_masked_value_valid(
-            m, st.body[0], st.body[1]
-        )
-        builder.store_var(target, valid)
+# ``m is NA`` / ``NA is m`` -> ``not m.valid`` (invalid means "is NA").
+def _lower_masked_is_na(builder, target, args, kwargs):
+    m = builder.load_var(_masked_operand(builder, args))
+    st = llvm.StructType(m.type)
+    _, valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+    one = arith.constant(valid.type, 1)
+    builder.store_var(target, arith.xori(valid, one))
 
-    return _impl
+
+# ``m is not NA`` / ``NA is not m`` -> ``m.valid``.
+def _lower_masked_is_not_na(builder, target, args, kwargs):
+    m = builder.load_var(_masked_operand(builder, args))
+    st = llvm.StructType(m.type)
+    _, valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+    builder.store_var(target, valid)
 
 
 def _register() -> None:
@@ -219,14 +220,10 @@ def _register() -> None:
         lower_cast(_scalar_cls, MaskedType)(_cast_scalar_to_masked)
     lower_cast(MaskedType, MaskedType)(_cast_masked_to_masked)
 
-    lower(operator.is_, MaskedType, NAType)(_lower_masked_is_na(lambda a: a[0]))
-    lower(operator.is_, NAType, MaskedType)(_lower_masked_is_na(lambda a: a[1]))
-    lower(operator.is_not, MaskedType, NAType)(
-        _lower_masked_is_not_na(lambda a: a[0])
-    )
-    lower(operator.is_not, NAType, MaskedType)(
-        _lower_masked_is_not_na(lambda a: a[1])
-    )
+    lower(operator.is_, MaskedType, NAType)(_lower_masked_is_na)
+    lower(operator.is_, NAType, MaskedType)(_lower_masked_is_na)
+    lower(operator.is_not, MaskedType, NAType)(_lower_masked_is_not_na)
+    lower(operator.is_not, NAType, MaskedType)(_lower_masked_is_not_na)
 
 
 _register()
