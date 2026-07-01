@@ -5,11 +5,8 @@
 
 #pragma once
 
+#include <cudf/detail/utilities/arrow_bloom_filter_policy.cuh>
 #include <cudf/hashing/detail/xxhash_64.cuh>
-
-#include <cuco/bloom_filter_policies.cuh>
-
-#include <cstdint>
 
 namespace cudf::io::parquet::detail {
 
@@ -26,21 +23,13 @@ struct arrow_hasher : cudf::hashing::detail::XXHash_64<Key> {
 };
 
 /**
- * @brief A policy that defines how the Apache Arrow Block-Split Bloom Filter generates and stores a
- * key's fingerprint.
- *
- * Implemented in terms of cuco's `parametric_filter_policy` with the Apache Arrow layout: 256-bit
- * blocks (8 x `uint32_t`), 8 fingerprint bits per key, fully horizontal add (Theta=8) and fully
- * vertical contains (Phi=8). This is bit-compatible with Apache Arrow, as verified by cuCollections
- * `tests/bloom_filter/arrow_compat_test.cu`.
- *
- * Reference:
- * https://github.com/apache/arrow/blob/be1dcdb96b030639c0b56955c4c62f9d6b03f473/cpp/src/parquet/bloom_filter.cc#L219-L230
+ * @brief Policy describing the Apache Arrow Block-Split Bloom Filter, hashing keys with cudf's
+ * `XXHash_64` (so that `cudf::string_view` and other cudf types are hashed by content, matching the
+ * Apache Parquet/Arrow bloom filter specification).
  *
  * @tparam Key The type of the values to generate a fingerprint for.
  */
 template <class Key>
-using arrow_filter_policy =
-  cuco::parametric_filter_policy<arrow_hasher<Key>, std::uint32_t, 8, 8, 8, 1, 1, 8, false, false>;
+using arrow_filter_policy = cudf::detail::arrow_bloom_filter_policy<arrow_hasher<Key>>;
 
 }  // namespace cudf::io::parquet::detail
