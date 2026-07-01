@@ -16,6 +16,7 @@
 #include <cudf/hashing/detail/xxhash_64.cuh>
 #include <cudf/io/parquet_schema.hpp>
 #include <cudf/logger.hpp>
+#include <cudf/reduction/bloom_filter.cuh>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_checks.hpp>
@@ -24,7 +25,6 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter_ref.cuh>
 #include <cuda/iterator>
 #include <thrust/tabulate.h>
@@ -49,16 +49,7 @@ namespace {
  * @tparam Key The type of the values to generate a fingerprint for.
  */
 template <class Key>
-using arrow_filter_policy = cuco::parametric_filter_policy<cudf::hashing::detail::XXHash_64<Key>,
-                                                           std::uint32_t,
-                                                           8,
-                                                           8,
-                                                           8,
-                                                           1,
-                                                           1,
-                                                           8,
-                                                           false,
-                                                           false>;
+using arrow_filter_policy = cudf::arrow_filter_policy<cudf::hashing::detail::XXHash_64<Key>>;
 
 /**
  * @brief Converts bloom filter membership results (for each column chunk) to a device column.
