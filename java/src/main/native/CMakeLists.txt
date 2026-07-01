@@ -179,6 +179,7 @@ add_library(
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp
+  src/VariantUtilsJni.cpp
   src/aggregation128_utils.cu
   src/check_nvcomp_output_sizes.cu
   src/maps_column_view.cu
