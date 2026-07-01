@@ -14,6 +14,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <mutex>
 
 namespace cudf {
 
@@ -108,8 +109,7 @@ std::filesystem::path get_cudf_kernel_cache_dir()
 }
 
 static std::optional<context> _context{std::nullopt};
-static std::optional<std::once_flag> _context_init_flag{std::in_place};
-static std::optional<std::once_flag> _context_deinit_flag{std::in_place};
+static std::mutex _context_mutex;
 
 }  // namespace cudf
 
@@ -117,7 +117,9 @@ namespace CUDF_EXPORT cudf {
 
 void initialize(init_flags flags)
 {
-  std::call_once(*_context_init_flag, [&]() {
+  std::lock_guard guard{_context_mutex};
+
+  if (!_context.has_value()) {
     auto const dump_codegen      = detail::get_bool_env_or("LIBCUDF_JIT_DUMP_CODEGEN", false);
     auto const use_jit           = detail::get_bool_env_or("LIBCUDF_JIT_ENABLED", false);
     auto const preload_jit_cache = detail::get_bool_env_or("LIBCUDF_KERNEL_CACHE_PRELOAD", false);
@@ -157,20 +159,17 @@ void initialize(init_flags flags)
                        .kernel_cache_limit_process = kernel_cache_limit_process};
 
     _context.emplace(cfg, flags);
-  });
+  }
 
   _context->initialize_components(flags);
 }
 
 void teardown()
 {
-  std::call_once(*_context_deinit_flag, [&]() {
-    // reset the context to destroy all global objects and release resources, allowing for clean
-    // re-initialization in the future if desired.
-    _context.reset();
-    _context_init_flag.emplace();
-    _context_deinit_flag.emplace();
-  });
+  std::lock_guard guard{_context_mutex};
+  // reset the context to destroy all global objects and release resources, allowing for clean
+  // re-initialization in the future if desired.
+  _context.reset();
 }
 
 void enable_jit_cache(bool enabled)
