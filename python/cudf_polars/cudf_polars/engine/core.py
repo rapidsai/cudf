@@ -712,16 +712,16 @@ def evaluate_on_rank(
 
         new_node: Scan | StreamingScan
         for node in traversal([ir]):
-            if isinstance(node, Scan):
-                new_node = Scan.with_prefetched_parquet_metadata(
-                    node, [cached_parquet_info_map[path] for path in node.paths]
-                )
-                replacements[node] = new_node
-            elif isinstance(node, StreamingScan):
+            if isinstance(node, StreamingScan):
                 new_node = StreamingScan.with_prefetched_parquet_metadata(
                     node, cached_parquet_info_map
                 )
                 replacements[node] = new_node
+
+            elif isinstance(node, Scan) and node.typ == "parquet":  # pragma: no cover
+                raise RuntimeError(
+                    "Unexpected parquet 'Scan' node in lowered IR graph."
+                )
 
         old_ir = ir
         ir = replace([ir], replacements)[0]

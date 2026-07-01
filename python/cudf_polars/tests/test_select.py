@@ -176,9 +176,18 @@ def parquet_scan_row_bounds(request) -> dict[str, int | None]:
     return request.param
 
 
-def test_get_parquet_row_count_from_metadata_missing_prefetch() -> None:
+def test_get_parquet_row_count_from_metadata_raises() -> None:
     paths = ["/some/missing/file.parquet"]
     parquet_options = ParquetOptions(prefetch_file_metadata=True)
+
+    with pytest.raises(AssertionError, match=r"Cached parquet info is required"):
+        Scan._get_parquet_row_count_from_metadata(
+            paths,
+            skip_rows=0,
+            n_rows=-1,
+            parquet_options=parquet_options,
+            cached_parquet_info=None,
+        )
 
     with pytest.raises(
         AssertionError,

@@ -137,9 +137,8 @@ def prefetch_parquet_file_metadata_for_ir(
             for scan in node.scans:
                 for path in scan.paths:
                     all_paths.add(path)
-        elif isinstance(node, Scan) and node.typ == "parquet":
-            for path in node.paths:
-                all_paths.add(path)
+        elif isinstance(node, Scan) and node.typ == "parquet":  # pragma: no cover
+            raise RuntimeError("Unexpected parquet 'Scan' node in lowered IR graph.")
 
     cached_parquet_info: dict[str, CachedParquetInfo] = {}
     if stats is not None:

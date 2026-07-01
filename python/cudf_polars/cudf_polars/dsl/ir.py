@@ -605,26 +605,26 @@ class Scan(IR):
                 "Reading only parquet metadata to produce row index."
             )
 
-    @classmethod
-    def with_prefetched_parquet_metadata(
-        cls, scan: Scan, cached_parquet_info: list[CachedParquetInfo]
-    ) -> Self:
-        """Create a new scan node, with prefetched parquet metadata set."""
-        return cls(
-            scan.schema,
-            scan.typ,
-            scan.reader_options,
-            scan.cloud_options,
-            scan.paths,
-            scan.with_columns,
-            scan.skip_rows,
-            scan.n_rows,
-            scan.row_index,
-            scan.include_file_paths,
-            scan.predicate,
-            scan.parquet_options,
-            cached_parquet_info,
-        )
+    # @classmethod
+    # def with_prefetched_parquet_metadata(
+    #     cls, scan: Scan, cached_parquet_info: list[CachedParquetInfo]
+    # ) -> Self:
+    #     """Create a new scan node, with prefetched parquet metadata set."""
+    #     return cls(
+    #         scan.schema,
+    #         scan.typ,
+    #         scan.reader_options,
+    #         scan.cloud_options,
+    #         scan.paths,
+    #         scan.with_columns,
+    #         scan.skip_rows,
+    #         scan.n_rows,
+    #         scan.row_index,
+    #         scan.include_file_paths,
+    #         scan.predicate,
+    #         scan.parquet_options,
+    #         cached_parquet_info,
+    #     )
 
     @staticmethod
     def _validate_cached_parquet_info(
