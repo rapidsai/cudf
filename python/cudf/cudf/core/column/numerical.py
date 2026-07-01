@@ -943,6 +943,22 @@ class NumericalColumn(NumericalBaseColumn):
                 rhs = rhs.astype(lhs.dtype)
             elif lhs.can_cast_safely(rhs.dtype):
                 lhs = lhs.astype(rhs.dtype)
+            elif (
+                isinstance(lhs.dtype, np.dtype)
+                and isinstance(rhs.dtype, np.dtype)
+                and lhs.dtype.kind in "biuf"
+                and rhs.dtype.kind in "biuf"
+                and "b" in (lhs.dtype.kind, rhs.dtype.kind)
+            ):
+                # A boolean column compares by value against numeric needles
+                # (``True == 1``) like numpy/pandas. ``can_cast_safely`` reports
+                # bool<->numeric as unsafe, so promote the boolean side to the
+                # numeric dtype (a bool always fits) rather than bailing out to
+                # an all-False result.
+                if lhs.dtype.kind == "b":
+                    lhs = lhs.astype(rhs.dtype)
+                else:
+                    rhs = rhs.astype(lhs.dtype)
         return lhs, rhs
 
     def _can_return_nan(self, skipna: bool | None = None) -> bool:
