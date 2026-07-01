@@ -276,6 +276,9 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
       options.emplace_back("--pch-verbose=false");
       options.emplace_back("--pch-messages=false");
     }
+  } else {
+    // suppress warning about nv_hdrstop directive on later CUDA versions
+    options.emplace_back("--diag-suppress=161");
   }
 
   if (cfg.disable_cuda_cache) { options.emplace_back("--no-cache"); }
@@ -358,6 +361,9 @@ rtcx::blob compile_fragment(char const* name,
       options.emplace_back("--pch-verbose=false");
       options.emplace_back("--pch-messages=false");
     }
+  } else {
+    // suppress warning about nv_hdrstop directive on later CUDA versions
+    options.emplace_back("--diag-suppress=161");
   }
 
   if (cfg.disable_cuda_cache) { options.emplace_back("--no-cache"); }
