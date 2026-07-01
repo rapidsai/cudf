@@ -95,7 +95,7 @@ Section name
 ```
 
 Each listed will automatically have its docstring rendered into a separate page.
-This layout comes from [PyData Sphinx Theme](https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html).
+This layout comes from [NVIDIA Sphinx Theme](https://pypi.org/project/nvidia-sphinx-theme/).
 
 ````{note}
 Autosummary generates stub pages that look like this (using `cudf.concat` as an example):
