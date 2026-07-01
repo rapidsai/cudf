@@ -232,7 +232,7 @@ struct host_span {
    */
   [[nodiscard]] constexpr host_span first(size_type count) const noexcept
   {
-    return host_span{_span.data(), count};
+    return host_span{_span.data(), count, _is_device_accessible};
   }
 
   /**
@@ -243,7 +243,7 @@ struct host_span {
    */
   [[nodiscard]] constexpr host_span last(size_type count) const noexcept
   {
-    return host_span{_span.data() + _span.size() - count, count};
+    return host_span{_span.data() + _span.size() - count, count, _is_device_accessible};
   }
 
   /**
