@@ -365,8 +365,7 @@ aggregate_reader_metadata::read_bloom_filters(
   // Exit early if we don't have any bloom filters
   if (not have_bloom_filters) { return {}; }
 
-  // Fetch the header-stripped, 32-byte-aligned bloom filter bitsets to device via the shared
-  // utility
+  // Fetch the header-stripped, 32-byte-aligned bloom filter bitsets to device
   std::vector<std::reference_wrapper<datasource>> datasource_refs;
   datasource_refs.reserve(sources.size());
   std::transform(

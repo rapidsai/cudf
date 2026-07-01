@@ -394,9 +394,6 @@ fetch_bloom_filters_to_device_async_impl(
   CUDF_EXPECTS(num_sources == bloom_filter_byte_ranges_per_source.size(),
                "Encountered mismatch in number of datasources and bloom filter byte range spans");
 
-  // Speculatively read each filter in one host read (its serialized length when known, else a
-  // header-sized guess), then copy the bitset to device if covered, otherwise stream the bitset.
-
   // Flatten to one (source index, index within source, bloom filter byte range) task per filter
   std::vector<std::tuple<std::size_t, std::size_t, cudf::io::text::byte_range_info>>
     bloom_filter_tasks;
@@ -424,25 +421,29 @@ fetch_bloom_filters_to_device_async_impl(
     std::size_t bitset_size{};
     bool covered{};  // the whole bitset is already present in `host_buffer`
   };
-  auto speculative_reads =
-    dispatch_tasks(bloom_filter_tasks.size(), [&](std::size_t task_idx) -> speculative_read {
-      auto const& [source_idx, inner_idx, bloom_range] = bloom_filter_tasks[task_idx];
-      // placeholder for a chunk whose column has no bloom filter written
-      if (bloom_range.is_empty()) { return {}; }
-      // Read the whole filter when its length is known, else guess
-      auto const read_size = static_cast<std::size_t>(bloom_range.size());
-      auto host_buffer     = datasources[source_idx].get().host_read(
-        static_cast<std::size_t>(bloom_range.offset()), read_size);
-      auto const header_info =
-        detail::parse_bloom_filter_header({host_buffer->data(), host_buffer->size()});
-      CUDF_EXPECTS(header_info.has_value(), "Encountered an invalid bloom filter header");
-      auto const [header_size, bitset_size] = header_info.value();
-      auto const covered = read_size >= static_cast<std::size_t>(header_size) + bitset_size;
-      return {std::move(host_buffer), header_size, bitset_size, covered};
-    });
+  // Speculatively read one bloom filter from a source
+  auto const read_speculative =
+    [](cudf::io::datasource& datasource,
+       cudf::io::text::byte_range_info const& bloom_range) -> speculative_read {
+    // placeholder for a chunk whose column has no bloom filter written
+    if (bloom_range.is_empty()) { return {}; }
+    auto const read_size = static_cast<std::size_t>(bloom_range.size());
+    auto host_buffer =
+      datasource.host_read(static_cast<std::size_t>(bloom_range.offset()), read_size);
+    auto const header_info =
+      detail::parse_bloom_filter_header({host_buffer->data(), host_buffer->size()});
+    CUDF_EXPECTS(header_info.has_value(), "Encountered an invalid bloom filter header");
+    auto const [header_size, bitset_size] = header_info.value();
+    auto const covered = read_size >= static_cast<std::size_t>(header_size) + bitset_size;
+    return {std::move(host_buffer), header_size, bitset_size, covered};
+  };
 
-  // Phase 2: materialize aligned device bitsets — copy covered filters from the host read, stream
-  // the rest to device.
+  auto speculative_reads = dispatch_tasks(bloom_filter_tasks.size(), [&](std::size_t task_idx) {
+    auto const& [source_idx, inner_idx, bloom_range] = bloom_filter_tasks[task_idx];
+    return read_speculative(datasources[source_idx].get(), bloom_range);
+  });
+
+  // Phase 2: materialize aligned device bitsets
   std::vector<rmm::device_buffer> bloom_filter_buffers;
   bloom_filter_buffers.reserve(bloom_filter_tasks.size());
   std::vector<device_spans_per_source_type> bitset_spans_per_source(num_sources);
@@ -468,7 +469,7 @@ fetch_bloom_filters_to_device_async_impl(
         bloom_filter_buffers.emplace_back(
           spec.host_buffer->data() + spec.header_size, spec.bitset_size, stream, aligned_mr);
       } else if (datasources[source_idx].get().is_device_read_preferred(spec.bitset_size)) {
-        // device-capable source: stream the bitset to device (kvikio picks GDS vs host bounce)
+        // device-capable source: stream the bitset to device
         bloom_filter_buffers.emplace_back(spec.bitset_size, stream, aligned_mr);
         device_read_tasks.emplace_back(datasources[source_idx].get().device_read_async(
           bitset_offset,
