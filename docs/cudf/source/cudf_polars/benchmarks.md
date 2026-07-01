@@ -8,8 +8,9 @@ The steps below reproduce the PDS-H benchmark results using the Polars GPU engin
 
 ### Setup
 
-**GPU machines:** Install `cudf-polars` following the [RAPIDS installation guide](https://docs.rapids.ai/install).
-For nightly wheels, install with the `ray` extra (required for multi-GPU benchmarking):
+**GPU machines** can run both CPU and GPU benchmarks. Install `cudf-polars` following the
+[RAPIDS installation guide](https://docs.rapids.ai/install). For nightly wheels, install with
+the `ray` extra (required for multi-GPU benchmarking):
 
 ```bash
 CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
@@ -26,8 +27,8 @@ Polars release.
      pip install "cudf-polars-cu${CUDA_MAJOR}[ray,benchmark]>=0.0.0a0"
      Requires changes to pyproject.toml and dependencies.yaml. -->
 
-**CPU-only machines (no CUDA):** The `--frontend polars-cpu` benchmark runs on any machine.
-Since `cudf-polars` GPU wheels are not available for non-CUDA platforms, install from source:
+**CPU-only machines** (no CUDA) can only run the `--frontend polars-cpu` benchmark. Since the
+`cudf-polars` GPU wheels require CUDA, install from source instead:
 
 ```bash
 git clone --depth=1 https://github.com/rapidsai/cudf.git
