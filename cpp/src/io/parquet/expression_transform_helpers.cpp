@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -368,56 +368,17 @@ offset_column_references::offset_column_references(
   _converted_expr = expr.value().get().accept(*this);
 }
 
-std::optional<std::reference_wrapper<ast::expression const>>
-offset_column_references::get_converted_expr() const
-{
-  return _converted_expr;
-}
-
-std::reference_wrapper<ast::expression const> offset_column_references::visit(
-  ast::literal const& expr)
-{
-  return expr;
-}
-
 std::reference_wrapper<ast::expression const> offset_column_references::visit(
   ast::column_reference const& expr)
 {
-  auto const& new_ref = _expr_tree.push(
-    ast::column_reference{expr.get_column_index() + _offset, expr.get_table_source()});
-  return std::reference_wrapper<ast::expression const>(new_ref);
+  _col_ref.emplace_back(expr.get_column_index() + _offset, expr.get_table_source());
+  return _col_ref.back();
 }
 
 std::reference_wrapper<ast::expression const> offset_column_references::visit(
   ast::column_name_reference const&)
 {
   CUDF_FAIL("Column name references are not supported in offset_column_references");
-}
-
-std::reference_wrapper<ast::expression const> offset_column_references::visit(
-  ast::operation const& expr)
-{
-  auto const operands       = expr.get_operands();
-  auto op                   = expr.get_operator();
-  auto new_operands         = visit_operands(operands);
-  auto const operator_arity = cudf::ast::detail::ast_operator_arity(op);
-  if (operator_arity == 2) {
-    _expr_tree.push(ast::operation{op, new_operands.front(), new_operands.back()});
-  } else if (operator_arity == 1) {
-    _expr_tree.push(ast::operation{op, new_operands.front()});
-  }
-  return std::reference_wrapper<ast::expression const>(_expr_tree.back());
-}
-
-std::vector<std::reference_wrapper<ast::expression const>> offset_column_references::visit_operands(
-  cudf::host_span<std::reference_wrapper<ast::expression const> const> operands)
-{
-  std::vector<std::reference_wrapper<ast::expression const>> transformed_operands;
-  for (auto const& operand : operands) {
-    auto const new_operand = operand.get().accept(*this);
-    transformed_operands.push_back(new_operand);
-  }
-  return transformed_operands;
 }
 
 }  // namespace cudf::io::parquet::detail

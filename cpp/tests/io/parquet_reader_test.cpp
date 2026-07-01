@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1481,7 +1481,7 @@ TEST_F(ParquetReaderTest, FilterWithColumnProjection)
                        .prepend_source_index_column(true)
                        .filter(read_expr);
     auto result = cudf::io::read_parquet(read_opts);
-    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->select({1}), expected->view());
+    CUDF_TEST_EXPECT_TABLES_EQUAL(result.tbl->view().select({1}), *expected);
 
     // Repeat but select columns using indices instead of names
     read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
@@ -4877,6 +4877,8 @@ TEST_F(ParquetReaderTest, SourceIndexSelectedRead)
                              .build();
     CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::io::read_parquet(read_opts).tbl->view(), expected);
   }
+}
+
 TEST_F(ParquetReaderTest, MismatchedSchemaFilterColumnCollision)
 {
   // Different-type collision: source 0's double `price` lands on source 1's int64 `id`.
