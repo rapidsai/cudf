@@ -200,8 +200,9 @@ def test_dataframe_join_combine_cats():
     lhs_pd.index = lhs_pd.index.astype(pd.StringDtype(na_value=np.nan))
     rhs_pd.index = rhs_pd.index.astype(pd.StringDtype(na_value=np.nan))
 
+    # Categorical keys with different category sets decategorize to their
+    # common (string) dtype, matching pandas.
     expect = lhs_pd.join(rhs_pd, how="outer")
-    expect.index = expect.index.astype("category")
     got = lhs.join(rhs, how="outer")
 
     assert_eq(expect.index.sort_values(), got.index.sort_values())

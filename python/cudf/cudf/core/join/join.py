@@ -6,6 +6,8 @@ import copy
 import itertools
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
+
 import pylibcudf as plc
 
 from cudf.core._internals import sorting
@@ -312,9 +314,11 @@ class Merge:
         ):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
-            if get_option("mode.pandas_compatible"):
+            if len(lcol) and len(rcol):
                 # pandas refuses to merge a numeric key against a string key
-                # (a numeric-looking string is NOT silently parsed).
+                # (a numeric-looking string is NOT silently parsed). Empty
+                # keys are inferred as ``empty`` rather than ``string`` by
+                # pandas and so are exempt from this check.
                 l_num = is_dtype_obj_numeric(lcol.dtype) and lcol.dtype.kind in (
                     "iuf"
                 )
@@ -330,21 +334,34 @@ class Merge:
                         "If you wish to proceed you should use pd.concat"
                     )
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
+            # The common-typed columns are always used to compute the join
+            # maps; the columns written into the output frame may differ.
             left_join_cols.append(lcol_casted)
             right_join_cols.append(rcol_casted)
+            # ``_match_join_keys`` returns the keys unchanged (still
+            # categorical) when both sides share the same categories, and
+            # otherwise decategorizes them -- matching pandas, which keeps the
+            # result categorical only when the category sets match.
+            output_lcol, output_rcol = lcol_casted, rcol_casted
 
-            # Categorical dtypes must be cast back from the underlying codes
-            # type that was returned by _match_join_keys.
-            if (
-                self.how == "inner"
-                and isinstance(lcol.dtype, CategoricalDtype)
-                and isinstance(rcol.dtype, CategoricalDtype)
-            ):
-                lcol_casted = lcol_casted.astype(lcol.dtype)
-                rcol_casted = rcol_casted.astype(rcol.dtype)
+            # pandas keeps an *empty* key column at its original dtype even when
+            # the other (empty) side has a different numeric/object dtype;
+            # cudf's common-type cast would otherwise change it. The join maps
+            # are unaffected (an empty side yields an empty gather map).
+            if (len(lcol) == 0 or len(rcol) == 0) and lcol.dtype != rcol.dtype:
+                l_numeric = is_dtype_obj_numeric(lcol.dtype)
+                r_numeric = is_dtype_obj_numeric(rcol.dtype)
+                l_objlike = is_dtype_obj_string(lcol.dtype) or (
+                    isinstance(lcol.dtype, np.dtype) and lcol.dtype == object
+                )
+                r_objlike = is_dtype_obj_string(rcol.dtype) or (
+                    isinstance(rcol.dtype, np.dtype) and rcol.dtype == object
+                )
+                if (l_numeric and r_objlike) or (l_objlike and r_numeric):
+                    output_lcol, output_rcol = lcol, rcol
 
-            left_key.set(self.lhs, lcol_casted)
-            right_key.set(self.rhs, rcol_casted)
+            left_key.set(self.lhs, output_lcol)
+            right_key.set(self.rhs, output_rcol)
 
         from cudf.core.dataframe import DataFrame
 

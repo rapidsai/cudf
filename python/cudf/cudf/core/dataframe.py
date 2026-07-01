@@ -4949,13 +4949,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 result = result.iloc[:, new_indices]
 
-        if get_option("mode.pandas_compatible") and how != "cross":
+        if how != "cross":
             # pandas presents a retained (shared-name) join key with the LEFT
             # operand's original dtype. When at least one side is a pandas
             # extension dtype (nullable/pyarrow), cudf's internal common-type
             # promotion can change the presented dtype, so restore it here.
-            # (Purely numpy<->numpy key promotion is left untouched to preserve
-            # cudf-classic behavior.)
+            # (Purely numpy<->numpy key promotion is left untouched.)
             if is_right_join:
                 key_on, key_lon, key_ron = orig_on, orig_left_on, orig_right_on
                 key_li, key_ri = orig_left_index, orig_right_index
@@ -4988,6 +4987,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         if name in right._data
                         else None
                     )
+                    # Categorical keys follow pandas' (de)categorization rules
+                    # handled during the join itself, not this restoration.
+                    if isinstance(target, CategoricalDtype) or isinstance(
+                        right_dtype, CategoricalDtype
+                    ):
+                        continue
                     one_extension = (not isinstance(target, np.dtype)) or (
                         right_dtype is not None
                         and not isinstance(right_dtype, np.dtype)

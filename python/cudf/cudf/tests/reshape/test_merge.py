@@ -1132,17 +1132,16 @@ def test_categorical_typecast_inner():
         result = left.merge(right, how="inner", on="key")
 
     # Unequal categories
-    # Neither ordered -> unordered categorical with intersection
+    # Neither ordered -> decategorized to the common categories dtype
+    # (matching pandas, which only keeps the result categorical when the
+    # category sets match).
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
     right = make_categorical_dataframe([2, 3, 4], ordered=False)
 
     result = left.merge(right, how="inner", on="key")
 
-    expect_dtype = cudf.CategoricalDtype(categories=[2, 3], ordered=False)
-    expect_data = cudf.Series([2, 3], dtype=expect_dtype, name="key")
-    assert_join_results_equal(
-        expect_data, result["key"], how="inner", check_categorical=False
-    )
+    expect_data = cudf.Series([2, 3], dtype="int64", name="key")
+    assert_join_results_equal(expect_data, result["key"], how="inner")
 
     # One is ordered -> error
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
@@ -1183,13 +1182,13 @@ def test_categorical_typecast_left():
     with pytest.raises(TypeError):
         result = right.merge(left, on="key", how="left")
 
-    # unequal categories neither ordered -> left dtype
+    # unequal categories neither ordered -> decategorized to the common
+    # categories dtype (matching pandas)
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
     right = make_categorical_dataframe([2, 3, 4], ordered=False)
 
     result = left.merge(right, on="key", how="left")
-    expect_dtype = CategoricalDtype(categories=[1, 2, 3], ordered=False)
-    expect_data = cudf.Series([1, 2, 3], dtype=expect_dtype, name="key")
+    expect_data = cudf.Series([1, 2, 3], dtype="int64", name="key")
 
     assert_join_results_equal(expect_data, result["key"], how="left")
 
@@ -1247,13 +1246,13 @@ def test_categorical_typecast_outer():
     with pytest.raises(TypeError):
         result = right.merge(left, how="outer", on="key")
 
-    # unequal categories, neither ordered -> superset
+    # unequal categories, neither ordered -> decategorized to the common
+    # categories dtype (matching pandas)
     left = make_categorical_dataframe([1, 2, 3], ordered=False)
     right = make_categorical_dataframe([2, 3, 4], ordered=False)
     result = left.merge(right, on="key", how="outer")
 
-    expect_dtype = CategoricalDtype(categories=[1, 2, 3, 4], ordered=False)
-    expect_data = cudf.Series([1, 2, 3, 4], dtype=expect_dtype, name="key")
+    expect_data = cudf.Series([1, 2, 3, 4], dtype="int64", name="key")
 
     assert_join_results_equal(expect_data, result["key"], how="outer")
 
@@ -1292,7 +1291,8 @@ def test_categorical_typecast_left_one_cat(dtype):
     right = left.astype(left["key"].dtype.categories.dtype)
 
     result = left.merge(right, on="key", how="left")
-    assert result["key"].dtype == left["key"].dtype
+    # pandas decategorizes when only one side is categorical.
+    assert result["key"].dtype == left["key"].dtype.categories.dtype
 
 
 @pytest.mark.parametrize("dtype", [*NUMERIC_TYPES, "str"])
