@@ -70,9 +70,10 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
+    is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
-from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
+from cudf.utils.utils import _EQUALITY_OPS, _is_same_name, is_na_like
 
 if TYPE_CHECKING:
     from collections.abc import Hashable, Iterable, MutableMapping
@@ -3141,8 +3142,41 @@ class Series(SingleColumnFrame, IndexedFrame):
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
+        if is_pandas_nullable_numpy_dtype(self.dtype) and not isinstance(
+            self.dtype, pd.StringDtype
+        ):
+            # Mirror pandas' BaseMaskedArray.isin for masked (nullable
+            # integer/float/boolean) dtypes:
+            #  * matching is done on the underlying numpy values, so e.g. a
+            #    boolean element equals the integer 1,
+            #  * an NA element is considered present only when pd.NA itself
+            #    is one of the passed values (a plain NaN/None/NaT does not
+            #    match), and
+            #  * the result is a nullable BooleanDtype with no missing values.
+            numpy_dtype = self.dtype.numpy_dtype
+            na_mask = self._column.isnull()
+            placeholder = False if numpy_dtype.kind == "b" else 0
+            data_col = self._column.astype(numpy_dtype).fillna(placeholder)
+            # NA-like sentinels (pd.NA/None/NaT) never match a real value and
+            # would otherwise raise when mixed with numeric values; NA rows
+            # are handled by the mask below instead.
+            cleaned_values = [
+                value for value in values if not is_na_like(value)
+            ]
+            result_col = data_col.isin(cleaned_values)
+            if na_mask.any():
+                values_have_NA = any(value is pd.NA for value in values)
+                result_col = (
+                    result_col | na_mask
+                    if values_have_NA
+                    else result_col & ~na_mask
+                )
+            result_col = result_col.astype(pd.BooleanDtype())
+        else:
+            result_col = self._column.isin(values)
+
         return Series._from_column(
-            self._column.isin(values),
+            result_col,
             name=self.name,
             index=self.index,
             attrs=self.attrs,

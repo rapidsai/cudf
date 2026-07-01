@@ -1,8 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -159,3 +160,67 @@ def test_isin_categorical(data, values):
     got = gsr.isin(values)
     expected = psr.isin(values)
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize("dtype", ["boolean", "Int64", "Float64"])
+@pytest.mark.parametrize(
+    "data,values",
+    [
+        ([0, 1, 0], [1]),
+        ([0, 1, 0], [1, pd.NA]),
+        ([0, pd.NA, 0], [1, 0]),
+        ([0, 1, pd.NA], [1, pd.NA]),
+        ([0, 1, pd.NA], [1, np.nan]),
+        ([0, pd.NA, pd.NA], [np.nan, pd.NaT, None]),
+    ],
+)
+def test_isin_masked_types(dtype, data, values):
+    # Series.isin on a pandas masked (nullable integer/float/boolean) dtype
+    # returns a nullable BooleanDtype result and matches pandas' NA semantics:
+    #  * comparison is done on the underlying values (a boolean element equals
+    #    the integer 1), and
+    #  * an NA element is considered present only when pd.NA itself is one of
+    #    ``values`` (a plain NaN/None/NaT does not match).
+    psr = pd.Series(data, dtype=dtype)
+    gsr = cudf.Series(data, dtype=dtype)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+
+    assert got.dtype == pd.BooleanDtype()
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "values",
+    [[1], [0], [1, 0], [2], [1.0], [1.5], [True], [False]],
+)
+def test_isin_bool_against_numeric(values):
+    # A boolean Series compares equal to the integers/floats 0 and 1, matching
+    # numpy/pandas value semantics (previously cudf returned all-False for a
+    # numeric ``values`` argument).
+    psr = pd.Series([True, False, False, True])
+    gsr = cudf.Series([True, False, False, True])
+
+    got = gsr.isin(values)
+    assert got.dtype == np.dtype("bool")
+    assert_eq(got, psr.isin(values))
+
+
+@pytest.mark.parametrize(
+    "psr",
+    [
+        pd.Series([0, 1, 0], dtype=pd.ArrowDtype(pa.int64())),
+        pd.Series([1.0, 2.0, None], dtype=pd.ArrowDtype(pa.float64())),
+        pd.Series([True, False, True], dtype=pd.ArrowDtype(pa.bool_())),
+        pd.Series(["a", "b", "a"], dtype="category"),
+    ],
+)
+def test_isin_non_masked_extension_returns_numpy_bool(psr):
+    # Arrow and categorical inputs yield a numpy bool result (only masked
+    # numeric/boolean dtypes upgrade to nullable boolean).
+    gsr = cudf.from_pandas(psr)
+
+    got = gsr.isin([psr.iloc[0]])
+    assert got.dtype == np.dtype("bool")
+    assert_eq(got, psr.isin([psr.iloc[0]]))
