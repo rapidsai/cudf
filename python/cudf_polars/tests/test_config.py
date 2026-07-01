@@ -740,6 +740,20 @@ def test_validate_join_domain_prefilter_options() -> None:
         )
 
 
+@pytest.mark.parametrize("value", [None, object()])
+def test_validate_join_domain_prefilter_type(value: object) -> None:
+    with pytest.raises(
+        TypeError,
+        match="join_domain_prefilter must be a JoinDomainPrefilterOptions instance",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_domain_prefilter": value},
+            )
+        )
+
+
 def test_join_domain_prefilter_from_instance() -> None:
     options = JoinDomainPrefilterOptions(enabled=False, threshold=0.25, trace=True)
     config = ConfigOptions.from_polars_engine(

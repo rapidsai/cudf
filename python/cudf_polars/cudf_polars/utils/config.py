@@ -824,6 +824,11 @@ class StreamingExecutor:
                 "join_domain_prefilter",
                 JoinDomainPrefilterOptions(**self.join_domain_prefilter),
             )
+        if not isinstance(self.join_domain_prefilter, JoinDomainPrefilterOptions):
+            raise TypeError(
+                "join_domain_prefilter must be a JoinDomainPrefilterOptions "
+                "instance or dict"
+            )
 
         if self.cluster in ("spmd", "ray", "dask"):
             if self.sink_to_directory is False:
