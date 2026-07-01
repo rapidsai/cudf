@@ -893,10 +893,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
                                      column_name_info{.name = "src_idx", .is_nullable = false});
   }
 
-  // Offset column references in `_expr_conv` by the number of prepended columns
-  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
-  auto const final_filter =
-    offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
+  // Compute the final filter expression incorporating any column reference offsets in _expr_conv
+  auto const final_filter      = compute_offset_filter();
   auto const final_filter_expr = final_filter.get_converted_expr();
 
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists

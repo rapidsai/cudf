@@ -17,6 +17,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/io/parquet_io_utils.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/error.hpp>
@@ -156,6 +157,83 @@ TEST_F(HybridScanMultifileTest, MaterializeListsOfStrings)
   auto col4 = make_list_str_column(gen, true, true);
 
   test_hybrid_scan_multifile({col0, *col1, *col2, *col3, *col4}, false);
+}
+
+TEST_F(HybridScanMultifileTest, PrependSourceIndexColumn)
+{
+  using T = int32_t;
+  using cudf::io::parquet::experimental::use_data_page_mask;
+
+  // Small single-column table with sequence values [0, 10)
+  auto constexpr num_rows    = 10;
+  auto constexpr num_sources = 3;
+  auto values                = cuda::counting_iterator<T>{0};
+  cudf::test::fixed_width_column_wrapper<T> col0(values, values + num_rows);
+  auto const table = cudf::table_view{{col0}};
+
+  cudf::io::table_input_metadata expected_metadata(table);
+  expected_metadata.column_metadata[0].set_name("col0");
+
+  // Write the table once and reference the same file for all sources
+  auto const parquet_filepath = temp_env->get_temp_filepath("PrependSourceIndexColumn.parquet");
+  {
+    auto out_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{parquet_filepath}, table)
+        .metadata(expected_metadata)
+        .build();
+    cudf::io::write_parquet(out_opts);
+  }
+
+  // Filtering AST - col0 % 2 == 0, removes odd rows (half the rows) from each source
+  auto two_scalar     = cudf::numeric_scalar<T>(2);
+  auto two_literal    = cudf::ast::literal(two_scalar);
+  auto zero_scalar    = cudf::numeric_scalar<T>(0);
+  auto zero_literal   = cudf::ast::literal(zero_scalar);
+  auto col_ref_0      = cudf::ast::column_name_reference("col0");
+  auto mod_expression = cudf::ast::operation(cudf::ast::ast_operator::MOD, col_ref_0, two_literal);
+  auto filter_expression =
+    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, mod_expression, zero_literal);
+
+  auto const stream = cudf::get_default_stream();
+  auto const mr     = cudf::get_current_device_resource_ref();
+
+  auto const parquet_filepaths = std::vector<std::string>(num_sources, parquet_filepath);
+  auto source_info             = cudf::io::source_info(parquet_filepaths);
+
+  // Expected table read via the mainline multi-source parquet reader
+  auto const expected_options = cudf::io::parquet_reader_options::builder(source_info)
+                                  .filter(filter_expression)
+                                  .prepend_source_index_column(true)
+                                  .build();
+  auto const expected = cudf::io::read_parquet(expected_options, stream, mr);
+
+  // Hybrid scan multifile reader options
+  auto const options = cudf::io::parquet_reader_options::builder()
+                         .filter(filter_expression)
+                         .prepend_source_index_column(true)
+                         .build();
+
+  auto inputs = multifile_inputs(source_info);
+  auto reader =
+    cudf::io::parquet::experimental::hybrid_scan_multifile{inputs.footer_byte_spans, options};
+
+  auto const row_group_indices = reader.all_row_groups(options);
+  auto row_mask                = reader.build_all_true_row_mask(row_group_indices, stream, mr);
+
+  auto filter_column_chunks = fetch_multisource_device_data(
+    inputs, reader.filter_column_chunks_byte_ranges(row_group_indices, options), stream, mr);
+  auto row_mask_view = row_mask->mutable_view();
+  auto filter_result = reader.materialize_filter_columns(row_group_indices,
+                                                         filter_column_chunks.flat_spans,
+                                                         row_mask_view,
+                                                         use_data_page_mask::NO,
+                                                         options,
+                                                         stream,
+                                                         mr);
+
+  // Filter result must contain the prepended source index column (col0 and src_idx)
+  ASSERT_EQ(filter_result.tbl->num_columns(), 2);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected.tbl->view(), filter_result.tbl->view());
 }
 
 TEST_F(HybridScanMultifileTest, MaterializeStructs)
