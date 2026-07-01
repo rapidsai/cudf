@@ -15,10 +15,10 @@ std::pair<bool, size_type> is_shared_memory_compatible(host_span<aggregation::Ki
                                                        table_view const& values,
                                                        size_type grid_size)
 {
-  // If any aggregation has values type is dictionary, or the aggregation is SUM_WITH_OVERFLOW,
+  // If any aggregation has values type is dictionary, or the aggregation is SUM_OVERFLOW,
   // we should always use global memory code path.
   for (std::size_t i = 0; i < agg_kinds.size(); ++i) {
-    if (is_dictionary(values.column(i).type()) || agg_kinds[i] == aggregation::SUM_WITH_OVERFLOW) {
+    if (is_dictionary(values.column(i).type()) || agg_kinds[i] == aggregation::SUM_OVERFLOW) {
       return {false, 0};
     }
   }
