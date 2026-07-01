@@ -4949,6 +4949,52 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
                 result = result.iloc[:, new_indices]
 
+        if get_option("mode.pandas_compatible") and how != "cross":
+            # pandas presents a retained (shared-name) join key with the LEFT
+            # operand's original dtype. When at least one side is a pandas
+            # extension dtype (nullable/pyarrow), cudf's internal common-type
+            # promotion can change the presented dtype, so restore it here.
+            # (Purely numpy<->numpy key promotion is left untouched to preserve
+            # cudf-classic behavior.)
+            if is_right_join:
+                key_on, key_lon, key_ron = orig_on, orig_left_on, orig_right_on
+                key_li, key_ri = orig_left_index, orig_right_index
+            else:
+                key_on, key_lon, key_ron = on, left_on, right_on
+                key_li, key_ri = left_index, right_index
+            if not key_li and not key_ri:
+                if key_on is not None:
+                    key_names = (
+                        [key_on] if is_scalar(key_on) else list(key_on)
+                    )
+                elif key_lon is not None and key_ron is not None:
+                    lon = [key_lon] if is_scalar(key_lon) else list(key_lon)
+                    ron = [key_ron] if is_scalar(key_ron) else list(key_ron)
+                    key_names = [
+                        lk
+                        for lk, rk in zip(lon, ron, strict=True)
+                        if lk == rk
+                    ]
+                else:
+                    key_names = list(
+                        set(self._column_names) & set(right._column_names)
+                    )
+                for name in key_names:
+                    if name not in self._data or name not in result._data:
+                        continue
+                    target = self._data[name].dtype
+                    right_dtype = (
+                        right._data[name].dtype
+                        if name in right._data
+                        else None
+                    )
+                    one_extension = (not isinstance(target, np.dtype)) or (
+                        right_dtype is not None
+                        and not isinstance(right_dtype, np.dtype)
+                    )
+                    if one_extension and result._data[name].dtype != target:
+                        result[name] = result[name].astype(target)
+
         return result
 
     @_performance_tracking

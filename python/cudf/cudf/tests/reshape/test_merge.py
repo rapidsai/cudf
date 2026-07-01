@@ -1329,7 +1329,9 @@ def test_merge_suffixes_duplicate_label_raises():
     expected = df_pd.merge(df_pd, on=["a"], suffixes=("", "_right"))
     assert_eq(result, expected)
 
-    with pytest.raises(NotImplementedError):
+    # Suffixing collides the new ``b`` -> ``b_right`` with the pre-existing
+    # ``b_right`` column, which pandas rejects with a ``MergeError``.
+    with pytest.raises(pd.errors.MergeError, match="duplicate columns"):
         result.merge(df_cudf, on=["a"], suffixes=("", "_right"))
 
 

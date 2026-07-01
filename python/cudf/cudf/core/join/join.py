@@ -11,6 +11,10 @@ import pylibcudf as plc
 from cudf.core._internals import sorting
 from cudf.core.column import ColumnBase, access_columns
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
@@ -308,6 +312,23 @@ class Merge:
         ):
             lcol = left_key.get(self.lhs)
             rcol = right_key.get(self.rhs)
+            if get_option("mode.pandas_compatible"):
+                # pandas refuses to merge a numeric key against a string key
+                # (a numeric-looking string is NOT silently parsed).
+                l_num = is_dtype_obj_numeric(lcol.dtype) and lcol.dtype.kind in (
+                    "iuf"
+                )
+                r_num = is_dtype_obj_numeric(rcol.dtype) and rcol.dtype.kind in (
+                    "iuf"
+                )
+                l_str = is_dtype_obj_string(lcol.dtype)
+                r_str = is_dtype_obj_string(rcol.dtype)
+                if (l_str and r_num) or (r_str and l_num):
+                    raise ValueError(
+                        f"You are trying to merge on {lcol.dtype} and "
+                        f"{rcol.dtype} columns for key '{left_key.name}'. "
+                        "If you wish to proceed you should use pd.concat"
+                    )
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
             left_join_cols.append(lcol_casted)
             right_join_cols.append(rcol_casted)
@@ -406,6 +427,42 @@ class Merge:
         )
         return result
 
+    @staticmethod
+    def _check_duplicate_output_labels(
+        left_names, right_names, llabels, rlabels, to_rename
+    ):
+        # Mirror pandas' ``_items_overlap_with_suffix`` duplicate detection.
+        # A duplicate is only an error when it is *introduced by suffixing*
+        # (labels already duplicated in an input are allowed), or when a
+        # suffixed label collides with a non-renamed label on the other side.
+        def _within_frame_dups(labels, names):
+            seen_labels: set = set()
+            seen_names: set = set()
+            dups = []
+            for label, name in zip(labels, names, strict=True):
+                if label in seen_labels and name not in seen_names:
+                    # ``label`` repeats but ``name`` did not (i.e. the
+                    # duplication came from suffixing, not the input).
+                    dups.append(label)
+                seen_labels.add(label)
+                seen_names.add(name)
+            return dups
+
+        dups = _within_frame_dups(llabels, left_names)
+        dups.extend(_within_frame_dups(rlabels, right_names))
+        # A renamed label colliding with a non-renamed label on the other side.
+        right_not_renamed = set(right_names) - set(to_rename)
+        left_not_renamed = set(left_names) - set(to_rename)
+        dups.extend(label for label in set(llabels) if label in right_not_renamed)
+        dups.extend(label for label in set(rlabels) if label in left_not_renamed)
+        if dups:
+            from pandas.errors import MergeError
+
+            raise MergeError(
+                f"Passing 'suffixes' which cause duplicate columns "
+                f"{set(dups)} is not allowed."
+            )
+
     def _merge_results(self, left_result: DataFrame, right_result: DataFrame):
         # Merge the DataFrames `left_result` and `right_result` into a single
         # `DataFrame`, suffixing column names if necessary.
@@ -447,29 +504,45 @@ class Merge:
                 return f"{name}{suffix}"
             return name
 
-        data = {
-            _suffixed(name, self.lsuffix): col
-            for name, col in left_result._column_labels_and_values
-        }
+        # All left columns appear in the output; right key columns that share a
+        # name with a left key column are dropped (their values come from the
+        # left key column). The remaining labels are suffixed per the rule
+        # above.
+        left_items = list(left_result._column_labels_and_values)
+        right_items = [
+            (name, col)
+            for name, col in right_result._column_labels_and_values
+            if self.how == "cross"
+            or name not in self._key_columns_with_same_name
+        ]
+        left_names = [name for name, _ in left_items]
+        right_names = [name for name, _ in right_items]
+        llabels = [_suffixed(name, self.lsuffix) for name in left_names]
+        rlabels = [_suffixed(name, self.rsuffix) for name in right_names]
 
-        # The right table follows the same rule as the left table except that
-        # key columns from the right table are removed.
-        for name, col in right_result._column_labels_and_values:
-            if name in common_names:
-                if (
-                    self.how == "cross"
-                    or name not in self._key_columns_with_same_name
-                ):
-                    r_label = _suffixed(name, self.rsuffix)
-                    if r_label in data:
-                        raise NotImplementedError(
-                            f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
-                            f"duplicate column label, '{r_label}', which is "
-                            "not supported."
-                        )
-                    data[r_label] = col
-            else:
-                data[name] = col
+        # pandas raises MergeError when suffixing would introduce a duplicate
+        # column label that was not already duplicated in the inputs.
+        self._check_duplicate_output_labels(
+            left_names, right_names, llabels, rlabels, cols_to_suffix
+        )
+
+        # pandas permits some duplicate output labels (e.g. two ``B_x`` columns
+        # from ``suffixes=("_x", "_x")``); cudf represents columns as a dict
+        # keyed by label and cannot hold duplicates, so surface these as
+        # NotImplementedError (cudf.pandas falls back to pandas transparently).
+        output_labels = llabels + rlabels
+        if len(set(output_labels)) != len(output_labels):
+            raise NotImplementedError(
+                f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
+                "duplicate column label, which is not supported."
+            )
+
+        data = {
+            label: col
+            for label, (_, col) in zip(
+                llabels + rlabels, left_items + right_items, strict=True
+            )
+        }
 
         # determine if the result has multiindex columns.  The result
         # of a join has a MultiIndex as its columns if:
@@ -582,6 +655,16 @@ class Merge:
             raise TypeError("left must be a Series or DataFrame")
         if not isinstance(rhs, (Series, DataFrame)):
             raise TypeError("right must be a Series or DataFrame")
+        if not isinstance(left_index, bool):
+            raise ValueError(
+                f"left_index parameter must be of type bool, not "
+                f"{type(left_index)}"
+            )
+        if not isinstance(right_index, bool):
+            raise ValueError(
+                f"right_index parameter must be of type bool, not "
+                f"{type(right_index)}"
+            )
         # ``suffixes`` must be an ordered pair; pandas rejects unordered/mapping
         # containers such as sets and dicts.
         if not isinstance(suffixes, (list, tuple)):
