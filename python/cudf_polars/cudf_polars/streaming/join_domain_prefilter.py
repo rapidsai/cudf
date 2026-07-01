@@ -270,9 +270,9 @@ def _simple_candidates(
         )
         if domain is None:
             continue
-        if _contains_identity(target.node, domain.node):
-            continue
         if domain.rows / target.rows > threshold:
+            continue
+        if _contains_identity(target.node, domain.node):
             continue
         yield _Candidate(
             mode="simple",
@@ -318,6 +318,8 @@ def _composite_candidates(
             )
             if domain is None:
                 continue
+            if domain.rows / target.rows > threshold:
+                continue
             constraint_domain = _smallest_key_producer(
                 target_child,
                 target_constraint_key.name,
@@ -328,13 +330,11 @@ def _composite_candidates(
             )
             if constraint_domain is None:
                 continue
+            if constraint_domain.rows / domain.rows > threshold:
+                continue
             if _contains_identity(target.node, domain.node) or _contains_identity(
                 target.node, constraint_domain.node
             ):
-                continue
-            if domain.rows / target.rows > threshold:
-                continue
-            if constraint_domain.rows / domain.rows > threshold:
                 continue
             yield _Candidate(
                 mode="composite",
