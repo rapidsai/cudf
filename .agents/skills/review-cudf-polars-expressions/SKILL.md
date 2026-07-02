@@ -43,7 +43,7 @@ Now, review if the Polars expression is currently supported and correct with cud
 
 Run the same examples generated in Step 1 with `pl.GPUEngine(executor="streaming", raise_on_fail=True)` passed to the `engine` argument of `collect` so failures do not fall back to CPU Polars. If the example data was relatively small, this should test the single partition path of cudf_polars.
 
-Additionally run another variation of the Step 1 examples with `pl.GPUEngine(executor="streaming", raise_on_fail=True, executor_options={"max_rows_per_partition": 2}))` passed to the `engine` argument of `collect`. With a large enough input data for the examples, this configuration would test the multiple partition path of cudf_polars.
+Additionally run another variation of the Step 1 examples with `pl.GPUEngine(executor="streaming", raise_on_fail=True, executor_options={"max_rows_per_partition": 2})` passed to the `engine` argument of `collect`. With a large enough input data for the examples, this configuration would test the multiple partition path of cudf_polars.
 
 Note the following failure and fallback cases:
 
@@ -72,9 +72,7 @@ Start with scoping an implementation for the single partition path for cudf_pola
 
 Next, if the expression is non-pointwise, add a multiple partition implementation in `python/cudf_polars/cudf_polars/streaming/expressions.py`
 
-<!---
 TODO: Add more guidance on a multiple partition implementation.
--->
 
 ## Step 4: Test the Polars expression implementation in cudf-polars
 
@@ -84,6 +82,5 @@ Finally, add a unit test to an existing or new file in the `python/cudf_polars/t
 2. The unit tests should use the `engine` fixture from `python/cudf_polars/tests/conftest.py` to test all applicable cudf_polars engine types including single and multiple partition execution.
 3. Review the existing unit tests in `python/cudf_polars/tests` to check if existing tests used this expressions. Unit tests may have existed that asserted that this expression was not supported.
 4. When using `assert_gpu_result_equal` for expressions that return floats, consider specifying `check_exact=False` if necessary.
-<!---
-TODO: Instructions on how to validate with the Polars unit tests.
--->
+
+TODO: Add more guidance on a multiple partition implementation.
