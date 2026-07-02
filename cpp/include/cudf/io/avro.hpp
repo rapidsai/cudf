@@ -21,7 +21,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
- * @brief cuDF-IO API for reading Avro files into a table.
+ * @brief APIs for reading Avro files into a table.
  */
 
 class avro_reader_options_builder;

@@ -25,7 +25,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
- * @brief cuDF-IO API for reading and writing ORC files.
+ * @brief APIs for reading and writing ORC files.
  */
 
 constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;  ///< 64MB default orc stripe size

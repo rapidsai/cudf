@@ -26,7 +26,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
- * @brief cuDF-IO API for reading and writing JSON files.
+ * @brief APIs for reading and writing JSON files.
  */
 
 class json_reader_options_builder;
