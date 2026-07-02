@@ -116,6 +116,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
     delete d_buffer;
   };
 
+  stream.synchronize();  // wait for h_buffer to finish copying
   return std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>(d_prog, deleter);
 }
 
