@@ -23,6 +23,7 @@ import random
 import reprlib
 import time
 import uuid
+from collections.abc import Sized
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
@@ -67,7 +68,14 @@ from cudf_polars.utils.versions import (
 
 if TYPE_CHECKING:
     import concurrent.futures
-    from collections.abc import Callable, Generator, Hashable, Iterable, Sequence
+    from collections.abc import (
+        Callable,
+        Generator,
+        Hashable,
+        Iterable,
+        Iterator,
+        Sequence,
+    )
     from typing import Literal, Self
 
     from polars import polars  # type: ignore[attr-defined]
@@ -76,6 +84,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.dsl.utils.io import CachedParquetInfo
+    from cudf_polars.streaming.rank_aware_source import RankAwareSource
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
     from cudf_polars.utils.timer import Timer
@@ -185,6 +194,29 @@ class IRExecutionContext:
             self.get_cuda_stream, upstreams=[df.stream for df in dfs]
         ) as result_stream:
             yield result_stream
+
+
+def apply_predicate(df: DataFrame, predicate: expr.NamedExpr | None) -> DataFrame:
+    """Filter ``df`` by a predicate expression."""
+    if predicate is None:
+        return df
+    (mask,) = broadcast(
+        predicate.evaluate(df), target_length=df.num_rows, stream=df.stream
+    )
+    return df.filter(mask)
+
+
+def concatenate_chunks(
+    dfs: Sequence[DataFrame], *, context: IRExecutionContext
+) -> DataFrame:
+    """Vertically concatenate ``dfs`` (which must share a schema) into one frame."""
+    with context.stream_ordered_after(*dfs) as stream:
+        return DataFrame.from_table(
+            plc.concatenate.concatenate([df.table for df in dfs], stream=stream),
+            dfs[0].column_names,
+            dfs[0].dtypes,
+            stream=stream,
+        )
 
 
 _BINOPS = {
@@ -337,7 +369,193 @@ class PythonScan(IR):
         self.predicate = predicate
         self._non_child_args = (schema, options, predicate)
         self.children = ()
-        raise NotImplementedError("PythonScan not implemented")
+
+    def get_hashable(self) -> Hashable:
+        """Return a hashable representation."""
+        _scan_fn, with_columns, source_type, ir_node_index = self.options
+        return (
+            type(self),
+            tuple(self.schema.items()),
+            ir_node_index,
+            tuple(with_columns) if with_columns is not None else None,
+            source_type,
+            self.predicate,
+        )
+
+    @staticmethod
+    def run_source_function(
+        options: Any,
+        schema: Schema,
+        *,
+        rank_aware_source: RankAwareSource | None = None,
+        rank: int = 0,
+        nranks: int = 1,
+        context: IRExecutionContext,
+    ) -> tuple[int | None, Iterator[pl.DataFrame | DataFrame]]:
+        """
+        Call the source and return its raw chunks.
+
+        The source's scan function is invoked here, so this is where the
+        registered IO source's user code runs. A source that yields no chunks
+        produces a single empty host frame carrying the declared schema, so
+        the iterator always yields at least one chunk.
+
+        Parameters
+        ----------
+        options
+            The `PythonScan` options tuple
+            ``(scan_fn, with_columns, source_type, ir_node_index)``.
+        schema
+            The declared output schema, used for the empty-source fallback frame.
+        rank_aware_source
+            The `RankAwareSource` captured by the registered scan function,
+            when one was found.
+        rank
+            Rank running this scan, passed to a `RankAwareSource`. Defaults to
+            ``0`` for single-rank / in-memory execution.
+        nranks
+            Total number of ranks, passed to a `RankAwareSource`. Defaults to
+            ``1`` for single-rank / in-memory execution.
+        context
+            The IR execution context (provides the CUDA stream).
+
+        Returns
+        -------
+        count
+            The number of chunks the source will yield when it reports one up front (a
+            sized iterator) or None for a plain generator whose length is unknown until
+            it is drained.
+        chunks
+            An iterator of raw chunks, always yielding at least one chunk.
+
+        Raises
+        ------
+        TypeError
+            If the source yields something other than a polars or cudf-polars
+            DataFrame.
+        """
+        scan_fn, with_columns, _source_type, _ir_node_index = options
+        # We pass predicate=None and apply any pushed predicate on the
+        # GPU in process_chunk.
+        # TODO: forward the pushed predicate to a RankAwareSource so a GPU-aware source
+        # can apply it at read time. See https://github.com/rapidsai/cudf/issues/22917.
+        if rank_aware_source is not None:
+            source_chunks = rank_aware_source(
+                with_columns, None, None, None, rank=rank, nranks=nranks
+            )
+        else:
+            # A plain source. The discarded second return value is the wrapper's
+            # "predicate applied" flag, which carries no information here.
+            source_chunks, _ = scan_fn(with_columns, None, None, None)
+        count = len(source_chunks) if isinstance(source_chunks, Sized) else None
+
+        def chunks() -> Generator[pl.DataFrame | DataFrame, None, None]:
+            iterator = iter(source_chunks)
+            sentinel = object()
+            first = next(iterator, sentinel)
+            if first is sentinel:
+                # Empty source: emit one empty host frame carrying the declared schema.
+                yield pl.DataFrame(
+                    schema={name: dtype.polars_type for name, dtype in schema.items()}
+                )
+                return
+            for chunk in itertools.chain((first,), iterator):
+                if not isinstance(chunk, (DataFrame, pl.DataFrame)):
+                    raise TypeError(
+                        "PythonScan source must yield polars.DataFrame or "
+                        "cudf_polars.containers.DataFrame chunks"
+                    )
+                yield chunk
+
+        return count, chunks()
+
+    @staticmethod
+    def process_chunk(
+        chunk: pl.DataFrame | DataFrame,
+        schema: Schema,
+        predicate: expr.NamedExpr | None,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """
+        Move a raw source chunk to the device, validate it, and filter it.
+
+        Parameters
+        ----------
+        chunk
+            A raw chunk returned from :meth:`run_source_function`.
+        schema
+            The declared output schema. The chunk must match it in name, order,
+            and dtype.
+        predicate
+            A pushed-down filter to apply on the device, or ``None``.
+        context
+            The IR execution context (provides the CUDA stream).
+
+        Returns
+        -------
+        The device dataframe for this chunk, filtered by ``predicate``.
+
+        Raises
+        ------
+        polars.exceptions.SchemaError
+            If the chunk's schema does not match ``schema``.
+        """
+        # A host frame is copied to the device; a cudf-polars frame is already there.
+        df = (
+            chunk
+            if isinstance(chunk, DataFrame)
+            else DataFrame.from_polars(chunk, stream=context.get_cuda_stream())
+        )
+        # Validate against the declared (output) schema. Polars performs this
+        # check for register_io_source(..., validate_schema=True), but the flag is
+        # not exposed to the GPU plan, so we always validate.
+        # See https://github.com/rapidsai/cudf/issues/23043
+        declared = pl.Schema(
+            {name: dtype.polars_type for name, dtype in schema.items()}
+        )
+        produced = pl.Schema(
+            zip(
+                df.column_names,
+                (dtype.polars_type for dtype in df.dtypes),
+                strict=True,
+            )
+        )
+        if produced != declared:
+            raise pl.exceptions.SchemaError(
+                f"user provided schema: {declared} doesn't match the "
+                f"DataFrame schema: {produced}"
+            )
+        return apply_predicate(df, predicate)
+
+    @classmethod
+    @log_do_evaluate
+    @nvtx_annotate_cudf_polars(message="PythonScan")
+    def do_evaluate(
+        cls,
+        schema: Schema,
+        options: Any,
+        predicate: expr.NamedExpr | None,
+        *,
+        context: IRExecutionContext,
+    ) -> DataFrame:
+        """
+        Evaluate and return a dataframe.
+
+        This runs the source eagerly, producing the whole scan output as one
+        frame. It is used by the non-streaming (in-memory) engine. Streaming
+        engines do not call this; they handle ``PythonScan`` with a dedicated
+        actor (``python_scan_node``) that streams chunks individually.
+        """
+        _, raw = cls.run_source_function(options, schema, context=context)
+        chunks = [
+            cls.process_chunk(chunk, schema, predicate, context=context)
+            for chunk in raw
+        ]
+        # run_source_function always yields at least one chunk.
+        if len(chunks) == 1:
+            return chunks[0]
+        return concatenate_chunks(chunks, context=context)
 
 
 _COMPARISON_BINOPS = {
@@ -1015,13 +1233,7 @@ class Scan(IR):
         assert all(
             c.obj.type() == schema[name].plc_type for name, c in df.column_map.items()
         )
-        if predicate is None:
-            return df
-        else:
-            (mask,) = broadcast(
-                predicate.evaluate(df), target_length=df.num_rows, stream=df.stream
-            )
-            return df.filter(mask)
+        return apply_predicate(df, predicate)
 
 
 class Sink(IR):
@@ -3009,10 +3221,7 @@ class Filter(IR):
         cls, mask_expr: expr.NamedExpr, df: DataFrame, *, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        (mask,) = broadcast(
-            mask_expr.evaluate(df), target_length=df.num_rows, stream=df.stream
-        )
-        return df.filter(mask)
+        return apply_predicate(df, mask_expr)
 
 
 class Projection(IR):
@@ -3327,14 +3536,8 @@ class Union(IR):
         cls, zlice: Zlice | None, *dfs: DataFrame, context: IRExecutionContext
     ) -> DataFrame:
         """Evaluate and return a dataframe."""
-        with context.stream_ordered_after(*dfs) as stream:
-            # TODO: only evaluate what we need if we have a slice?
-            return DataFrame.from_table(
-                plc.concatenate.concatenate([df.table for df in dfs], stream=stream),
-                dfs[0].column_names,
-                dfs[0].dtypes,
-                stream=stream,
-            ).slice(zlice)
+        # TODO: only evaluate what we need if we have a slice?
+        return concatenate_chunks(dfs, context=context).slice(zlice)
 
 
 class HConcat(IR):

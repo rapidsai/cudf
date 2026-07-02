@@ -108,7 +108,7 @@ rtcx::sha256 compute_embed_hash(std::span<uint8_t const> uncompressed_files_byte
   ctx.update(uncompressed_files_bytes);
   ctx.update(merged_dests_bytes);
   ctx.update(merged_include_dirs_bytes);
-  ctx.update(std::span{reinterpret_cast<const uint8_t*>(compression.data()), compression.size()});
+  ctx.update(std::span{reinterpret_cast<uint8_t const*>(compression.data()), compression.size()});
   return ctx.finalize();
 }
 

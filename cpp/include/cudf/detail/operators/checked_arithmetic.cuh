@@ -281,6 +281,13 @@ __device__ cuda::std::expected<T, errc> neg_overflow(T a)
   return -a;
 }
 
+template <unsigned_integer T>
+__device__ cuda::std::expected<T, errc> neg_overflow(T a)
+{
+  if (a != 0) { return cuda::std::unexpected{errc::OVERFLOW}; }
+  return a;
+}
+
 template <floating_point T>
 __device__ cuda::std::expected<T, errc> neg_overflow(T a)
 {
