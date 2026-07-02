@@ -145,7 +145,8 @@ tpchgen-cli parquet -o "${DATA_PATH}" -s ${SCALE_FACTOR}
 ```
 
 `tpchgen-cli` generates Decimal and `datetime.date` columns. pandas cannot use these types
-in arithmetic, so convert them to float64 and timestamp before running the benchmark:
+in arithmetic, so convert them to float64 and timestamp before running the benchmark. This
+conversion step may not be needed in the future (see [#21204](https://github.com/rapidsai/cudf/issues/21204)).
 
 ```python
 from pathlib import Path
