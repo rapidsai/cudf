@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -111,6 +111,20 @@ struct comparator_impl {
 
 template <typename T>
 struct comparator_impl<T, bounded_open> {
+  using op     = less_equal<T>;
+  using rev_op = greater_equal<T>;
+};
+
+// The column-valued bounded window types share the comparator behaviour of their scalar
+// counterparts: `*_closed` includes the computed endpoint, `*_open` excludes it.
+template <typename T>
+struct comparator_impl<T, bounded_closed_column> {
+  using op     = less<T>;
+  using rev_op = greater<T>;
+};
+
+template <typename T>
+struct comparator_impl<T, bounded_open_column> {
   using op     = less_equal<T>;
   using rev_op = greater_equal<T>;
 };
@@ -352,11 +366,17 @@ current_row_distance_functor(Grouping,
  *
  * See `saturating_op` for details of the implementation of saturating addition/subtraction.
  */
-template <typename Grouping, typename OrderbyT, typename DeltaT, typename WindowType>
+template <typename Grouping,
+          typename OrderbyT,
+          typename DeltaT,
+          typename WindowType,
+          bool PerRow = false>
 struct bounded_distance_functor {
   static_assert(cuda::std::is_same_v<WindowType, bounded_open> ||
-                  cuda::std::is_same_v<WindowType, bounded_closed>,
-                "Invalid WindowType, expecting bounded_open or bounded_closed.");
+                  cuda::std::is_same_v<WindowType, bounded_closed> ||
+                  cuda::std::is_same_v<WindowType, bounded_open_column> ||
+                  cuda::std::is_same_v<WindowType, bounded_closed_column>,
+                "Invalid WindowType, expecting a bounded (scalar or column) window.");
   Grouping const groups;
   direction const direction;
   order const order;
@@ -382,9 +402,12 @@ struct bounded_distance_functor {
       return direction == direction::PRECEDING ? i - row_info.null_start() + 1
                                                : row_info.null_end() - i - 1;
     }
+    // For scalar deltas (PerRow == false) the same value is broadcast to every row (index 0); for
+    // column-valued deltas (PerRow == true) each row reads its own delta at index `i`.
+    DeltaT const delta                   = row_delta[PerRow ? i : size_type{0}];
     auto const offset_value_did_overflow = [subtract = (order == order::ASCENDING) ==
                                                        (direction == direction::PRECEDING),
-                                            delta     = *row_delta,
+                                            delta,
                                             row_value = begin[i]]() {
       return subtract ? saturating_sub{}(row_value, delta) : saturating_add{}(row_value, delta);
     }();
@@ -426,7 +449,7 @@ struct bounded_distance_functor {
       // positive overflow, but exclude for negative overflow.
       // Since, when the orderby columns is ASCENDING, delta is
       // treated with a sign flip, the above also applies in that case.
-      if (*row_delta > DeltaT{0}) {
+      if (delta > DeltaT{0}) {
         return distance(comparator_t<OrderbyT, bounded_closed>{order});
       } else {
         return distance(comparator_t<OrderbyT, bounded_open>{order});
@@ -447,7 +470,9 @@ struct range_window_clamper {
   static_assert(cuda::std::is_same_v<WindowType, unbounded> ||
                   cuda::std::is_same_v<WindowType, current_row> ||
                   cuda::std::is_same_v<WindowType, bounded_closed> ||
-                  cuda::std::is_same_v<WindowType, bounded_open>,
+                  cuda::std::is_same_v<WindowType, bounded_open> ||
+                  cuda::std::is_same_v<WindowType, bounded_closed_column> ||
+                  cuda::std::is_same_v<WindowType, bounded_open_column>,
                 "Invalid WindowType descriptor");
   template <typename Grouping>
   void expand_unbounded(Grouping grouping,
@@ -479,7 +504,7 @@ struct range_window_clamper {
                    result.begin<size_type>());
   }
 
-  template <typename Grouping, typename OrderbyT, typename DeltaT>
+  template <bool PerRow, typename Grouping, typename OrderbyT, typename DeltaT>
   void expand_bounded(Grouping grouping,
                       direction direction,
                       order order,
@@ -492,7 +517,7 @@ struct range_window_clamper {
     thrust::copy_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    cudf::detail::make_counting_transform_iterator(
                      0,
-                     bounded_distance_functor<Grouping, OrderbyT, DeltaT, WindowType>{
+                     bounded_distance_functor<Grouping, OrderbyT, DeltaT, WindowType, PerRow>{
                        grouping, direction, order, begin, row_delta}),
                    size,
                    result.begin<size_type>());
@@ -524,6 +549,7 @@ struct range_window_clamper {
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
+    column_view const* delta_col,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
@@ -538,9 +564,28 @@ struct range_window_clamper {
       } else if constexpr (cuda::std::is_same_v<WindowType, current_row>) {
         expand_current_row(
           grouping, direction, order, d_begin, orderby.size(), result_view, stream);
+      } else if constexpr (cuda::std::is_same_v<WindowType, bounded_closed_column> ||
+                           cuda::std::is_same_v<WindowType, bounded_open_column>) {
+        // Per-row delta sourced from a column (one entry per orderby row). The delta column shares
+        // the orderby type for numeric orderby columns, and is the matching duration type for
+        // timestamp orderby columns. Other orderby types are rejected before reaching this point.
+        if constexpr (cudf::is_numeric_not_bool<OrderbyT>()) {
+          auto const* d_row_delta = delta_col->data<OrderbyT>();
+          expand_bounded</*PerRow=*/true>(
+            grouping, direction, order, d_begin, d_row_delta, orderby.size(), result_view, stream);
+        } else if constexpr (cudf::is_timestamp<OrderbyT>()) {
+          auto const* d_row_delta = delta_col->data<typename OrderbyT::duration>();
+          expand_bounded</*PerRow=*/true>(
+            grouping, direction, order, d_begin, d_row_delta, orderby.size(), result_view, stream);
+        } else {
+          CUDF_FAIL(
+            "Column-valued RANGE bounds are only supported for numeric and timestamp order-by "
+               "columns.",
+            cudf::data_type_error);
+        }
       } else {
         auto const* d_row_delta = static_cast<ScalarT const*>(row_delta)->data();
-        expand_bounded(
+        expand_bounded</*PerRow=*/false>(
           grouping, direction, order, d_begin, d_row_delta, orderby.size(), result_view, stream);
       }
     };
@@ -587,6 +632,7 @@ struct range_window_clamper {
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
+    column_view const* delta_col,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
@@ -597,8 +643,19 @@ struct range_window_clamper {
     CUDF_EXPECTS(!row_delta || row_delta->type().id() == type_to_id<typename OrderbyT::duration>(),
                  "Row delta must have same the resolution as orderby.",
                  cudf::data_type_error);
+    if (delta_col) {
+      CUDF_EXPECTS(delta_col->size() == orderby.size(),
+                   "Delta column must have the same number of rows as the orderby column.");
+      CUDF_EXPECTS(!delta_col->has_nulls(), "Delta column must not contain nulls.");
+      CUDF_EXPECTS(cudf::is_duration(delta_col->type()),
+                   "Delta column must be a duration type.",
+                   cudf::data_type_error);
+      CUDF_EXPECTS(delta_col->type().id() == type_to_id<typename OrderbyT::duration>(),
+                   "Delta column must have the same resolution as orderby.",
+                   cudf::data_type_error);
+    }
     return window_bounds<OrderbyT, ScalarT>(
-      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
+      orderby, direction, order, grouping, nulls_at_start, row_delta, delta_col, stream, mr);
   }
 
   template <typename OrderbyT, CUDF_ENABLE_IF(cudf::is_fixed_point<OrderbyT>())>
@@ -609,9 +666,13 @@ struct range_window_clamper {
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
+    column_view const* delta_col,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
+    CUDF_EXPECTS(!delta_col,
+                 "Column-valued RANGE bounds are not supported for fixed-point order-by columns.",
+                 cudf::data_type_error);
     CUDF_EXPECTS(!row_delta || (orderby.type().id() == row_delta->type().id()),
                  "Orderby column and row_delta must both be fixed point.",
                  cudf::data_type_error);
@@ -629,10 +690,10 @@ struct range_window_clamper {
         stream,
         cudf::get_current_device_resource_ref()};
       return window_bounds<OrderbyT>(
-        orderby, direction, order, grouping, nulls_at_start, &new_scalar, stream, mr);
+        orderby, direction, order, grouping, nulls_at_start, &new_scalar, delta_col, stream, mr);
     }
     return window_bounds<OrderbyT>(
-      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
+      orderby, direction, order, grouping, nulls_at_start, row_delta, delta_col, stream, mr);
   }
 
   template <typename OrderbyT, CUDF_ENABLE_IF(cudf::is_numeric_not_bool<OrderbyT>())>
@@ -643,14 +704,23 @@ struct range_window_clamper {
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
+    column_view const* delta_col,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
     CUDF_EXPECTS(!row_delta || cudf::have_same_types(orderby, *row_delta),
                  "Orderby column and row_delta must have the same type.",
                  cudf::data_type_error);
+    if (delta_col) {
+      CUDF_EXPECTS(delta_col->size() == orderby.size(),
+                   "Delta column must have the same number of rows as the orderby column.");
+      CUDF_EXPECTS(!delta_col->has_nulls(), "Delta column must not contain nulls.");
+      CUDF_EXPECTS(cudf::have_same_types(orderby, *delta_col),
+                   "Orderby column and delta column must have the same type.",
+                   cudf::data_type_error);
+    }
     return window_bounds<OrderbyT>(
-      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
+      orderby, direction, order, grouping, nulls_at_start, row_delta, delta_col, stream, mr);
   }
 
   template <typename OrderbyT,
@@ -664,13 +734,16 @@ struct range_window_clamper {
     std::optional<preprocessed_group_info> const& grouping,
     bool nulls_at_start,
     scalar const* row_delta,
+    column_view const* delta_col,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const
   {
     CUDF_EXPECTS(!row_delta,
                  "Not expecting window range to have value for string-based window calculation");
+    CUDF_EXPECTS(!delta_col,
+                 "Not expecting window range to have value for string-based window calculation");
     return window_bounds<OrderbyT>(
-      orderby, direction, order, grouping, nulls_at_start, row_delta, stream, mr);
+      orderby, direction, order, grouping, nulls_at_start, row_delta, delta_col, stream, mr);
   }
 
   template <typename OrderbyT, CUDF_ENABLE_IF(!is_supported<OrderbyT>())>
@@ -680,6 +753,7 @@ struct range_window_clamper {
                                      std::optional<preprocessed_group_info> const&,
                                      bool,
                                      scalar const*,
+                                     column_view const*,
                                      rmm::cuda_stream_view,
                                      rmm::device_async_resource_ref) const
   {
