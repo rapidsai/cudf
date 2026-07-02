@@ -23,5 +23,5 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 @pytest.mark.parametrize("decimals", [0, 1, 2, 5])
 def test_truncate(engine: pl.GPUEngine, series: pl.Series, decimals: int) -> None:
     lf = pl.LazyFrame({"a": series})
-    q = lf.select(pl.col("a").truncate(decimals))  # type: ignore[attr-defined]
+    q = lf.select(pl.col("a").truncate(decimals))
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
