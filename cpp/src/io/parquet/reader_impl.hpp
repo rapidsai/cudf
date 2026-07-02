@@ -421,26 +421,25 @@ class reader_impl {
                                                                          size_t chunk_num_rows);
 
   /**
-   * @brief Construct and prepend the source index column to the output columns
+   * @brief Synthesize source index column
    *
    * @param num_rows_per_source Number of rows per parquet source
-   * @param out_columns Current output columns
+   * @return Synthesized source index column
    */
-  void prepend_source_index_column(std::span<std::size_t const> num_rows_per_source,
-                                   std::vector<std::unique_ptr<column>>& out_columns);
+  [[nodiscard]] std::unique_ptr<column> synthesize_source_index_column(
+    std::span<std::size_t const> num_rows_per_source);
 
   /**
-   * @brief Construct and prepend the file-local row index column to the output columns
+   * @brief Synthesize file-local row index column
    *
    * For each output row, the column contains the row's index within its parquet source file,
    * accounting for row group selection and row bounds.
    *
    * @param read_info Row range of the output chunk relative to the first row of the first
    *                  selected row group
-   * @param out_columns Current output columns
+   * @return Synthesized row index column
    */
-  void prepend_row_index_column(row_range const& read_info,
-                                std::vector<std::unique_ptr<column>>& out_columns);
+  [[nodiscard]] std::unique_ptr<column> synthesize_row_index_column(row_range const& read_info);
 
   /**
    * @brief Computes the names of columns to be read from the file, if specified.
