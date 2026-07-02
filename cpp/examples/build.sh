@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # libcudf examples build script
@@ -66,3 +66,4 @@ build_example nested_types
 build_example parquet_inspect
 build_example parquet_io
 build_example billion_rows
+build_example pack_unpack
