@@ -14,6 +14,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import Join, Scan, Select
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.engine.default_singleton_engine import DefaultSingletonEngine
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.join_domain_prefilter import (
     _smallest_node_containing_all,
@@ -227,7 +228,10 @@ def test_nullable_join_keys_preserve_results(
     semi_joins = _joins(optimized, "Semi")
     assert semi_joins
     assert all(join.options[1] is nulls_equal for join in semi_joins)
-    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+    try:
+        assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+    finally:
+        DefaultSingletonEngine.shutdown()
 
 
 def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:
