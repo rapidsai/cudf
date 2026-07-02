@@ -108,6 +108,8 @@ class parquet_reader_options {
   bool _case_sensitive_names = true;
   // Whether to prepend a source file index column to the output
   bool _prepend_source_index_column = false;
+  // Whether to prepend a file-local row index column to the output
+  bool _prepend_row_index_column = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -308,6 +310,20 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_prepend_source_index_column() const
   {
     return _prepend_source_index_column;
+  }
+
+  /**
+   * @brief Returns whether to prepend a file-local row index column to the output.
+   *
+   * The row index column contains, for each output row, the row's index within its parquet
+   * source file. If the source index column is also enabled, the column order is: source index,
+   * row index, data columns.
+   *
+   * @return `true` if a row index column should be prepended
+   */
+  [[nodiscard]] bool is_enabled_prepend_row_index_column() const
+  {
+    return _prepend_row_index_column;
   }
 
   /**
@@ -561,6 +577,13 @@ class parquet_reader_options {
    * @param val Boolean indicating whether to prepend the source file index column.
    */
   void enable_prepend_source_index_column(bool val) { _prepend_source_index_column = val; }
+
+  /**
+   * @brief Sets whether to prepend a file-local row index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend the row index column.
+   */
+  void enable_prepend_row_index_column(bool val) { _prepend_row_index_column = val; }
 };
 
 /**
@@ -831,6 +854,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& prepend_source_index_column(bool val)
   {
     options._prepend_source_index_column = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether to prepend a file-local row index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend a row index column
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& prepend_row_index_column(bool val)
+  {
+    options._prepend_row_index_column = val;
     return *this;
   }
 
