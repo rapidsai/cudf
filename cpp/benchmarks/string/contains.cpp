@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,13 +13,6 @@
 
 #include <nvbench/nvbench.cuh>
 
-#include <utility>
-#include <vector>
-
-// create_string_column generates data from 10 hardcoded strings where only row 0
-// ("123 abc 4567890 DEFGHI 0987 5W43") is scattered at exactly hit_rate%.
-// All patterns below match ONLY row 0 (via the unique "5W" substring), so
-// the hit_rate parameter correctly controls the match frequency for every pattern.
 // longer pattern lengths demand more working memory per string
 static std::vector<std::string> const patterns = {
   "^\\d+ [a-z]+",                  // 0: classes plus begin anchor pattern
@@ -50,7 +43,8 @@ static void bench_contains(nvbench::state& state)
   auto col   = create_string_column(num_rows, row_width, hit_rate);
   auto input = cudf::strings_column_view(col->view());
 
-  auto program = cudf::strings::regex_program::create(patterns[pattern_index]);
+  auto pattern = patterns[pattern_index];
+  auto program = cudf::strings::regex_program::create(pattern);
 
   state.add_global_memory_reads<nvbench::int8_t>(col->alloc_size());
   state.add_global_memory_writes<nvbench::int32_t>(input.size());
@@ -66,5 +60,5 @@ NVBENCH_BENCH(bench_contains)
   .set_name("contains")
   .add_int64_axis("row_width", {64, 128, 256})
   .add_int64_axis("num_rows", {262144, 2097152})
-  .add_int64_axis("hit_rate", {50, 100})                     // percentage
-  .add_int64_axis("pattern", {2, 3, 4, 5, 6, 7, 8, 9, 10});  // 0,1 skipped
+  .add_int64_axis("hit_rate", {50, 100})  // percentage
+  .add_int64_axis("pattern", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});

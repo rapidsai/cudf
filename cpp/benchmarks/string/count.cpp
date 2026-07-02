@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -43,8 +43,7 @@ static void bench_count(nvbench::state& state)
     create_random_table({cudf::type_id::STRING}, row_count{num_rows}, table_profile);
   cudf::strings_column_view input(table->view().column(0));
 
-  auto const pattern = patterns[pattern_index];
-  auto prog          = cudf::strings::regex_program::create(pattern);
+  auto prog = cudf::strings::regex_program::create(patterns[pattern_index]);
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
   // gather some throughput statistics as well
