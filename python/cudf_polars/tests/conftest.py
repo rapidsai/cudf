@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -284,6 +284,9 @@ def engine(
 ) -> pl.GPUEngine:
     """
     Return a :class:`polars.GPUEngine` for each engine variant under test.
+
+    Every variant is configured with ``raise_on_fail=True``, so an unsupported
+    GPU path raises instead of silently falling back to the CPU engine.
 
     Parameters
     ----------
