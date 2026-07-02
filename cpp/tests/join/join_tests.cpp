@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1018,7 +1018,7 @@ TEST_F(JoinTest, SortMergeInnerJoinSizePerRowNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  for (const auto eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
+  for (auto const eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
     // single column
     {
       auto size_per_row = inner_join_size_per_row(t0, t1, {0}, {0}, eq, algorithm::SORT_MERGE);
@@ -1182,7 +1182,7 @@ TEST_P(JoinParameterizedTest, InnerJoinNoNulls)
   Table t0(std::move(cols0));
   Table t1(std::move(cols1));
 
-  for (const auto eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
+  for (auto const eq : {cudf::null_equality::EQUAL, cudf::null_equality::UNEQUAL}) {
     // single column
     {
       auto result            = inner_join(t0, t1, {0}, {0}, eq, algo);

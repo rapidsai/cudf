@@ -187,7 +187,7 @@ TYPED_TEST(FromArrowHostDeviceTestDurationsTest, DurationTable)
   auto col  = cudf::test::fixed_width_column_wrapper<T>(data, cuda::constant_iterator<bool>(true));
 
   cudf::table_view expected_table_view({col});
-  const ArrowTimeUnit time_unit = [&] {
+  ArrowTimeUnit const time_unit = [&] {
     switch (cudf::type_to_id<TypeParam>()) {
       case cudf::type_id::DURATION_SECONDS: return NANOARROW_TIME_UNIT_SECOND;
       case cudf::type_id::DURATION_MILLISECONDS: return NANOARROW_TIME_UNIT_MILLI;
