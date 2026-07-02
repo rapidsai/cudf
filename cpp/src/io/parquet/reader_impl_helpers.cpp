@@ -1758,7 +1758,7 @@ aggregate_reader_metadata::select_columns(
                                         has_list_parent || col_type == type_id::LIST);
         }
       } else {
-        for (const auto& idx : col_name_info->children) {
+        for (auto const& idx : col_name_info->children) {
           path_is_valid |= build_column(&idx,
                                         find_schema_child(schema_elem, idx.name),
                                         output_col.children,
@@ -1996,7 +1996,7 @@ aggregate_reader_metadata::select_columns(
       std::transform(index_names.cbegin(),
                      index_names.cend(),
                      std::back_inserter(selected_columns),
-                     [](std::string const& name) { return column_name_info(name); });
+                     [](std::string const& name) { return column_name_info{.name = name}; });
     }
     // Merge the vector use_names into a set of hierarchical column_name_info objects
     /* This is because if we have columns like this:

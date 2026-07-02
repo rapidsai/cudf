@@ -980,19 +980,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         d    40
         dtype: int64
         >>> series.reindex(['a', 'b', 'y', 'z'])
-        a      10
-        b      20
-        y    <NA>
-        z    <NA>
-        dtype: int64
-
-        .. pandas-compat::
-            :meth:`pandas.Series.reindex`
-
-            Note: One difference from Pandas is that ``NA`` is used for rows
-            that do not match, rather than ``NaN``. One side effect of this is
-            that the series retains an integer dtype in cuDF
-            where it is cast to float in Pandas.
+        a    10.0
+        b    20.0
+        y     NaN
+        z     NaN
+        dtype: float64
 
         """
         if index is None:
@@ -2886,7 +2878,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
         >>> ser1.cov(ser2)
-        -0.015750000000000004
+        np.float64(-0.015750000000000004)
 
         .. pandas-compat::
             :meth:`pandas.Series.cov`
@@ -3021,9 +3013,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> ser1 = cudf.Series([0.9, 0.13, 0.62])
         >>> ser2 = cudf.Series([0.12, 0.26, 0.51])
         >>> ser1.corr(ser2, method="pearson")
-        -0.20454263717316126
+        np.float64(-0.20454263717316126)
         >>> ser1.corr(ser2, method="spearman")
-        -0.5
+        np.float64(-0.5)
         """
 
         if method not in {"pearson", "spearman"}:
@@ -3069,9 +3061,9 @@ class Series(SingleColumnFrame, IndexedFrame):
         >>> import cudf
         >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05, 0.17])
         >>> s.autocorr()
-        0.1438853844...
+        np.float64(0.1438853844...)
         >>> s.autocorr(lag=2)
-        -0.9647548490...
+        np.float64(-0.9647548490...)
         """
         return self.corr(self.shift(lag))
 
@@ -3343,7 +3335,12 @@ class Series(SingleColumnFrame, IndexedFrame):
                     else None
                 )
                 res = res[res.index.notna()]
-                res = res.reindex(self.dtype.categories).fillna(0)
+                # Fill missing categories with a 0 count directly via
+                # ``reindex`` (rather than ``reindex(...).fillna(0)``) so
+                # the integer count dtype is preserved: a default-NA
+                # reindex upcasts integer columns to float64 in
+                # pandas-compatible mode.
+                res = res.reindex(self.dtype.categories, fill_value=0)
                 res.index = res.index.astype(self.dtype)
                 if nan_count is not None:
                     res = cudf.concat([res, nan_count])
@@ -3417,7 +3414,7 @@ class Series(SingleColumnFrame, IndexedFrame):
         3    4
         dtype: int64
         >>> series.quantile(0.5)
-        2.5
+        np.float64(2.5)
         >>> series.quantile([0.25, 0.5, 0.75])
         0.25    1.75
         0.50    2.50
