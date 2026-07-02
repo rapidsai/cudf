@@ -524,13 +524,11 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
                                          _sources,
                                          options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas())
+                                         has_mismatched_pq_schema_selection(options))
                                      : std::make_unique<aggregate_reader_metadata>(
                                          std::forward<std::vector<FileMetaData>>(file_metadatas),
                                          options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas());
+                                         has_mismatched_pq_schema_selection(options));
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -541,9 +539,11 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
 
+  auto const ignore_missing_columns =
+    effective_ignore_missing_columns(options, _metadata->get_num_sources());
+
   // Select only columns required by the options and filter
-  auto select_column_names =
-    get_column_projection(options, options.is_enabled_ignore_missing_columns());
+  auto select_column_names = get_column_projection(options, ignore_missing_columns);
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
   if (options.get_filter().has_value() and
@@ -559,7 +559,7 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               filter_only_columns_names,
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
-                              options.is_enabled_ignore_missing_columns(),
+                              ignore_missing_columns,
                               _options.timestamp_type.id(),
                               _options.decimal_width,
                               _options.case_sensitive_names);

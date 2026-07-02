@@ -142,6 +142,27 @@ struct surviving_row_group_metrics {
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
 };
 
+/**
+ * @brief Whether columns are explicitly selected (by names or indices) with
+ * `allow_mismatched_pq_schemas` enabled, requiring per-source schema index maps
+ */
+[[nodiscard]] bool has_mismatched_pq_schema_selection(
+  cudf::io::parquet_reader_options const& options);
+
+/**
+ * @brief Computes the effective `ignore_missing_columns` policy for column selection
+ *
+ * With multiple sources and `allow_mismatched_pq_schemas`, every selected or filter-only column
+ * must be present and mappable in each source. Missing columns always throw in that mode,
+ * regardless of `ignore_missing_columns`.
+ *
+ * @param options The reader options
+ * @param num_sources Number of input Parquet sources
+ * @return The effective `ignore_missing_columns` value to pass to column selection
+ */
+[[nodiscard]] bool effective_ignore_missing_columns(cudf::io::parquet_reader_options const& options,
+                                                    size_t num_sources);
+
 class aggregate_reader_metadata {
  protected:
   std::vector<metadata> per_file_metadata;
@@ -626,7 +647,8 @@ class aggregate_reader_metadata {
    * @param filter_columns_names List of paths of column names that are present only in filter
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
+   * @param ignore_missing_columns Whether to ignore non-existent projected columns.
+   * See `effective_ignore_missing_columns` for the mismatched-schema policy.
    * @param timestamp_type_id Type conversion parameter
    * @param decimal_type_id Type conversion parameter
    *
