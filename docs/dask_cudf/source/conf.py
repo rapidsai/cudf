@@ -16,7 +16,7 @@ from packaging.version import Version
 
 DASK_CUDF_VERSION = Version(dask_cudf.__version__)
 
-project = "dask-cuDF"
+project = "NVIDIA Dask-cuDF"
 copyright = f"2018-{datetime.datetime.today().year}, NVIDIA Corporation"
 author = "NVIDIA Corporation"
 version = f"{DASK_CUDF_VERSION.major:02}.{DASK_CUDF_VERSION.minor:02}"
