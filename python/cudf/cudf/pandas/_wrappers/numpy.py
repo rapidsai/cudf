@@ -6,7 +6,7 @@ from __future__ import annotations
 import cupy
 import cupy._core.flags
 import numpy
-from packaging import version
+from numpy._core.multiarray import flagsobj as _numpy_flagsobj
 
 from cudf.options import _env_get_bool
 
@@ -323,12 +323,6 @@ flatiter = make_final_proxy_type(
         "__array__": array_method,
     },
 )
-
-if version.parse(numpy.__version__) >= version.parse("2.0"):
-    # NumPy 2 introduced `_core` and gives warnings for access to `core`.
-    from numpy._core.multiarray import flagsobj as _numpy_flagsobj
-else:
-    from numpy.core.multiarray import flagsobj as _numpy_flagsobj
 
 # Mapping flags between slow and fast types
 _ndarray_flags = make_intermediate_proxy_type(

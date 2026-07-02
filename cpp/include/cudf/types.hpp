@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -259,6 +259,23 @@ enum class output_nullability : uint8_t {
   PRESERVE  = 0,  ///< A null-mask may be produced if needed
   ALL_VALID = 1   ///< A null-mask is not produced and all values are considered valid even if
                   ///< null values are produced
+};
+
+/**
+ * @brief Indicates whether a function can produce an error during execution.
+ */
+enum class fallible : bool {
+  NO  = 0,  ///< The function is not fallible
+  YES = 1   ///< The function is fallible
+};
+
+/**
+ * @brief Indicates whether a function nullifies its output on error.
+ *
+ */
+enum class error_policy : uint8_t {
+  PROPAGATE = 0,  ///< The function propagates errors
+  NULLIFY   = 1   ///< The function nullifies its output on error
 };
 
 /**
