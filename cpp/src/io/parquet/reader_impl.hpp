@@ -200,10 +200,18 @@ class reader_impl {
    * Populates `_dict_transcode_eligible` with a bool per input column indicating whether the
    * column will be assembled as a DICTIONARY32 output later in `assemble_dict_transcoded_columns`.
    *
+   * The fast path is also skipped when custom row bounds are in effect (see
+   * `uses_custom_row_bounds`): `assemble_dict_transcoded_columns` derives per-chunk row segments
+   * from the full, unadjusted `ColumnChunkDesc::num_rows`, which would not match the decoded
+   * indices column's size once a `skip_rows` / `num_rows` slice is applied. Skipped columns still
+   * get DICTIONARY32 output via the post-hoc `dictionary::detail::encode` fallback in
+   * `finalize_output`.
+   *
+   * @param mode Value indicating if the data sources are read all at once or chunk by chunk
    * @return True if dict transcode is active for this read (eligible columns had output types and
    * decode masks updated and pushed to the device). False otherwise.
    */
-  [[nodiscard]] bool prepare_dict_transcode();
+  [[nodiscard]] bool prepare_dict_transcode(read_mode mode);
 
   /**
    * @brief Zero-initialize the INT32 output buffers of dict-transcoded columns so that null rows

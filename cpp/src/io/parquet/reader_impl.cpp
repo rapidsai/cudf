@@ -726,7 +726,7 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   // eligibility and mutate `_output_buffers` / `subpass.pages` before we allocate column buffers
   // or dispatch decode kernels. This has to happen before `preprocess_chunk_strings` /
   // `allocate_columns` because those branch on `subpass.kernel_mask` and on `out_buf.type`.
-  bool const dict_transcode_active = prepare_dict_transcode();
+  bool const dict_transcode_active = prepare_dict_transcode(mode);
 
   // computes:
   // PageNestingInfo::batch_size for each level of nesting, for each page, taking row bounds into
