@@ -1,9 +1,13 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from libc.stdint cimport uint8_t
+from libc.stddef cimport size_t
+from libc.stdint cimport int64_t, uint8_t
+from cython.operator cimport dereference
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
+from libcpp.unordered_map cimport unordered_map
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from pylibcudf.io.types cimport SourceInfo
@@ -23,7 +27,9 @@ from pylibcudf.libcudf.io.parquet_schema cimport (
 )
 from pylibcudf.libcudf.utilities.span cimport host_span
 from pylibcudf.types cimport DataType
-
+from libc.stddef cimport size_t
+from libc.stdint cimport int64_t, uint8_t
+from cython.operator cimport dereference
 ctypedef const unique_ptr[datasource] const_unique_ptr_datasource
 
 
@@ -36,6 +42,7 @@ __all__ = [
     "ParquetSchema",
     "RowGroup",
     "SortingColumn",
+    "columnchunk_metadata",
     "read_parquet_footers",
     "read_parquet_metadata",
 ]
@@ -608,3 +615,44 @@ cpdef list read_parquet_footers(SourceInfo src_info):
         )
 
     return [FileMetaData.from_cpp(metadata) for metadata in c_result]
+
+
+cpdef dict columnchunk_metadata(list parquet_metadatas):
+    """
+    Build column chunk metadata from pre-materialized parquet footers.
+
+    Parameters
+    ----------
+    parquet_metadatas : list[FileMetaData]
+        Parquet footer metadata, one object per source.
+
+    Returns
+    -------
+    dict[str, list[int]]
+        Map of leaf column names to lists of ``total_uncompressed_size`` metadata
+        from all their column chunks.
+    """
+    cdef vector[cpp_FileMetaData] c_metadatas
+    cdef vector[cpp_FileMetaData*] metadata_ptrs
+    cdef unordered_map[string, vector[int64_t]] c_result
+    cdef object metadata
+    cdef size_t i
+
+    for metadata in parquet_metadatas:
+        if not isinstance(metadata, FileMetaData):
+            raise TypeError(
+                "parquet_metadatas must contain only FileMetaData objects"
+            )
+        metadata_ptrs.push_back(&(<FileMetaData>metadata).c_obj)
+
+    c_metadatas.reserve(metadata_ptrs.size())
+    with nogil:
+        # This copies potentially large metadata objects. Do this without the GIL.
+        for i in range(metadata_ptrs.size()):
+            c_metadatas.push_back(dereference(metadata_ptrs[i]))
+        c_result = cpp_parquet_metadata.columnchunk_metadata(move(c_metadatas))
+
+    return {
+        col_name.decode(): uncompressed_sizes
+        for col_name, uncompressed_sizes in c_result
+    }

@@ -2984,6 +2984,41 @@ TEST_F(ParquetMetadataReaderTest, PreMaterializedMetadata)
   test_parquet_metadata(3);
 }
 
+TEST_F(ParquetMetadataReaderTest, ColumnChunkMetadataMultipleSources)
+{
+  auto const num_rows = 1200;
+
+  auto ints   = random_values<int>(num_rows);
+  auto floats = random_values<float>(num_rows);
+  column_wrapper<int> int_col(ints.begin(), ints.end());
+  column_wrapper<float> float_col(floats.begin(), floats.end());
+
+  table_view expected({int_col, float_col});
+  std::vector<std::vector<char>> buffers(2);
+  for (auto& buffer : buffers) {
+    auto const write_opts =
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected).build();
+    cudf::io::write_parquet(write_opts);
+  }
+
+  std::vector<cudf::host_span<char const>> parquet_spans;
+  parquet_spans.reserve(buffers.size());
+  for (auto const& buffer : buffers) {
+    parquet_spans.emplace_back(buffer.data(), buffer.size());
+  }
+
+  auto const source_info =
+    cudf::io::source_info{cudf::host_span<cudf::host_span<char const>>{parquet_spans}};
+  auto const metadata = read_parquet_metadata(source_info).columnchunk_metadata();
+
+  ASSERT_EQ(metadata.size(), 2);
+  for (auto const& [_, uncompressed_sizes] : metadata) {
+    EXPECT_EQ(uncompressed_sizes.size(), 2);
+    EXPECT_GT(uncompressed_sizes[0], 0);
+    EXPECT_GT(uncompressed_sizes[1], 0);
+  }
+}
+
 TEST_F(ParquetMetadataReaderTest, Nested)
 {
   auto const num_rows       = 1200;

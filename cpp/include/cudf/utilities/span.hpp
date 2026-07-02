@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -208,8 +208,8 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
             std::enable_if_t<is_host_span_supported_container<C>::value &&
                              std::is_convertible_v<
                                std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
-                                 std::declval<C&>().data()))> (*)[],
-                               T (*)[]>>* = nullptr>  // NOLINT
+                                 std::declval<C&>().data()))> (*)[],                     // NOLINT
+                               T (*)[]>>* = nullptr>                                     // NOLINT
   constexpr host_span(C& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }
@@ -221,8 +221,8 @@ struct host_span : public cudf::detail::span_base<T, Extent, host_span<T, Extent
             std::enable_if_t<is_host_span_supported_container<C>::value &&
                              std::is_convertible_v<
                                std::remove_pointer_t<decltype(thrust::raw_pointer_cast(  // NOLINT
-                                 std::declval<C&>().data()))> (*)[],
-                               T (*)[]>>* = nullptr>  // NOLINT
+                                 std::declval<C&>().data()))> (*)[],                     // NOLINT
+                               T (*)[]>>* = nullptr>                                     // NOLINT
   constexpr host_span(C const& in) : base(thrust::raw_pointer_cast(in.data()), in.size())
   {
   }

@@ -295,6 +295,19 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
 std::vector<parquet::FileMetaData> read_parquet_footers(
   std::span<std::unique_ptr<cudf::io::datasource> const> sources);
 
+/**
+ * @brief Returns a map of column names to vectors of `total_uncompressed_size` metadata from
+ *        all their column chunks. See @ref cudf::io::parquet_metadata::columnchunk_metadata for
+ * more.
+ *
+ * @param parquet_metadatas Input parquet file footer metadata.
+ *
+ * @return Map of column names to vectors of `total_uncompressed_size` metadata from all their
+ *         column chunks.
+ */
+parquet_metadata::column_chunk_metadata columnchunk_metadata(
+  std::vector<parquet::FileMetaData>&& parquet_metadatas);
+
 /** @} */  // end of group
 }  // namespace io
 }  // namespace CUDF_EXPORT cudf
