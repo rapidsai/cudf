@@ -68,10 +68,11 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<cudf::host_span<uint8_t const> const> footer_bytes,
   parquet_reader_options const& options)
 {
+  auto const has_cols_from_mismatched_srcs =
+    (options.get_column_names().has_value() or options.get_column_field_ids().has_value()) and
+    options.is_enabled_allow_mismatched_pq_schemas();
   _metadata = std::make_unique<aggregate_reader_metadata>(
-    footer_bytes,
-    options.is_enabled_use_arrow_schema(),
-    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+    footer_bytes, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_srcs);
 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
@@ -79,10 +80,11 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<FileMetaData const> parquet_metadatas, parquet_reader_options const& options)
 {
+  auto const has_cols_from_mismatched_srcs =
+    (options.get_column_names().has_value() or options.get_column_field_ids().has_value()) and
+    options.is_enabled_allow_mismatched_pq_schemas();
   _metadata = std::make_unique<aggregate_reader_metadata>(
-    parquet_metadatas,
-    options.is_enabled_use_arrow_schema(),
-    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+    parquet_metadatas, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_srcs);
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
@@ -132,7 +134,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                 options.is_enabled_ignore_missing_columns(),
                                 _options.timestamp_type.id(),
                                 _options.decimal_width,
-                                _options.case_sensitive_names);
+                                _options.case_sensitive_names,
+                                options.get_column_field_ids().has_value());
 
     _is_all_columns_selected     = true;
     _is_filter_columns_selected  = false;
@@ -157,7 +160,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                          ignore_missing_columns,
                                          _options.timestamp_type.id(),
                                          _options.decimal_width,
-                                         _options.case_sensitive_names);
+                                         _options.case_sensitive_names,
+                                         options.get_column_field_ids().has_value());
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
@@ -178,7 +182,8 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
                                                  options.is_enabled_ignore_missing_columns(),
                                                  _options.timestamp_type.id(),
                                                  _options.decimal_width,
-                                                 _options.case_sensitive_names);
+                                                 _options.case_sensitive_names,
+                                                 options.get_column_field_ids().has_value());
 
     _is_payload_columns_selected = true;
     _is_filter_columns_selected  = false;

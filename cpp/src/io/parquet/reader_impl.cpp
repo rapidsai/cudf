@@ -5,6 +5,7 @@
 
 #include "reader_impl.hpp"
 
+#include "column_path_helpers.hpp"
 #include "error.hpp"
 #include "runtime/context.hpp"
 
@@ -521,16 +522,17 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Open and parse the source dataset metadata
   CUDF_EXPECTS(file_metadatas.empty() or file_metadatas.size() == _sources.size(),
                "Encountered a mismatch in the number of provided data sources and metadatas");
-  _metadata = file_metadatas.empty() ? std::make_unique<aggregate_reader_metadata>(
-                                         _sources,
-                                         options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas())
-                                     : std::make_unique<aggregate_reader_metadata>(
-                                         std::forward<std::vector<FileMetaData>>(file_metadatas),
-                                         options.is_enabled_use_arrow_schema(),
-                                         options.get_column_names().has_value() and
-                                           options.is_enabled_allow_mismatched_pq_schemas());
+
+  auto const has_cols_from_mismatched_srcs =
+    (options.get_column_names().has_value() or options.get_column_field_ids().has_value()) and
+    options.is_enabled_allow_mismatched_pq_schemas();
+  _metadata = file_metadatas.empty()
+                ? std::make_unique<aggregate_reader_metadata>(
+                    _sources, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_srcs)
+                : std::make_unique<aggregate_reader_metadata>(
+                    std::forward<std::vector<FileMetaData>>(file_metadatas),
+                    options.is_enabled_use_arrow_schema(),
+                    has_cols_from_mismatched_srcs);
 
   // Number of input sources
   _num_sources = _sources.size();
@@ -546,8 +548,10 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
     get_column_projection(options, options.is_enabled_ignore_missing_columns());
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
-  if (options.get_filter().has_value() and
-      (options.get_column_names().has_value() or options.get_column_indices().has_value())) {
+  auto const has_column_selection = options.get_column_names().has_value() or
+                                    options.get_column_indices().has_value() or
+                                    options.get_column_field_ids().has_value();
+  if (options.get_filter().has_value() and has_column_selection) {
     // list, struct, dictionary are not supported by AST filter yet.
     // extract columns not present in get_column_names() & keep count to remove at end.
     filter_only_columns_names = get_column_names_in_expression(
@@ -562,7 +566,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
                               options.is_enabled_ignore_missing_columns(),
                               _options.timestamp_type.id(),
                               _options.decimal_width,
-                              _options.case_sensitive_names);
+                              _options.case_sensitive_names,
+                              options.get_column_field_ids().has_value());
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -810,28 +815,48 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   parquet_reader_options const& options, bool ignore_missing_columns) const
 {
-  auto const has_column_names   = options.get_column_names().has_value();
-  auto const has_column_indices = options.get_column_indices().has_value();
+  auto const has_column_names     = options.get_column_names().has_value();
+  auto const has_column_indices   = options.get_column_indices().has_value();
+  auto const has_column_field_ids = options.get_column_field_ids().has_value();
 
-  CUDF_EXPECTS(
-    not(has_column_names and has_column_indices),
-    "Parquet reader encountered column selection by both names and indices simultaneously");
+  auto constexpr max_allowed_col_selection_modes = 1;
+  CUDF_EXPECTS(static_cast<int>(has_column_names) + static_cast<int>(has_column_indices) +
+                   static_cast<int>(has_column_field_ids) <=
+                 max_allowed_col_selection_modes,
+               "Parquet reader encountered more than one column selection mode");
 
   // No column selection specified. Return nullopt indicating all columns to be selected
-  if (not has_column_names and not has_column_indices) {
+  if (not has_column_names and not has_column_indices and not has_column_field_ids) {
     return std::nullopt;
   } else if (has_column_names) {
     return options.get_column_names();
-  } else {
+  } else if (has_column_indices) {
     std::vector<std::string> col_names;
     auto const& top_level_schema_indices = _metadata->get_schema(0).children_idx;
-    for (auto const index : options.get_column_indices().value_or(std::vector<cudf::size_type>{})) {
+    for (auto const index : options.get_column_indices().value()) {
       auto const is_valid_index =
         std::cmp_greater_equal(index, 0) and std::cmp_less(index, top_level_schema_indices.size());
       CUDF_EXPECTS(ignore_missing_columns or is_valid_index,
                    "Encountered an invalid col index in the top-level column selection");
       if (is_valid_index) {
         col_names.emplace_back(_metadata->get_schema(top_level_schema_indices[index]).name);
+      }
+    }
+    return std::make_optional(std::move(col_names));
+  } else {
+    std::vector<std::string> col_names;
+    auto const& schema_tree = _metadata->get_schema_tree();
+    for (auto const field_id : options.get_column_field_ids().value()) {
+      auto const schema_iter =
+        std::find_if(schema_tree.cbegin() + 1, schema_tree.cend(), [field_id](auto const& schema) {
+          return schema.field_id.has_value() and schema.field_id.value() == field_id;
+        });
+      CUDF_EXPECTS(ignore_missing_columns or schema_iter != schema_tree.end(),
+                   "Encountered a non-existent Parquet field ID in selected columns",
+                   std::invalid_argument);
+      if (schema_iter != schema_tree.end()) {
+        auto const schema_idx = static_cast<int>(std::distance(schema_tree.cbegin(), schema_iter));
+        col_names.emplace_back(column_path_from_index(schema_tree, schema_idx));
       }
     }
     return std::make_optional(std::move(col_names));

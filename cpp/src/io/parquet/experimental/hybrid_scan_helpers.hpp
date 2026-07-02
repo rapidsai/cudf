@@ -164,6 +164,7 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param timestamp_type_id Type conversion parameter
    * @param decimal_type_id Type conversion parameter
    * @param case_sensitive_names Boolean indicating if column names are case sensitive
+   * @param match_schema_by_field_id Whether to match schema by field ID
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -177,7 +178,8 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
                            bool ignore_missing_columns,
                            type_id timestamp_type_id,
                            type_id decimal_type_id,
-                           bool case_sensitive_names);
+                           bool case_sensitive_names,
+                           bool match_schema_by_field_id);
 
   /**
    * @brief Filters row groups such that only the row groups that start within the byte range
