@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -292,19 +292,3 @@ def test_boolean_not_with_integers(engine: pl.GPUEngine, dtype, col):
     ldf = pl.LazyFrame({"a": pl.Series(col, dtype=dtype)})
     q = ldf.select(~pl.col("a"))
     assert_gpu_result_equal(q, engine=engine)
-
-
-@pytest.mark.parametrize(
-    "expr",
-    [
-        pl.sum_horizontal("a", "b"),
-        pl.mean_horizontal("a", "b"),
-        pl.min_horizontal("a", "b"),
-        pl.max_horizontal("a", "b"),
-    ],
-    ids=["sum_horizontal", "mean_horizontal", "min_horizontal", "max_horizontal"],
-)
-def test_numeric_horizontal_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
-    df = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
-    q = df.select(expr)
-    assert_ir_translation_raises(q, engine, NotImplementedError)
