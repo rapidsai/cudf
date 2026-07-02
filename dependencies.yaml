@@ -1196,10 +1196,10 @@ dependencies:
           - {matrix: null, packages: [*libcudf_unsuffixed]}
   depends_on_numba_cuda:
     common:
-      - output_types: pyproject
+      - output_types: [conda, requirements, pyproject]
         packages:
-          # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
-          - numba<0.66
+        # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
+        - numba>=0.60.0,<0.65.0
       - output_types: [conda]
         packages:
         - &numba_cuda numba-cuda>=0.22.2
