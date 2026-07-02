@@ -117,6 +117,7 @@ except ImportError:
 else:
     _HAS_STRUCTLOG = True
 
+
 _STREAMING_FRONTENDS = frozenset({"dask", "ray", "spmd"})
 _CPU_ENGINES = frozenset({"polars-cpu", "duckdb"})
 
