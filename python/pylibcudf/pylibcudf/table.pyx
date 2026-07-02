@@ -80,19 +80,24 @@ cdef class Table:
         columns = tuple(columns)
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
-        self._columns = columns
-        if num_rows is None:
-            self._num_rows = columns[0].size() if len(columns) else 0
-        else:
+        if num_rows is not None:
             if not isinstance(num_rows, int):
                 raise TypeError("num_rows must be an int or None")
             if num_rows < 0:
                 raise ValueError("num_rows cannot be negative")
-            if any(c.size() != num_rows for c in columns):
+        self._columns = columns
+        if len(columns):
+            if any(c.size() != columns[0].size() for c in columns):
+                raise ValueError("All columns must have the same size")
+            if num_rows is None:
+                num_rows = columns[0].size()
+            elif columns[0].size() != num_rows:
                 raise ValueError(
                     "num_rows does not match the size of the provided columns"
                 )
-            self._num_rows = num_rows
+        elif num_rows is None:
+            num_rows = 0
+        self._num_rows = num_rows
 
     def to_arrow(
         self,

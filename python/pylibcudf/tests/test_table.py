@@ -85,6 +85,9 @@ def test_table_num_rows_mismatch_raises():
     # num_rows matches the first column but not the second; both must agree.
     with pytest.raises(ValueError):
         plc.Table([col3, col4], num_rows=3)
+    # Even without an explicit num_rows, columns of differing sizes are rejected.
+    with pytest.raises(ValueError):
+        plc.Table([col3, col4])
 
 
 def test_zero_column_table_concatenate_sums_rows():
