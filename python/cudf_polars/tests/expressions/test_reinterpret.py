@@ -50,5 +50,5 @@ def test_reinterpret_across_kinds_raises(
     target_dtype: pl.DataType,
 ) -> None:
     lf = pl.LazyFrame({"a": pl.Series([0, 1, 2]).cast(source_dtype)})
-    q = lf.select(pl.col("a").reinterpret(dtype=target_dtype))  # type: ignore[call-arg]
+    q = lf.select(pl.col("a").reinterpret(dtype=target_dtype))
     assert_ir_translation_raises(q, engine, NotImplementedError)
