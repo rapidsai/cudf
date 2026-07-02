@@ -987,19 +987,11 @@ class Series(SingleColumnFrame, IndexedFrame):
         d    40
         dtype: int64
         >>> series.reindex(['a', 'b', 'y', 'z'])
-        a      10
-        b      20
-        y    <NA>
-        z    <NA>
-        dtype: int64
-
-        .. pandas-compat::
-            :meth:`pandas.Series.reindex`
-
-            Note: One difference from Pandas is that ``NA`` is used for rows
-            that do not match, rather than ``NaN``. One side effect of this is
-            that the series retains an integer dtype in cuDF
-            where it is cast to float in Pandas.
+        a    10.0
+        b    20.0
+        y     NaN
+        z     NaN
+        dtype: float64
 
         """
         if index is None:
@@ -3350,7 +3342,12 @@ class Series(SingleColumnFrame, IndexedFrame):
                     else None
                 )
                 res = res[res.index.notna()]
-                res = res.reindex(self.dtype.categories).fillna(0)
+                # Fill missing categories with a 0 count directly via
+                # ``reindex`` (rather than ``reindex(...).fillna(0)``) so
+                # the integer count dtype is preserved: a default-NA
+                # reindex upcasts integer columns to float64 in
+                # pandas-compatible mode.
+                res = res.reindex(self.dtype.categories, fill_value=0)
                 res.index = res.index.astype(self.dtype)
                 if nan_count is not None:
                     res = cudf.concat([res, nan_count])
