@@ -1268,7 +1268,7 @@ TEST_F(StringsContainsTests, LazyQuantifiers)
   }
 }
 
-TEST_F(StringsContainsTests, DISABLED_WhitespaceControlCharacters)
+TEST_F(StringsContainsTests, WhitespaceControlCharacters)
 {
   // \x1c-\x1f (file/group/record/unit separators) are classified as whitespace
   // by cudf's codepoint flags table and should match \s.

@@ -35,6 +35,10 @@
 
 #include "glushkov_regcomp.h"
 
+#include "strings/char_types/char_flags.h"
+
+#include <cudf/strings/detail/char_tables.hpp>
+
 #include <algorithm>
 #include <bit>
 #include <map>
@@ -70,16 +74,18 @@ bool host_reclass_match_ascii(reclass const& cls, uint8_t const c)
   }
   if (!cls.builtins) { return false; }
 
-  bool const is_alnum = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
-  bool const is_space = (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v');
-  bool const is_digit = (c >= '0' && c <= '9');
+  // ASCII code points map 1:1 into g_character_codepoint_flags, the same table
+  // used by reclass_device::is_match on the device, so the flags looked up here
+  // match device-side IS_ALPHANUM/IS_SPACE/IS_DIGIT exactly (e.g. control
+  // characters 0x1c-0x1f are flagged as whitespace, same as \s on device).
+  uint8_t const fl = g_character_codepoint_flags[c];
 
-  if ((cls.builtins & CCLASS_W) && (c == '_' || is_alnum)) return true;
-  if ((cls.builtins & CCLASS_S) && is_space) return true;
-  if ((cls.builtins & CCLASS_D) && is_digit) return true;
-  if ((cls.builtins & NCCLASS_W) && (c != '\n' && c != '_' && !is_alnum)) return true;
-  if ((cls.builtins & NCCLASS_S) && !is_space) return true;
-  if ((cls.builtins & NCCLASS_D) && (c != '\n' && !is_digit)) return true;
+  if ((cls.builtins & CCLASS_W) && (c == '_' || IS_ALPHANUM(fl))) return true;
+  if ((cls.builtins & CCLASS_S) && IS_SPACE(fl)) return true;
+  if ((cls.builtins & CCLASS_D) && IS_DIGIT(fl)) return true;
+  if ((cls.builtins & NCCLASS_W) && (c != '\n' && c != '_' && !IS_ALPHANUM(fl))) return true;
+  if ((cls.builtins & NCCLASS_S) && !IS_SPACE(fl)) return true;
+  if ((cls.builtins & NCCLASS_D) && (c != '\n' && !IS_DIGIT(fl))) return true;
   return false;
 }
 
