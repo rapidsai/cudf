@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
+#include <cstring>
 #include <functional>
 #include <numeric>
 
@@ -36,7 +37,6 @@ reprog_device::reprog_device(reprog const& prog)
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   reprog const& h_prog, rmm::cuda_stream_view stream)
 {
-  // compute size to hold all the member data
   auto const insts_count   = h_prog.insts_count();
   auto const classes_count = h_prog.classes_count();
   auto const starts_count  = h_prog.starts_count();
@@ -108,9 +108,9 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
     (h_prog.compute_match_flags() == cudf::strings::detail::match_flags::EMPTY_MATCH);
 
   // copy flat prog to device memory
-  cudf::detail::cuda_memcpy<u_char>(*d_buffer, h_buffer, stream);
+  cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
 
-  // build deleter to cleanup device memory
+  // create a deleter to free both device buffers
   auto deleter = [d_buffer](reprog_device* t) {
     t->destroy();
     delete d_buffer;

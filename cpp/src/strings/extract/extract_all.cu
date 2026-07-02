@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -108,7 +108,7 @@ std::unique_ptr<column> extract_all_record(strings_column_view const& input,
 
   // Get the match counts for each string.
   // This column will become the output lists child offsets column.
-  auto counts   = count_matches(*d_strings, *d_prog, stream, mr);
+  auto counts   = count_matches(*d_strings, prog, stream, mr);
   auto d_counts = counts->mutable_view().data<size_type>();
 
   // Compute null output rows
