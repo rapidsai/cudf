@@ -29,3 +29,14 @@ def test_index_of(
     lf = pl.LazyFrame({"a": series})
     q = lf.select(pl.col("a").index_of(value))
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_index_of_expression_value(engine: pl.GPUEngine) -> None:
+    lf = pl.LazyFrame(
+        {
+            "a": [1, None, 3],
+            "needle": pl.Series([None, None, None], dtype=pl.Int64),
+        }
+    )
+    q = lf.select(pl.col("a").index_of(pl.col("needle").first()))
+    assert_gpu_result_equal(q, engine=engine)
