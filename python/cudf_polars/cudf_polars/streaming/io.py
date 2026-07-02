@@ -21,6 +21,7 @@ from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Empty,
+    PythonScan,
     Scan,
     Sink,
 )
@@ -442,6 +443,21 @@ def _(
     ir: Empty, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+
+
+@lower_ir_node.register(PythonScan)
+def _(
+    ir: PythonScan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # A PythonScan can emit multiple chunks and the count is unknown at lowering,
+    # so it always lowers as multi-partition (count > 1) regardless of world size.
+    # This forces downstream global operators to insert the required reduction
+    # instead of evaluating chunkwise.
+    #
+    # TODO: Remove this workaround once dynamic planning is mandatory. Under
+    # dynamic planning the runtime adapts to the real chunk count, so this
+    # lowering estimate no longer gates correctness.
+    return ir, {ir: PartitionInfo(count=2)}
 
 
 def can_use_native_parquet_node(
