@@ -142,7 +142,7 @@ struct [[nodiscard]] opcode_info {
   using enum types;
   using enum arg_ref;
 
-  static const opcode_info map[] =  // NOLINT(modernize-avoid-c-arrays)
+  static opcode_info const map[] =  // NOLINT(modernize-avoid-c-arrays)
     {
       {"GET_INPUT", PROPAGATE, false, false, {}, INPUT},
       {"SET_OUTPUT", PROPAGATE, false, false, {ALL}, NONE},
