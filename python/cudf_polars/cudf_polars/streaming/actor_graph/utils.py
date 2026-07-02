@@ -39,7 +39,7 @@ from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
-from cudf_polars.dsl.utils.naming import names_to_indices
+from cudf_polars.dsl.utils.naming import indices_to_names, names_to_indices
 from cudf_polars.streaming.actor_graph.collectives.allgather import AllGatherManager
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
 from cudf_polars.streaming.utils import _concat
@@ -167,9 +167,6 @@ async def shutdown_on_error(
         An actor tracer for collecting stats (if tracing enabled), else None.
     """
     # Create tracer only if LOG_TRACES is enabled and IR is provided
-    tracer: ActorTracer | None = None
-    contextvars: dict[str, Any] = {}
-
     ir_id = trace_ir.get_stable_id()
     ir_type = type(trace_ir).__name__
     tracer = ActorTracer(ir_id, ir_type)
@@ -256,11 +253,11 @@ def _remap_scheme_simple(
     ir: IR, scheme: PartitioningScheme, child: IR
 ) -> PartitioningScheme:
     if isinstance(scheme, (HashScheme, OrderScheme)):
-        old_key_names = indices_to_names(_scheme_column_indices(scheme), child.schema)
+        old_keys = indices_to_names(_scheme_column_indices(scheme), child.schema)
         try:
-            new_indices = names_to_indices(old_key_names, ir.schema)
-        except (ValueError, IndexError):
-            return None
+            new_indices = names_to_indices(old_keys, ir.schema)
+        except (ValueError, KeyError):
+            return None  # Column missing in child or output schema
         return _update_scheme_indices(scheme, new_indices)
     return scheme  # None or "inherit" passes through unchanged
 
@@ -706,25 +703,6 @@ async def chunkwise_evaluate(
         await send_chunk(context, ch_out, result, 0, tracer=tracer)
 
     await ch_out.drain(context)
-
-
-def indices_to_names(indices: tuple[int, ...], schema: Schema) -> tuple[str, ...]:
-    """
-    Return column names for the given column indices in schema order.
-
-    Parameters
-    ----------
-    indices
-        The indices to get names for.
-    schema
-        The schema to get names from.
-
-    Returns
-    -------
-    The column names for each index in schema order.
-    """
-    keys = list(schema.keys())
-    return tuple(keys[i] for i in indices)
 
 
 @dataclass(frozen=True)
