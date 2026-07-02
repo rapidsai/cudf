@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/sequence.h>
 
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -187,6 +188,177 @@ TEST_F(StringsSliceTest, NegativePositions)
   }
 }
 
+TEST_F(StringsSliceTest, StartAndLengthOptions)
+{
+  std::vector<char const*> h_strings{"example",
+                                     "example",
+                                     "example",
+                                     "example",
+                                     "example",
+                                     "example",
+                                     "example",
+                                     "da数据ta",
+                                     nullptr,
+                                     ""};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto strings_column = cudf::strings_column_view(strings);
+  auto starts =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 2, -2, -7, -8, -9, 2, 1, 1});
+  auto lengths =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, -1, 2, 2, 7, 2, 9, 4, 2, 2});
+
+  cudf::strings::slice_strings_options options;
+  options.start_indexing  = cudf::strings::start_indexing_policy::ONE_BASED;
+  options.negative_start  = cudf::strings::negative_start_policy::RELATIVE_TO_END;
+  options.bounds          = cudf::strings::slice_bounds_policy::START_AND_LENGTH;
+  options.negative_length = cudf::strings::negative_length_policy::CLAMP_TO_ZERO;
+
+  auto results = cudf::strings::slice_strings(strings_column, starts, lengths, options);
+
+  std::vector<char const*> h_expected{
+    "ex", "", "xa", "le", "example", "e", "example", "a数据t", nullptr, ""};
+  cudf::test::strings_column_wrapper expected(
+    h_expected.begin(),
+    h_expected.end(),
+    thrust::make_transform_iterator(h_expected.begin(), [](auto str) { return str != nullptr; }));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, StartAndMissingLengthOptions)
+{
+  cudf::test::strings_column_wrapper strings{"example"};
+  auto strings_column = cudf::strings_column_view(strings);
+
+  cudf::strings::slice_strings_options options;
+  options.start_indexing  = cudf::strings::start_indexing_policy::ONE_BASED;
+  options.negative_start  = cudf::strings::negative_start_policy::RELATIVE_TO_END;
+  options.bounds          = cudf::strings::slice_bounds_policy::START_AND_LENGTH;
+  options.missing_length  = cudf::strings::missing_length_policy::MAX_SIZE;
+  options.negative_length = cudf::strings::negative_length_policy::CLAMP_TO_ZERO;
+
+  cudf::numeric_scalar<cudf::size_type> start(std::numeric_limits<cudf::size_type>::min());
+  cudf::numeric_scalar<cudf::size_type> missing_length(0, false);
+  auto results = cudf::strings::slice_strings(
+    strings_column, start, missing_length, cudf::numeric_scalar<cudf::size_type>(1), options);
+
+  cudf::test::strings_column_wrapper expected{"exampl"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, NegativeStartClampWithLengthOptions)
+{
+  cudf::test::strings_column_wrapper strings{"abcdef"};
+  auto strings_column = cudf::strings_column_view(strings);
+  auto starts         = cudf::test::fixed_width_column_wrapper<cudf::size_type>({-2});
+  auto lengths        = cudf::test::fixed_width_column_wrapper<cudf::size_type>({3});
+
+  cudf::strings::slice_strings_options options;
+  options.bounds = cudf::strings::slice_bounds_policy::START_AND_LENGTH;
+
+  auto results = cudf::strings::slice_strings(strings_column, starts, lengths, options);
+
+  cudf::test::strings_column_wrapper expected{"abc"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, DefaultOptionsMatchExistingBehavior)
+{
+  cudf::test::strings_column_wrapper strings{"abcdef", "xy", ""};
+  auto strings_column = cudf::strings_column_view(strings);
+  cudf::strings::slice_strings_options options;
+
+  auto expected = cudf::strings::slice_strings(strings_column, 1, 3);
+  auto results  = cudf::strings::slice_strings(strings_column,
+                                              cudf::numeric_scalar<cudf::size_type>(1),
+                                              cudf::numeric_scalar<cudf::size_type>(3),
+                                              cudf::numeric_scalar<cudf::size_type>(1),
+                                              options);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected);
+
+  auto starts = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 1});
+  auto stops  = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, 2, 5});
+  expected    = cudf::strings::slice_strings(strings_column, starts, stops);
+  results     = cudf::strings::slice_strings(strings_column, starts, stops, options);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, *expected);
+}
+
+TEST_F(StringsSliceTest, MissingLengthToEndOptions)
+{
+  cudf::test::strings_column_wrapper strings{"abcdef"};
+  auto strings_column = cudf::strings_column_view(strings);
+
+  cudf::strings::slice_strings_options options;
+  options.negative_start = cudf::strings::negative_start_policy::RELATIVE_TO_END;
+  options.bounds         = cudf::strings::slice_bounds_policy::START_AND_LENGTH;
+  options.missing_length = cudf::strings::missing_length_policy::TO_END;
+
+  auto results = cudf::strings::slice_strings(strings_column,
+                                              cudf::numeric_scalar<cudf::size_type>(-2),
+                                              cudf::numeric_scalar<cudf::size_type>(0, false),
+                                              cudf::numeric_scalar<cudf::size_type>(1),
+                                              options);
+
+  cudf::test::strings_column_wrapper expected{"ef"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, StartAndStopOptions)
+{
+  cudf::test::strings_column_wrapper strings{"abcdef", "abcdef"};
+  auto strings_column = cudf::strings_column_view(strings);
+  auto starts         = cudf::test::fixed_width_column_wrapper<cudf::size_type>({2, -2});
+  auto stops          = cudf::test::fixed_width_column_wrapper<cudf::size_type>({4, 6});
+
+  cudf::strings::slice_strings_options options;
+  options.start_indexing = cudf::strings::start_indexing_policy::ONE_BASED;
+  options.negative_start = cudf::strings::negative_start_policy::RELATIVE_TO_END;
+  options.bounds         = cudf::strings::slice_bounds_policy::START_AND_STOP;
+
+  auto results = cudf::strings::slice_strings(strings_column, starts, stops, options);
+
+  cudf::test::strings_column_wrapper expected{"bcd", "ef"};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, NegativeLengthPreserveOptions)
+{
+  cudf::test::strings_column_wrapper strings{"abcdef"};
+  auto strings_column = cudf::strings_column_view(strings);
+  auto starts         = cudf::test::fixed_width_column_wrapper<cudf::size_type>({3});
+  auto lengths        = cudf::test::fixed_width_column_wrapper<cudf::size_type>({-1});
+
+  cudf::strings::slice_strings_options options;
+  options.bounds = cudf::strings::slice_bounds_policy::START_AND_LENGTH;
+
+  auto results = cudf::strings::slice_strings(strings_column, starts, lengths, options);
+
+  cudf::test::strings_column_wrapper expected{""};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
+TEST_F(StringsSliceTest, AllNullsOptions)
+{
+  std::vector<char const*> h_strings{nullptr, nullptr};
+  cudf::test::strings_column_wrapper strings(
+    h_strings.begin(),
+    h_strings.end(),
+    thrust::make_transform_iterator(h_strings.begin(), [](auto str) { return str != nullptr; }));
+  auto strings_column = cudf::strings_column_view(strings);
+
+  cudf::strings::slice_strings_options options;
+  options.bounds = cudf::strings::slice_bounds_policy::START_AND_LENGTH;
+
+  auto results = cudf::strings::slice_strings(strings_column,
+                                              cudf::numeric_scalar<cudf::size_type>(1),
+                                              cudf::numeric_scalar<cudf::size_type>(2),
+                                              cudf::numeric_scalar<cudf::size_type>(1),
+                                              options);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+}
+
 TEST_F(StringsSliceTest, NullPositions)
 {
   cudf::test::strings_column_wrapper strings{"a", "bc", "def", "ghij", "klmno", "pqrstu", "vwxyz"};
@@ -303,6 +475,25 @@ TEST_F(StringsSliceTest, Error)
 
   auto indexes_bad = cudf::test::fixed_width_column_wrapper<float>({1});
   EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_bad, indexes_bad),
+               cudf::logic_error);
+
+  cudf::strings::slice_strings_options options;
+  options.bounds = cudf::strings::slice_bounds_policy::START_AND_LENGTH;
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view,
+                                            cudf::numeric_scalar<cudf::size_type>(0),
+                                            cudf::numeric_scalar<cudf::size_type>(1),
+                                            cudf::numeric_scalar<cudf::size_type>(2),
+                                            options),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes, indexes, options),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_null, indexes_null, options),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_bad, indexes_bad, options),
+               cudf::logic_error);
+  auto indexes_32 = cudf::test::fixed_width_column_wrapper<int32_t>({1});
+  auto indexes_64 = cudf::test::fixed_width_column_wrapper<int64_t>({1});
+  EXPECT_THROW(cudf::strings::slice_strings(strings_view, indexes_32, indexes_64, options),
                cudf::logic_error);
 }
 
