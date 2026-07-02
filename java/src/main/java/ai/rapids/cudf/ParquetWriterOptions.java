@@ -37,7 +37,13 @@ public final class ParquetWriterOptions extends CompressionMetadataWriterOptions
     ROWGROUP(1),
 
     /** Generate column statistics for each page */
-    PAGE(2);
+    PAGE(2),
+
+    /**
+     * Generate full column and offset indices (page index). Implies ROWGROUP statistics.
+     * Required for page-level pruning in {@link HybridScanReader}.
+     */
+    COLUMN(3);
 
     final int nativeId;
 
