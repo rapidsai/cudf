@@ -112,7 +112,7 @@ def optimize_join_domain_prefilters(
     after every inserted row-reduction semi join.
     """
     options = config_options.executor.join_domain_prefilter
-    if not options.enabled:
+    if options is None:
         return ir
     threshold = options.threshold
     trace = options.trace

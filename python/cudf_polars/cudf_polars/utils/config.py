@@ -386,14 +386,14 @@ class JoinDomainPrefilterOptions:
     """
     Configuration for the logical join-domain prefilter rewrite.
 
+    Pass ``None`` to ``StreamingExecutor(join_domain_prefilter=...)`` to
+    disable the rewrite.
+
     These options can be configured via environment variables with the prefix
     ``CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER__``.
 
     Parameters
     ----------
-    enabled
-        Whether to insert generic derived key-domain semi-join filters before
-        lowering streaming joins. Default is True.
     threshold
         Row-count ratio (domain / target) below which a derived key-domain
         semi-join filter is inserted. Default is 0.5.
@@ -404,11 +404,6 @@ class JoinDomainPrefilterOptions:
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER"
 
-    enabled: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__ENABLED", _bool_converter, default=True
-        )
-    )
     threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__THRESHOLD", float, default=0.5
@@ -421,8 +416,6 @@ class JoinDomainPrefilterOptions:
     )
 
     def __post_init__(self) -> None:  # noqa: D105
-        if not isinstance(self.enabled, bool):
-            raise TypeError("enabled must be a bool")
         threshold = self.threshold
         if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
             raise TypeError("threshold must be a float or int")
@@ -697,6 +690,7 @@ class StreamingExecutor:
     join_domain_prefilter
         Options controlling the logical join-domain prefilter rewrite. See
         :class:`~cudf_polars.utils.config.JoinDomainPrefilterOptions` for more.
+        ``None`` disables the rewrite.
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
@@ -760,7 +754,7 @@ class StreamingExecutor:
     dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
         default_factory=DynamicPlanningOptions
     )
-    join_domain_prefilter: JoinDomainPrefilterOptions = dataclasses.field(
+    join_domain_prefilter: JoinDomainPrefilterOptions | None = dataclasses.field(
         default_factory=JoinDomainPrefilterOptions
     )
     max_io_threads: int = dataclasses.field(
@@ -824,10 +818,12 @@ class StreamingExecutor:
                 "join_domain_prefilter",
                 JoinDomainPrefilterOptions(**self.join_domain_prefilter),
             )
-        if not isinstance(self.join_domain_prefilter, JoinDomainPrefilterOptions):
+        if self.join_domain_prefilter is not None and not isinstance(
+            self.join_domain_prefilter, JoinDomainPrefilterOptions
+        ):
             raise TypeError(
                 "join_domain_prefilter must be a JoinDomainPrefilterOptions "
-                "instance or dict"
+                "instance, dict, or None"
             )
 
         if self.cluster in ("spmd", "ray", "dask"):
@@ -981,6 +977,17 @@ class ConfigOptions(Generic[ExecutorType]):
                     )
                     if not _bool_converter(env_dynamic_planning):
                         user_executor_options["dynamic_planning"] = None
+
+                # Handle join_domain_prefilter: check user config, then env var
+                user_join_domain_prefilter = user_executor_options.get(
+                    "join_domain_prefilter", None
+                )
+                if user_join_domain_prefilter is None:
+                    env_join_domain_prefilter = os.environ.get(
+                        "CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER", "1"
+                    )
+                    if not _bool_converter(env_join_domain_prefilter):
+                        user_executor_options["join_domain_prefilter"] = None
 
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable

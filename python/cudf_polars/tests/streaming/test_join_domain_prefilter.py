@@ -119,9 +119,11 @@ def _stats(**row_counts: tuple[Scan, int]) -> StatsCollector:
     return stats
 
 
-def _config(*, dynamic_planning: bool = True) -> ConfigOptions:
+def _config(
+    *, dynamic_planning: bool = True, join_domain_prefilter: bool = True
+) -> ConfigOptions:
     executor_options: dict[str, object] = {
-        "join_domain_prefilter": {"enabled": True, "trace": False}
+        "join_domain_prefilter": {"trace": False} if join_domain_prefilter else None
     }
     if not dynamic_planning:
         executor_options["dynamic_planning"] = None
@@ -174,6 +176,20 @@ def test_domain_prefilter_is_independent_of_dynamic_planning() -> None:
     assert _joins(optimized, "Semi")
 
 
+def test_domain_prefilter_can_be_disabled() -> None:
+    part = _scan("part", ("p_partkey",), predicate=True)
+    lineitem = _scan("lineitem", ("l_partkey",))
+    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
+        _config(join_domain_prefilter=False),
+    )
+
+    assert optimized is root
+
+
 @pytest.mark.parametrize(
     "nulls_equal", [False, True], ids=["nulls_not_equal", "nulls_equal"]
 )
@@ -197,7 +213,7 @@ def test_nullable_join_keys_preserve_results(
     engine = pl.GPUEngine(
         executor="streaming",
         raise_on_fail=True,
-        executor_options={"join_domain_prefilter": {"enabled": True, "threshold": 0.5}},
+        executor_options={"join_domain_prefilter": {"threshold": 0.5}},
     )
 
     ir = Translator(query._ldf.visit(), engine).translate_ir()
