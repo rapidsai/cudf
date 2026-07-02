@@ -345,6 +345,12 @@ TESTS_TO_SKIP: dict[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_metrics[False-parquet]": "Checks to IO metric logs specific to Polars CPU",
     "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Checks to IO metric logs specific to Polars CPU",
     "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Checks to IO metric logs specific to Polars CPU",
+    # polars 1.42 updated these tests to also assert deprecated_call and strict=True ShapeError
+    # in the same test function. The SPMD engine fails on the strict=True collect() inside a
+    # pytest.raises block because the DeprecationWarning from how='horizontal' propagates differently
+    # across engines. Skip both runs rather than xfail (which would XPASS on in-memory).
+    "tests/unit/lazyframe/test_predicates.py::test_hconcat_predicate": "polars 1.42: test uses deprecated how='horizontal' with strict=True in ways that behave differently across GPU engines",
+    "tests/unit/functions/test_union.py::test_union_lazyframe_horizontal": "polars 1.42: test uses deprecated how='horizontal' with strict=True in ways that behave differently across GPU engines",
 }
 
 
