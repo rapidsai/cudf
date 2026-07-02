@@ -88,7 +88,8 @@ def test_masked_type_unify_with_na_returns_self():
 
 def test_na_type_unify_with_masked_defers_to_masked():
     """``NA.unify(Masked(...))`` -> None: tells numba to use
-    ``MaskedType.unify`` instead, which gives the right answer."""
+    ``MaskedType.unify`` instead, which gives the right answer.
+    """
     from cudf.core.udf.mlir_backend.masked_typing import (
         MaskedType,
         na_type,
@@ -100,7 +101,8 @@ def test_na_type_unify_with_masked_defers_to_masked():
 
 def test_na_type_unify_with_scalar_promotes_to_masked():
     """``NA.unify(scalar)`` -> ``Masked(scalar)``: scalar branches that
-    join an NA branch get wrapped."""
+    join an NA branch get wrapped.
+    """
     from cudf.core.udf.mlir_backend.masked_typing import (
         MaskedType,
         na_type,
