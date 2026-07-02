@@ -15,9 +15,28 @@ from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
+    from rmm.pylibrmm.stream import Stream
+
     from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
+
+
+def _reverse_column(column: plc.Column, stream: Stream) -> plc.Column:
+    """Return a copy of ``column`` with its rows in reverse order."""
+    n = column.size()
+    indices = plc.filling.sequence(
+        n,
+        plc.Scalar.from_py(n - 1, plc.DataType(plc.TypeId.INT32), stream=stream),
+        plc.Scalar.from_py(-1, plc.DataType(plc.TypeId.INT32), stream=stream),
+        stream=stream,
+    )
+    return plc.copying.gather(
+        plc.Table([column]),
+        indices,
+        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+        stream=stream,
+    ).columns()[0]
 
 
 class Cast(Expr):
@@ -152,12 +171,6 @@ class UnaryFunction(Expr):
 
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover
-        if self.name in UnaryFunction._supported_cum_aggs:
-            (reverse,) = self.options
-            if reverse:
-                raise NotImplementedError(
-                    "reverse=True is not supported for cumulative aggregations"
-                )
         if self.name == "fill_null_with_strategy" and self.options[1] not in {0, None}:
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
@@ -553,23 +566,28 @@ class UnaryFunction(Expr):
             )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
+            (reverse,) = self.options
+            plc_col = column.obj
+            if reverse:
+                # A reverse cumulative aggregation is a forward one over the
+                # reversed column, reversed back into place.
+                plc_col = _reverse_column(plc_col, df.stream)
             if self.name == "cum_count":
                 # cum_count is the cumulative count of non-null values.
                 counts = plc.unary.cast(
-                    plc.unary.is_valid(column.obj, stream=df.stream),
+                    plc.unary.is_valid(plc_col, stream=df.stream),
                     self.dtype.plc_type,
                     stream=df.stream,
                 )
-                return Column(
-                    plc.reduce.scan(
-                        counts,
-                        plc.aggregation.sum(),
-                        plc.reduce.ScanType.INCLUSIVE,
-                        stream=df.stream,
-                    ),
-                    dtype=self.dtype,
+                result = plc.reduce.scan(
+                    counts,
+                    plc.aggregation.sum(),
+                    plc.reduce.ScanType.INCLUSIVE,
+                    stream=df.stream,
                 )
-            plc_col = column.obj
+                if reverse:
+                    result = _reverse_column(result, df.stream)
+                return Column(result, dtype=self.dtype)
             col_type = column.dtype.plc_type
             # cum_sum casts
             # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
@@ -610,12 +628,12 @@ class UnaryFunction(Expr):
             elif self.name == "cum_max":
                 agg = plc.aggregation.max()
 
-            return Column(
-                plc.reduce.scan(
-                    plc_col, agg, plc.reduce.ScanType.INCLUSIVE, stream=df.stream
-                ),
-                dtype=self.dtype,
+            result = plc.reduce.scan(
+                plc_col, agg, plc.reduce.ScanType.INCLUSIVE, stream=df.stream
             )
+            if reverse:
+                result = _reverse_column(result, df.stream)
+            return Column(result, dtype=self.dtype)
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
