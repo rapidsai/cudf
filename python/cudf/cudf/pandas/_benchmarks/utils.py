@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
@@ -406,8 +406,16 @@ def get_data(
     suffix: str = "",
     columns: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Get table from dataset."""
-    return pd.read_parquet(f"{path}/{table_name}{suffix}", columns=columns)
+    """Get table from dataset.
+
+    The parquet files must have Decimal columns pre-converted to float64 and
+    date columns pre-converted to timestamp. tpchgen-cli generates Decimal and
+    date types that pandas cannot use in arithmetic. See schema-overhead.md for
+    a conversion script and benchmarks showing the performance impact.
+    """
+    return pd.read_parquet(
+        Path(path) / f"{table_name}{suffix}", columns=columns
+    )
 
 
 def execute_query(
