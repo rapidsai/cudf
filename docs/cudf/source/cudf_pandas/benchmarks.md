@@ -114,12 +114,6 @@ index f39beb0..a9ad651 100755
 
 The steps below reproduce the PDS-H benchmark results using cudf.pandas.
 
-**Note on data types:** `tpchgen-cli` generates Decimal columns (e.g. `l_extendedprice`,
-`l_discount`) and Python `datetime.date` columns. The benchmark reads these as float64 and
-timestamp respectively, which is faster and avoids Python object overhead. This means results
-may differ slightly from a strictly spec-compliant TPC-H run that preserves Decimal
-precision.
-
 ### Setup
 
 Install `cudf` following the
