@@ -181,3 +181,11 @@ compile_commands.json
 # pytest artifacts
 rmm_log.txt
 python/cudf/cudf_pandas_tests/data/rmm_log.txt
+
+## Autoresearch (untracked experiment tracking files — must survive code reverts)
+AGENT_LOG.md
+results.tsv
+results/
+build.log
+test.log
+run.log

@@ -378,12 +378,32 @@ ConfigureNVBench(ORC_MULTITHREADED_NVBENCH io/orc/orc_reader_multithreaded.cpp)
 ConfigureNVBench(CSV_READER_NVBENCH io/csv/csv_reader_input.cpp io/csv/csv_reader_options.cpp)
 
 # ##################################################################################################
+# * csv reader type inference benchmark ------------------------------------------------------------
+ConfigureNVBench(CSV_READER_TYPE_INFERENCE_NVBENCH io/csv/csv_read_type_inference.cpp)
+
+# ##################################################################################################
+# * csv reader quoting benchmark -------------------------------------------------------------------
+ConfigureNVBench(CSV_READER_QUOTING_NVBENCH io/csv/csv_read_quoting.cpp)
+
+# ##################################################################################################
+# * csv reader realistic profile benchmark ---------------------------------------------------------
+ConfigureNVBench(CSV_READER_REALISTIC_NVBENCH io/csv/csv_read_realistic.cpp)
+
+# ##################################################################################################
+# * csv reader scale benchmark ---------------------------------------------------------------------
+ConfigureNVBench(CSV_READER_SCALE_NVBENCH io/csv/csv_read_scale.cpp)
+
+# ##################################################################################################
 # * orc writer benchmark --------------------------------------------------------------------------
 ConfigureNVBench(ORC_WRITER_NVBENCH io/orc/orc_writer.cpp io/orc/orc_writer_chunks.cpp)
 
 # ##################################################################################################
 # * csv writer benchmark --------------------------------------------------------------------------
 ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
+
+# ##################################################################################################
+# * csv writer scale benchmark ---------------------------------------------------------------------
+ConfigureNVBench(CSV_WRITER_SCALE_NVBENCH io/csv/csv_write_scale.cpp)
 
 # ##################################################################################################
 # * ast benchmark ---------------------------------------------------------------------------------

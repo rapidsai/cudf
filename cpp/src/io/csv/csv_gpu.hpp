@@ -219,7 +219,6 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::data_type const> dtypes,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
-                            device_span<size_type> valid_counts,
                             device_span<bool* const> is_quoted,
                             rmm::cuda_stream_view stream);
 

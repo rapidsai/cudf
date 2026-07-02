@@ -306,10 +306,9 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
  * @param[in] dtypes The data type of the column
  * @param[out] columns The output column data
  * @param[out] valids The bitmaps indicating whether column fields are valid
- * @param[out] valid_counts The number of valid fields in each column
  * @param[out] is_quoted_flags Per-column boolean arrays tracking which rows were quoted fields
  */
-CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
+CUDF_KERNEL void __launch_bounds__(csvparse_block_dim, 8)
   convert_csv_to_cudf(cudf::io::parse_options_view options,
                       device_span<char const> data,
                       device_span<column_parse::flags const> column_flags,
@@ -317,7 +316,6 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                       device_span<cudf::data_type const> dtypes,
                       device_span<void* const> columns,
                       device_span<cudf::bitmask_type* const> valids,
-                      device_span<size_type> valid_counts,
                       device_span<bool* const> is_quoted_flags)
 {
   auto const raw_csv = data.data();
@@ -397,9 +395,7 @@ CUDF_KERNEL void __launch_bounds__(csvparse_block_dim)
                                     dtypes[actual_col],
                                     options,
                                     column_flags[col] & column_parse::as_hexadecimal)) {
-            // set the valid bitmap - all bits were set to 0 to start
             set_bit(valids[actual_col], rec_id);
-            atomicAdd(&valid_counts[actual_col], 1);
           }
         }
       } else if (dtypes[actual_col].id() == cudf::type_id::STRING) {
@@ -866,11 +862,9 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                             device_span<cudf::data_type const> dtypes,
                             device_span<void* const> columns,
                             device_span<cudf::bitmask_type* const> valids,
-                            device_span<size_type> valid_counts,
                             device_span<bool* const> is_quoted_flags,
                             rmm::cuda_stream_view stream)
 {
-  // Calculate actual block count to use based on records count
   auto const block_size = csvparse_block_dim;
   auto const num_rows   = row_offsets.size() - 1;
   auto const grid_size  = cudf::util::div_rounding_up_safe<size_t>(num_rows, block_size);
@@ -882,7 +876,6 @@ void decode_row_column_data(cudf::io::parse_options_view const& options,
                                                                     dtypes,
                                                                     columns,
                                                                     valids,
-                                                                    valid_counts,
                                                                     is_quoted_flags);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
