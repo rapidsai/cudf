@@ -240,14 +240,11 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
                                               rmm::cuda_stream_view stream,
                                               rmm::device_async_resource_ref mr)
 {
-  // Reset column selection so the helper is safe to call repeatedly on the same reader; the
-  // single-file tests reuse one reader across many filter expressions.
   reader.reset_column_selection();
   auto const row_group_indices = reader.all_row_groups(options);
 
   if constexpr (std::is_same_v<ReaderType,
                                cudf::io::parquet::experimental::hybrid_scan_multifile>) {
-    // Dictionary page byte ranges carry a per-range source map used to regroup them by source.
     auto const dict_pages = reader.dictionary_pages_byte_ranges(row_group_indices, options);
     CUDF_EXPECTS(dict_pages.first.size() > 0, "No dictionary page byte ranges found");
 
@@ -255,11 +252,7 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
       group_byte_ranges_by_source(dict_pages, inputs.datasources.size());
     auto [dict_page_buffers, dict_page_data_per_source, task] =
       cudf::io::parquet::fetch_byte_ranges_to_device_async(
-        inputs.datasource_refs,
-        cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{
-          dict_page_ranges_per_source},
-        stream,
-        mr);
+        inputs.datasource_refs, dict_page_ranges_per_source, stream, mr);
     task.get();
 
     std::vector<cudf::device_span<uint8_t const>> dict_page_data;
@@ -267,21 +260,21 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
       dict_page_data.insert(
         dict_page_data.end(), source_dict_pages.begin(), source_dict_pages.end());
     }
+
     return reader.filter_row_groups_with_dictionary_pages(
       dict_page_data, row_group_indices, options, stream);
   } else {
-    // `secondary_filters_byte_ranges().second` is the single-file equivalent of the multi-file
-    // `dictionary_pages_byte_ranges()`.
-    auto const current = cudf::host_span<cudf::size_type const>{row_group_indices};
     auto const dict_page_byte_ranges =
-      reader.secondary_filters_byte_ranges(current, options).second;
+      reader.secondary_filters_byte_ranges(row_group_indices, options).second;
     CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
     auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
       cudf::io::parquet::fetch_byte_ranges_to_device_async(
         inputs, dict_page_byte_ranges, stream, mr);
     dict_page_tasks.get();
-    return reader.filter_row_groups_with_dictionary_pages(dict_page_data, current, options, stream);
+
+    return reader.filter_row_groups_with_dictionary_pages(
+      dict_page_data, row_group_indices, options, stream);
   }
 }
 
