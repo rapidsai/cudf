@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/split.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -192,6 +193,14 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
     return std::make_unique<table>(std::move(results));
   }
 
+  auto [fp, literal] = prog.get_literal_fast_path();
+  if (fp == literal_fast_path::LITERAL_ONLY) {
+    auto const delimiter =
+      cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
+    return direction == split_direction::FORWARD ? split(input, delimiter, maxsplit, stream, mr)
+                                                 : rsplit(input, delimiter, maxsplit, stream, mr);
+  }
+
   // create device object from regex_program
   auto d_prog = regex_device_builder::create_prog_device(prog, stream);
 
@@ -254,6 +263,15 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
                                         rmm::device_async_resource_ref mr)
 {
   CUDF_EXPECTS(!prog.pattern().empty(), "Parameter pattern must not be empty");
+
+  auto [fp, literal] = prog.get_literal_fast_path();
+  if (fp == literal_fast_path::LITERAL_ONLY) {
+    auto const delimiter =
+      cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
+    return direction == split_direction::FORWARD
+             ? split_record(input, delimiter, maxsplit, stream, mr)
+             : rsplit_record(input, delimiter, maxsplit, stream, mr);
+  }
 
   auto const strings_count = input.size();
 
