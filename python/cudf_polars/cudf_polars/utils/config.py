@@ -51,6 +51,7 @@ __all__ = [
     "DaskContext",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
+    "JoinDomainPrefilterOptions",
     "ParquetOptions",
     "RayContext",
     "SPMDContext",
@@ -380,6 +381,59 @@ class DynamicPlanningOptions:
             raise TypeError("join_prefilter_trace must be a bool")
 
 
+@dataclasses.dataclass(frozen=True)
+class JoinDomainPrefilterOptions:
+    """
+    Configuration for the logical join-domain prefilter rewrite.
+
+    These options can be configured via environment variables with the prefix
+    ``CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER__``.
+
+    Parameters
+    ----------
+    enabled
+        Whether to insert generic derived key-domain semi-join filters before
+        lowering streaming joins. Default is True.
+    threshold
+        Row-count ratio (domain / target) below which a derived key-domain
+        semi-join filter is inserted. Default is 0.5.
+    trace
+        Whether to emit plan-time trace decisions for derived key-domain
+        prefilters. Default is False.
+    """
+
+    _env_prefix = "CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER"
+
+    enabled: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__ENABLED", _bool_converter, default=True
+        )
+    )
+    threshold: float = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__THRESHOLD", float, default=0.5
+        )
+    )
+    trace: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__TRACE", _bool_converter, default=False
+        )
+    )
+
+    def __post_init__(self) -> None:  # noqa: D105
+        if not isinstance(self.enabled, bool):
+            raise TypeError("enabled must be a bool")
+        threshold = self.threshold
+        if isinstance(threshold, bool) or not isinstance(threshold, (int, float)):
+            raise TypeError("threshold must be a float or int")
+        threshold = float(threshold)
+        object.__setattr__(self, "threshold", threshold)
+        if not 0.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be between 0 and 1")
+        if not isinstance(self.trace, bool):
+            raise TypeError("trace must be a bool")
+
+
 @dataclasses.dataclass(frozen=True, eq=True)
 class MemoryResourceConfig:
     """
@@ -640,6 +694,9 @@ class StreamingExecutor:
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
+    join_domain_prefilter
+        Options controlling the logical join-domain prefilter rewrite. See
+        :class:`~cudf_polars.utils.config.JoinDomainPrefilterOptions` for more.
     max_io_threads
         Maximum number of IO threads. Default is 4.
         This controls the parallelism of IO operations when reading data.
@@ -703,6 +760,9 @@ class StreamingExecutor:
     dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
         default_factory=DynamicPlanningOptions
     )
+    join_domain_prefilter: JoinDomainPrefilterOptions = dataclasses.field(
+        default_factory=JoinDomainPrefilterOptions
+    )
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__MAX_IO_THREADS", int, default=4
@@ -758,6 +818,18 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
+        if isinstance(self.join_domain_prefilter, dict):
+            object.__setattr__(
+                self,
+                "join_domain_prefilter",
+                JoinDomainPrefilterOptions(**self.join_domain_prefilter),
+            )
+        if not isinstance(self.join_domain_prefilter, JoinDomainPrefilterOptions):
+            raise TypeError(
+                "join_domain_prefilter must be a JoinDomainPrefilterOptions "
+                "instance or dict"
+            )
+
         if self.cluster in ("spmd", "ray", "dask"):
             if self.sink_to_directory is False:
                 raise ValueError(
@@ -790,6 +862,7 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
+        d["join_domain_prefilter"] = json.dumps(d["join_domain_prefilter"])
         return hash(tuple(sorted(d.items())))
 
 
