@@ -1864,7 +1864,7 @@ aggregate_reader_metadata::select_columns(
                                         has_list_parent || col_type == type_id::LIST);
         }
       } else {
-        for (const auto& idx : col_name_info->children) {
+        for (auto const& idx : col_name_info->children) {
           path_is_valid |=
             build_column(&idx,
                          schema_lookup.find_schema_child_by_name(schema_idx, idx.name),
