@@ -117,29 +117,40 @@ std::unique_ptr<column> findall(strings_column_view const& input,
 
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
-  // Create lists offsets column
-  auto const sizes              = count_matches(*d_strings, prog, stream, mr);
-  auto [offsets, total_matches] = cudf::detail::make_offsets_child_column(
-    sizes->view().begin<size_type>(), sizes->view().end<size_type>(), stream, mr);
-  auto const d_offsets = offsets->view().data<size_type>();
+  // Builds the lists offsets column and the matches from a single, already-built
+  // device regex program (avoids a redundant device program build for the count pass).
+  auto const build_matches = [&](auto& d_prog, auto make_functor) {
+    auto const sizes = count_matches(*d_strings, d_prog, input.size(), stream, mr);
+    auto [offsets, total_matches] =
+      cudf::detail::make_offsets_child_column(sizes->view().template begin<size_type>(),
+                                              sizes->view().template end<size_type>(),
+                                              stream,
+                                              mr);
+    auto const d_offsets = offsets->view().template data<size_type>();
 
-  // Build strings column of the matches
-  rmm::device_uvector<string_index_pair> indices(total_matches, stream);
-  if (groups == 1) {
-    auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-    launch_for_each_kernel(
-      one_capture_fn{*d_strings, d_offsets, indices.data()}, *d_prog, input.size(), stream);
-  } else {
+    rmm::device_uvector<string_index_pair> indices(total_matches, stream);
+    launch_for_each_kernel(make_functor(d_offsets, indices.data()), d_prog, input.size(), stream);
+    return std::pair(std::move(offsets), std::move(indices));
+  };
+
+  auto [offsets, indices] = [&]() {
+    if (groups == 1) {
+      auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+      return build_matches(*d_prog, [&](size_type const* d_offsets, string_index_pair* d_indices) {
+        return one_capture_fn{*d_strings, d_offsets, d_indices};
+      });
+    }
     if (regex_device_builder::glushkov_fast_path_supported(prog)) {
       auto d_prog = regex_device_builder::create_gkprog_device(prog, stream);
-      launch_for_each_kernel(
-        findall_fn{*d_strings, d_offsets, indices.data()}, *d_prog, input.size(), stream);
-    } else {
-      auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-      launch_for_each_kernel(
-        findall_fn{*d_strings, d_offsets, indices.data()}, *d_prog, input.size(), stream);
+      return build_matches(*d_prog, [&](size_type const* d_offsets, string_index_pair* d_indices) {
+        return findall_fn{*d_strings, d_offsets, d_indices};
+      });
     }
-  }
+    auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+    return build_matches(*d_prog, [&](size_type const* d_offsets, string_index_pair* d_indices) {
+      return findall_fn{*d_strings, d_offsets, d_indices};
+    });
+  }();
 
   auto strings_output = make_strings_column(indices.begin(), indices.end(), stream, mr);
 

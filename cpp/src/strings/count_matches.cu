@@ -13,6 +13,8 @@
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <type_traits>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -50,34 +52,62 @@ struct count_fn {
 
 }  // namespace
 
+template <typename ProgDevice>
+std::unique_ptr<column> count_matches(column_device_view const& d_strings,
+                                      ProgDevice& d_prog,
+                                      size_type strings_count,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::device_async_resource_ref mr)
+{
+  auto results = make_numeric_column(
+    data_type{type_to_id<size_type>()}, strings_count, mask_state::UNALLOCATED, stream, mr);
+
+  if (strings_count == 0) { return results; }
+
+  auto d_results = results->mutable_view().data<cudf::size_type>();
+
+  // Glushkov's engine always requires the begin/end positional check; the Thompson
+  // engine can skip it (cheaper) when an empty match is not possible for this pattern.
+  if constexpr (std::is_same_v<ProgDevice, gkprog_device>) {
+    launch_transform_kernel(
+      count_fn<positional::BEGIN_END>{d_strings}, d_prog, d_results, strings_count, stream);
+  } else {
+    if (d_prog.is_empty_match_possible()) {
+      launch_transform_kernel(
+        count_fn<positional::BEGIN_END>{d_strings}, d_prog, d_results, strings_count, stream);
+    } else {
+      launch_transform_kernel(
+        count_fn<positional::END_ONLY>{d_strings}, d_prog, d_results, strings_count, stream);
+    }
+  }
+
+  return results;
+}
+
+template std::unique_ptr<column> count_matches<reprog_device>(column_device_view const&,
+                                                              reprog_device&,
+                                                              size_type,
+                                                              rmm::cuda_stream_view,
+                                                              rmm::device_async_resource_ref);
+
+template std::unique_ptr<column> count_matches<gkprog_device>(column_device_view const&,
+                                                              gkprog_device&,
+                                                              size_type,
+                                                              rmm::cuda_stream_view,
+                                                              rmm::device_async_resource_ref);
+
 std::unique_ptr<column> count_matches(column_device_view const& d_strings,
                                       regex_program const& prog,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
 {
-  auto results = make_numeric_column(
-    data_type{type_to_id<size_type>()}, d_strings.size(), mask_state::UNALLOCATED, stream, mr);
-
-  if (d_strings.size() == 0) { return results; }
-
-  auto d_results = results->mutable_view().data<cudf::size_type>();
-
+  auto const strings_count = d_strings.size();
   if (regex_device_builder::glushkov_fast_path_supported(prog)) {
     auto d_prog = regex_device_builder::create_gkprog_device(prog, stream);
-    launch_transform_kernel(
-      count_fn<positional::BEGIN_END>{d_strings}, *d_prog, d_results, d_strings.size(), stream);
-  } else {
-    auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-    if (d_prog->is_empty_match_possible()) {
-      launch_transform_kernel(
-        count_fn<positional::BEGIN_END>{d_strings}, *d_prog, d_results, d_strings.size(), stream);
-    } else {
-      launch_transform_kernel(
-        count_fn<positional::END_ONLY>{d_strings}, *d_prog, d_results, d_strings.size(), stream);
-    }
+    return count_matches(d_strings, *d_prog, strings_count, stream, mr);
   }
-
-  return results;
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+  return count_matches(d_strings, *d_prog, strings_count, stream, mr);
 }
 
 }  // namespace detail

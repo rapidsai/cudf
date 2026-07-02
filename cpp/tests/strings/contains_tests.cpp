@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1266,4 +1266,26 @@ TEST_F(StringsContainsTests, LazyQuantifiers)
     cudf::test::fixed_width_column_wrapper<bool> expected({0, 0, 1, 1, 0, 1});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
+}
+
+TEST_F(StringsContainsTests, DISABLED_WhitespaceControlCharacters)
+{
+  // \x1c-\x1f (file/group/record/unit separators) are classified as whitespace
+  // by cudf's codepoint flags table and should match \s.
+  auto input =
+    cudf::test::strings_column_wrapper({"a\x1c"
+                                        "b",
+                                        "a\x1d"
+                                        "b",
+                                        "a\x1e"
+                                        "b",
+                                        "a\x1f"
+                                        "b",
+                                        "a b",
+                                        "ab"});
+  auto sv      = cudf::strings_column_view(input);
+  auto prog    = cudf::strings::regex_program::create("a\\sb");
+  auto results = cudf::strings::contains_re(sv, *prog);
+  cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 1, 1, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }

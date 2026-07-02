@@ -112,24 +112,29 @@ struct token_reader_fn {
 /**
  * @brief Call regex to split each input string into tokens.
  *
+ * Also computes the match counts (token offsets) against the given, already-built
+ * device regex program so a second device program build is not needed for this step.
+ *
  * @param d_strings Strings to split
- * @param d_prog Regex to evaluate against each string
+ * @param d_prog Device regex program to evaluate against each string
  * @param direction Whether tokens are generated forwards or backwards.
  * @param maxsplit The maximum number of tokens for each split.
- * @param counts The number of tokens in each string
  * @param stream CUDA stream used for kernel launches.
  */
+template <typename ProgDevice>
 std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> generate_tokens(
   column_device_view const& d_strings,
-  regex_program const& prog,
+  ProgDevice& d_prog,
   split_direction direction,
   size_type maxsplit,
-  column_view const& counts,
   rmm::cuda_stream_view stream)
 {
   auto const strings_count = d_strings.size();
   auto const max_tokens    = maxsplit > 0 ? maxsplit : std::numeric_limits<size_type>::max();
-  auto const d_counts      = counts.data<size_type>();
+
+  auto const counts = count_matches(
+    d_strings, d_prog, strings_count, stream, cudf::get_current_device_resource_ref());
+  auto const d_counts = counts->view().template data<size_type>();
 
   // convert match counts to token offsets
   auto map_fn = cuda::proclaim_return_type<size_type>(
@@ -148,16 +153,27 @@ std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> gener
   rmm::device_uvector<string_index_pair> tokens(total_tokens, stream);
   if (total_tokens > 0) {
     auto tr_fn = token_reader_fn{d_strings, direction, d_offsets, tokens.data()};
-
-    if (regex_device_builder::glushkov_fast_path_supported(prog)) {
-      auto d_prog = regex_device_builder::create_gkprog_device(prog, stream);
-      launch_for_each_kernel(tr_fn, *d_prog, d_strings.size(), stream);
-    } else {
-      auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-      launch_for_each_kernel(tr_fn, *d_prog, d_strings.size(), stream);
-    }
+    launch_for_each_kernel(tr_fn, d_prog, d_strings.size(), stream);
   }
   return std::pair(std::move(tokens), std::move(offsets));
+}
+
+/**
+ * @brief Builds the device regex program once and generates the split tokens with it.
+ */
+std::pair<rmm::device_uvector<string_index_pair>, std::unique_ptr<column>> generate_tokens(
+  column_device_view const& d_strings,
+  regex_program const& prog,
+  split_direction direction,
+  size_type maxsplit,
+  rmm::cuda_stream_view stream)
+{
+  if (regex_device_builder::glushkov_fast_path_supported(prog)) {
+    auto d_prog = regex_device_builder::create_gkprog_device(prog, stream);
+    return generate_tokens(d_strings, *d_prog, direction, maxsplit, stream);
+  }
+  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
+  return generate_tokens(d_strings, *d_prog, direction, maxsplit, stream);
 }
 
 /**
@@ -202,14 +218,10 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
 
   auto d_strings = column_device_view::create(input.parent(), stream);
 
-  // count the number of delimiters matched in each string
-  auto const counts =
-    count_matches(*d_strings, prog, stream, cudf::get_current_device_resource_ref());
-
-  // get the split tokens from the input column; this also converts the counts into offsets
-  auto [tokens, offsets] =
-    generate_tokens(*d_strings, prog, direction, maxsplit, counts->view(), stream);
-  auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
+  // get the split tokens from the input column; this also computes the match counts
+  // and converts them into offsets, using a single device regex program build
+  auto [tokens, offsets] = generate_tokens(*d_strings, prog, direction, maxsplit, stream);
+  auto const d_offsets   = cudf::detail::offsetalator_factory::make_input_iterator(offsets->view());
 
   // the output column count is the maximum number of tokens generated for any input string
   auto const columns_count = thrust::transform_reduce(
@@ -263,12 +275,9 @@ std::unique_ptr<column> split_record_re(strings_column_view const& input,
   auto const strings_count = input.size();
   auto d_strings           = column_device_view::create(input.parent(), stream);
 
-  // count the number of delimiters matched in each string
-  auto counts = count_matches(*d_strings, prog, stream, mr);
-
-  // get the split tokens from the input column; this also converts the counts into offsets
-  auto [tokens, offsets] =
-    generate_tokens(*d_strings, prog, direction, maxsplit, counts->view(), stream);
+  // get the split tokens from the input column; this also computes the match counts
+  // and converts them into offsets, using a single device regex program build
+  auto [tokens, offsets] = generate_tokens(*d_strings, prog, direction, maxsplit, stream);
 
   CUDF_EXPECTS(tokens.size() < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "Size of output exceeds the column size limit",
