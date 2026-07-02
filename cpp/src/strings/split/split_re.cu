@@ -200,9 +200,6 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
     return std::make_unique<table>(std::move(results));
   }
 
-  // create device object from regex_program
-  auto d_prog = regex_device_builder::create_prog_device(prog, stream);
-
   auto d_strings = column_device_view::create(input.parent(), stream);
 
   // count the number of delimiters matched in each string
