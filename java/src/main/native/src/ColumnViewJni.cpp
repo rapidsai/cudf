@@ -2196,55 +2196,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_normalizeNANsAndZeros(JNI
   JNI_CATCH(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidity(
-  JNIEnv* env, jobject j_object, jlong base_column, jlongArray column_handles, jint bin_op)
-{
-  JNI_NULL_CHECK(env, base_column, "base column native handle is null", 0);
-  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
-  JNI_TRY
-  {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view* original_column = reinterpret_cast<cudf::column_view*>(base_column);
-    std::unique_ptr<cudf::column> copy(new cudf::column(*original_column));
-    cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
-
-    if (n_cudf_columns.size() == 0) {
-      copy->set_null_mask({}, 0);
-      return release_as_jlong(copy);
-    }
-
-    cudf::binary_operator op = static_cast<cudf::binary_operator>(bin_op);
-    switch (op) {
-      case cudf::binary_operator::BITWISE_AND: {
-        auto cols = n_cudf_columns.get_dereferenced();
-        cols.push_back(copy->view());
-        auto table_view                = cudf::table_view{cols};
-        auto [new_bitmask, null_count] = cudf::bitmask_and(table_view);
-        copy->set_null_mask(std::move(new_bitmask), null_count);
-        break;
-      }
-      case cudf::binary_operator::BITWISE_OR: {
-        auto input_table = cudf::table_view{n_cudf_columns.get_dereferenced()};
-        auto [tmp_new_bitmask, tmp_null_count] = cudf::bitmask_or(input_table);
-        copy->set_null_mask(std::move(tmp_new_bitmask), tmp_null_count);
-        // and the bitmask with the original column
-        cudf::table_view table_view{std::vector<cudf::column_view>{copy->view(), *original_column}};
-        auto [new_bitmask, null_count] = cudf::bitmask_and(table_view);
-        copy->set_null_mask(std::move(new_bitmask), null_count);
-        break;
-      }
-      default:
-        JNI_THROW_NEW(
-          env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation", 0);
-    }
-    auto const copy_cv = copy->view();
-    if (cudf::has_nonempty_nulls(copy_cv)) { copy = cudf::purge_nonempty_nulls(copy_cv); }
-
-    return release_as_jlong(copy);
-  }
-  JNI_CATCH(env, 0);
-}
-
 ////////
 // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
 // should typically only be called from the CudfColumn inner class.

@@ -879,29 +879,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(normalizeNANsAndZeros(getNativeView()));
   }
 
-  /**
-   * Create a deep copy of the column while replacing the null mask. The resultant null mask is the
-   * bitwise merge of null masks in the columns given as arguments.
-   * The result will be sanitized to not contain any non-empty nulls in case of nested types
-   *
-   * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
-   * @param columns array of columns whose null masks are merged, must have identical number of rows.
-   * @return the new ColumnVector with merged null mask.
-   */
-  public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
-    assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
-    long[] columnViews = new long[columns.length];
-    long size = getRowCount();
-
-    for(int i = 0; i < columns.length; i++) {
-      assert columns[i] != null : "Column vectors passed may not be null";
-      assert columns[i].getRowCount() == size : "Row count mismatch, all columns must be the same size";
-      columnViews[i] = columns[i].getNativeView();
-    }
-
-    return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
-  }
-
   /////////////////////////////////////////////////////////////////////////////
   // DATE/TIME
   /////////////////////////////////////////////////////////////////////////////
@@ -5179,17 +5156,6 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @throws CudfException On failure to normalize.
    */
   private static native long normalizeNANsAndZeros(long viewHandle) throws CudfException;
-
-  /**
-   * Native method to deep copy a column while replacing the null mask. The null mask is the
-   * bitwise merge of the null masks in the columns given as arguments.
-   *
-   * @param baseHandle column view of the column that is deep copied.
-   * @param viewHandles array of views whose null masks are merged, must have identical row counts.
-   * @return native handle of the copied cudf column with replaced null mask.
-   */
-  private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
-                                                        int nullConfig) throws CudfException;
 
   ////////
   // Native cudf::column_view life cycle and metadata access methods. Life cycle methods
