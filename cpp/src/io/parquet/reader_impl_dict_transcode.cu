@@ -178,7 +178,7 @@ void update_from_chunk(column_eligibility& e, ColumnChunkDesc const& chunk)
 
 }  // namespace
 
-bool reader_impl::prepare_dict_transcode()
+bool reader_impl::prepare_dict_transcode(read_mode mode)
 {
   CUDF_FUNC_RANGE();
 
@@ -190,6 +190,11 @@ bool reader_impl::prepare_dict_transcode()
   // reads (non-zero chunk or pass read limit) we skip it and let `finalize_output` produce the
   // DICTIONARY32 columns via a post-hoc `dictionary::detail::encode` instead.
   if (_output_chunk_read_limit != 0 or _input_pass_read_limit != 0) { return false; }
+
+  // Custom row bounds (`skip_rows` / `num_rows`) slice the decoded output to fewer rows than the
+  // full, unadjusted chunks that `assemble_dict_transcoded_columns` segments by. Skip the fast
+  // path here too and fall back to the post-hoc encode.
+  if (uses_custom_row_bounds(mode)) { return false; }
 
   if (_pass_itm_data == nullptr or _pass_itm_data->subpass == nullptr) { return false; }
 
@@ -365,8 +370,11 @@ void reader_impl::assemble_dict_transcoded_columns(
       // INT32 buffer. We select each chunk's row range via the parent dictionary view's
       // `offset`/`size` rather than slicing the indices child: `get_indices_annotated()` rebuilds
       // the indices view from the child's `head()` plus the parent's offset/size, so a sliced
-      // child (carrying its own offset) would be ignored. `cudf::detail::concatenate` then
-      // rewrites the row-group-local indices against the unified, deduplicated keys.
+      // child (carrying its own offset) would be ignored. For the same reason the null mask must
+      // also live on the parent view (sourced from the shared `indices_view`'s mask): the indices
+      // child's own null mask, if it had one, would be ignored by `get_indices_annotated()`, and a
+      // hardcoded null_count of 0 would silently turn nulls into a valid index (0) once
+      // `cudf::detail::concatenate` rewrites indices against the unified, deduplicated keys.
       std::vector<std::unique_ptr<column>> seg_keys_owners(chunk_indices.size());
       std::vector<column_view> dict_segment_views(chunk_indices.size());
       std::transform(cuda::counting_iterator<size_t>{0},
@@ -379,13 +387,17 @@ void reader_impl::assemble_dict_transcoded_columns(
                        seg_keys_owners[k] = make_keys_column_from_index_pairs(
                          chunk.str_dict_index, chunk_key_counts[k], _stream, _mr);
 
-                       auto const seg_rows = chunk_row_offsets[k + 1] - chunk_row_offsets[k];
+                       auto const seg_begin = chunk_row_offsets[k];
+                       auto const seg_end   = chunk_row_offsets[k + 1];
+                       auto const seg_rows  = seg_end - seg_begin;
+                       auto const seg_null_count =
+                         indices_view.null_count(seg_begin, seg_end, _stream);
                        return column_view{data_type{type_id::DICTIONARY32},
                                           seg_rows,
-                                          nullptr,               // dictionary parent holds no data
-                                          nullptr,               // non-nullable transcode path
-                                          0,                     // null count
-                                          chunk_row_offsets[k],  // reslices shared indices child
+                                          nullptr,                  // dictionary parent holds no data
+                                          indices_view.null_mask(),  // shared with indices_view
+                                          seg_null_count,
+                                          seg_begin,  // reslices shared indices child + null mask
                                           {indices_view, seg_keys_owners[k]->view()}};
                      });
 
