@@ -550,6 +550,42 @@ TEST_F(JITExpressionTest, BitShiftRight)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
 
+template <typename To>
+constexpr cudf::ast::jit::op get_cast_op()
+{
+  using enum cudf::ast::jit::op;
+  if constexpr (std::is_same_v<To, bool>) {
+    return CAST_TO_BOOL8;
+  } else if constexpr (std::is_same_v<To, int8_t>) {
+    return CAST_TO_INT8;
+  } else if constexpr (std::is_same_v<To, int16_t>) {
+    return CAST_TO_INT16;
+  } else if constexpr (std::is_same_v<To, int32_t>) {
+    return CAST_TO_INT32;
+  } else if constexpr (std::is_same_v<To, int64_t>) {
+    return CAST_TO_INT64;
+  } else if constexpr (std::is_same_v<To, uint8_t>) {
+    return CAST_TO_UINT8;
+  } else if constexpr (std::is_same_v<To, uint16_t>) {
+    return CAST_TO_UINT16;
+  } else if constexpr (std::is_same_v<To, uint32_t>) {
+    return CAST_TO_UINT32;
+  } else if constexpr (std::is_same_v<To, uint64_t>) {
+    return CAST_TO_UINT64;
+  } else if constexpr (std::is_same_v<To, float>) {
+    return CAST_TO_FLOAT32;
+  } else if constexpr (std::is_same_v<To, double>) {
+    return CAST_TO_FLOAT64;
+  } else if constexpr (std::is_same_v<To, numeric::decimal32>) {
+    return CAST_TO_DECIMAL32;
+  } else if constexpr (std::is_same_v<To, numeric::decimal64>) {
+    return CAST_TO_DECIMAL64;
+  } else if constexpr (std::is_same_v<To, numeric::decimal128>) {
+    static_assert(std::is_same_v<To, numeric::decimal128>);
+    return CAST_TO_DECIMAL128;
+  }
+}
+
 template <typename From, typename To>
 void test_cast()
 {
@@ -558,35 +594,8 @@ void test_cast()
   auto table    = cudf::table_view{{a}};
   auto a_ref    = cudf::ast::column_reference(0);
   auto tree     = cudf::ast::tree{};
-
-  cudf::ast::expression const* cast = nullptr;
-
-  if constexpr (std::is_same_v<To, bool>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_BOOL8, {a_ref});
-  } else if constexpr (std::is_same_v<To, int8_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT8, {a_ref});
-  } else if constexpr (std::is_same_v<To, int16_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT16, {a_ref});
-  } else if constexpr (std::is_same_v<To, int32_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT32, {a_ref});
-  } else if constexpr (std::is_same_v<To, int64_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT64, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint8_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT8, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint16_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT16, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint32_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT32, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint64_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT64, {a_ref});
-  } else if constexpr (std::is_same_v<To, float>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT32, {a_ref});
-  } else {
-    static_assert(std::is_same_v<To, double>);
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT64, {a_ref});
-  }
-
-  auto result = cudf::compute_column_jit(table, *cast);
+  auto result =
+    cudf::compute_column_jit(table, cudf::ast::jit::operation(tree, get_cast_op<To>(), {a_ref}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
 
@@ -598,35 +607,8 @@ void test_from_decimal_cast()
   auto table    = cudf::table_view{{a}};
   auto a_ref    = cudf::ast::column_reference(0);
   auto tree     = cudf::ast::tree{};
-
-  cudf::ast::expression const* cast = nullptr;
-
-  if constexpr (std::is_same_v<To, bool>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_BOOL8, {a_ref});
-  } else if constexpr (std::is_same_v<To, int8_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT8, {a_ref});
-  } else if constexpr (std::is_same_v<To, int16_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT16, {a_ref});
-  } else if constexpr (std::is_same_v<To, int32_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT32, {a_ref});
-  } else if constexpr (std::is_same_v<To, int64_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT64, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint8_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT8, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint16_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT16, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint32_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT32, {a_ref});
-  } else if constexpr (std::is_same_v<To, uint64_t>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT64, {a_ref});
-  } else if constexpr (std::is_same_v<To, float>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT32, {a_ref});
-  } else {
-    static_assert(std::is_same_v<To, double>);
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT64, {a_ref});
-  }
-
-  auto result = cudf::compute_column_jit(table, *cast);
+  auto result =
+    cudf::compute_column_jit(table, cudf::ast::jit::operation(tree, get_cast_op<To>(), {a_ref}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
 
@@ -671,19 +653,8 @@ void test_decimal_cast()
   auto table    = cudf::table_view{{a}};
   auto a_ref    = cudf::ast::column_reference(0);
   auto tree     = cudf::ast::tree{};
-
-  cudf::ast::expression const* cast = nullptr;
-
-  if constexpr (std::is_same_v<To, numeric::decimal32>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL32, {a_ref});
-  } else if constexpr (std::is_same_v<To, numeric::decimal64>) {
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL64, {a_ref});
-  } else if constexpr (std::is_same_v<To, numeric::decimal128>) {
-    static_assert(std::is_same_v<To, numeric::decimal128>);
-    cast = &cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL128, {a_ref});
-  }
-
-  auto result = cudf::compute_column_jit(table, *cast);
+  auto result =
+    cudf::compute_column_jit(table, cudf::ast::jit::operation(tree, get_cast_op<To>(), {a_ref}));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view(), VERBOSITY);
 }
 
