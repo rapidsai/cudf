@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -671,7 +671,7 @@ std::pair<cudf::table, std::string> create_parquet_typed_with_stats(std::string 
     expected_metadata.column_metadata[1].set_name("col1");
     expected_metadata.column_metadata[2].set_name("col2");
 
-    const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options const out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
         .metadata(std::move(expected_metadata))
         .row_group_size_rows(8000);

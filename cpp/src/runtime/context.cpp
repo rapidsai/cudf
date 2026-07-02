@@ -12,7 +12,10 @@
 #include <cudf/detail/utilities/getenv_or.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <unistd.h>
+
 #include <filesystem>
+#include <format>
 #include <memory>
 
 namespace cudf {
@@ -87,23 +90,76 @@ void context::initialize_components(init_flags flags)
   if (has_flag(flags, init_flags::LOAD_NVCOMP)) { io::detail::nvcomp::load_nvcomp_library(); }
 }
 
+/**
+ * @brief Returns the path to the CUDF kernel cache directory.
+ */
 std::filesystem::path get_cudf_kernel_cache_dir()
 {
-  if (auto libcudf_kernel_cache_path =
-        detail::getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH");
-      libcudf_kernel_cache_path.has_value()) {
-    return std::filesystem::path(*libcudf_kernel_cache_path);
+  static constexpr auto has_rwx = [](std::filesystem::path const& p) -> bool {
+    // check if the process has read, write, and execute permissions on the directory
+    return ::access(p.c_str(), R_OK | W_OK | X_OK) == 0;
+  };
+
+  static constexpr auto is_accessible_dir = [](std::filesystem::path const& p) -> bool {
+    return std::filesystem::is_directory(p) && has_rwx(p);
+  };
+
+  static constexpr auto try_create_dirs = [](std::filesystem::path const& p) -> bool {
+    std::error_code ec;
+    std::filesystem::create_directories(p, ec);
+    return (!ec || ec == std::errc::file_exists) && is_accessible_dir(p);
+  };
+
+  if (auto path = detail::getenv_optional<std::string>("LIBCUDF_KERNEL_CACHE_PATH");
+      path.has_value()) {
+    // - if $LIBCUDF_KERNEL_CACHE_PATH exists, return it, otherwise create it
+    // - if creation fails, warn and continue to next option
+    // - check that we have read/write permissions to the directory, otherwise warn and continue
+    // to next option
+    if (try_create_dirs(*path)) {
+      return *path;
+    } else {
+      CUDF_LOG_WARN(
+        std::format("Environment variable {} is set to {}, but the process "
+                    "could not create the directory. Ignoring.",
+                    "LIBCUDF_KERNEL_CACHE_PATH",
+                    *path));
+    }
   }
 
-  if (auto home = detail::getenv_optional<std::string>("HOME"); home.has_value()) {
-    return std::filesystem::path(*home) / ".libcudf";
+  if (auto base = detail::getenv_optional<std::string>("XDG_CACHE_HOME"); base.has_value()) {
+    auto path = std::filesystem::path(*base) / "libcudf";
+    if (try_create_dirs(path)) { return path; }
+  }
+
+  if (auto base = detail::getenv_optional<std::string>("HOME"); base.has_value()) {
+    if (is_accessible_dir(*base)) {
+      // attempt to create the subdirectories if non-existent
+      auto path = std::filesystem::path(*base) / ".cache" / "libcudf";
+      if (try_create_dirs(path)) { return path; }
+    }
+  }
+
+  if (auto base = detail::getenv_optional<std::string>("TMPDIR"); base.has_value()) {
+    if (is_accessible_dir(*base)) {
+      // attempt to create the subdirectory if non-existent
+      auto path = std::filesystem::path(*base) / "libcudf";
+      if (try_create_dirs(path)) { return path; }
+    }
+  }
+
+  if (is_accessible_dir("/tmp")) {
+    auto path = std::filesystem::path("/tmp") / "libcudf";
+    if (try_create_dirs(path)) { return path; }
   }
 
   CUDF_FAIL(
-    "Unable to determine the CUDF root directory. Please set the `LIBCUDF_KERNEL_CACHE_PATH` or "
-    "`HOME` "
-    "environment variables to allow automatic resolution of the root "
-    "directory.",
+    R"***(Unable to resolve cuDF kernel cache directory. Tried:
+- ${LIBCUDF_KERNEL_CACHE_PATH}
+- ${XDG_CACHE_HOME}/libcudf
+- ${HOME}/.cache/libcudf
+- ${TMPDIR}/libcudf
+- /tmp/libcudf)***",
     std::runtime_error);
 }
 
