@@ -3954,6 +3954,20 @@ class IndexedFrame(Frame):
             dtypes = {}
 
         df = self
+        # Original column dtypes, captured before any index handling
+        # mutates ``df``; used to infer the dtype of brand-new columns.
+        orig_col_dtypes = [dtype for _, dtype in self._dtypes]
+        frame_common_dtype = (
+            orig_col_dtypes[0]
+            if (
+                orig_col_dtypes
+                and all(dt == orig_col_dtypes[0] for dt in orig_col_dtypes)
+                and isinstance(orig_col_dtypes[0], np.dtype)
+            )
+            else None
+        )
+        row_reindex = index is not None
+        rows_added = False
         if index is not None:
             if not df.index.is_unique:
                 raise ValueError(
@@ -3992,8 +4006,9 @@ class IndexedFrame(Frame):
                     index=df.index,
                 )
                 diff = index.difference(df.index)
+                rows_added = len(diff) > 0
                 df = lhs.join(rhs, how="left", sort=True)
-                if fill_value is not NA and len(diff) > 0:
+                if fill_value is not NA and rows_added:
                     df.loc[diff] = fill_value
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
@@ -4036,24 +4051,93 @@ class IndexedFrame(Frame):
             multiindex = False
             rangeindex = False
 
-        cols = {
-            name: (
-                df._data[name].copy(deep=deep)
-                if name in df._data
-                else (
-                    column_empty(
-                        dtype=dtypes.get(name, np.dtype(np.float64)),
-                        row_count=len(index),
-                    ).fillna(fill_value)
-                    if fill_value is not NA
-                    else column_empty(
-                        dtype=dtypes.get(name, np.dtype(np.float64)),
-                        row_count=len(index),
+        def _new_nulls_column(name):
+            # Build a brand-new column produced by reindex (entirely missing
+            # or fill values), choosing a dtype that matches pandas.
+            if fill_value is NA:
+                # All-null new column: keep a homogeneous float dtype,
+                # else float64 (numpy integer/bool cannot hold NaN).
+                if name in dtypes:
+                    target = dtypes[name]
+                elif (
+                    frame_common_dtype is not None
+                    and frame_common_dtype.kind == "f"
+                ):
+                    target = frame_common_dtype
+                else:
+                    target = np.dtype(np.float64)
+                # A numpy integer dtype cannot hold NA, so pandas upcasts an
+                # all-null reindexed column to float64. Match that here,
+                # mirroring the upcast applied to existing integer columns
+                # below so both paths agree. An empty result (row_count == 0)
+                # holds no NA, so the integer dtype is preserved -- matching
+                # pandas and cudf's prior behavior for e.g. reindex to an
+                # empty index.
+                if (
+                    isinstance(target, np.dtype)
+                    and target.kind in "iu"
+                    and len(index) > 0
+                ):
+                    target = np.dtype(np.float64)
+                return column_empty(dtype=target, row_count=len(index))
+            # Non-null fill. A numeric scalar fill on a brand-new column of a
+            # homogeneous numpy frame promotes the frame dtype against the fill
+            # value (uint8 + 10 -> uint8, uint8 + 300 -> int64); otherwise the
+            # dtype is the fill value's own. Any other fill keeps the source /
+            # float64 default. ``fillna`` raises on incompatible fills so
+            # cudf.pandas falls back to pandas.
+            if (
+                name not in dtypes
+                and is_scalar(fill_value)
+                and (scalar_col := as_column(fill_value, length=1)).dtype.kind
+                in "iuf"
+            ):
+                if row_reindex and frame_common_dtype is not None:
+                    target = (
+                        frame_common_dtype
+                        if scalar_col.can_cast_safely(frame_common_dtype)
+                        else find_common_type(
+                            [frame_common_dtype, scalar_col.dtype]
+                        )
                     )
-                )
+                else:
+                    target = scalar_col.dtype
+            else:
+                target = dtypes.get(name, np.dtype(np.float64))
+            return column_empty(dtype=target, row_count=len(index)).fillna(
+                fill_value
             )
-            for name in names
-        }
+
+        # cudf cannot represent duplicate column names; pandas can. Raise
+        # so cudf.pandas falls back to pandas rather than silently
+        # collapsing duplicates.
+        names_list = list(names)
+        if len(names_list) != len(set(names_list)):
+            raise ValueError("Duplicate column names are not allowed")
+
+        # pandas upcasts integer columns to float64 when default-NaN
+        # filling newly added rows on reindex (a numpy integer column
+        # cannot hold NA), so match that unconditionally.
+        upcast_int_nulls = rows_added and fill_value is NA
+
+        cols = {}
+        for name in names_list:
+            if name in df._data:
+                col = df._data[name].copy(deep=deep)
+                if (
+                    upcast_int_nulls
+                    # Only plain numpy integer columns cannot hold NA;
+                    # nullable extension integers (masked ``IntX``,
+                    # ``ArrowDtype``) natively represent NA, so pandas
+                    # keeps their dtype rather than upcasting to float64.
+                    and isinstance(col.dtype, np.dtype)
+                    and col.dtype.kind in "iu"
+                    and col.null_count
+                ):
+                    col = col.astype(np.dtype(np.float64))
+            else:
+                col = _new_nulls_column(name)
+            cols[name] = col
 
         result = self.__class__._from_data(
             data=ColumnAccessor(
