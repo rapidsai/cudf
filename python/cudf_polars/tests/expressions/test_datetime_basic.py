@@ -213,6 +213,38 @@ def test_duration_total_component_extract(engine: pl.GPUEngine, field, dtype):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("field", duration_extract_fields)
+@pytest.mark.parametrize(
+    "dtype", [pl.Duration("ms"), pl.Duration("us"), pl.Duration("ns")]
+)
+def test_duration_total_component_extract_fractional(
+    engine: pl.GPUEngine, field, dtype
+):
+    ldf = pl.LazyFrame(
+        {
+            "durations": pl.Series(
+                [
+                    0,
+                    1,
+                    15,
+                    -1500,
+                    1000,
+                    1111,
+                    1500,
+                    11111,
+                    -134234534,
+                    134234534,
+                    5857593848682946,
+                    -5857593848682946,
+                ],
+                dtype=dtype,
+            ),
+        }
+    )
+    q = ldf.select(getattr(pl.col("durations").dt, field)(fractional=True))
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
 @pytest.mark.parametrize("method", ["century", "millennium"])
 @pytest.mark.parametrize(
     "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
