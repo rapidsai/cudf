@@ -236,6 +236,19 @@ TYPED_TEST(JITDecimalArithmeticTest, MulOverflow)
     cudf::ast::jit::operation(tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref});
   auto& try_mul_fail = cudf::ast::jit::operation(
     tree, cudf::ast::jit::op::MUL_OVERFLOW, {a_ref, b_fail_ref}, cudf::error_policy::NULLIFY);
+
+  // This fails on CI CUDA 12.2, driver 535, V100
+  if constexpr (std::is_same_v<T, numeric::decimal128>) {
+    int driver_version{0};
+    auto const err = cudaDriverGetVersion(&driver_version);
+    if (err != cudaSuccess or driver_version < 12090) {
+      std::cout
+        << "Skipping JITDecimalArithmeticTest.MulOverflow/decimal128 test, driver earlier than 12.9"
+        << std::endl;
+      GTEST_SKIP();
+    }
+  }
+
   auto result      = cudf::compute_column_jit(table, mul);
   auto result_fail = cudf::compute_column_jit(table, try_mul_fail);
 
