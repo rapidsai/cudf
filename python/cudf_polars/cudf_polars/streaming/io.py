@@ -287,14 +287,22 @@ class SplitScan(IR):
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
+        if self.cached_parquet_info is not None:
+            cached_parquet_info = tuple(
+                (info.path, info.size) for info in self.cached_parquet_info
+            )
+        else:
+            cached_parquet_info = ()
+
         return (
-            type(self),
+            type(self),  # type: ignore[arg-type]
             tuple(self.schema.items()),
             self.base_scan.get_hashable(),
             tuple(self.paths),
             self.split_index,
             self.total_splits,
             self.parquet_options,
+            *cached_parquet_info,
         )
 
     @classmethod
@@ -475,12 +483,19 @@ class FusedScan(IR):
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
+        if self.cached_parquet_info is not None:
+            cached_parquet_info = tuple(
+                (info.path, info.size) for info in self.cached_parquet_info
+            )
+        else:
+            cached_parquet_info = ()
         return (
-            type(self),
+            type(self),  # type: ignore[arg-type]
             tuple(self.schema.items()),
             self.base_scan.get_hashable(),
             tuple(self.paths),
             self.parquet_options,
+            *cached_parquet_info,
         )
 
     @classmethod

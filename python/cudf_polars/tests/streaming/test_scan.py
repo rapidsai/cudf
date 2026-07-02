@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import pytest
 
@@ -17,7 +17,10 @@ from cudf_polars.dsl.ir import (
     IRExecutionContext,
     Scan,
 )
-from cudf_polars.dsl.utils.io import prefetch_parquet_file_metadata_for_ir
+from cudf_polars.dsl.utils.io import (
+    CachedParquetInfo,
+    prefetch_parquet_file_metadata_for_ir,
+)
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import IOPartitionFlavor, IOPartitionPlan
 from cudf_polars.streaming.io import (
@@ -38,6 +41,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
     from typing import Any, Literal
+
+    import pylibcudf as plc
 
     import cudf_polars.engine.core
     from cudf_polars.engine.core import StreamingEngine
@@ -451,3 +456,110 @@ def test_prefetch_file_metadata_join(
 
     q = pl.scan_parquet(p1).join(pl.scan_parquet(p2), on="k")
     q.collect(engine=engine)
+
+
+def _make_cached_parquet_info(
+    paths: list[str], size: int = 10
+) -> list[CachedParquetInfo]:
+    return [
+        # `file_metadata` is not used by identity/hash tests.
+        # It only needs to be a stable value for equality checks.
+        CachedParquetInfo(
+            path=path,
+            size=size,
+            file_metadata=cast("plc.io.parquet_metadata.FileMetaData", path),
+        )
+        for path in paths
+    ]
+
+
+def test_prefetch_file_metadata_with_cached_scan_parent_nodes(
+    tmp_path: Path, streaming_engine_factory: Callable[..., StreamingEngine]
+) -> None:
+    # Regression test for replace not replacing StreamingScan nodes with their prefetched variants.
+    source = tmp_path / "data.parquet"
+    pl.DataFrame(
+        {
+            "k": [1, 1, 2, 2, 3, 3],
+            "v": [10, 11, 20, 21, 30, 31],
+        }
+    ).write_parquet(source)
+
+    engine = streaming_engine_factory(
+        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
+    )
+
+    cached_scan = pl.scan_parquet(source).cache()
+    left = cached_scan.group_by("k").agg(pl.col("v").sum().alias("sum_v"))
+    right = cached_scan.group_by("k").agg(pl.len().alias("n"))
+    q = left.join(right, on="k").sort("k")
+
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_fused_scan_identity_equality() -> None:
+    base = _make_parquet_scan(["a.parquet", "b.parquet"])
+    paths = ["a.parquet"]
+    info = _make_cached_parquet_info(paths)
+
+    a = FusedScan(base.schema, base, paths, base.parquet_options, info)
+    b = FusedScan(base.schema, base, paths, base.parquet_options, info.copy())
+    c = FusedScan(base.schema, base, ["b.parquet"], base.parquet_options, info)
+
+    assert a == b
+    assert hash(a) == hash(b)
+    assert a != c
+
+
+def test_split_scan_identity_equality() -> None:
+    base = _make_parquet_scan(["a.parquet"])
+    info = _make_cached_parquet_info(base.paths)
+
+    a = SplitScan(base.schema, base, base.paths, 0, 4, base.parquet_options, info)
+    b = SplitScan(
+        base.schema, base, base.paths, 0, 4, base.parquet_options, info.copy()
+    )
+    c = SplitScan(base.schema, base, base.paths, 1, 4, base.parquet_options, info)
+
+    assert a == b
+    assert hash(a) == hash(b)
+    assert a != c
+
+
+def test_streaming_scan_identity_equality() -> None:
+    base = _make_parquet_scan(["a.parquet"])
+    split = SplitScan(
+        base.schema,
+        base,
+        base.paths,
+        0,
+        2,
+        base.parquet_options,
+        _make_cached_parquet_info(base.paths, size=10),
+    )
+    split_same = SplitScan(
+        base.schema,
+        base,
+        base.paths,
+        0,
+        2,
+        base.parquet_options,
+        _make_cached_parquet_info(base.paths, size=10),
+    )
+    split_diff_metadata = SplitScan(
+        base.schema,
+        base,
+        base.paths,
+        0,
+        2,
+        base.parquet_options,
+        _make_cached_parquet_info(base.paths, size=11),
+    )
+
+    a = StreamingScan([split], base, "split")
+    b = StreamingScan([split_same], base, "split")
+    c = StreamingScan([split_diff_metadata], base, "split")
+
+    assert a == b
+    assert hash(a) == hash(b)
+    assert a != c
