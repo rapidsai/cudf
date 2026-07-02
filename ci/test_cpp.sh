@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -34,7 +34,9 @@ fi
 
 if (( SUITEERROR == 0 )); then
     rapids-logger "Run libcudf_streaming gtests"
-    timeout 5m ./ci/run_cudf_streaming_ctests.sh -j20
+    # cudf_streaming contains distributed tests, and running tests in
+    # parallel results in resource starvation CI env.
+    timeout 5m ./ci/run_cudf_streaming_ctests.sh -j1
     SUITEERROR=$?
 fi
 
