@@ -97,19 +97,13 @@ class BooleanFunction(Expr):
         self.is_pointwise = self.name not in (
             BooleanFunction.Name.All,
             BooleanFunction.Name.Any,
+            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsDuplicated,
+            BooleanFunction.Name.IsEmpty,
             BooleanFunction.Name.IsFirstDistinct,
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsUnique,
         )
-        if self.name in {
-            BooleanFunction.Name.HasNulls,
-            BooleanFunction.Name.IsClose,
-            BooleanFunction.Name.IsEmpty,
-        }:
-            raise NotImplementedError(
-                f"Boolean function {self.name}"
-            )  # pragma: no cover
         if self.name is BooleanFunction.Name.IsIn and len(children) == 2:
             # TODO: Polars should raise an error ahead of time
             # for us for these kind of shape mismatches
@@ -162,6 +156,89 @@ class BooleanFunction(Expr):
             dtype=dtype,
         )
 
+    def _is_close(self, df: DataFrame, *, context: ExecutionContext) -> Column:
+        # Matches polars' PEP 485 semantics (see
+        # crates/polars-ops/src/series/ops/is_close.rs):
+        #   |x - y| <= max(rel_tol * max(|x|, |y|), abs_tol)
+        # with special handling for non-finite values.
+        abs_tol, rel_tol, nans_equal = self.options
+        left, right = (child.evaluate(df, context=context) for child in self.children)
+        f64 = plc.DataType(plc.TypeId.FLOAT64)
+        stream = df.stream
+
+        # A scalar operand is broadcast to the size of the other (columnar)
+        # operand, which may be zero for empty partitions.
+        if left.is_scalar and not right.is_scalar:
+            target = right.size
+        elif right.is_scalar and not left.is_scalar:
+            target = left.size
+        else:
+            target = left.size
+
+        def prep(col: Column) -> plc.Column:
+            obj = col.obj
+            if obj.type().id() != plc.TypeId.FLOAT64:
+                obj = plc.unary.cast(obj, f64, stream=stream)
+            if col.is_scalar and col.size != target:
+                obj = plc.Column.from_scalar(
+                    obj.to_scalar(stream=stream), target, stream=stream
+                )
+            return obj
+
+        xd = prep(left)
+        yd = prep(right)
+
+        def binop(
+            lhs: plc.Column,
+            rhs: plc.Column | plc.Scalar,
+            op: plc.binaryop.BinaryOperator,
+            out: plc.DataType,
+        ) -> plc.Column:
+            return plc.binaryop.binary_operation(lhs, rhs, op, out, stream=stream)
+
+        def unop(col: plc.Column, op: plc.unary.UnaryOperator) -> plc.Column:
+            return plc.unary.unary_operation(col, op, stream=stream)
+
+        bool_t = plc.DataType(plc.TypeId.BOOL8)
+        abs_op = plc.unary.UnaryOperator.ABS
+        absx = unop(xd, abs_op)
+        absy = unop(yd, abs_op)
+        absdiff = unop(binop(xd, yd, plc.binaryop.BinaryOperator.SUB, f64), abs_op)
+        maxabs = binop(absx, absy, plc.binaryop.BinaryOperator.NULL_MAX, f64)
+        rel_scalar = plc.Scalar.from_py(rel_tol, f64, stream=stream)
+        abs_scalar = plc.Scalar.from_py(abs_tol, f64, stream=stream)
+        rel_term = binop(maxabs, rel_scalar, plc.binaryop.BinaryOperator.MUL, f64)
+        tol = binop(rel_term, abs_scalar, plc.binaryop.BinaryOperator.NULL_MAX, f64)
+        cmp = binop(absdiff, tol, plc.binaryop.BinaryOperator.LESS_EQUAL, bool_t)
+
+        inf_scalar = plc.Scalar.from_py(float("inf"), f64, stream=stream)
+        nan_x = plc.unary.is_nan(xd, stream=stream)
+        nan_y = plc.unary.is_nan(yd, stream=stream)
+        inf_x = binop(absx, inf_scalar, plc.binaryop.BinaryOperator.EQUAL, bool_t)
+        inf_y = binop(absy, inf_scalar, plc.binaryop.BinaryOperator.EQUAL, bool_t)
+        or_op = plc.binaryop.BinaryOperator.LOGICAL_OR
+        and_op = plc.binaryop.BinaryOperator.LOGICAL_AND
+        not_op = plc.unary.UnaryOperator.NOT
+        fin_x = unop(binop(nan_x, inf_x, or_op, bool_t), not_op)
+        fin_y = unop(binop(nan_y, inf_y, or_op, bool_t), not_op)
+        both_fin = binop(fin_x, fin_y, and_op, bool_t)
+        part_finite = binop(both_fin, cmp, and_op, bool_t)
+
+        # Infinities are close if they share the same sign.
+        inf_both = binop(inf_x, inf_y, and_op, bool_t)
+        same_val = binop(xd, yd, plc.binaryop.BinaryOperator.EQUAL, bool_t)
+        part_inf = binop(inf_both, same_val, and_op, bool_t)
+
+        result = binop(part_finite, part_inf, or_op, bool_t)
+        if nans_equal:
+            part_nan = binop(nan_x, nan_y, and_op, bool_t)
+            result = binop(result, part_nan, or_op, bool_t)
+
+        # Reapply null propagation: null iff either input is null.
+        combined = binop(xd, yd, plc.binaryop.BinaryOperator.ADD, f64)
+        result = result.with_mask(combined.null_mask(), combined.null_count())
+        return Column(result, dtype=self.dtype)
+
     _BETWEEN_OPS: ClassVar[
         dict[
             pl_types.ClosedInterval,
@@ -190,6 +267,34 @@ class BooleanFunction(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
+        if self.name is BooleanFunction.Name.HasNulls:
+            (child,) = self.children
+            column = child.evaluate(df, context=context)
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        column.null_count > 0, self.dtype.plc_type, stream=df.stream
+                    ),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        if self.name is BooleanFunction.Name.IsEmpty:
+            (child,) = self.children
+            column = child.evaluate(df, context=context)
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        column.size == 0, self.dtype.plc_type, stream=df.stream
+                    ),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        if self.name is BooleanFunction.Name.IsClose:
+            return self._is_close(df, context=context)
         if self.name in (
             BooleanFunction.Name.IsFinite,
             BooleanFunction.Name.IsInfinite,
