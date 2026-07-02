@@ -27,6 +27,9 @@ main() {
         CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --cuda "$RAPIDS_CUDA_VERSION" --arch any)")
+
+        # TODO: Remove before merging. Use rapidsmpf conda packages from rapidsai/rapidsmpf#1081.
+        source ./ci/use_conda_packages_from_prs.sh
     fi
 
     ANY_FAILURES=0
@@ -46,7 +49,8 @@ main() {
                 --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
                 --prepend-channel "${CPP_CHANNEL}" \
                 --prepend-channel "${PYTHON_CHANNEL}" \
-                --prepend-channel "${PYTHON_NOARCH_CHANNEL}" | tee env.yaml
+                --prepend-channel "${PYTHON_NOARCH_CHANNEL}" \
+                "${RAPIDS_PREPENDED_CHANNEL_ARGS[@]}" | tee env.yaml
         else
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \
