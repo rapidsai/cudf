@@ -556,6 +556,9 @@ def test_dynamic_planning_defaults() -> None:
     assert config.executor.dynamic_planning.join_prefilter_threshold == 0.5
     assert config.executor.dynamic_planning.join_prefilter_max_key_columns == 1
     assert not config.executor.dynamic_planning.join_prefilter_trace
+    assert config.executor.dynamic_planning.join_domain_prefilter_enabled
+    assert config.executor.dynamic_planning.join_domain_prefilter_threshold == 0.5
+    assert not config.executor.dynamic_planning.join_domain_prefilter_trace
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -595,6 +598,44 @@ def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
     assert config.executor.dynamic_planning.join_prefilter_threshold == 0.25
     assert config.executor.dynamic_planning.join_prefilter_max_key_columns is None
     assert config.executor.dynamic_planning.join_prefilter_trace
+    assert config.executor.dynamic_planning.join_domain_prefilter_threshold == 0.25
+    assert config.executor.dynamic_planning.join_domain_prefilter_trace
+
+
+def test_join_domain_prefilter_options_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_DOMAIN_PREFILTER_ENABLED",
+        "0",
+    )
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_DOMAIN_PREFILTER_THRESHOLD",
+        "0.125",
+    )
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_DOMAIN_PREFILTER_TRACE",
+        "1",
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.dynamic_planning is not None
+    assert not config.executor.dynamic_planning.join_domain_prefilter_enabled
+    assert config.executor.dynamic_planning.join_domain_prefilter_threshold == 0.125
+    assert config.executor.dynamic_planning.join_domain_prefilter_trace
+
+
+@pytest.mark.parametrize("value", ["none", "null"])
+def test_join_domain_prefilter_trace_inherits_from_env(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_TRACE", "1"
+    )
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_DOMAIN_PREFILTER_TRACE",
+        value,
+    )
+    assert DynamicPlanningOptions().join_domain_prefilter_trace
 
 
 @pytest.mark.parametrize("value, expected", [("none", None), ("null", None), ("2", 2)])
@@ -685,6 +726,47 @@ def test_validate_join_prefilter_trace() -> None:
             pl.GPUEngine(
                 executor="streaming",
                 executor_options={"dynamic_planning": {"join_prefilter_trace": "bad"}},
+            )
+        )
+
+
+def test_validate_join_domain_prefilter_options() -> None:
+    with pytest.raises(TypeError, match="join_domain_prefilter_enabled must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_domain_prefilter_enabled": "bad"}
+                },
+            )
+        )
+    with pytest.raises(TypeError, match="join_domain_prefilter_threshold must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_domain_prefilter_threshold": "bad"}
+                },
+            )
+        )
+    with pytest.raises(
+        ValueError, match="join_domain_prefilter_threshold must be between"
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_domain_prefilter_threshold": 1.5}
+                },
+            )
+        )
+    with pytest.raises(TypeError, match="join_domain_prefilter_trace must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_domain_prefilter_trace": "bad"}
+                },
             )
         )
 

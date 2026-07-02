@@ -173,8 +173,18 @@ def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
     return parse(v)
 
 
+def _optional_float_converter(v: str) -> float | None:
+    return _optional_converter(v, float)
+
+
 def _optional_int_converter(v: str) -> int | None:
     return _optional_converter(v, int)
+
+
+def _optional_bool_converter(v: str) -> bool | None:
+    if v.lower() in {"none", "null"}:
+        return None
+    return _bool_converter(v)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -322,6 +332,16 @@ class DynamicPlanningOptions:
     join_prefilter_trace
         Whether to collect input/output row counts around applied join
         prefilters. Default is False.
+    join_domain_prefilter_enabled
+        Whether to insert generic derived key-domain semi-join filters before
+        lowering streaming joins. Default is True.
+    join_domain_prefilter_threshold
+        Row-count ratio (domain / target) below which a derived key-domain
+        semi-join filter is inserted. When unset, ``join_prefilter_threshold``
+        is used. Default is unset.
+    join_domain_prefilter_trace
+        Whether to emit plan-time trace decisions for derived key-domain
+        prefilters. Default follows ``join_prefilter_trace``.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -352,6 +372,27 @@ class DynamicPlanningOptions:
             default=False,
         )
     )
+    join_domain_prefilter_enabled: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_DOMAIN_PREFILTER_ENABLED",
+            _bool_converter,
+            default=True,
+        )
+    )
+    join_domain_prefilter_threshold: float | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_DOMAIN_PREFILTER_THRESHOLD",
+            _optional_float_converter,
+            default=None,
+        )
+    )
+    join_domain_prefilter_trace: bool | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_DOMAIN_PREFILTER_TRACE",
+            _optional_bool_converter,
+            default=None,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.sample_chunk_count, int):
@@ -378,6 +419,28 @@ class DynamicPlanningOptions:
                 )
         if not isinstance(self.join_prefilter_trace, bool):
             raise TypeError("join_prefilter_trace must be a bool")
+        if not isinstance(self.join_domain_prefilter_enabled, bool):
+            raise TypeError("join_domain_prefilter_enabled must be a bool")
+        join_domain_prefilter_threshold = self.join_domain_prefilter_threshold
+        if join_domain_prefilter_threshold is None:
+            join_domain_prefilter_threshold = join_prefilter_threshold
+            object.__setattr__(
+                self,
+                "join_domain_prefilter_threshold",
+                join_domain_prefilter_threshold,
+            )
+        elif not isinstance(join_domain_prefilter_threshold, float):
+            raise TypeError("join_domain_prefilter_threshold must be a float or None")
+        if not 0.0 <= join_domain_prefilter_threshold <= 1.0:
+            raise ValueError("join_domain_prefilter_threshold must be between 0 and 1")
+        join_domain_prefilter_trace = self.join_domain_prefilter_trace
+        if join_domain_prefilter_trace is None:
+            join_domain_prefilter_trace = self.join_prefilter_trace
+            object.__setattr__(
+                self, "join_domain_prefilter_trace", join_domain_prefilter_trace
+            )
+        elif not isinstance(join_domain_prefilter_trace, bool):
+            raise TypeError("join_domain_prefilter_trace must be a bool or None")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
