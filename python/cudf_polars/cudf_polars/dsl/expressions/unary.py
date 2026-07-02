@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
@@ -175,6 +176,8 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "index_of" and plc.traits.is_nested(children[0].dtype.plc_type):
+            raise NotImplementedError("index_of on nested types is not supported")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -424,20 +427,29 @@ class UnaryFunction(Expr):
             column = self.children[0].evaluate(df, context=context)
             value_expr = self.children[1]
             if isinstance(value_expr, Literal):
+                py_value = value_expr.value
                 value = plc.Scalar.from_py(
-                    value_expr.value, column.dtype.plc_type, stream=df.stream
+                    py_value, column.dtype.plc_type, stream=df.stream
                 )
             else:
                 value = value_expr.evaluate(df, context=context).obj_scalar(
                     stream=df.stream
                 )
-            mask = plc.binaryop.binary_operation(
-                column.obj,
-                value,
-                plc.binaryop.BinaryOperator.NULL_EQUALS,
-                plc.DataType(plc.TypeId.BOOL8),
-                stream=df.stream,
-            )
+                py_value = value.to_py(stream=df.stream)
+            if (
+                plc.traits.is_floating_point(column.obj.type())
+                and isinstance(py_value, float)
+                and math.isnan(py_value)
+            ):
+                mask = plc.unary.is_nan(column.obj, stream=df.stream)
+            else:
+                mask = plc.binaryop.binary_operation(
+                    column.obj,
+                    value,
+                    plc.binaryop.BinaryOperator.NULL_EQUALS,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
             indices = plc.filling.sequence(
                 column.obj.size(),
                 plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),

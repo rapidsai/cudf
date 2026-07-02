@@ -2,11 +2,16 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 
 
 @pytest.mark.parametrize(
@@ -18,6 +23,10 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
         (pl.Series("a", [1, None, 3]), None),
         (pl.Series("a", [1, None, 3]), 3),
         (pl.Series("a", [1.5, float("nan"), 3.0]), 3.0),
+        (pl.Series("a", [1.5, float("nan"), 3.0]), float("nan")),
+        (pl.Series("a", [1.5, float("nan"), 3.0]), -float("nan")),
+        (pl.Series("a", [1.5, None, float("nan"), 3.0]), float("nan")),
+        (pl.Series("a", [1.5, 2.0, 3.0]), float("nan")),
         (pl.Series("a", ["a", "bb", "c"]), "bb"),
         (pl.Series("a", ["a", "bb", "c"]), "zz"),
         (pl.Series("a", [], dtype=pl.Int64), 1),
@@ -40,3 +49,20 @@ def test_index_of_expression_value(engine: pl.GPUEngine) -> None:
     )
     q = lf.select(pl.col("a").index_of(pl.col("needle").first()))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "series, value",
+    [
+        (pl.Series("a", [[1, 2], None, [4, 5]]), [4, 5]),
+        (
+            pl.Series("a", [{"x": 1}, {"x": 2}], dtype=pl.Struct({"x": pl.Int64})),
+            {"x": 2},
+        ),
+    ],
+)
+def test_index_of_nested_raises(
+    engine: pl.GPUEngine, series: pl.Series, value: Any
+) -> None:
+    q = pl.LazyFrame({"a": series}).select(pl.col("a").index_of(value))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
