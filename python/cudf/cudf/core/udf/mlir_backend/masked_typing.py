@@ -63,6 +63,7 @@ class MaskedType(types.Type):
         and a scalar; two branches returning different ``Masked``
         widths unify their inner value types. Returning ``None``
         signals "no unifier" and lets numba fall through.
+        See https://numba.pydata.org/numba-doc/dev/user/troubleshoot.html#my-code-has-a-type-unification-problem
         """
         if isinstance(other, NAType):
             return self
@@ -82,6 +83,7 @@ class NAType(types.Type):
         super().__init__(name="NA")
 
     def unify(self, context, other):
+        # See https://numba.pydata.org/numba-doc/dev/user/troubleshoot.html#my-code-has-a-type-unification-problem
         # NA + Masked is delegated to MaskedType.unify (see above) so we
         # only need to handle NA + (NA | scalar) here.
         if isinstance(other, MaskedType):
