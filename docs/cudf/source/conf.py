@@ -285,8 +285,8 @@ latex_documents = [
     (
         master_doc,
         "cudf.tex",
-        "cudf Documentation",
-        "NVIDIA Corporation",
+        f"{project} Documentation",
+        author,
         "manual",
     )
 ]
@@ -296,7 +296,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "cudf", "cudf Documentation", [author], 1)]
+man_pages = [(master_doc, "cudf", f"{project} Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -308,7 +308,7 @@ texinfo_documents = [
     (
         master_doc,
         "cudf",
-        "cudf Documentation",
+        f"{project} Documentation",
         author,
         "cudf",
         "One line description of project.",
