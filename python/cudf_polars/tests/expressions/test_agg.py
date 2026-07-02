@@ -128,6 +128,26 @@ def test_cum_count(engine: pl.GPUEngine, data):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        ([1, 2, 3, 4], pl.Int32),
+        ([1, 2, None, 4], pl.Int32),
+        ([1, 0, 3], pl.Int32),
+        ([2, 3, 4], pl.Int8),
+        ([1.5, 2.0, 3.0], pl.Float64),
+        ([1.5, None, 3.0], pl.Float64),
+        ([True, False, True], pl.Boolean),
+        ([], pl.Int32),
+        ([None, None], pl.Int32),
+    ],
+)
+def test_product(engine: pl.GPUEngine, data, dtype):
+    df = pl.LazyFrame({"a": pl.Series(data, dtype=dtype)})
+    q = df.select(pl.col("a").product())
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
 @pytest.mark.parametrize("cum_agg", sorted(expr.UnaryFunction._supported_cum_aggs))
 def test_cum_agg_reverse_unsupported(engine: pl.GPUEngine, cum_agg):
     df = pl.LazyFrame({"a": [1, 2, 3]})

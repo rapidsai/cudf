@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -70,6 +70,8 @@ class Agg(Expr):
             req = plc.aggregation.mean()
         elif name == "sum":
             req = plc.aggregation.sum()
+        elif name == "product":
+            req = plc.aggregation.product()
         elif name == "std":
             # TODO: handle nans
             req = plc.aggregation.std(ddof=options)
@@ -124,7 +126,7 @@ class Agg(Expr):
             op = partial(op, propagate_nans=options)
         elif name == "count":
             op = partial(op, include_nulls=options)
-        elif name in {"sum", "first", "last"}:
+        elif name in {"sum", "product", "first", "last"}:
             pass
         else:
             raise NotImplementedError(
@@ -144,6 +146,7 @@ class Agg(Expr):
             "m2",
             "merge_m2",
             "sum",
+            "product",
             "count",
             "std",
             "var",
@@ -225,6 +228,20 @@ class Agg(Expr):
                 dtype=self.dtype,
             )
         return self._reduce(column, request=plc.aggregation.sum(), stream=stream)
+
+    def _product(self, column: Column, stream: Stream) -> Column:
+        if column.size == 0 or column.null_count == column.size:
+            # The product of an empty or all-null column is 1 in polars.
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(1, self.dtype.plc_type, stream=stream),
+                    1,
+                    stream=stream,
+                ),
+                name=column.name,
+                dtype=self.dtype,
+            )
+        return self._reduce(column, request=plc.aggregation.product(), stream=stream)
 
     def _min(self, column: Column, *, propagate_nans: bool, stream: Stream) -> Column:
         nan_count = column.nan_count(stream=stream)
