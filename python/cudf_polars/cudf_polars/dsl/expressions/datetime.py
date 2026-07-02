@@ -151,9 +151,12 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        Name.Round,
         Name.Century,
         Name.Millennium,
         Name.Date,
+        Name.DaysInMonth,
+        Name.Quarter,
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
@@ -175,12 +178,15 @@ class TemporalFunction(Expr):
             self.children[0].dtype.plc_type
         ):
             raise NotImplementedError("ToString is not supported on duration types")
-        elif self.name is TemporalFunction.Name.Truncate:
+        elif self.name in {
+            TemporalFunction.Name.Truncate,
+            TemporalFunction.Name.Round,
+        }:
             every = cast("Literal", self.children[1]).value
             match = re.fullmatch(r"(\d+)(ns|us|ms|s|m|h|d)", every)
             if match is None or int(match.group(1)) != 1:
                 # https://github.com/rapidsai/cudf/issues/18654 to support non-1 buckets
-                raise NotImplementedError(f"Unsupported truncate bucket: {every!r}")
+                raise NotImplementedError(f"Unsupported bucket: {every!r}")
             self.options = (self._TRUNCATE_FREQ_MAP[match.group(2)],)
 
     def do_evaluate(
@@ -269,6 +275,36 @@ class TemporalFunction(Expr):
                 stream=df.stream,
             )
             return Column(result, dtype=self.dtype)
+        elif self.name is TemporalFunction.Name.Round:
+            (column, _) = columns
+            return Column(
+                plc.datetime.round_datetimes(
+                    column.obj,
+                    self.options[0],
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is TemporalFunction.Name.DaysInMonth:
+            (column,) = columns
+            return Column(
+                plc.unary.cast(
+                    plc.datetime.days_in_month(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is TemporalFunction.Name.Quarter:
+            (column,) = columns
+            return Column(
+                plc.unary.cast(
+                    plc.datetime.extract_quarter(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
         elif self.name is TemporalFunction.Name.Date:
             (column,) = columns
             # Casting the timestamp to TIMESTAMP_DAYS (the storage of ``pl.Date``)
