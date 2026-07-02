@@ -223,6 +223,31 @@ using hashmap_of_device_columns =
   std::unordered_map<NodeIndexT, std::reference_wrapper<device_json_column>>;
 
 struct build_tree_result {
+  build_tree_result(cudf::detail::host_vector<bool> ignore_vals,
+                    cudf::detail::host_vector<bool> is_mixed_pruned,
+                    hashmap_of_device_columns columns,
+                    cudf::detail::host_vector<bool> is_schema_mismatched,
+                    cudf::detail::host_vector<NodeT> expected_types,
+                    NodeIndexT named_level)
+    : ignore_vals{std::move(ignore_vals)},
+      is_mixed_pruned{std::move(is_mixed_pruned)},
+      columns{std::move(columns)},
+      is_schema_mismatched{std::move(is_schema_mismatched)},
+      expected_types{std::move(expected_types)},
+      named_level{named_level}
+  {
+  }
+
+  explicit build_tree_result(rmm::cuda_stream_view stream)
+    : build_tree_result{cudf::detail::make_host_vector<bool>(0, stream),
+                        cudf::detail::make_host_vector<bool>(0, stream),
+                        {},
+                        cudf::detail::make_host_vector<bool>(0, stream),
+                        cudf::detail::make_host_vector<NodeT>(0, stream),
+                        parent_node_sentinel}
+  {
+  }
+
   cudf::detail::host_vector<bool> ignore_vals;
   cudf::detail::host_vector<bool> is_mixed_pruned;
   hashmap_of_device_columns columns;
@@ -561,13 +586,7 @@ build_tree_result build_tree(device_json_column& root,
   // Pruning: iterate through schema and mark only those columns and enforce type.
   // NoPruning: iterate through schema and enforce type.
 
-  if (adj[parent_node_sentinel].empty())
-    return build_tree_result{cudf::detail::make_host_vector<bool>(0, stream),
-                             cudf::detail::make_host_vector<bool>(0, stream),
-                             {},
-                             cudf::detail::make_host_vector<bool>(0, stream),
-                             cudf::detail::make_host_vector<NodeT>(0, stream),
-                             parent_node_sentinel};  // for empty file
+  if (adj[parent_node_sentinel].empty()) return build_tree_result{stream};  // for empty file
   CUDF_EXPECTS(adj[parent_node_sentinel].size() == 1, "Should be 1");
   auto expected_types = cudf::detail::make_host_vector<NodeT>(num_columns, stream);
   std::fill_n(expected_types.begin(), num_columns, NUM_NODE_CLASSES);
@@ -648,13 +667,7 @@ build_tree_result build_tree(device_json_column& root,
     }
   };
   if (is_array_of_arrays) {
-    if (adj[adj[parent_node_sentinel][0]].empty())
-      return build_tree_result{cudf::detail::make_host_vector<bool>(0, stream),
-                               cudf::detail::make_host_vector<bool>(0, stream),
-                               {},
-                               cudf::detail::make_host_vector<bool>(0, stream),
-                               cudf::detail::make_host_vector<NodeT>(0, stream),
-                               parent_node_sentinel};
+    if (adj[adj[parent_node_sentinel][0]].empty()) return build_tree_result{stream};
     auto root_list_col_id =
       is_enabled_lines ? adj[parent_node_sentinel][0] : adj[adj[parent_node_sentinel][0]][0];
     // mark root and row array col_id as not pruned.

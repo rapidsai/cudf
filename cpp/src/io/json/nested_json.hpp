@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cudf/io/detail/tokenize_json.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
@@ -56,13 +57,7 @@ enum class stack_behavior_t : char {
 // Default name for a list's child column
 constexpr auto list_child_name{"element"};
 
-/**
- * @brief Row-level schema mismatch diagnostics for one top-level output column.
- */
-struct schema_mismatch_rows {
-  std::string column_name;
-  std::vector<size_type> row_indices;
-};
+using schema_mismatch_rows = cudf::io::json_reader_row_diagnostics::schema_mismatch_rows;
 
 /**
  * @brief Intermediate representation of data from a nested JSON input
