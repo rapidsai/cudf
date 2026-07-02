@@ -569,6 +569,18 @@ __device__ inline void decode(float * output, float input){
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(out_ptx->view(), a->view());
   }
 
+  // empty column
+  {
+    auto a_empty                   = cudf::test::fixed_width_column_wrapper<float>({}).release();
+    auto a_encoded                 = cudf::dictionary::encode(a_empty->view());
+    cudf::transform_input inputs[] = {*a_encoded};
+
+    auto out = cudf::transform_extended(
+      inputs, cuda, cudf::data_type{cudf::type_id::FLOAT32}, cudf::udf_source_type::CUDA);
+
+    EXPECT_EQ(out->size(), 0);
+  }
+
   // sliced
   {
     auto a = cudf::test::fixed_width_column_wrapper<float>(
