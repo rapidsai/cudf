@@ -66,7 +66,7 @@ target_compile_options(
 )
 target_link_libraries(
   libcudf_streaming_test_sources
-  PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf::cudftestutil cudf::cudftestutil_impl
+  PRIVATE cudf_streaming rapidsmpf::rapidsmpf cudf::cudftestutil cudf::cudftestutil_impl cuco::cuco
   PUBLIC GTest::gmock GTest::gtest
 )
 # cudf::cudftestutil_impl injects cudf test-utility .cu sources (via INTERFACE_SOURCES) that are
@@ -77,7 +77,9 @@ target_compile_options(
 )
 target_sources(
   libcudf_streaming_test_sources
-  PRIVATE streaming/test_table_chunk.cpp
+  PRIVATE streaming/test_bloom_filter.cu
+          streaming/test_bloom_filter_config.cpp
+          streaming/test_table_chunk.cpp
           streaming/test_read_parquet.cpp
           streaming/test_channel_metadata.cpp
           streaming/test_partition.cpp

@@ -779,9 +779,9 @@ def make_filter_tasks(
         ch_left = context.create_channel()
         bloom_apply_output = ch_left
 
-    # TODO: configure based on GPU L2 size
-    nblocks = BloomFilter.fitting_num_blocks(32 * 1024 * 1024)
-    filter = BloomFilter(context, comm, LIBCUDF_DEFAULT_HASH_SEED, nblocks)
+    # TODO: Make the filter size configurable.
+    filter_size = 32 * 1024 * 1024
+    filter = BloomFilter(context, comm, LIBCUDF_DEFAULT_HASH_SEED, filter_size)
     filter_tasks: list[Coroutine[Any, Any, None]] = []
     chs_to_shutdown = [
         bloom_build_output,
