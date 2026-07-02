@@ -125,6 +125,12 @@ class Merge:
         self.lhs = lhs.copy(deep=False)
         self.rhs = rhs.copy(deep=False)
         self.how = how
+        # Whether the join maps contain unmatched (nullifying) entries for
+        # each side; computed in ``perform_merge``. Only nulls *introduced*
+        # by the join trigger pandas' int -> float64 upcast (a column may
+        # already hold cudf-native nulls before the merge).
+        self._left_unmatched = False
+        self._right_unmatched = False
         # If the user requests that the result is sorted or we're in
         # pandas-compatible mode we have various obligations on the
         # output order:
@@ -390,6 +396,20 @@ class Merge:
             left_rows, right_rows = self._gather_maps(
                 left_join_cols, right_join_cols
             )
+            if self.how not in {"inner", "leftsemi", "leftanti"}:
+                # libcudf marks unmatched rows in a gather map with a negative
+                # out-of-bounds sentinel; gathering with such a map nullifies
+                # that side's columns at those rows.
+                self._left_unmatched = (
+                    left_rows is not None
+                    and len(left_rows) > 0
+                    and left_rows.minmax()[0] < 0
+                )
+                self._right_unmatched = (
+                    right_rows is not None
+                    and len(right_rows) > 0
+                    and right_rows.minmax()[0] < 0
+                )
             gather_kwargs = {
                 "keep_index": self._using_left_index
                 or self._using_right_index,
@@ -599,10 +619,19 @@ class Merge:
 
         # pandas has no integer missing-value sentinel, so a merge that
         # introduces nulls into a numpy integer column upcasts it to float64.
+        # Only unmatched rows introduce nulls -- a column that merely carried
+        # cudf-native nulls into the merge keeps its dtype.
+        promotions = itertools.chain(
+            itertools.repeat(self._left_unmatched, len(left_items)),
+            itertools.repeat(self._right_unmatched, len(right_items)),
+        )
         data = {
-            label: self._promote_column_with_nulls(col)
-            for label, (_, col) in zip(
-                llabels + rlabels, left_items + right_items, strict=True
+            label: self._promote_column_with_nulls(col) if promote else col
+            for label, (_, col), promote in zip(
+                llabels + rlabels,
+                left_items + right_items,
+                promotions,
+                strict=True,
             )
         }
 
@@ -661,11 +690,19 @@ class Merge:
 
         # For a single-flag mixed merge, unmatched rows introduce nulls into
         # the mapped index; pandas drops the index name and upcasts a numpy
-        # integer index to float64.
+        # integer index to float64. The mapped index was gathered from the
+        # left frame when ``right_index`` was passed (and vice versa), so
+        # consult that side's unmatched flag.
         if index is not None and (
             self._left_index_flag != self._right_index_flag
         ):
-            index = self._promote_index_with_nulls(index)
+            index_side_unmatched = (
+                self._left_unmatched
+                if self._right_index_flag
+                else self._right_unmatched
+            )
+            if index_side_unmatched:
+                index = self._promote_index_with_nulls(index)
 
         # Construct result from data and index:
         return (
