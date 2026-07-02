@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -353,6 +353,32 @@ std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_in
   }
 
   return {filtered_row_group_indices};
+}
+
+offset_column_references::offset_column_references(
+  std::optional<std::reference_wrapper<ast::expression const>> expr, size_type offset)
+  : _offset{offset}
+{
+  if (!expr.has_value()) { return; }
+
+  if (offset == 0) {
+    _converted_expr = expr;
+    return;
+  }
+  _converted_expr = expr.value().get().accept(*this);
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::column_reference const& expr)
+{
+  _col_ref.emplace_back(expr.get_column_index() + _offset, expr.get_table_source());
+  return _col_ref.back();
+}
+
+std::reference_wrapper<ast::expression const> offset_column_references::visit(
+  ast::column_name_reference const&)
+{
+  CUDF_FAIL("Column name references are not supported in offset_column_references");
 }
 
 }  // namespace cudf::io::parquet::detail

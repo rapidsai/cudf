@@ -18,6 +18,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <span>
 #include <string>
 #include <vector>
 
@@ -263,7 +264,7 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
  * @return List of FileMetaData objects, one per parquet source
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<datasource> const> sources);
+  std::span<std::unique_ptr<datasource> const> sources);
 
 /**
  * @brief Returns a map of column names to vectors of `total_uncompressed_size` metadata from
