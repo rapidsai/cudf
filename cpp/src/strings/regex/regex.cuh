@@ -4,8 +4,7 @@
  */
 #pragma once
 
-// #include "glushkov.cuh"
-#include "reclass.hpp"
+#include "common.cuh"
 #include "regcomp.h"
 
 #include <cudf/strings/regex/flags.hpp>
@@ -22,11 +21,6 @@
 namespace cudf {
 namespace strings {
 namespace detail {
-
-// Forward declaration so reprog_device::create() can reference the type without
-// pulling glushkov_regcomp.h (a host-only header) into device compilation units.
-// struct gkprog;
-// struct gkprog_device;
 
 template <positional P>
 struct reljunk;

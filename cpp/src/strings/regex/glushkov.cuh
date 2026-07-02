@@ -4,16 +4,7 @@
  */
 #pragma once
 
-/**
- * @brief Device-side Glushkov NFA program data structure.
- *
- * The device program is a compact representation of the Glushkov NFA:
- *  - State is a 64-bit bitmask (one bit per position, no working memory needed).
- *  - Transition = shift-and + exception lookup (Hyperscan technique).
- *  - Character matching reuses the existing reclass_device::is_match path.
- */
-
-#include "reclass.hpp"
+#include "common.cuh"
 
 #include <cudf/strings/string_view.cuh>
 
@@ -28,6 +19,15 @@
 #include <functional>
 #include <memory>
 
+/**
+ * @brief Device-side Glushkov NFA program data structure.
+ *
+ * The device program is a compact representation of the Glushkov NFA:
+ *  - State is a 64-bit bitmask (one bit per position, no working memory needed).
+ *  - Transition = shift-and + exception lookup (Hyperscan technique).
+ *  - Character matching reuses the existing reclass_device::is_match path.
+ */
+
 namespace cudf::strings::detail {
 
 struct gkprog;
@@ -35,9 +35,9 @@ struct gkprog;
 /**
  * @brief Block-shared cache of read-only Glushkov program data.
  *
- * Loaded cooperatively by all threads in a block at kernel entry via
- * @ref glushkov_load_shmem.  Subsequent calls to glushkov_find (with cache)
- * read from shared memory (~20-cycle latency) instead of global/L2 (~100 cycles).
+ * Loaded cooperatively by all threads in a block at kernel entry via gkprog_device::load.
+ * Subsequent calls to gkprog_device::find read from shared memory (~20-cycle latency)
+ * instead of global/L2 (~100 cycles).
  *
  * Total size: ~1608 bytes — negligible impact on occupancy.
  */
@@ -55,13 +55,7 @@ struct glushkov_shmem_cache {
  * @brief GPU-resident Glushkov NFA program.
  *
  * All array pointers address device-global memory packed into a single flat
- * buffer (see regexec.cpp :: create_glushkov_device).  The struct itself is
- * also stored at the head of that buffer so that the reprog_device pointer
- * _glushkov points directly into device memory.
- *
- * Unlike reprog_device, this struct does NOT use a global working-memory
- * buffer: the NFA state (glushkov_state_t) fits in a single 64-bit register per
- * thread.
+ * buffer (see gkprog_device::create).
  */
 struct gkprog_device {
  public:
@@ -84,10 +78,13 @@ struct gkprog_device {
 
   [[nodiscard]] CUDF_HOST_DEVICE bool is_empty_match_possible() const { return false; }
 
+  /**
+   * @brief Stores this instance into the given buffer (shared_memory pointer)
+   */
   __device__ inline void store(void* buffer) const;
 
   /**
-   * @brief Load an instance of this class from a device buffer (e.g. shared memory).
+   * @brief Load an instance from a device buffer (e.g. shared memory).
    */
   [[nodiscard]] __device__ static inline gkprog_device load(gkprog_device const prog, void* buffer);
 
@@ -96,7 +93,6 @@ struct gkprog_device {
    *
    * This can be called on the CPU for specifying the shared-memory size in the
    * kernel launch parameters.
-   * This may return 0 if the MAX_SHARED_MEM value is exceeded.
    */
   [[nodiscard]] int32_t compute_shared_memory_size() const;
 
@@ -122,22 +118,19 @@ struct gkprog_device {
                                                     string_view::const_iterator begin,
                                                     cudf::size_type end = -1) const;
 
-  uint32_t num_states{};              ///< Number of Glushkov positions (≤ 64)
-  uint32_t shift_count{};             ///< Number of shift slots (≤ GLUSHKOV_MAX_SHIFTS_DEV)
-  glushkov_state_t first_set{};       ///< Initial active positions (before first character)
-  glushkov_state_t accept_mask{};     ///< Positions whose match completes the pattern
-  glushkov_state_t exception_mask{};  ///< Positions with non-shift follow transitions
-  cuda::std::optional<char32_t>
-    startchar{};  ///< The common literal (valid only when has_startchar)
+  uint32_t num_states{};                      ///< Number of Glushkov positions (≤ 64)
+  uint32_t shift_count{};                     ///< Number of shift slots (≤ GLUSHKOV_MAX_SHIFTS_DEV)
+  glushkov_state_t first_set{};               ///< Initial active positions (before first character)
+  glushkov_state_t accept_mask{};             ///< Positions whose match completes the pattern
+  glushkov_state_t exception_mask{};          ///< Positions with non-shift follow transitions
+  cuda::std::optional<char32_t> startchar{};  ///< First literal
 
-  uint8_t const* _codepoint_flags{};  ///< Character-type lookup table (shared with Thompson)
-  reclass_device const* _classes{};   ///< Character class data
-  // glushkov_position const* _positions{};         ///< [num_states] per-position descriptors
+  uint8_t const* _codepoint_flags{};       ///< Character-type lookup table (shared with Thompson)
+  reclass_device const* _classes{};        ///< Character class data
   reinst const* _positions{};              ///< [num_states] per-position descriptors
   glushkov_state_t const* _shift_masks{};  ///< [shift_count] shift-and source masks
   uint8_t const* _shift_amounts{};         ///< [shift_count] shift amounts
-  glushkov_state_t const*
-    _reach_ascii{};  ///< [GLUSHKOV_ASCII_TABLE_SIZE] precomputed reach bitmasks for ASCII chars
+  glushkov_state_t const* _reach_ascii{};  ///< precomputed reach bitmasks for ASCII chars
   glushkov_state_t const* _exception_successors{};  ///< [num_states] exception successor masks
 
   std::size_t _prog_size{};  ///< Total buffer size (for potential shmem loading)
@@ -183,10 +176,9 @@ struct gkprog_device {
  * @brief Emulate Thompson's first-alternative-wins priority by killing lower-priority states.
  *
  * When multiple alternatives can accept at the same position, the lowest-indexed accepting
- * position corresponds to the highest-priority alternative (Thompson's relist orders first
- * alternatives first).  All bits above the lowest accepting bit are cleared so that
- * lower-priority paths are killed while self-loops and continuations of the winning path
- * survive.
+ * position corresponds to the highest-priority alternative.  All bits above the lowest accepting
+ * bit are cleared so that lower-priority paths are killed while self-loops and continuations of the
+ * winning path survive.
  *
  * @param state       Current NFA state bitmask.
  * @param accept_mask Bitmask of accepting positions.
@@ -257,8 +249,8 @@ gkprog_device::compute_follow_impl(glushkov_state_t const state) const
  *
  * reach(c) = { p | position p matches character c }
  *
- * Fast path (ASCII, c < GLUSHKOV_ASCII_TABLE_SIZE): single lookup into the precomputed reach_ascii
- * table — O(1).
+ * Fast path (c < GLUSHKOV_ASCII_TABLE_SIZE): single lookup into the precomputed
+ *   reach_ascii table — O(1).
  * Slow path (non-ASCII): O(num_states) loop over position descriptors.
  */
 __device__ __forceinline__ glushkov_state_t
@@ -294,10 +286,9 @@ gkprog_device::compute_reach_impl(char32_t const c) const
  *
  * @param d_str  Input string.
  * @param begin  Iterator to the first character to consider.
- * @param end    Max start-position to try (−1 = try all positions). Mirrors the
- *               Thompson NFA semantics: `end=1` means only try starting at 0
- *               (used by matches_re / beginning_only); the NFA always runs to
- *               the end of the string once a start position is chosen.
+ * @param end    Max start-position to try (−1 = try all positions).
+ *               `end=1` means only try starting at 0
+ *               (used by matches_re / beginning_only)
  * @return       Match pair or nullopt.
  */
 template <positional P>

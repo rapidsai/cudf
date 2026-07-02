@@ -4,6 +4,16 @@
  */
 #pragma once
 
+#include "common.cuh"
+#include "regcomp.h"
+
+#include <cuda/std/optional>
+
+#include <array>
+#include <cstdint>
+#include <memory>
+#include <vector>
+
 /**
  * @file glushkov_regcomp.h
  * @brief Host-side Glushkov NFA construction via ε-elimination from Thompson NFA.
@@ -23,16 +33,6 @@
  *   - capture-group extraction (uses Thompson NFA always)
  */
 
-#include "reclass.hpp"
-#include "regcomp.h"
-
-#include <cuda/std/optional>
-
-#include <array>
-#include <cstdint>
-#include <memory>
-#include <vector>
-
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -49,20 +49,14 @@ struct gkprog {
   uint32_t num_states{};           ///< Number of character-consuming positions
   glushkov_state_t first_set{};    ///< Bitmask: positions reachable before first character
   glushkov_state_t accept_mask{};  ///< Bitmask: positions whose match completes the pattern
-  // bool nullable{};          ///< True if the empty string satisfies the pattern
 
   /// follow_table[p] = bitmask of positions that can immediately follow position p.
   std::array<glushkov_state_t, GLUSHKOV_MAX_STATES> follow_table{};
 
   // ---- Per-position character-matching descriptors ----
-  // Using struct-of-arrays to avoid a separate shared struct that would need
-  // to be visible in the CUDA device header.
-  // std::array<int32_t, GLUSHKOV_MAX_STATES> pos_inst_type{};  ///< CHAR/ANY/ANYNL/CCLASS/NCCLASS
-  // std::array<char32_t, GLUSHKOV_MAX_STATES> pos_ch{};        ///< Literal char (CHAR only)
-  // std::array<int32_t, GLUSHKOV_MAX_STATES> pos_cls_idx{};    ///< Class index (CCLASS/NCCLASS)
   std::array<reinst, GLUSHKOV_MAX_STATES> pos_insts{};
 
-  // ---- Shift-and transition optimisation (Hyperscan-style) ----
+  // ---- Shift-and transition optimization (Hyperscan-style) ----
   //
   // For each pair (p, q) where q ∈ follow_table[p] and 1 ≤ (q-p) ≤ 63:
   //   shift span s = q - p
@@ -81,8 +75,7 @@ struct gkprog {
 
   /// When true, every position in first_set is a CHAR instruction for the
   /// same literal character.  Enables a tight first-character skip in
-  /// glushkov_find (mirrors Thompson NFA's find_char optimisation).
-  // bool has_startchar{};
+  /// glushkov_find (mirrors Thompson NFA's find_char optimization).
   cuda::std::optional<char32_t> startchar{};
 
   /// Bitmask of positions with at least one "exception" (non-shift) transition.

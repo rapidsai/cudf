@@ -128,41 +128,6 @@ struct reljunk {
   }
 };
 
-/**
- * @brief Utility to check a specific character against this class instance.
- *
- * @param ch A 4-byte UTF-8 character.
- * @param codepoint_flags Used for mapping a character to type for builtin classes.
- * @return true if the character matches
- */
-//__device__ __forceinline__ bool reclass_device::is_match(char32_t const ch,
-//                                                         uint8_t const* codepoint_flags) const
-//{
-//  for (int i = 0; i < count; ++i) {
-//    auto const literal = literals[i];
-//    if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
-//  }
-//
-//  if (!builtins) return false;
-//  uint32_t codept = utf8_to_codepoint(ch);
-//  if (codept > 0x00'FFFF) return false;
-//  int8_t fl = codepoint_flags[codept];
-//  if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
-//    return true;
-//  if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
-//    return true;
-//  if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
-//    return true;
-//  if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
-//    return true;
-//  if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
-//    return true;
-//  if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
-//    return true;
-//  //
-//  return false;
-//}
-
 __device__ __forceinline__ reinst reprog_device::get_inst(int32_t id) const { return _insts[id]; }
 
 __device__ __forceinline__ reclass_device reprog_device::get_class(int32_t id) const

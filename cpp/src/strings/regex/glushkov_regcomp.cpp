@@ -22,7 +22,7 @@
  *
  * The initial set (first_set) is built from ε_closure(startinst_id).
  *
- * Shift-and optimisation (Hyperscan technique)
+ * Shift-and optimization (Hyperscan technique)
  * --------------------------------------------
  * Positions are numbered by their instruction index order (low → high).
  * Most follow transitions go from a smaller to a slightly larger index, i.e.
@@ -381,9 +381,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
   int32_t const num_insts = prog.insts_count();
 
   // ---- Step 1: Reject ineligible patterns ----------------------------------
-  // Glushkov cannot handle zero-width assertions or lazy quantifiers (the
-  // bit-parallel NFA always returns the greedy/longest match).
-  // if (prog.has_lazy()) { return nullptr; }
+  // Glushkov cannot handle zero-width assertions or lazy quantifiers
   for (int32_t i = 0; i < num_insts; ++i) {
     if (is_assertion(prog.insts_data()[i].type)) { return nullptr; }
   }
@@ -431,15 +429,13 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
       int32_t const pos = inst_to_pos[iid];
       if (pos >= 0) { gp->first_set |= glushkov_state_t(1) << pos; }
     }
-    // if (is_accept) { gp->nullable = true; }
     empty_matchable = is_accept;
   }
 
   // Nullable patterns have ε-paths not represented as Glushkov positions.
   // When the ε-path is the first alternative (e.g. `(|a)`), Thompson gives it
   // highest priority (its END fires first), but Glushkov has no position to
-  // represent that priority.  Fall back to Thompson for correctness.
-  // if (gp->nullable) { return nullptr; }
+  // represent that priority.
   if (empty_matchable) { return nullptr; }
 
   // ---- Step 5: follow_table + accept_mask for each position --------------
@@ -515,7 +511,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
     }
   }
 
-  // ---- Step 8: First-character skip optimisation -------------------------
+  // ---- Step 8: First-character skip optimization -------------------------
   // When every position in first_set is a CHAR instruction for the same
   // literal, record that character so glushkov_find can use a tight byte-scan
   // (like Thompson NFA's find_char) instead of a reach-table lookup per byte.
@@ -539,10 +535,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
         break;
       }
     }
-    if (all_char) {
-      // gp->has_startchar = true;
-      gp->startchar = common;
-    }
+    if (all_char) { gp->startchar = common; }
   }
 
   return gp;
