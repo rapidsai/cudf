@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2013 Google Inc. All Rights Reserved.
  * SPDX-FileCopyrightText: Copyright(c) 2009, 2010, 2013 - 2016 by the Brotli Authors.
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0 AND MIT
  */
 
@@ -355,7 +355,7 @@ static __device__ uint8_t* ext_heap_alloc(uint32_t bytes,
                                           uint32_t ext_heap_size)
 {
   uint32_t len              = (bytes + 0xf) & ~0xf;
-  volatile auto* heap_ptr   = reinterpret_cast<volatile uint32_t*>(ext_heap_base);
+  auto volatile* heap_ptr   = reinterpret_cast<uint32_t volatile*>(ext_heap_base);
   uint32_t first_free_block = ~0;
   for (;;) {
     uint32_t blk_next, blk_prev;
@@ -425,7 +425,7 @@ static __device__ void ext_heap_free(void* ptr,
                                      uint32_t ext_heap_size)
 {
   uint32_t len              = (bytes + 0xf) & ~0xf;
-  volatile auto* heap_ptr   = (volatile uint32_t*)ext_heap_base;
+  auto volatile* heap_ptr   = (uint32_t volatile*)ext_heap_base;
   uint32_t first_free_block = ~0;
   auto cur_blk              = static_cast<uint32_t>(static_cast<uint8_t*>(ptr) - ext_heap_base);
   for (;;) {

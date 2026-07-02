@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -249,7 +249,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         keys: list[int],
         keep: Literal["first", "last", False],
         nulls_are_equal: bool,
-    ) -> list[plc.Column]:
+    ) -> tuple[plc.Column, ...]:
         """Core stable_distinct implementation shared by Index and IndexedFrame."""
         _keep_options = {
             "first": plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
@@ -277,7 +277,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         keys: list[int],
         how: Literal["any", "all"],
         thresh: int | None = None,
-    ) -> list[plc.Column]:
+    ) -> tuple[plc.Column, ...]:
         """Core drop_nulls implementation shared by Index and IndexedFrame."""
         if how not in {"any", "all"}:
             raise ValueError("how must be 'any' or 'all'")
@@ -1945,7 +1945,7 @@ class Frame(BinaryOperand, Scannable, Serializable):
         b    7
         dtype: int64
         >>> min_series.min()
-        1
+        np.int64(1)
 
         .. pandas-compat::
             :meth:`pandas.DataFrame.min`, :meth:`pandas.Series.min`

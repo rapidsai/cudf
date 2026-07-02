@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -204,7 +204,7 @@ int dispatch_to_arrow_type::operator()<cudf::dictionary32>(column_view input,
 }  // namespace detail
 
 unique_schema_t to_arrow_schema(cudf::table_view const& input,
-                                cudf::host_span<column_metadata const> metadata)
+                                std::span<column_metadata const> metadata)
 {
   CUDF_EXPECTS((metadata.size() == static_cast<std::size_t>(input.num_columns())),
                "columns' metadata should be equal to the number of columns in table");
