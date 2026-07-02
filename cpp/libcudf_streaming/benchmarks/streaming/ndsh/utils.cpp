@@ -196,8 +196,8 @@ std::pair<std::shared_ptr<streaming::Context>, std::shared_ptr<Communicator>> cr
 
   auto br                              = BufferResource::create(std::move(mr),
                                    arguments.no_pinned_host_memory
-                                                                  ? PinnedMemoryResource::Disabled
-                                                                  : PinnedMemoryResource::make_if_available(),
+                                                                  ? PinnedMemoryDisabled
+                                                                  : std::optional<PinnedPoolProperties>(std::in_place),
                                    std::move(memory_limits),
                                    arguments.periodic_spill,
                                    std::make_shared<rmm::cuda_stream_pool>(

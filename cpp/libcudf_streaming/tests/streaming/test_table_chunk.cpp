@@ -39,12 +39,12 @@ class StreamingTableChunk : public BaseStreamingFixture,
       std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking);
     stream = cudf::get_default_stream();
     br     = rapidsmpf::BufferResource::create(
-      mr_cuda,                                               // device_mr
-      rapidsmpf::PinnedMemoryResource::make_if_available(),  // pinned_mr
-      memory_limits,                                         // memory_limits
-      std::chrono::milliseconds{1},                          // periodic_spill_check
-      stream_pool,                                           // stream_pool
-      rapidsmpf::Statistics::disabled()                      // statistics
+      mr_cuda,                            // device_mr
+      rapidsmpf::PinnedPoolProperties{},  // pinned_pool_properties
+      memory_limits,                      // memory_limits
+      std::chrono::milliseconds{1},       // periodic_spill_check
+      stream_pool,                        // stream_pool
+      rapidsmpf::Statistics::disabled()   // statistics
     );
     ctx = std::make_shared<rapidsmpf::streaming::Context>(
       options, GlobalEnvironment->comm_->logger(), br);

@@ -503,8 +503,8 @@ int main(int argc, char** argv)
   stats->disable();
   auto br = rapidsmpf::BufferResource::create(
     rmm_mr,
-    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryResource::Disabled
-                            : rapidsmpf::PinnedMemoryResource::make_if_available(),
+    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryDisabled
+                            : std::optional<rapidsmpf::PinnedPoolProperties>(std::in_place),
     std::move(memory_limits),
     std::chrono::milliseconds{1},
     std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking),
