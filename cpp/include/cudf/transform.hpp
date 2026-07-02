@@ -228,6 +228,8 @@ std::unique_ptr<column> column_nans_to_nulls(
  * transform.
  *
  * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ * @throws cudf::data_type_error if the expression applies a non-comparison binary operator to
+ * decimal128 operands.
  *
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree
@@ -249,6 +251,8 @@ std::unique_ptr<column> compute_column(
  * transform.
  *
  * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ * @throws cudf::data_type_error if the expression applies a non-comparison binary operator to
+ * decimal128 operands.
  *
  * @param table The table used for expression evaluation
  * @param expr The root of the expression tree

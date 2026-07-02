@@ -317,13 +317,13 @@ def _drop_dyn_pred_hints(
 
 
 def translate_predicate(
-    translator: Translator, *, n: Any, schema: Schema
+    translator: Translator, *, n: int, output_name: str, schema: Schema
 ) -> expr.NamedExpr | None:
     """Translate predicate, dropping Polars' dynamic predicate hints."""
-    mask = _drop_dyn_pred_hints(translator, n.node, schema)
+    mask = _drop_dyn_pred_hints(translator, n, schema)
     if mask is None:
         return None
-    return expr.NamedExpr(n.output_name, mask)
+    return expr.NamedExpr(output_name, mask)
 
 
 class set_internal_name_gen(AbstractContextManager[None]):
@@ -353,13 +353,36 @@ def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -> ir.IR:
-    scan_fn, with_columns, source_type, predicate, nrows = node.options
-    options = (scan_fn, with_columns, source_type, nrows)
-    predicate = (
-        translate_named_expr(translator, n=predicate, schema=schema)
-        if predicate is not None
-        else None
-    )
+    scan_fn, with_columns, source_type, raw_predicate, nrows = node.options
+    if source_type != "io_plugin":
+        # cudf-polars supports register_io_source plugins (and pl.defer), which
+        # report source_type "io_plugin". Other sources, notably pyarrow-dataset
+        # scans ("pyarrow"), are not supported and fall back to the CPU engine.
+        raise NotImplementedError(
+            f"Unsupported PythonScan source type: {source_type!r}"
+        )
+    if nrows is not None:
+        # A global row limit cannot be enforced independently per rank; tracked
+        # in https://github.com/rapidsai/cudf/issues/22918.
+        raise NotImplementedError(
+            "A row limit (head/limit) on a PythonScan source is not supported."
+        )
+    # Reused sources share the same ``scan_fn`` object, so capture the Polars
+    # node index to keep occurrences distinct in our IR identity (hash/eq).
+    # The index is deterministic across ranks.
+    ir_node_index = translator.visitor.get_node()
+    options = (scan_fn, with_columns, source_type, ir_node_index)
+    if raw_predicate is None:
+        predicate = None
+    elif isinstance(raw_predicate, tuple) and raw_predicate[0] == "polars":
+        predicate = translate_predicate(
+            translator, n=raw_predicate[1], output_name="_predicate", schema=schema
+        )
+    else:  # pragma: no cover
+        # The only other form is a pyarrow predicate, ("pyarrow", ...), which
+        # Polars only emits for pyarrow-dataset scans, never for an
+        # ``register_io_source`` plugin.
+        assert_never(raw_predicate)
     return ir.PythonScan(schema, options, predicate)
 
 
@@ -426,7 +449,12 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         (
             None
             if node.predicate is None
-            else translate_predicate(translator, n=node.predicate, schema=schema)
+            else translate_predicate(
+                translator,
+                n=node.predicate.node,
+                output_name=node.predicate.output_name,
+                schema=schema,
+            )
         ),
         parquet_options,
     )
@@ -643,7 +671,12 @@ def _(node: plrs._ir_nodes.Slice, translator: Translator, schema: Schema) -> ir.
 def _(node: plrs._ir_nodes.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        mask = translate_predicate(translator, n=node.predicate, schema=inp.schema)
+        mask = translate_predicate(
+            translator,
+            n=node.predicate.node,
+            output_name=node.predicate.output_name,
+            schema=inp.schema,
+        )
         if mask is None:
             return inp
     return ir.Filter(schema, mask, inp)
