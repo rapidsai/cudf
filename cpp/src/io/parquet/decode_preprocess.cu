@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -418,6 +418,16 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   rle_stream<level_t, level_decode_block_size, max_output_values>
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
+  // Shared-memory staging scratch for the encoded level streams. Level streams
+  // for a page are usually small (definition/repetition levels are dominated by
+  // short RLE runs), and their serial run-header parse is latency-bound on
+  // dependent global loads. Staging the bytes into shared memory once removes
+  // that latency from fill_run_batch(). Streams larger than the per-stream
+  // budget fall back to parsing from global with no behavior change.
+  constexpr int level_stage_bytes = 8 * 1024;
+  __shared__ uint8_t def_stage[level_stage_bytes];
+  __shared__ uint8_t rep_stage[level_stage_bytes];
+
   // Get the level decode buffers for this page
   auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   auto* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
@@ -434,14 +444,18 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           s->abs_lvl_start[level_type::DEFINITION],
                                           s->abs_lvl_end[level_type::DEFINITION],
                                           def,
-                                          num_to_decode);
+                                          num_to_decode,
+                                          def_stage,
+                                          level_stage_bytes);
   }
   if (has_repetition) {
     decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
                                           s->abs_lvl_start[level_type::REPETITION],
                                           s->abs_lvl_end[level_type::REPETITION],
                                           rep,
-                                          num_to_decode);
+                                          num_to_decode,
+                                          rep_stage,
+                                          level_stage_bytes);
   }
   block.sync();
 

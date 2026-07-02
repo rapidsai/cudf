@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -178,7 +178,19 @@ struct rle_stream {
   int fill_index;
   int decode_index;
 
-  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
+  // Optional shared-memory staging of the encoded byte stream. When init() is
+  // given a scratch buffer large enough to hold [start, end), the stream is
+  // copied into it once (block-cooperatively) and cur/end are rebased into
+  // shared memory. This turns the serial run-header parse that dominates
+  // fill_run_batch() from a chain of dependent L2 loads (~200 cyc each) into
+  // shared-memory loads (~30 cyc). It stages *raw encoded bytes*, so it is
+  // level_t- and level_bits-agnostic: definition/repetition levels, dictionary
+  // indices, and boolean streams all benefit with identical code. Streams that
+  // do not fit the budget transparently fall back to parsing from global.
+  uint8_t const* smem_stage;
+  int smem_stage_size;
+
+  __device__ rle_stream(rle_run* _runs) : runs(_runs), smem_stage(nullptr), smem_stage_size(0) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
@@ -189,7 +201,9 @@ struct rle_stream {
                        uint8_t const* _start,
                        uint8_t const* _end,
                        level_t* _output,
-                       int _total_values)
+                       int _total_values,
+                       uint8_t* _smem_stage = nullptr,
+                       int _smem_stage_size = 0)
   {
     level_bits = _level_bits;
     cur        = _start;
@@ -203,6 +217,44 @@ struct rle_stream {
     cur_values   = 0;
     fill_index   = 0;
     decode_index = -1;  // signals the first iteration. Nothing to decode.
+
+    // Optionally stage the encoded stream into shared memory. init() is called
+    // by every thread in the block, so the copy below is block-cooperative. It
+    // deliberately performs no barrier of its own: every existing caller issues
+    // a block-wide sync immediately after init() (before the first parse in
+    // fill_run_batch/skip_runs), which is what publishes the staged bytes.
+    smem_stage      = _smem_stage;
+    smem_stage_size = _smem_stage_size;
+    if (smem_stage != nullptr) {
+      int const len = static_cast<int>(_end - _start);
+      if (len > 0 && len <= smem_stage_size) {
+        auto* const s_dst  = _smem_stage;
+        int const t        = threadIdx.x;
+        int const nthreads = blockDim.x;
+        // 16-byte vectorized copy of the aligned body; byte copy for the tail.
+        // Falls back to a plain byte copy when the source is not 16B-aligned.
+        if ((reinterpret_cast<uintptr_t>(_start) & 15u) == 0) {
+          int const nvec = len >> 4;
+          auto const* g4 = reinterpret_cast<uint4 const*>(_start);
+          auto* const s4 = reinterpret_cast<uint4*>(s_dst);
+          for (int i = t; i < nvec; i += nthreads) {
+            s4[i] = g4[i];
+          }
+          for (int i = (nvec << 4) + t; i < len; i += nthreads) {
+            s_dst[i] = _start[i];
+          }
+        } else {
+          for (int i = t; i < len; i += nthreads) {
+            s_dst[i] = _start[i];
+          }
+        }
+        // Rebase the parse cursor and end onto the shared copy. All downstream
+        // reads (get_rle_run_info, decode, skip_runs) follow cur/end and now hit
+        // shared memory with no other changes required.
+        cur = smem_stage;
+        end = smem_stage + len;
+      }
+    }
   }
 
   __device__ inline int get_rle_run_info(rle_run& run)
