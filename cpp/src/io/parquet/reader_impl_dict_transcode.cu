@@ -394,7 +394,7 @@ void reader_impl::assemble_dict_transcoded_columns(
                          indices_view.null_count(seg_begin, seg_end, _stream);
                        return column_view{data_type{type_id::DICTIONARY32},
                                           seg_rows,
-                                          nullptr,                  // dictionary parent holds no data
+                                          nullptr,  // dictionary parent holds no data
                                           indices_view.null_mask(),  // shared with indices_view
                                           seg_null_count,
                                           seg_begin,  // reslices shared indices child + null mask
