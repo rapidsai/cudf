@@ -168,14 +168,12 @@ def build_parent_operators_map(
 
     Returns
     -------
-    Mapping from physical stable ID to the list of parent
-    :class:`Operator` objects, omitting entries with no parents.
+    Mapping from physical stable ID to the list of parent :class:`Operator`
+    objects, with an empty list for entries with no parents.
     """
-    result: dict[str, list[Operator]] = {}
-    for physical_sid, logical_sids in node_map.items():
-        parents = [
+    return {
+        physical_sid: [
             logical_op_by_id[sid] for sid in logical_sids if sid in logical_op_by_id
         ]
-        if parents:
-            result[physical_sid] = parents
-    return result
+        for physical_sid, logical_sids in node_map.items()
+    }
