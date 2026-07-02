@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,7 +17,10 @@
 
 #include <cuda/std/limits>
 
+#include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <utility>
 
 namespace CUDF_EXPORT cudf {
 
@@ -349,19 +352,59 @@ filter_join_indices(cudf::table_view const& left,
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Overload of `filter_join_indices` that accepts a precomputed output size.
+ *
+ * Identical to `filter_join_indices` above, but skips the internal size-counting pass by using the
+ * provided `output_size` (for example the result of `filter_join_indices_output_size` for the same
+ * inputs). This is useful when composing the size and filtering steps, such as in the mixed join
+ * APIs.
+ *
+ * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @throw std::invalid_argument if left_indices and right_indices have different sizes.
+ * @throw std::invalid_argument if predicate does not produce a Boolean output.
+ *
+ * @param left The left table for predicate evaluation (conditional columns only).
+ * @param right The right table for predicate evaluation (conditional columns only).
+ * @param left_indices Device span of row indices in the left table from hash join.
+ * @param right_indices Device span of row indices in the right table from hash join.
+ * @param predicate An AST expression that returns a boolean for each pair of rows.
+ * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @param output_size The precomputed number of output rows. Behavior is undefined if it differs
+ *        from the size the unsized overload would produce for the same inputs.
+ * @param stream CUDA stream used for kernel launches and memory operations.
+ * @param mr Device memory resource used to allocate output indices.
+ *
+ * @return A pair of device vectors [filtered_left_indices, filtered_right_indices]
+ *         corresponding to rows that satisfy the join semantics and predicate.
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+filter_join_indices(cudf::table_view const& left,
+                    cudf::table_view const& right,
+                    cudf::device_span<size_type const> left_indices,
+                    cudf::device_span<size_type const> right_indices,
+                    cudf::ast::expression const& predicate,
+                    cudf::join_kind join_kind,
+                    std::size_t output_size,
+                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Returns the exact output size of `filter_join_indices` without materializing
  *        the filtered index vectors.
  *
  * Runs the same predicate evaluation as `filter_join_indices` but skips the index
- * materialization step, returning only the total number of pairs that would be
- * emitted. The semantics per `join_kind` match `filter_join_indices`:
+ * materialization step, returning the total number of pairs that would be emitted along with
+ * the per-output contribution counts whose sum is that total. The semantics per `join_kind`
+ * match `filter_join_indices`:
  * - INNER_JOIN: number of pairs where the predicate evaluates to true.
  * - LEFT_JOIN: predicate-passing pairs plus one entry per left row with no passing match.
  * - FULL_JOIN: input pairs plus one extra entry per pair whose predicate failed
  *   (because failed matches split into `(left, JoinNoMatch)` and `(JoinNoMatch, right)`).
  *
- * The returned size may be passed as a precomputed hint to APIs that compose
- * `filter_join_indices` (for example, the mixed join APIs).
+ * The returned size and contribution counts may be passed as a precomputed hint to APIs that
+ * compose `filter_join_indices` (for example, the mixed join APIs). The layout of the
+ * contribution counts is an implementation detail that should not be relied upon.
  *
  * @throw std::invalid_argument if `join_kind` is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @throw std::invalid_argument if `left_indices` and `right_indices` have different sizes.
@@ -374,17 +417,21 @@ filter_join_indices(cudf::table_view const& left,
  * @param predicate An AST expression that returns a boolean for each pair of rows.
  * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
  * @param stream CUDA stream used for kernel launches and memory operations.
+ * @param mr Device memory resource used to allocate the returned contribution counts.
  *
- * @return The exact number of pairs that `filter_join_indices` would produce.
+ * @return A pair containing the exact number of pairs that `filter_join_indices` would produce
+ *         and the per-output contribution counts that sum to that number.
  */
-[[nodiscard]] std::size_t filter_join_indices_output_size(
+[[nodiscard]] std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+filter_join_indices_output_size(
   cudf::table_view const& left,
   cudf::table_view const& right,
   cudf::device_span<size_type const> left_indices,
   cudf::device_span<size_type const> right_indices,
   cudf::ast::expression const& predicate,
   cudf::join_kind join_kind,
-  rmm::cuda_stream_view stream = cudf::get_default_stream());
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
  * @brief JIT-based filtering of join result indices using string predicate.
