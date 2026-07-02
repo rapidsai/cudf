@@ -1575,3 +1575,45 @@ def test_merge_invalid_input(param):
         left.merge(param)
     with pytest.raises(TypeError):
         cudf.merge(left["a"], param)
+
+
+def test_merge_natural_join_key_order_matches_left_frame():
+    # A merge without ``on`` joins on the common columns in left-frame
+    # column order, like pandas. Building the key list from an unordered
+    # set made the sorted output of an outer merge (and hence positional
+    # comparisons against pandas) vary with the process hash seed.
+    pl = pd.DataFrame({"a": ["foo", "bar"], "b": [1, 2]})
+    pr = pd.DataFrame({"a": ["foo", "baz"], "b": [3, 4]})
+    gl = cudf.from_pandas(pl)
+    gr = cudf.from_pandas(pr)
+
+    expect = pl.merge(pr, how="outer", sort=True)
+    got = gl.merge(gr, how="outer", sort=True)
+    assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))
+
+
+@pytest.mark.parametrize("how", ["left", "inner"])
+def test_merge_on_index_level_keeps_right_key_column(how):
+    # When ``on`` names an index level on the left but a column on the
+    # right, the right key column is not a duplicate of any left output
+    # column and must be kept (pandas keeps the key as a column and
+    # resets the index).
+    pl = pd.DataFrame(
+        {"outer": [1, 1, 2], "inner": [1, 2, 1], "v1": [0.1, 0.2, 0.3]}
+    ).set_index(["outer", "inner"])
+    pr = pd.DataFrame(
+        {"outer": [1, 1, 2], "inner": [1, 2, 2], "v2": [10.0, 11.0, 12.0]}
+    )
+    gl = cudf.from_pandas(pl)
+    gr = cudf.from_pandas(pr)
+
+    expect = pl.merge(pr, on=["inner"], how=how)
+    got = gl.merge(gr, on=["inner"], how=how)
+    assert sorted(got.to_pandas().columns) == sorted(expect.columns)
+    assert_eq(
+        expect.sort_values(list(expect.columns)).reset_index(drop=True),
+        got.sort_values(list(expect.columns))
+        .reset_index(drop=True)
+        .to_pandas()[expect.columns],
+        check_dtype=False,
+    )

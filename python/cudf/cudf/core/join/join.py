@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -221,8 +221,12 @@ class Merge:
         else:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
-            # the intersection  of columns in both frames
-            on_names = set(lhs._data) & set(rhs._data)
+            # the intersection of columns in both frames, in left-frame
+            # column order like pandas (a set here would make the key
+            # order -- and hence the sorted output of an outer merge --
+            # vary with the process hash seed).
+            right_names = set(rhs._data)
+            on_names = [name for name in lhs._data if name in right_names]
             self._left_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._right_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._using_left_index = False
@@ -558,14 +562,17 @@ class Merge:
             return name
 
         # All left columns appear in the output; right key columns that share a
-        # name with a left key column are dropped (their values come from the
-        # left key column). The remaining labels are suffixed per the rule
-        # above.
+        # name with a left key *column* are dropped (their values come from the
+        # left key column). A right key column whose left counterpart is an
+        # index level is not a duplicate (the level is not emitted as a
+        # column), so it is kept. The remaining labels are suffixed per the
+        # rule above.
         left_items = list(left_result._column_labels_and_values)
         right_items = [
             (name, col)
             for name, col in right_result._column_labels_and_values
-            if self.how == "cross"
+            if name not in common_names
+            or self.how == "cross"
             or name not in self._key_columns_with_same_name
         ]
         left_names = [name for name, _ in left_items]
