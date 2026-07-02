@@ -153,6 +153,7 @@ class TemporalFunction(Expr):
         Name.Truncate,
         Name.Century,
         Name.Millennium,
+        Name.Date,
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
@@ -268,6 +269,14 @@ class TemporalFunction(Expr):
                 stream=df.stream,
             )
             return Column(result, dtype=self.dtype)
+        elif self.name is TemporalFunction.Name.Date:
+            (column,) = columns
+            # Casting the timestamp to TIMESTAMP_DAYS (the storage of ``pl.Date``)
+            # drops the sub-day component.
+            return Column(
+                plc.unary.cast(column.obj, self.dtype.plc_type, stream=df.stream),
+                dtype=self.dtype,
+            )
         elif self.name is TemporalFunction.Name.CastTimeUnit:
             (column,) = columns
             return Column(
