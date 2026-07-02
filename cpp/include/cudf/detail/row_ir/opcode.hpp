@@ -278,7 +278,11 @@ __device__ constexpr auto evaluate(cuda::std::optional<T>... args)
       }
 
     } else {
-      return expected_t{optional_value_t{result.value()}};
+      if (!result.has_value()) {
+        return expected_t{cuda::std::unexpected{result.error()}};
+      } else {
+        return expected_t{optional_value_t{result.value()}};
+      }
     }
   } else {
     using value_t          = result_t;

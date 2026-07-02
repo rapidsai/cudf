@@ -142,13 +142,8 @@ expression const& jit::operation(ast::tree& tree,
                                  cudf::error_policy error_policy,
                                  std::optional<int32_t> target_scale)
 {
-  auto ir_opcode = as_opcode(operator_id);
-
-  CUDF_EXPECTS((operator_id == op::RESCALE) == target_scale.has_value(),
-               "Target scale is only valid and required for jit::op::RESCALE",
-               std::invalid_argument);
-
-  return tree.push(detail::operation(ir_opcode, std::move(args), error_policy, target_scale));
+  return tree.push(
+    detail::operation(as_opcode(operator_id), std::move(args), error_policy, target_scale));
 }
 
 expression const& jit::operation(

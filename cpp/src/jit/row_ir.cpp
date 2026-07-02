@@ -98,6 +98,7 @@ enum class [[nodiscard]] types : uint64_t {
   SIGNED_INTEGERS        = INT8 | INT16 | INT32 | INT64,
   UNSIGNED_INTEGERS      = UINT8 | UINT16 | UINT32 | UINT64,
   INTEGERS               = SIGNED_INTEGERS | UNSIGNED_INTEGERS,
+  INTEGRALS              = INTEGERS | BOOL8,
   FLOATS                 = FLOAT32 | FLOAT64,
   DECIMALS               = DECIMAL32 | DECIMAL64 | DECIMAL128,
   ARITHMETIC             = INTEGERS | FLOATS | DECIMALS,
@@ -169,7 +170,7 @@ struct [[nodiscard]] opcode_info {
       {"MOD_OVERFLOW", PROPAGATE, false, true, {ARITHMETIC, ARG0}, ARG0},
       {"CHECK_PRECISION", PROPAGATE, false, true, {DECIMALS, INT32}, ARG0},
       {"BITWISE_AND", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
-      {"BITWISE_INVERT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
+      {"BITWISE_INVERT", PROPAGATE, false, false, {INTEGERS}, ARG0},
       {"BITWISE_OR", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
       {"BITWISE_XOR", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
       {"BITWISE_SHIFT_LEFT", PROPAGATE, false, false, {INTEGERS, ARG0}, ARG0},
@@ -201,13 +202,13 @@ struct [[nodiscard]] opcode_info {
       {"LOGICAL_AND", PROPAGATE, false, false, {ARITHMETIC | BOOL8, ARG0}, BOOL8},
       {"LOGICAL_OR", PROPAGATE, false, false, {ARITHMETIC | BOOL8, ARG0}, BOOL8},
       {"LOGICAL_NOT", PROPAGATE, false, false, {ARITHMETIC | BOOL8}, BOOL8},
-      {"IF_ELSE", PROPAGATE, false, false, {ALL, ARG0, BOOL8}, ARG0},
+      {"IF_ELSE", PROPAGATE, true, false, {ALL, ARG0, INTEGRALS}, ARG0},
       {"CBRT", PROPAGATE, false, false, {FLOATS}, ARG0},
       {"CEIL", PROPAGATE, false, false, {FLOATS}, ARG0},
       {"FLOOR", PROPAGATE, false, false, {FLOATS}, ARG0},
       {"RINT", PROPAGATE, false, false, {FLOATS}, ARG0},
       {"SQRT", PROPAGATE, false, false, {FLOATS}, ARG0},
-      {"POW", PROPAGATE, false, false, {FLOATS}, ARG0},
+      {"POW", PROPAGATE, false, false, {FLOATS | INTEGERS, ARG0}, ARG0},
       {"EXP", PROPAGATE, false, false, {FLOATS}, ARG0},
       {"LOG", PROPAGATE, false, false, {FLOATS}, ARG0},
       {"ARCCOS", PROPAGATE, false, false, {FLOATS}, ARG0},
@@ -236,11 +237,6 @@ struct [[nodiscard]] opcode_info {
   }
 
   return info;
-}
-
-[[nodiscard]] size_t get_op_arity(opcode op)
-{
-  return get_op_info(op, cudf::error_policy::PROPAGATE).arg_types.size();
 }
 
 opcode as_opcode(ast::ast_operator op)
@@ -478,13 +474,21 @@ node::node(opcode op,
   : op_{op}, target_scale_{target_scale}, error_policy_{error_policy}, args_{std::move(args)}
 {
   auto op_info = get_op_info(op_, error_policy_);
-
   CUDF_EXPECTS(op_ != opcode::GET_INPUT && op_ != opcode::SET_OUTPUT,
                std::format("Invalid opcode `{}` for operation node.", op_info.name),
                std::runtime_error);
 
+  if (!get_op_info(op_, error_policy::PROPAGATE).is_fallible) {
+    CUDF_EXPECTS(error_policy_ != error_policy::NULLIFY,
+                 std::format("Invalid error policy `NULLIFY` for operator `{}`. Only operators "
+                             "that are fallible can use the NULLIFY error policy.",
+                             op_info.name),
+                 std::runtime_error);
+  }
+
   if (op != opcode::RESCALE) {
-    auto expected_arity = get_op_arity(op_);
+    auto op_info        = get_op_info(op_, error_policy_);
+    auto expected_arity = op_info.arg_types.size();
     auto actual_arity   = args_.size();
     CUDF_EXPECTS(actual_arity == expected_arity,
                  std::format("Invalid number of arguments for operator `{}`. Expected {}, Got {}.",
@@ -565,7 +569,18 @@ bool node::is_always_valid() const
 {
   if (op_ == opcode::GET_INPUT) { return false; }
 
-  if (get_op_info(op_, error_policy_).null_policy == null_output::ALWAYS_VALID) { return true; }
+  auto null_policy = get_op_info(op_, error_policy_).null_policy;
+
+  switch (null_policy) {
+    case null_output::ALWAYS_NULLABLE: {
+      return false;
+    }
+    case null_output::ALWAYS_VALID: {
+      return true;
+    }
+    case null_output::PROPAGATE:
+    default: break;
+  }
 
   CUDF_EXPECTS(!args_.empty(),
                "Unexpectedly found an operator node with no arguments. All operator nodes should "
