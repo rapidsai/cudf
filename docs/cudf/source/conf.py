@@ -630,11 +630,14 @@ nitpick_ignore = [
     # unqualified strings in type annotations. The ``rapidsmpf.*`` regex below
     # only matches fully qualified targets, so the bare leaf names are listed
     # explicitly here.
+    ("py:class", "SizedIterator"),
     ("py:class", "Statistics"),
     ("py:class", "Communicator"),
     ("py:class", "Options"),
     # polars aliases that don't match the public intersphinx targets.
     ("py:class", "pl.DataFrame"),
+    ("py:class", "pl.Expr"),
+    ("py:class", "pl.LazyFrame"),
     ("py:class", "polars.LazyFrame"),
     ("py:class", "polars.DataFrame"),
     ("py:class", "polars.dataframe.frame.DataFrame"),
