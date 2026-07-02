@@ -103,18 +103,24 @@ class UnaryFunction(Expr):
     }
     _supported_misc_fns = frozenset(
         {
+            "approx_n_unique",
             "as_struct",
+            "drop_nans",
             "drop_nulls",
             "fill_null",
             "fill_null_with_strategy",
+            "index_of",
             "mask_nans",
             "null_count",
             "rank",
+            "rechunk",
             "round",
+            "search_sorted",
             "set_sorted",
             "shift",
             "shift_and_fill",
             "top_k",
+            "truncate",
             "unique",
             "value_counts",
         }
@@ -135,8 +141,10 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "rechunk",
             "round",
             "set_sorted",
+            "truncate",
         }
     ).union(_OP_MAPPING.keys())
 
@@ -207,6 +215,49 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             ).sorted_like(values)  # pragma: no cover
+        elif self.name == "truncate":
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            if not plc.traits.is_floating_point(out_type):
+                return column
+            (decimals,) = self.options
+            operand = column.obj
+            scale: plc.Scalar | None = None
+            if decimals != 0:
+                scale = plc.Scalar.from_py(10.0**decimals, out_type, stream=df.stream)
+                operand = plc.binaryop.binary_operation(
+                    operand,
+                    scale,
+                    plc.binaryop.BinaryOperator.MUL,
+                    out_type,
+                    stream=df.stream,
+                )
+            nonneg = plc.binaryop.binary_operation(
+                operand,
+                plc.Scalar.from_py(0.0, out_type, stream=df.stream),
+                plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            truncated = plc.copying.copy_if_else(
+                plc.unary.unary_operation(
+                    operand, plc.unary.UnaryOperator.FLOOR, stream=df.stream
+                ),
+                plc.unary.unary_operation(
+                    operand, plc.unary.UnaryOperator.CEIL, stream=df.stream
+                ),
+                nonneg,
+                stream=df.stream,
+            )
+            if scale is not None:
+                truncated = plc.binaryop.binary_operation(
+                    truncated,
+                    scale,
+                    plc.binaryop.BinaryOperator.DIV,
+                    out_type,
+                    stream=df.stream,
+                )
+            return Column(truncated, dtype=self.dtype)
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
@@ -329,6 +380,95 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "rechunk":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            return column
+        elif self.name == "approx_n_unique":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            count = plc.reduce.distinct_count(
+                column.obj,
+                plc.types.NullPolicy.INCLUDE,
+                plc.types.NanPolicy.NAN_IS_VALID,
+                stream=df.stream,
+            )
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(count, self.dtype.plc_type, stream=df.stream),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "search_sorted":
+            side, descending = self.options
+            column = self.children[0].evaluate(df, context=context)
+            needles = self.children[1].evaluate(df, context=context)
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+            bound = (
+                plc.search.upper_bound if side == "right" else plc.search.lower_bound
+            )
+            indices = bound(
+                plc.Table([column.obj]),
+                plc.Table([needles.obj]),
+                [order],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            return Column(
+                plc.unary.cast(indices, self.dtype.plc_type, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "index_of":
+            column = self.children[0].evaluate(df, context=context)
+            value_expr = self.children[1]
+            if isinstance(value_expr, Literal):
+                value = plc.Scalar.from_py(
+                    value_expr.value, column.dtype.plc_type, stream=df.stream
+                )
+            else:
+                value = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+            mask = plc.binaryop.binary_operation(
+                column.obj,
+                value,
+                plc.binaryop.BinaryOperator.NULL_EQUALS,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            indices = plc.filling.sequence(
+                column.obj.size(),
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            matched = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([indices]), mask, stream=df.stream
+            ).columns()[0]
+            if matched.size() == 0:
+                result = plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                    1,
+                    stream=df.stream,
+                )
+            else:
+                (first,) = plc.copying.slice(
+                    plc.Table([matched]), [0, 1], stream=df.stream
+                )[0].columns()
+                result = plc.unary.cast(first, self.dtype.plc_type, stream=df.stream)
+            return Column(result, dtype=self.dtype)
+        elif self.name == "drop_nans":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            if not plc.traits.is_floating_point(column.obj.type()):
+                return column
+            return Column(
+                plc.stream_compaction.drop_nans(
+                    plc.Table([column.obj]), [0], 1, stream=df.stream
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
