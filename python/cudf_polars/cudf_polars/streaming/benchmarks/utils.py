@@ -20,6 +20,7 @@ import textwrap
 import time
 import traceback
 import uuid
+import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1572,8 +1573,14 @@ def _write_quent_traces(
 
     # The quent UI currently requires the filename to match the engine's ID.
     for log in quent_logs:
-        if log.get("data", {}).get("Engine", {}).get("Init"):
-            assert log["id"] == str(run_id)
+        if log.get("data", {}).get("Engine", {}).get("Init") and log.get("id") != str(
+            run_id
+        ):
+            msg = (
+                f"Engine ID mismatch: Quent ID ({log['id']}) != Run ID ({run_id}). "
+                "The data might not load in the Quent UI."
+            )
+            warnings.warn(msg, stacklevel=2)
 
     logs_dir = Path("logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
