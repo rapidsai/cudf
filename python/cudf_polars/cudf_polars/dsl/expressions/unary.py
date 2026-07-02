@@ -135,6 +135,7 @@ class UnaryFunction(Expr):
     }
     _supported_horizontal_fns = frozenset(
         {
+            "coalesce",
             "max_horizontal",
             "mean_horizontal",
             "min_horizontal",
@@ -566,6 +567,22 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "coalesce":
+            child_columns = [
+                child.evaluate(df, context=context) for child in self.children
+            ]
+            result = child_columns[0].astype(self.dtype, stream=df.stream).obj
+            for candidate in child_columns[1:]:
+                if result.null_count() == 0:
+                    break
+                cast_candidate = candidate.astype(self.dtype, stream=df.stream)
+                fill = (
+                    cast_candidate.obj_scalar(stream=df.stream)
+                    if candidate.is_scalar
+                    else cast_candidate.obj
+                )
+                result = plc.replace.replace_nulls(result, fill, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         elif self.name in ("min_horizontal", "max_horizontal"):
             op = UnaryFunction._horizontal_fold_ops[self.name]
             columns = [
