@@ -160,7 +160,11 @@ class BooleanFunction(Expr):
         # Matches polars' PEP 485 semantics (see
         # crates/polars-ops/src/series/ops/is_close.rs):
         #   |x - y| <= max(rel_tol * max(|x|, |y|), abs_tol)
-        # with special handling for non-finite values.
+        # with special handling for non-finite values. The whole predicate is
+        # evaluated as a single fused libcudf AST expression via
+        # ``compute_column`` to minimize kernel launches. Nulls propagate
+        # through the (non-Kleene) AST logical ops, so the result is null iff
+        # either input is null, matching polars.
         abs_tol, rel_tol, nans_equal = self.options
         left, right = (child.evaluate(df, context=context) for child in self.children)
         f64 = plc.DataType(plc.TypeId.FLOAT64)
@@ -168,12 +172,7 @@ class BooleanFunction(Expr):
 
         # A scalar operand is broadcast to the size of the other (columnar)
         # operand, which may be zero for empty partitions.
-        if left.is_scalar and not right.is_scalar:
-            target = right.size
-        elif right.is_scalar and not left.is_scalar:
-            target = left.size
-        else:
-            target = left.size
+        target = right.size if left.is_scalar and not right.is_scalar else left.size
 
         def prep(col: Column) -> plc.Column:
             obj = col.obj
@@ -185,59 +184,70 @@ class BooleanFunction(Expr):
                 )
             return obj
 
-        xd = prep(left)
-        yd = prep(right)
+        table = plc.Table([prep(left), prep(right)])
 
-        def binop(
-            lhs: plc.Column,
-            rhs: plc.Column | plc.Scalar,
-            op: plc.binaryop.BinaryOperator,
-            out: plc.DataType,
-        ) -> plc.Column:
-            return plc.binaryop.binary_operation(lhs, rhs, op, out, stream=stream)
+        ast = plc.expressions
+        op = ast.ASTOperator
 
-        def unop(col: plc.Column, op: plc.unary.UnaryOperator) -> plc.Column:
-            return plc.unary.unary_operation(col, op, stream=stream)
+        def lit(value: float) -> plc.expressions.Literal:
+            return ast.Literal(plc.Scalar.from_py(value, f64, stream=stream))
 
-        bool_t = plc.DataType(plc.TypeId.BOOL8)
-        abs_op = plc.unary.UnaryOperator.ABS
-        absx = unop(xd, abs_op)
-        absy = unop(yd, abs_op)
-        absdiff = unop(binop(xd, yd, plc.binaryop.BinaryOperator.SUB, f64), abs_op)
-        maxabs = binop(absx, absy, plc.binaryop.BinaryOperator.NULL_MAX, f64)
-        rel_scalar = plc.Scalar.from_py(rel_tol, f64, stream=stream)
-        abs_scalar = plc.Scalar.from_py(abs_tol, f64, stream=stream)
-        rel_term = binop(maxabs, rel_scalar, plc.binaryop.BinaryOperator.MUL, f64)
-        tol = binop(rel_term, abs_scalar, plc.binaryop.BinaryOperator.NULL_MAX, f64)
-        cmp = binop(absdiff, tol, plc.binaryop.BinaryOperator.LESS_EQUAL, bool_t)
+        def unary(operator: Any, operand: Any) -> plc.expressions.Operation:
+            return ast.Operation(operator, operand)
 
-        inf_scalar = plc.Scalar.from_py(float("inf"), f64, stream=stream)
-        nan_x = plc.unary.is_nan(xd, stream=stream)
-        nan_y = plc.unary.is_nan(yd, stream=stream)
-        inf_x = binop(absx, inf_scalar, plc.binaryop.BinaryOperator.EQUAL, bool_t)
-        inf_y = binop(absy, inf_scalar, plc.binaryop.BinaryOperator.EQUAL, bool_t)
-        or_op = plc.binaryop.BinaryOperator.LOGICAL_OR
-        and_op = plc.binaryop.BinaryOperator.LOGICAL_AND
-        not_op = plc.unary.UnaryOperator.NOT
-        fin_x = unop(binop(nan_x, inf_x, or_op, bool_t), not_op)
-        fin_y = unop(binop(nan_y, inf_y, or_op, bool_t), not_op)
-        both_fin = binop(fin_x, fin_y, and_op, bool_t)
-        part_finite = binop(both_fin, cmp, and_op, bool_t)
+        def binary(operator: Any, lhs: Any, rhs: Any) -> plc.expressions.Operation:
+            return ast.Operation(operator, lhs, rhs)
 
-        # Infinities are close if they share the same sign.
-        inf_both = binop(inf_x, inf_y, and_op, bool_t)
-        same_val = binop(xd, yd, plc.binaryop.BinaryOperator.EQUAL, bool_t)
-        part_inf = binop(inf_both, same_val, and_op, bool_t)
+        def maximum(lhs: Any, rhs: Any) -> plc.expressions.Operation:
+            # max(a, b) == (a + b + |a - b|) / 2. Only used on the finite
+            # branch, so NaN contamination from non-finite inputs is masked out.
+            return binary(
+                op.DIV,
+                binary(
+                    op.ADD,
+                    binary(op.ADD, lhs, rhs),
+                    unary(op.ABS, binary(op.SUB, lhs, rhs)),
+                ),
+                lit(2.0),
+            )
 
-        result = binop(part_finite, part_inf, or_op, bool_t)
+        x = ast.ColumnReference(0)
+        y = ast.ColumnReference(1)
+        inf = lit(float("inf"))
+        absx = unary(op.ABS, x)
+        absy = unary(op.ABS, y)
+        absdiff = unary(op.ABS, binary(op.SUB, x, y))
+
+        tol = maximum(binary(op.MUL, lit(rel_tol), maximum(absx, absy)), lit(abs_tol))
+        cmp = binary(op.LESS_EQUAL, absdiff, tol)
+
+        # NaN iff value != itself; Inf iff |value| == inf.
+        nan_x = binary(op.NOT_EQUAL, x, x)
+        nan_y = binary(op.NOT_EQUAL, y, y)
+        inf_x = binary(op.EQUAL, absx, inf)
+        inf_y = binary(op.EQUAL, absy, inf)
+        finite_x = unary(op.NOT, binary(op.LOGICAL_OR, nan_x, inf_x))
+        finite_y = unary(op.NOT, binary(op.LOGICAL_OR, nan_y, inf_y))
+        both_finite = binary(op.LOGICAL_AND, finite_x, finite_y)
+        part_finite = binary(op.LOGICAL_AND, both_finite, cmp)
+
+        # Infinities are close iff both are infinite with the same sign.
+        part_inf = binary(
+            op.LOGICAL_AND,
+            binary(op.LOGICAL_AND, inf_x, inf_y),
+            binary(op.EQUAL, x, y),
+        )
+
+        predicate = binary(op.LOGICAL_OR, part_finite, part_inf)
         if nans_equal:
-            part_nan = binop(nan_x, nan_y, and_op, bool_t)
-            result = binop(result, part_nan, or_op, bool_t)
+            predicate = binary(
+                op.LOGICAL_OR, predicate, binary(op.LOGICAL_AND, nan_x, nan_y)
+            )
 
-        # Reapply null propagation: null iff either input is null.
-        combined = binop(xd, yd, plc.binaryop.BinaryOperator.ADD, f64)
-        result = result.with_mask(combined.null_mask(), combined.null_count())
-        return Column(result, dtype=self.dtype)
+        return Column(
+            plc.transform.compute_column(table, predicate, stream=stream),
+            dtype=self.dtype,
+        )
 
     _BETWEEN_OPS: ClassVar[
         dict[
