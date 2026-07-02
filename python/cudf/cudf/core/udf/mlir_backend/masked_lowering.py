@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import operator
+from functools import partial
 from typing import TYPE_CHECKING
 
 from numba_cuda_mlir import types
@@ -125,48 +126,37 @@ def _lower_masked_getattr(
     builder.store_var(target, convert(field_value, target_mlir_ty))
 
 
-# ``cast(NA -> Masked)``: NA has no payload, so build a struct with
-# an undef value and ``valid=False``. Triggered by branches like
-# ``return x if cond else cudf.NA`` where the unification is Masked.
-def _cast_na_to_masked(context, builder, fromty, toty, val):
-    value_mlir_ty = builder.get_mlir_type(toty.value_type)
-    undef_val = llvm.UndefOp(value_mlir_ty)
-    valid_zero = arith.constant(
-        result=builder.get_mlir_type(types.boolean), value=0
+# ``cast(NA -> Masked)`` and ``cast(scalar -> Masked)``. Both build a Masked
+# struct for the target's value type; they differ only in the payload (NA has
+# none, so use undef) and the validity bit (NA -> invalid, scalar -> valid).
+# Triggered by branch unification, e.g. ``return x if cond else cudf.NA`` or
+# ``return 5``.
+def _cast_to_masked(context, builder, from_ty, to_ty, val):
+    value_mlir_ty = builder.get_mlir_type(to_ty.value_type)
+    if isinstance(from_ty, NAType):
+        value = llvm.UndefOp(value_mlir_ty)
+        valid = 0
+    else:
+        value = convert(val, value_mlir_ty)
+        valid = 1
+    valid_const = arith.constant(
+        result=builder.get_mlir_type(types.boolean), value=valid
     )
-    return _pack_masked(builder, toty, undef_val, valid_zero)
-
-
-# ``cast(scalar -> Masked)``: ``return 5`` / ``return 2.5`` patterns
-# where Numba unifies the branch return shape to Masked. Wrap the
-# scalar with ``valid=True``.
-def _cast_scalar_to_masked(context, builder, fromty, toty, val):
-    if not isinstance(toty, MaskedType):
-        raise TypeError(
-            f"cast to Masked expected MaskedType destination, got {toty!r}"
-        )
-    value_mlir_ty = builder.get_mlir_type(toty.value_type)
-    scalar_val = convert(val, value_mlir_ty)
-    valid_one = arith.constant(
-        result=builder.get_mlir_type(types.boolean), value=1
-    )
-    return _pack_masked(builder, toty, scalar_val, valid_one)
+    return _pack_masked(builder, to_ty, value, valid_const)
 
 
 # ``cast(Masked -> Masked)``: branch unification across different
 # inner widths (e.g. one branch returns Masked(int32), another
 # returns Masked(float64); Numba unifies to Masked(float64)).
 # Promote the payload, preserve the validity bit.
-def _cast_masked_to_masked(context, builder, fromty, toty, val):
-    if fromty.value_type == toty.value_type:
+def _cast_masked_to_masked(context, builder, from_ty, to_ty, val):
+    if from_ty.value_type == to_ty.value_type:
         return val
     st = llvm.StructType(val.type)
-    m_val, m_valid = _extract_masked_value_valid(
-        val, st.body[0], st.body[1]
-    )
-    value_mlir_ty = builder.get_mlir_type(toty.value_type)
+    m_val, m_valid = _extract_masked_value_valid(val, st.body[0], st.body[1])
+    value_mlir_ty = builder.get_mlir_type(to_ty.value_type)
     casted = convert(m_val, value_mlir_ty)
-    return _pack_masked(builder, toty, casted, m_valid)
+    return _pack_masked(builder, to_ty, casted, m_valid)
 
 
 # ``is``/``is not`` against NA are registered for both operand orders
@@ -180,20 +170,16 @@ def _masked_operand(builder, args):
     raise TypeError("expected a MaskedType operand")
 
 
-# ``m is NA`` / ``NA is m`` -> ``not m.valid`` (invalid means "is NA").
-def _lower_masked_is_na(builder, target, args, kwargs):
+# ``is``/``is not`` against NA both reduce to the validity bit: ``m is NA`` ->
+# ``not m.valid`` and ``m is not NA`` -> ``m.valid``. Registered for both
+# operators (and operand orders) via partials below.
+def _lower_masked_na_compare(builder, target, args, kwargs, *, is_null):
     m = builder.load_var(_masked_operand(builder, args))
     st = llvm.StructType(m.type)
     _, valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
-    one = arith.constant(valid.type, 1)
-    builder.store_var(target, arith.xori(valid, one))
-
-
-# ``m is not NA`` / ``NA is not m`` -> ``m.valid``.
-def _lower_masked_is_not_na(builder, target, args, kwargs):
-    m = builder.load_var(_masked_operand(builder, args))
-    st = llvm.StructType(m.type)
-    _, valid = _extract_masked_value_valid(m, st.body[0], st.body[1])
+    if is_null:
+        one = arith.constant(valid.type, 1)
+        valid = arith.xori(valid, one)
     builder.store_var(target, valid)
 
 
@@ -215,15 +201,17 @@ def _register() -> None:
 
     lowering_registry.lower_getattr_generic(MaskedType)(_lower_masked_getattr)
 
-    lower_cast(na_type, MaskedType)(_cast_na_to_masked)
+    lower_cast(na_type, MaskedType)(_cast_to_masked)
     for _scalar_cls in (types.Integer, types.Float, types.Boolean):
-        lower_cast(_scalar_cls, MaskedType)(_cast_scalar_to_masked)
+        lower_cast(_scalar_cls, MaskedType)(_cast_to_masked)
     lower_cast(MaskedType, MaskedType)(_cast_masked_to_masked)
 
-    lower(operator.is_, MaskedType, NAType)(_lower_masked_is_na)
-    lower(operator.is_, NAType, MaskedType)(_lower_masked_is_na)
-    lower(operator.is_not, MaskedType, NAType)(_lower_masked_is_not_na)
-    lower(operator.is_not, NAType, MaskedType)(_lower_masked_is_not_na)
+    is_na = partial(_lower_masked_na_compare, is_null=True)
+    is_not_na = partial(_lower_masked_na_compare, is_null=False)
+    lower(operator.is_, MaskedType, NAType)(is_na)
+    lower(operator.is_, NAType, MaskedType)(is_na)
+    lower(operator.is_not, MaskedType, NAType)(is_not_na)
+    lower(operator.is_not, NAType, MaskedType)(is_not_na)
 
 
 _register()

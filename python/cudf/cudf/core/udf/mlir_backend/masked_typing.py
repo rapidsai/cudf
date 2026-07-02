@@ -66,18 +66,17 @@ class MaskedType(types.Type):
         """
         if isinstance(other, NAType):
             return self
-        if isinstance(other, MaskedType):
-            unified = context.unify_pairs(self.value_type, other.value_type)
-            return MaskedType(unified) if unified is not None else None
-        unified = context.unify_pairs(self.value_type, other)
-        if unified is None:
-            return None
-        return MaskedType(unified)
+        other_value_type = (
+            other.value_type if isinstance(other, MaskedType) else other
+        )
+        unified = context.unify_pairs(self.value_type, other_value_type)
+        return MaskedType(unified) if unified is not None else None
 
 
 class NAType(types.Type):
     """Type for ``cudf.NA`` -- the missing-value sentinel that can flow
-    through a UDF branch and unify into a ``MaskedType``."""
+    through a UDF branch and unify into a ``MaskedType``.
+    """
 
     def __init__(self):
         super().__init__(name="NA")
@@ -125,29 +124,16 @@ class MaskedTypeAttrs(AttributeTemplate):
         return types.boolean
 
 
-# ``m is NA`` / ``NA is m`` -> boolean. The lowering returns
-# ``not m.valid``.
-class MaskedScalarIsNull(AbstractTemplate):
+# ``is``/``is not`` between a ``MaskedType`` and ``NA`` (either operand order)
+# both type to boolean; the is/is-not distinction is handled in lowering, so a
+# single template serves both operators.
+class MaskedNAComparison(AbstractTemplate):
     def generic(self, args, kws):
         if len(args) != 2 or kws:
             return None
-        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            return nb_signature(types.boolean, args[0], na_type)
-        if isinstance(args[0], NAType) and isinstance(args[1], MaskedType):
-            return nb_signature(types.boolean, na_type, args[1])
-        return None
-
-
-# ``m is not NA`` / ``NA is not m`` -> boolean. The lowering
-# returns ``m.valid`` directly.
-class MaskedScalarIsNotNull(AbstractTemplate):
-    def generic(self, args, kws):
-        if len(args) != 2 or kws:
-            return None
-        if isinstance(args[0], MaskedType) and isinstance(args[1], NAType):
-            return nb_signature(types.boolean, args[0], na_type)
-        if isinstance(args[0], NAType) and isinstance(args[1], MaskedType):
-            return nb_signature(types.boolean, na_type, args[1])
+        lhs, rhs = args
+        if {type(lhs), type(rhs)} == {MaskedType, NAType}:
+            return nb_signature(types.boolean, lhs, rhs)
         return None
 
 
@@ -157,8 +143,8 @@ def _register() -> None:
     """
     typing_registry.register_global(Masked, types.Function(MaskedConstructor))
     typing_registry.register_attr(MaskedTypeAttrs)
-    typing_registry.register_global(operator.is_)(MaskedScalarIsNull)
-    typing_registry.register_global(operator.is_not)(MaskedScalarIsNotNull)
+    typing_registry.register_global(operator.is_)(MaskedNAComparison)
+    typing_registry.register_global(operator.is_not)(MaskedNAComparison)
 
 
 _register()

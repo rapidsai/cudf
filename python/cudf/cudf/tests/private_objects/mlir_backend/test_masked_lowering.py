@@ -146,7 +146,8 @@ def test_cast_na_to_masked_via_branch_unification():
 
 def test_cast_masked_to_masked_promotes_value_type():
     """Branches with different Masked widths unify on the wider type;
-    the narrow branch's value gets promoted, validity is preserved."""
+    the narrow branch's value gets promoted, validity is preserved.
+    """
 
     @cuda.jit(device=True)
     def fn(x_int, x_float, take_int):
@@ -192,68 +193,44 @@ def test_cast_masked_to_masked_promotes_value_type():
 
 
 @pytest.mark.parametrize("valid_in", [True, False])
-def test_masked_is_na_returns_not_valid(valid_in):
-    """``m is NA`` returns ``not m.valid`` (invalid means "is NA")."""
+def test_masked_is_na(valid_in):
+    """``m is NA`` and ``NA is m`` (both orders) return ``not m.valid``."""
     from cudf.core.missing import NA
 
-    @cuda.jit(types.void(types.boolean[::1], types.int64[::1], types.boolean[::1]))
+    @cuda.jit(
+        types.void(types.boolean[::1], types.int64[::1], types.boolean[::1])
+    )
     def k(out, v, valid):
         m = Masked(v[0], valid[0])
         out[0] = m is NA
+        out[1] = NA is m
 
     in_v = cp.array([42], dtype=np.int64)
     in_valid = cp.array([valid_in], dtype=np.bool_)
-    out = cp.zeros(1, dtype=np.bool_)
+    out = cp.zeros(2, dtype=np.bool_)
     _launch(k, out, in_v, in_valid)
-    assert bool(out.get()[0]) is (not valid_in)
+    result = out.get()
+    assert bool(result[0]) is (not valid_in)
+    assert bool(result[1]) is (not valid_in)
 
 
 @pytest.mark.parametrize("valid_in", [True, False])
-def test_masked_is_not_na_returns_valid(valid_in):
-    """``m is not NA`` returns ``m.valid`` directly."""
+def test_masked_is_not_na(valid_in):
+    """``m is not NA`` and ``NA is not m`` (both orders) return ``m.valid``."""
     from cudf.core.missing import NA
 
-    @cuda.jit(types.void(types.boolean[::1], types.int64[::1], types.boolean[::1]))
+    @cuda.jit(
+        types.void(types.boolean[::1], types.int64[::1], types.boolean[::1])
+    )
     def k(out, v, valid):
         m = Masked(v[0], valid[0])
         out[0] = m is not NA
+        out[1] = NA is not m
 
     in_v = cp.array([42], dtype=np.int64)
     in_valid = cp.array([valid_in], dtype=np.bool_)
-    out = cp.zeros(1, dtype=np.bool_)
+    out = cp.zeros(2, dtype=np.bool_)
     _launch(k, out, in_v, in_valid)
-    assert bool(out.get()[0]) is valid_in
-
-
-@pytest.mark.parametrize("valid_in", [True, False])
-def test_na_is_masked_returns_not_valid(valid_in):
-    """``NA is m`` is the symmetric form of ``m is NA``."""
-    from cudf.core.missing import NA
-
-    @cuda.jit(types.void(types.boolean[::1], types.int64[::1], types.boolean[::1]))
-    def k(out, v, valid):
-        m = Masked(v[0], valid[0])
-        out[0] = NA is m
-
-    in_v = cp.array([42], dtype=np.int64)
-    in_valid = cp.array([valid_in], dtype=np.bool_)
-    out = cp.zeros(1, dtype=np.bool_)
-    _launch(k, out, in_v, in_valid)
-    assert bool(out.get()[0]) is (not valid_in)
-
-
-@pytest.mark.parametrize("valid_in", [True, False])
-def test_na_is_not_masked_returns_valid(valid_in):
-    """``NA is not m`` is the symmetric form of ``m is not NA``."""
-    from cudf.core.missing import NA
-
-    @cuda.jit(types.void(types.boolean[::1], types.int64[::1], types.boolean[::1]))
-    def k(out, v, valid):
-        m = Masked(v[0], valid[0])
-        out[0] = NA is not m
-
-    in_v = cp.array([42], dtype=np.int64)
-    in_valid = cp.array([valid_in], dtype=np.bool_)
-    out = cp.zeros(1, dtype=np.bool_)
-    _launch(k, out, in_v, in_valid)
-    assert bool(out.get()[0]) is valid_in
+    result = out.get()
+    assert bool(result[0]) is valid_in
+    assert bool(result[1]) is valid_in
