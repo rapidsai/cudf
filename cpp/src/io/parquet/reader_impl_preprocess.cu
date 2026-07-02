@@ -22,7 +22,10 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cub/device/device_transform.cuh>
 #include <cuda/iterator>
+#include <thrust/binary_search.h>
+#include <thrust/execution_policy.h>
 #include <thrust/fill.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/scan.h>
@@ -1123,6 +1126,84 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
                               _stream);
 
   return cudf::detail::make_pinned_vector(d_col_sizes, _stream);
+}
+
+namespace {
+
+/**
+ * @brief Maps each global row index in the current row range to the source-local row index
+ */
+struct map_global_to_local_row_index {
+  std::size_t const* rg_global_row_offsets;  ///< Global row offsets for each selected row group
+  std::size_t const* rg_local_row_offsets;   ///< File-local row offsets for each selected row group
+  std::size_t num_row_groups;
+
+  __device__ std::size_t operator()(std::size_t global_row_index) const
+  {
+    auto const rg_idx = thrust::upper_bound(thrust::seq,
+                                            rg_global_row_offsets,
+                                            rg_global_row_offsets + num_row_groups,
+                                            global_row_index) -
+                        rg_global_row_offsets - 1;
+    return global_row_index + rg_local_row_offsets[rg_idx];
+  }
+};
+
+}  // namespace
+
+void reader_impl::prepend_row_index_column(row_range const& read_info,
+                                           std::vector<std::unique_ptr<column>>& out_columns)
+{
+  if (not _options.prepend_row_index_column) { return; }
+
+  using column_type    = size_t;
+  auto constexpr dtype = cudf::data_type{cudf::type_to_id<column_type>()};
+
+  auto const prepend_column = [&](auto&& column) {
+    out_columns.emplace(out_columns.begin(), std::move(column));
+  };
+
+  // Empty column
+  if (read_info.num_rows == 0) {
+    prepend_column(cudf::make_empty_column(dtype));
+    return;
+  }
+
+  // Collect the global and file-local row offsets for each currently selected row group (in
+  // selection order).
+  auto const& row_groups = _file_itm_data.row_groups;
+  auto host_rg_global_offsets =
+    cudf::detail::make_empty_pinned_vector<std::size_t>(row_groups.size(), _stream);
+  auto host_rg_local_offsets =
+    cudf::detail::make_empty_pinned_vector<size_t>(row_groups.size(), _stream);
+  for (auto const& rg : row_groups) {
+    host_rg_global_offsets.push_back(rg.start_row);
+    host_rg_local_offsets.push_back(rg.source_start_row - rg.start_row);
+  }
+
+  // Map global row indices in the current row-range to corresponding source-local row indices
+  rmm::device_uvector<column_type> col_data(read_info.num_rows, _stream, _mr);
+  {
+    auto temp_mr = cudf::get_current_device_resource_ref();
+
+    // Copy row offsets to device
+    auto const rg_global_offsets =
+      cudf::detail::make_device_uvector_async(host_rg_global_offsets, _stream, temp_mr);
+    auto const rg_local_offsets =
+      cudf::detail::make_device_uvector_async(host_rg_local_offsets, _stream, temp_mr);
+
+    // For each output row, binary search its row group and compute the file-local row index
+    CUDF_CUDA_TRY(cub::DeviceTransform::Transform(
+      cuda::counting_iterator<std::size_t>(read_info.skip_rows),
+      col_data.begin(),
+      read_info.num_rows,
+      map_global_to_local_row_index{
+        rg_global_offsets.data(), rg_local_offsets.data(), rg_global_offsets.size()},
+      _stream.value()));
+    _stream.synchronize();
+  }
+
+  prepend_column(std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{}, 0));
 }
 
 void reader_impl::prepend_source_index_column(std::span<std::size_t const> num_rows_per_source,
