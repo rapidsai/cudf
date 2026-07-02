@@ -133,6 +133,12 @@ class TemporalFunction(Expr):
         Name.TotalMicroseconds: 1_000,
         Name.TotalNanoseconds: 1,
     }
+    # Divisor used to derive the century/millennium from the calendar year:
+    # ``(year - 1) // divisor + 1`` (floor division, matching polars).
+    _CENTURY_MILLENNIUM_DIVISOR: ClassVar[dict[Name, int]] = {
+        Name.Century: 100,
+        Name.Millennium: 1_000,
+    }
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
@@ -145,6 +151,8 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        Name.Century,
+        Name.Millennium,
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
@@ -225,6 +233,41 @@ class TemporalFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
+            (column,) = columns
+            year = plc.datetime.extract_datetime_component(
+                column.obj,
+                plc.datetime.DatetimeComponent.YEAR,
+                stream=df.stream,
+            )
+            int32 = plc.DataType(plc.TypeId.INT32)
+            # polars computes ``(year - 1) // divisor + 1`` using floor division.
+            year_minus_one = plc.binaryop.binary_operation(
+                year,
+                plc.Scalar.from_py(1, int32, stream=df.stream),
+                plc.binaryop.BinaryOperator.SUB,
+                int32,
+                stream=df.stream,
+            )
+            floored = plc.binaryop.binary_operation(
+                year_minus_one,
+                plc.Scalar.from_py(
+                    self._CENTURY_MILLENNIUM_DIVISOR[self.name],
+                    int32,
+                    stream=df.stream,
+                ),
+                plc.binaryop.BinaryOperator.FLOOR_DIV,
+                int32,
+                stream=df.stream,
+            )
+            result = plc.binaryop.binary_operation(
+                floored,
+                plc.Scalar.from_py(1, int32, stream=df.stream),
+                plc.binaryop.BinaryOperator.ADD,
+                self.dtype.plc_type,
+                stream=df.stream,
+            )
+            return Column(result, dtype=self.dtype)
         elif self.name is TemporalFunction.Name.CastTimeUnit:
             (column,) = columns
             return Column(
