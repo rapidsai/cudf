@@ -17,6 +17,9 @@ public class VariantUtils {
     NativeDepsLoader.loadNativeDeps();
   }
 
+  // Keep in sync with the target types accepted by cuDF Variant extraction/cast:
+  // cpp/include/cudf/io/experimental/variant.hpp and
+  // cpp/src/io/parquet/experimental/variant_extract.cu:is_variant_castable.
   private static final List<DType> SUPPORTED_TYPES = Arrays.asList(
       DType.STRING, DType.INT8, DType.INT16, DType.INT32, DType.INT64);
 
