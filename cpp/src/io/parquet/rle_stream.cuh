@@ -182,11 +182,11 @@ struct rle_stream {
   // given a scratch buffer large enough to hold [start, end), the stream is
   // copied into it once (block-cooperatively) and cur/end are rebased into
   // shared memory. This turns the serial run-header parse that dominates
-  // fill_run_batch() from a chain of dependent L2 loads (~200 cyc each) into
-  // shared-memory loads (~30 cyc). It stages *raw encoded bytes*, so it is
-  // level_t- and level_bits-agnostic: definition/repetition levels, dictionary
-  // indices, and boolean streams all benefit with identical code. Streams that
-  // do not fit the budget transparently fall back to parsing from global.
+  // fill_run_batch() from a chain of dependent L2 loads into shared-memory
+  // loads. It stages *raw encoded bytes*, so it is level_t- and
+  // level_bits-agnostic: definition/repetition levels, dictionary indices, and
+  // boolean streams all benefit with identical code. Streams that do not fit
+  // the budget transparently fall back to parsing from global.
   uint8_t const* smem_stage;
   int smem_stage_size;
 
@@ -218,15 +218,15 @@ struct rle_stream {
     fill_index   = 0;
     decode_index = -1;  // signals the first iteration. Nothing to decode.
 
-    // Optionally stage the encoded stream into shared memory. init() is called
-    // by every thread in the block, so the copy below is block-cooperative. It
-    // deliberately performs no barrier of its own: every existing caller issues
-    // a block-wide sync immediately after init() (before the first parse in
+    // If smem staging is active, since init() is called by every thread in the
+    // block the copy below is block-cooperative. It deliberately performs no
+    // barrier of its own: every existing caller issues a block-wide sync
+    // immediately after init() (before the first parse in
     // fill_run_batch/skip_runs), which is what publishes the staged bytes.
     smem_stage      = _smem_stage;
     smem_stage_size = _smem_stage_size;
     if (smem_stage != nullptr) {
-      int const len = static_cast<int>(_end - _start);
+      auto const len = static_cast<int>(_end - _start);
       if (len > 0 && len <= smem_stage_size) {
         auto* const s_dst  = _smem_stage;
         int const t        = threadIdx.x;
