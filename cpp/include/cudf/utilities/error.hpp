@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup utility_error
  * @{
  * @file
+ * @brief Exception types and error-checking macros used throughout libcudf.
  */
 
 /**

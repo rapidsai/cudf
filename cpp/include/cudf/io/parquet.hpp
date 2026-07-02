@@ -25,6 +25,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief cuDF-IO API for reading and writing Parquet files.
  */
 
 constexpr size_t default_row_group_size_bytes =
