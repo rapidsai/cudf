@@ -61,7 +61,6 @@ pygments_style = "sphinx"
 html_theme_options = {
     "external_links": [],
     "github_url": "https://github.com/rapidsai/cudf",
-    "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
     "navbar_align": "right",
     "navbar_center": "navbar-nav, version-switcher, navbar-external-links",
