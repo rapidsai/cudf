@@ -290,7 +290,8 @@ def test_to_datetime(
             exact=exact,
         )
     )
-    if cache or not exact or (not strict and format is None):
+    if not exact or (not strict and format is None):
+        # cache is CPU-only memoization and is ignored on the GPU.
         outcome = "translation_error"
     elif (values[0] == "foo" and format is None and strict) or (
         strict and has_invalid_row
@@ -312,6 +313,19 @@ def test_to_datetime(
                 q.collect(engine=engine)
     else:
         assert_gpu_result_equal(q, engine=engine)
+
+
+def test_to_datetime_default_cache(engine: pl.GPUEngine):
+    # cache defaults to True; it is CPU-only memoization and ignored on GPU.
+    df = pl.LazyFrame({"a": ["2024-01-01 00:00:00", "2023-12-31 23:59:59", None]})
+    q = df.select(pl.col("a").str.to_datetime(format="%Y-%m-%d %H:%M:%S"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_to_date_default_cache(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": ["2024-01-01", "2023-12-31", None]})
+    q = df.select(pl.col("a").str.to_date(format="%Y-%m-%d"))
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(

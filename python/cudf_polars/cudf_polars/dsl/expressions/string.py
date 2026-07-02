@@ -281,11 +281,11 @@ class StringFunction(Expr):
                 "String split with regex (literal=False) is not supported."
             )
         elif self.name is StringFunction.Name.Strptime:
-            format, strict, exact, cache = self.options
+            format, strict, exact, _ = self.options
             if not format and not strict:
                 raise NotImplementedError("format inference requires strict checking")
-            if cache:
-                raise NotImplementedError("Strptime cache is a CPU feature")
+            # cache is CPU-only memoization of parsed values; it has no effect
+            # on the result so we ignore it on the GPU.
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
