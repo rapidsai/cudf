@@ -87,7 +87,7 @@ if TYPE_CHECKING:
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.streaming.explain import SerializablePlan
 
-POLARS_VALIDATION_OPTIONS = {
+POLARS_VALIDATION_OPTIONS: dict[str, Any] = {
     "check_row_order": True,
     "check_column_order": True,
     "check_dtypes": True,

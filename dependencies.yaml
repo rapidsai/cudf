@@ -592,6 +592,10 @@ files:
       polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41"]
     includes:
       - test_cudf_polars_compat
+  test_cudf_polars_tpch:
+    output: none
+    includes:
+      - test_cudf_polars_tpch
 channels:
   - rapidsai-nightly
   - rapidsai
@@ -1165,6 +1169,12 @@ dependencies:
           # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
           # (https://github.com/pandas-dev/pandas/issues/66086).
           - *pandas
+  test_cudf_polars_tpch:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - duckdb
+          - tpchgen-cli
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
