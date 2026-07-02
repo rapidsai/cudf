@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -40,6 +40,10 @@ namespace strings {
  * r2 is now ["hello","gdbye"]
  * @endcode
  *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
+ *
  * @throw cudf::logic_error if target is an empty string.
  *
  * @param input Strings column for this operation
@@ -79,6 +83,10 @@ std::unique_ptr<column> replace(
  * r = s.replace_slice(s,2,5,"z")
  * r is now ["abzfghij", "01z56789"]
  * @endcode
+ *
+ * The `repl` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw cudf::logic_error if start is greater than stop.
  *

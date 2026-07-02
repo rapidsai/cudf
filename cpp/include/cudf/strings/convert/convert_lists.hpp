@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -35,6 +35,10 @@ namespace strings {
  * s2 = format_list_column(l1, '-', [':', '{', '}'])
  * s2 is now ["{{a:b:c}:{d:e}}", "{-}", "{{f:g}:-:{h}}"]
  * @endcode
+ *
+ * The `na_rep` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw cudf::logic_error if the input column is not a LIST type with a STRING child.
  *

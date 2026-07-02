@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -82,6 +82,10 @@ std::unique_ptr<column> all_characters_of_type(
  * be set to `ALL_TYPES`.
  *
  * Any null row results in a null entry for that row in the output column.
+ *
+ * The `replacement` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
  *
  * @throw cudf::logic_error if neither or both `types_to_remove` and
  *        `types_to_keep` are set to `ALL_TYPES`.

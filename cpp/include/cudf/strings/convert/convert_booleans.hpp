@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -23,6 +23,10 @@ namespace strings {
  *
  * Any null entries will result in corresponding null entries in the output column.
  *
+ * The `true_string` parameter is expected to be created using the same stream as the one passed
+ * to this function. Otherwise, that stream must be synchronized before calling this function to
+ * ensure that the scalar value is available on the device.
+ *
  * @param input Strings instance for this operation
  * @param true_string String to expect for true. Non-matching strings are false
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -40,6 +44,10 @@ std::unique_ptr<column> to_booleans(
  * provided column into strings.
  *
  * Any null entries will result in corresponding null entries in the output column.
+ *
+ * The scalar parameters are expected to be created using the same stream as the one passed to this
+ * function. Otherwise, that stream must be synchronized before calling this function to ensure that
+ * the scalar values are available on the device.
  *
  * @throw cudf::logic_error if the input column is not BOOL8 type.
  *
