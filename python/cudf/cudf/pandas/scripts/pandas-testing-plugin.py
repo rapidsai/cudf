@@ -2864,7 +2864,6 @@ NODEIDS_THAT_FAIL = {
     "tests/indexing/multiindex/test_loc.py::test_loc_getitem_index_differently_ordered_slice_none_duplicates[indexer0]": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_loc.py::test_loc_getitem_int_raises_exception": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_loc.py::test_loc_with_mi_indexer": "TODO: Add a reason for failure",
-    "tests/indexing/multiindex/test_multiindex.py::TestMultiIndexBasic::test_rename_multiindex_with_duplicates": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_partial.py::TestMultiIndexPartial::test_getitem_partial_column_select": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_setitem.py::TestMultiIndexSetItem::test_frame_getitem_setitem_boolean": "TODO: Add a reason for failure",
     "tests/indexing/multiindex/test_setitem.py::TestMultiIndexSetItem::test_frame_getitem_setitem_multislice": "TODO: Add a reason for failure",
