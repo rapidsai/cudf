@@ -40,10 +40,10 @@ std::unique_ptr<cudf::table> create_int_table(cudf::size_type num_rows,
 
 static void BM_PartitionAndPack(benchmark::State& state)
 {
-  const std::int64_t local_size = std::int64_t{state.range(1)} * 1000000;
+  std::int64_t const local_size = std::int64_t{state.range(1)} * 1000000;
   int num_rows                  = int(local_size / std::int64_t{sizeof(std::int32_t)});
 
-  const int num_partitions = state.range(1);
+  int const num_partitions = state.range(1);
 
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
@@ -86,9 +86,9 @@ static void BM_PartitionAndPack(benchmark::State& state)
 
 static void BM_PartitionAndPackCurrentImpl(benchmark::State& state)
 {
-  const int nranks              = state.range(0);
-  const std::int64_t local_size = std::int64_t{state.range(1)} * 1000000;
-  const int num_partitions      = state.range(2);
+  int const nranks              = state.range(0);
+  std::int64_t const local_size = std::int64_t{state.range(1)} * 1000000;
+  int const num_partitions      = state.range(2);
 
   int total_npartitions = nranks * num_partitions;
   int num_rows =

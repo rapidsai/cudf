@@ -27,8 +27,8 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "cupy-cuda13x>=13.6.0,!=14.0.0,!=14.1.0",
-    "numpy>=1.26,<3.0",
+    "cupy-cuda13x[ctk]>=14.0.1,!=14.1.0",
+    "numpy>=2.0,<3.0",
     "pytest-cov",
     "pytest-xdist",
     "pytest<9.1.0",

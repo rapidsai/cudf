@@ -43,7 +43,7 @@ Set the scale factor once and reuse it across all steps. The following generates
 export SCALE_FACTOR=1000.0
 export DATA_PATH="data/tables/scale-${SCALE_FACTOR}"
 
-tpchgen-cli parquet -o "${DATA_PATH}" -s ${SCALE_FACTOR}
+tpchgen-cli --output-dir="${DATA_PATH}" --format=parquet -s ${SCALE_FACTOR}
 ```
 
 ### Run
