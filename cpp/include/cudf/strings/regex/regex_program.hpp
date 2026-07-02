@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -46,6 +46,7 @@ struct regex_program {
   regex_program()                                = delete;
   regex_program(regex_program const&)            = delete;
   regex_program& operator=(regex_program const&) = delete;
+  ~regex_program();
 
   /**
    * @brief Move constructor
@@ -104,8 +105,6 @@ struct regex_program {
    * @return Size of the working memory in bytes
    */
   [[nodiscard]] std::size_t compute_working_memory_size(int32_t num_strings) const;
-
-  ~regex_program();
 
  private:
   std::string _pattern;

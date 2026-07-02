@@ -38,6 +38,7 @@ from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_139,
     POLARS_VERSION_LT_140,
     POLARS_VERSION_LT_141,
+    POLARS_VERSION_LT_142,
 )
 
 if TYPE_CHECKING:
@@ -45,7 +46,7 @@ if TYPE_CHECKING:
 
     from polars import GPUEngine
 
-    from cudf_polars.typing import NodeTraverser
+    from cudf_polars.typing import NodeTraverser, Slice as Zlice
 
 __all__ = ["Translator", "translate_named_expr"]
 
@@ -164,7 +165,7 @@ class Translator:
         # IR is versioned with major.minor, minor is bumped for backwards
         # compatible changes (e.g. adding new nodes), major is bumped for
         # incompatible changes (e.g. renaming nodes).
-        if (version := self.visitor.version()) >= (13, 1):
+        if (version := self.visitor.version()) >= (14, 4):
             e = NotImplementedError(
                 f"No support for polars IR {version=}"
             )  # pragma: no cover; no such version for now.
@@ -291,19 +292,27 @@ def _drop_dyn_pred_hints(
 ) -> expr.Expr | None:
     try:
         node = translator.visitor.view_expression(n)
-    except Exception as e:
+    except Exception as e:  # pragma: no cover
         if str(e) == "dynamic_pred":
             return None
-        raise  # pragma: no cover
+        raise
+    if (
+        not POLARS_VERSION_LT_142
+        and isinstance(node, plrs._expr_nodes.Function)
+        and node.function_data[0] == "dynamic_pred"
+    ):
+        return None
     if isinstance(node, plrs._expr_nodes.BinaryExpr) and node.op in (
         plrs._expr_nodes.Operator.And,
         plrs._expr_nodes.Operator.LogicalAnd,
     ):
         left = _drop_dyn_pred_hints(translator, node.left, schema)
         right = _drop_dyn_pred_hints(translator, node.right, schema)
-        if left is None:
-            return right  # pragma: no cover
-        if right is None:
+        # Which branch is taken depends on where the dynamic predicate lands in
+        # the AND tree, which is nondeterministic.
+        if left is None:  # pragma: no cover
+            return right
+        if right is None:  # pragma: no cover
             return left
         return expr.BinOp(
             DataType(translator.visitor.get_dtype(n)),
@@ -315,13 +324,13 @@ def _drop_dyn_pred_hints(
 
 
 def translate_predicate(
-    translator: Translator, *, n: Any, schema: Schema
+    translator: Translator, *, n: int, output_name: str, schema: Schema
 ) -> expr.NamedExpr | None:
     """Translate predicate, dropping Polars' dynamic predicate hints."""
-    mask = _drop_dyn_pred_hints(translator, n.node, schema)
+    mask = _drop_dyn_pred_hints(translator, n, schema)
     if mask is None:
         return None
-    return expr.NamedExpr(n.output_name, mask)
+    return expr.NamedExpr(output_name, mask)
 
 
 class set_internal_name_gen(AbstractContextManager[None]):
@@ -351,13 +360,36 @@ def _translate_ir(node: Any, translator: Translator, schema: Schema) -> ir.IR:
 
 @_translate_ir.register
 def _(node: plrs._ir_nodes.PythonScan, translator: Translator, schema: Schema) -> ir.IR:
-    scan_fn, with_columns, source_type, predicate, nrows = node.options
-    options = (scan_fn, with_columns, source_type, nrows)
-    predicate = (
-        translate_named_expr(translator, n=predicate, schema=schema)
-        if predicate is not None
-        else None
-    )
+    scan_fn, with_columns, source_type, raw_predicate, nrows = node.options
+    if source_type != "io_plugin":
+        # cudf-polars supports register_io_source plugins (and pl.defer), which
+        # report source_type "io_plugin". Other sources, notably pyarrow-dataset
+        # scans ("pyarrow"), are not supported and fall back to the CPU engine.
+        raise NotImplementedError(
+            f"Unsupported PythonScan source type: {source_type!r}"
+        )
+    if nrows is not None:
+        # A global row limit cannot be enforced independently per rank; tracked
+        # in https://github.com/rapidsai/cudf/issues/22918.
+        raise NotImplementedError(
+            "A row limit (head/limit) on a PythonScan source is not supported."
+        )
+    # Reused sources share the same ``scan_fn`` object, so capture the Polars
+    # node index to keep occurrences distinct in our IR identity (hash/eq).
+    # The index is deterministic across ranks.
+    ir_node_index = translator.visitor.get_node()
+    options = (scan_fn, with_columns, source_type, ir_node_index)
+    if raw_predicate is None:
+        predicate = None
+    elif isinstance(raw_predicate, tuple) and raw_predicate[0] == "polars":
+        predicate = translate_predicate(
+            translator, n=raw_predicate[1], output_name="_predicate", schema=schema
+        )
+    else:  # pragma: no cover
+        # The only other form is a pyarrow predicate, ("pyarrow", ...), which
+        # Polars only emits for pyarrow-dataset scans, never for an
+        # ``register_io_source`` plugin.
+        assert_never(raw_predicate)
     return ir.PythonScan(schema, options, predicate)
 
 
@@ -385,6 +417,8 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         raise NotImplementedError(
             "Iceberg format is not supported in cudf-polars. Furthermore, row-level deletions are not supported."
         )  # pragma: no cover
+    if not POLARS_VERSION_LT_142 and node.hive_parts is not None:
+        raise NotImplementedError("Hive-partitioned scans are not supported")
     config_options = translator.config_options
     parquet_options = config_options.parquet_options
 
@@ -424,7 +458,12 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
         (
             None
             if node.predicate is None
-            else translate_predicate(translator, n=node.predicate, schema=schema)
+            else translate_predicate(
+                translator,
+                n=node.predicate.node,
+                output_name=node.predicate.output_name,
+                schema=schema,
+            )
         ),
         parquet_options,
     )
@@ -627,7 +666,17 @@ def _(node: plrs._ir_nodes.Sort, translator: Translator, schema: Schema) -> ir.I
     order, null_order = sorting.sort_order(
         descending, nulls_last=nulls_last, num_keys=len(by)
     )
-    return ir.Sort(schema, by, order, null_order, stable, node.slice, inp)
+    # TODO: use the DynamicPred hint from node.slice (offset, length,
+    # dynamic_pred_id). dynamic_pred_id is an int (u128 UUID) matching a
+    # DynamicPred Function node in an upstream scan. The sort actor could
+    # set a threshold predicate on it (e.g. col < max_seen) to prune rows
+    # at the source.
+    if not POLARS_VERSION_LT_142 and node.slice is not None:
+        offset, length, *_ = node.slice
+        zlice: Zlice | None = (offset, length)
+    else:
+        zlice = node.slice
+    return ir.Sort(schema, by, order, null_order, stable, zlice, inp)
 
 
 @_translate_ir.register
@@ -641,7 +690,12 @@ def _(node: plrs._ir_nodes.Slice, translator: Translator, schema: Schema) -> ir.
 def _(node: plrs._ir_nodes.Filter, translator: Translator, schema: Schema) -> ir.IR:
     with set_node(translator.visitor, node.input):
         inp = translator.translate_ir(n=None)
-        mask = translate_predicate(translator, n=node.predicate, schema=inp.schema)
+        mask = translate_predicate(
+            translator,
+            n=node.predicate.node,
+            output_name=node.predicate.output_name,
+            schema=inp.schema,
+        )
         if mask is None:
             return inp
     return ir.Filter(schema, mask, inp)
