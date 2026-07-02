@@ -75,9 +75,9 @@ struct memory_resource_expectations {
  * @brief Reusable memory-resource instrumentation for API routing tests.
  *
  * This harness owns independent statistics adaptors for setup, output, and temporary allocations.
- * It also owns an allocation-failing resource that can be installed as the current resource around
- * only the API call under test. Counter assertion helpers synchronize the supplied stream before
- * inspecting allocation state.
+ * It also owns a resource that throws on allocation and can be installed as the current resource
+ * around only the API call under test. Counter assertion helpers synchronize the supplied stream
+ * before inspecting allocation state.
  */
 class memory_resource_test_harness {
  public:
@@ -104,7 +104,7 @@ class memory_resource_test_harness {
   [[nodiscard]] cudf::memory_resources resources() noexcept;
 
   /**
-   * @brief Install an allocation-failing current resource for the returned scope's lifetime.
+   * @brief Install a current resource that throws on allocation for the returned scope's lifetime.
    *
    * Keep the returned scope limited to the API invocation and stream synchronization. Construct
    * inputs and validate results outside this scope.
@@ -159,6 +159,10 @@ class memory_resource_test_harness {
  *
  * `factory` receives a statistics resource and returns a column wrapper. The helper releases the
  * wrapper into an owning column and compares its `alloc_size()` with the resource counters.
+ * The current device resource is used only as the upstream allocator for the statistics resource;
+ * the statistics resource itself is passed explicitly to `factory`. Returned allocations that
+ * bypass the supplied statistics resource are therefore excluded from its counters and cause the
+ * ownership checks to fail.
  *
  * @tparam Factory Callable type used to construct the result
  * @param factory Callable invoked with the output resource
@@ -196,8 +200,7 @@ void expect_output_uses_resource(
  *
  * `factory` receives distinct output and temporary resources and returns a column wrapper. The
  * helper releases the wrapper into an owning column and compares its `alloc_size()` with the
- * resource counters. This helper does not replace the current resource, so it is suitable for test
- * utilities whose transitive production dependencies have not yet been migrated.
+ * resource counters.
  *
  * @tparam Factory Callable type used to construct the result
  * @param factory Callable invoked with distinct resources
@@ -223,7 +226,7 @@ void expect_output_uses_distinct_resources(
 /**
  * @brief Invoke an API with explicit resources and validate its allocation routing.
  *
- * The current resource is allocation-failing only while `factory` runs and `stream` synchronizes.
+ * The current resource throws on allocation only while `factory` runs and `stream` synchronizes.
  * Allocation accounting and `validate_result` run after the prior current resource is restored.
  * `result_size` makes this helper usable with columns, tables, buffers, and compound result types.
  *
