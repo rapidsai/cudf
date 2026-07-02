@@ -643,6 +643,17 @@ def test_string_zfill_column(engine: pl.GPUEngine, fill):
         assert_gpu_result_equal(q, engine=engine)
 
 
+def test_string_zfill_column_null_widths(engine: pl.GPUEngine):
+    df = pl.LazyFrame(
+        {
+            "s": ["1", "0", "123", None, "45", "6"],
+            "w": [3, None, 5, 3, None, 0],
+        }
+    )
+    q = df.select(pl.col("s").str.zfill(pl.col("w")))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_string_zfill_forbidden_chars(engine: pl.GPUEngine):
     ldf = pl.LazyFrame({"a": ["Café", "345", "東京", None]})
     q = ldf.select(pl.col("a").str.zfill(3))
