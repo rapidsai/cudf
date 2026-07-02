@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -522,7 +522,7 @@ table_with_metadata device_parse_nested_json_impl(device_span<SymbolT const> d_i
 
   auto gpu_tree = [&]() {
     // Parse the JSON and get the token stream
-    const auto [tokens_gpu, token_indices_gpu] =
+    auto const [tokens_gpu, token_indices_gpu] =
       get_token_stream(d_input, options, stream, cudf::get_current_device_resource_ref());
     // gpu tree generation
     // Note that to normalize whitespaces in nested columns coerced to be string, we need the column
