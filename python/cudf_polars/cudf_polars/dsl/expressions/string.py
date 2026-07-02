@@ -177,13 +177,13 @@ class StringFunction(Expr):
             raise NotImplementedError(f"String function {self.name!r}")
         if self.name is StringFunction.Name.CountMatches:
             (literal,) = self.options
-            if literal:
-                raise NotImplementedError(
-                    f"{literal=} is not supported for count_matches"
-                )
             literal_expr = self.children[1]
             assert isinstance(literal_expr, Literal)
             pattern = literal_expr.value
+            if literal:
+                # libcudf has no literal count; escape the pattern so the
+                # regex engine matches it verbatim.
+                pattern = re.escape(pattern)
             self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.Contains:
             literal, strict = self.options
