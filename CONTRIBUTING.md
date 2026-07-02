@@ -57,7 +57,7 @@ documentation docs](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/
    Changes to libcudf C++ files require at least 2 approvals from the cudf-cpp-codeowners before
    merging.
    Changes limited to libcudf_streaming C++ files require at least 1 approval from the
-   cudf-cpp-codeowners before merging.
+   rapidsmpf-cpp-codeowners before merging.
 10. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
 If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
