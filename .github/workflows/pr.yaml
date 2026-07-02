@@ -38,7 +38,7 @@ jobs:
       - cudf-polars-polars-tests
       - wheel-build-dask-cudf
       - wheel-tests-dask-cudf
-      - devcontainer
+      # - devcontainer
       - unit-tests-cudf-pandas
       - pandas-tests
       # - narwhals-tests
@@ -732,29 +732,29 @@ jobs:
       build_type: pull-request
       script: ci/test_wheel_dask_cudf.sh
   # build cudf with benchmarks but disable for cudf_streaming since we can't use MPI/UCX in wheel-based builds
-  devcontainer:
-    permissions:
-      actions: read
-      contents: read
-      id-token: write
-      packages: read
-      pull-requests: read
-    secrets: inherit # zizmor: ignore[secrets-inherit]
-    needs: telemetry-setup
-    uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@main
-    with:
-      arch: '["amd64", "arm64"]'
-      cuda: '["13.3"]'
-      node_type: "cpu8"
-      timeout-minutes: 90
-      env: |
-        SCCACHE_DIST_MAX_RETRIES=inf
-        SCCACHE_SERVER_LOG=sccache=debug
-        SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
-      build_command: |
-        sccache --zero-stats;
-        build-all -j0 --verbose -DBUILD_BENCHMARKS=ON 2>&1 | tee telemetry-artifacts/build.log;
-        sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
+  # devcontainer:
+  #   permissions:
+  #     actions: read
+  #     contents: read
+  #     id-token: write
+  #     packages: read
+  #     pull-requests: read
+  #   secrets: inherit # zizmor: ignore[secrets-inherit]
+  #   needs: telemetry-setup
+  #   uses: rapidsai/shared-workflows/.github/workflows/build-in-devcontainer.yaml@main
+  #   with:
+  #     arch: '["amd64", "arm64"]'
+  #     cuda: '["13.3"]'
+  #     node_type: "cpu8"
+  #     timeout-minutes: 90
+  #     env: |
+  #       SCCACHE_DIST_MAX_RETRIES=inf
+  #       SCCACHE_SERVER_LOG=sccache=debug
+  #       SCCACHE_DIST_FALLBACK_TO_LOCAL_COMPILE=false
+  #     build_command: |
+  #       sccache --zero-stats;
+  #       build-all -j0 --verbose -DBUILD_BENCHMARKS=ON 2>&1 | tee telemetry-artifacts/build.log;
+  #       sccache --show-adv-stats | tee telemetry-artifacts/sccache-stats.txt;
   unit-tests-cudf-pandas:
     needs: [wheel-build-cudf, changed-files]
     permissions:
