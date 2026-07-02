@@ -285,6 +285,9 @@ def engine(
     """
     Return a :class:`polars.GPUEngine` for each engine variant under test.
 
+    Every variant is configured with ``raise_on_fail=True``, so an unsupported
+    GPU path raises instead of silently falling back to the CPU engine.
+
     Parameters
     ----------
     _unconfigured_engine

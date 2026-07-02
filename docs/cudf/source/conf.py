@@ -179,7 +179,7 @@ source_suffix = {".rst": "restructuredtext"}
 master_doc = "index"
 
 # General information about the project.
-project = "cudf"
+project = "cuDF"
 copyright = f"2018-{datetime.datetime.today().year}, NVIDIA Corporation"
 author = "NVIDIA Corporation"
 
@@ -226,12 +226,12 @@ pygments_style = "sphinx"
 
 html_theme_options = {
     "external_links": [],
-    # https://github.com/pydata/pydata-sphinx-theme/issues/1220
     "icon_links": [],
     "github_url": "https://github.com/rapidsai/cudf",
     "twitter_url": "https://twitter.com/rapidsai",
     "show_toc_level": 1,
     "navbar_align": "content",
+    "navbar_center": "navbar-nav, version-switcher, navbar-external-links",
     "navigation_with_keys": True,
 }
 include_pandas_compat = True
@@ -241,8 +241,7 @@ include_pandas_compat = True
 # a list of builtin themes.
 #
 
-html_theme = "pydata_sphinx_theme"
-html_logo = "_static/RAPIDS-logo-purple.png"
+html_theme = "nvidia_sphinx_theme"
 
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -631,11 +630,14 @@ nitpick_ignore = [
     # unqualified strings in type annotations. The ``rapidsmpf.*`` regex below
     # only matches fully qualified targets, so the bare leaf names are listed
     # explicitly here.
+    ("py:class", "SizedIterator"),
     ("py:class", "Statistics"),
     ("py:class", "Communicator"),
     ("py:class", "Options"),
     # polars aliases that don't match the public intersphinx targets.
     ("py:class", "pl.DataFrame"),
+    ("py:class", "pl.Expr"),
+    ("py:class", "pl.LazyFrame"),
     ("py:class", "polars.LazyFrame"),
     ("py:class", "polars.DataFrame"),
     ("py:class", "polars.dataframe.frame.DataFrame"),
@@ -780,10 +782,6 @@ class PLCIntEnumDocumenter(ClassDocumenter):
 
 
 def setup(app):
-    app.add_css_file("https://docs.rapids.ai/assets/css/custom.css")
-    app.add_js_file(
-        "https://docs.rapids.ai/assets/js/custom.js", loading_method="defer"
-    )
     app.connect("doctree-read", resolve_aliases)
     app.connect("missing-reference", on_missing_reference)
     app.setup_extension("sphinx.ext.autodoc")

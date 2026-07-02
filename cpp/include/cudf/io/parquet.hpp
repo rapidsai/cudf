@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -106,6 +106,8 @@ class parquet_reader_options {
   // Whether column name matching is case sensitive. In case of multiple
   // case-insensitive matches, the first matched column is selected
   bool _case_sensitive_names = true;
+  // Whether to prepend a source file index column to the output
+  bool _prepend_source_index_column = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -297,6 +299,16 @@ class parquet_reader_options {
    * @return `true` if column name matching is case sensitive (default)
    */
   [[nodiscard]] bool is_enabled_case_sensitive_names() const { return _case_sensitive_names; }
+
+  /**
+   * @brief Returns whether to prepend a source file index column to the output.
+   *
+   * @return `true` if a source file index column should be prepended
+   */
+  [[nodiscard]] bool is_enabled_prepend_source_index_column() const
+  {
+    return _prepend_source_index_column;
+  }
 
   /**
    * @brief Set a new source location
@@ -542,6 +554,13 @@ class parquet_reader_options {
    * @param val Boolean indicating whether to enable case-sensitive matching.
    */
   void enable_case_sensitive_names(bool val) { _case_sensitive_names = val; }
+
+  /**
+   * @brief Sets whether to prepend a source file index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend the source file index column.
+   */
+  void enable_prepend_source_index_column(bool val) { _prepend_source_index_column = val; }
 };
 
 /**
@@ -800,6 +819,18 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& case_sensitive_names(bool val)
   {
     options._case_sensitive_names = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether to prepend a source file index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend a source file index column
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& prepend_source_index_column(bool val)
+  {
+    options._prepend_source_index_column = val;
     return *this;
   }
 

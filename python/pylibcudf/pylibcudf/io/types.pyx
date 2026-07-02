@@ -349,7 +349,7 @@ cdef class TableWithMetadata:
     @property
     def columns(self):
         """
-        Return a list containing the columns of the table
+        Return a tuple containing the columns of the table
         """
         return self.tbl.columns()
 
