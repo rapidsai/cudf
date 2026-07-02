@@ -5,9 +5,11 @@
 
 #pragma once
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/experimental/hybrid_scan_multifile.hpp>
+#include <cudf/io/parquet.hpp>
 #include <cudf/io/text/byte_range_info.hpp>
 #include <cudf/io/types.hpp>
 #include <cudf/table/table.hpp>
@@ -147,3 +149,27 @@ template <typename T,
   std::vector<std::string> column_names     = {"col0", "col1", "col2"},
   std::vector<cudf::size_type> column_order = {0, 1, 2},
   rmm::cuda_stream_view stream              = cudf::get_default_stream());
+
+/**
+ * @brief Prune row groups using column chunk dictionaries via the single-file hybrid scan reader
+ *
+ * @return Dictionary-filtered row group indices
+ */
+[[nodiscard]] std::vector<cudf::size_type> filter_row_groups_with_dictionaries(
+  cudf::io::datasource& datasource,
+  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  cudf::ast::operation const& filter_expression,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
+ * @brief Prune row groups using column chunk dictionaries via the multi-file hybrid scan reader
+ *
+ * @return Per-source dictionary-filtered row group indices
+ */
+[[nodiscard]] std::vector<std::vector<cudf::size_type>> filter_row_groups_with_dictionaries(
+  multifile_inputs const& inputs,
+  cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);

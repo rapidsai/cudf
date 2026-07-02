@@ -85,50 +85,6 @@ auto make_scalar(cudf::size_type value, rmm::cuda_stream_view stream)
   }
 }
 
-/**
- * @brief Filter input row groups using column chunk dictionaries via the experimental parquet
- * reader for hybrid scan (multi-file)
- *
- * @param inputs Multi-file datasources
- * @param reader Hybrid scan multi-file reader
- * @param options Parquet reader options
- * @param stream CUDA stream
- * @param mr Device memory resource
- *
- * @return Vector of per-source dictionary-filtered row group indices
- */
-auto filter_row_groups_with_dictionaries(
-  multifile_inputs const& inputs,
-  cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
-  cudf::io::parquet_reader_options const& options,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  auto const input_row_group_indices = reader.all_row_groups(options);
-
-  auto const dict_pages = reader.dictionary_pages_byte_ranges(input_row_group_indices, options);
-  CUDF_EXPECTS(dict_pages.first.size() > 0, "No dictionary page byte ranges found");
-
-  auto const dict_page_ranges_per_source =
-    group_byte_ranges_by_source(dict_pages, inputs.datasources.size());
-  auto [dict_page_buffers, dict_page_data_per_source, task] =
-    cudf::io::parquet::fetch_byte_ranges_to_device_async(
-      inputs.datasource_refs,
-      cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{
-        dict_page_ranges_per_source},
-      stream,
-      mr);
-  task.get();
-
-  std::vector<cudf::device_span<uint8_t const>> dict_page_data;
-  for (auto const& source_dict_pages : dict_page_data_per_source) {
-    dict_page_data.insert(dict_page_data.end(), source_dict_pages.begin(), source_dict_pages.end());
-  }
-
-  return reader.filter_row_groups_with_dictionary_pages(
-    dict_page_data, input_row_group_indices, options, stream);
-}
-
 }  // namespace
 
 struct HybridScanMultifileFiltersTest : public cudf::test::BaseFixture {};

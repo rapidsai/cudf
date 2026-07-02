@@ -27,63 +27,6 @@
 #include <memory>
 #include <vector>
 
-namespace {
-
-/**
- * @brief Filter input row groups using column chunk dictionaries via the experimental parquet
- * reader for hybrid scan
- *
- * @param datasource Input datasource
- * @param reader Hybrid scan reader
- * @param filter_expression Filter expression
- * @param stream CUDA stream
- * @param mr Device memory resource
- *
- * @return Vector of dictionary-filtered row group indices
- */
-auto filter_row_groups_with_dictionaries(
-  cudf::io::datasource& datasource,
-  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
-  cudf::ast::operation const& filter_expression,
-  rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-{
-  // Reader options
-  cudf::io::parquet_reader_options options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression);
-
-  reader.reset_column_selection();
-
-  // Get all row groups from the reader
-  auto input_row_group_indices = reader.all_row_groups(options);
-
-  // Span to track current row group indices
-  auto current_row_group_indices = cudf::host_span<cudf::size_type>(input_row_group_indices);
-
-  // Get dictionary page byte ranges from the reader
-  auto const dict_page_byte_ranges =
-    std::get<1>(reader.secondary_filters_byte_ranges(current_row_group_indices, options));
-
-  // If we have dictionary page byte ranges, filter row groups with dictionary pages
-  std::vector<cudf::size_type> dict_page_filtered_row_group_indices;
-  dict_page_filtered_row_group_indices.reserve(current_row_group_indices.size());
-
-  CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
-
-  // Fetch dictionary page buffers from the input file buffer
-  auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
-    cudf::io::parquet::fetch_byte_ranges_to_device_async(
-      datasource, dict_page_byte_ranges, stream, mr);
-  dict_page_tasks.get();
-
-  dict_page_filtered_row_group_indices = reader.filter_row_groups_with_dictionary_pages(
-    dict_page_data, current_row_group_indices, options, stream);
-
-  return dict_page_filtered_row_group_indices;
-}
-
-}  // namespace
-
 // Base test fixture for tests
 struct HybridScanFiltersTest : public cudf::test::BaseFixture {};
 

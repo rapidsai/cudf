@@ -27,6 +27,7 @@
 #include <iterator>
 #include <string>
 #include <tuple>
+#include <type_traits>
 
 namespace {
 
@@ -228,6 +229,86 @@ std::unique_ptr<cudf::table> concatenate_tables(std::vector<std::unique_ptr<cudf
   return cudf::concatenate(table_views, stream, mr);
 }
 
+namespace {
+
+// Shared implementation templated over the reader; the single-file and multi-file public helpers
+// below forward to it.
+template <typename ReaderType, typename InputType>
+auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
+                                              ReaderType const& reader,
+                                              cudf::io::parquet_reader_options const& options,
+                                              rmm::cuda_stream_view stream,
+                                              rmm::device_async_resource_ref mr)
+{
+  // Reset column selection so the helper is safe to call repeatedly on the same reader; the
+  // single-file tests reuse one reader across many filter expressions.
+  reader.reset_column_selection();
+  auto const row_group_indices = reader.all_row_groups(options);
+
+  if constexpr (std::is_same_v<ReaderType,
+                               cudf::io::parquet::experimental::hybrid_scan_multifile>) {
+    // Dictionary page byte ranges carry a per-range source map used to regroup them by source.
+    auto const dict_pages = reader.dictionary_pages_byte_ranges(row_group_indices, options);
+    CUDF_EXPECTS(dict_pages.first.size() > 0, "No dictionary page byte ranges found");
+
+    auto const dict_page_ranges_per_source =
+      group_byte_ranges_by_source(dict_pages, inputs.datasources.size());
+    auto [dict_page_buffers, dict_page_data_per_source, task] =
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        inputs.datasource_refs,
+        cudf::host_span<std::vector<cudf::io::text::byte_range_info> const>{
+          dict_page_ranges_per_source},
+        stream,
+        mr);
+    task.get();
+
+    std::vector<cudf::device_span<uint8_t const>> dict_page_data;
+    for (auto const& source_dict_pages : dict_page_data_per_source) {
+      dict_page_data.insert(
+        dict_page_data.end(), source_dict_pages.begin(), source_dict_pages.end());
+    }
+    return reader.filter_row_groups_with_dictionary_pages(
+      dict_page_data, row_group_indices, options, stream);
+  } else {
+    // `secondary_filters_byte_ranges().second` is the single-file equivalent of the multi-file
+    // `dictionary_pages_byte_ranges()`.
+    auto const current = cudf::host_span<cudf::size_type const>{row_group_indices};
+    auto const dict_page_byte_ranges =
+      reader.secondary_filters_byte_ranges(current, options).second;
+    CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
+
+    auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
+      cudf::io::parquet::fetch_byte_ranges_to_device_async(
+        inputs, dict_page_byte_ranges, stream, mr);
+    dict_page_tasks.get();
+    return reader.filter_row_groups_with_dictionary_pages(dict_page_data, current, options, stream);
+  }
+}
+
+}  // namespace
+
+std::vector<cudf::size_type> filter_row_groups_with_dictionaries(
+  cudf::io::datasource& datasource,
+  cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
+  cudf::ast::operation const& filter_expression,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  auto const options =
+    cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+  return filter_row_groups_with_dictionaries_impl(datasource, reader, options, stream, mr);
+}
+
+std::vector<std::vector<cudf::size_type>> filter_row_groups_with_dictionaries(
+  multifile_inputs const& inputs,
+  cudf::io::parquet::experimental::hybrid_scan_multifile const& reader,
+  cudf::io::parquet_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  return filter_row_groups_with_dictionaries_impl(inputs, reader, options, stream, mr);
+}
+
 template <typename T, size_t NumTableConcats, bool IsConstantStrings, bool IsNullable>
 std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_stats(
   cudf::size_type str_col_value,
@@ -237,16 +318,23 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
   rmm::cuda_stream_view stream)
 {
   static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
-  CUDF_EXPECTS(column_names.size() == column_order.size(),
-               "Column names and column order must have the same size");
-  CUDF_EXPECTS(column_order.size() == 3, "Column order must include all three test columns");
-  CUDF_EXPECTS(std::all_of(cuda::counting_iterator<cudf::size_type>{0},
-                           cuda::counting_iterator<cudf::size_type>{3},
-                           [&](auto const col_idx) {
-                             return std::count(column_order.begin(), column_order.end(), col_idx) ==
-                                    1;
-                           }),
-               "Column order must be a permutation of the three test columns");
+
+  // Common default-layout callers skip these checks.
+  static auto const default_column_names = std::vector<std::string>{"col0", "col1", "col2"};
+  static auto const default_column_order = std::vector<cudf::size_type>{0, 1, 2};
+  if (column_names != default_column_names or column_order != default_column_order) {
+    CUDF_EXPECTS(column_names.size() == column_order.size(),
+                 "Column names and column order must have the same size");
+    CUDF_EXPECTS(column_order.size() == default_column_order.size(),
+                 "Column order must include all three test columns");
+    CUDF_EXPECTS(std::all_of(default_column_order.begin(),
+                             default_column_order.end(),
+                             [&](auto const col_idx) {
+                               return std::count(
+                                        column_order.begin(), column_order.end(), col_idx) == 1;
+                             }),
+                 "Column order must be a permutation of the three test columns");
+  }
 
   auto col0 = testdata::ascending<T>();
   auto col1 = []() {

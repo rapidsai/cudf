@@ -290,7 +290,7 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
    * @throws std::invalid_argument if @p row_group_indices.size() is all empty or not equal to the
    * number of input datasources
    *
-   * @param row_group_indices Input row group indices, one per source
+   * @param row_group_indices Span of vectors of input row group indices, one per source
    * @param total_row_groups Total number of row groups across all sources
    * @param pass_read_limit Memory limit to read and decompress row
    * group data
