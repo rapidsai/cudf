@@ -158,6 +158,22 @@ table_chunk table_chunk::copy(rapidsmpf::MemoryReservation& reservation) const
   //    not matter.
   rapidsmpf::BufferResource* br = reservation.br();
 
+  // A cudf table's allocation size may be slightly smaller than its packed size because
+  // pack() aligns each output buffer. Spill reservations are based on the former, so grow
+  // the reservation to the actual packed size when the difference is only alignment
+  // overhead. This applies to both pinned-host and ordinary-host destinations.
+  auto resize_reservation_for_pack_alignment = [&](std::size_t packed_size) {
+    if (packed_size > reservation.size()) {
+      auto const alignment_overhead = packed_size - reservation.size();
+      auto const max_alignment_overhead =
+        1024 * static_cast<std::size_t>(table_view().num_columns());
+      if (alignment_overhead <= max_alignment_overhead) {
+        reservation =
+          br->reserve(reservation.mem_type(), packed_size, rapidsmpf::AllowOverbooking::YES).first;
+      }
+    }
+  };
+
   // If the table view is available and the table is not packed, we can use libcudf to
   // copy the table in device memory, or pack it to pinned/ host memory. Else, fall
   // through to case 2 (ie. use buffer_copy).
@@ -184,6 +200,8 @@ table_chunk table_chunk::copy(rapidsmpf::MemoryReservation& reservation) const
         auto packed_pinned = cudf::pack(table_view(), stream(), br->pinned_mr());
         auto nbytes        = packed_pinned.gpu_data->size();
 
+        resize_reservation_for_pack_alignment(nbytes);
+
         br->statistics()->record_copy(rapidsmpf::MemoryType::DEVICE,
                                       rapidsmpf::MemoryType::PINNED_HOST,
                                       nbytes,
@@ -206,19 +224,7 @@ table_chunk table_chunk::copy(rapidsmpf::MemoryReservation& reservation) const
           std::move(packed_columns.metadata),
           br->move(std::move(packed_columns.gpu_data), stream()));
 
-        // Handle the case where `cudf::pack` allocates slightly more than the
-        // input size. This can occur because cudf uses aligned allocations,
-        // which may exceed the requested size. To accommodate this, we
-        // allow some wiggle room.
-        if (packed_data->data->size > reservation.size()) {
-          auto const wiggle_room = 1024 * static_cast<std::size_t>(table_view().num_columns());
-          if (packed_data->data->size <= reservation.size() + wiggle_room) {
-            reservation =
-              br->reserve(
-                  reservation.mem_type(), packed_data->data->size, rapidsmpf::AllowOverbooking::YES)
-                .first;
-          }
-        }
+        resize_reservation_for_pack_alignment(packed_data->data->size);
         packed_data->data = br->move(std::move(packed_data->data), reservation);
         return table_chunk(std::move(packed_data));
       }
