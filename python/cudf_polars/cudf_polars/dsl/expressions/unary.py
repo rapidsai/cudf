@@ -15,28 +15,9 @@ from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from rmm.pylibrmm.stream import Stream
-
     from cudf_polars.containers import DataFrame, DataType
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
-
-
-def _reverse_column(column: plc.Column, stream: Stream) -> plc.Column:
-    """Return a copy of ``column`` with its rows in reverse order."""
-    n = column.size()
-    indices = plc.filling.sequence(
-        n,
-        plc.Scalar.from_py(n - 1, plc.DataType(plc.TypeId.INT32), stream=stream),
-        plc.Scalar.from_py(-1, plc.DataType(plc.TypeId.INT32), stream=stream),
-        stream=stream,
-    )
-    return plc.copying.gather(
-        plc.Table([column]),
-        indices,
-        plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-        stream=stream,
-    ).columns()[0]
 
 
 class Cast(Expr):
@@ -571,7 +552,7 @@ class UnaryFunction(Expr):
             if reverse:
                 # A reverse cumulative aggregation is a forward one over the
                 # reversed column, reversed back into place.
-                plc_col = _reverse_column(plc_col, df.stream)
+                plc_col = plc.copying.reverse(plc_col, stream=df.stream)
             if self.name == "cum_count":
                 # cum_count is the cumulative count of non-null values.
                 counts = plc.unary.cast(
@@ -586,7 +567,7 @@ class UnaryFunction(Expr):
                     stream=df.stream,
                 )
                 if reverse:
-                    result = _reverse_column(result, df.stream)
+                    result = plc.copying.reverse(result, stream=df.stream)
                 return Column(result, dtype=self.dtype)
             col_type = column.dtype.plc_type
             # cum_sum casts
@@ -632,7 +613,7 @@ class UnaryFunction(Expr):
                 plc_col, agg, plc.reduce.ScanType.INCLUSIVE, stream=df.stream
             )
             if reverse:
-                result = _reverse_column(result, df.stream)
+                result = plc.copying.reverse(result, stream=df.stream)
             return Column(result, dtype=self.dtype)
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
