@@ -24,9 +24,10 @@ table_chunk::table_chunk(std::unique_ptr<cudf::table> table, rmm::cuda_stream_vi
   : table_{std::move(table)}, stream_{stream}, is_spillable_{true}
 {
   RAPIDSMPF_EXPECTS(table_ != nullptr, "table pointer cannot be null", std::invalid_argument);
-  table_view_                                                               = table_->view();
-  data_alloc_size_[static_cast<std::size_t>(rapidsmpf::MemoryType::DEVICE)] = table_->alloc_size();
-  make_available_cost_                                                      = 0;
+  table_view_ = table_->view();
+  data_alloc_size_[static_cast<std::size_t>(rapidsmpf::MemoryType::DEVICE)] =
+    cudf::packed_size(*table_view_, stream_, rmm::mr::get_current_device_resource_ref());
+  make_available_cost_ = 0;
 }
 
 table_chunk::table_chunk(cudf::table_view table_view,
@@ -158,22 +159,6 @@ table_chunk table_chunk::copy(rapidsmpf::MemoryReservation& reservation) const
   //    not matter.
   rapidsmpf::BufferResource* br = reservation.br();
 
-  // A cudf table's allocation size may be slightly smaller than its packed size because
-  // pack() aligns each output buffer. Spill reservations are based on the former, so grow
-  // the reservation to the actual packed size when the difference is only alignment
-  // overhead. This applies to both pinned-host and ordinary-host destinations.
-  auto resize_reservation_for_pack_alignment = [&](std::size_t packed_size) {
-    if (packed_size > reservation.size()) {
-      auto const alignment_overhead = packed_size - reservation.size();
-      auto const max_alignment_overhead =
-        1024 * static_cast<std::size_t>(table_view().num_columns());
-      if (alignment_overhead <= max_alignment_overhead) {
-        reservation =
-          br->reserve(reservation.mem_type(), packed_size, rapidsmpf::AllowOverbooking::YES).first;
-      }
-    }
-  };
-
   // If the table view is available and the table is not packed, we can use libcudf to
   // copy the table in device memory, or pack it to pinned/ host memory. Else, fall
   // through to case 2 (ie. use buffer_copy).
@@ -200,8 +185,6 @@ table_chunk table_chunk::copy(rapidsmpf::MemoryReservation& reservation) const
         auto packed_pinned = cudf::pack(table_view(), stream(), br->pinned_mr());
         auto nbytes        = packed_pinned.gpu_data->size();
 
-        resize_reservation_for_pack_alignment(nbytes);
-
         br->statistics()->record_copy(rapidsmpf::MemoryType::DEVICE,
                                       rapidsmpf::MemoryType::PINNED_HOST,
                                       nbytes,
@@ -224,7 +207,6 @@ table_chunk table_chunk::copy(rapidsmpf::MemoryReservation& reservation) const
           std::move(packed_columns.metadata),
           br->move(std::move(packed_columns.gpu_data), stream()));
 
-        resize_reservation_for_pack_alignment(packed_data->data->size);
         packed_data->data = br->move(std::move(packed_data->data), reservation);
         return table_chunk(std::move(packed_data));
       }
