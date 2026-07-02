@@ -247,8 +247,6 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/lazyframe/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
     "tests/unit/lazyframe/test_predicates.py::test_filter_contradiction_fallible_error_handling": "Casting that raises not supported on GPU",
-    "tests/unit/lazyframe/test_predicates.py::test_hconcat_predicate": "polars 1.42.1: how='horizontal' in concat is deprecated and raises a warning treated as error; fails on CPU too",
-    "tests/unit/functions/test_union.py::test_union_lazyframe_horizontal": "polars 1.42.1: how='horizontal' in union is deprecated and raises a warning treated as error; fails on CPU too",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
     "tests/unit/lazyframe/test_cse.py::test_cse_predicate_self_join[False]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_scan_row_deletion.py::test_scan_row_deletion_skips_file_with_all_rows_deleted": "The test intentionally corrupts the parquet file, so we cannot read the row count from the header.",

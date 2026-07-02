@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -122,6 +122,9 @@ PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 \
 # test_dtypes: narwhals' dtype mapping changed with polars 1.40 (reports Object where the test expects Int8).
 # test_namespace_len[polars[lazy]]: len() row count lost in zero-column streaming chunks
 #   (https://github.com/rapidsai/cudf/issues/21428).
+# test_explode_*[polars[lazy]-*]: polars 1.42 emits a DeprecationWarning when explode() is called
+#   without empty_as_null=True; narwhals 2.16.0 doesn't pass the kwarg yet, so filterwarnings=error
+#   turns this into a failure. Remove once narwhals is updated.
 TESTS_THAT_NEED_NARWHALS_FIX_FOR_CUDF_POLARS=" \
 test_dtypes or \
 test_namespace_len[polars[lazy]] or \
@@ -131,7 +134,8 @@ test_to_datetime_tz_aware[polars[lazy]-None] or \
 test_truncate[polars[lazy]-1ns-expected0] or \
 test_truncate_multiples[polars[lazy]-2ns-expected0] or \
 ((test_nested_structures and polars and lazy) and (value0 or value1 or value3 or value4 or value6 or value7)) or \
-(test_series_from_iterable and pandas) \
+(test_series_from_iterable and pandas) or \
+(test_explode and polars and lazy) \
 "
 
 rapids-logger "Run narwhals tests for cuDF Polars"
