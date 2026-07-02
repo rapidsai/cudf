@@ -127,9 +127,6 @@ struct schema_child_lookup {
       case_sensitive_names{case_sensitive_names},
       match_schema_by_field_id{selection_mode == column_selection_mode::BY_FIELD_ID}
   {
-    CUDF_EXPECTS(selection_mode == column_selection_mode::BY_NAME or
-                   selection_mode == column_selection_mode::BY_FIELD_ID,
-                 "Invalid column selection mode");
   }
 
   /**
