@@ -112,6 +112,10 @@ void setup_page_indexes(cudf::io::parquet::experimental::hybrid_scan_multifile c
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/// Default top-level column names and physical emit order used by `create_parquet_with_stats`.
+inline std::vector<std::string> const default_test_column_names{"col0", "col1", "col2"};
+inline std::vector<cudf::size_type> const default_test_column_order{0, 1, 2};
+
 /**
  * @brief Creates a table and writes it to Parquet host buffer with column level statistics
  *
@@ -146,8 +150,8 @@ template <typename T,
 [[nodiscard]] std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_stats(
   cudf::size_type str_col_value             = 100,
   cudf::io::compression_type compression    = cudf::io::compression_type::AUTO,
-  std::vector<std::string> column_names     = {"col0", "col1", "col2"},
-  std::vector<cudf::size_type> column_order = {0, 1, 2},
+  std::vector<std::string> column_names     = default_test_column_names,
+  std::vector<cudf::size_type> column_order = default_test_column_order,
   rmm::cuda_stream_view stream              = cudf::get_default_stream());
 
 /**
