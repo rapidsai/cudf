@@ -314,8 +314,8 @@ class DynamicPlanningOptions:
     Parameters
     ----------
     sample_chunk_count
-        The maximum number of chunks to sample before deciding whether
-        to shuffle. Default is 2.
+        The maximum number of chunks to sample before making
+        dynamic-planning decisions. Default is 2.
     join_prefilter_threshold
         Row-count ratio (small / large) below which a join key prefilter is
         applied. Set to 0 to disable join prefiltering. Default is 0.5.
