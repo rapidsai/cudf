@@ -28,7 +28,6 @@
 #pragma GCC diagnostic pop
 #endif
 
-#include <cudf/detail/utilities/arrow_bloom_filter_policy.cuh>
 #include <cudf/hashing.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -59,7 +58,16 @@ using BloomFilterRefType =
   cuco::bloom_filter_ref<KeyType,
                          cuco::extent<std::size_t>,
                          cuco::thread_scope_device,
-                         cudf::detail::arrow_bloom_filter_policy<cuco::identity_hash<KeyType>>>;
+                         cuco::parametric_filter_policy<cuco::identity_hash<KeyType>,
+                                                        std::uint32_t,
+                                                        8,
+                                                        8,
+                                                        8,
+                                                        1,
+                                                        1,
+                                                        8,
+                                                        false,
+                                                        false>>;
 using StorageType = BloomFilterRefType::filter_block_type;
 
 }  // namespace
