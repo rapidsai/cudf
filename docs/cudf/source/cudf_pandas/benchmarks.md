@@ -109,3 +109,85 @@ index f39beb0..a9ad651 100755
 ./_launcher/solution.R --solution=pandas --task=join --nrow=1e7
 ./_launcher/solution.R --solution=pandas --task=join --nrow=1e8
 ```
+
+## PDS-H (TPC-H variant)
+
+The steps below reproduce the PDS-H benchmark results using cudf.pandas.
+
+**Note on data types:** `tpchgen-cli` generates Decimal columns (e.g. `l_extendedprice`,
+`l_discount`) and Python `datetime.date` columns. The benchmark reads these as float64 and
+timestamp respectively, which is faster and avoids Python object overhead. This means results
+may differ slightly from a strictly spec-compliant TPC-H run that preserves Decimal
+precision.
+
+### Setup
+
+Install `cudf` following the
+[RAPIDS installation guide](https://docs.rapids.ai/install). For nightly wheels:
+
+```bash
+CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
+pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+    "cudf-cu${CUDA_MAJOR}>=0.0.0a0"
+```
+
+Then install `tpchgen-cli`, a Rust-based TPC-H data generator used to produce the benchmark
+dataset as Parquet files:
+
+```bash
+pip install tpchgen-cli
+```
+
+### Generate data
+
+Set the scale factor once and reuse it across all steps. The following generates SF50
+(scale factor 50, roughly 50GB of data):
+
+```bash
+export SCALE_FACTOR=50.0
+export DATA_PATH="data/tables/scale-${SCALE_FACTOR}"
+
+tpchgen-cli --output-dir="${DATA_PATH}" --format=parquet -s ${SCALE_FACTOR}
+```
+
+### Run
+
+**CPU** (`--executor cpu`, pandas):
+
+```bash
+python -m cudf.pandas._benchmarks.pdsh all \
+    --executor cpu \
+    --path "${DATA_PATH}"
+```
+
+**GPU** (`--executor in-memory`, cudf.pandas):
+
+```bash
+python -m cudf.pandas._benchmarks.pdsh all \
+    --executor in-memory \
+    --path "${DATA_PATH}"
+```
+
+### Results
+
+Results are written to `pdsh_results.jsonl` in the current directory by default (override with `-o`).
+Each run appends one JSON line containing metadata and a `records` field with per-query,
+per-iteration timings:
+
+```json
+{
+  "query_set": "pdsh",
+  "executor": "in-memory",
+  "dataset_path": "data/tables/scale-50.0",
+  "scale_factor": 50,
+  "records": {
+    "1": [
+      {"query": 1, "iteration": 0, "duration": 0.79, "status": "success"},
+      {"query": 1, "iteration": 1, "duration": 0.55, "status": "success"}
+    ]
+  }
+}
+```
+
+`duration` is in seconds. Running multiple executors with the same `-o` file appends each as a
+separate line, making it easy to compare CPU and GPU results in one file.
