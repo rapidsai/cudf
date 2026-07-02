@@ -235,6 +235,7 @@
                             <excludes>
                                 <exclude>**/CudaFatalTest.java</exclude>
                                 <exclude>**/ColumnViewNonEmptyNullsTest.java</exclude>
+                                <exclude>**/NativeDepsLoaderTest.java</exclude>
                             </excludes>
                         </configuration>
                         <executions>
@@ -262,6 +263,16 @@
                                 <configuration>
                                     <reuseForks>false</reuseForks>
                                     <test>*/CudaFatalTest.java</test>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>native-deps-loader-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <reuseForks>false</reuseForks>
+                                    <test>*/NativeDepsLoaderTest.java</test>
                                 </configuration>
                             </execution>
                         </executions>
@@ -286,6 +297,7 @@
                                 <exclude>**/ColumnViewNonEmptyNullsTest.java</exclude>
                                 <exclude>**/CuFileTest.java</exclude>
                                 <exclude>**/CudaFatalTest.java</exclude>
+                                <exclude>**/NativeDepsLoaderTest.java</exclude>
                             </excludes>
                         </configuration>
                         <executions>
@@ -313,6 +325,16 @@
                                 <configuration>
                                     <argLine>-da:ai.rapids.cudf.AssertEmptyNulls</argLine>
                                     <test>*/ColumnViewNonEmptyNullsTest.java</test>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>native-deps-loader-test</id>
+                                <goals>
+                                    <goal>test</goal>
+                                </goals>
+                                <configuration>
+                                    <reuseForks>false</reuseForks>
+                                    <test>*/NativeDepsLoaderTest.java</test>
                                 </configuration>
                             </execution>
                         </executions>
@@ -669,6 +691,12 @@
                         <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
                         <ai.rapids.cudf.nvtx.enabled>${ai.rapids.cudf.nvtx.enabled}</ai.rapids.cudf.nvtx.enabled>
                     </systemPropertyVariables>
+                    <!-- NativeDepsLoaderTest mutates the lib-native-dir system property
+                         and asserts the JVM is pristine; it must run in its own forked
+                         JVM via the dedicated execution defined in the test profiles. -->
+                    <excludes>
+                        <exclude>**/NativeDepsLoaderTest.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>
