@@ -29,6 +29,7 @@ from cudf_polars.dsl.ir import (
     GroupBy,
     HStack,
     Join,
+    PythonScan,
     Scan,
     Select,
     Sort,
@@ -407,7 +408,11 @@ def _repr_ir_tree(
             f" projected={_fmt_partition_bytes(projected_size)}"
         )
         header = header.rstrip("\n") + f" [{plan_info}]\n"
-    if count is not None:
+    if isinstance(ir, PythonScan):
+        # The lowered partition count is a placeholder. under dynamic planning the
+        # runtime adapts to the real chunk count, so don't report a misleading value.
+        header = header.rstrip("\n") + " [unknown]\n"
+    elif count is not None:
         header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [

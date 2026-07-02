@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,11 +58,11 @@ enum class string_state {
   ESCAPED_U  // not a complete state
 };
 
-__device__ inline bool substr_eq(const char* data,
+__device__ inline bool substr_eq(char const* data,
                                  SymbolOffsetT const start,
                                  SymbolOffsetT const end,
                                  SymbolOffsetT const expected_len,
-                                 const char* expected)
+                                 char const* expected)
 {
   if (end - start != expected_len) { return false; }
   for (auto idx = 0; idx < expected_len; idx++) {

@@ -1222,7 +1222,7 @@ void reprog::check_for_errors()
 
 match_flags reprog::compute_match_flags() const
 {
-  static const std::unordered_set<int> non_consuming_inst_types{
+  static std::unordered_set<int> const non_consuming_inst_types{
     OR, BOL, EOL, BOW, NBOW, LBRA, RBRA};
 
   auto check_paths = [this](auto&& self, int id, std::unordered_set<int>& visited) -> bool {
