@@ -9,6 +9,7 @@
 #include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/regex/regex_program.hpp>
 
+#include <cstdlib>
 #include <memory>
 #include <string>
 
@@ -33,7 +34,8 @@ regex_program::regex_program(std::string_view pattern, regex_flags flags, captur
     _impl(
       std::make_unique<regex_program_impl>(detail::reprog::create_from(pattern, flags, capture)))
 {
-  _impl->glushkov_prog = detail::build_glushkov_program(_impl->prog);
+  auto const* env = std::getenv("LIBCUDF_DISABLE_GLUSHKOV");
+  if (env == nullptr) { _impl->glushkov_prog = detail::build_glushkov_program(_impl->prog); }
 }
 
 std::string regex_program::pattern() const { return _pattern; }
@@ -48,8 +50,8 @@ int32_t regex_program::groups_count() const { return _impl->prog.groups_count();
 
 std::size_t regex_program::compute_working_memory_size(int32_t num_strings) const
 {
-  // TODO: check if glushkov fast-path is available and return 0 if so
-  return detail::compute_working_memory_size(num_strings, instructions_count());
+  if (_impl->glushkov_prog.get() != nullptr) { return 0; }
+  return detail::reprog_device::compute_working_memory_size(num_strings, instructions_count());
 }
 
 }  // namespace strings

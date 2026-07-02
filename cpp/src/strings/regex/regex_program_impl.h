@@ -38,7 +38,6 @@ struct regex_program::regex_program_impl {
 struct regex_device_builder {
   static bool glushkov_fast_path_supported(regex_program const& p)
   {
-    // TODO: Add environment variable check here as well
     return p._impl->glushkov_prog.get() != nullptr;
   }
 

@@ -94,12 +94,14 @@ class alignas(16) reprog_device {
   }
 
   /**
-   * @brief Returns the size needed for working memory for the given thread count.
+   * @brief Return the size in bytes needed for working memory to
+   * execute insts_count instructions in parallel over num_threads threads.
    *
-   * @param num_threads Number of threads to be executed in parallel
-   * @return Size of working memory in bytes
+   * @param num_threads Number of parallel threads (usually one per string in a strings column)
+   * @param insts_count Number of instructions from a compiled regex pattern
+   * @return Number of bytes needed for working memory
    */
-  [[nodiscard]] std::size_t working_memory_size(int32_t num_threads) const;
+  static std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count);
 
   /**
    * @brief Compute working memory for the given thread count with a maximum size.
@@ -207,6 +209,11 @@ class alignas(16) reprog_device {
   [[nodiscard]] __device__ inline reclass_device get_class(int32_t id) const;
 
   /**
+   * @brief Returns the size needed for working memory for the given thread count for this instance
+   */
+  [[nodiscard]] std::size_t working_memory_size(int32_t num_threads) const;
+
+  /**
    * @brief Executes the regex pattern on the given string.
    */
   template <positional P>
@@ -246,16 +253,6 @@ class alignas(16) reprog_device {
   void* _buffer{};           // working memory buffer
   int32_t _thread_count{};   // threads available in working memory
 };
-
-/**
- * @brief Return the size in bytes needed for working memory to
- * execute insts_count instructions in parallel over num_threads threads.
- *
- * @param num_threads Number of parallel threads (usually one per string in a strings column)
- * @param insts_count Number of instructions from a compiled regex pattern
- * @return Number of bytes needed for working memory
- */
-std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count);
 
 /**
  * @brief Converts a match_pair from character positions to byte positions

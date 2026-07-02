@@ -155,7 +155,7 @@ int32_t reprog_device::compute_shared_memory_size() const
   return _prog_size < MAX_SHARED_MEM ? static_cast<int32_t>(_prog_size) : 0;
 }
 
-std::size_t compute_working_memory_size(int32_t num_threads, int32_t insts_count)
+std::size_t reprog_device::compute_working_memory_size(int32_t num_threads, int32_t insts_count)
 {
   return relist::alloc_size(insts_count, num_threads) * 2;
 }
