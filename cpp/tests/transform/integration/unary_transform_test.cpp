@@ -600,7 +600,7 @@ __device__ inline void decode(float * output, float input){
     auto out_ptx = cudf::transform_extended(
       inputs, ptx, cudf::data_type{cudf::type_id::FLOAT32}, cudf::udf_source_type::PTX);
 
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out_ptx->view(), a->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(out_ptx->view(), sliced_expect);
   }
 }
 
