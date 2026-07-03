@@ -17,6 +17,7 @@
 #include <future>
 #include <span>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 /**
@@ -166,16 +167,13 @@ fetch_byte_ranges_to_device_async(
  * @param stream CUDA stream
  * @param aligned_mr Device memory resource to allocate aligned memory for bloom filters
  *
- * @return A tuple containing the device buffers, the device spans of the bitset data, and a future
- * to wait on the read tasks
+ * @return A pair containing the device buffers and the device spans of the bitset data
  */
-std::tuple<std::vector<rmm::device_buffer>,
-           std::vector<cudf::device_span<uint8_t const>>,
-           std::future<void>>
-fetch_bloom_filters_to_device_async(cudf::io::datasource& datasource,
-                                    cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::device_async_resource_ref aligned_mr);
+std::pair<std::vector<rmm::device_buffer>, std::vector<cudf::device_span<uint8_t const>>>
+fetch_bloom_filters_to_device(cudf::io::datasource& datasource,
+                              cudf::host_span<byte_range_info const> bloom_filter_byte_ranges,
+                              rmm::cuda_stream_view stream,
+                              rmm::device_async_resource_ref aligned_mr);
 
 /**
  * @brief Fetches Parquet bloom filter bitsets from multiple datasources into device buffers
@@ -191,13 +189,11 @@ fetch_bloom_filters_to_device_async(cudf::io::datasource& datasource,
  * @param stream CUDA stream
  * @param aligned_mr Device memory resource to allocate aligned memory for bloom filters
  *
- * @return A tuple containing a vector of device buffers, a vector of vectors of device spans, and a
- * future to wait on the read tasks
+ * @return A pair containing a vector of device buffers and a vector of vectors of device spans
  */
-std::tuple<std::vector<rmm::device_buffer>,
-           std::vector<std::vector<cudf::device_span<uint8_t const>>>,
-           std::future<void>>
-fetch_bloom_filters_to_device_async(
+std::pair<std::vector<rmm::device_buffer>,
+          std::vector<std::vector<cudf::device_span<uint8_t const>>>>
+fetch_bloom_filters_to_device(
   cudf::host_span<std::reference_wrapper<cudf::io::datasource> const> datasources,
   cudf::host_span<std::vector<byte_range_info> const> bloom_filter_byte_ranges_per_source,
   rmm::cuda_stream_view stream,
