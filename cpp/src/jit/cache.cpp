@@ -216,7 +216,7 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
   auto& bundle            = ctx.jit_bundle();
   auto& device_properties = ctx.get_device_properties();
   auto sm                 = device_properties.compute_capability;
-  auto nvrtc_version      = ctx.nvrtc_version();
+  auto nvrtc_version      = ctx.nvrtc_version().value();
 
   auto include_dirs = bundle.get_include_directories();
   auto use_pch      = nvrtc_version >= MIN_NVRTC_VERSION_PCH;
@@ -302,7 +302,7 @@ rtcx::blob compile_fragment(char const* name,
   auto include_dirs = bundle.get_include_directories();
   auto pch_dir      = ctx.get_jit_pch_dir();
 
-  auto nvrtc_version = ctx.nvrtc_version();
+  auto nvrtc_version = ctx.nvrtc_version().value();
 
   auto use_pch     = nvrtc_version >= MIN_NVRTC_VERSION_PCH;
   auto use_minimal = nvrtc_version >= MIN_NVRTC_VERSION_MINIMAL;
