@@ -35,7 +35,7 @@ struct gkprog;
 /**
  * @brief Block-shared cache of read-only Glushkov program data.
  *
- * Loaded cooperatively by all threads in a block at kernel entry via gkprog_device::load.
+ * Loaded by thread-0 via gkprog_device::load/store calls.
  * Subsequent calls to gkprog_device::find read from shared memory (~20-cycle latency)
  * instead of global/L2 (~100 cycles).
  *
