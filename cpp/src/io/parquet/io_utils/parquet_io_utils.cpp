@@ -53,7 +53,7 @@ namespace cudf::io::parquet {
 namespace {
 
 /**
- * @brief Dispatches a task for each task index and collects the results
+ * @brief Dispatches each indexed task and collects the results
  *
  * Dispatches sequentially or using host worker pool depending on the number of tasks.
  *
