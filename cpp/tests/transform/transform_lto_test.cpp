@@ -49,6 +49,44 @@ TEST_F(TransformLTOTest, InvSqrt)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
 }
 
+TEST_F(TransformLTOTest, Distance)
+{
+  column_wrapper<float> x1{{0, 0, 0, 0}};
+  column_wrapper<float> y1{{0.0F, 1.2F, 2.5F, 3.7F}};
+  column_wrapper<float> x2{{1.6F, 2.1F, 3.2f, 4.5f}};
+  column_wrapper<float> y2{{0, 0, 0, 0}};
+
+  cudf::transform_input inputs[]   = {x1, y1, x2, y2};
+  cudf::transform_output outputs[] = {
+    {cudf::data_type{cudf::type_id::FLOAT32}, cudf::output_nullability::ALL_VALID}};
+
+  auto const range = cudf_test_fragments::file_ranges[cudf_test_fragments::distance];
+  std::span<uint8_t const> udf{cudf_test_fragments::files.subspan(range[0], range[1])};
+
+  auto result = cudf::transform_lto(udf,
+                                    cudf::lto_binary_type::FATBIN,
+                                    cudf::null_aware::NO,
+                                    std::nullopt,
+                                    inputs,
+                                    outputs,
+                                    {},
+                                    std::nullopt,
+                                    cudf::test::get_default_stream());
+
+  auto distance = [](float x1, float y1, float x2, float y2) {
+    return std::sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+  };
+
+  column_wrapper<float> expected{{
+    distance(0, 0, 1.6F, 0),
+    distance(0, 1.2F, 2.1F, 0),
+    distance(0, 2.5F, 3.2F, 0),
+    distance(0, 3.7F, 4.5F, 0),
+  }};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
+}
+
 TEST_F(TransformLTOTest, ToUpper)
 {
   column_wrapper<uint8_t> input{{65, 66, 97, 98, 48, 49, 32, 33, 127, 255}};

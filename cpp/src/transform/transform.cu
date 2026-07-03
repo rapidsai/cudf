@@ -209,7 +209,6 @@ void launch(cudf::kernel const& kernel,
   kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
-
 std::string get_element_type_name(column_view const& view, bool use_physical_type);
 
 struct element_type_name_fn {
@@ -224,9 +223,10 @@ struct element_type_name_fn {
   std::string operator()(column_view const& view, bool use_physical_type) const
     requires(std::same_as<T, cudf::dictionary32>)
   {
-    return std::format("cudf::dictionary_element<{}, {}>",
-                       get_element_type_name(view.child(cudf::dictionary_indices_column_index), use_physical_type),
-                       get_element_type_name(view.child(cudf::dictionary_keys_column_index), use_physical_type));
+    return std::format(
+      "cudf::dictionary_element<{}, {}>",
+      get_element_type_name(view.child(cudf::dictionary_indices_column_index), use_physical_type),
+      get_element_type_name(view.child(cudf::dictionary_keys_column_index), use_physical_type));
   }
 
   template <typename T>
@@ -243,11 +243,10 @@ std::string get_element_type_name(column_view const& view, bool use_physical_typ
   return cudf::type_dispatcher(view.type(), element_type_name_fn{}, view, use_physical_type);
 }
 
-
-
-
-
-std::string reflect_input_element(column_view const& c, bool use_physical_type) { return get_element_type_name(c, use_physical_type); }
+std::string reflect_input_element(column_view const& c, bool use_physical_type)
+{
+  return get_element_type_name(c, use_physical_type);
+}
 
 std::string reflect_input_element(scalar_column_view const& c, bool use_physical_type)
 {
@@ -256,9 +255,8 @@ std::string reflect_input_element(scalar_column_view const& c, bool use_physical
 
 std::string reflect_output_element(fixed_width_column const& c, bool use_physical_type)
 {
-  return get_element_type_name(c._col->type(), use_physical_type);
+  return get_element_type_name(c._col->view(), use_physical_type);
 }
-
 
 std::string reflect_output_element(string_views_column const&,
                                    [[maybe_unused]] bool use_physical_type)
@@ -274,9 +272,9 @@ std::string reflect_output_element(mutable_strings_column const&,
 
 std::string reflect_input_value_type(column_view const& c, bool use_physical_type)
 {
-  return is_dictionary(c.type())
-           ? reflect_input_value_type(c.child(cudf::dictionary_keys_column_index), use_physical_type)
-           : reflect_input_element(c, use_physical_type);
+  return is_dictionary(c.type()) ? reflect_input_value_type(
+                                     c.child(cudf::dictionary_keys_column_index), use_physical_type)
+                                 : reflect_input_element(c, use_physical_type);
 }
 
 std::string reflect_input_value_type(scalar_column_view const& c, bool use_physical_type)
@@ -370,7 +368,8 @@ auto reflect(std::variant<udf_source_type, lto_binary_type> source_type,
   if (std::holds_alternative<udf_source_type>(source_type) &&
       std::get<udf_source_type>(source_type) == udf_source_type::PTX) {
     for (auto& in : inputs) {
-      ptx_in_types.push_back(std::visit([&](auto& c) { return reflect_input_value_type(c, use_physical_types); }, in));
+      ptx_in_types.push_back(
+        std::visit([&](auto& c) { return reflect_input_value_type(c, use_physical_types); }, in));
     }
 
     for (auto& out : outputs) {
@@ -431,16 +430,17 @@ std::tuple<rtcx::blob, lto_binary_type, std::string> instantiate_fragment(
   std::span<output_column const> outputs)
 {
   CUDF_FUNC_RANGE();
-  // substitutes the CUDF_KERNEL_INSTANCE macro
+  // substitutes the `CUDF_KERNEL_INSTANCE` macro
   auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
                                        rtcx::reflect(is_null_aware),
                                        rtcx::reflect(has_user_data),
                                        ins,
                                        outs);
 
-  // substitutes the CUDF_UDF_TYPE macro
+  // substitutes the `CUDF_UDF_TYPE` macro
   auto signature = reflect_udf_signature(
     is_null_aware, has_user_data, inputs, outputs, /*use_physical_types=*/true);
+
   return {jit::get_udf_kernel_fragment("cudf/cpp/src/transform/jit/kernel.cu", kernel, signature),
           lto_binary_type::LTO_IR,
           kernel};
@@ -729,7 +729,7 @@ void perform_checks(std::variant<udf_source_type, lto_binary_type> source_type,
                     std::span<transform_output const> outputs,
                     std::span<std::unique_ptr<column> const> string_offsets)
 {
-  if (uto* udf_source = std::get_if<udf_source_type>(&source_type);
+  if (auto* udf_source = std::get_if<udf_source_type>(&source_type);
       udf_source != nullptr && *udf_source == udf_source_type::PTX) {
     static constexpr auto is_input_value_supported = [](auto const& c) {
       return is_integral(c.type()) || is_floating_point(c.type());
@@ -1223,6 +1223,7 @@ dispatch_lto_kernel_fragment(bool is_null_aware,
                                                         rtcx::reflect(has_user_data),
                                                         in_types,
                                                         out_types));
+
   for (size_t i = 0; i < std::size(cudf_fragments::transform_kernel_FILE_INDEX); i++) {
     auto file_index = cudf_fragments::transform_kernel_FILE_INDEX[i];
     auto instance   = strip_whitespace(cudf_fragments::transform_kernel_INSTANCE[i]);

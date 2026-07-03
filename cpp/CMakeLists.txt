@@ -504,20 +504,8 @@ rtcx_embed(
 
 rtcx_add_embed(cudf_fragments)
 
-list(
-  APPEND
-  CUDF_PRECOMPILE_PHYSICAL_TYPES
-  uint8_t
-  uint16_t
-  uint32_t
-  uint64_t
-  numeric::decimal32
-  numeric::decimal64
-  numeric::decimal128
-  # cudf::dictionary_element<int32_t, uint8_t> cudf::dictionary_element<int32_t, uint16_t>
-  # cudf::dictionary_element<int32_t, uint32_t> cudf::dictionary_element<int32_t, uint64_t>
-  # cudf::dictionary_element<int32_t, numeric::decimal32> cudf::dictionary_element<int32_t,
-  # numeric::decimal64> cudf::dictionary_element<int32_t, numeric::decimal128>
+list(APPEND CUDF_PRECOMPILE_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t numeric::decimal32
+     numeric::decimal64 numeric::decimal128
 )
 
 foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})

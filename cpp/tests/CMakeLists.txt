@@ -699,6 +699,8 @@ add_fragment(
   cudf_test_fragments FRAGMENT bankers_rounding SOURCE transform/fragments/bankers_rounding.cu
 )
 
+add_fragment(cudf_test_fragments FRAGMENT distance SOURCE transform/fragments/distance.cu)
+
 add_fragment(cudf_test_fragments FRAGMENT invsqrt SOURCE transform/fragments/invsqrt.cu)
 
 add_fragment(cudf_test_fragments FRAGMENT lehmer_mean SOURCE transform/fragments/lehmer_mean.cu)
