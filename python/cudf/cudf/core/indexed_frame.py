@@ -4053,7 +4053,6 @@ class IndexedFrame(Frame):
                 )
                 df = cudf.DataFrame()
             else:
-                lhs = cudf.DataFrame._from_data({}, index=index)
                 rhs = cudf.DataFrame._from_data(
                     {
                         # bookkeeping workaround for unnamed series
@@ -4069,13 +4068,24 @@ class IndexedFrame(Frame):
                 # Join only the indexes and gather the data columns natively
                 # (see ``_align_to_index``): the merge's pandas dtype
                 # semantics must not leak into reindexing, whose own dtype
-                # rules are applied below.
+                # rules are applied below. Row order comes from a positional
+                # column on the target rather than from sorting the joined
+                # key: a value sort's collation can disagree with the
+                # target's own ordering (e.g. a categorical target joined
+                # against a string source is decategorized and would sort
+                # lexically rather than by category).
                 pos_col_id = str(uuid4())
+                order_col_id = str(uuid4())
+                lhs = cudf.DataFrame._from_data(
+                    {order_col_id: ColumnBase.from_range(range(len(index)))},
+                    index=index,
+                )
                 pos_rhs = cudf.DataFrame._from_data(
                     {pos_col_id: ColumnBase.from_range(range(len(rhs)))},
                     index=rhs.index,
                 )
-                joined = lhs.join(pos_rhs, how="left", sort=True)
+                joined = lhs.join(pos_rhs, how="left", sort=False)
+                joined = joined.sort_values(order_col_id)
                 df = rhs._gather(
                     _gather_map_from_positions(
                         joined._data[pos_col_id], len(rhs)
@@ -4085,8 +4095,6 @@ class IndexedFrame(Frame):
                 df.index = joined.index
                 if fill_value is not NA and rows_added:
                     df.loc[diff] = fill_value
-                # double-argsort to map back from sorted to unsorted positions
-                df = df.take(index.argsort(ascending=True).argsort())
 
         index = index if index is not None else df.index
 
