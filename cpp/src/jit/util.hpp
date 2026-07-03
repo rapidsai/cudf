@@ -35,7 +35,7 @@ void const* get_data_ptr(scalar const& s);
  * e.g.
  *
  * ```cpp
- * // PTX: .extern .func (.param .b32 func_retval0) my_udf_uint32(.param .b32 a);
+ * // PTX: .extern .func (.param .b32 func_retval0) my_udf(.param .b32 a);
  *
  * extern void my_udf_uint32(uint32_t a);
  * extern void my_udf_int32(int32_t a);
@@ -43,13 +43,13 @@ void const* get_data_ptr(scalar const& s);
  * extern void my_udf_duration_D(duration_D a);
  * ```
  *
- * `my_udf_int32` and `my_udf_float`, `my_udf_duration_D` can safely alias `my_udf_uint32` because
+ * `my_udf_int32` and `my_udf_float`, `my_udf_duration_D` can safely alias `my_udf` because
  * they have the same register storage type (PTX `b32`).
  *
  *
  * This means that some CUDA functions/kernels that are template-specialized on physical types can
- * be re-used for other types that have the same physical type, thus reducing the cost of code
- * specialization.
+ * be re-used for other types that have the same physical type, thus reducing the compilation cost
+ * of code specialization.
  *
  */
 data_type physical_type_of(data_type type);
