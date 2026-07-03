@@ -192,14 +192,14 @@ std::vector<std::string> jit_bundle_t::get_include_directories() const
 
 namespace {
 
-constexpr int make_cuda_version(int major, int minor, int patch)
+constexpr int32_t make_cuda_version(int32_t major, int32_t minor, int32_t patch)
 {
   return major * 1000 + minor * 10 + patch;
 }
 
-constexpr int MIN_CUDA_VERSION_PCH =
+constexpr int32_t MIN_NVRTC_VERSION_PCH =
   make_cuda_version(12, 8, 0);  // minimum CUDA version for the "--pch" NVRTC flag
-constexpr int MIN_CUDA_VERSION_MINIMAL =
+constexpr int32_t MIN_NVRTC_VERSION_MINIMAL =
   make_cuda_version(12, 8, 0);  // minimum CUDA version for the "--minimal" NVRTC flag
 
 std::tuple<rtcx::library, rtcx::blob> compile_library(
@@ -216,11 +216,11 @@ std::tuple<rtcx::library, rtcx::blob> compile_library(
   auto& bundle            = ctx.jit_bundle();
   auto& device_properties = ctx.get_device_properties();
   auto sm                 = device_properties.compute_capability;
-  auto runtime            = device_properties.runtime_version;
+  auto nvrtc_version      = ctx.nvrtc_version();
 
   auto include_dirs = bundle.get_include_directories();
-  auto use_pch      = runtime >= MIN_CUDA_VERSION_PCH;
-  auto use_minimal  = runtime >= MIN_CUDA_VERSION_MINIMAL;
+  auto use_pch      = nvrtc_version >= MIN_NVRTC_VERSION_PCH;
+  auto use_minimal  = nvrtc_version >= MIN_NVRTC_VERSION_MINIMAL;
 
   std::vector<std::string> options;
 
@@ -298,13 +298,14 @@ rtcx::blob compile_fragment(char const* name,
   auto& bundle            = ctx.jit_bundle();
   auto& device_properties = ctx.get_device_properties();
   auto sm                 = device_properties.compute_capability;
-  auto runtime            = device_properties.runtime_version;
 
   auto include_dirs = bundle.get_include_directories();
   auto pch_dir      = ctx.get_jit_pch_dir();
 
-  auto use_pch     = runtime >= MIN_CUDA_VERSION_PCH;
-  auto use_minimal = runtime >= MIN_CUDA_VERSION_MINIMAL;
+  auto nvrtc_version = ctx.nvrtc_version();
+
+  auto use_pch     = nvrtc_version >= MIN_NVRTC_VERSION_PCH;
+  auto use_minimal = nvrtc_version >= MIN_NVRTC_VERSION_MINIMAL;
 
   std::vector<std::string> options;
 

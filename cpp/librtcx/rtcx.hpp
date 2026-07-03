@@ -726,6 +726,20 @@ struct cache_t {  // NOLINT
 };
 
 /**
+ * @brief Get the version of the NVRTC library
+ * @return An integer representing the NVRTC version. With the encoding major * 1000 + minor * 10 +
+ * patch
+ */
+[[nodiscard]] std::int32_t nvrtc_version();
+
+/**
+ * @brief Get the version of the NVJITLINK library
+ * @return An integer representing the NVJITLINK version. With the encoding major * 1000 + minor *
+ * 10 + patch
+ */
+[[nodiscard]] std::int32_t nvjitlink_version();
+
+/**
  * @brief Compile source code into a binary blob
  *
  * @param params Compilation parameters including source code, headers, options, and target binary

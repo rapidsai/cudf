@@ -183,6 +183,7 @@ void log_error(std::string_view msg)
   DO_IT(LibraryUnload)
 
 #define FOR_EACH_NVRTC_FUNC(DO_IT) \
+  DO_IT(Version)                   \
   DO_IT(GetErrorString)            \
   DO_IT(CreateProgram)             \
   DO_IT(DestroyProgram)            \
@@ -199,6 +200,7 @@ void log_error(std::string_view msg)
   DO_IT(GetLoweredName)
 
 #define FOR_EACH_NVJITLINK_FUNC(DO_IT) \
+  DO_IT(Version)                       \
   DO_IT(Create)                        \
   DO_IT(Destroy)                       \
   DO_IT(AddData)                       \
@@ -657,6 +659,24 @@ void log_nvJitLink_result(link_params const& params,
 }
 
 }  // namespace
+
+std::int32_t nvrtc_version()
+{
+  RTCX_FUNC_RANGE();
+
+  std::int32_t major, minor;
+  RTCX_CHECK_NVRTC(nvrtc->Version(&major, &minor));
+  return major * 1000 + minor * 10;
+}
+
+std::int32_t nvjitlink_version()
+{
+  RTCX_FUNC_RANGE();
+
+  std::uint32_t major, minor;
+  RTCX_CHECK_NVJITLINK(nvjitlink->Version(&major, &minor));
+  return static_cast<std::int32_t>(major * 1000 + minor * 10);
+}
 
 byte_buffer compile(compile_params const& params)
 {

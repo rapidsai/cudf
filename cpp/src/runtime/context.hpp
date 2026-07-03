@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 
 #include <memory>
 #include <mutex>
+#include <optional>
 
 namespace rtcx {
 struct cache_t;
@@ -57,6 +58,8 @@ class context {
   std::unique_ptr<rtcx::cache_t> _rtcx_cache;
   std::unique_ptr<jit_bundle_t> _jit_bundle;
   device_properties _device_properties;
+  std::optional<int32_t> _nvrtc_version;
+  std::optional<int32_t> _nvjitlink_version;
 
  private:
   void ensure_nvcomp_loaded();
@@ -84,6 +87,10 @@ class context {
   [[nodiscard]] std::string const& get_jit_pch_dir() const;
 
   [[nodiscard]] device_properties const& get_device_properties() const;
+
+  [[nodiscard]] std::optional<int32_t> nvrtc_version() const;
+
+  [[nodiscard]] std::optional<int32_t> nvjitlink_version() const;
 
   /// @brief Initialize additional components based on the provided flags
   /// @param flags The initialization flags to process

@@ -53,7 +53,9 @@ context::context(context_config cfg, init_flags flags)
   : _config{std::move(cfg)},
     _jit_cache_init_flag{},
     _device_properties{
-      get_driver_version(), get_runtime_version(), get_current_device_compute_capability()}
+      get_driver_version(), get_runtime_version(), get_current_device_compute_capability()},
+    _nvrtc_version{0},
+    _nvjitlink_version{0}
 {
   initialize_components(flags);
 }
@@ -70,6 +72,9 @@ void context::ensure_jit_cache_initialized()
     std::filesystem::create_directories(_config.jit_tmp_dir);
 
     rtcx::initialize();
+
+    _nvrtc_version     = rtcx::nvrtc_version();
+    _nvjitlink_version = rtcx::nvjitlink_version();
 
     auto limits = rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
                                      .num_mem_libraries = _config.kernel_cache_limit_process};
@@ -121,6 +126,10 @@ context::device_properties const& context::get_device_properties() const
 {
   return _device_properties;
 }
+
+std::optional<int32_t> context::nvrtc_version() const { return _nvrtc_version; }
+
+std::optional<int32_t> context::nvjitlink_version() const { return _nvjitlink_version; }
 
 void context::initialize_components(init_flags flags)
 {
