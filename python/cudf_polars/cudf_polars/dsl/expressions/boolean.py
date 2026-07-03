@@ -188,62 +188,97 @@ class BooleanFunction(Expr):
 
         table = plc.Table([prep(left), prep(right)])
 
-        ast = plc.expressions
-        op = ast.ASTOperator
-
-        def lit(value: float) -> plc.expressions.Literal:
-            return ast.Literal(plc.Scalar.from_py(value, f64, stream=stream))
-
-        def unary(operator: Any, operand: Any) -> plc.expressions.Operation:
-            return ast.Operation(operator, operand)
-
-        def binary(operator: Any, lhs: Any, rhs: Any) -> plc.expressions.Operation:
-            return ast.Operation(operator, lhs, rhs)
-
-        def maximum(lhs: Any, rhs: Any) -> plc.expressions.Operation:
+        def maximum(
+            lhs: plc.expressions.Expression, rhs: plc.expressions.Expression
+        ) -> plc.expressions.Operation:
             # max(a, b) == (a + b + |a - b|) / 2. Only used on the finite
             # branch, so NaN contamination from non-finite inputs is masked out.
-            return binary(
-                op.DIV,
-                binary(
-                    op.ADD,
-                    binary(op.ADD, lhs, rhs),
-                    unary(op.ABS, binary(op.SUB, lhs, rhs)),
+            return plc.expressions.Operation(
+                plc.expressions.ASTOperator.DIV,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.ADD,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.ADD, lhs, rhs
+                    ),
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.ABS,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.SUB, lhs, rhs
+                        ),
+                    ),
                 ),
-                lit(2.0),
+                plc.expressions.Literal(plc.Scalar.from_py(2.0, f64, stream=stream)),
             )
 
-        x = ast.ColumnReference(0)
-        y = ast.ColumnReference(1)
-        inf = lit(float("inf"))
-        absx = unary(op.ABS, x)
-        absy = unary(op.ABS, y)
-        absdiff = unary(op.ABS, binary(op.SUB, x, y))
-
-        tol = maximum(binary(op.MUL, lit(rel_tol), maximum(absx, absy)), lit(abs_tol))
-        cmp = binary(op.LESS_EQUAL, absdiff, tol)
-
-        # NaN iff value != itself; Inf iff |value| == inf.
-        nan_x = binary(op.NOT_EQUAL, x, x)
-        nan_y = binary(op.NOT_EQUAL, y, y)
-        inf_x = binary(op.EQUAL, absx, inf)
-        inf_y = binary(op.EQUAL, absy, inf)
-        finite_x = unary(op.NOT, binary(op.LOGICAL_OR, nan_x, inf_x))
-        finite_y = unary(op.NOT, binary(op.LOGICAL_OR, nan_y, inf_y))
-        both_finite = binary(op.LOGICAL_AND, finite_x, finite_y)
-        part_finite = binary(op.LOGICAL_AND, both_finite, cmp)
-
-        # Infinities are close iff both are infinite with the same sign.
-        part_inf = binary(
-            op.LOGICAL_AND,
-            binary(op.LOGICAL_AND, inf_x, inf_y),
-            binary(op.EQUAL, x, y),
+        x = plc.expressions.ColumnReference(0)
+        y = plc.expressions.ColumnReference(1)
+        inf = plc.expressions.Literal(
+            plc.Scalar.from_py(float("inf"), f64, stream=stream)
+        )
+        absx = plc.expressions.Operation(plc.expressions.ASTOperator.ABS, x)
+        absy = plc.expressions.Operation(plc.expressions.ASTOperator.ABS, y)
+        absdiff = plc.expressions.Operation(
+            plc.expressions.ASTOperator.ABS,
+            plc.expressions.Operation(plc.expressions.ASTOperator.SUB, x, y),
         )
 
-        predicate = binary(op.LOGICAL_OR, part_finite, part_inf)
+        tol = maximum(
+            plc.expressions.Operation(
+                plc.expressions.ASTOperator.MUL,
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(rel_tol, f64, stream=stream)
+                ),
+                maximum(absx, absy),
+            ),
+            plc.expressions.Literal(plc.Scalar.from_py(abs_tol, f64, stream=stream)),
+        )
+        cmp = plc.expressions.Operation(
+            plc.expressions.ASTOperator.LESS_EQUAL, absdiff, tol
+        )
+
+        # NaN iff value != itself; Inf iff |value| == inf.
+        nan_x = plc.expressions.Operation(plc.expressions.ASTOperator.NOT_EQUAL, x, x)
+        nan_y = plc.expressions.Operation(plc.expressions.ASTOperator.NOT_EQUAL, y, y)
+        inf_x = plc.expressions.Operation(plc.expressions.ASTOperator.EQUAL, absx, inf)
+        inf_y = plc.expressions.Operation(plc.expressions.ASTOperator.EQUAL, absy, inf)
+        finite_x = plc.expressions.Operation(
+            plc.expressions.ASTOperator.NOT,
+            plc.expressions.Operation(
+                plc.expressions.ASTOperator.LOGICAL_OR, nan_x, inf_x
+            ),
+        )
+        finite_y = plc.expressions.Operation(
+            plc.expressions.ASTOperator.NOT,
+            plc.expressions.Operation(
+                plc.expressions.ASTOperator.LOGICAL_OR, nan_y, inf_y
+            ),
+        )
+        both_finite = plc.expressions.Operation(
+            plc.expressions.ASTOperator.LOGICAL_AND, finite_x, finite_y
+        )
+        part_finite = plc.expressions.Operation(
+            plc.expressions.ASTOperator.LOGICAL_AND, both_finite, cmp
+        )
+
+        # Infinities are close iff both are infinite with the same sign.
+        part_inf = plc.expressions.Operation(
+            plc.expressions.ASTOperator.LOGICAL_AND,
+            plc.expressions.Operation(
+                plc.expressions.ASTOperator.LOGICAL_AND, inf_x, inf_y
+            ),
+            plc.expressions.Operation(plc.expressions.ASTOperator.EQUAL, x, y),
+        )
+
+        predicate = plc.expressions.Operation(
+            plc.expressions.ASTOperator.LOGICAL_OR, part_finite, part_inf
+        )
         if nans_equal:
-            predicate = binary(
-                op.LOGICAL_OR, predicate, binary(op.LOGICAL_AND, nan_x, nan_y)
+            predicate = plc.expressions.Operation(
+                plc.expressions.ASTOperator.LOGICAL_OR,
+                predicate,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.LOGICAL_AND, nan_x, nan_y
+                ),
             )
 
         return Column(
