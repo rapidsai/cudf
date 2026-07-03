@@ -570,6 +570,61 @@ def test_outer_merge_dtype_preserved_with_empty_side(empty_side):
     assert_join_results_equal(expect, got, how="outer")
 
 
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_datetime_resolution_preserved_with_empty_side(
+    empty_side,
+):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # Same reasoning as test_outer_merge_dtype_preserved_with_empty_side,
+    # but for a case that used to go through the datetime/timedelta
+    # promotion branch (max(ltype, rtype)) rather than the float64
+    # fallback: an empty side should not force promotion to the finer
+    # resolution, it should just adopt the non-empty side's resolution.
+    pdf_data = pd.DataFrame(
+        {"a": pd.to_datetime(["2020-01-01", "2020-01-02"])}
+    ).astype({"a": "datetime64[s]"})
+    pdf_empty = pd.DataFrame({"a": pd.Series([], dtype="datetime64[ns]")})
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert expect["a"].dtype == got["a"].dtype
+    assert_join_results_equal(expect, got, how="outer")
+
+
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_categorical_preserved_with_empty_side(empty_side):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # Same reasoning as test_outer_merge_dtype_preserved_with_empty_side,
+    # but for a categorical key: an empty side should not force the two
+    # sides' categories to be unioned or decategorized, it should just
+    # adopt the non-empty side's (categorical) dtype.
+    pdf_data = pd.DataFrame(
+        {"a": pd.Categorical(["x", "y", "z"], categories=["x", "y", "z"])}
+    )
+    pdf_empty = pd.DataFrame(
+        {"a": pd.Categorical([], categories=["x", "y", "z"])}
+    )
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert isinstance(got["a"].dtype, cudf.CategoricalDtype)
+    assert_join_results_equal(expect, got, how="outer")
+
+
 def test_join_multiindex_empty():
     lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]}, index=["a", "b", "c"])
     lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])

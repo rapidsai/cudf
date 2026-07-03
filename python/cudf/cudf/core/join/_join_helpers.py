@@ -86,8 +86,18 @@ def _match_join_keys(
     # side has no rows there is no data whose dtype could actually be lost.
     # Adopt the non-empty side's dtype instead of falling through to the
     # generic promotion logic below, which would otherwise promote e.g. an
-    # int64 column paired with an empty object column to float64.
-    if how == "outer":
+    # int64 column paired with an empty object column to float64. Decimal
+    # dtypes are excluded so mismatched precision/scale still raises below,
+    # matching the behavior when both sides are non-empty.
+    if (
+        how == "outer"
+        and not isinstance(
+            ltype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)
+        )
+        and not isinstance(
+            rtype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)
+        )
+    ):
         if len(lcol) and not len(rcol):
             return lcol, rcol.astype(ltype)
         elif len(rcol) and not len(lcol):
