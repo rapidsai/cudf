@@ -5,11 +5,15 @@
 
 #include "helpers.hpp"
 
+#include <cudf/column/column_device_view_base.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <jit/cache.hpp>
 #include <rtcx.hpp>
 #include <runtime/context.hpp>
+
+#include <format>
 
 namespace cudf {
 namespace jit {
@@ -75,18 +79,6 @@ std::map<uint32_t, std::string> build_ptx_params(std::span<std::string const> ou
   }
 
   return params;
-}
-
-std::vector<std::string> input_type_names(
-  std::span<std::variant<column_view, scalar_column_view> const> views)
-{
-  std::vector<std::string> names;
-
-  std::transform(views.begin(), views.end(), std::back_inserter(names), [&](auto const& view) {
-    return std::visit([](auto& a) { return type_to_name(a.type()); }, view);
-  });
-
-  return names;
 }
 
 kernel get_udf_kernel(std::string const& source_file,
