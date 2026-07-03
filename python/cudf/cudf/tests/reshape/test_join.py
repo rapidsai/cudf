@@ -625,6 +625,60 @@ def test_outer_merge_categorical_preserved_with_empty_side(empty_side):
     assert_join_results_equal(expect, got, how="outer")
 
 
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_categorical_ordering_mismatch_with_empty_side(
+    empty_side,
+):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # Merging on categorical variables with mismatched ordering is normally
+    # ambiguous and rejected, but that ambiguity is a value-comparison
+    # concern that is vacuous when one side has no values to compare. An
+    # empty side should adopt the non-empty side's (unordered) dtype
+    # instead of raising, matching pandas.
+    pdf_data = pd.DataFrame(
+        {"a": pd.Categorical(["a", "b", "a"], categories=["a", "b"])}
+    )
+    pdf_empty = pd.DataFrame(
+        {"a": pd.Categorical([], categories=["a", "b"], ordered=True)}
+    )
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert isinstance(got["a"].dtype, cudf.CategoricalDtype)
+    assert got["a"].dtype.ordered == expect["a"].dtype.ordered
+    assert_join_results_equal(expect, got, how="outer")
+
+
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_datetime_vs_int_with_empty_side(empty_side):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # Merging a datetime64 key against an int64 key normally raises, since
+    # neither can safely cast to the other. But an empty side has no data
+    # that could actually be lost, so it should adopt the non-empty side's
+    # dtype instead of raising, matching pandas.
+    pdf_data = pd.DataFrame({"a": pd.Series([1, 2, 3], dtype="int64")})
+    pdf_empty = pd.DataFrame({"a": pd.Series([], dtype="datetime64[ns]")})
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert expect["a"].dtype == got["a"].dtype
+    assert_join_results_equal(expect, got, how="outer")
+
+
 def test_join_multiindex_empty():
     lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]}, index=["a", "b", "c"])
     lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
