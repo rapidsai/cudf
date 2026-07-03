@@ -37,7 +37,6 @@ TEST_F(TransformLTOTest, InvSqrt)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
-                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -64,7 +63,6 @@ TEST_F(TransformLTOTest, ToUpper)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
-                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -92,7 +90,6 @@ TEST_F(TransformLTOTest, SumOfSquares)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
-                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -105,7 +102,7 @@ TEST_F(TransformLTOTest, SumOfSquares)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
 }
 
-TEST_F(TransformLTOTest, LehmerMean)
+TEST_F(TransformLTOTest, FallibleIntegerLehmerMean)
 {
   // computes integer lehmer mean: `(a^2 + b^2) / (a + b)` for each row using checked arithmetic and
   // throws if an overflow occurs
@@ -125,7 +122,6 @@ TEST_F(TransformLTOTest, LehmerMean)
   auto result      = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
-                                    cudf::fallible::YES,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -147,7 +143,6 @@ TEST_F(TransformLTOTest, LehmerMean)
   EXPECT_THROW(cudf::transform_lto(udf,
                                    cudf::lto_binary_type::FATBIN,
                                    cudf::null_aware::NO,
-                                   cudf::fallible::YES,
                                    std::nullopt,
                                    inputs_fail,
                                    outputs,
@@ -176,7 +171,6 @@ TEST_F(TransformLTOTest, BankersRounding)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
-                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,

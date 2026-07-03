@@ -506,34 +506,54 @@ rtcx_add_embed(cudf_fragments)
 
 list(
   APPEND
-  CUDF_PRECOMPILE_TYPES
+  CUDF_PRECOMPILE_PHYSICAL_TYPES
   uint8_t
   uint16_t
   uint32_t
   uint64_t
-  int8_t
-  int16_t
-  int32_t
-  int64_t
-  float
-  double
   numeric::decimal32
   numeric::decimal64
   numeric::decimal128
-  cudf::timestamp_D
-  cudf::timestamp_s
-  cudf::timestamp_ms
-  cudf::timestamp_us
-  cudf::timestamp_ns
-  cudf::duration_D
-  cudf::duration_s
-  cudf::duration_ms
-  cudf::duration_us
-  cudf::duration_ns
+  # cudf::dictionary_element<int32_t, uint8_t> cudf::dictionary_element<int32_t, uint16_t>
+  # cudf::dictionary_element<int32_t, uint32_t> cudf::dictionary_element<int32_t, uint64_t>
+  # cudf::dictionary_element<int32_t, numeric::decimal32> cudf::dictionary_element<int32_t,
+  # numeric::decimal64> cudf::dictionary_element<int32_t, numeric::decimal128>
 )
 
-foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
-  foreach(DISCARD_ERRORS IN ITEMS "false" "true")
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
+  set(FRAGMENT_NAME transform_kernel)
+  get_property(
+    FILE_INDEX
+    TARGET cudf_fragments__embed_props
+    PROPERTY EMBED_FILE_INDEX
+  )
+  set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+  set(INSTANCE
+      "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+  )
+  add_fragment(
+    cudf_fragments
+    FRAGMENT
+    ${VARIANT_NAME}
+    SOURCE
+    src/transform/jit/kernel.cu
+    KERNEL_INSTANCE
+    ${INSTANCE}
+    UDF_TYPE
+    "int(${TYPE} *, ${TYPE})"
+    DEFINITIONS
+    CUDF_LTO_MODE
+    ARRAY_IDS
+    ${FRAGMENT_NAME}_FILE_INDEX
+    ${FRAGMENT_NAME}_INSTANCE
+    ARRAY_VALUES
+    ${FILE_INDEX}
+    "${INSTANCE}"
+  )
+endforeach()
+
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
+  foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
     set(FRAGMENT_NAME transform_kernel)
     get_property(
       FILE_INDEX
@@ -542,7 +562,7 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
     )
     set(VARIANT_NAME transform_kernel_${FILE_INDEX})
     set(INSTANCE
-        "cudf::jit::transform_kernel<false, ${DISCARD_ERRORS}, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
     )
     add_fragment(
       cudf_fragments
@@ -553,7 +573,7 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
       KERNEL_INSTANCE
       ${INSTANCE}
       UDF_TYPE
-      "int(${TYPE} *, ${TYPE})"
+      "int(${TYPE} *, ${TYPE}, ${TYPE})"
       DEFINITIONS
       CUDF_LTO_MODE
       ARRAY_IDS
@@ -563,42 +583,6 @@ foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
       ${FILE_INDEX}
       "${INSTANCE}"
     )
-  endforeach()
-endforeach()
-
-foreach(DISCARD_ERRORS IN ITEMS "false" "true")
-  foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_TYPES})
-    foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
-      set(FRAGMENT_NAME transform_kernel)
-      get_property(
-        FILE_INDEX
-        TARGET cudf_fragments__embed_props
-        PROPERTY EMBED_FILE_INDEX
-      )
-      set(VARIANT_NAME transform_kernel_${FILE_INDEX})
-      set(INSTANCE
-          "cudf::jit::transform_kernel<false, ${DISCARD_ERRORS}, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
-      )
-      add_fragment(
-        cudf_fragments
-        FRAGMENT
-        ${VARIANT_NAME}
-        SOURCE
-        src/transform/jit/kernel.cu
-        KERNEL_INSTANCE
-        ${INSTANCE}
-        UDF_TYPE
-        "int(${TYPE} *, ${TYPE}, ${TYPE})"
-        DEFINITIONS
-        CUDF_LTO_MODE
-        ARRAY_IDS
-        ${FRAGMENT_NAME}_FILE_INDEX
-        ${FRAGMENT_NAME}_INSTANCE
-        ARRAY_VALUES
-        ${FILE_INDEX}
-        "${INSTANCE}"
-      )
-    endforeach()
   endforeach()
 endforeach()
 
