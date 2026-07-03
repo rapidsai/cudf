@@ -37,6 +37,10 @@
 namespace cudf {
 namespace {
 
+column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
+
+column_view as_column_view(column_view const& column) { return column; }
+
 struct mutable_fixed_width_column_view {
   mutable_column_view _view;
 
@@ -204,13 +208,53 @@ void launch(cudf::kernel const& kernel,
   kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
-std::string reflect_input_element(column_view const& c) { return type_to_name(c.type()); }
+namespace {
 
-std::string reflect_input_element(scalar_column_view const& c) { return type_to_name(c.type()); }
+std::string get_element_type_name(column_view const& view);
+
+struct element_type_name_fn {
+  template <typename T>
+  std::string operator()(column_view const& view) const
+    requires(is_fixed_width<T>() || std::same_as<T, cudf::string_view>)
+  {
+    return type_to_name(view.type());
+  }
+
+  template <typename T>
+  std::string operator()(column_view const& view) const
+    requires(std::same_as<T, cudf::dictionary32>)
+  {
+    return std::format("cudf::dictionary_element<{}, {}>",
+                       get_element_type_name(view.child(cudf::dictionary_indices_column_index)),
+                       get_element_type_name(view.child(cudf::dictionary_keys_column_index)));
+  }
+
+  template <typename T>
+  std::string operator()(column_view const& view) const
+    requires(!is_fixed_width<T>() && !std::same_as<T, cudf::string_view> &&
+             !std::same_as<T, cudf::dictionary32>)
+  {
+    CUDF_FAIL("Unsupported type for JIT compilation: " + type_to_name(view.type()));
+  }
+};
+
+std::string get_element_type_name(column_view const& view)
+{
+  return cudf::type_dispatcher(view.type(), element_type_name_fn{}, view);
+}
+
+}  // namespace
+
+std::string reflect_input_element(column_view const& c) { return get_element_type_name(c); }
+
+std::string reflect_input_element(scalar_column_view const& c)
+{
+  return get_element_type_name(c.as_column_view());
+}
 
 std::string reflect_output_element(fixed_width_column const& c)
 {
-  return type_to_name(c._col->type());
+  return get_element_type_name(c._col->view());
 }
 
 std::string reflect_output_element(string_views_column const&) { return "cudf::string_view"; }
@@ -218,6 +262,33 @@ std::string reflect_output_element(string_views_column const&) { return "cudf::s
 std::string reflect_output_element(mutable_strings_column const&)
 {
   return "cuda::std::span<char>";
+}
+
+std::string reflect_input_value_type(column_view const& c)
+{
+  return is_dictionary(c.type())
+           ? reflect_input_value_type(c.child(cudf::dictionary_keys_column_index))
+           : reflect_input_element(c);
+}
+
+std::string reflect_input_value_type(scalar_column_view const& c)
+{
+  return reflect_input_value_type(c.as_column_view());
+}
+
+std::string reflect_output_value_type(fixed_width_column const& c)
+{
+  return reflect_output_element(c);
+}
+
+std::string reflect_output_value_type(string_views_column const& c)
+{
+  return reflect_output_element(c);
+}
+
+std::string reflect_output_value_type(mutable_strings_column const& c)
+{
+  return reflect_output_element(c);
 }
 
 std::string reflect_input_column(column_view const&) { return "cudf::column_device_view_core"; }
@@ -287,11 +358,12 @@ auto reflect(udf_source_type source_type,
 
   if (source_type == udf_source_type::PTX) {
     for (auto& in : inputs) {
-      ptx_in_types.push_back(std::visit([](auto& c) { return reflect_input_element(c); }, in));
+      ptx_in_types.push_back(std::visit([](auto& c) { return reflect_input_value_type(c); }, in));
     }
 
     for (auto& out : outputs) {
-      ptx_out_types.push_back(std::visit([](auto& c) { return reflect_output_element(c); }, out));
+      ptx_out_types.push_back(
+        std::visit([](auto& c) { return reflect_output_value_type(c); }, out));
     }
   }
 
@@ -519,17 +591,20 @@ void perform_checks(udf_source_type source_type,
                     std::span<std::unique_ptr<column> const> string_offsets)
 {
   if (source_type == udf_source_type::PTX) {
-    CUDF_EXPECTS(std::none_of(inputs.begin(),
-                              inputs.end(),
-                              [](auto& in) {
-                                return std::visit(
-                                  [](auto& c) {
-                                    return !is_integral(c.type()) && !is_floating_point(c.type());
-                                  },
-                                  in);
-                              }),
-                 "Transforms with PTX UDFs only support integer, floating-point, and boolean",
-                 std::invalid_argument);
+    static constexpr auto is_input_value_supported = [](auto const& c) {
+      return is_integral(c.type()) || is_floating_point(c.type());
+    };
+    static constexpr auto is_supported_input_type = [](auto const& c) {
+      auto col = std::visit([](auto& c) { return as_column_view(c); }, c);
+      return is_input_value_supported(col) ||
+             (is_dictionary(col.type()) &&
+              is_input_value_supported(col.child(dictionary_keys_column_index)));
+    };
+    CUDF_EXPECTS(
+      std::none_of(
+        inputs.begin(), inputs.end(), [](auto const& in) { return !is_supported_input_type(in); }),
+      "Transforms with PTX UDFs only support integer, floating-point, and boolean",
+      std::invalid_argument);
     CUDF_EXPECTS(std::none_of(outputs.begin(),
                               outputs.end(),
                               [](auto& out) {
@@ -550,14 +625,20 @@ void perform_checks(udf_source_type source_type,
                "Transforms only support output of fixed-width or string types",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::none_of(inputs.begin(),
-                            inputs.end(),
-                            [&](auto& in) {
-                              auto type = std::visit([](auto& c) { return c.type(); }, in);
-                              return !is_fixed_width(type) && type.id() != type_id::STRING;
-                            }),
-               "Transforms only support input of fixed-width or string types",
-               std::invalid_argument);
+  static constexpr auto is_input_value_supported = [](auto const& c) {
+    return is_fixed_width(c.type()) || c.type().id() == type_id::STRING || is_dictionary(c.type());
+  };
+  static constexpr auto is_supported_input_type = [&](auto const& c) {
+    auto col = std::visit([](auto const& c) { return as_column_view(c); }, c);
+    return is_input_value_supported(col) ||
+           (is_dictionary(col.type()) &&
+            is_input_value_supported(col.child(dictionary_keys_column_index)));
+  };
+  CUDF_EXPECTS(
+    std::none_of(
+      inputs.begin(), inputs.end(), [&](auto const& in) { return !is_supported_input_type(in); }),
+    "Transforms only support input of fixed-width, string, or dictionary types",
+    std::invalid_argument);
 
   if (!in_row_size.has_value()) {
     CUDF_EXPECTS(

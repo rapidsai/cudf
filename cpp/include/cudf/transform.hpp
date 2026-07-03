@@ -95,9 +95,11 @@ struct transform_output {
  *
  *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
- * @throws std::invalid_argument if `output_type` or any of the input types are not supported.
- * CUDA-supported types are fixed-width and string types, while PTX-supported types are integral and
- * floating-point types.
+ * @throws std::invalid_argument if any of the output or input types are not supported.
+ * CUDA-supported input types are fixed-width, string, and their dictionary types. PTX-supported
+ * input types are integrals, floats, and their dictionary types. CUDA-supported output types are
+ * fixed-width, string, and their dictionary types. PTX-supported output types are integrals,
+ * floats, and their dictionary types.
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
@@ -145,6 +147,11 @@ std::unique_ptr<column> transform_extended(
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
+ * @throws std::invalid_argument if any of the output or input types are not supported.
+ * CUDA-supported input types are fixed-width, string, and their dictionary types. PTX-supported
+ * input types are integrals, floats, and their dictionary types. CUDA-supported output types are
+ * fixed-width, string, and their dictionary types. PTX-supported output types are integrals,
+ * floats, and their dictionary types.
  * @throws std::invalid_argument if string offsets are provided for non-string output columns, or
  * if the number of string offsets does not match the number of output columns.
  * @throws cudf::evaluation_error if the UDF produces an error during execution.
