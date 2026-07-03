@@ -7,6 +7,7 @@ package ai.rapids.cudf.ast;
 
 import ai.rapids.cudf.DType;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -121,6 +122,23 @@ public final class Literal extends AstExpression {
       return ofNull(DType.FLOAT64);
     }
     return ofDouble(value.doubleValue());
+  }
+
+  /** Construct a decimal literal with the specified type and unscaled value. */
+  public static Literal ofDecimal(DType type, BigInteger unscaledValue) {
+    if (!type.isDecimalType()) {
+      throw new IllegalArgumentException("type is not a decimal: " + type);
+    }
+    if (unscaledValue == null) {
+      return ofNull(type);
+    }
+    if (type.getTypeId() == DType.DTypeEnum.DECIMAL32) {
+      return ofIntBasedType(type, unscaledValue.intValueExact());
+    } else if (type.getTypeId() == DType.DTypeEnum.DECIMAL64) {
+      return ofLongBasedType(type, unscaledValue.longValueExact());
+    } else {
+      return new Literal(type, convertDecimal128FromJavaToCudf(unscaledValue.toByteArray(), type));
+    }
   }
 
   /** Construct a timestamp days literal with the specified value. */
@@ -274,5 +292,17 @@ public final class Literal extends AstExpression {
     byte[] serializedValue = new byte[Long.BYTES];
     ByteBuffer.wrap(serializedValue).order(ByteOrder.nativeOrder()).putLong(value);
     return new Literal(type, serializedValue);
+  }
+
+  private static byte[] convertDecimal128FromJavaToCudf(byte[] bytes, DType type) {
+    byte[] finalBytes = new byte[type.getSizeInBytes()];
+    byte signByte = (bytes[0] & 0x80) > 0 ? (byte) 0xff : (byte) 0x00;
+    for (int i = bytes.length; i < finalBytes.length; i++) {
+      finalBytes[i] = signByte;
+    }
+    for (int i = 0; i < bytes.length; i++) {
+      finalBytes[i] = bytes[bytes.length - i - 1];
+    }
+    return finalBytes;
   }
 }

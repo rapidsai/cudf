@@ -19,7 +19,8 @@ public abstract class AstExpression {
     NULL_LITERAL(1),
     COLUMN_REFERENCE(2),
     UNARY_EXPRESSION(3),
-    BINARY_EXPRESSION(4);
+    BINARY_EXPRESSION(4),
+    JIT_EXPRESSION(5);
 
     private final byte nativeId;
 

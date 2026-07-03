@@ -18,6 +18,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.NullSource;
 
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,6 +27,7 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class CompiledExpressionTest extends CudfTestBase {
   @Test
@@ -292,6 +294,99 @@ public class CompiledExpressionTest extends CudfTestBase {
          ColumnVector expected =
              ColumnVector.durationNanoSecondsFromBoxedLongs(value, value, value, value, value)) {
       assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  public void testDecimal128LiteralTransform() {
+    int scale = -4;
+    BigInteger value = new BigInteger("-123456789012345678901234567890");
+    Literal expr = Literal.ofDecimal(DType.create(DType.DTypeEnum.DECIMAL128, scale), value);
+    try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumn(t);
+         ColumnVector expected = ColumnVector.decimalFromBigInt(scale, value, value, value)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testJitOperationValidation() {
+    AstExpression[] inputs = new AstExpression[] {
+        new ColumnReference(0),
+        new ColumnReference(1),
+        new ColumnReference(2)
+    };
+    for (JitOperator op : JitOperator.values()) {
+      if (op == JitOperator.RESCALE) {
+        Assertions.assertDoesNotThrow(
+            () -> new JitOperation(op, -2, Arrays.copyOf(inputs, op.getArity())));
+      } else {
+        JitComplianceMode mode = op == JitOperator.PRECISION_CHECK
+            ? JitComplianceMode.ANSI : JitComplianceMode.DEFAULT;
+        Assertions.assertDoesNotThrow(
+            () -> new JitOperation(op, mode, Arrays.copyOf(inputs, op.getArity())));
+      }
+      if (op.getArity() > 0) {
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> new JitOperation(op, Arrays.copyOf(inputs, op.getArity() - 1)));
+      }
+    }
+
+    Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () -> new JitOperation(JitOperator.PRECISION_CHECK,
+            new ColumnReference(0), new ColumnReference(1)));
+    Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () -> new JitOperation(JitOperator.IF_ELSE, JitComplianceMode.ANSI,
+            new ColumnReference(0), new ColumnReference(1), new ColumnReference(2)));
+    Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () -> new JitOperation(JitOperator.RESCALE, new ColumnReference(0)));
+  }
+
+  @Test
+  void testJitTryDivModTransform() {
+    assumeTrue("1".equals(System.getenv("LIBCUDF_JIT_ENABLED")));
+    try (Table t = new Table.TestBuilder()
+        .column(10, 7, null, 6)
+        .column(2, 0, 3, null)
+        .build()) {
+      JitOperation divExpr = new JitOperation(JitOperator.DIV, JitComplianceMode.ANSI_TRY,
+          new ColumnReference(0), new ColumnReference(1));
+      try (CompiledExpression compiledExpr = divExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumn(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(5, null, null, null)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+
+      JitOperation modExpr = new JitOperation(JitOperator.MOD, JitComplianceMode.ANSI_TRY,
+          new ColumnReference(0), new ColumnReference(1));
+      try (CompiledExpression compiledExpr = modExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumn(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(0, null, null, null)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+    }
+  }
+
+  @Test
+  void testJitIfElseTransform() {
+    assumeTrue("1".equals(System.getenv("LIBCUDF_JIT_ENABLED")));
+    try (Table t = new Table.TestBuilder()
+        .column(1, 2, 3, 4)
+        .column(10, 20, 30, 40)
+        .column(true, false, true, false)
+        .build()) {
+      JitOperation expr = new JitOperation(JitOperator.IF_ELSE,
+          new ColumnReference(0), new ColumnReference(1), new ColumnReference(2));
+      try (CompiledExpression compiledExpr = expr.compile();
+           ColumnVector actual = compiledExpr.computeColumn(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(1, 20, 3, 40)) {
+        assertColumnsAreEqual(expected, actual);
+      }
     }
   }
 

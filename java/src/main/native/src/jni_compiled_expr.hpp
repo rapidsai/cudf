@@ -29,8 +29,13 @@ class compiled_expr {
   /** All expression nodes within the expression tree */
   std::vector<std::unique_ptr<cudf::ast::expression>> expressions;
 
+  /** Expression tree for JIT helper-created nodes */
+  cudf::ast::tree jit_expressions;
+
   /** GPU scalar instances that correspond to literal nodes */
   std::vector<std::unique_ptr<cudf::scalar>> scalars;
+
+  cudf::ast::expression const* top_expression = nullptr;
 
  public:
   cudf::ast::literal& add_literal(std::unique_ptr<cudf::ast::literal> literal_ptr,
@@ -38,23 +43,34 @@ class compiled_expr {
   {
     expressions.push_back(std::move(literal_ptr));
     scalars.push_back(std::move(scalar_ptr));
+    top_expression = expressions.back().get();
     return static_cast<cudf::ast::literal&>(*expressions.back());
   }
 
   cudf::ast::column_reference& add_column_ref(std::unique_ptr<cudf::ast::column_reference> ref_ptr)
   {
     expressions.push_back(std::move(ref_ptr));
+    top_expression = expressions.back().get();
     return static_cast<cudf::ast::column_reference&>(*expressions.back());
   }
 
   cudf::ast::operation& add_operation(std::unique_ptr<cudf::ast::operation> expr_ptr)
   {
     expressions.push_back(std::move(expr_ptr));
+    top_expression = expressions.back().get();
     return static_cast<cudf::ast::operation&>(*expressions.back());
   }
 
+  template <typename F>
+  cudf::ast::expression const& add_jit_expression(F&& factory)
+  {
+    auto& expr     = factory(jit_expressions);
+    top_expression = &expr;
+    return expr;
+  }
+
   /** Return the expression node at the top of the tree */
-  cudf::ast::expression& get_top_expression() const { return *expressions.back(); }
+  cudf::ast::expression const& get_top_expression() const { return *top_expression; }
 };
 
 }  // namespace ast

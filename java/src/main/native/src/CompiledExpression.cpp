@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -7,13 +7,16 @@
 #include "jni_compiled_expr.hpp"
 
 #include <cudf/ast/expressions.hpp>
+#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/transform.hpp>
 #include <cudf/types.hpp>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -98,7 +101,8 @@ class jni_serialized_ast {
         return cudf::data_type(dtype_id);
       }
       case cudf::type_id::DECIMAL32:
-      case cudf::type_id::DECIMAL64: {
+      case cudf::type_id::DECIMAL64:
+      case cudf::type_id::DECIMAL128: {
         int32_t const scale = read_byte();
         return cudf::data_type(dtype_id, scale);
       }
@@ -116,7 +120,8 @@ enum class jni_serialized_expression_type : int8_t {
   NULL_LITERAL     = 1,
   COLUMN_REFERENCE = 2,
   UNARY_OPERATION  = 3,
-  BINARY_OPERATION = 4
+  BINARY_OPERATION = 4,
+  JIT_OPERATION    = 5
 };
 
 /**
@@ -191,6 +196,80 @@ cudf::ast::ast_operator jni_to_binary_operator(jbyte jni_op_value)
     case 22: return cudf::ast::ast_operator::NULL_LOGICAL_OR;
     default: throw std::invalid_argument("unexpected JNI AST binary operator value");
   }
+}
+
+enum class jni_jit_compliance_mode : int8_t { DEFAULT, ANSI, ANSI_TRY };
+
+/**
+ * Convert a Java AST serialized byte representing a JIT compliance mode.
+ * NOTE: This must be kept in sync with the enumeration in JitComplianceMode.java!
+ */
+jni_jit_compliance_mode jni_to_jit_compliance_mode(jbyte jni_mode_value)
+{
+  switch (jni_mode_value) {
+    case 0: return jni_jit_compliance_mode::DEFAULT;
+    case 1: return jni_jit_compliance_mode::ANSI;
+    case 2: return jni_jit_compliance_mode::ANSI_TRY;
+    default: throw std::invalid_argument("unexpected JNI AST JIT compliance mode value");
+  }
+}
+
+void expect_default_jit_compliance_mode(jni_jit_compliance_mode mode)
+{
+  if (mode != jni_jit_compliance_mode::DEFAULT) {
+    throw std::invalid_argument("unexpected compliance mode for JNI AST JIT operator");
+  }
+}
+
+void expect_non_default_jit_compliance_mode(jni_jit_compliance_mode mode)
+{
+  if (mode == jni_jit_compliance_mode::DEFAULT) {
+    throw std::invalid_argument(
+      "expected ANSI or ANSI_TRY compliance mode for JNI AST JIT operator");
+  }
+}
+
+cudf::error_policy jni_to_jit_error_policy(jni_jit_compliance_mode mode)
+{
+  expect_non_default_jit_compliance_mode(mode);
+  return mode == jni_jit_compliance_mode::ANSI_TRY ? cudf::error_policy::NULLIFY
+                                                   : cudf::error_policy::PROPAGATE;
+}
+
+cudf::ast::expression const& dispatch_jit_expression(
+  cudf::ast::tree& tree,
+  std::vector<std::reference_wrapper<cudf::ast::expression const>> const& args,
+  jni_jit_compliance_mode mode,
+  cudf::ast::jit::op default_op,
+  cudf::ast::jit::op overflow_op)
+{
+  if (mode == jni_jit_compliance_mode::DEFAULT) {
+    return cudf::ast::jit::operation(tree, default_op, args);
+  }
+  return cudf::ast::jit::operation(tree, overflow_op, args, jni_to_jit_error_policy(mode));
+}
+
+void expect_jit_arity(std::vector<std::reference_wrapper<cudf::ast::expression const>> const& args,
+                      std::size_t expected)
+{
+  if (args.size() != expected) {
+    throw std::invalid_argument("unexpected JNI AST JIT operator arity");
+  }
+}
+
+void expect_no_target_scale(std::optional<int32_t> const& target_scale)
+{
+  if (target_scale.has_value()) {
+    throw std::invalid_argument("unexpected target scale for JNI AST JIT operator");
+  }
+}
+
+int32_t require_target_scale(std::optional<int32_t> const& target_scale)
+{
+  if (!target_scale.has_value()) {
+    throw std::invalid_argument("expected target scale for JNI AST JIT operator");
+  }
+  return target_scale.value();
 }
 
 /**
@@ -291,16 +370,34 @@ struct make_literal {
   }
 
   /** Default functor implementation to catch type dispatch errors */
-  template <
-    typename T,
-    std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_timestamp<T>() &&
-                     !cudf::is_duration<T>() && !std::is_same_v<T, cudf::string_view>>* = nullptr>
+  template <typename T,
+            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_timestamp<T>() &&
+                             !cudf::is_duration<T>() && !cudf::is_fixed_point<T>() &&
+                             !std::is_same_v<T, cudf::string_view>>* = nullptr>
   cudf::ast::literal& operator()(cudf::data_type dtype,
                                  bool is_valid,
                                  cudf::jni::ast::compiled_expr& compiled_expr,
                                  jni_serialized_ast& jni_ast)
   {
     throw std::logic_error("Unsupported AST literal type");
+  }
+
+  /** Construct an AST literal from a fixed-point value */
+  template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
+  cudf::ast::literal& operator()(cudf::data_type dtype,
+                                 bool is_valid,
+                                 cudf::jni::ast::compiled_expr& compiled_expr,
+                                 jni_serialized_ast& jni_ast)
+  {
+    using rep_type = typename T::rep;
+    auto const val = is_valid ? jni_ast.read<rep_type>() : rep_type{};
+    std::unique_ptr<cudf::scalar> scalar_ptr =
+      cudf::make_fixed_point_scalar<T>(val, numeric::scale_type{dtype.scale()});
+    scalar_ptr->set_valid_async(is_valid);
+
+    auto& fixed_point_scalar = static_cast<cudf::fixed_point_scalar<T>&>(*scalar_ptr);
+    return compiled_expr.add_literal(std::make_unique<cudf::ast::literal>(fixed_point_scalar),
+                                     std::move(scalar_ptr));
   }
 };
 
@@ -324,15 +421,15 @@ cudf::ast::column_reference& compile_column_reference(cudf::jni::ast::compiled_e
 }
 
 // forward declaration
-cudf::ast::expression& compile_expression(cudf::jni::ast::compiled_expr& compiled_expr,
-                                          jni_serialized_ast& jni_ast);
+cudf::ast::expression const& compile_expression(cudf::jni::ast::compiled_expr& compiled_expr,
+                                                jni_serialized_ast& jni_ast);
 
 /** Decode a serialized AST unary expression */
 cudf::ast::operation& compile_unary_expression(cudf::jni::ast::compiled_expr& compiled_expr,
                                                jni_serialized_ast& jni_ast)
 {
-  auto const ast_op                       = jni_to_unary_operator(jni_ast.read_byte());
-  cudf::ast::expression& child_expression = compile_expression(compiled_expr, jni_ast);
+  auto const ast_op                             = jni_to_unary_operator(jni_ast.read_byte());
+  cudf::ast::expression const& child_expression = compile_expression(compiled_expr, jni_ast);
   return compiled_expr.add_operation(
     std::make_unique<cudf::ast::operation>(ast_op, child_expression));
 }
@@ -341,16 +438,185 @@ cudf::ast::operation& compile_unary_expression(cudf::jni::ast::compiled_expr& co
 cudf::ast::operation& compile_binary_expression(cudf::jni::ast::compiled_expr& compiled_expr,
                                                 jni_serialized_ast& jni_ast)
 {
-  auto const ast_op                  = jni_to_binary_operator(jni_ast.read_byte());
-  cudf::ast::expression& left_child  = compile_expression(compiled_expr, jni_ast);
-  cudf::ast::expression& right_child = compile_expression(compiled_expr, jni_ast);
+  auto const ast_op                        = jni_to_binary_operator(jni_ast.read_byte());
+  cudf::ast::expression const& left_child  = compile_expression(compiled_expr, jni_ast);
+  cudf::ast::expression const& right_child = compile_expression(compiled_expr, jni_ast);
   return compiled_expr.add_operation(
     std::make_unique<cudf::ast::operation>(ast_op, left_child, right_child));
 }
 
+/** Decode a serialized JIT AST expression */
+cudf::ast::expression const& compile_jit_expression(cudf::jni::ast::compiled_expr& compiled_expr,
+                                                    jni_serialized_ast& jni_ast)
+{
+  auto const op_byte = jni_ast.read_byte();
+  auto const mode    = jni_to_jit_compliance_mode(jni_ast.read_byte());
+  auto const arity   = static_cast<int32_t>(jni_ast.read_byte());
+  if (arity < 0) { throw std::invalid_argument("unexpected JNI AST JIT operator arity"); }
+  auto const has_target_scale = jni_ast.read_byte();
+  std::optional<int32_t> target_scale;
+  if (has_target_scale != 0) { target_scale = jni_ast.read<int32_t>(); }
+
+  std::vector<std::reference_wrapper<cudf::ast::expression const>> args;
+  args.reserve(arity);
+  for (int32_t index = 0; index < arity; ++index) {
+    args.emplace_back(compile_expression(compiled_expr, jni_ast));
+  }
+
+  return compiled_expr.add_jit_expression(
+    [&](cudf::ast::tree& tree) -> cudf::ast::expression const& {
+      switch (op_byte) {
+        case 0:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          return dispatch_jit_expression(
+            tree, args, mode, cudf::ast::jit::op::ADD, cudf::ast::jit::op::ADD_OVERFLOW);
+        case 1:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          return dispatch_jit_expression(
+            tree, args, mode, cudf::ast::jit::op::SUB, cudf::ast::jit::op::SUB_OVERFLOW);
+        case 2:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          return dispatch_jit_expression(
+            tree, args, mode, cudf::ast::jit::op::MUL, cudf::ast::jit::op::MUL_OVERFLOW);
+        case 3:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          return dispatch_jit_expression(
+            tree, args, mode, cudf::ast::jit::op::DIV, cudf::ast::jit::op::DIV_OVERFLOW);
+        case 4:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          return dispatch_jit_expression(
+            tree, args, mode, cudf::ast::jit::op::MOD, cudf::ast::jit::op::MOD_OVERFLOW);
+        case 5:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          return dispatch_jit_expression(
+            tree, args, mode, cudf::ast::jit::op::ABS, cudf::ast::jit::op::ABS_OVERFLOW);
+        case 6:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          return dispatch_jit_expression(
+            tree, args, mode, cudf::ast::jit::op::NEG, cudf::ast::jit::op::NEG_OVERFLOW);
+        case 7:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          return cudf::ast::jit::operation(
+            tree, cudf::ast::jit::op::CHECK_PRECISION, args, jni_to_jit_error_policy(mode));
+        case 8:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::BITWISE_SHIFT_LEFT, args);
+        case 9:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::BITWISE_SHIFT_RIGHT, args);
+        case 10:
+          expect_jit_arity(args, 2);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::COALESCE, args);
+        case 11:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::PREDICATE, args);
+        case 12:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_BOOL8, args);
+        case 13:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT8, args);
+        case 14:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT16, args);
+        case 15:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT32, args);
+        case 16:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_INT64, args);
+        case 17:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT8, args);
+        case 18:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT16, args);
+        case 19:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT32, args);
+        case 20:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_UINT64, args);
+        case 21:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT32, args);
+        case 22:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_FLOAT64, args);
+        case 23:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL32, args);
+        case 24:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL64, args);
+        case 25:
+          expect_jit_arity(args, 1);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::CAST_TO_DECIMAL128, args);
+        case 26:
+          expect_jit_arity(args, 1);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree,
+                                           cudf::ast::jit::op::RESCALE,
+                                           args,
+                                           cudf::error_policy::PROPAGATE,
+                                           require_target_scale(target_scale));
+        case 27:
+          expect_jit_arity(args, 3);
+          expect_no_target_scale(target_scale);
+          expect_default_jit_compliance_mode(mode);
+          return cudf::ast::jit::operation(tree, cudf::ast::jit::op::IF_ELSE, args);
+        default: throw std::invalid_argument("unexpected JNI AST JIT operator value");
+      }
+    });
+}
+
 /** Decode a serialized AST expression by reading the expression type and dispatching */
-cudf::ast::expression& compile_expression(cudf::jni::ast::compiled_expr& compiled_expr,
-                                          jni_serialized_ast& jni_ast)
+cudf::ast::expression const& compile_expression(cudf::jni::ast::compiled_expr& compiled_expr,
+                                                jni_serialized_ast& jni_ast)
 {
   auto const expression_type = static_cast<jni_serialized_expression_type>(jni_ast.read_byte());
   switch (expression_type) {
@@ -364,6 +630,8 @@ cudf::ast::expression& compile_expression(cudf::jni::ast::compiled_expr& compile
       return compile_unary_expression(compiled_expr, jni_ast);
     case jni_serialized_expression_type::BINARY_OPERATION:
       return compile_binary_expression(compiled_expr, jni_ast);
+    case jni_serialized_expression_type::JIT_OPERATION:
+      return compile_jit_expression(compiled_expr, jni_ast);
     default: throw std::invalid_argument("data is not a serialized AST expression");
   }
 }
