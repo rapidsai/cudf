@@ -450,7 +450,7 @@ void make_device_json_column(device_span<SymbolT const> input,
       }
 
       auto top_node_id = static_cast<NodeIndexT>(node_id);
-      while (top_node_id != parent_node_sentinel && top_node_id != -1) {
+      while (top_node_id != parent_node_sentinel) {
         auto const top_col_id = h_col_ids[top_node_id];
         if (top_col_id >= 0 && static_cast<std::size_t>(top_col_id) < h_column_parent_ids.size() &&
             h_column_parent_ids[top_col_id] == named_level) {
