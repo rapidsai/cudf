@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2018-2019 BlazingDB, Inc.
  * SPDX-FileCopyrightText: Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 /*
@@ -1179,6 +1179,66 @@ return l - t * l + t * h;
                                               cudf::output_nullability::ALL_VALID);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cuda_result, *expected);
+}
+
+TEST_F(UnaryOperationIntegrationTest, Transform_ErrorHandling)
+{
+  auto cuda =
+    R"***(
+__device__ cudf::errc expression (
+       int* c,
+       int a,
+       int b
+)
+{
+  auto e = cudf::detail::ops::div_overflow(a, b);
+  if(!e.has_value()){
+    return e.error();
+  }
+  *c = e.value();
+  return cudf::errc::SUCCESS;
+}
+)***";
+
+  cudf::test::fixed_width_column_wrapper<int32_t> a{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<int32_t> b_fail{1, 2, 3, 4, 5, 6, 0, 8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<int32_t> b{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  cudf::test::fixed_width_column_wrapper<int32_t> expected{1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+
+  {
+    cudf::transform_input inputs[]   = {a, b};
+    cudf::transform_output outputs[] = {
+      {cudf::data_type(cudf::type_id::INT32), cudf::output_nullability::ALL_VALID}};
+    std::unique_ptr<cudf::table> result;
+    EXPECT_NO_THROW(result = cudf::multi_transform(cuda,
+                                                   cudf::udf_source_type::CUDA,
+                                                   cudf::null_aware::NO,
+                                                   cudf::fallible::YES,
+                                                   std::nullopt,
+                                                   inputs,
+                                                   outputs,
+                                                   {},
+                                                   std::nullopt));
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
+  }
+
+  {
+    cudf::transform_input inputs[]   = {a, b_fail};
+    cudf::transform_output outputs[] = {
+      {cudf::data_type(cudf::type_id::INT32), cudf::output_nullability::ALL_VALID}};
+    std::unique_ptr<cudf::table> result;
+    EXPECT_THROW(result = cudf::multi_transform(cuda,
+                                                cudf::udf_source_type::CUDA,
+                                                cudf::null_aware::NO,
+                                                cudf::fallible::YES,
+                                                std::nullopt,
+                                                inputs,
+                                                outputs,
+                                                {},
+                                                std::nullopt),
+                 cudf::evaluation_error);
+  }
 }
 
 }  // namespace transformation
