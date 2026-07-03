@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -544,6 +544,30 @@ def test_typecast_on_join_indexes_matching_categorical():
     got = gdf_l.join(gdf_r, how="inner", lsuffix="_x", rsuffix="_y")
 
     assert_join_results_equal(expect, got, how="inner")
+
+
+@pytest.mark.parametrize("empty_side", ["left", "right"])
+def test_outer_merge_dtype_preserved_with_empty_side(empty_side):
+    # https://github.com/rapidsai/cudf/issues/9981
+    # In an outer merge, every output row's key value comes from whichever
+    # side is non-empty, so if one side of the merge key has no rows, no
+    # value could actually be lost. The non-empty side's dtype should
+    # survive the merge just like it does in pandas, instead of being
+    # promoted to float64.
+    pdf_data = pd.DataFrame({"a": [1, 2, 3, 4]})
+    pdf_empty = pd.DataFrame(columns=["a"])
+    lhs, rhs = (
+        (pdf_empty, pdf_data)
+        if empty_side == "left"
+        else (pdf_data, pdf_empty)
+    )
+    glhs, grhs = cudf.from_pandas(lhs), cudf.from_pandas(rhs)
+
+    expect = lhs.merge(rhs, how="outer")
+    got = glhs.merge(grhs, how="outer")
+
+    assert expect["a"].dtype == got["a"].dtype
+    assert_join_results_equal(expect, got, how="outer")
 
 
 def test_join_multiindex_empty():

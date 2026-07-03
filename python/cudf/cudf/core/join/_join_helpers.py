@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -80,6 +80,18 @@ def _match_join_keys(
     # cast the keys lcol and rcol to a common dtype
     ltype = lcol.dtype
     rtype = rcol.dtype
+
+    # For outer joins, every output row's key value comes from whichever side
+    # is non-empty (the empty side contributes only nulls), so if exactly one
+    # side has no rows there is no data whose dtype could actually be lost.
+    # Adopt the non-empty side's dtype instead of falling through to the
+    # generic promotion logic below, which would otherwise promote e.g. an
+    # int64 column paired with an empty object column to float64.
+    if how == "outer":
+        if len(lcol) and not len(rcol):
+            return lcol, rcol.astype(ltype)
+        elif len(rcol) and not len(lcol):
+            return lcol.astype(rtype), rcol
 
     # if either side is categorical, different logic
     left_is_categorical = isinstance(ltype, CategoricalDtype)
