@@ -5,12 +5,17 @@
 
 #include <cuda/std/cstdint>
 
-extern "C" __device__ int transform(uint8_t* output, uint8_t input)
+__device__ uint8_t to_upper(uint8_t input)
 {
   if (input > 96 && input < 123) {
-    *output = input - 32;
+    return input - 32;
   } else {
-    *output = input;
+    return input;
   }
+}
+
+extern "C" __device__ int transform(uint8_t* output, uint8_t input)
+{
+  *output = to_upper(input);
   return 0;
 }

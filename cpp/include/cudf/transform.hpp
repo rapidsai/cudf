@@ -263,6 +263,7 @@ enum class lto_binary_type : uint8_t {
  * `transform` and follow the CUDF UDF ABI.
  * @param binary_type   The type of the LTO binary provided in `udf`
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
+ * @param is_fallible   Signifies the UDF may produce errors during execution
  * @param user_data     User-defined device data to pass to the UDF.
  * @param inputs        Immutable view of the input to transform
  * @param outputs       Specification of the output columns to be created
@@ -280,6 +281,7 @@ std::unique_ptr<table> transform_lto(
   std::span<uint8_t const> udf,
   lto_binary_type binary_type,
   null_aware is_null_aware,
+  fallible is_fallible,
   std::optional<void*> user_data,
   std::span<transform_input const> inputs,
   std::span<transform_output const> outputs,

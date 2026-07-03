@@ -339,8 +339,10 @@ std::string reflect_udf_signature(bool is_null_aware,
   return std::format("int({})", joined);
 }
 
+// determine CUDF_KERNEL_INSTANCE and CUDF_UDF_TYPE
 std::tuple<rtcx::blob, lto_binary_type, std::string> instantiate_fragment(
   bool is_null_aware,
+  bool discard_errors,
   bool has_user_data,
   std::string const& ins,
   std::string const& outs,
@@ -350,6 +352,7 @@ std::tuple<rtcx::blob, lto_binary_type, std::string> instantiate_fragment(
   CUDF_FUNC_RANGE();
   auto kernel    = rtcx::reflect_template("cudf::jit::transform_kernel",
                                        rtcx::reflect(is_null_aware),
+                                       rtcx::reflect(discard_errors),
                                        rtcx::reflect(has_user_data),
                                        ins,
                                        outs);
@@ -444,12 +447,14 @@ rtcx::binary_type as_rtcx_binary_type(lto_binary_type type)
 void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type, char const*>>
                precompiled_kernel_fragment,
              bool is_null_aware,
+             bool discard_errors,
              bool has_user_data,
              size_type row_size,
              bitmask_type const* d_stencil,
              void* user_data,
              std::span<input_column_view const> inputs,
              std::span<output_column const> outputs,
+             int32_t* d_max_error,
              std::span<uint8_t const> udf_binary,
              lto_binary_type source_type,
              rmm::cuda_stream_view stream,
@@ -466,8 +471,8 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
     std::tie(kernel_fragment, kernel_fragment_binary_type, kernel_fragment_id) =
       *precompiled_kernel_fragment;
   } else {
-    std::tie(fragment_blob, kernel_fragment_binary_type, kernel_fragment_id) =
-      instantiate_fragment(is_null_aware, has_user_data, in_types, out_types, inputs, outputs);
+    std::tie(fragment_blob, kernel_fragment_binary_type, kernel_fragment_id) = instantiate_fragment(
+      is_null_aware, discard_errors, has_user_data, in_types, out_types, inputs, outputs);
     kernel_fragment = fragment_blob->view();
   }
 
@@ -489,7 +494,8 @@ void run_lto(std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type,
   auto* input_cols     = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* output_cols =
     reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
-  return launch(kernel, row_size, d_stencil, user_data, input_cols, output_cols, stream);
+  return launch(
+    kernel, row_size, d_stencil, user_data, input_cols, output_cols, d_max_error, stream);
 }
 
 }  // namespace jit_transform
@@ -1141,6 +1147,7 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
 // it to use for LTO linking instead of compiling a new one
 std::optional<std::tuple<std::span<uint8_t const>, lto_binary_type, char const*>>
 dispatch_lto_kernel_fragment(bool is_null_aware,
+                             bool discard_errors,
                              bool has_user_data,
                              std::span<transform_input const> inputs,
                              std::span<output_column const> outputs)
@@ -1162,6 +1169,7 @@ dispatch_lto_kernel_fragment(bool is_null_aware,
     jit_transform::reflect(lto_binary_type::FATBIN, inputs, outputs);
   auto target = strip_whitespace(rtcx::reflect_template("cudf::jit::transform_kernel",
                                                         rtcx::reflect(is_null_aware),
+                                                        rtcx::reflect(discard_errors),
                                                         rtcx::reflect(has_user_data),
                                                         in_types,
                                                         out_types));
@@ -1182,6 +1190,7 @@ dispatch_lto_kernel_fragment(bool is_null_aware,
 std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
                                      lto_binary_type binary_type,
                                      null_aware is_null_aware,
+                                     fallible is_fallible,
                                      std::optional<void*> user_data,
                                      std::span<transform_input const> inputs,
                                      std::span<transform_output const> outputs,
@@ -1206,20 +1215,37 @@ std::unique_ptr<table> transform_lto(std::span<uint8_t const> udf,
   auto stencil_arg               = stencil.has_value() ? stencil->first : nullptr;
   auto stencil_has_nulls         = stencil.has_value() ? (stencil->second > 0) : false;
 
-  auto precompiled_kernel_fragment = dispatch_lto_kernel_fragment(
-    is_null_aware == null_aware::YES, user_data.has_value(), inputs, output_columns);
+  auto precompiled_kernel_fragment = dispatch_lto_kernel_fragment(is_null_aware == null_aware::YES,
+                                                                  is_fallible == fallible::NO,
+                                                                  user_data.has_value(),
+                                                                  inputs,
+                                                                  output_columns);
+
+  rmm::device_scalar<int32_t> d_max_error(static_cast<int32_t>(errc::SUCCESS), stream, mr);
+
   jit_transform::run_lto(precompiled_kernel_fragment,
                          is_null_aware == null_aware::YES,
+                         is_fallible == fallible::NO,
                          user_data.has_value(),
                          row_size,
                          stencil_has_nulls ? stencil_arg : nullptr,
                          user_data.value_or(nullptr),
                          inputs,
                          output_columns,
+                         d_max_error.data(),
                          udf,
                          binary_type,
                          stream,
                          mr);
+
+  auto error = static_cast<errc>(d_max_error.value(stream));
+  switch (error) {
+    case errc::SUCCESS: break;
+    default:
+      throw evaluation_error(
+        error, std::format("Transform UDF evaluation failed with error `{}`", to_string(error)));
+  }
+
   auto finalized = finalize_outputs(is_null_aware, row_size, std::move(output_columns), stream, mr);
   return std::make_unique<table>(std::move(finalized));
 }

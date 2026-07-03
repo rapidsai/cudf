@@ -37,6 +37,7 @@ TEST_F(TransformLTOTest, InvSqrt)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
+                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -63,6 +64,7 @@ TEST_F(TransformLTOTest, ToUpper)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
+                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -90,6 +92,7 @@ TEST_F(TransformLTOTest, SumOfSquares)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
+                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,
@@ -100,6 +103,58 @@ TEST_F(TransformLTOTest, SumOfSquares)
   column_wrapper<float> expected{{2.0f, 20.0f, 85.0f, 356.0f}};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
+}
+
+TEST_F(TransformLTOTest, LehmerMean)
+{
+  // computes integer lehmer mean: `(a^2 + b^2) / (a + b)` for each row using checked arithmetic and
+  // throws if an overflow occurs
+
+  column_wrapper<int32_t> a{{2, 3, 4, 6, 8}};
+  column_wrapper<int32_t> b{{1, 1, 2, 3, 4}};
+  column_wrapper<int32_t> a_fail{{2, 3, -2, 6, 8}};
+
+  cudf::transform_output outputs[] = {
+    {cudf::data_type{cudf::type_id::INT32}, cudf::output_nullability::ALL_VALID}};
+
+  auto const range = cudf_test_fragments::file_ranges[cudf_test_fragments::lehmer_mean];
+  std::span<uint8_t const> udf{cudf_test_fragments::files.subspan(range[0], range[1])};
+
+  cudf::transform_input inputs[] = {a, b};
+
+  auto result      = cudf::transform_lto(udf,
+                                    cudf::lto_binary_type::FATBIN,
+                                    cudf::null_aware::NO,
+                                    cudf::fallible::YES,
+                                    std::nullopt,
+                                    inputs,
+                                    outputs,
+                                         {},
+                                    std::nullopt,
+                                    cudf::test::get_default_stream());
+  auto lehmer_mean = [](int32_t a, int32_t b) { return (a * a + b * b) / (a + b); };
+
+  column_wrapper<int32_t> expected{{lehmer_mean(2, 1),
+                                    lehmer_mean(3, 1),
+                                    lehmer_mean(4, 2),
+                                    lehmer_mean(6, 3),
+                                    lehmer_mean(8, 4)}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->get_column(0), expected);
+
+  cudf::transform_input inputs_fail[] = {a_fail, b};
+
+  EXPECT_THROW(cudf::transform_lto(udf,
+                                   cudf::lto_binary_type::FATBIN,
+                                   cudf::null_aware::NO,
+                                   cudf::fallible::YES,
+                                   std::nullopt,
+                                   inputs_fail,
+                                   outputs,
+                                   {},
+                                   std::nullopt,
+                                   cudf::test::get_default_stream()),
+               cudf::evaluation_error);
 }
 
 TEST_F(TransformLTOTest, BankersRounding)
@@ -121,6 +176,7 @@ TEST_F(TransformLTOTest, BankersRounding)
   auto result = cudf::transform_lto(udf,
                                     cudf::lto_binary_type::FATBIN,
                                     cudf::null_aware::NO,
+                                    cudf::fallible::NO,
                                     std::nullopt,
                                     inputs,
                                     outputs,

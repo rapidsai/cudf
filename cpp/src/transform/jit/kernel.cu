@@ -61,12 +61,12 @@ template <bool is_null_aware,
           bool has_user_data,
           typename InputAccessors,
           typename OutputAccessors>
-CUDF_KERNEL void transform_kernel(size_type row_size,
-                                  bitmask_type const* __restrict__ stencil,
-                                  void* __restrict__ user_data,
-                                  column_device_view_core const* __restrict__ input_cols,
-                                  mutable_column_device_view_core const* __restrict__ output_cols,
-                                  int32_t* __restrict__ max_error)
+__device__ void transform_kernel(size_type row_size,
+                                 bitmask_type const* __restrict__ stencil,
+                                 void* __restrict__ user_data,
+                                 column_device_view_core const* __restrict__ input_cols,
+                                 mutable_column_device_view_core const* __restrict__ output_cols,
+                                 int32_t* __restrict__ max_error)
 {
   auto start        = detail::grid_1d::global_thread_id();
   auto stride       = detail::grid_1d::grid_stride();
@@ -103,7 +103,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       auto out_ptrs =
         cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      auto row_error = operation(cuda::std::tuple_cat(out_ptrs, ins));
+      auto row_error = static_cast<cudf::errc>(operation(cuda::std::tuple_cat(out_ptrs, ins)));
 
       OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...);
@@ -123,7 +123,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
       auto out_ptrs =
         cuda::std::apply([&](auto&... args) { return cuda::std::tuple{&args...}; }, outs);
 
-      auto row_error = operation(cuda::std::tuple_cat(out_ptrs, ins));
+      auto row_error = static_cast<cudf::errc>(operation(cuda::std::tuple_cat(out_ptrs, ins)));
 
       OutputAccessors::map([&]<typename... A>() {
         (A::assign(output_cols, row, *cuda::std::get<A::index>(outs)), ...);
