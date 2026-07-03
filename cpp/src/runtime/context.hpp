@@ -45,11 +45,18 @@ struct [[nodiscard]] context_config {
 /// objects/state across translation units.
 class context {
  public:
+  struct device_properties {
+    int32_t driver_version     = 0;
+    int32_t runtime_version    = 0;
+    int32_t compute_capability = 0;
+  };
+
  private:
   context_config _config;
   std::once_flag _jit_cache_init_flag;
   std::unique_ptr<rtcx::cache_t> _rtcx_cache;
   std::unique_ptr<jit_bundle_t> _jit_bundle;
+  device_properties _device_properties;
 
  private:
   void ensure_nvcomp_loaded();
@@ -72,9 +79,11 @@ class context {
 
   [[nodiscard]] bool use_jit() const;
 
-  [[nodiscard]] context_config const& config() const { return _config; }
+  [[nodiscard]] context_config const& config() const;
 
   [[nodiscard]] std::string const& get_jit_pch_dir() const;
+
+  [[nodiscard]] device_properties const& get_device_properties() const;
 
   /// @brief Initialize additional components based on the provided flags
   /// @param flags The initialization flags to process
