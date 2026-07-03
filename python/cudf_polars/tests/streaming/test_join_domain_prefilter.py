@@ -12,6 +12,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
+from cudf_polars.dsl.expressions.base import ExecutionContext
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, Join, Scan, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.default_singleton_engine import DefaultSingletonEngine
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from cudf_polars.streaming.base import SerializedDataSourceInfo
 
 I64 = DataType(pl.Int64())
+F64 = DataType(pl.Float64())
 BOOL = DataType(pl.Boolean())
 
 
@@ -66,6 +68,30 @@ def _scan(name: str, columns: tuple[str, ...], *, predicate: bool = False) -> Sc
         None,
         [f"/tmp/{name}.parquet"],
         list(columns),
+        0,
+        -1,
+        None,
+        None,
+        mask,
+        ParquetOptions(),
+    )
+
+
+def _typed_scan(
+    name: str, schema: dict[str, DataType], *, predicate: bool = False
+) -> Scan:
+    mask = (
+        expr.NamedExpr("__predicate", expr.Literal(BOOL, True))  # noqa: FBT003
+        if predicate
+        else None
+    )
+    return Scan(
+        schema,
+        "parquet",
+        {},
+        None,
+        [f"/tmp/{name}.parquet"],
+        list(schema),
         0,
         -1,
         None,
@@ -176,6 +202,42 @@ def _filtered_groupby_domain(source: IR, key: str) -> Select:
         True,  # noqa: FBT003
         filtered,
     )
+
+
+def _filtered_sum_domain(
+    source: IR, key: str, value: str, aggregate: str
+) -> tuple[Filter, Select]:
+    grouped = GroupBy(
+        {key: source.schema[key], aggregate: source.schema[value]},
+        (_key(source, key),),
+        (
+            expr.NamedExpr(
+                aggregate,
+                expr.Agg(
+                    source.schema[value],
+                    "sum",
+                    None,
+                    ExecutionContext.GROUPBY,
+                    expr.Col(source.schema[value], value),
+                ),
+            ),
+        ),
+        False,  # noqa: FBT003
+        None,
+        source,
+    )
+    filtered = Filter(
+        grouped.schema,
+        expr.NamedExpr("__predicate", expr.Literal(BOOL, True)),  # noqa: FBT003
+        grouped,
+    )
+    keys = Select(
+        {key: filtered.schema[key]},
+        (_key(filtered, key),),
+        True,  # noqa: FBT003
+        filtered,
+    )
+    return filtered, keys
 
 
 def test_simple_domain_prefilter_filters_large_side() -> None:
@@ -625,6 +687,324 @@ def test_reused_semi_domain_does_not_duplicate_uncached_source() -> None:
         semi for semi in _joins(optimized, "Semi") if semi.children[0] is lineitem
     ]
     assert not lineitem_semis
+
+
+@pytest.mark.parametrize(
+    "sum_fill, expect_reuse",
+    [(None, True), (0.0, True), (1.0, False)],
+    ids=["direct", "zero_fill", "nonzero_fill"],
+)
+def test_reuses_existing_aggregate_domain_to_replace_detail_join(
+    sum_fill: float | None,
+    expect_reuse: bool,  # noqa: FBT001
+) -> None:
+    lineitem = _typed_scan("lineitem", {"l_orderkey": I64, "l_quantity": F64})
+    aggregate_cache = Cache(lineitem.schema, 0, 2, lineitem)
+    detail_cache = Cache(lineitem.schema, 0, 2, lineitem)
+    selected_sums, _ = _filtered_sum_domain(
+        aggregate_cache, "l_orderkey", "l_quantity", "sum_quantity"
+    )
+    if sum_fill is not None:
+        grouped = selected_sums.children[0]
+        normalized_sums = Select(
+            grouped.schema,
+            (
+                _key(grouped, "l_orderkey"),
+                expr.NamedExpr(
+                    "sum_quantity",
+                    expr.UnaryFunction(
+                        F64,
+                        "fill_null",
+                        (),
+                        expr.Col(F64, "sum_quantity"),
+                        expr.Literal(F64, sum_fill),
+                    ),
+                ),
+            ),
+            True,  # noqa: FBT003
+            grouped,
+        )
+        selected_sums = Filter(
+            normalized_sums.schema,
+            selected_sums.mask,
+            normalized_sums,
+        )
+    renamed_sums = _select(
+        selected_sums,
+        l_orderkey="l_orderkey",
+        sum_for_reuse="sum_quantity",
+    )
+    selected_keys = _select(renamed_sums, l_orderkey="l_orderkey")
+    orders = _typed_scan(
+        "orders",
+        {
+            "o_orderkey": I64,
+            "o_custkey": I64,
+            "o_totalprice": F64,
+        },
+    )
+    customer = _typed_scan("customer", {"c_custkey": I64, "c_name": I64})
+
+    filtered_orders = _join(
+        orders, selected_keys, ("o_orderkey",), ("l_orderkey",), how="Semi"
+    )
+    filtered_lineitem = _join(
+        detail_cache,
+        selected_keys,
+        ("l_orderkey",),
+        ("l_orderkey",),
+        how="Semi",
+    )
+    order_lineitem = _join(
+        filtered_orders, filtered_lineitem, ("o_orderkey",), ("l_orderkey",)
+    )
+    joined = _join(order_lineitem, customer, ("o_custkey",), ("c_custkey",))
+    projected = Select(
+        {
+            "c_name": I64,
+            "o_custkey": I64,
+            "o_orderkey": I64,
+            "o_totalprice": F64,
+            "l_quantity": F64,
+        },
+        tuple(
+            _key(joined, name)
+            for name in (
+                "c_name",
+                "o_custkey",
+                "o_orderkey",
+                "o_totalprice",
+                "l_quantity",
+            )
+        ),
+        True,  # noqa: FBT003
+        joined,
+    )
+    root = GroupBy(
+        {
+            "c_name": I64,
+            "o_custkey": I64,
+            "o_orderkey": I64,
+            "o_totalprice": F64,
+            "sum(l_quantity)": F64,
+        },
+        tuple(
+            _key(projected, name)
+            for name in (
+                "c_name",
+                "o_custkey",
+                "o_orderkey",
+                "o_totalprice",
+            )
+        ),
+        (
+            expr.NamedExpr(
+                "sum(l_quantity)",
+                expr.Agg(
+                    F64,
+                    "sum",
+                    None,
+                    ExecutionContext.GROUPBY,
+                    expr.Col(F64, "l_quantity"),
+                ),
+            ),
+        ),
+        False,  # noqa: FBT003
+        None,
+        projected,
+    )
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(
+            lineitem=(lineitem, 1_800), orders=(orders, 450), customer=(customer, 150)
+        ),
+        _config(),
+    )
+
+    detail_semis = [
+        semi for semi in _joins(optimized, "Semi") if semi.children[0] is detail_cache
+    ]
+    if not expect_reuse:
+        assert detail_semis
+        return
+    assert not detail_semis
+
+    replacement_details = [
+        join.children[1]
+        for join in _joins(optimized, "Inner")
+        if _join_key_names(join.left_on) == ("o_orderkey",)
+        and _join_key_names(join.right_on) == ("l_orderkey",)
+    ]
+    assert len(replacement_details) == 1
+    replacement_detail = replacement_details[0]
+    assert isinstance(replacement_detail, Filter)
+    aggregate_values = replacement_detail.children[0]
+    assert isinstance(aggregate_values, Select)
+    assert aggregate_values.schema == {"l_orderkey": I64, "l_quantity": F64}
+    assert _contains_node(aggregate_values, renamed_sums)
+
+
+@pytest.mark.parametrize(
+    "nulls_equal", [False, True], ids=["nulls_not_equal", "nulls_equal"]
+)
+def test_aggregate_domain_reuse_preserves_results(
+    nulls_equal: bool,  # noqa: FBT001
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+) -> None:
+    lineitem = pl.LazyFrame(
+        {
+            "l_orderkey": [None, None, 1, 1, 2, 3],
+            "l_quantity": [4, 5, 2, 3, 7, 1],
+        }
+    )
+    selected_keys = (
+        lineitem.group_by("l_orderkey")
+        .agg(pl.col("l_quantity").sum().alias("sum_quantity"))
+        .filter(pl.col("sum_quantity") > 4)
+        .select("l_orderkey")
+    )
+    orders = pl.LazyFrame({"o_orderkey": [None, 1, 2, 3]})
+    query = (
+        orders.join(
+            selected_keys,
+            left_on="o_orderkey",
+            right_on="l_orderkey",
+            nulls_equal=nulls_equal,
+        )
+        .join(
+            lineitem,
+            left_on="o_orderkey",
+            right_on="l_orderkey",
+            nulls_equal=nulls_equal,
+        )
+        .group_by("o_orderkey")
+        .agg(pl.col("l_quantity").sum())
+    )
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"join_domain_prefilter": {"threshold": 0.5}},
+    )
+
+    ir = Translator(query._ldf.visit(), engine).translate_ir()
+    config = ConfigOptions.from_polars_engine(engine)
+    optimized = optimize_join_domain_prefilters(
+        ir,
+        collect_statistics(ir, config, parquet_stats_executor),
+        config,
+    )
+
+    detail_semis = [
+        join
+        for join in _joins(optimized, "Semi")
+        if isinstance(join.children[0], Cache)
+        and "l_quantity" in join.children[0].schema
+    ]
+    assert not detail_semis
+    try:
+        assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+    finally:
+        DefaultSingletonEngine.shutdown()
+
+
+def test_aggregate_domain_reuse_skips_filter_between_join_and_groupby() -> None:
+    lineitem = _typed_scan("lineitem", {"l_orderkey": I64, "l_quantity": F64})
+    selected_sums, selected_keys = _filtered_sum_domain(
+        lineitem, "l_orderkey", "l_quantity", "sum_quantity"
+    )
+    orders = _typed_scan("orders", {"o_orderkey": I64})
+    filtered_lineitem = _join(
+        lineitem,
+        selected_keys,
+        ("l_orderkey",),
+        ("l_orderkey",),
+        how="Semi",
+    )
+    joined = _join(orders, filtered_lineitem, ("o_orderkey",), ("l_orderkey",))
+    filtered_join = Filter(
+        joined.schema,
+        expr.NamedExpr("__predicate", expr.Literal(BOOL, True)),  # noqa: FBT003
+        joined,
+    )
+    root = GroupBy(
+        {"o_orderkey": I64, "sum(l_quantity)": F64},
+        (_key(filtered_join, "o_orderkey"),),
+        (
+            expr.NamedExpr(
+                "sum(l_quantity)",
+                expr.Agg(
+                    F64,
+                    "sum",
+                    None,
+                    ExecutionContext.GROUPBY,
+                    expr.Col(F64, "l_quantity"),
+                ),
+            ),
+        ),
+        False,  # noqa: FBT003
+        None,
+        filtered_join,
+    )
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(lineitem=(lineitem, 1_800), orders=(orders, 450)),
+        _config(),
+    )
+
+    assert _contains_node(optimized, filtered_lineitem)
+    assert _contains_node(optimized, selected_sums)
+
+
+def test_aggregate_domain_reuse_requires_same_detail_source() -> None:
+    lineitem = _typed_scan("lineitem", {"l_orderkey": I64, "l_quantity": F64})
+    other_lineitem = _typed_scan(
+        "other_lineitem", {"l_orderkey": I64, "l_quantity": F64}
+    )
+    _, selected_keys = _filtered_sum_domain(
+        other_lineitem, "l_orderkey", "l_quantity", "sum_quantity"
+    )
+    orders = _typed_scan("orders", {"o_orderkey": I64})
+    filtered_lineitem = _join(
+        lineitem,
+        selected_keys,
+        ("l_orderkey",),
+        ("l_orderkey",),
+        how="Semi",
+    )
+    joined = _join(orders, filtered_lineitem, ("o_orderkey",), ("l_orderkey",))
+    root = GroupBy(
+        {"o_orderkey": I64, "sum(l_quantity)": F64},
+        (_key(joined, "o_orderkey"),),
+        (
+            expr.NamedExpr(
+                "sum(l_quantity)",
+                expr.Agg(
+                    F64,
+                    "sum",
+                    None,
+                    ExecutionContext.GROUPBY,
+                    expr.Col(F64, "l_quantity"),
+                ),
+            ),
+        ),
+        False,  # noqa: FBT003
+        None,
+        joined,
+    )
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(
+            lineitem=(lineitem, 1_800),
+            other_lineitem=(other_lineitem, 1_800),
+            orders=(orders, 450),
+        ),
+        _config(),
+    )
+
+    assert _contains_node(optimized, filtered_lineitem)
 
 
 def test_reused_semi_domain_does_not_duplicate_wrapped_uncached_source() -> None:

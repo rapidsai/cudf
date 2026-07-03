@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from functools import singledispatch
 from typing import TYPE_CHECKING, Any, Literal, TypedDict
 
+import polars as pl
+
+from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
@@ -94,6 +97,19 @@ class _Candidate:
             constraint_cost,
             self.domain.cost,
         )
+
+
+@dataclass(frozen=True)
+class _AggregateReuseCandidate:
+    """A join detail side that can be replaced by an existing aggregate domain."""
+
+    join: Join
+    detail_side: Literal["left", "right"]
+    value_column: expr.Col
+    replacement: IR
+    domain_node_type: str
+    replacement_rows: int
+    replacement_cost: int
 
 
 class _RewriteState(TypedDict):
@@ -206,6 +222,71 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
     return node.reconstruct((left, right))
 
 
+@_rewrite.register(GroupBy)
+def _(node: GroupBy, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
+    original = node
+    rewritten = reuse_if_unchanged(node, rec)
+    assert isinstance(rewritten, GroupBy)
+    node = rewritten
+    if node is original:
+        row_estimates = rec.state["row_estimates"]
+        source_costs = rec.state["source_costs"]
+        selective_nodes = rec.state["selective_nodes"]
+    else:
+        row_estimates = _estimate_row_counts(node, rec.state["stats"])
+        source_costs, _ = _estimate_source_stats(node, row_estimates)
+        selective_nodes = _collect_selective_nodes(node)
+    rewritten, aggregate_candidate = _rewrite_aggregate_domain_reuse(
+        node, row_estimates, source_costs, selective_nodes
+    )
+    if rec.state["trace"]:
+        _trace_aggregate_reuse(node, aggregate_candidate)
+    return rewritten
+
+
+def _rewrite_aggregate_domain_reuse(
+    ir: GroupBy,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> tuple[GroupBy, _AggregateReuseCandidate | None]:
+    """Replace one detail join with a compatible existing aggregate domain."""
+    if ir.maintain_order or ir.zlice is not None:
+        return ir, None
+
+    aggregate_column = _single_summed_column(ir)
+    if aggregate_column is None:
+        return ir, None
+
+    candidates = list(
+        _aggregate_reuse_candidates(
+            ir.children[0],
+            aggregate_column,
+            row_estimates,
+            source_costs,
+            selective_nodes,
+        )
+    )
+    if not candidates:
+        return ir, None
+
+    for candidate in sorted(
+        candidates,
+        key=lambda item: (item.replacement_rows, item.replacement_cost),
+    ):
+        child = _replace_on_aggregate_path(
+            ir.children[0],
+            aggregate_column.name,
+            candidate.join,
+            candidate.replacement,
+        )
+        if child is not None:
+            rewritten = ir.reconstruct((child,))
+            assert isinstance(rewritten, GroupBy)
+            return rewritten, candidate
+    return ir, None
+
+
 def _select_candidate(
     ir: Join,
     threshold: float,
@@ -286,6 +367,476 @@ def _select_candidate(
     if not candidates:
         return None, "no_profitable_domain"
     return min(candidates, key=lambda c: c.score), "applied"
+
+
+def _single_summed_column(ir: GroupBy) -> expr.Col | None:
+    """Return the sole directly summed, non-key column."""
+    if len(ir.agg_requests) != 1:
+        return None
+    value = ir.agg_requests[0].value
+    if not isinstance(value, expr.Agg) or value.name != "sum":
+        return None
+    if len(value.children) != 1:
+        return None
+    (child,) = value.children
+    if not isinstance(child, expr.Col):
+        return None
+
+    if any(
+        isinstance(node, expr.Col) and node.name == child.name
+        for node in traversal([key.value for key in ir.keys])
+    ):
+        return None
+    return child
+
+
+def _aggregate_reuse_candidates(
+    root: IR,
+    summed_column: expr.Col,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> Iterable[_AggregateReuseCandidate]:
+    """Yield candidates along the exact input lineage of the final sum."""
+    bindings = tuple(_column_bindings(root, summed_column.name))
+    for index, (node, bound_value_column) in enumerate(bindings):
+        if (
+            isinstance(node, Join)
+            and node.options[0] == "Inner"
+            and node.options[2] is None
+            and node.options[5] == "none"
+        ):
+            yield from _aggregate_reuse_candidates_for_join(
+                node,
+                bound_value_column,
+                row_estimates,
+                source_costs,
+                selective_nodes,
+            )
+
+        if index + 1 < len(bindings):
+            child, input_column = bindings[index + 1]
+            if not _aggregate_reuse_edge_is_safe(
+                node, bound_value_column, child, input_column
+            ):
+                return
+
+
+def _aggregate_reuse_candidates_for_join(
+    node: Join,
+    summed_column: str,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> Iterable[_AggregateReuseCandidate]:
+    """Yield aggregate replacements for one join on the sum lineage."""
+    left_keys = _simple_keys(node.left_on)
+    right_keys = _simple_keys(node.right_on)
+    if len(left_keys) != len(node.left_on) or len(right_keys) != len(node.right_on):
+        return
+    assert len(left_keys) == len(right_keys)
+
+    value_binding = _join_input_binding(node, summed_column)
+    if value_binding is None:
+        return
+    detail_child, detail_value_column = value_binding
+    detail_indices = [
+        index for index, child in enumerate(node.children) if child is detail_child
+    ]
+    if len(detail_indices) != 1:
+        return
+    (detail_index,) = detail_indices
+    detail_side: Literal["left", "right"] = "left" if detail_index == 0 else "right"
+    detail_keys = left_keys if detail_index == 0 else right_keys
+    allowed_columns = {detail_value_column}
+    allowed_columns.update(key.name for key in detail_keys)
+    bound_detail_columns = set()
+    for output_column in node.schema:
+        binding = _join_input_binding(node, output_column)
+        if binding is not None and binding[0] is detail_child:
+            bound_detail_columns.add(binding[1])
+    if not bound_detail_columns.issubset(allowed_columns):
+        return
+
+    value_column = expr.Col(
+        detail_child.schema[detail_value_column], detail_value_column
+    )
+    replacement_detail = _aggregate_reuse_detail_replacement(
+        detail_child,
+        detail_keys,
+        value_column,
+        row_estimates,
+        source_costs,
+        selective_nodes,
+    )
+    if replacement_detail is None:
+        return
+    replacement, domain_node_type, replacement_rows, replacement_cost = (
+        replacement_detail
+    )
+    children = list(node.children)
+    children[detail_index] = replacement
+    yield _AggregateReuseCandidate(
+        join=node,
+        detail_side=detail_side,
+        value_column=value_column,
+        replacement=node.reconstruct(children),
+        domain_node_type=domain_node_type,
+        replacement_rows=replacement_rows,
+        replacement_cost=replacement_cost,
+    )
+
+
+def _aggregate_reuse_detail_replacement(
+    detail_child: IR,
+    detail_keys: tuple[expr.Col, ...],
+    value_column: expr.Col,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> tuple[IR, str, int, int] | None:
+    """Build a null-correct aggregate replacement for a semi-filtered detail side."""
+    if len(detail_keys) != 1:
+        return None
+    (detail_key,) = detail_keys
+    if not isinstance(detail_child, Join) or detail_child.options[0] != "Semi":
+        return None
+    if detail_child.options[2] is not None or detail_child.options[5] != "none":
+        return None
+
+    semi_left_keys = _simple_keys(detail_child.left_on)
+    semi_right_keys = _simple_keys(detail_child.right_on)
+    if len(semi_left_keys) != len(detail_child.left_on) or len(semi_right_keys) != len(
+        detail_child.right_on
+    ):
+        return None
+    if semi_left_keys != (detail_key,) or len(semi_right_keys) != 1:
+        return None
+    (domain_key,) = semi_right_keys
+
+    aggregate_domain = _selective_aggregate_domain(
+        detail_child.children[1],
+        domain_key,
+        detail_child.children[0],
+        detail_key,
+        value_column,
+        row_estimates,
+        source_costs,
+        selective_nodes,
+    )
+    if aggregate_domain is None:
+        return None
+    domain = aggregate_domain
+    aggregate_values = _project_bound_key_and_value(
+        domain.node,
+        domain.columns[0],
+        domain.columns[1],
+        detail_key,
+        value_column,
+    )
+    replacement: IR
+    if _domain_key_set_is_preserved(
+        detail_child.children[1], domain.node, domain_key.name
+    ):
+        replacement = (
+            aggregate_values
+            if detail_child.options[1]
+            else _drop_null_key(aggregate_values, detail_key)
+        )
+    else:
+        replacement = _make_semi_join(
+            aggregate_values,
+            expr.Col(aggregate_values.schema[detail_key.name], detail_key.name),
+            detail_child.children[1],
+            domain_key,
+            nulls_equal=detail_child.options[1],
+            suffix=detail_child.options[3],
+        )
+    return (
+        replacement,
+        type(domain.node).__name__,
+        domain.rows,
+        domain.cost,
+    )
+
+
+def _selective_aggregate_domain(
+    root: IR,
+    domain_key: expr.Col,
+    detail_source: IR,
+    detail_key: expr.Col,
+    value_column: expr.Col,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> _Producer | None:
+    """Find a selective aggregate derived from the identical detail source."""
+    candidates = []
+    for groupby, bound_domain_key in _column_bindings(root, domain_key.name):
+        if not isinstance(groupby, GroupBy):
+            continue
+        if (
+            not _same_detail_source(groupby.children[0], detail_source)
+            or len(groupby.keys) != 1
+        ):
+            continue
+        (groupby_key,) = groupby.keys
+        if (
+            groupby_key.name != bound_domain_key
+            or not isinstance(groupby_key.value, expr.Col)
+            or groupby_key.value != detail_key
+        ):
+            continue
+        aggregate_column = _sum_aggregate_output_column(groupby, value_column)
+        if aggregate_column is None:
+            continue
+        domain = _smallest_selective_node_containing_all(
+            root,
+            bound_domain_key,
+            aggregate_column.name,
+            groupby,
+            row_estimates,
+            source_costs,
+            selective_nodes,
+        )
+        if domain is None:
+            continue
+        candidates.append((domain.rows, domain.cost, domain))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def _same_detail_source(left: IR, right: IR) -> bool:
+    """Return whether two nodes refer to the same materialized detail source."""
+    if left is right:
+        return True
+    return (
+        isinstance(left, Cache)
+        and isinstance(right, Cache)
+        and left.key == right.key
+        and left.refcount == right.refcount
+        and left.schema == right.schema
+    )
+
+
+def _sum_aggregate_output_column(
+    ir: GroupBy, value_column: expr.Col
+) -> expr.Col | None:
+    """Return the output of a direct sum over the requested value column."""
+    for request in ir.agg_requests:
+        value = request.value
+        if not isinstance(value, expr.Agg) or value.name != "sum":
+            continue
+        if value.dtype != value_column.dtype or len(value.children) != 1:
+            continue
+        (child,) = value.children
+        if isinstance(child, expr.Col) and child.name == value_column.name:
+            if request.name not in ir.schema:
+                return None
+            return expr.Col(ir.schema[request.name], request.name)
+    return None
+
+
+def _smallest_selective_node_containing_all(
+    root: IR,
+    key_column: str,
+    value_column: str,
+    anchor: IR,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> _Producer | None:
+    """Find the smallest selective node whose columns bind to an anchor."""
+    candidates = []
+    for node in traversal([root]):
+        bound_columns = _bound_aggregate_output_columns(
+            node, anchor, key_column, value_column
+        )
+        if bound_columns is None or node not in selective_nodes:
+            continue
+        rows = row_estimates.get(node)
+        if rows is None or rows <= 0:
+            continue
+        cost = source_costs.get(node)
+        if cost is None:
+            continue
+        producer = _Producer(node, bound_columns, rows, cost)
+        candidates.append((rows, cost, len(node.schema), producer))
+    if not candidates:
+        return None
+    return min(candidates, key=lambda item: (item[0], item[1], item[2]))[3]
+
+
+def _bound_aggregate_output_columns(
+    node: IR, anchor: IR, key_column: str, value_column: str
+) -> tuple[str, ...] | None:
+    """Map an aggregate key and normalized sum output through a domain node."""
+    outputs = []
+    for anchor_column, binding_fn in (
+        (key_column, _column_bindings),
+        (value_column, _aggregate_value_bindings),
+    ):
+        matches = [
+            output_column
+            for output_column in node.schema
+            if any(
+                candidate is anchor and bound_column == anchor_column
+                for candidate, bound_column in binding_fn(node, output_column)
+            )
+        ]
+        if len(matches) != 1:
+            return None
+        outputs.append(matches[0])
+    return tuple(outputs)
+
+
+def _aggregate_value_bindings(root: IR, column: str) -> Iterable[tuple[IR, str]]:
+    """Yield sum-value lineage through direct bindings and zero-fill normalization."""
+    node = root
+    while column in node.schema:
+        yield node, column
+        binding = _input_binding(node, column)
+        if binding is None and isinstance(node, Select):
+            selected = next((item for item in node.exprs if item.name == column), None)
+            binding = _zero_fill_binding(node.children[0], selected)
+        if binding is None:
+            return
+        node, column = binding
+
+
+def _zero_fill_binding(
+    child: IR, expression: expr.NamedExpr | None
+) -> tuple[IR, str] | None:
+    """Bind Polars' ``sum`` null normalization to its aggregate output."""
+    if expression is None or not isinstance(expression.value, expr.UnaryFunction):
+        return None
+    value = expression.value
+    if value.name != "fill_null" or value.options or len(value.children) != 2:
+        return None
+    source, fill = value.children
+    if (
+        not isinstance(source, expr.Col)
+        or not isinstance(fill, expr.Literal)
+        or fill.value != 0
+        or source.name not in child.schema
+        or source.dtype != child.schema[source.name]
+        or fill.dtype != source.dtype
+        or value.dtype != source.dtype
+    ):
+        return None
+    return child, source.name
+
+
+def _project_bound_key_and_value(
+    source: IR,
+    source_key: str,
+    source_value: str,
+    output_key: expr.Col,
+    output_value: expr.Col,
+) -> Select:
+    """Project aggregate key and value columns under detail-side names."""
+    assert source.schema[source_key] == output_key.dtype
+    assert source.schema[source_value] == output_value.dtype
+    return Select(
+        {output_key.name: output_key.dtype, output_value.name: output_value.dtype},
+        (
+            expr.NamedExpr(output_key.name, expr.Col(output_key.dtype, source_key)),
+            expr.NamedExpr(
+                output_value.name, expr.Col(output_value.dtype, source_value)
+            ),
+        ),
+        True,  # noqa: FBT003
+        source,
+    )
+
+
+def _domain_key_set_is_preserved(root: IR, domain: IR, column: str) -> bool:
+    """Return whether a domain reaches the semi join through row-preserving nodes."""
+    for node, _ in _column_bindings(root, column):
+        if node is domain:
+            return True
+        if not isinstance(node, (Cache, HStack, Projection, Select)):
+            return False
+    return False
+
+
+def _drop_null_key(source: IR, key: expr.Col) -> Filter:
+    """Apply the null-key behavior of a semi join with ``nulls_equal=False``."""
+    bool_dtype = DataType(pl.Boolean())
+    predicate = expr.NamedExpr(
+        "__join_domain_key_is_not_null",
+        expr.BooleanFunction(
+            bool_dtype,
+            expr.BooleanFunction.Name.IsNotNull,
+            (),
+            expr.Col(key.dtype, key.name),
+        ),
+    )
+    return Filter(source.schema, predicate, source)
+
+
+def _aggregate_reuse_edge_is_safe(
+    node: IR,
+    output_column: str,
+    child: IR,
+    input_column: str,
+) -> bool:
+    """Return whether aggregate values can move across one lineage edge."""
+    child_indices = [
+        index for index, candidate in enumerate(node.children) if candidate is child
+    ]
+    if len(child_indices) != 1:
+        return False
+    (child_index,) = child_indices
+    if _input_binding(node, output_column) != (child, input_column):
+        return False
+    if isinstance(node, (Cache, HStack, Projection, Select)):
+        return True
+    if not isinstance(node, Join):
+        return False
+    if (
+        node.options[0] != "Inner"
+        or node.options[2] is not None
+        or node.options[5] != "none"
+    ):
+        return False
+    keys = node.left_on if child_index == 0 else node.right_on
+    return not any(
+        isinstance(item, expr.Col) and item.name == input_column
+        for item in traversal([key.value for key in keys])
+    )
+
+
+def _replace_on_aggregate_path(
+    root: IR,
+    column: str,
+    target: Join,
+    replacement: IR,
+) -> IR | None:
+    """Replace a join only on the direct lineage of an aggregate column."""
+    bindings = tuple(_column_bindings(root, column))
+    path: list[tuple[IR, int]] = []
+    for index, (node, _) in enumerate(bindings):
+        if node is target:
+            rewritten = replacement
+            for parent, child_index in reversed(path):
+                children = list(parent.children)
+                children[child_index] = rewritten
+                rewritten = parent.reconstruct(children)
+            return rewritten
+        if index + 1 == len(bindings):
+            break
+        child = bindings[index + 1][0]
+        child_indices = [
+            child_index
+            for child_index, candidate in enumerate(node.children)
+            if candidate is child
+        ]
+        if len(child_indices) != 1:
+            return None
+        path.append((node, child_indices[0]))
+    return None
 
 
 def _simple_keys(keys: Sequence[expr.NamedExpr]) -> tuple[expr.Col, ...]:
@@ -945,3 +1496,28 @@ def _trace_decision(
                 }
             )
     log("Join Domain Prefilter", **record)
+
+
+def _trace_aggregate_reuse(
+    ir: GroupBy, candidate: _AggregateReuseCandidate | None
+) -> None:
+    aggregate_domain_reuse: dict[str, Any] = {
+        "reason": "applied" if candidate is not None else "no_reusable_domain",
+    }
+    record = {
+        "scope": Scope.PLAN.value,
+        "join_aggregate_domain_reuse": aggregate_domain_reuse,
+        "actor_ir_id": ir.get_stable_id(),
+        "actor_ir_type": type(ir).__name__,
+    }
+    if candidate is not None:
+        aggregate_domain_reuse.update(
+            {
+                "detail_side": candidate.detail_side,
+                "value_column": candidate.value_column.name,
+                "domain_node_type": candidate.domain_node_type,
+                "estimated_replacement_rows": candidate.replacement_rows,
+                "estimated_replacement_cost": candidate.replacement_cost,
+            }
+        )
+    log("Join Aggregate Domain Reuse", **record)
