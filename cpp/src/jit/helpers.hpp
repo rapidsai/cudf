@@ -76,5 +76,9 @@ kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
                       std::string const& cuda_source);
 
+rtcx::blob get_udf_kernel_fragment(std::string const& source_file,
+                                   std::string const& kernel_name,
+                                   std::string const& udf_type);
+
 }  // namespace jit
 }  // namespace cudf
