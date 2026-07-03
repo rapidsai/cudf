@@ -40,6 +40,7 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_pandas_nullable_extension_dtype,
+    is_pandas_nullable_numpy_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -925,6 +926,104 @@ class NumericalColumn(NumericalBaseColumn):
         if self.dtype.kind != "f":
             return super().nan_count
         return self.isnan().sum()
+
+    def isin(self, values: Sequence | ColumnBase) -> ColumnBase:
+        if isinstance(self.dtype, np.dtype) or not (
+            is_pandas_nullable_numpy_dtype(self.dtype)
+        ):
+            return super().isin(values)
+        # Mirror pandas' BaseMaskedArray.isin for masked (nullable
+        # integer/float/boolean) dtypes:
+        #  * matching is done on the underlying numpy values, so e.g. a
+        #    boolean element equals the integer 1,
+        #  * an NA element is considered present only when pd.NA itself
+        #    is one of the passed values (a plain NaN/None/NaT does not
+        #    match), and
+        #  * the result is a nullable BooleanDtype with no missing values.
+        # Validity-only nulls (ColumnBase.isnull): a genuine NaN value in a
+        # masked float column is data, not NA - it must keep matching a NaN
+        # needle instead of being folded into the mask
+        # (NumericalColumn.isnull would count it as null).
+        na_mask = ColumnBase.isnull(self)
+        # View the column through its numpy dtype (identical physical
+        # layout). astype is not used because casting a masked column with
+        # nulls to numpy raises in pandas-compatible mode, and its
+        # short-circuit mutates the live column's dtype in place; fillna is
+        # not used because it folds genuine NaN values into the fill. Null
+        # rows come back False from ``isin`` (the needles below never
+        # contain nulls) and are then corrected from ``na_mask``.
+        data_col = ColumnBase.create(self.plc_column, self.dtype.numpy_dtype)
+        cleaned_values, values_have_na = self._process_values_for_masked_isin(
+            values
+        )
+        if len(cleaned_values) == 0:
+            # Nothing can match; also avoids the object-dtype column an
+            # empty needle list produces, which an all-null data column
+            # cannot be compared against in pandas-compatible mode.
+            result = as_column(
+                False, length=len(self), dtype=np.dtype(np.bool_)
+            )
+        else:
+            result = data_col.isin(cleaned_values)
+        if na_mask.any():
+            result = result | na_mask if values_have_na else result & ~na_mask
+        return result.astype(pd.BooleanDtype())
+
+    @staticmethod
+    def _process_values_for_masked_isin(
+        values: Sequence | ColumnBase,
+    ) -> tuple[Sequence, bool]:
+        """Normalize ``values`` for a masked ``isin``.
+
+        Drops NA-like needles (they are handled through the mask by the
+        caller) and reports whether ``pd.NA`` itself was among them.
+        """
+        # The normalization below rebinds across container types, so use a
+        # loosely typed alias.
+        host_values: Any = values
+        # Bring device-backed ``values`` to host in a single transfer; the
+        # per-element inspection below would otherwise read them
+        # element-wise or fail on non-iterable cudf objects.
+        if isinstance(host_values, (ColumnBase, cudf.Series, cudf.Index)):
+            host_values = host_values.to_pandas()
+        elif isinstance(host_values, cp.ndarray):
+            host_values = cp.asnumpy(host_values)
+        elif isinstance(host_values, (pa.Array, pa.ChunkedArray)):
+            host_values = host_values.to_pylist()
+        if isinstance(
+            host_values,
+            (pd.Series, pd.Index, pd.api.extensions.ExtensionArray),
+        ):
+            # np.asarray mirrors pandas' BaseMaskedArray.isin: a masked (or
+            # other extension) container decays to numpy, where pd.NA
+            # becomes NaN and no longer matches NA rows - only object
+            # containers can carry pd.NA identity.
+            host_values = np.asarray(host_values)
+        elif not isinstance(host_values, np.ndarray):
+            # Materialize one-shot iterators so the single pass below is
+            # the only traversal.
+            host_values = list(host_values)
+        # NA-like sentinels never match a real value and would otherwise
+        # raise when mixed with numeric values, so they are dropped from
+        # the needles; NA rows are handled by the caller through the mask
+        # instead.
+        if isinstance(host_values, np.ndarray) and host_values.dtype != object:
+            # A non-object array cannot hold pd.NA, and NaT is the only
+            # NA-like value it can hold (NaN is a matchable value), so no
+            # Python-level scan is needed.
+            if host_values.dtype.kind in "mM":
+                host_values = host_values[~np.isnat(host_values)]
+            return cast("Sequence", host_values), False
+        # ``host_values`` is a list or an object array here; a single
+        # Python pass mirrors pandas' pd.NA identity scan.
+        cleaned: list[Any] = []
+        values_have_na = False
+        for value in host_values:
+            if value is pd.NA:
+                values_have_na = True
+            elif not is_na_like(value):
+                cleaned.append(value)
+        return cleaned, values_have_na
 
     def _process_values_for_isin(
         self, values: Sequence | ColumnBase
