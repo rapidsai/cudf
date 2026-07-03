@@ -81,6 +81,7 @@ def _match_join_keys(
     ltype = lcol.dtype
     rtype = rcol.dtype
 
+    # https://github.com/rapidsai/cudf/issues/9981
     # For outer joins, every output row's key value comes from whichever side
     # is non-empty (the empty side contributes only nulls), so if exactly one
     # side has no rows there is no data whose dtype could actually be lost.
