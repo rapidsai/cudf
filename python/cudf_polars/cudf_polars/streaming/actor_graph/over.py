@@ -86,6 +86,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     shutdown_on_error,
 )
 from cudf_polars.streaming.over import Over, _build_over_groupby_irs
+from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
@@ -161,16 +162,17 @@ def _evaluate_ir_broadcast_sync(
     ir: Over,
     global_agg_df: DataFrame,
     key_names: tuple[str, ...],
-    ir_context: IRExecutionContext,
     br: BufferResource,
 ) -> TableChunk:
     """Map the per-group aggregate onto a chunk's rows to produce its Over output."""
     chunk_df = chunk_to_frame(chunk, ir.children[0])
-    # global_agg_df and chunk_df may live on different streams (the former from
-    # the upstream allgather/reduction on ir_context's stream, the latter from
-    # the input message). Join them so the broadcast kernels read global_agg_df
-    # safely.
-    with ir_context.stream_ordered_after(chunk_df, global_agg_df) as stream:
+    # global_agg_df and chunk_df may live on different streams. Since we do
+    # an evaluation of values in chunk_df via Expr.evaluate, run the
+    # broadcast on chunk_dfs stream, making sure the global_agg stream
+    # waits.
+    with stream_ordered_after(
+        lambda: chunk_df.stream, upstreams=[global_agg_df.stream]
+    ) as stream:
         result_cols = [
             _broadcast_gw_sync(
                 ne.value, chunk_df, global_agg_df, key_names, stream
@@ -211,7 +213,6 @@ async def _evaluate_broadcast_chunk(
             ir,
             global_agg_df,
             key_names,
-            ir_context,
             context.br(),
         )
 

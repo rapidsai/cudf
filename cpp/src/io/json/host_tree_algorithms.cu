@@ -275,8 +275,8 @@ void scatter_offsets(tree_meta_t const& tree,
                      device_span<size_type> node_ids,
                      device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
                      tree_meta_t const& d_column_tree,
-                     host_span<const bool> ignore_vals,
-                     host_span<const bool> is_mixed,
+                     host_span<bool const> ignore_vals,
+                     host_span<bool const> is_mixed,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream);
 
@@ -988,8 +988,8 @@ void scatter_offsets(tree_meta_t const& tree,
                      device_span<size_type> node_ids,
                      device_span<size_type> sorted_col_ids,  // Reuse this for parent_col_ids
                      tree_meta_t const& d_column_tree,
-                     host_span<const bool> ignore_vals,
-                     host_span<const bool> is_mixed_pruned,
+                     host_span<bool const> ignore_vals,
+                     host_span<bool const> is_mixed_pruned,
                      hashmap_of_device_columns const& columns,
                      rmm::cuda_stream_view stream)
 {
@@ -1073,7 +1073,7 @@ void scatter_offsets(tree_meta_t const& tree,
     [d_ignore_vals     = d_ignore_vals.begin(),
      parent_node_ids   = tree.parent_node_ids.begin(),
      column_categories = d_column_tree.node_categories.begin(),
-     col_ids           = col_ids.begin()] __device__(size_type node_id) {
+     col_ids           = col_ids.begin()] __device__(size_type node_id) -> bool {
       auto parent_node_id = parent_node_ids[node_id];
       return parent_node_id != parent_node_sentinel and
              column_categories[col_ids[parent_node_id]] == NC_LIST and

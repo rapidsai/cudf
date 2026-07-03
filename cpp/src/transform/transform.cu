@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 #include <cudf/detail/transform.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/errc.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
@@ -35,6 +36,10 @@
 
 namespace cudf {
 namespace {
+
+column_view as_column_view(scalar_column_view const& scalar) { return scalar.as_column_view(); }
+
+column_view as_column_view(column_view const& column) { return column; }
 
 struct mutable_fixed_width_column_view {
   mutable_column_view _view;
@@ -158,6 +163,7 @@ using handle        = std::variant<
 namespace jit_transform {
 
 kernel instantiate(bool is_null_aware,
+                   bool discard_errors,
                    bool has_user_data,
                    std::string const& ins,
                    std::string const& outs,
@@ -176,6 +182,7 @@ kernel instantiate(bool is_null_aware,
 
   auto kernel = rtcx::reflect_template("cudf::jit::transform_kernel",
                                        rtcx::reflect(is_null_aware),
+                                       rtcx::reflect(discard_errors),
                                        rtcx::reflect(has_user_data),
                                        ins,
                                        outs);
@@ -189,10 +196,11 @@ void launch(cudf::kernel const& kernel,
             void* user_data,
             column_device_view_core const* input_cols,
             mutable_column_device_view_core const* output_cols,
+            int32_t* max_error,
             rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
-  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols};
+  void* args[] = {&row_size, &stencil, &user_data, &input_cols, &output_cols, &max_error};
   auto cfg     = kernel.max_occupancy_config(0, 0);
   CUDF_EXPECTS(cfg.block_size % cudf::detail::warp_size == 0,
                "Expected block size to be a multiple of warp size",
@@ -200,13 +208,53 @@ void launch(cudf::kernel const& kernel,
   kernel.launch({cfg.min_grid_size}, {cfg.block_size}, 0, stream, args);
 }
 
-std::string reflect_input_element(column_view const& c) { return type_to_name(c.type()); }
+namespace {
 
-std::string reflect_input_element(scalar_column_view const& c) { return type_to_name(c.type()); }
+std::string get_element_type_name(column_view const& view);
+
+struct element_type_name_fn {
+  template <typename T>
+  std::string operator()(column_view const& view) const
+    requires(is_fixed_width<T>() || std::same_as<T, cudf::string_view>)
+  {
+    return type_to_name(view.type());
+  }
+
+  template <typename T>
+  std::string operator()(column_view const& view) const
+    requires(std::same_as<T, cudf::dictionary32>)
+  {
+    return std::format("cudf::dictionary_element<{}, {}>",
+                       get_element_type_name(view.child(cudf::dictionary_indices_column_index)),
+                       get_element_type_name(view.child(cudf::dictionary_keys_column_index)));
+  }
+
+  template <typename T>
+  std::string operator()(column_view const& view) const
+    requires(!is_fixed_width<T>() && !std::same_as<T, cudf::string_view> &&
+             !std::same_as<T, cudf::dictionary32>)
+  {
+    CUDF_FAIL("Unsupported type for JIT compilation: " + type_to_name(view.type()));
+  }
+};
+
+std::string get_element_type_name(column_view const& view)
+{
+  return cudf::type_dispatcher(view.type(), element_type_name_fn{}, view);
+}
+
+}  // namespace
+
+std::string reflect_input_element(column_view const& c) { return get_element_type_name(c); }
+
+std::string reflect_input_element(scalar_column_view const& c)
+{
+  return get_element_type_name(c.as_column_view());
+}
 
 std::string reflect_output_element(fixed_width_column const& c)
 {
-  return type_to_name(c._col->type());
+  return get_element_type_name(c._col->view());
 }
 
 std::string reflect_output_element(string_views_column const&) { return "cudf::string_view"; }
@@ -214,6 +262,33 @@ std::string reflect_output_element(string_views_column const&) { return "cudf::s
 std::string reflect_output_element(mutable_strings_column const&)
 {
   return "cuda::std::span<char>";
+}
+
+std::string reflect_input_value_type(column_view const& c)
+{
+  return is_dictionary(c.type())
+           ? reflect_input_value_type(c.child(cudf::dictionary_keys_column_index))
+           : reflect_input_element(c);
+}
+
+std::string reflect_input_value_type(scalar_column_view const& c)
+{
+  return reflect_input_value_type(c.as_column_view());
+}
+
+std::string reflect_output_value_type(fixed_width_column const& c)
+{
+  return reflect_output_element(c);
+}
+
+std::string reflect_output_value_type(string_views_column const& c)
+{
+  return reflect_output_element(c);
+}
+
+std::string reflect_output_value_type(mutable_strings_column const& c)
+{
+  return reflect_output_element(c);
 }
 
 std::string reflect_input_column(column_view const&) { return "cudf::column_device_view_core"; }
@@ -283,11 +358,12 @@ auto reflect(udf_source_type source_type,
 
   if (source_type == udf_source_type::PTX) {
     for (auto& in : inputs) {
-      ptx_in_types.push_back(std::visit([](auto& c) { return reflect_input_element(c); }, in));
+      ptx_in_types.push_back(std::visit([](auto& c) { return reflect_input_value_type(c); }, in));
     }
 
     for (auto& out : outputs) {
-      ptx_out_types.push_back(std::visit([](auto& c) { return reflect_output_element(c); }, out));
+      ptx_out_types.push_back(
+        std::visit([](auto& c) { return reflect_output_value_type(c); }, out));
     }
   }
 
@@ -333,12 +409,14 @@ auto to_args(std::span<input_column_view const> inputs,
 }
 
 void run(bool is_null_aware,
+         bool discard_errors,
          bool has_user_data,
          size_type row_size,
          bitmask_type const* d_stencil,
          void* user_data,
          std::span<input_column_view const> inputs,
          std::span<output_column const> outputs,
+         int32_t* d_max_error,
          std::string const& udf,
          udf_source_type source_type,
          rmm::cuda_stream_view stream,
@@ -346,6 +424,7 @@ void run(bool is_null_aware,
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
   auto kernel                                             = instantiate(is_null_aware,
+                            discard_errors,
                             has_user_data,
                             in_types,
                             out_types,
@@ -357,7 +436,8 @@ void run(bool is_null_aware,
   auto* input_cols = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* output_cols =
     reinterpret_cast<mutable_column_device_view_core const*>(input_cols + inputs.size());
-  return launch(kernel, row_size, d_stencil, user_data, input_cols, output_cols, stream);
+  return launch(
+    kernel, row_size, d_stencil, user_data, input_cols, output_cols, d_max_error, stream);
 }
 
 }  // namespace jit_transform
@@ -511,17 +591,20 @@ void perform_checks(udf_source_type source_type,
                     std::span<std::unique_ptr<column> const> string_offsets)
 {
   if (source_type == udf_source_type::PTX) {
-    CUDF_EXPECTS(std::none_of(inputs.begin(),
-                              inputs.end(),
-                              [](auto& in) {
-                                return std::visit(
-                                  [](auto& c) {
-                                    return !is_integral(c.type()) && !is_floating_point(c.type());
-                                  },
-                                  in);
-                              }),
-                 "Transforms with PTX UDFs only support integer, floating-point, and boolean",
-                 std::invalid_argument);
+    static constexpr auto is_input_value_supported = [](auto const& c) {
+      return is_integral(c.type()) || is_floating_point(c.type());
+    };
+    static constexpr auto is_supported_input_type = [](auto const& c) {
+      auto col = std::visit([](auto& c) { return as_column_view(c); }, c);
+      return is_input_value_supported(col) ||
+             (is_dictionary(col.type()) &&
+              is_input_value_supported(col.child(dictionary_keys_column_index)));
+    };
+    CUDF_EXPECTS(
+      std::none_of(
+        inputs.begin(), inputs.end(), [](auto const& in) { return !is_supported_input_type(in); }),
+      "Transforms with PTX UDFs only support integer, floating-point, and boolean",
+      std::invalid_argument);
     CUDF_EXPECTS(std::none_of(outputs.begin(),
                               outputs.end(),
                               [](auto& out) {
@@ -542,14 +625,20 @@ void perform_checks(udf_source_type source_type,
                "Transforms only support output of fixed-width or string types",
                std::invalid_argument);
 
-  CUDF_EXPECTS(std::none_of(inputs.begin(),
-                            inputs.end(),
-                            [&](auto& in) {
-                              auto type = std::visit([](auto& c) { return c.type(); }, in);
-                              return !is_fixed_width(type) && type.id() != type_id::STRING;
-                            }),
-               "Transforms only support input of fixed-width or string types",
-               std::invalid_argument);
+  static constexpr auto is_input_value_supported = [](auto const& c) {
+    return is_fixed_width(c.type()) || c.type().id() == type_id::STRING || is_dictionary(c.type());
+  };
+  static constexpr auto is_supported_input_type = [&](auto const& c) {
+    auto col = std::visit([](auto const& c) { return as_column_view(c); }, c);
+    return is_input_value_supported(col) ||
+           (is_dictionary(col.type()) &&
+            is_input_value_supported(col.child(dictionary_keys_column_index)));
+  };
+  CUDF_EXPECTS(
+    std::none_of(
+      inputs.begin(), inputs.end(), [&](auto const& in) { return !is_supported_input_type(in); }),
+    "Transforms only support input of fixed-width, string, or dictionary types",
+    std::invalid_argument);
 
   if (!in_row_size.has_value()) {
     CUDF_EXPECTS(
@@ -811,6 +900,7 @@ auto finalize_outputs(null_aware is_null_aware,
 std::unique_ptr<table> execute_transform(std::string const& udf,
                                          udf_source_type source_type,
                                          null_aware is_null_aware,
+                                         fallible is_fallible,
                                          std::optional<size_type> in_row_size,
                                          std::optional<void*> user_data,
                                          std::span<transform_input const> inputs,
@@ -832,17 +922,31 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
 
   auto stencil_arg       = stencil.has_value() ? stencil->first : nullptr;
   auto stencil_has_nulls = stencil.has_value() ? (stencil->second > 0) : false;
+
+  rmm::device_scalar<int32_t> d_max_error(static_cast<int32_t>(errc::SUCCESS), stream, mr);
+
   jit_transform::run(is_null_aware == null_aware::YES,
+                     is_fallible == fallible::NO,
                      user_data.has_value(),
                      row_size,
                      stencil_has_nulls ? stencil_arg : nullptr,
                      user_data.value_or(nullptr),
                      inputs,
                      output_columns,
+                     d_max_error.data(),
                      udf,
                      source_type,
                      stream,
                      mr);
+
+  auto error = static_cast<errc>(d_max_error.value(stream));
+
+  switch (error) {
+    case errc::SUCCESS: break;
+    default:
+      throw evaluation_error(
+        error, std::format("Transform UDF evaluation failed with error `{}`", to_string(error)));
+  }
 
   auto finalized = finalize_outputs(is_null_aware, row_size, std::move(output_columns), stream, mr);
   return std::make_unique<table>(std::move(finalized));
@@ -853,6 +957,7 @@ std::unique_ptr<table> execute_transform(std::string const& udf,
 std::unique_ptr<table> multi_transform(std::string const& udf,
                                        udf_source_type source_type,
                                        null_aware is_null_aware,
+                                       fallible is_fallible,
                                        std::optional<void*> user_data,
                                        std::span<transform_input const> inputs,
                                        std::span<transform_output const> outputs,
@@ -866,6 +971,7 @@ std::unique_ptr<table> multi_transform(std::string const& udf,
   return execute_transform(udf,
                            source_type,
                            is_null_aware,
+                           is_fallible,
                            row_size,
                            user_data,
                            inputs,
@@ -873,6 +979,30 @@ std::unique_ptr<table> multi_transform(std::string const& udf,
                            std::move(string_offsets),
                            stream,
                            mr);
+}
+
+std::unique_ptr<table> multi_transform(std::string const& udf,
+                                       udf_source_type source_type,
+                                       null_aware is_null_aware,
+                                       std::optional<void*> user_data,
+                                       std::span<transform_input const> inputs,
+                                       std::span<transform_output const> outputs,
+                                       std::vector<std::unique_ptr<column>>&& string_offsets,
+                                       std::optional<size_type> row_size,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::device_async_resource_ref mr)
+{
+  return multi_transform(udf,
+                         source_type,
+                         is_null_aware,
+                         fallible::NO,
+                         user_data,
+                         inputs,
+                         outputs,
+                         std::move(string_offsets),
+                         row_size,
+                         stream,
+                         mr);
 }
 
 std::unique_ptr<column> transform_extended(std::span<transform_input const> inputs,
@@ -887,8 +1017,19 @@ std::unique_ptr<column> transform_extended(std::span<transform_input const> inpu
                                            rmm::device_async_resource_ref mr)
 {
   transform_output outputs[] = {{.type = output_type, .nullability = null_policy}};
-  auto table                 = multi_transform(
-    udf, source_type, is_null_aware, user_data, inputs, outputs, {}, row_size, stream, mr);
+
+  auto table = multi_transform(udf,
+                               source_type,
+                               is_null_aware,
+                               fallible::NO,
+                               user_data,
+                               inputs,
+                               outputs,
+                               {},
+                               row_size,
+                               stream,
+                               mr);
+
   auto cols = table->release();
   return std::move(cols[0]);
 }
@@ -940,6 +1081,7 @@ std::unique_ptr<column> compute_column_jit(table_view const& table,
   auto result = multi_transform(args.udf,
                                 args.source_type,
                                 args.is_null_aware,
+                                args.is_fallible,
                                 args.user_data,
                                 args.inputs,
                                 args.outputs,

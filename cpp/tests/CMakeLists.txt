@@ -159,7 +159,7 @@ ConfigureTest(
   groupby/sum_of_squares_tests.cpp
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
-  groupby/sum_with_overflow_tests.cpp
+  groupby/sum_overflow_tests.cpp
   groupby/tdigest_tests.cpp
   groupby/topk_tests.cpp
   groupby/var_tests.cpp
@@ -348,8 +348,10 @@ ConfigureTest(
 )
 ConfigureTest(
   HYBRID_SCAN_TEST
+  io/experimental/hybrid_scan_common.cpp
   io/experimental/hybrid_scan_composer.cpp
   io/experimental/hybrid_scan_filters_test.cpp
+  io/experimental/hybrid_scan_multifile_composer.cpp
   io/experimental/hybrid_scan_multifile_filters_test.cpp
   io/experimental/hybrid_scan_multifile_test.cpp
   io/experimental/hybrid_scan_test.cpp
@@ -686,7 +688,7 @@ ConfigureTest(ENCODE_TEST encode/encode_tests.cpp)
 
 # ##################################################################################################
 # * ast tests -------------------------------------------------------------------------------------
-ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp)
+ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp ast/jit_expressions_tests.cpp)
 
 # ##################################################################################################
 # * lists tests ----------------------------------------------------------------------------------
