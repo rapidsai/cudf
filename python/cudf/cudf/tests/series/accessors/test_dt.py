@@ -590,24 +590,27 @@ def test_dayofweek_dtype(dtype, attr):
         assert expect.dtype == np.dtype("int32")
 
 
-def test_timedelta_components_dtype():
+@pytest.mark.parametrize(
+    "attr, expected_dtype",
+    [
+        ("days", np.dtype("int64")),
+        ("seconds", np.dtype("int32")),
+        ("microseconds", np.dtype("int32")),
+        ("nanoseconds", np.dtype("int32")),
+    ],
+)
+def test_timedelta_components_dtype(attr, expected_dtype):
     # pandas returns int64 for .dt.days but int32 for the sub-day components
     # (seconds/microseconds/nanoseconds); cudf must match.
     ps = pd.Series([1000000, 200000, 3000000], dtype="timedelta64[ns]")
     gs = cudf.from_pandas(ps)
 
-    for attr, expected_dtype in [
-        ("days", np.dtype("int64")),
-        ("seconds", np.dtype("int32")),
-        ("microseconds", np.dtype("int32")),
-        ("nanoseconds", np.dtype("int32")),
-    ]:
-        expect = getattr(ps.dt, attr)
-        got = getattr(gs.dt, attr)
-        assert_eq(expect, got)
-        assert got.dtype == expected_dtype
-        # Sanity: our expectation tracks pandas' actual dtype.
-        assert expect.dtype == expected_dtype
+    expect = getattr(ps.dt, attr)
+    got = getattr(gs.dt, attr)
+    assert_eq(expect, got)
+    assert got.dtype == expected_dtype
+    # Sanity: our expectation tracks pandas' actual dtype.
+    assert expect.dtype == expected_dtype
 
 
 @pytest.mark.parametrize(

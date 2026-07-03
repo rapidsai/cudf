@@ -57,6 +57,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.mixins import NoNewAttributesMixin
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import SeriesApplyKernel
@@ -3989,26 +3990,14 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class BaseDatelikeProperties:
+class BaseDatelikeProperties(NoNewAttributesMixin):
     """
     Base accessor class for Series values.
     """
 
-    # Set via object.__setattr__ in __init__ (see __setattr__ below), so
-    # declare them here for type checkers.
-    series: Series
-    _frozen: bool
-
     def __init__(self, series: Series):
-        object.__setattr__(self, "series", series)
-        object.__setattr__(self, "_frozen", True)
-
-    def __setattr__(self, key, value):
-        # Mimic pandas' NoNewAttributesMixin: once initialized, disallow
-        # setting attributes that do not already exist.
-        if getattr(self, "_frozen", False) and not hasattr(self, key):
-            raise AttributeError(f"You cannot add any new attribute '{key}'")
-        object.__setattr__(self, key, value)
+        self.series = series
+        self._freeze()
 
     def _return_result_like_self(self, column: ColumnBase) -> Series:
         """Return the method result like self.series"""
