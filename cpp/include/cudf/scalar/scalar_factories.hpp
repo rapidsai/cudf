@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -9,6 +9,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+
+#include <span>
 
 namespace CUDF_EXPORT cudf {
 /**
@@ -210,7 +212,7 @@ std::unique_ptr<scalar> make_struct_scalar(
  * @returns A struct scalar
  */
 std::unique_ptr<scalar> make_struct_scalar(
-  host_span<column_view const> data,
+  std::span<column_view const> data,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

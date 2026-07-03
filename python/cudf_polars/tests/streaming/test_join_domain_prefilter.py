@@ -5,19 +5,28 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+import pytest
+
 import polars as pl
 
+from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Join, Scan
+from cudf_polars.dsl.ir import Join, Scan, Select
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.engine.default_singleton_engine import DefaultSingletonEngine
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.join_domain_prefilter import (
+    _smallest_node_containing_all,
     optimize_join_domain_prefilters,
 )
+from cudf_polars.streaming.statistics import collect_statistics
+from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 
 if TYPE_CHECKING:
+    import concurrent.futures
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import SerializedDataSourceInfo
 
@@ -70,6 +79,19 @@ def _key(node: IR, name: str) -> expr.NamedExpr:
     return expr.NamedExpr(name, expr.Col(node.schema[name], name))
 
 
+def _select(node: IR, **columns: str) -> Select:
+    schema = {output: node.schema[source] for output, source in columns.items()}
+    return Select(
+        schema,
+        tuple(
+            expr.NamedExpr(output, expr.Col(schema[output], source))
+            for output, source in columns.items()
+        ),
+        True,  # noqa: FBT003
+        node,
+    )
+
+
 def _join(
     left: IR,
     right: IR,
@@ -98,16 +120,18 @@ def _stats(**row_counts: tuple[Scan, int]) -> StatsCollector:
     return stats
 
 
-def _config() -> ConfigOptions:
+def _config(
+    *, dynamic_planning: bool = True, join_domain_prefilter: bool = True
+) -> ConfigOptions:
+    executor_options: dict[str, object] = {
+        "join_domain_prefilter": {"trace": False} if join_domain_prefilter else None
+    }
+    if not dynamic_planning:
+        executor_options["dynamic_planning"] = None
     return ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
-            executor_options={
-                "dynamic_planning": {
-                    "join_domain_prefilter_enabled": True,
-                    "join_domain_prefilter_trace": False,
-                }
-            },
+            executor_options=executor_options,
         )
     )
 
@@ -149,6 +173,77 @@ def test_simple_domain_prefilter_filters_large_side() -> None:
     assert optimized.children[1].options[0] == "Semi"
     assert optimized.children[1].children[0] is lineitem
     assert optimized.children[0] is part
+
+
+def test_domain_prefilter_is_independent_of_dynamic_planning() -> None:
+    part = _scan("part", ("p_partkey",), predicate=True)
+    lineitem = _scan("lineitem", ("l_partkey",))
+    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
+        _config(dynamic_planning=False),
+    )
+
+    assert _joins(optimized, "Semi")
+
+
+def test_domain_prefilter_can_be_disabled() -> None:
+    part = _scan("part", ("p_partkey",), predicate=True)
+    lineitem = _scan("lineitem", ("l_partkey",))
+    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
+        _config(join_domain_prefilter=False),
+    )
+
+    assert optimized is root
+
+
+@pytest.mark.parametrize(
+    "nulls_equal", [False, True], ids=["nulls_not_equal", "nulls_equal"]
+)
+def test_nullable_join_keys_preserve_results(
+    nulls_equal: bool,  # noqa: FBT001
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+) -> None:
+    domain = pl.LazyFrame(
+        {
+            "key": [None, 1, 2, 9],
+            "active": [True, True, True, False],
+        }
+    ).filter("active")
+    target = pl.LazyFrame(
+        {
+            "key": [None, 1, 2, 3] * 10,
+            "value": range(40),
+        }
+    )
+    query = domain.join(target, on="key", nulls_equal=nulls_equal)
+    engine = pl.GPUEngine(
+        executor="streaming",
+        raise_on_fail=True,
+        executor_options={"join_domain_prefilter": {"threshold": 0.5}},
+    )
+
+    ir = Translator(query._ldf.visit(), engine).translate_ir()
+    config = ConfigOptions.from_polars_engine(engine)
+    optimized = optimize_join_domain_prefilters(
+        ir,
+        collect_statistics(ir, config, parquet_stats_executor),
+        config,
+    )
+
+    semi_joins = _joins(optimized, "Semi")
+    assert semi_joins
+    assert all(join.options[1] is nulls_equal for join in semi_joins)
+    try:
+        assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+    finally:
+        DefaultSingletonEngine.shutdown()
 
 
 def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:
@@ -319,6 +414,113 @@ def test_rewritten_analysis_respects_stack_and_cost_guards() -> None:
     semis = _joins(optimized, "Semi")
     assert sum(semi.children[0] is lineitem for semi in semis) == 1
     assert not any(semi.children[0] is orders for semi in semis)
+    assert not any(
+        isinstance(semi.children[0], Join) and semi.children[0].options[0] == "Semi"
+        for semi in semis
+    )
+
+
+def test_target_source_follows_join_key_through_rename() -> None:
+    big = _scan("big", ("left_key", "other"))
+    renamed_big = _select(big, foo="left_key", other="other")
+    small = _scan("small", ("left_key", "other2"))
+    joined = _join(
+        renamed_big,
+        small,
+        ("other",),
+        ("other2",),
+        maintain_order="left",
+    )
+    domain = _scan("domain", ("domain_key",), predicate=True)
+    root = _join(joined, domain, ("left_key",), ("domain_key",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(big=(big, 1_000), small=(small, 100), domain=(domain, 5)),
+        _config(),
+    )
+
+    semis = _joins(optimized, "Semi")
+    assert any(semi.children[0] is small for semi in semis)
+    assert not any(semi.children[0] is big for semi in semis)
+
+
+def test_domain_source_follows_join_key_through_rename() -> None:
+    target = _scan("target", ("target_key",))
+    unrelated = _scan("unrelated", ("domain_key", "other"), predicate=True)
+    renamed_unrelated = _select(unrelated, foo="domain_key", other="other")
+    domain_source = _scan("domain_source", ("domain_key", "other2"), predicate=True)
+    domain = _join(
+        renamed_unrelated,
+        domain_source,
+        ("other",),
+        ("other2",),
+        maintain_order="left",
+    )
+    root = _join(target, domain, ("target_key",), ("domain_key",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(
+            target=(target, 1_000),
+            unrelated=(unrelated, 1),
+            domain_source=(domain_source, 5),
+        ),
+        _config(),
+    )
+
+    semi = next(
+        semi for semi in _joins(optimized, "Semi") if semi.children[0] is target
+    )
+    selected_domain = semi.children[1]
+    assert isinstance(selected_domain, Select)
+    assert selected_domain.children[0] is domain
+
+
+def test_composite_domain_columns_follow_renames() -> None:
+    source = _scan("source", ("raw_key", "raw_constraint"))
+    renamed = _select(
+        source,
+        domain_key="raw_key",
+        domain_constraint="raw_constraint",
+    )
+
+    producer = _smallest_node_containing_all(
+        renamed,
+        ("domain_key", "domain_constraint"),
+        {renamed: 20, source: 10},
+        {renamed: 10, source: 10},
+    )
+
+    assert producer is not None
+    assert producer.node is source
+    assert producer.columns == ("raw_key", "raw_constraint")
+
+
+def test_target_replacement_does_not_rewrite_shared_domain_side() -> None:
+    shared = _scan("shared", ("target_key", "other"))
+    domain_source = _scan("domain_source", ("domain_key", "other2"), predicate=True)
+    domain = _join(
+        shared,
+        domain_source,
+        ("other",),
+        ("other2",),
+        maintain_order="left",
+    )
+    root = _join(shared, domain, ("target_key",), ("domain_key",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(shared=(shared, 1_000), domain_source=(domain_source, 5)),
+        _config(),
+    )
+
+    assert isinstance(optimized, Join)
+    assert isinstance(optimized.children[0], Join)
+    assert optimized.children[0].options[0] == "Semi"
+    assert optimized.children[0].children[0] is shared
+    assert optimized.children[1] is domain
+    assert domain.children[0] is shared
 
 
 def test_no_domain_prefilter_for_outer_join() -> None:

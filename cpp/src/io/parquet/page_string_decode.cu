@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -1079,7 +1079,7 @@ inline __device__ bool prefetch_string_data(int t,
     if (thread_bytes_to_copy > 0) {
       int32_t const thread_copy_from_index = buffer_base + thread_offset;
       cuda::std::memcpy(reinterpret_cast<void*>(&prefetch_buffer[thread_offset]),
-                        reinterpret_cast<const void*>(&cur[thread_copy_from_index]),
+                        reinterpret_cast<void const*>(&cur[thread_copy_from_index]),
                         thread_bytes_to_copy);
     }
   }
@@ -1207,7 +1207,7 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
       // Read the length of the string from the data stream
       int32_t len;
       cuda::std::memcpy(reinterpret_cast<void*>(&len),
-                        reinterpret_cast<const void*>(&cur[length_offset]),
+                        reinterpret_cast<void const*>(&cur[length_offset]),
                         sizeof(int32_t));
 
       if (string_offset + len > dict_size) {
