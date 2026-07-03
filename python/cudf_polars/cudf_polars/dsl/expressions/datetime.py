@@ -242,39 +242,49 @@ class TemporalFunction(Expr):
             )
         elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
             (column,) = columns
-            year = plc.datetime.extract_datetime_component(
-                column.obj,
-                plc.datetime.DatetimeComponent.YEAR,
-                stream=df.stream,
-            )
             int32 = plc.DataType(plc.TypeId.INT32)
-            # polars computes ``(year - 1) // divisor + 1`` using floor division.
-            year_minus_one = plc.binaryop.binary_operation(
-                year,
-                plc.Scalar.from_py(1, int32, stream=df.stream),
-                plc.binaryop.BinaryOperator.SUB,
-                int32,
-                stream=df.stream,
-            )
-            floored = plc.binaryop.binary_operation(
-                year_minus_one,
-                plc.Scalar.from_py(
-                    self._CENTURY_MILLENNIUM_DIVISOR[self.name],
-                    int32,
+            # YEAR extraction yields INT16; cast up so the arithmetic (and the
+            # INT32 output polars produces) does not overflow or need promotion.
+            year = plc.unary.cast(
+                plc.datetime.extract_datetime_component(
+                    column.obj,
+                    plc.datetime.DatetimeComponent.YEAR,
                     stream=df.stream,
                 ),
-                plc.binaryop.BinaryOperator.FLOOR_DIV,
                 int32,
                 stream=df.stream,
             )
-            result = plc.binaryop.binary_operation(
-                floored,
-                plc.Scalar.from_py(1, int32, stream=df.stream),
-                plc.binaryop.BinaryOperator.ADD,
-                self.dtype.plc_type,
-                stream=df.stream,
+            # polars computes ``(year - 1) // divisor + 1`` using floor division;
+            # evaluate the whole arithmetic as a single fused libcudf AST
+            # expression rather than three separate binaryop kernels.
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1, int32, stream=df.stream)
             )
-            return Column(result, dtype=self.dtype)
+            predicate = plc.expressions.Operation(
+                plc.expressions.ASTOperator.ADD,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.FLOOR_DIV,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.SUB,
+                        plc.expressions.ColumnReference(0),
+                        one,
+                    ),
+                    plc.expressions.Literal(
+                        plc.Scalar.from_py(
+                            self._CENTURY_MILLENNIUM_DIVISOR[self.name],
+                            int32,
+                            stream=df.stream,
+                        )
+                    ),
+                ),
+                one,
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([year]), predicate, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
         elif self.name is TemporalFunction.Name.Round:
             (column, _) = columns
             return Column(
