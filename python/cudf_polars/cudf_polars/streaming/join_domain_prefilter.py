@@ -59,7 +59,7 @@ class _Producer:
 class _Candidate:
     """A derived key-domain prefilter candidate."""
 
-    mode: Literal["simple", "composite"]
+    mode: Literal["simple", "composite", "reused"]
     target_side: Literal["left", "right"]
     target: _Producer
     target_key: expr.Col
@@ -83,13 +83,14 @@ class _Candidate:
     @property
     def score(self) -> tuple[int, int, int]:
         """Prefer composite filters, then cheaper constraint/domain inputs."""
+        mode_score = {"composite": 0, "simple": 1, "reused": 2}[self.mode]
         constraint_cost = (
             self.constraint_domain.cost
             if self.constraint_domain is not None
             else self.domain.cost
         )
         return (
-            0 if self.mode == "composite" else 1,
+            mode_score,
             constraint_cost,
             self.domain.cost,
         )
@@ -268,6 +269,19 @@ def _select_candidate(
                 selective_nodes,
             )
         )
+        candidates.extend(
+            _reused_semi_domain_candidates(
+                target_side,
+                target_child,
+                domain_child,
+                target_keys,
+                domain_keys,
+                row_estimates,
+                source_costs,
+                source_counts,
+                selective_nodes,
+            )
+        )
 
     if not candidates:
         return None, "no_profitable_domain"
@@ -327,6 +341,49 @@ def _simple_candidates(
             domain_key=domain_key,
             target_rows=target.rows,
         )
+
+
+def _reused_semi_domain_candidates(
+    target_side: Literal["left", "right"],
+    target_child: IR,
+    domain_child: IR,
+    target_keys: tuple[expr.Col, ...],
+    domain_keys: tuple[expr.Col, ...],
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    source_counts: dict[IR, int],
+    selective_nodes: set[IR],
+) -> Iterable[_Candidate]:
+    for target_key, domain_key in zip(target_keys, domain_keys, strict=True):
+        for domain, semi_domain_key in _filtering_semi_domains(
+            domain_child,
+            domain_key,
+            row_estimates,
+            source_costs,
+            selective_nodes,
+        ):
+            target = _largest_key_reusable_target(
+                target_child, target_key.name, domain.node, row_estimates, source_costs
+            )
+            if target is None:
+                continue
+            if domain.rows > target.rows:
+                continue
+            if _contains_identity(target.node, domain.node):
+                continue
+            if source_counts.get(domain.node) == 1 and _has_filtering_semi_ancestor(
+                target_child, target.node
+            ):
+                continue
+            yield _Candidate(
+                mode="reused",
+                target_side=target_side,
+                target=target,
+                target_key=target_key,
+                domain=domain,
+                domain_key=semi_domain_key,
+                target_rows=target.rows,
+            )
 
 
 def _composite_candidates(
@@ -412,7 +469,7 @@ def _composite_candidates(
 
 
 def _make_domain(candidate: _Candidate, ir: Join) -> IR:
-    if candidate.mode == "simple":
+    if candidate.mode in ("simple", "reused"):
         return _project_bound_key(
             candidate.domain.node,
             candidate.domain.column,
@@ -507,6 +564,37 @@ def _smallest_key_producer(
     return min(candidates, key=lambda item: (item[0], item[1], item[2]))[3]
 
 
+def _filtering_semi_domains(
+    root: IR,
+    filtered_key: expr.Col,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+    selective_nodes: set[IR],
+) -> Iterable[tuple[_Producer, expr.Col]]:
+    """Yield domains from semi joins on the exact filtered-key lineage."""
+    for node, bound_key in _column_bindings(root, filtered_key.name):
+        if not isinstance(node, Join) or node.options[0] != "Semi":
+            continue
+        left_keys = _simple_keys(node.left_on)
+        right_keys = _simple_keys(node.right_on)
+        if len(left_keys) != len(node.left_on) or len(right_keys) != len(node.right_on):
+            continue
+        assert len(left_keys) == len(right_keys)
+        for left_key, right_key in zip(left_keys, right_keys, strict=True):
+            if left_key.name != bound_key:
+                continue
+            domain = _smallest_key_producer(
+                node.children[1],
+                right_key.name,
+                row_estimates,
+                source_costs,
+                selective_nodes,
+                require_selective=True,
+            )
+            if domain is not None:
+                yield domain, right_key
+
+
 def _smallest_node_containing_all(
     root: IR,
     columns: Sequence[str],
@@ -569,6 +657,50 @@ def _largest_key_source(
     if not candidates:
         return None
     return max(candidates, key=lambda item: (item[0], -item[1]))[2]
+
+
+def _largest_key_reusable_target(
+    root: IR,
+    column: str,
+    domain: IR,
+    row_estimates: dict[IR, int | None],
+    source_costs: dict[IR, int | None],
+) -> _Producer | None:
+    """Select a target without duplicating a source used by the domain."""
+    shared_cache_candidates = []
+    source_candidates = []
+    fallback_candidates = []
+    domain_sources = _scan_sources(domain)
+    for order, (node, bound_column) in enumerate(_column_bindings(root, column)):
+        rows = row_estimates.get(node)
+        if rows is None or rows <= 0:
+            continue
+        cost = source_costs.get(node)
+        if cost is None:
+            continue
+        producer = _Producer(node, (bound_column,), rows, cost)
+        item = (rows, len(node.schema), -order, producer)
+        if _contains_identity(domain, node):
+            if isinstance(node, Cache):
+                shared_cache_candidates.append(item)
+            continue
+        if not _scan_sources(node).isdisjoint(domain_sources):
+            continue
+        if isinstance(node, (Scan, DataFrameScan)):
+            source_candidates.append(item)
+        else:
+            fallback_candidates.append(item)
+    candidates = shared_cache_candidates or source_candidates or fallback_candidates
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: (item[0], -item[1], item[2]))[3]
+
+
+def _scan_sources(root: IR) -> frozenset[IR]:
+    """Return physical scan nodes reachable from a subtree."""
+    return frozenset(
+        node for node in traversal([root]) if isinstance(node, (Scan, DataFrameScan))
+    )
 
 
 def _column_bindings(root: IR, column: str) -> Iterable[tuple[IR, str]]:

@@ -12,7 +12,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Join, Scan, Select
+from cudf_polars.dsl.ir import Cache, Filter, GroupBy, Join, Scan, Select
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.default_singleton_engine import DefaultSingletonEngine
 from cudf_polars.streaming.base import StatsCollector
@@ -154,6 +154,28 @@ def _join_key_names(keys: tuple[expr.NamedExpr, ...]) -> tuple[str, ...]:
         assert isinstance(key.value, expr.Col)
         names.append(key.value.name)
     return tuple(names)
+
+
+def _filtered_groupby_domain(source: IR, key: str) -> Select:
+    grouped = GroupBy(
+        {key: source.schema[key]},
+        (_key(source, key),),
+        (),
+        False,  # noqa: FBT003
+        None,
+        source,
+    )
+    filtered = Filter(
+        grouped.schema,
+        expr.NamedExpr("__predicate", expr.Literal(BOOL, True)),  # noqa: FBT003
+        grouped,
+    )
+    return Select(
+        {key: filtered.schema[key]},
+        (_key(filtered, key),),
+        True,  # noqa: FBT003
+        filtered,
+    )
 
 
 def test_simple_domain_prefilter_filters_large_side() -> None:
@@ -474,7 +496,7 @@ def test_domain_source_follows_join_key_through_rename() -> None:
     )
     selected_domain = semi.children[1]
     assert isinstance(selected_domain, Select)
-    assert selected_domain.children[0] is domain
+    assert selected_domain.children[0] is domain_source
 
 
 def test_composite_domain_columns_follow_renames() -> None:
@@ -521,6 +543,122 @@ def test_target_replacement_does_not_rewrite_shared_domain_side() -> None:
     assert optimized.children[0].children[0] is shared
     assert optimized.children[1] is domain
     assert domain.children[0] is shared
+
+
+def test_reuses_existing_semi_domain_to_filter_shared_target() -> None:
+    lineitem = _scan("lineitem", ("l_orderkey", "l_quantity"))
+    cached_lineitem = Cache(lineitem.schema, 0, 2, lineitem)
+    selected_orders = _filtered_groupby_domain(cached_lineitem, "l_orderkey")
+    orders = _scan("orders", ("o_orderkey", "o_custkey"))
+
+    filtered_orders = _join(
+        orders, selected_orders, ("o_orderkey",), ("l_orderkey",), how="Semi"
+    )
+    root = _join(filtered_orders, cached_lineitem, ("o_orderkey",), ("l_orderkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(lineitem=(lineitem, 1_800), orders=(orders, 450)),
+        _config(),
+    )
+
+    assert isinstance(optimized, Join)
+    assert optimized.options[0] == "Inner"
+    assert optimized.children[0] is filtered_orders
+    assert isinstance(optimized.children[1], Join)
+    assert optimized.children[1].options[0] == "Semi"
+    assert optimized.children[1].children[0] is cached_lineitem
+    assert _contains_node(optimized.children[1].children[1], selected_orders)
+
+
+def test_reused_semi_domain_follows_filtered_key_rename() -> None:
+    lineitem = _scan("lineitem", ("l_orderkey", "l_quantity"))
+    cached_lineitem = Cache(lineitem.schema, 0, 2, lineitem)
+    selected_orders = _filtered_groupby_domain(cached_lineitem, "l_orderkey")
+    orders = _scan("orders", ("o_orderkey", "o_custkey"))
+
+    filtered_orders = _join(
+        orders, selected_orders, ("o_orderkey",), ("l_orderkey",), how="Semi"
+    )
+    renamed_orders = _select(
+        filtered_orders,
+        joined_orderkey="o_orderkey",
+        o_custkey="o_custkey",
+    )
+    root = _join(
+        renamed_orders,
+        cached_lineitem,
+        ("joined_orderkey",),
+        ("l_orderkey",),
+    )
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(lineitem=(lineitem, 1_800), orders=(orders, 450)),
+        _config(),
+    )
+
+    assert isinstance(optimized, Join)
+    assert isinstance(optimized.children[1], Join)
+    assert optimized.children[1].options[0] == "Semi"
+    assert optimized.children[1].children[0] is cached_lineitem
+    assert _contains_node(optimized.children[1].children[1], selected_orders)
+
+
+def test_reused_semi_domain_does_not_duplicate_uncached_source() -> None:
+    lineitem = _scan("lineitem", ("l_orderkey", "l_quantity"))
+    selected_orders = _filtered_groupby_domain(lineitem, "l_orderkey")
+    orders = _scan("orders", ("o_orderkey", "o_custkey"))
+
+    filtered_orders = _join(
+        orders, selected_orders, ("o_orderkey",), ("l_orderkey",), how="Semi"
+    )
+    root = _join(filtered_orders, lineitem, ("o_orderkey",), ("l_orderkey",))
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(lineitem=(lineitem, 1_800), orders=(orders, 450)),
+        _config(),
+    )
+
+    lineitem_semis = [
+        semi for semi in _joins(optimized, "Semi") if semi.children[0] is lineitem
+    ]
+    assert not lineitem_semis
+
+
+def test_reused_semi_domain_does_not_duplicate_wrapped_uncached_source() -> None:
+    lineitem = _scan("lineitem", ("l_orderkey", "l_quantity"))
+    projected_lineitem = _select(
+        lineitem,
+        l_orderkey="l_orderkey",
+        l_quantity="l_quantity",
+    )
+    selected_orders = _filtered_groupby_domain(projected_lineitem, "l_orderkey")
+    orders = _scan("orders", ("o_orderkey", "o_custkey"))
+
+    filtered_orders = _join(
+        orders, selected_orders, ("o_orderkey",), ("l_orderkey",), how="Semi"
+    )
+    root = _join(
+        filtered_orders,
+        projected_lineitem,
+        ("o_orderkey",),
+        ("l_orderkey",),
+    )
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        _stats(lineitem=(lineitem, 1_800), orders=(orders, 450)),
+        _config(),
+    )
+
+    lineitem_semis = [
+        semi
+        for semi in _joins(optimized, "Semi")
+        if semi.children[0] is projected_lineitem
+    ]
+    assert not lineitem_semis
 
 
 def test_no_domain_prefilter_for_outer_join() -> None:
