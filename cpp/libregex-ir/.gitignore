@@ -1,0 +1,15 @@
+/build/
+/build-*/
+/.cache/
+/.agents/
+/.codex/
+/docs/build/
+/install/
+CMakeUserPresets.json
+compile_commands.json
+*.orig
+*.rej
+*.ncu-rep
+*.nsys-rep
+*.sqlite
+__pycache__/

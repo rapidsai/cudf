@@ -1,0 +1,117 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  style:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install checks
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang-format
+          python -m pip install pre-commit
+      - run: pre-commit run --all-files --show-diff-on-failure
+
+  test:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:13.0.0-devel-ubuntu24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          apt-get update
+          apt-get install --yes cmake ninja-build g++ libfmt-dev libgtest-dev ${{ matrix.compiler }}
+      - name: Configure
+        env:
+          CXX: ${{ matrix.compiler == 'gcc' && 'g++' || 'clang++' }}
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --parallel 2
+      - run: ctest --test-dir build --output-on-failure
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build clang libclang-rt-dev libfmt-dev
+      - name: Configure libFuzzer
+        env:
+          CXX: clang++
+        run: >-
+          cmake -S . -B build-fuzz -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DBUILD_TESTING=OFF
+          -DREGEX_IR_BUILD_TESTS=OFF
+          -DREGEX_IR_BUILD_EXAMPLES=OFF
+          -DREGEX_IR_BUILD_EXPLORER=OFF
+          -DREGEX_IR_BUILD_CODEGEN=OFF
+          -DREGEX_IR_BUILD_FUZZERS=ON
+      - run: cmake --build build-fuzz --target regex_ir_compile_execute_fuzzer --parallel 2
+      - name: Fuzz parser, optimizer, and executor
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+        run: >-
+          ./build-fuzz/regex_ir_compile_execute_fuzzer
+          -max_total_time=60 -timeout=5 -rss_limit_mb=4096
+
+  documentation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Install documentation dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake doxygen graphviz libfmt-dev ninja-build
+          python -m pip install --requirement docs/requirements.txt
+      - name: Configure documentation
+        run: >-
+          cmake -S . -B build-docs -G Ninja
+          -DREGEX_IR_BUILD_DOCS=ON
+          -DBUILD_TESTING=OFF
+          -DREGEX_IR_BUILD_TESTS=OFF
+          -DREGEX_IR_BUILD_EXAMPLES=OFF
+          -DREGEX_IR_BUILD_EXPLORER=OFF
+          -DREGEX_IR_BUILD_CODEGEN=OFF
+      - run: cmake --build build-docs --target regex_ir_docs
+
+  nvvm:
+    runs-on: ubuntu-latest
+    container: nvidia/cuda:13.0.0-devel-ubuntu24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install --yes cmake ninja-build g++ libfmt-dev libgtest-dev
+      - name: Configure CUDA toolchain test
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DREGEX_IR_BUILD_EXAMPLES=OFF
+          -DREGEX_IR_BUILD_EXPLORER=OFF
+          -DREGEX_IR_BUILD_CODEGEN=OFF
+      - run: cmake --build build --target regex_ir_tests --parallel 2
+      - run: >-
+          ./build/tests/regex_ir_tests
+          --gtest_filter=Nvvm.ToolchainCompilation

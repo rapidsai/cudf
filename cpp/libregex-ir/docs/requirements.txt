@@ -1,0 +1,4 @@
+breathe>=4.35
+myst-parser>=3
+nvidia-sphinx-theme>=0.0.8
+sphinx>=7
