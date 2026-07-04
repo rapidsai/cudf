@@ -24,9 +24,10 @@ table_chunk::table_chunk(std::unique_ptr<cudf::table> table, rmm::cuda_stream_vi
   : table_{std::move(table)}, stream_{stream}, is_spillable_{true}
 {
   RAPIDSMPF_EXPECTS(table_ != nullptr, "table pointer cannot be null", std::invalid_argument);
-  table_view_                                                               = table_->view();
-  data_alloc_size_[static_cast<std::size_t>(rapidsmpf::MemoryType::DEVICE)] = table_->alloc_size();
-  make_available_cost_                                                      = 0;
+  table_view_ = table_->view();
+  data_alloc_size_[static_cast<std::size_t>(rapidsmpf::MemoryType::DEVICE)] =
+    cudf::packed_size(*table_view_, stream_, rmm::mr::get_current_device_resource_ref());
+  make_available_cost_ = 0;
 }
 
 table_chunk::table_chunk(cudf::table_view table_view,
@@ -206,19 +207,6 @@ table_chunk table_chunk::copy(rapidsmpf::MemoryReservation& reservation) const
           std::move(packed_columns.metadata),
           br->move(std::move(packed_columns.gpu_data), stream()));
 
-        // Handle the case where `cudf::pack` allocates slightly more than the
-        // input size. This can occur because cudf uses aligned allocations,
-        // which may exceed the requested size. To accommodate this, we
-        // allow some wiggle room.
-        if (packed_data->data->size > reservation.size()) {
-          auto const wiggle_room = 1024 * static_cast<std::size_t>(table_view().num_columns());
-          if (packed_data->data->size <= reservation.size() + wiggle_room) {
-            reservation =
-              br->reserve(
-                  reservation.mem_type(), packed_data->data->size, rapidsmpf::AllowOverbooking::YES)
-                .first;
-          }
-        }
         packed_data->data = br->move(std::move(packed_data->data), reservation);
         return table_chunk(std::move(packed_data));
       }
