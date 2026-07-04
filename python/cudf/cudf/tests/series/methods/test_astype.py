@@ -1557,3 +1557,43 @@ def test_astype_aware_to_naive_raises():
         cudf_ser.astype("datetime64[ns]")
     with pytest.raises(TypeError):
         pd_ser.astype("datetime64[ns]")
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["123_1"],
+        ["1_2", "1_000", "20_000"],
+        ["1_2_3"],
+        ["123", "456"],
+    ],
+)
+@pytest.mark.parametrize("dtype", ["int32", "int64", "uint64"])
+def test_string_astype_int_pep515_underscores(data, dtype):
+    # https://github.com/rapidsai/cudf/issues/12047
+    # Python (PEP 515) allows underscores between digits, so pandas
+    # parses "123_1" as 1231; cudf should match.
+    got = cudf.Series(data).astype(dtype)
+    expect = pd.Series(data).astype(dtype)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["_12"],
+        ["12_"],
+        ["1__2"],
+        ["1_2", "_3"],
+    ],
+)
+def test_string_astype_int_invalid_underscores_raises(data):
+    # https://github.com/rapidsai/cudf/issues/12047
+    # Underscores not surrounded by digits are invalid (PEP 515);
+    # both pandas and cudf must reject them.
+    assert_exceptions_equal(
+        lfunc=pd.Series(data).astype,
+        rfunc=cudf.Series(data).astype,
+        lfunc_args_and_kwargs=((), {"dtype": "int64"}),
+        rfunc_args_and_kwargs=((), {"dtype": "int64"}),
+    )
