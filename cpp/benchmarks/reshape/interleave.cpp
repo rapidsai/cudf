@@ -33,8 +33,10 @@ static void bench_interleave(nvbench::state& state)
   auto const stream      = cudf::get_default_stream();
 
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
-  auto chars_size = cudf::strings_column_view(source_view.column(0)).chars_size(stream) +
-                    cudf::strings_column_view(source_view.column(1)).chars_size(stream);
+  auto chars_size = size_t{0};
+  for (auto i = cudf::size_type{0}; i < num_cols; ++i) {
+    chars_size += cudf::strings_column_view(source_view.column(i)).chars_size(stream);
+  }
   state.add_global_memory_reads<nvbench::int8_t>(chars_size);   // all bytes are read
   state.add_global_memory_writes<nvbench::int8_t>(chars_size);  // all bytes are written
 
