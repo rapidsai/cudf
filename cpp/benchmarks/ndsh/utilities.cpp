@@ -211,7 +211,6 @@ std::unique_ptr<table_with_names> apply_inner_join(
             right_input->column_names().end(),
             std::back_inserter(merged_column_names));
   return std::make_unique<table_with_names>(std::move(table), merged_column_names);
-  return std::make_unique<table_with_names>(std::move(table), merged_column_names);
 }
 
 std::unique_ptr<table_with_names> apply_filter(std::unique_ptr<table_with_names> const& table,
