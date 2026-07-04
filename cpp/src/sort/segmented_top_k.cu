@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,6 +33,7 @@ namespace {
  * @brief Resolves the k indices per segment
  *
  * Marks values outside the k range to -1 to be removed in a separate step.
+ * Rows not covered by any segment are also marked to be removed.
  * Also computes the total number of valid indices for each segment.
  * All elements are used in a segment if it has less than k total elements.
  *
@@ -50,6 +51,11 @@ CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
   if (tid >= d_indices.size()) { return; }
 
   auto const sitr = thrust::upper_bound(thrust::seq, d_offsets.begin(), d_offsets.end(), tid);
+  // mark rows outside all segments for removal (offsets need not cover all rows)
+  if (sitr == d_offsets.begin() || sitr == d_offsets.end()) {
+    d_indices[tid] = -1;
+    return;
+  }
   auto const segment_start = *(sitr - 1);
   auto const segment_end   = *sitr;
   auto const index         = tid - segment_start;
