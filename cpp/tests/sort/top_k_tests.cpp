@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -122,6 +122,66 @@ TYPED_TEST(TopKTypes, TopKSegmented)
   }
 }
 
+// Empty segments (leading, trailing, interior, or consecutive) must produce empty result lists.
+// A per-segment size slot that is never written by the resolve kernel would otherwise be read
+// uninitialized, corrupting the empty segment's list size and every segment that follows it.
+TYPED_TEST(TopKTypes, TopKSegmentedEmpty)
+{
+  using T    = TypeParam;
+  using LCW  = cudf::test::lists_column_wrapper<T, int32_t>;
+  using LCWO = cudf::test::lists_column_wrapper<cudf::size_type>;
+
+  {
+    // Interior empty segment: offsets [0,3,3,7]; seg1=[3,3) is empty.
+    // Seg0 desc top2: 30@1,20@2 ; seg2 desc top2: 50@3,45@5.
+    auto input   = cudf::test::fixed_width_column_wrapper<T, int32_t>({10, 30, 20, 50, 15, 45, 25});
+    auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 3, 3, 7});
+    LCW expected({LCW{30, 20}, LCW{}, LCW{50, 45}});
+    LCWO expected_order({LCWO{1, 2}, LCWO{}, LCWO{3, 5}});
+    auto result = cudf::segmented_top_k(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::segmented_top_k_order(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+  }
+
+  {
+    // Leading empty segment: offsets [0,0,4]; seg0=[0,0) is empty.
+    // Seg1 desc top2: 40@0,30@2.
+    auto input   = cudf::test::fixed_width_column_wrapper<T, int32_t>({40, 10, 30, 20});
+    auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 0, 4});
+    LCW expected({LCW{}, LCW{40, 30}});
+    LCWO expected_order({LCWO{}, LCWO{0, 2}});
+    auto result = cudf::segmented_top_k(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::segmented_top_k_order(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+  }
+
+  {
+    // Trailing empty segment: offsets [0,4,4]; seg1=[4,4) is empty.
+    auto input   = cudf::test::fixed_width_column_wrapper<T, int32_t>({40, 10, 30, 20});
+    auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 4, 4});
+    LCW expected({LCW{40, 30}, LCW{}});
+    LCWO expected_order({LCWO{0, 2}, LCWO{}});
+    auto result = cudf::segmented_top_k(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::segmented_top_k_order(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+  }
+
+  {
+    // Consecutive interior empty segments: offsets [0,3,3,3,7]; seg1 and seg2 are both empty.
+    auto input   = cudf::test::fixed_width_column_wrapper<T, int32_t>({10, 30, 20, 50, 15, 45, 25});
+    auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 3, 3, 3, 7});
+    LCW expected({LCW{30, 20}, LCW{}, LCW{}, LCW{50, 45}});
+    LCWO expected_order({LCWO{1, 2}, LCWO{}, LCWO{}, LCWO{3, 5}});
+    auto result = cudf::segmented_top_k(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+    result = cudf::segmented_top_k_order(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+  }
+}
+
 struct TopK : public cudf::test::BaseFixture {};
 
 TEST_F(TopK, Empty)
@@ -158,4 +218,20 @@ TEST_F(TopK, Errors)
 
   EXPECT_THROW(cudf::segmented_top_k(input, input, 10), cudf::data_type_error);
   EXPECT_THROW(cudf::segmented_top_k_order(input, input, 10), cudf::data_type_error);
+}
+
+// Dedicated sanitizer-safe case: exercises ONLY segmented_top_k_order (which has no gather), so
+// compute-sanitizer initcheck flags the uninitialized empty-segment size read in
+// make_offsets_child_column without triggering the full segmented_top_k gather over a
+// garbage-sized index map.
+TEST_F(TopK, TopKSegmentedEmptyOrderInitcheck)
+{
+  using LCWO = cudf::test::lists_column_wrapper<cudf::size_type>;
+  // Interior empty segment: offsets [0,3,3,7]; seg1=[3,3) empty.
+  // Seg0 desc top2: 30@1,20@2 ; seg2 desc top2: 50@3,45@5.
+  auto input   = cudf::test::fixed_width_column_wrapper<int32_t>({10, 30, 20, 50, 15, 45, 25});
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 3, 3, 7});
+  LCWO expected_order({LCWO{1, 2}, LCWO{}, LCWO{3, 5}});
+  auto result = cudf::segmented_top_k_order(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
 }
