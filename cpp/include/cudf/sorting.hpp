@@ -432,7 +432,7 @@ std::unique_ptr<column> top_k_order(
  * result is [[7,6,5]] // rows 0-2 and 10-12 are excluded
  * @endcode
  *
- * @throw std::invalid_argument if k less than or equal to zero
+ * @throw std::invalid_argument if k is negative
  * @throw cudf::data_type_error if segment_offsets is not size_type
  * @throw std::invalid_argument segments_offsets is empty or contains nulls
  *
@@ -479,7 +479,7 @@ std::unique_ptr<column> segmented_top_k(
  * result is [[9,8,7]] // rows 0-2 and 10-12 are excluded
  * @endcode
  *
- * @throw std::invalid_argument if k less than or equal to zero
+ * @throw std::invalid_argument if k is negative
  * @throw cudf::data_type_error if segment_offsets is not size_type
  * @throw std::invalid_argument segments_offsets is empty or contains nulls
  *
