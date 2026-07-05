@@ -1,0 +1,18 @@
+/*
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include "http_log_udf.cuh"
+
+extern "C" __device__ int transform(int32_t* method_size,
+                                    int32_t* path_size,
+                                    int32_t* version_size,
+                                    cudf::string_view input)
+{
+  auto const fields = http_log_udf::parse_medium(input);
+  *method_size      = fields.method.size();
+  *path_size        = fields.path.size();
+  *version_size     = fields.version.size();
+  return 0;
+}

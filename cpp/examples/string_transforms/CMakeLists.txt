@@ -21,6 +21,12 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
+# Build and embed the AOT CUDA fragments consumed by cudf::transform_lto.
+include(${CMAKE_CURRENT_LIST_DIR}/../../librtcx/embed.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/Modules/AddFragment.cmake)
+set(CUDF_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../..")
+set(CUDF_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
 # For now, disable CMake's automatic module scanning for C++ files. There is an sccache bug in the
 # version RAPIDS uses in CI that causes it to handle the resulting -M* flags incorrectly with
 # gcc>=14. We can remove this once we upgrade to a newer sccache version.
@@ -48,6 +54,35 @@ add_string_transforms_example(format_phone_precompiled format_phone_precompiled.
 add_string_transforms_example(localize_phone_jit localize_phone_jit.cpp)
 add_string_transforms_example(localize_phone_precompiled localize_phone_precompiled.cpp)
 
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
-        DESTINATION bin/examples/libcudf/string_transformers
+rtcx_add_embed(http_log_fragments)
+add_fragment(http_log_fragments FRAGMENT http_medium_sizes SOURCE
+             fragments/http_medium_sizes.cu)
+add_fragment(http_log_fragments FRAGMENT http_medium_output SOURCE
+             fragments/http_medium_output.cu)
+add_fragment(http_log_fragments FRAGMENT http_high_sizes SOURCE
+             fragments/http_high_sizes.cu)
+add_fragment(http_log_fragments FRAGMENT http_high_output SOURCE
+             fragments/http_high_output.cu)
+
+foreach(
+  fragment_target
+  http_log_fragments_http_medium_sizes http_log_fragments_http_medium_output
+  http_log_fragments_http_high_sizes http_log_fragments_http_high_output)
+  target_include_directories(${fragment_target}
+                             PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+endforeach()
+
+rtcx_embed(http_log_fragments COMPRESSION none OUTPUT_DIRECTORY
+           "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+
+add_string_transforms_example(
+  http_log_transforms
+  "http_log_transforms.cpp;${http_log_fragments_SOURCE_DIR}/http_log_fragments.s"
 )
+target_include_directories(http_log_transforms
+                           PRIVATE ${http_log_fragments_SOURCE_DIR})
+add_dependencies(http_log_transforms http_log_fragments)
+
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
+              ${CMAKE_CURRENT_LIST_DIR}/http_logs.csv
+        DESTINATION bin/examples/libcudf/string_transformers)
