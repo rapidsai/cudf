@@ -286,8 +286,8 @@ constexpr std::string_view usage =
                                   mr);
   } else {
     auto const id = selected_operation == operation::REQUEST_LINE
-                      ? http_log_fragments::http_request_line_sizes
-                      : http_log_fragments::http_combined_log_sizes;
+                      ? http_log_fragments::request_line_sizes
+                      : http_log_fragments::combined_log_sizes;
     sizes         = cudf::transform_lto(fragment(id),
                                 cudf::lto_binary_type::FATBIN,
                                 cudf::null_aware::NO,
@@ -323,8 +323,8 @@ constexpr std::string_view usage =
   }
 
   auto const id = selected_operation == operation::REQUEST_LINE
-                    ? http_log_fragments::http_request_line_output
-                    : http_log_fragments::http_combined_log_output;
+                    ? http_log_fragments::request_line_output
+                    : http_log_fragments::combined_log_output;
   return cudf::transform_lto(fragment(id),
                              cudf::lto_binary_type::FATBIN,
                              cudf::null_aware::NO,

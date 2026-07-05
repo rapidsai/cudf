@@ -15,4 +15,4 @@ Each result processes 1,000,000 rows. It is the mean of five independent process
 
 Effective bandwidth is `(input bytes + output bytes) / warm time`. Peak allocation and allocated-per-call are reported by the example's tracking memory resource; they are allocation metrics, not total device-resident memory. The precompiled implementation intentionally uses public non-JIT cuDF string and regex functions, while the JIT variants fuse parsing, sizing, and output construction.
 
-The machine-readable comparison is in [`http_log_performance.csv`](http_log_performance.csv).
+The machine-readable comparison is in [`performance.csv`](performance.csv).

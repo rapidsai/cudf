@@ -80,29 +80,29 @@ add_string_transforms_example(localize_phone_jit localize_phone_jit.cpp)
 add_string_transforms_example(localize_phone_precompiled localize_phone_precompiled.cpp)
 
 rtcx_add_embed(http_log_fragments)
-add_fragment(http_log_fragments FRAGMENT http_request_line_sizes SOURCE
-             fragments/http_request_line_sizes.cu)
-add_fragment(http_log_fragments FRAGMENT http_request_line_output SOURCE
-             fragments/http_request_line_output.cu)
-add_fragment(http_log_fragments FRAGMENT http_combined_log_sizes SOURCE
-             fragments/http_combined_log_sizes.cu)
-add_fragment(http_log_fragments FRAGMENT http_combined_log_output SOURCE
-             fragments/http_combined_log_output.cu)
+add_fragment(http_log_fragments FRAGMENT request_line_sizes SOURCE
+             http_logs/fragments/request_line_sizes.cu)
+add_fragment(http_log_fragments FRAGMENT request_line_output SOURCE
+             http_logs/fragments/request_line_output.cu)
+add_fragment(http_log_fragments FRAGMENT combined_log_sizes SOURCE
+             http_logs/fragments/combined_log_sizes.cu)
+add_fragment(http_log_fragments FRAGMENT combined_log_output SOURCE
+             http_logs/fragments/combined_log_output.cu)
 
 foreach(
   fragment_target
-  http_log_fragments_http_request_line_sizes
-  http_log_fragments_http_request_line_output
-  http_log_fragments_http_combined_log_sizes
-  http_log_fragments_http_combined_log_output)
+  http_log_fragments_request_line_sizes
+  http_log_fragments_request_line_output
+  http_log_fragments_combined_log_sizes
+  http_log_fragments_combined_log_output)
   target_include_directories(${fragment_target}
-                             PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+                             PRIVATE ${CMAKE_CURRENT_LIST_DIR}/http_logs)
 endforeach()
 
 rtcx_embed(http_log_fragments COMPRESSION none OUTPUT_DIRECTORY
            "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
-add_string_transforms_example(http_log_transforms http_log_transforms.cpp)
+add_string_transforms_example(http_log_transforms http_logs/transforms.cpp)
 target_sources(
   http_log_transforms PRIVATE ${http_log_fragments_SOURCE_DIR}/http_log_fragments.s
 )
@@ -111,5 +111,5 @@ target_include_directories(http_log_transforms
 add_dependencies(http_log_transforms http_log_fragments)
 
 install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
-              ${CMAKE_CURRENT_LIST_DIR}/http_logs.csv
+              ${CMAKE_CURRENT_LIST_DIR}/http_logs/logs.csv
         DESTINATION bin/examples/libcudf/string_transformers)

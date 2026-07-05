@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "http_log_udf.cuh"
+#include "udf.cuh"
 
 extern "C" __device__ int transform(int32_t* client_ip_size,
                                     int32_t* timestamp_size,
