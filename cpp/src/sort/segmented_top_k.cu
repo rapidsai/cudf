@@ -51,7 +51,7 @@ CUDF_KERNEL void resolve_segment_indices(device_span<size_type const> d_offsets,
   if (tid >= d_indices.size()) { return; }
 
   auto const sitr = thrust::upper_bound(thrust::seq, d_offsets.begin(), d_offsets.end(), tid);
-  // mark rows outside all segments for removal (offsets need not cover all rows)
+  // Mark rows outside all segments for removal (offsets need not cover all rows).
   if (sitr == d_offsets.begin() || sitr == d_offsets.end()) {
     d_indices[tid] = -1;
     return;
