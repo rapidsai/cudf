@@ -4,6 +4,7 @@
 /.agents/
 /.codex/
 /docs/build/
+/docs/_static/benchmarks/
 /install/
 CMakeUserPresets.json
 compile_commands.json

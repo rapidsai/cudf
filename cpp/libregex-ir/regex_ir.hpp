@@ -48,8 +48,8 @@ enum class diagnostic_code : std::uint8_t {
  */
 struct diagnostic {
   diagnostic_code code = diagnostic_code::UNEXPECTED_END;  ///< Diagnostic category
-  source_span span     = {};                               ///< Related source range
-  std::string message  = {};                               ///< Human-readable explanation
+  source_span span     = source_span{};                    ///< Related source range
+  std::string message  = "";                               ///< Human-readable explanation
 };
 
 }  // namespace regex_ir
@@ -88,7 +88,7 @@ struct compile_options {
   bool ascii_classes    : 1 = true;   ///< Restrict predefined classes to ASCII characters
   bool extended_newline : 1 = false;  ///< Recognize CR, NEL, LS, and PS as line terminators
   character_mode characters = character_mode::UTF8;  ///< Input character decoding mode
-  compile_limits limits     = {};                    ///< Compilation resource limits
+  compile_limits limits     = compile_limits{};      ///< Compilation resource limits
 };
 
 /**
@@ -109,7 +109,7 @@ enum class operation_kind : std::uint8_t {
  */
 struct operation {
   operation_kind kind     = operation_kind::MATCHES;  ///< Selected operation
-  std::string replacement = {};                       ///< Replacement template for `REPLACE`
+  std::string replacement = "";                       ///< Replacement template for `REPLACE`
 
   /**
    * @brief Create a boolean operation that searches for the first match
@@ -223,7 +223,7 @@ enum class predicate_class : std::uint8_t {
  * @brief Normalized predicate evaluated by a consuming automata state
  */
 struct character_predicate {
-  std::vector<codepoint_range> ranges = {};  ///< Sorted inclusive code-point ranges
+  std::vector<codepoint_range> ranges = std::vector<codepoint_range>{};  ///< Sorted ranges
   predicate_class recognized          = predicate_class::NONE;  ///< Original shorthand category
   bool negated          : 1           = false;                  ///< Invert range membership
   bool matches_newline  : 1           = true;  ///< Whether dot accepts configured line terminators
@@ -296,26 +296,26 @@ struct automata_edge {
  * @brief One node in an ordered Thompson automaton
  */
 struct automata_state {
-  state_id id                      = invalid_state;                ///< Dense state identifier
-  automata_state_kind kind         = automata_state_kind::JUMP;    ///< State operation
-  source_span source               = {};                           ///< Related pattern range
-  std::vector<automata_edge> edges = {};                           ///< Ordered outgoing edges
-  character_predicate predicate    = {};                           ///< Predicate for `CONSUME`
-  assertion_kind assertion         = assertion_kind::BEGIN_INPUT;  ///< Assertion for `ASSERTION`
-  capture_action capture           = capture_action::BEGIN;        ///< Action for `CAPTURE`
-  std::uint32_t capture_index      = 0;                            ///< Capture index for `CAPTURE`
+  state_id id                      = invalid_state;                 ///< Dense state identifier
+  automata_state_kind kind         = automata_state_kind::JUMP;     ///< State operation
+  source_span source               = source_span{};                 ///< Related pattern range
+  std::vector<automata_edge> edges = std::vector<automata_edge>{};  ///< Ordered outgoing edges
+  character_predicate predicate    = character_predicate{};         ///< Predicate for `CONSUME`
+  assertion_kind assertion         = assertion_kind::BEGIN_INPUT;   ///< Assertion for `ASSERTION`
+  capture_action capture           = capture_action::BEGIN;         ///< Action for `CAPTURE`
+  std::uint32_t capture_index      = 0;                             ///< Capture index for `CAPTURE`
 };
 
 /**
  * @brief Ordered Thompson automaton produced from a regular expression
  */
 struct automata_ir {
-  std::string pattern                = {};             ///< Original UTF-8 pattern bytes
-  compile_options options            = {};             ///< Options used to parse the pattern
-  std::vector<automata_state> states = {};             ///< Dense state table
-  state_id entry                     = invalid_state;  ///< Entry state
-  state_id accept                    = invalid_state;  ///< Unique accepting state
-  std::uint32_t capture_count        = 0;              ///< Number of explicit capture groups
+  std::string pattern                = "";                             ///< Original UTF-8 pattern
+  compile_options options            = compile_options{};              ///< Parse options
+  std::vector<automata_state> states = std::vector<automata_state>{};  ///< Dense states
+  state_id entry                     = invalid_state;                  ///< Entry state
+  state_id accept                    = invalid_state;                  ///< Unique accepting state
+  std::uint32_t capture_count        = 0;  ///< Number of explicit capture groups
 };
 
 /**
@@ -368,14 +368,14 @@ struct read_character {};
  * @brief Test the current character against a predicate
  */
 struct match_character {
-  character_predicate predicate = {};  ///< Predicate that must match
+  character_predicate predicate = character_predicate{};  ///< Predicate that must match
 };
 
 /**
  * @brief Test consecutive characters against a fixed literal
  */
 struct match_literal {
-  std::u32string value = {};  ///< Literal Unicode code points
+  std::u32string value = std::u32string{};  ///< Literal Unicode code points
 };
 
 /**
@@ -429,10 +429,10 @@ struct block_edge {
  * @brief Straight-line instruction sequence with ordered successors
  */
 struct instruction_block {
-  block_id id                           = invalid_block;  ///< Dense block identifier
-  source_span source                    = {};             ///< Related pattern range
-  std::vector<instruction> instructions = {};             ///< Instructions executed in order
-  std::vector<block_edge> successors    = {};             ///< Ordered control-flow successors
+  block_id id                           = invalid_block;               ///< Dense block identifier
+  source_span source                    = source_span{};               ///< Related pattern range
+  std::vector<instruction> instructions = std::vector<instruction>{};  ///< Instructions
+  std::vector<block_edge> successors    = std::vector<block_edge>{};   ///< Ordered successors
 };
 
 /**
@@ -448,7 +448,7 @@ struct replacement_token {
   };
 
   kind type                   = kind::LITERAL;  ///< Token category
-  std::string literal         = {};             ///< Bytes for a literal token
+  std::string literal         = "";             ///< Bytes for a literal token
   std::uint32_t capture_index = 0;              ///< Capture index for a capture token
 };
 
@@ -491,16 +491,16 @@ struct ir_metrics {
  * @brief Typed operation-specialized control-flow IR
  */
 struct instruction_ir {
-  std::string pattern                        = {};             ///< Original UTF-8 pattern bytes
-  compile_options options                    = {};             ///< Options used for compilation
-  operation selected_operation               = {};             ///< Operation encoded by this IR
-  operation_control control                  = {};             ///< Execution policy
-  std::vector<instruction_block> blocks      = {};             ///< Dense block table
-  block_id entry                             = invalid_block;  ///< Entry block
+  std::string pattern                        = "";                   ///< Original UTF-8 pattern
+  compile_options options                    = compile_options{};    ///< Compilation options
+  operation selected_operation               = operation{};          ///< Encoded operation
+  operation_control control                  = operation_control{};  ///< Execution policy
+  std::vector<instruction_block> blocks      = std::vector<instruction_block>{};  ///< Dense blocks
+  block_id entry                             = invalid_block;                     ///< Entry block
   block_id accept                            = invalid_block;  ///< Block containing acceptance
   std::uint32_t capture_count                = 0;              ///< Explicit capture count
-  std::vector<replacement_token> replacement = {};             ///< Parsed replacement template
-  ir_metrics metrics                         = {};             ///< Static graph metrics
+  std::vector<replacement_token> replacement = std::vector<replacement_token>{};  ///< Template
+  ir_metrics metrics                         = ir_metrics{};  ///< Static graph metrics
 };
 
 /**
@@ -540,21 +540,33 @@ struct nvvm_ir_codegen_options {
 [[nodiscard]] ir_metrics measure(instruction_ir const& ir);
 
 /**
- * @brief Generate NVVM IR for a boolean or capture-enumeration regex operation
+ * @brief Generate operation-specialized NVVM IR for a regex operation
  *
  * the returned module is self-contained device code with a public function named by
  * `options.execute_function` and prefixed internal symbols. NVVM IR uses LLVM syntax but follows
  * NVIDIA's stricter NVVM target contract. Assertion-free contains and matches graphs are
  * determinized into a bounded Unicode-class transition table; other valid boolean graphs use the
- * ordered fallback executor. Boolean functions have the ABI `i1(i8*, i64)`. Extract functions use
- * `i1(i8*, i64, i64, i64*)`, where the third argument is the first search byte and the final
- * argument receives begin/end pairs for the whole match followed by each explicit capture.
+ * ordered fallback executor. The generated ABI is selected by the operation:
+ * exact one-byte ASCII global operations use a direct byte scan, and non-scanning deterministic
+ * machines reject immediately after entering their dead state.
  *
- * @param ir Optimized boolean Instruction IR to render
+ * - contains and matches: `i1(i8*, i64)`;
+ * - find: `i1(i8*, i64, i64*)`, with one begin/end pair in the final argument;
+ * - count: `i64(i8*, i64)`;
+ * - extract: `i1(i8*, i64, i64, i64*)`, with a search byte followed by storage for the whole
+ *   match and explicit capture pairs;
+ * - replace: `i64(i8*, i64, i8*)`, returning the result byte count and writing the result when
+ *   the final argument is non-null; and
+ * - split: `i64(i8*, i64, i64*)`, returning the field count and writing field begin/end pairs
+ *   when the final argument is non-null.
+ *
+ * passing a null output to replace or split performs a sizing pass without materialization.
+ * replacement output storage must not overlap the input range.
+ *
+ * @param ir Optimized operation-specialized Instruction IR to render
  * @param options Symbol names and optimization hints
  * @return Textual NVVM IR accepted by libNVVM
- * @throw std::invalid_argument If the IR is invalid, a symbol is invalid, or the selected operation
- * does not produce a boolean or capture result
+ * @throw std::invalid_argument If the IR or a requested symbol name is invalid
  */
 [[nodiscard]] std::string generate_nvvm_ir(instruction_ir const& ir,
                                            nvvm_ir_codegen_options const& options = {});
@@ -572,8 +584,8 @@ namespace regex_ir {
  */
 template <typename T>
 struct result {
-  std::optional<T> value              = {};  ///< Compiled value when the stage succeeds
-  std::vector<diagnostic> diagnostics = {};  ///< Diagnostics emitted by the stage
+  std::optional<T> value              = std::nullopt;               ///< Compiled value
+  std::vector<diagnostic> diagnostics = std::vector<diagnostic>{};  ///< Diagnostics
 
   /**
    * @brief Check whether this result contains a compiled value
@@ -672,13 +684,15 @@ struct match_span {
  * not a production host regex runtime.
  */
 struct execution_result {
-  bool matched                                                        = false;  ///< Any match
-  std::size_t count                                                   = 0;      ///< Match count
-  std::vector<match_span> matches                                     = {};     ///< Match spans
-  std::vector<std::optional<match_span>> captures                     = {};     ///< First captures
-  std::vector<std::vector<std::optional<match_span>>> capture_matches = {};     ///< All captures
-  std::vector<std::string> pieces                                     = {};     ///< Split fields
-  std::string replaced                                                = {};  ///< Replacement result
+  bool matched                    = false;                      ///< Any match
+  std::size_t count               = 0;                          ///< Match count
+  std::vector<match_span> matches = std::vector<match_span>{};  ///< Match spans
+  std::vector<std::optional<match_span>> captures =
+    std::vector<std::optional<match_span>>{};  ///< First captures
+  std::vector<std::vector<std::optional<match_span>>> capture_matches =
+    std::vector<std::vector<std::optional<match_span>>>{};       ///< All captures
+  std::vector<std::string> pieces = std::vector<std::string>{};  ///< Split fields
+  std::string replaced            = "";                          ///< Replacement result
 };
 
 /**

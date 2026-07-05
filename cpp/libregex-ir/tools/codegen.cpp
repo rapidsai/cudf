@@ -9,13 +9,14 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
 
 struct options {
   regex_ir::operation operation     = regex_ir::operation::contains();
-  regex_ir::compile_options compile = {};
+  regex_ir::compile_options compile = regex_ir::compile_options{};
   std::string symbol_prefix         = "regex_ir_generated";
   std::string execute_function      = "regex_ir_execute";
   bool prefix_filter : 1            = true;
@@ -27,7 +28,9 @@ void usage(char const* executable)
   std::cout << "usage: " << executable << " [OPTIONS] PATTERN\n\n"
             << "Generate CUDA-oriented NVVM IR on standard output.\n\n"
             << "Options:\n"
-            << "  -o, --operation NAME  contains, matches, or extract (default: contains)\n"
+            << "  -o, --operation NAME  contains, matches, find, count, extract, or split\n"
+            << "                        (default: contains)\n"
+            << "  --replace TEXT        select replace mode with replacement TEXT\n"
             << "  --symbol-prefix NAME  prefix for generated internal symbols\n"
             << "  --execute-function N  generated NVVM entry function name\n"
             << "  --no-prefix-filter    disable recursive-fallback prefix filtering\n"
@@ -72,13 +75,24 @@ int main(int argc, char** argv)
     if (argument == "-o" || argument == "--operation") {
       std::string value;
       if (!take_value(index, argc, argv, value) ||
-          (value != "contains" && value != "matches" && value != "extract")) {
-        std::cerr << "--operation requires contains, matches, or extract\n";
+          (value != "contains" && value != "matches" && value != "find" && value != "count" &&
+           value != "extract" && value != "split")) {
+        std::cerr << "--operation requires contains, matches, find, count, extract, or split\n";
         return 2;
       }
       if (value == "contains") parsed.operation = regex_ir::operation::contains();
       if (value == "matches") parsed.operation = regex_ir::operation::matches();
+      if (value == "find") parsed.operation = regex_ir::operation::find();
+      if (value == "count") parsed.operation = regex_ir::operation::count();
       if (value == "extract") parsed.operation = regex_ir::operation::extract();
+      if (value == "split") parsed.operation = regex_ir::operation::split();
+    } else if (argument == "--replace") {
+      std::string value;
+      if (!take_value(index, argc, argv, value)) {
+        std::cerr << "--replace requires replacement text\n";
+        return 2;
+      }
+      parsed.operation = regex_ir::operation::replace(std::move(value));
     } else if (argument == "--symbol-prefix") {
       if (!take_value(index, argc, argv, parsed.symbol_prefix)) {
         std::cerr << "--symbol-prefix requires a name\n";

@@ -10,6 +10,12 @@ default. Clearing `compile_options::ascii_classes` selects the compressed cuDF
 Unicode tables through U+FFFF; non-word/non-digit complements continue through
 the Unicode scalar range.
 
+ASCII POSIX bracket classes are accepted inside character classes: `alpha`,
+`alnum`, `digit`, `xdigit`, `space`, `word`, and `punct`. `\p{Sm}` and
+`\P{Sm}` select or complement the Unicode mathematical-symbol general
+category. Other Unicode property names return an unsupported-feature
+diagnostic.
+
 Dot excludes line feed by default. Extended-newline mode additionally excludes
 carriage return, NEL, line separator, and paragraph separator. `dot_all`
 accepts every scalar in either mode.

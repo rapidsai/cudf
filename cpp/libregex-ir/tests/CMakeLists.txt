@@ -23,17 +23,44 @@ find_library(REGEX_IR_NVJITLINK_LIBRARY
 include(${PROJECT_SOURCE_DIR}/cmake/EmbedCudaLto.cmake)
 
 set(REGEX_IR_KERNEL_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated)
+set(REGEX_IR_FRAGMENT_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/fragments)
 regex_ir_embed_cuda_lto(
   REGEX_IR_BOOLEAN_KERNEL
   regex_ir_boolean_kernel
-  ${CMAKE_CURRENT_SOURCE_DIR}/regex_ir_execute_kernel.cu
+  ${REGEX_IR_FRAGMENT_DIRECTORY}/regex_ir_boolean_kernel.cu
   regex_ir_boolean_kernel_fatbin)
 regex_ir_embed_cuda_lto(
   REGEX_IR_CAPTURE_KERNEL
   regex_ir_capture_kernel
-  ${CMAKE_CURRENT_SOURCE_DIR}/regex_ir_capture_kernel.cu
+  ${REGEX_IR_FRAGMENT_DIRECTORY}/regex_ir_capture_kernel.cu
   regex_ir_capture_kernel_fatbin)
-set(REGEX_IR_EMBEDDED_KERNELS ${REGEX_IR_BOOLEAN_KERNEL} ${REGEX_IR_CAPTURE_KERNEL})
+regex_ir_embed_cuda_lto(
+  REGEX_IR_FIND_KERNEL
+  regex_ir_find_kernel
+  ${REGEX_IR_FRAGMENT_DIRECTORY}/regex_ir_find_kernel.cu
+  regex_ir_find_kernel_fatbin)
+regex_ir_embed_cuda_lto(
+  REGEX_IR_COUNT_KERNEL
+  regex_ir_count_kernel
+  ${REGEX_IR_FRAGMENT_DIRECTORY}/regex_ir_count_kernel.cu
+  regex_ir_count_kernel_fatbin)
+regex_ir_embed_cuda_lto(
+  REGEX_IR_REPLACE_KERNEL
+  regex_ir_replace_kernel
+  ${REGEX_IR_FRAGMENT_DIRECTORY}/regex_ir_replace_kernel.cu
+  regex_ir_replace_kernel_fatbin)
+regex_ir_embed_cuda_lto(
+  REGEX_IR_SPLIT_KERNEL
+  regex_ir_split_kernel
+  ${REGEX_IR_FRAGMENT_DIRECTORY}/regex_ir_split_kernel.cu
+  regex_ir_split_kernel_fatbin)
+set(REGEX_IR_EMBEDDED_KERNELS
+  ${REGEX_IR_BOOLEAN_KERNEL}
+  ${REGEX_IR_CAPTURE_KERNEL}
+  ${REGEX_IR_FIND_KERNEL}
+  ${REGEX_IR_COUNT_KERNEL}
+  ${REGEX_IR_REPLACE_KERNEL}
+  ${REGEX_IR_SPLIT_KERNEL})
 
 add_custom_target(regex_ir_test_kernels DEPENDS ${REGEX_IR_EMBEDDED_KERNELS})
 
@@ -60,14 +87,30 @@ include(GoogleTest)
 gtest_discover_tests(regex_ir_tests TEST_PREFIX "regex_ir.unit.")
 
 if(TARGET regex_ir_explorer)
-  add_test(NAME regex_ir.explorer_smoke
-    COMMAND regex_ir_explorer --ir --operation find "a(b|c)+")
+  foreach(REGEX_IR_EXPLORER_OPERATION IN ITEMS contains match find count extract split)
+    add_test(NAME regex_ir.explorer_${REGEX_IR_EXPLORER_OPERATION}
+      COMMAND regex_ir_explorer --ir
+              --operation ${REGEX_IR_EXPLORER_OPERATION} "a(b|c)+")
+  endforeach()
+  add_test(NAME regex_ir.explorer_replace
+    COMMAND regex_ir_explorer --ir --operation replace
+            --replacement "<$1>" "a(b|c)+")
+  add_test(NAME regex_ir.explorer_contains_execute
+    COMMAND regex_ir_explorer --ir [=[contains("[0-9]", 12834)]=])
+  set_tests_properties(regex_ir.explorer_contains_execute
+    PROPERTIES PASS_REGULAR_EXPRESSION "contains = true")
   add_test(NAME regex_ir.explorer_help COMMAND regex_ir_explorer --help)
 endif()
 
 if(TARGET regex_ir_codegen)
   add_test(NAME regex_ir.codegen_nvvm
     COMMAND regex_ir_codegen --execute-function smoke_execute "a(b|c)+")
+  add_test(NAME regex_ir.codegen_count
+    COMMAND regex_ir_codegen --operation count "a+")
+  add_test(NAME regex_ir.codegen_replace
+    COMMAND regex_ir_codegen --replace "<$1>" "(a+)")
+  add_test(NAME regex_ir.codegen_split
+    COMMAND regex_ir_codegen --operation split "[,;]+")
   add_test(NAME regex_ir.codegen_empty COMMAND regex_ir_codegen "")
   add_test(NAME regex_ir.codegen_help COMMAND regex_ir_codegen --help)
 endif()

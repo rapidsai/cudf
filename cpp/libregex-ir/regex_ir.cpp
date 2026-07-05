@@ -44,10 +44,10 @@ enum class node_kind : std::uint8_t {
 
 struct node {
   node_kind kind                              = node_kind::EMPTY;
-  source_span source                          = {};
-  character_predicate predicate               = {};
+  source_span source                          = source_span{};
+  character_predicate predicate               = character_predicate{};
   assertion_kind assertion                    = assertion_kind::BEGIN_INPUT;
-  std::vector<std::unique_ptr<node>> children = {};
+  std::vector<std::unique_ptr<node>> children = std::vector<std::unique_ptr<node>>{};
   std::uint32_t minimum                       = 0;
   std::uint32_t maximum                       = 0;
   bool greedy                                 = true;
@@ -70,6 +70,31 @@ bool can_consume_character(node const& value)
     case node_kind::REPEAT: return can_consume_character(*value.children.front());
   }
   return false;
+}
+
+bool is_unconditional_empty(node const& value)
+{
+  switch (value.kind) {
+    case node_kind::EMPTY: return true;
+    case node_kind::GROUP: return is_unconditional_empty(*value.children.front());
+    case node_kind::CONCATENATE:
+    case node_kind::ALTERNATE:
+      return std::all_of(value.children.begin(), value.children.end(), [](auto& child) {
+        return is_unconditional_empty(*child);
+      });
+    case node_kind::PREDICATE:
+    case node_kind::REPEAT:
+    case node_kind::ASSERTION: return false;
+  }
+  return false;
+}
+
+bool contains_capture(node const& value)
+{
+  if (value.kind == node_kind::GROUP && value.capturing) return true;
+  return std::any_of(value.children.begin(), value.children.end(), [](auto& child) {
+    return contains_capture(*child);
+  });
 }
 
 void normalize_ranges(character_predicate& predicate)
@@ -131,6 +156,30 @@ void remove_codepoint(std::vector<codepoint_range>& ranges, char32_t value)
   ranges = std::move(result);
 }
 
+bool append_posix_class(character_predicate& predicate, std::string_view name)
+{
+  if (name == "alpha") {
+    predicate.ranges.insert(predicate.ranges.end(), {{U'A', U'Z'}, {U'a', U'z'}});
+  } else if (name == "alnum") {
+    predicate.ranges.insert(predicate.ranges.end(), {{U'0', U'9'}, {U'A', U'Z'}, {U'a', U'z'}});
+  } else if (name == "digit") {
+    predicate.ranges.push_back({U'0', U'9'});
+  } else if (name == "xdigit") {
+    predicate.ranges.insert(predicate.ranges.end(), {{U'0', U'9'}, {U'A', U'F'}, {U'a', U'f'}});
+  } else if (name == "space") {
+    predicate.ranges.insert(predicate.ranges.end(), {{U'\t', U'\r'}, {U' ', U' '}});
+  } else if (name == "word") {
+    predicate.ranges.insert(predicate.ranges.end(),
+                            {{U'0', U'9'}, {U'A', U'Z'}, {U'_', U'_'}, {U'a', U'z'}});
+  } else if (name == "punct") {
+    predicate.ranges.insert(predicate.ranges.end(),
+                            {{U'!', U'/'}, {U':', U'@'}, {U'[', U'`'}, {U'{', U'~'}});
+  } else {
+    return false;
+  }
+  return true;
+}
+
 char32_t swap_case(char32_t value)
 {
   static std::locale locale{"C.UTF-8"};
@@ -167,7 +216,7 @@ class parser {
     return expression;
   }
 
-  std::vector<diagnostic> diagnostics = {};
+  std::vector<diagnostic> diagnostics = std::vector<diagnostic>{};
   std::uint32_t capture_count         = 0;
 
  private:
@@ -286,6 +335,15 @@ class parser {
     }
 
     if (!quantified) { return atom; }
+    auto greedy = !consume('?');
+    if (peek() == '*' || peek() == '+' || peek() == '?' || peek() == '{') {
+      fail(diagnostic_code::INVALID_QUANTIFIER, {position_, 1}, "multiple repeat operators");
+    }
+    if (is_unconditional_empty(*atom) && !contains_capture(*atom)) {
+      // repeating an unconditional empty expression is still empty
+      atom->source.length = position_ - start;
+      return atom;
+    }
     if (!can_consume_character(*atom)) {
       fail(diagnostic_code::INVALID_QUANTIFIER,
            {start, position_ - start},
@@ -295,11 +353,8 @@ class parser {
     result->children.push_back(std::move(atom));
     result->minimum       = minimum;
     result->maximum       = maximum;
-    result->greedy        = !consume('?');
+    result->greedy        = greedy;
     result->source.length = position_ - start;
-    if (peek() == '*' || peek() == '+' || peek() == '?' || peek() == '{') {
-      fail(diagnostic_code::INVALID_QUANTIFIER, {position_, 1}, "multiple repeat operators");
-    }
     return result;
   }
 
@@ -448,8 +503,31 @@ class parser {
       return result;
     }
     auto result = make(node_kind::PREDICATE, start);
-    if (value == 'd' || value == 'D' || value == 'w' || value == 'W' || value == 's' ||
-        value == 'S') {
+    if (value == 'p' || value == 'P') {
+      if (!consume('{')) {
+        fail(diagnostic_code::INVALID_ESCAPE, {start, position_ - start}, "missing property name");
+      }
+      auto property_begin = position_;
+      while (!at_end() && peek() != '}')
+        static_cast<void>(take());
+      if (!consume('}')) {
+        fail(diagnostic_code::INVALID_ESCAPE,
+             {start, position_ - start},
+             "unterminated Unicode property");
+      }
+      auto property = pattern_.substr(property_begin, position_ - property_begin - 1U);
+      if (property != "Sm") {
+        fail(diagnostic_code::UNSUPPORTED_FEATURE,
+             {start, position_ - start},
+             "unsupported Unicode property");
+      }
+      append_unicode_ranges(result->predicate, unicode_math_symbol_ranges);
+      if (value == 'P') {
+        result->predicate.ranges = complement_ranges(std::move(result->predicate.ranges));
+      }
+      normalize_ranges(result->predicate);
+    } else if (value == 'd' || value == 'D' || value == 'w' || value == 'W' || value == 's' ||
+               value == 'S') {
       result->predicate = predefined(value);
     } else {
       if (std::isalpha(static_cast<unsigned char>(value)) != 0 && value != 'a' && value != 'b' &&
@@ -489,6 +567,28 @@ class parser {
         break;
       }
       first = false;
+      if (peek() == '[' && position_ + 1U < pattern_.size() && pattern_[position_ + 1U] == ':') {
+        auto class_start = position_;
+        position_ += 2U;
+        auto name_start = position_;
+        while (position_ + 1U < pattern_.size() &&
+               !(pattern_[position_] == ':' && pattern_[position_ + 1U] == ']')) {
+          ++position_;
+        }
+        if (position_ + 1U >= pattern_.size()) {
+          fail(diagnostic_code::INVALID_CHARACTER_CLASS,
+               {class_start, position_ - class_start},
+               "unterminated POSIX character class");
+        }
+        auto name = pattern_.substr(name_start, position_ - name_start);
+        position_ += 2U;
+        if (!append_posix_class(result->predicate, name)) {
+          fail(diagnostic_code::UNSUPPORTED_FEATURE,
+               {class_start, position_ - class_start},
+               "unsupported POSIX character class");
+        }
+        continue;
+      }
       char32_t lower{};
       if (consume('\\')) {
         auto escaped = parse_escape(true);
@@ -632,7 +732,7 @@ struct patch_reference {
 };
 struct fragment {
   state_id start                    = invalid_state;
-  std::vector<patch_reference> outs = {};
+  std::vector<patch_reference> outs = std::vector<patch_reference>{};
 };
 
 class thompson_builder {
@@ -643,8 +743,8 @@ class thompson_builder {
     ir.options = options;
   }
 
-  automata_ir ir                      = {};
-  std::vector<diagnostic> diagnostics = {};
+  automata_ir ir                      = automata_ir{};
+  std::vector<diagnostic> diagnostics = std::vector<diagnostic>{};
 
   fragment build(node const& expression)
   {
@@ -1123,14 +1223,14 @@ bool assertion_matches(assertion_kind kind,
 }
 
 struct capture_value {
-  std::optional<std::size_t> begin = {};
-  std::optional<std::size_t> end   = {};
+  std::optional<std::size_t> begin = std::nullopt;
+  std::optional<std::size_t> end   = std::nullopt;
 };
 
 struct found_match {
   std::size_t begin                   = 0;
   std::size_t end                     = 0;
-  std::vector<capture_value> captures = {};
+  std::vector<capture_value> captures = std::vector<capture_value>{};
 };
 
 bool run_block(instruction_ir const& ir,
@@ -1680,11 +1780,6 @@ instruction_result compile(std::string_view pattern,
 namespace regex_ir {
 namespace {
 
-bool observes_captures(operation_kind kind)
-{
-  return kind == operation_kind::EXTRACT || kind == operation_kind::REPLACE;
-}
-
 std::optional<char32_t> singleton(instruction_block const& block)
 {
   for (auto& item : block.instructions) {
@@ -1698,12 +1793,21 @@ std::optional<char32_t> singleton(instruction_block const& block)
 
 void strip_captures(instruction_ir& ir)
 {
-  if (observes_captures(ir.selected_operation.kind)) return;
+  std::vector<bool> observed(ir.capture_count + 1U, false);
+  if (ir.selected_operation.kind == operation_kind::EXTRACT) {
+    std::fill(observed.begin(), observed.end(), true);
+  } else if (ir.selected_operation.kind == operation_kind::REPLACE) {
+    for (auto& token : ir.replacement) {
+      if (token.type == replacement_token::kind::CAPTURE) { observed[token.capture_index] = true; }
+    }
+  }
   for (auto& block : ir.blocks) {
     block.instructions.erase(std::remove_if(block.instructions.begin(),
                                             block.instructions.end(),
-                                            [](instruction const& item) {
-                                              return std::holds_alternative<write_capture>(item);
+                                            [&](instruction const& item) {
+                                              auto* capture = std::get_if<write_capture>(&item);
+                                              return capture != nullptr &&
+                                                     !observed[capture->capture_index];
                                             }),
                              block.instructions.end());
   }
@@ -1840,7 +1944,7 @@ class source_buffer {
   }
 
   template <typename... Args>
-  void line(fmt::format_string<Args...> format, Args&&... args)
+  void emit(fmt::format_string<Args...> format, Args&&... args)
   {
     append(format, std::forward<Args>(args)...);
     value_ += '\n';
@@ -1850,7 +1954,7 @@ class source_buffer {
   [[nodiscard]] std::string take() { return std::move(value_); }
 
  private:
-  std::string value_ = {};
+  std::string value_ = "";
 };
 
 void require_identifier(std::string_view value, std::string_view field)
@@ -1884,10 +1988,24 @@ std::string nvvm_symbol(std::string_view prefix, std::string_view suffix)
 }
 
 struct deterministic_nfa_node {
-  character_predicate predicate    = {};
-  std::vector<std::size_t> targets = {};
-  bool consumes : 1                = false;
-  bool accepts  : 1                = false;
+  character_predicate predicate           = character_predicate{};
+  std::vector<std::size_t> targets        = std::vector<std::size_t>{};
+  std::optional<write_capture> capture    = std::nullopt;
+  std::optional<assertion_kind> assertion = std::nullopt;
+  bool consumes : 1                       = false;
+  bool accepts  : 1                       = false;
+};
+
+struct deterministic_nfa_graph {
+  std::vector<deterministic_nfa_node> nodes = std::vector<deterministic_nfa_node>{};
+  std::size_t entry                         = 0;
+};
+
+struct deterministic_capture_action {
+  std::uint32_t slot = 0;
+  bool reset_end : 1 = false;
+
+  bool operator==(deterministic_capture_action const&) const = default;
 };
 
 struct deterministic_interval {
@@ -1897,13 +2015,27 @@ struct deterministic_interval {
 };
 
 struct deterministic_machine {
-  std::array<std::uint16_t, 256> byte_classes           = {};
-  std::vector<deterministic_interval> unicode_intervals = {};
-  std::vector<std::uint16_t> transitions                = {};
-  std::uint16_t initial_state                           = 0;
-  std::uint16_t class_count                             = 0;
-  std::uint16_t state_count                             = 0;
-  bool scan_input : 1                                   = false;
+  std::array<std::uint16_t, 256> byte_classes           = std::array<std::uint16_t, 256>{};
+  std::vector<deterministic_interval> unicode_intervals = std::vector<deterministic_interval>{};
+  std::vector<std::uint16_t> transitions                = std::vector<std::uint16_t>{};
+  std::vector<std::vector<deterministic_capture_action>> transition_capture_actions =
+    std::vector<std::vector<deterministic_capture_action>>{};
+  std::vector<std::vector<deterministic_capture_action>> accept_capture_actions =
+    std::vector<std::vector<deterministic_capture_action>>{};
+  std::vector<std::uint8_t> boundary_accepts     = std::vector<std::uint8_t>{};
+  std::uint16_t initial_state                    = 0;
+  std::uint16_t dead_state                       = 0;
+  std::uint16_t class_count                      = 0;
+  std::uint16_t state_count                      = 0;
+  std::uint16_t state_mask                       = 16383;
+  std::uint8_t transition_address_space          = 4;
+  std::uint8_t boundary_class_count              = 0;
+  std::uint8_t assertion_mask                    = 0;
+  std::optional<assertion_kind> accept_assertion = std::nullopt;
+  bool scan_input       : 1                      = false;
+  bool accept_at_end    : 1                      = false;
+  bool capture_one_pass : 1                      = false;
+  bool assertion_aware  : 1                      = false;
 };
 
 void set_machine_bit(std::vector<std::uint64_t>& bits, std::size_t index)
@@ -1923,10 +2055,344 @@ character_predicate singleton_predicate(char32_t value)
   return result;
 }
 
-std::optional<deterministic_machine> make_deterministic_machine(instruction_ir const& ir)
+std::optional<deterministic_nfa_graph> make_deterministic_graph(instruction_ir const& ir)
 {
-  if (ir.selected_operation.kind != operation_kind::CONTAINS &&
-      ir.selected_operation.kind != operation_kind::MATCHES) {
+  if (ir.entry >= ir.blocks.size()) return std::nullopt;
+  std::vector<std::size_t> block_starts(ir.blocks.size());
+  std::vector<std::size_t> block_lengths(ir.blocks.size(), 1);
+  std::size_t node_count = 0;
+  for (auto& block : ir.blocks) {
+    match_character const* match    = nullptr;
+    match_literal const* literal    = nullptr;
+    can_peek const* peek            = nullptr;
+    advance_cursor const* advance   = nullptr;
+    test_assertion const* assertion = nullptr;
+    bool accepts                    = false;
+    for (auto& item : block.instructions) {
+      if (auto* candidate = std::get_if<match_character>(&item)) match = candidate;
+      if (auto* candidate = std::get_if<match_literal>(&item)) literal = candidate;
+      if (auto* candidate = std::get_if<can_peek>(&item)) peek = candidate;
+      if (auto* candidate = std::get_if<advance_cursor>(&item)) advance = candidate;
+      if (auto* candidate = std::get_if<test_assertion>(&item)) {
+        if (assertion != nullptr) return std::nullopt;
+        assertion = candidate;
+      }
+      if (std::holds_alternative<emit_accept>(item)) accepts = true;
+    }
+    if (match != nullptr && literal != nullptr) return std::nullopt;
+    if ((match != nullptr || literal != nullptr) && (accepts || assertion != nullptr)) {
+      return std::nullopt;
+    }
+    if (match != nullptr && (peek == nullptr || peek->characters != 1 || advance == nullptr ||
+                             advance->characters != 1)) {
+      return std::nullopt;
+    }
+    if (literal != nullptr) {
+      if (literal->value.empty() || peek == nullptr || peek->characters != literal->value.size() ||
+          advance == nullptr || advance->characters != literal->value.size()) {
+        return std::nullopt;
+      }
+      block_lengths[block.id] = literal->value.size();
+    }
+    block_starts[block.id] = node_count;
+    node_count += block_lengths[block.id];
+  }
+  if (node_count == 0) return std::nullopt;
+
+  deterministic_nfa_graph graph;
+  graph.nodes.resize(node_count);
+  graph.entry = block_starts[ir.entry];
+  for (auto& block : ir.blocks) {
+    auto start                      = block_starts[block.id];
+    match_character const* match    = nullptr;
+    match_literal const* literal    = nullptr;
+    write_capture const* capture    = nullptr;
+    test_assertion const* assertion = nullptr;
+    for (auto& item : block.instructions) {
+      if (auto* candidate = std::get_if<match_character>(&item)) match = candidate;
+      if (auto* candidate = std::get_if<match_literal>(&item)) literal = candidate;
+      if (auto* candidate = std::get_if<write_capture>(&item)) capture = candidate;
+      if (auto* candidate = std::get_if<test_assertion>(&item)) assertion = candidate;
+      if (std::holds_alternative<emit_accept>(item)) graph.nodes[start].accepts = true;
+    }
+    if (capture != nullptr) graph.nodes[start].capture = *capture;
+    if (assertion != nullptr) graph.nodes[start].assertion = assertion->kind;
+
+    auto append_successors = [&](deterministic_nfa_node& node) {
+      auto successors = block.successors;
+      std::stable_sort(successors.begin(), successors.end(), [](auto& left, auto& right) {
+        return left.priority < right.priority;
+      });
+      for (auto edge : successors)
+        node.targets.push_back(block_starts[edge.target]);
+    };
+
+    if (match != nullptr) {
+      graph.nodes[start].predicate = match->predicate;
+      graph.nodes[start].consumes  = true;
+      append_successors(graph.nodes[start]);
+    } else if (literal != nullptr) {
+      for (std::size_t index = 0; index < literal->value.size(); ++index) {
+        auto& node     = graph.nodes[start + index];
+        node.predicate = singleton_predicate(literal->value[index]);
+        node.consumes  = true;
+        if (index + 1 < literal->value.size()) {
+          node.targets.push_back(start + index + 1);
+        } else {
+          append_successors(node);
+        }
+      }
+    } else {
+      append_successors(graph.nodes[start]);
+    }
+  }
+  return graph;
+}
+
+std::optional<std::vector<std::uint32_t>> make_deterministic_alphabet(
+  std::vector<deterministic_nfa_node> const& nodes, deterministic_machine& machine)
+{
+  constexpr std::uint32_t unicode_limit = 0x110000;
+  auto word_count                       = (nodes.size() + 63U) / 64U;
+  std::vector<std::uint32_t> boundaries{0, 256, unicode_limit};
+  for (auto& node : nodes) {
+    if (!node.consumes) continue;
+    if (node.predicate.recognized == predicate_class::ANY && !node.predicate.matches_newline) {
+      boundaries.insert(boundaries.end(), {10, 11});
+      if (node.predicate.extended_newline) {
+        boundaries.insert(boundaries.end(), {13, 14, 133, 134, 8232, 8234});
+      }
+    }
+    for (auto range : node.predicate.ranges) {
+      auto first = static_cast<std::uint32_t>(range.first);
+      auto last  = static_cast<std::uint32_t>(range.last);
+      if (first < unicode_limit) boundaries.push_back(first);
+      if (last < unicode_limit - 1) boundaries.push_back(last + 1);
+    }
+  }
+  std::sort(boundaries.begin(), boundaries.end());
+  boundaries.erase(std::unique(boundaries.begin(), boundaries.end()), boundaries.end());
+
+  std::map<std::vector<std::uint64_t>, std::uint16_t> class_ids;
+  std::vector<std::uint32_t> representatives;
+  std::vector<deterministic_interval> intervals;
+  for (std::size_t index = 0; index + 1 < boundaries.size(); ++index) {
+    auto first = boundaries[index];
+    auto last  = boundaries[index + 1] - 1;
+    if (first > last || first >= unicode_limit) continue;
+    std::vector<std::uint64_t> signature(word_count);
+    for (std::size_t node_index = 0; node_index < nodes.size(); ++node_index) {
+      if (nodes[node_index].consumes &&
+          nodes[node_index].predicate.matches(static_cast<char32_t>(first))) {
+        set_machine_bit(signature, node_index);
+      }
+    }
+    auto existing          = class_ids.find(signature);
+    std::uint16_t class_id = 0;
+    if (existing == class_ids.end()) {
+      if (class_ids.size() >= 32767) return std::nullopt;
+      class_id = static_cast<std::uint16_t>(class_ids.size());
+      class_ids.emplace(std::move(signature), class_id);
+      representatives.push_back(first);
+    } else {
+      class_id = existing->second;
+    }
+    intervals.push_back({first, last, class_id});
+  }
+  if (class_ids.empty()) return std::nullopt;
+
+  machine.class_count        = static_cast<std::uint16_t>(class_ids.size());
+  std::size_t interval_index = 0;
+  for (std::size_t value = 0; value < machine.byte_classes.size(); ++value) {
+    while (interval_index + 1 < intervals.size() && value > intervals[interval_index].last)
+      ++interval_index;
+    machine.byte_classes[value] = intervals[interval_index].class_id;
+  }
+  for (auto interval : intervals) {
+    if (interval.last < 256) continue;
+    interval.first = std::max(interval.first, 256U);
+    if (!machine.unicode_intervals.empty() &&
+        machine.unicode_intervals.back().class_id == interval.class_id &&
+        machine.unicode_intervals.back().last + 1 == interval.first) {
+      machine.unicode_intervals.back().last = interval.last;
+    } else {
+      machine.unicode_intervals.push_back(interval);
+    }
+  }
+  return representatives;
+}
+
+std::uint8_t assertion_bit(assertion_kind assertion)
+{
+  return static_cast<std::uint8_t>(1U << static_cast<std::uint8_t>(assertion));
+}
+
+std::optional<deterministic_machine> make_assertion_deterministic_machine(
+  instruction_ir const& ir, deterministic_nfa_graph const& graph, bool scan_input)
+{
+  deterministic_machine machine;
+  machine.scan_input      = scan_input;
+  machine.accept_at_end   = ir.control.require_end;
+  machine.state_mask      = 32767U;
+  machine.assertion_aware = true;
+  for (auto& node : graph.nodes) {
+    if (node.capture.has_value()) return std::nullopt;
+    if (node.assertion.has_value()) machine.assertion_mask |= assertion_bit(*node.assertion);
+  }
+  if (machine.assertion_mask == 0) return std::nullopt;
+
+  std::vector<std::uint8_t> context_masks;
+  for (std::uint8_t mask = 0; mask < 64U; ++mask) {
+    auto relevant = static_cast<std::uint8_t>(mask & machine.assertion_mask);
+    if (std::find(context_masks.begin(), context_masks.end(), relevant) == context_masks.end()) {
+      context_masks.push_back(relevant);
+    }
+  }
+  machine.boundary_class_count = static_cast<std::uint8_t>(context_masks.size());
+
+  auto representatives = make_deterministic_alphabet(graph.nodes, machine);
+  if (!representatives) return std::nullopt;
+
+  struct assertion_closure {
+    std::vector<std::size_t> consumers = std::vector<std::size_t>{};
+    bool accepts : 1                   = false;
+  };
+  auto close = [&](std::vector<std::size_t> seeds, std::uint8_t assertion_mask) {
+    assertion_closure result;
+    std::vector<bool> visited(graph.nodes.size());
+    std::vector<std::size_t> work;
+    for (auto seed = seeds.rbegin(); seed != seeds.rend(); ++seed)
+      work.push_back(*seed);
+    while (!work.empty()) {
+      auto index = work.back();
+      work.pop_back();
+      if (visited[index]) continue;
+      visited[index] = true;
+      auto& node     = graph.nodes[index];
+      if (node.assertion.has_value() && (assertion_mask & assertion_bit(*node.assertion)) == 0) {
+        continue;
+      }
+      if (node.accepts) result.accepts = true;
+      if (node.consumes) {
+        result.consumers.push_back(index);
+        continue;
+      }
+      for (auto target = node.targets.rbegin(); target != node.targets.rend(); ++target)
+        work.push_back(*target);
+    }
+    std::sort(result.consumers.begin(), result.consumers.end());
+    result.consumers.erase(std::unique(result.consumers.begin(), result.consumers.end()),
+                           result.consumers.end());
+    return result;
+  };
+  auto canonicalize = [](std::vector<std::size_t>& state) {
+    std::sort(state.begin(), state.end());
+    state.erase(std::unique(state.begin(), state.end()), state.end());
+  };
+
+  constexpr std::size_t max_table_items = 4U * 1024U * 1024U;
+  std::map<std::vector<std::size_t>, std::uint16_t> state_ids;
+  std::vector<std::vector<std::size_t>> states{{graph.entry}};
+  state_ids.emplace(states.front(), 0);
+  machine.dead_state = std::numeric_limits<std::uint16_t>::max();
+  for (std::size_t state_index = 0; state_index < states.size(); ++state_index) {
+    if (states.size() * context_masks.size() * representatives->size() > max_table_items) {
+      return std::nullopt;
+    }
+    for (auto context : context_masks) {
+      auto seeds = states[state_index];
+      if (scan_input) {
+        seeds.push_back(graph.entry);
+        canonicalize(seeds);
+      }
+      auto closure = close(std::move(seeds), context);
+      machine.boundary_accepts.push_back(closure.accepts ? 1U : 0U);
+      for (auto representative : *representatives) {
+        std::vector<std::size_t> next;
+        for (auto node_index : closure.consumers) {
+          auto& node = graph.nodes[node_index];
+          if (!node.predicate.matches(static_cast<char32_t>(representative))) continue;
+          next.insert(next.end(), node.targets.begin(), node.targets.end());
+        }
+        canonicalize(next);
+        auto existing        = state_ids.find(next);
+        std::uint16_t target = 0;
+        if (existing == state_ids.end()) {
+          if (states.size() >= machine.state_mask) return std::nullopt;
+          target = static_cast<std::uint16_t>(states.size());
+          state_ids.emplace(next, target);
+          states.push_back(std::move(next));
+        } else {
+          target = existing->second;
+        }
+        if (states[target].empty()) machine.dead_state = target;
+        machine.transitions.push_back(
+          static_cast<std::uint16_t>(target | (closure.accepts ? 0x8000U : 0U)));
+      }
+    }
+  }
+  machine.initial_state = 0;
+  machine.state_count   = static_cast<std::uint16_t>(states.size());
+  if (machine.transitions.size() * sizeof(std::uint16_t) > 32U * 1024U) {
+    machine.transition_address_space = 1;
+  }
+  return machine;
+}
+
+std::optional<deterministic_machine> make_deterministic_machine(instruction_ir const& ir,
+                                                                bool scan_input,
+                                                                bool preserve_priority)
+{
+  auto block_assertion = [](instruction_block const& block) -> std::optional<assertion_kind> {
+    if (block.instructions.size() != 1U ||
+        !std::holds_alternative<test_assertion>(block.instructions.front())) {
+      return std::nullopt;
+    }
+    return std::get<test_assertion>(block.instructions.front()).kind;
+  };
+  std::optional<block_id> begin_anchor;
+  std::optional<block_id> end_anchor;
+  std::optional<assertion_kind> end_assertion;
+  bool has_assertions = false;
+  if (ir.entry < ir.blocks.size()) {
+    auto assertion = block_assertion(ir.blocks[ir.entry]);
+    if (assertion == assertion_kind::BEGIN_INPUT ||
+        (assertion == assertion_kind::BEGIN_LINE && !ir.options.multiline)) {
+      begin_anchor = ir.entry;
+    }
+  }
+  if (ir.accept < ir.blocks.size()) {
+    std::vector<block_id> predecessors;
+    for (auto& block : ir.blocks) {
+      for (auto edge : block.successors) {
+        if (edge.target == ir.accept) predecessors.push_back(block.id);
+      }
+    }
+    if (predecessors.size() == 1U) {
+      auto assertion = block_assertion(ir.blocks[predecessors.front()]);
+      if (assertion == assertion_kind::END_INPUT || assertion == assertion_kind::END_LINE) {
+        end_anchor    = predecessors.front();
+        end_assertion = assertion;
+      }
+    }
+  }
+  for (auto& block : ir.blocks) {
+    for (auto& item : block.instructions) {
+      if (std::holds_alternative<test_assertion>(item)) {
+        has_assertions = true;
+        if (preserve_priority && block.id != begin_anchor && block.id != end_anchor) {
+          return std::nullopt;
+        }
+      }
+    }
+  }
+  if (has_assertions && !preserve_priority) {
+    auto graph = make_deterministic_graph(ir);
+    if (!graph) return std::nullopt;
+    return make_assertion_deterministic_machine(ir, *graph, scan_input);
+  }
+  if ((begin_anchor.has_value() || end_anchor.has_value()) &&
+      ir.control.result != result_shape::BOOLEAN) {
     return std::nullopt;
   }
 
@@ -1940,7 +2406,6 @@ std::optional<deterministic_machine> make_deterministic_machine(instruction_ir c
     advance_cursor const* advance = nullptr;
     bool accepts                  = false;
     for (auto& item : block.instructions) {
-      if (std::holds_alternative<test_assertion>(item)) return std::nullopt;
       if (auto* candidate = std::get_if<match_character>(&item)) match = candidate;
       if (auto* candidate = std::get_if<match_literal>(&item)) literal = candidate;
       if (auto* candidate = std::get_if<can_peek>(&item)) peek = candidate;
@@ -1970,14 +2435,21 @@ std::optional<deterministic_machine> make_deterministic_machine(instruction_ir c
     auto start                   = block_starts[block.id];
     match_character const* match = nullptr;
     match_literal const* literal = nullptr;
+    write_capture const* capture = nullptr;
     for (auto& item : block.instructions) {
       if (auto* candidate = std::get_if<match_character>(&item)) match = candidate;
       if (auto* candidate = std::get_if<match_literal>(&item)) literal = candidate;
+      if (auto* candidate = std::get_if<write_capture>(&item)) capture = candidate;
       if (std::holds_alternative<emit_accept>(item)) nodes[start].accepts = true;
     }
+    if (capture != nullptr) nodes[start].capture = *capture;
 
     auto append_successors = [&](deterministic_nfa_node& node) {
-      for (auto edge : block.successors)
+      auto successors = block.successors;
+      std::stable_sort(successors.begin(), successors.end(), [](auto& left, auto& right) {
+        return left.priority < right.priority;
+      });
+      for (auto edge : successors)
         node.targets.push_back(block_starts[edge.target]);
     };
 
@@ -2004,41 +2476,77 @@ std::optional<deterministic_machine> make_deterministic_machine(instruction_ir c
   auto bit_count  = nodes.size() + 1;
   auto word_count = (bit_count + 63) / 64;
   auto accept_bit = nodes.size();
-  auto empty_bits = [&] { return std::vector<std::uint64_t>(word_count); };
-  auto closure    = [&](std::vector<std::uint64_t> const& seeds) {
-    auto result  = empty_bits();
+  struct closure_state {
+    std::vector<std::uint64_t> bits  = std::vector<std::uint64_t>{};
+    std::vector<std::size_t> ordered = std::vector<std::size_t>{};
+    std::vector<std::vector<deterministic_capture_action>> captures =
+      std::vector<std::vector<deterministic_capture_action>>{};
+  };
+  struct closure_work_item {
+    std::size_t node                                  = 0;
+    std::vector<deterministic_capture_action> actions = std::vector<deterministic_capture_action>{};
+  };
+  auto capture_paths_deterministic = true;
+  auto empty_bits                  = [&] { return std::vector<std::uint64_t>(word_count); };
+  auto closure                     = [&](std::vector<std::size_t> const& seeds) {
+    closure_state result{empty_bits(), {}, {}};
     auto visited = empty_bits();
-    std::vector<std::size_t> work;
-    for (std::size_t index = 0; index < nodes.size(); ++index) {
-      if (machine_bit(seeds, index)) work.push_back(index);
-    }
+    std::vector<std::optional<std::vector<deterministic_capture_action>>> visited_actions(
+      nodes.size());
+    std::vector<closure_work_item> work;
+    for (auto seed = seeds.rbegin(); seed != seeds.rend(); ++seed)
+      work.push_back({*seed, {}});
     while (!work.empty()) {
-      auto index = work.back();
+      auto current = std::move(work.back());
       work.pop_back();
-      if (machine_bit(visited, index)) continue;
-      set_machine_bit(visited, index);
-      auto& node = nodes[index];
-      if (node.accepts) set_machine_bit(result, accept_bit);
-      if (node.consumes) {
-        set_machine_bit(result, index);
+      auto index = current.node;
+      if (machine_bit(visited, index)) {
+        if (visited_actions[index] != current.actions) capture_paths_deterministic = false;
         continue;
       }
-      for (auto target : node.targets)
-        work.push_back(target);
+      set_machine_bit(visited, index);
+      visited_actions[index] = current.actions;
+      auto& node             = nodes[index];
+      if (node.capture.has_value()) {
+        auto slot = node.capture->capture_index * 2U +
+                    (node.capture->action == capture_action::END ? 1U : 0U);
+        current.actions.push_back({slot, node.capture->action == capture_action::BEGIN});
+      }
+      if (node.accepts) {
+        set_machine_bit(result.bits, accept_bit);
+        result.ordered.push_back(accept_bit);
+        result.captures.push_back(current.actions);
+      }
+      if (node.consumes) {
+        set_machine_bit(result.bits, index);
+        result.ordered.push_back(index);
+        result.captures.push_back(current.actions);
+        continue;
+      }
+      for (auto target = node.targets.rbegin(); target != node.targets.rend(); ++target) {
+        work.push_back({*target, current.actions});
+      }
+    }
+    if (!preserve_priority) {
+      std::sort(result.ordered.begin(), result.ordered.end());
+      result.ordered.erase(std::unique(result.ordered.begin(), result.ordered.end()),
+                           result.ordered.end());
+      result.captures.assign(result.ordered.size(), {});
     }
     return result;
   };
 
-  auto entry_seeds = empty_bits();
-  set_machine_bit(entry_seeds, block_starts[ir.entry]);
-  auto start_state = closure(entry_seeds);
+  auto start_state = closure({block_starts[ir.entry]});
 
   constexpr std::uint32_t unicode_limit = 0x110000;
   std::vector<std::uint32_t> boundaries{0, 256, unicode_limit};
   for (auto& node : nodes) {
     if (!node.consumes) continue;
     if (node.predicate.recognized == predicate_class::ANY && !node.predicate.matches_newline) {
-      boundaries.insert(boundaries.end(), {10, 11, 13, 14});
+      boundaries.insert(boundaries.end(), {10, 11});
+      if (node.predicate.extended_newline) {
+        boundaries.insert(boundaries.end(), {13, 14, 133, 134, 8232, 8234});
+      }
     }
     for (auto range : node.predicate.ranges) {
       auto first = static_cast<std::uint32_t>(range.first);
@@ -2080,7 +2588,10 @@ std::optional<deterministic_machine> make_deterministic_machine(instruction_ir c
 
   deterministic_machine machine;
   machine.class_count        = static_cast<std::uint16_t>(class_ids.size());
-  machine.scan_input         = ir.control.scan_input;
+  machine.scan_input         = scan_input && !begin_anchor.has_value();
+  machine.accept_at_end      = ir.control.require_end;
+  machine.accept_assertion   = end_assertion;
+  machine.state_mask         = preserve_priority ? 16383U : 32767U;
   std::size_t interval_index = 0;
   for (std::size_t value = 0; value < machine.byte_classes.size(); ++value) {
     while (interval_index + 1 < intervals.size() && value > intervals[interval_index].last)
@@ -2099,44 +2610,104 @@ std::optional<deterministic_machine> make_deterministic_machine(instruction_ir c
     }
   }
 
-  constexpr std::size_t max_dfa_states  = 32767;
+  auto max_dfa_states                   = static_cast<std::size_t>(machine.state_mask);
   constexpr std::size_t max_table_items = 4 * 1024 * 1024;
-  std::map<std::vector<std::uint64_t>, std::uint16_t> state_ids;
+  std::map<std::vector<std::size_t>, std::uint16_t> state_ids;
   std::vector<std::vector<std::uint64_t>> states;
-  state_ids.emplace(start_state, 0);
-  states.push_back(start_state);
+  std::vector<std::vector<std::size_t>> state_orders;
+  std::vector<std::vector<std::vector<deterministic_capture_action>>> state_capture_actions;
+  state_ids.emplace(start_state.ordered, 0);
+  states.push_back(start_state.bits);
+  state_orders.push_back(start_state.ordered);
+  state_capture_actions.push_back(start_state.captures);
+  machine.dead_state   = std::numeric_limits<std::uint16_t>::max();
+  auto strict_one_pass = !machine_bit(start_state.bits, accept_bit);
+  auto terminal_accept = true;
   for (std::size_t state_index = 0; state_index < states.size(); ++state_index) {
     if (states.size() * representatives.size() > max_table_items) return std::nullopt;
     for (auto representative : representatives) {
-      auto seeds = empty_bits();
-      for (std::size_t node_index = 0; node_index < nodes.size(); ++node_index) {
-        if (!machine_bit(states[state_index], node_index)) continue;
+      std::vector<std::size_t> seeds;
+      std::vector<deterministic_capture_action> transition_captures;
+      auto matching_consumers = 0U;
+      auto accept_seen        = false;
+      auto stop_before        = false;
+      for (std::size_t order_index = 0; order_index < state_orders[state_index].size();
+           ++order_index) {
+        auto node_index = state_orders[state_index][order_index];
+        if (node_index == accept_bit) {
+          accept_seen = true;
+          continue;
+        }
         auto& node = nodes[node_index];
         if (!node.predicate.matches(static_cast<char32_t>(representative))) continue;
-        for (auto target : node.targets)
-          set_machine_bit(seeds, target);
+        if (matching_consumers++ == 0U) {
+          transition_captures = state_capture_actions[state_index][order_index];
+        }
+        if (preserve_priority && accept_seen) stop_before = true;
+        seeds.insert(seeds.end(), node.targets.begin(), node.targets.end());
       }
+      if (matching_consumers > 1U) strict_one_pass = false;
       auto next = closure(seeds);
       if (machine.scan_input) {
-        for (std::size_t word = 0; word < next.size(); ++word)
-          next[word] |= start_state[word];
+        for (std::size_t word = 0; word < next.bits.size(); ++word)
+          next.bits[word] |= start_state.bits[word];
+        for (std::size_t start_index = 0; start_index < start_state.ordered.size(); ++start_index) {
+          auto node_index = start_state.ordered[start_index];
+          if (std::find(next.ordered.begin(), next.ordered.end(), node_index) ==
+              next.ordered.end()) {
+            next.ordered.push_back(node_index);
+            next.captures.push_back(start_state.captures[start_index]);
+          }
+        }
+        if (!preserve_priority) {
+          std::sort(next.ordered.begin(), next.ordered.end());
+          next.ordered.erase(std::unique(next.ordered.begin(), next.ordered.end()),
+                             next.ordered.end());
+          next.captures.assign(next.ordered.size(), {});
+        }
       }
-      auto existing        = state_ids.find(next);
+      auto existing        = state_ids.find(next.ordered);
       std::uint16_t target = 0;
       if (existing == state_ids.end()) {
         if (states.size() >= max_dfa_states) return std::nullopt;
         target = static_cast<std::uint16_t>(states.size());
-        state_ids.emplace(next, target);
-        states.push_back(std::move(next));
+        state_ids.emplace(next.ordered, target);
+        states.push_back(std::move(next.bits));
+        state_orders.push_back(std::move(next.ordered));
+        state_capture_actions.push_back(std::move(next.captures));
       } else {
         target = existing->second;
+        if (state_capture_actions[target] != next.captures) { capture_paths_deterministic = false; }
+      }
+      if (std::none_of(
+            states[target].begin(), states[target].end(), [](auto word) { return word != 0; })) {
+        machine.dead_state = target;
+      }
+      auto accepts  = machine_bit(states[target], accept_bit);
+      auto consumes = std::any_of(state_orders[target].begin(),
+                                  state_orders[target].end(),
+                                  [&](auto node_index) { return node_index != accept_bit; });
+      if (accepts && consumes) terminal_accept = false;
+      std::vector<deterministic_capture_action> accept_captures;
+      if (accepts) {
+        auto accept =
+          std::find(state_orders[target].begin(), state_orders[target].end(), accept_bit);
+        auto index      = static_cast<std::size_t>(accept - state_orders[target].begin());
+        accept_captures = state_capture_actions[target][index];
       }
       if (machine_bit(states[target], accept_bit)) target |= 0x8000U;
+      if (stop_before) target |= 0x4000U;
       machine.transitions.push_back(target);
+      machine.transition_capture_actions.push_back(std::move(transition_captures));
+      machine.accept_capture_actions.push_back(std::move(accept_captures));
     }
   }
-  machine.state_count   = static_cast<std::uint16_t>(states.size());
-  machine.initial_state = machine_bit(start_state, accept_bit) ? 0x8000U : 0U;
+  machine.state_count      = static_cast<std::uint16_t>(states.size());
+  machine.initial_state    = machine_bit(start_state.bits, accept_bit) ? 0x8000U : 0U;
+  machine.capture_one_pass = strict_one_pass && terminal_accept && capture_paths_deterministic;
+  if (machine.transitions.size() * sizeof(std::uint16_t) > 32U * 1024U) {
+    machine.transition_address_space = 1;
+  }
   return machine;
 }
 
@@ -2152,23 +2723,49 @@ class nvvm_ir_renderer {
     require_codegen_ir(ir_);
     require_identifier(options_.symbol_prefix, "symbol_prefix");
     require_identifier(options_.execute_function, "execute_function");
-    if (ir_.control.result != result_shape::BOOLEAN &&
-        ir_.control.result != result_shape::CAPTURES) {
-      throw std::invalid_argument(
-        "NVVM IR generation supports boolean operations and capture enumeration");
+    capture_slots_       = live_capture_slots();
+    auto boolean_result  = ir_.control.result == result_shape::BOOLEAN;
+    single_byte_literal_ = boolean_result ? std::nullopt : single_ascii_byte();
+    if (!single_byte_literal_.has_value()) {
+      if (boolean_result && begins_at_input_start() &&
+          ir_.blocks[ir_.entry].successors.size() == 1) {
+        // the selected successor is already constrained to byte zero by the removed assertion.
+        auto anchored_ir               = ir_;
+        anchored_ir.entry              = ir_.blocks[ir_.entry].successors.front().target;
+        anchored_ir.control.scan_input = false;
+        anchored_ir.blocks[ir_.entry].instructions.clear();
+        anchored_ir.blocks[ir_.entry].successors.clear();
+        deterministic_ = make_deterministic_machine(anchored_ir, false, false);
+      } else {
+        deterministic_ = make_deterministic_machine(
+          ir_, boolean_result && ir_.control.scan_input, !boolean_result);
+      }
     }
-    deterministic_ =
-      ir_.control.result == result_shape::BOOLEAN ? make_deterministic_machine(ir_) : std::nullopt;
-    output_.line(
-      R"NVVM(; NVVM IR generated by Regex IR
-; pattern: {}
+    auto tagged_result = ir_.control.result == result_shape::CAPTURES &&
+                         deterministic_.has_value() && deterministic_->capture_one_pass;
+    if (!boolean_result &&
+        (!deterministic_.has_value() || (uses_capture_buffer() && !tagged_result))) {
+      deterministic_.reset();
+    }
+    auto executor = std::string_view{"recursive Thompson"};
+    if (single_byte_literal_.has_value()) {
+      executor = "single-byte literal scan";
+    } else if (deterministic_.has_value()) {
+      executor = deterministic_->assertion_aware ? "assertion-aware deterministic table"
+                 : boolean_result                ? "deterministic table"
+                 : tagged_result                 ? "tagged prioritized deterministic table"
+                                                 : "prioritized deterministic table";
+    }
+    output_.emit("{}",
+                 fmt::format(R"NVVM(; NVVM IR generated by Regex IR
+; pattern: {pattern}
 target triple = "nvptx64-nvidia-cuda"
-target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i128:128:128-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64")NVVM",
-      escaped_comment(ir_.pattern));
-    output_.line("; executor: {}",
-                 deterministic_.has_value() ? "deterministic table" : "recursive Thompson");
+target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i128:128:128-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
+; executor: {executor})NVVM",
+                             fmt::arg("pattern", escaped_comment(ir_.pattern)),
+                             fmt::arg("executor", executor)));
     if (deterministic_.has_value()) {
-      output_.line("; dfa states: {}, alphabet classes: {}",
+      output_.emit("; dfa states: {}, alphabet classes: {}",
                    deterministic_->state_count,
                    deterministic_->class_count);
     }
@@ -2177,27 +2774,64 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     emit_load_byte();
     emit_decode_width();
     emit_decode_codepoint();
-    if (deterministic_.has_value()) {
+    if (deterministic_.has_value() && boolean_result) {
+      if (deterministic_->assertion_aware) {
+        auto word_assertions =
+          static_cast<std::uint8_t>(assertion_bit(assertion_kind::WORD_BOUNDARY) |
+                                    assertion_bit(assertion_kind::NOT_WORD_BOUNDARY));
+        if ((deterministic_->assertion_mask & word_assertions) != 0) emit_is_word();
+      } else if (deterministic_->accept_assertion.has_value()) {
+        emit_advance();
+        emit_is_word();
+        emit_previous_position();
+        emit_assertion();
+      }
       emit_deterministic_globals(*deterministic_);
       emit_deterministic_classifier(*deterministic_);
-      emit_deterministic_execute(*deterministic_);
+      if (deterministic_->assertion_aware) {
+        emit_deterministic_boundary_classifier(*deterministic_);
+        emit_assertion_deterministic_execute(*deterministic_);
+      } else {
+        emit_deterministic_execute(*deterministic_);
+      }
     } else {
       emit_optimizer_intrinsics();
       emit_advance();
-      emit_can_peek();
-      emit_is_word();
-      emit_previous_position();
-      emit_assertion();
-      emit_predicate_helpers();
-      emit_literal_helpers();
-      emit_blocks();
-      if (ir_.control.result == result_shape::CAPTURES) {
-        emit_capture_execute();
+      emit_replacement_globals();
+      if (single_byte_literal_.has_value()) {
+        emit_single_byte_find_from(*single_byte_literal_);
+      } else if (deterministic_.has_value()) {
+        emit_deterministic_globals(*deterministic_);
+        emit_deterministic_classifier(*deterministic_);
+        if (tagged_result) {
+          emit_tagged_deterministic_find_from(*deterministic_);
+        } else {
+          emit_deterministic_find_from(*deterministic_);
+        }
       } else {
+        emit_can_peek();
+        emit_is_word();
+        emit_previous_position();
+        emit_assertion();
+        emit_predicate_helpers();
+        emit_literal_helpers();
+        emit_blocks();
+      }
+      if (boolean_result) {
         emit_execute();
+      } else {
+        if (!deterministic_.has_value() && !single_byte_literal_.has_value()) emit_find_from();
+        switch (ir_.control.result) {
+          case result_shape::MATCH_SPAN: emit_find_execute(); break;
+          case result_shape::MATCH_COUNT: emit_count_execute(); break;
+          case result_shape::CAPTURES: emit_capture_execute(); break;
+          case result_shape::REPLACEMENT: emit_replace_execute(); break;
+          case result_shape::SPLIT_FIELDS: emit_split_execute(); break;
+          case result_shape::BOOLEAN: break;
+        }
       }
     }
-    output_.line(
+    output_.emit(
       R"NVVM(!nvvmir.version = !{{!0}}
 !0 = !{{i32 2, i32 0}})NVVM");
     return output_.take();
@@ -2207,6 +2841,29 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
   [[nodiscard]] std::string name(std::string_view suffix) const
   {
     return nvvm_symbol(options_.symbol_prefix, suffix);
+  }
+
+  [[nodiscard]] std::optional<std::uint8_t> single_ascii_byte() const
+  {
+    if (!ir_.control.scan_input || ir_.control.require_end || ir_.capture_count != 0 ||
+        ir_.entry >= ir_.blocks.size() || ir_.accept >= ir_.blocks.size()) {
+      return std::nullopt;
+    }
+    auto& entry = ir_.blocks[ir_.entry];
+    if (entry.successors.size() != 1 || entry.successors.front().target != ir_.accept ||
+        entry.instructions.size() != 4) {
+      return std::nullopt;
+    }
+    auto* peek    = std::get_if<can_peek>(&entry.instructions[0]);
+    auto* match   = std::get_if<match_character>(&entry.instructions[2]);
+    auto* advance = std::get_if<advance_cursor>(&entry.instructions[3]);
+    if (peek == nullptr || peek->characters != 1 ||
+        !std::holds_alternative<read_character>(entry.instructions[1]) || match == nullptr ||
+        !match->predicate.is_singleton() || match->predicate.singleton() > 0x7f ||
+        advance == nullptr || advance->characters != 1) {
+      return std::nullopt;
+    }
+    return static_cast<std::uint8_t>(match->predicate.singleton());
   }
 
   static std::string escaped_comment(std::string_view value)
@@ -2244,6 +2901,91 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     return std::nullopt;
   }
 
+  [[nodiscard]] bool begins_at_input_start() const
+  {
+    if (ir_.entry >= ir_.blocks.size()) return false;
+    auto& entry = ir_.blocks[ir_.entry];
+    if (entry.instructions.size() != 1U ||
+        !std::holds_alternative<test_assertion>(entry.instructions.front())) {
+      return false;
+    }
+    auto assertion = std::get<test_assertion>(entry.instructions.front()).kind;
+    return assertion == assertion_kind::BEGIN_INPUT ||
+           (assertion == assertion_kind::BEGIN_LINE && !ir_.options.multiline);
+  }
+
+  [[nodiscard]] std::vector<std::size_t> live_capture_slots() const
+  {
+    std::vector<bool> live(static_cast<std::size_t>(ir_.capture_count + 1U) * 2U, false);
+    if (ir_.control.result == result_shape::CAPTURES) {
+      std::fill(live.begin(), live.end(), true);
+    } else if (ir_.control.result == result_shape::REPLACEMENT) {
+      for (auto& token : ir_.replacement) {
+        if (token.type == replacement_token::kind::CAPTURE && token.capture_index != 0 &&
+            !is_whole_match_capture(token.capture_index)) {
+          auto slot       = static_cast<std::size_t>(token.capture_index) * 2U;
+          live[slot]      = true;
+          live[slot + 1U] = true;
+        }
+      }
+    }
+    std::vector<std::size_t> result;
+    for (std::size_t slot = 0; slot < live.size(); ++slot) {
+      if (live[slot]) result.push_back(slot);
+    }
+    return result;
+  }
+
+  [[nodiscard]] bool uses_capture_buffer() const { return !capture_slots_.empty(); }
+
+  [[nodiscard]] bool is_whole_match_capture(std::uint32_t capture_index) const
+  {
+    auto is_capture = [&](instruction_block const& block, capture_action action) {
+      return block.instructions.size() == 1U &&
+             std::holds_alternative<write_capture>(block.instructions.front()) &&
+             std::get<write_capture>(block.instructions.front()).capture_index == capture_index &&
+             std::get<write_capture>(block.instructions.front()).action == action;
+    };
+
+    std::vector<bool> visited(ir_.blocks.size(), false);
+    auto block           = ir_.entry;
+    auto begins_at_start = false;
+    while (block < ir_.blocks.size() && !visited[block]) {
+      visited[block]  = true;
+      auto& candidate = ir_.blocks[block];
+      if (is_capture(candidate, capture_action::BEGIN)) begins_at_start = true;
+      if (!candidate.instructions.empty() && !is_capture(candidate, capture_action::BEGIN)) {
+        break;
+      }
+      if (candidate.successors.size() != 1U) break;
+      block = candidate.successors.front().target;
+    }
+    if (!begins_at_start) return false;
+
+    std::vector<std::vector<block_id>> predecessors(ir_.blocks.size());
+    for (auto& candidate : ir_.blocks) {
+      for (auto edge : candidate.successors)
+        predecessors[edge.target].push_back(candidate.id);
+    }
+    std::fill(visited.begin(), visited.end(), false);
+    block               = ir_.accept;
+    auto ends_at_accept = false;
+    while (block < ir_.blocks.size() && !visited[block]) {
+      visited[block]  = true;
+      auto& candidate = ir_.blocks[block];
+      if (is_capture(candidate, capture_action::END)) ends_at_accept = true;
+      auto is_accept = candidate.instructions.size() == 1U &&
+                       std::holds_alternative<emit_accept>(candidate.instructions.front());
+      if (!candidate.instructions.empty() && !is_capture(candidate, capture_action::END) &&
+          !is_accept) {
+        break;
+      }
+      if (predecessors[block].size() != 1U) break;
+      block = predecessors[block].front();
+    }
+    return ends_at_accept;
+  }
+
   static std::int32_t llvm_i16(std::uint16_t value) { return static_cast<std::int16_t>(value); }
 
   static std::string format_i16_array(std::vector<std::uint16_t> const& values)
@@ -2257,6 +2999,29 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     return result;
   }
 
+  template <typename Range>
+  static std::string format_i8_array(Range const& values)
+  {
+    std::string result;
+    result.reserve(values.size() * 7U);
+    std::size_t index = 0;
+    for (auto value : values) {
+      if (index++ != 0) result += ", ";
+      fmt::format_to(std::back_inserter(result), "i8 {}", value);
+    }
+    return result;
+  }
+
+  static std::string format_byte_array(std::string_view value)
+  {
+    std::string result;
+    result.reserve(value.size() * 3U);
+    for (unsigned char byte : value) {
+      fmt::format_to(std::back_inserter(result), R"(\{:02X})", byte);
+    }
+    return result;
+  }
+
   /**
    * @brief emits constant character-class and DFA-transition tables
    *
@@ -2266,13 +3031,27 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
   {
     std::vector<std::uint16_t> byte_classes(machine.byte_classes.begin(),
                                             machine.byte_classes.end());
-    output_.line("@{} = internal addrspace(4) constant [256 x i16] [{}], align 2",
-                 name("dfa_byte_classes"),
-                 format_i16_array(byte_classes));
-    output_.line("@{} = internal addrspace(4) constant [{} x i16] [{}], align 2",
-                 name("dfa_transitions"),
-                 machine.transitions.size(),
-                 format_i16_array(machine.transitions));
+    auto common = fmt::format(
+      R"NVVM(@{classes} = internal addrspace(4) constant [256 x i16] [{class_values}], align 2
+@{transitions} = internal addrspace({transition_address_space}) constant [{transition_count} x i16] [{transition_values}], align 2)NVVM",
+      fmt::arg("classes", name("dfa_byte_classes")),
+      fmt::arg("class_values", format_i16_array(byte_classes)),
+      fmt::arg("transitions", name("dfa_transitions")),
+      fmt::arg("transition_address_space", machine.transition_address_space),
+      fmt::arg("transition_count", machine.transitions.size()),
+      fmt::arg("transition_values", format_i16_array(machine.transitions)));
+    if (machine.assertion_aware) {
+      output_.emit("{}",
+                   fmt::format(
+                     R"NVVM({common}
+@{boundary_accepts} = internal addrspace(4) constant [{accept_count} x i8] [{accept_values}], align 1)NVVM",
+                     fmt::arg("common", common),
+                     fmt::arg("boundary_accepts", name("dfa_boundary_accepts")),
+                     fmt::arg("accept_count", machine.boundary_accepts.size()),
+                     fmt::arg("accept_values", format_i8_array(machine.boundary_accepts))));
+    } else {
+      output_.emit("{}", common);
+    }
     output_.blank();
   }
 
@@ -2285,7 +3064,7 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
   {
     auto function = name("dfa_classify");
     auto table    = name("dfa_byte_classes");
-    output_.line("{}",
+    output_.emit("{}",
                  fmt::format(
                    R"NVVM(define internal i32 @{function}(i32 %cp) alwaysinline nounwind readonly {{
 entry:
@@ -2302,15 +3081,15 @@ unicode:)NVVM",
                    fmt::arg("table", table)));
 
     if (machine.unicode_intervals.empty()) {
-      output_.line("  ret i32 0");
+      output_.emit("  ret i32 0");
     } else if (machine.unicode_intervals.size() == 1) {
-      output_.line("  ret i32 {}", machine.unicode_intervals.front().class_id);
+      output_.emit("  ret i32 {}", machine.unicode_intervals.front().class_id);
     } else {
       auto result = fmt::format("{}", machine.unicode_intervals.back().class_id);
       for (std::size_t reverse = machine.unicode_intervals.size() - 1; reverse > 0; --reverse) {
         auto index     = reverse - 1;
         auto& interval = machine.unicode_intervals[index];
-        output_.line("{}",
+        output_.emit("{}",
                      fmt::format(R"NVVM(  %unicode_le_{index} = icmp ule i32 %cp, {last}
   %unicode_class_{index} = select i1 %unicode_le_{index}, i32 {class_id}, i32 {fallback})NVVM",
                                  fmt::arg("index", index),
@@ -2319,9 +3098,153 @@ unicode:)NVVM",
                                  fmt::arg("fallback", result)));
         result = fmt::format("%unicode_class_{}", index);
       }
-      output_.line("  ret i32 {}", result);
+      output_.emit("  ret i32 {}", result);
     }
-    output_.line("}}");
+    output_.emit("}}");
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the position-context classifier used by assertion-aware DFA transitions
+   *
+   * @param machine deterministic machine whose assertion truth values are classified
+   */
+  void emit_deterministic_boundary_classifier(deterministic_machine const& machine)
+  {
+    auto function = name("dfa_boundary_classify");
+    auto is_word  = name("is_word");
+    auto decode   = name("decode_codepoint");
+    output_.emit(
+      R"NVVM(define internal i32 @{}(i8* %data, i64 %size, i64 %position, i32 %previous_cp, i32 %current_cp, i64 %current_width) alwaysinline nounwind readonly {{
+entry:)NVVM",
+      function);
+
+    auto mask_value        = std::string{"0"};
+    std::size_t mask_index = 0;
+    auto append_bit        = [&](std::string_view condition) {
+      auto bit = std::uint32_t{1} << mask_index;
+      output_.emit("  %boundary_bit_{} = select i1 {}, i32 {}, i32 0", mask_index, condition, bit);
+      if (mask_value == "0") {
+        mask_value = fmt::format("%boundary_bit_{}", mask_index);
+      } else {
+        output_.emit(
+          "  %boundary_mask_{} = or i32 {}, %boundary_bit_{}", mask_index, mask_value, mask_index);
+        mask_value = fmt::format("%boundary_mask_{}", mask_index);
+      }
+      ++mask_index;
+    };
+
+    auto begin_input_bit = assertion_bit(assertion_kind::BEGIN_INPUT);
+    auto end_input_bit   = assertion_bit(assertion_kind::END_INPUT);
+    auto word_bits       = static_cast<std::uint8_t>(assertion_bit(assertion_kind::WORD_BOUNDARY) |
+                                               assertion_bit(assertion_kind::NOT_WORD_BOUNDARY));
+    auto line_bits       = static_cast<std::uint8_t>(assertion_bit(assertion_kind::BEGIN_LINE) |
+                                               assertion_bit(assertion_kind::END_LINE));
+    auto needs_begin =
+      (machine.assertion_mask &
+       static_cast<std::uint8_t>(begin_input_bit | assertion_bit(assertion_kind::BEGIN_LINE))) != 0;
+    auto needs_end =
+      (machine.assertion_mask &
+       static_cast<std::uint8_t>(end_input_bit | assertion_bit(assertion_kind::END_LINE))) != 0;
+    if (needs_begin) output_.emit("  %at_begin = icmp eq i64 %position, 0");
+    if (needs_end) output_.emit("  %at_end = icmp eq i64 %position, %size");
+    if ((machine.assertion_mask & begin_input_bit) != 0) { append_bit("%at_begin"); }
+    if ((machine.assertion_mask & end_input_bit) != 0) { append_bit("%at_end"); }
+
+    if ((machine.assertion_mask & word_bits) != 0) {
+      output_.emit("{}",
+                   fmt::format(
+                     R"NVVM(  %has_previous = icmp ne i64 %position, 0
+  %has_current = icmp ult i64 %position, %size
+  %previous_word_raw = call i1 @{is_word}(i32 %previous_cp)
+  %current_word_raw = call i1 @{is_word}(i32 %current_cp)
+  %previous_word = and i1 %has_previous, %previous_word_raw
+  %current_word = and i1 %has_current, %current_word_raw
+  %word_boundary = xor i1 %previous_word, %current_word
+  %not_word_boundary = xor i1 %word_boundary, true)NVVM",
+                     fmt::arg("is_word", is_word)));
+      if ((machine.assertion_mask & assertion_bit(assertion_kind::WORD_BOUNDARY)) != 0) {
+        append_bit("%word_boundary");
+      }
+      if ((machine.assertion_mask & assertion_bit(assertion_kind::NOT_WORD_BOUNDARY)) != 0) {
+        append_bit("%not_word_boundary");
+      }
+    }
+
+    if ((machine.assertion_mask & line_bits) != 0) {
+      if (ir_.options.extended_newline) {
+        output_.emit(
+          R"NVVM(  %current_lf = icmp eq i32 %current_cp, 10
+  %current_cr = icmp eq i32 %current_cp, 13
+  %current_nel = icmp eq i32 %current_cp, 133
+  %current_ls = icmp eq i32 %current_cp, 8232
+  %current_ps = icmp eq i32 %current_cp, 8233
+  %current_crlf = or i1 %current_lf, %current_cr
+  %current_extended_0 = or i1 %current_crlf, %current_nel
+  %current_extended_1 = or i1 %current_ls, %current_ps
+  %current_newline = or i1 %current_extended_0, %current_extended_1
+  %previous_lf = icmp eq i32 %previous_cp, 10
+  %previous_cr = icmp eq i32 %previous_cp, 13
+  %previous_nel = icmp eq i32 %previous_cp, 133
+  %previous_ls = icmp eq i32 %previous_cp, 8232
+  %previous_ps = icmp eq i32 %previous_cp, 8233
+  %previous_crlf = or i1 %previous_lf, %previous_cr
+  %previous_extended_0 = or i1 %previous_crlf, %previous_nel
+  %previous_extended_1 = or i1 %previous_ls, %previous_ps
+  %previous_newline = or i1 %previous_extended_0, %previous_extended_1
+  %mid_crlf = and i1 %previous_cr, %current_lf
+  %not_mid_crlf = xor i1 %mid_crlf, true)NVVM");
+      } else {
+        output_.emit(
+          R"NVVM(  %current_lf = icmp eq i32 %current_cp, 10
+  %current_newline = icmp eq i32 %current_cp, 10
+  %previous_newline = icmp eq i32 %previous_cp, 10
+  %not_mid_crlf = icmp eq i32 0, 0)NVVM");
+      }
+
+      if ((machine.assertion_mask & assertion_bit(assertion_kind::BEGIN_LINE)) != 0) {
+        if (ir_.options.multiline) {
+          output_.emit(R"NVVM(  %begin_after_newline = and i1 %previous_newline, %not_mid_crlf
+  %begin_line = or i1 %at_begin, %begin_after_newline)NVVM");
+        } else {
+          output_.emit("  %begin_line = icmp eq i64 %position, 0");
+        }
+        append_bit("%begin_line");
+      }
+
+      if ((machine.assertion_mask & assertion_bit(assertion_kind::END_LINE)) != 0) {
+        if (ir_.options.multiline) {
+          output_.emit(R"NVVM(  %end_at_newline = and i1 %current_newline, %not_mid_crlf
+  %end_line = or i1 %at_end, %end_at_newline)NVVM");
+        } else {
+          output_.emit("  %next_position = add i64 %position, %current_width");
+          output_.emit("  %current_is_final = icmp eq i64 %next_position, %size");
+          auto final_sequence = std::string{"%current_is_final"};
+          if (ir_.options.extended_newline) {
+            output_.emit(
+              "{}",
+              fmt::format(
+                R"NVVM(  %next_cp = call i32 @{decode}(i8* %data, i64 %size, i64 %next_position)
+  %next_width = call i64 @{width}(i8* %data, i64 %size, i64 %next_position)
+  %after_next = add i64 %next_position, %next_width
+  %next_lf = icmp eq i32 %next_cp, 10
+  %after_next_is_end = icmp eq i64 %after_next, %size
+  %crlf_tail_0 = and i1 %current_cr, %next_lf
+  %crlf_tail = and i1 %crlf_tail_0, %after_next_is_end
+  %final_sequence = or i1 %current_is_final, %crlf_tail)NVVM",
+                fmt::arg("decode", decode),
+                fmt::arg("width", name("decode_width"))));
+            final_sequence = "%final_sequence";
+          }
+          output_.emit("  %end_final_newline_0 = and i1 %current_newline, %not_mid_crlf");
+          output_.emit("  %end_final_newline = and i1 %end_final_newline_0, {}", final_sequence);
+          output_.emit("  %end_line = or i1 %at_end, %end_final_newline");
+        }
+        append_bit("%end_line");
+      }
+    }
+
+    output_.emit("  ret i32 {}\n}}", mask_value);
     output_.blank();
   }
 
@@ -2332,8 +3255,9 @@ unicode:)NVVM",
    */
   void emit_deterministic_execute(deterministic_machine const& machine)
   {
-    if ((machine.initial_state & 0x8000U) != 0 && machine.scan_input) {
-      output_.line(
+    if ((machine.initial_state & 0x8000U) != 0 && !machine.accept_at_end &&
+        !machine.accept_assertion.has_value()) {
+      output_.emit(
         R"NVVM(define zeroext i1 @{}(i8* %data, i64 %size) alwaysinline nounwind readnone {{
 entry:
   ret i1 true
@@ -2348,7 +3272,21 @@ entry:
     auto width       = name("decode_width");
     auto classify    = name("dfa_classify");
     auto transitions = name("dfa_transitions");
-    output_.line("{}",
+    auto dead_guard  = std::string{};
+    auto reject      = std::string{};
+    if (!machine.scan_input && machine.dead_state <= machine.state_mask) {
+      dead_guard = fmt::format(
+        R"NVVM(  %next_state_index = and i32 %next_state, {state_mask}
+  %dead = icmp eq i32 %next_state_index, {dead_state}
+  br i1 %dead, label %reject, label %transition_live
+transition_live:)NVVM",
+        fmt::arg("state_mask", machine.state_mask),
+        fmt::arg("dead_state", machine.dead_state));
+      reject = R"NVVM(reject:
+  ret i1 false
+)NVVM";
+    }
+    output_.emit("{}",
                  fmt::format(
                    R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
 entry:
@@ -2374,14 +3312,15 @@ unicode:
 transition:
   %character_class = phi i32 [ %ascii_class, %ascii ], [ %unicode_class, %unicode ]
   %character_width = phi i64 [ 1, %ascii ], [ %unicode_width, %unicode ]
-  %state_index = and i32 %state, 32767
+  %state_index = and i32 %state, {state_mask}
   %state_offset = mul nuw i32 %state_index, {class_count}
   %transition_index = add nuw i32 %state_offset, %character_class
   %transition_index_i64 = zext i32 %transition_index to i64
-  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace(4)* @{transitions}, i64 0, i64 %transition_index_i64
-  %next_state_i16 = load i16, i16 addrspace(4)* %transition_ptr, align 2
+  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
+  %next_state_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
   %next_state = zext i16 %next_state_i16 to i32
-  %next_position = add i64 %position, %character_width)NVVM",
+  %next_position = add i64 %position, %character_width
+{dead_guard})NVVM",
                    fmt::arg("execute", options_.execute_function),
                    fmt::arg("initial_state", machine.initial_state),
                    fmt::arg("load_byte", load_byte),
@@ -2389,11 +3328,38 @@ transition:
                    fmt::arg("decode", decode),
                    fmt::arg("width", width),
                    fmt::arg("class_count", machine.class_count),
+                   fmt::arg("state_mask", machine.state_mask),
                    fmt::arg("transition_count", machine.transitions.size()),
-                   fmt::arg("transitions", transitions)));
-    if (machine.scan_input) {
-      output_.line(
-        R"NVVM(  %accept_bits = and i32 %next_state, 32768
+                   fmt::arg("transition_address_space", machine.transition_address_space),
+                   fmt::arg("transitions", transitions),
+                   fmt::arg("dead_guard", dead_guard)));
+    if (!machine.accept_at_end && machine.accept_assertion.has_value()) {
+      output_.emit("{}",
+                   fmt::format(
+                     R"NVVM(  %accept_bits = and i32 %next_state, 32768
+  %accepted = icmp ne i32 %accept_bits, 0
+  br i1 %accepted, label %check_accept, label %continue
+check_accept:
+  %accept_assertion = call i1 @{assertion}(i8* %data, i64 %size, i64 %next_position, i32 {kind})
+  br i1 %accept_assertion, label %yes, label %continue
+continue:
+  br label %loop
+done:
+  %done_accept_bits = and i32 %state, 32768
+  %done_accepted = icmp ne i32 %done_accept_bits, 0
+  %done_assertion = call i1 @{assertion}(i8* %data, i64 %size, i64 %position, i32 {kind})
+  %done_result = and i1 %done_accepted, %done_assertion
+  ret i1 %done_result
+yes:
+  ret i1 true
+{reject}
+}})NVVM",
+                     fmt::arg("assertion", name("assertion")),
+                     fmt::arg("kind", static_cast<std::uint32_t>(*machine.accept_assertion)),
+                     fmt::arg("reject", reject)));
+    } else if (!machine.accept_at_end) {
+      output_.emit("{}",
+                   fmt::format(R"NVVM(  %accept_bits = and i32 %next_state, 32768
   %accepted = icmp ne i32 %accept_bits, 0
   br i1 %accepted, label %yes, label %continue
 continue:
@@ -2402,30 +3368,154 @@ done:
   ret i1 false
 yes:
   ret i1 true
-}})NVVM");
+{reject}
+}})NVVM",
+                               fmt::arg("reject", reject)));
     } else {
-      output_.line(
-        R"NVVM(  br label %continue
+      auto assertion = std::string{};
+      auto result    = std::string{"%accepted"};
+      if (machine.accept_assertion.has_value()) {
+        assertion = fmt::format(
+          R"NVVM(  %done_assertion = call i1 @{assertion}(i8* %data, i64 %size, i64 %position, i32 {kind})
+  %done_result = and i1 %accepted, %done_assertion
+)NVVM",
+          fmt::arg("assertion", name("assertion")),
+          fmt::arg("kind", static_cast<std::uint32_t>(*machine.accept_assertion)));
+        result = "%done_result";
+      }
+      output_.emit("{}",
+                   fmt::format(
+                     R"NVVM(  br label %continue
 continue:
   br label %loop
 done:
   %accept_bits = and i32 %state, 32768
   %accepted = icmp ne i32 %accept_bits, 0
-  ret i1 %accepted
-}})NVVM");
+{assertion}  ret i1 {result}
+{reject}
+}})NVVM",
+                     fmt::arg("assertion", assertion),
+                     fmt::arg("result", result),
+                     fmt::arg("reject", reject)));
     }
     output_.blank();
   }
 
   /**
-   * @brief emits NVVM-supported optimizer intrinsic declarations used by generated branch hints
+   * @brief emits a single-pass DFA whose epsilon closure is selected by boundary context
+   *
+   * @param machine assertion-aware deterministic machine to execute
+   */
+  void emit_assertion_deterministic_execute(deterministic_machine const& machine)
+  {
+    auto load_byte        = name("load_byte");
+    auto decode           = name("decode_codepoint");
+    auto width            = name("decode_width");
+    auto classify         = name("dfa_classify");
+    auto boundary         = name("dfa_boundary_classify");
+    auto transitions      = name("dfa_transitions");
+    auto boundary_accepts = name("dfa_boundary_accepts");
+    output_.emit("{}",
+                 fmt::format(
+                   R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+entry:
+  br label %loop
+loop:
+  %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]
+  %state = phi i32 [ {initial_state}, %entry ], [ %next_state, %continue ]
+  %previous_cp = phi i32 [ 0, %entry ], [ %current_cp, %continue ]
+  %at_end = icmp eq i64 %position, %size
+  br i1 %at_end, label %finish, label %load
+load:
+  %input_ptr = getelementptr i8, i8* %data, i64 %position
+  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %is_ascii = icmp ult i32 %first, 128
+  br i1 %is_ascii, label %ascii, label %unicode
+ascii:
+  %ascii_class = call i32 @{classify}(i32 %first)
+  br label %boundary
+unicode:
+  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  br label %boundary
+boundary:
+  %current_cp = phi i32 [ %first, %ascii ], [ %codepoint, %unicode ]
+  %character_class = phi i32 [ %ascii_class, %ascii ], [ %unicode_class, %unicode ]
+  %character_width = phi i64 [ 1, %ascii ], [ %unicode_width, %unicode ]
+  %boundary_class = call i32 @{boundary}(i8* %data, i64 %size, i64 %position, i32 %previous_cp, i32 %current_cp, i64 %character_width)
+  br label %transition)NVVM",
+                   fmt::arg("execute", options_.execute_function),
+                   fmt::arg("initial_state", machine.initial_state),
+                   fmt::arg("load_byte", load_byte),
+                   fmt::arg("classify", classify),
+                   fmt::arg("decode", decode),
+                   fmt::arg("width", width),
+                   fmt::arg("boundary", boundary)));
+    output_.emit("{}",
+                 fmt::format(
+                   R"NVVM(transition:
+  %transition_state_offset = mul nuw i32 %state, {boundary_class_count}
+  %transition_context_index = add nuw i32 %transition_state_offset, %boundary_class
+  %transition_context_offset = mul nuw i32 %transition_context_index, {class_count}
+  %transition_index = add nuw i32 %transition_context_offset, %character_class
+  %transition_index_i64 = zext i32 %transition_index to i64
+  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
+  %next_state_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
+  %next_state_raw = zext i16 %next_state_i16 to i32
+  %accept_bits = and i32 %next_state_raw, 32768
+  %accepted = icmp ne i32 %accept_bits, 0
+  %next_state = and i32 %next_state_raw, 32767
+  %next_position = add i64 %position, %character_width)NVVM",
+                   fmt::arg("boundary_class_count", machine.boundary_class_count),
+                   fmt::arg("class_count", machine.class_count),
+                   fmt::arg("transition_count", machine.transitions.size()),
+                   fmt::arg("transition_address_space", machine.transition_address_space),
+                   fmt::arg("transitions", transitions)));
+    if (machine.accept_at_end) {
+      output_.emit("  br label %continue");
+    } else {
+      output_.emit("  br i1 %accepted, label %yes, label %continue");
+    }
+    output_.emit("{}",
+                 fmt::format(
+                   R"NVVM(continue:
+  br label %loop
+finish:
+  %finish_boundary_class = call i32 @{boundary}(i8* %data, i64 %size, i64 %position, i32 %previous_cp, i32 0, i64 0)
+  %finish_state_offset = mul nuw i32 %state, {boundary_class_count}
+  %finish_accept_index = add nuw i32 %finish_state_offset, %finish_boundary_class
+  %finish_accept_index_i64 = zext i32 %finish_accept_index to i64
+  %finish_accept_ptr = getelementptr [{accept_count} x i8], [{accept_count} x i8] addrspace(4)* @{boundary_accepts}, i64 0, i64 %finish_accept_index_i64
+  %finish_accept_i8 = load i8, i8 addrspace(4)* %finish_accept_ptr, align 1
+  %finish_accepted = icmp ne i8 %finish_accept_i8, 0
+  ret i1 %finish_accepted
+yes:
+  ret i1 true
+}})NVVM",
+                   fmt::arg("boundary_class_count", machine.boundary_class_count),
+                   fmt::arg("boundary", boundary),
+                   fmt::arg("accept_count", machine.boundary_accepts.size()),
+                   fmt::arg("boundary_accepts", boundary_accepts)));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits NVVM intrinsics used by branch hints and replacement range copies
    */
   void emit_optimizer_intrinsics()
   {
-    if (required_ascii_prefix().has_value() && options_.branch_hints) {
-      output_.line("declare i1 @llvm.expect.i1(i1, i1)");
-      output_.blank();
+    auto expect      = required_ascii_prefix().has_value() && options_.branch_hints;
+    auto memory_copy = ir_.control.result == result_shape::REPLACEMENT;
+    if (expect && memory_copy) {
+      output_.emit(R"NVVM(declare i1 @llvm.expect.i1(i1, i1)
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8*, i8*, i64, i1))NVVM");
+    } else if (expect) {
+      output_.emit("declare i1 @llvm.expect.i1(i1, i1)");
+    } else if (memory_copy) {
+      output_.emit("declare void @llvm.memcpy.p0i8.p0i8.i64(i8*, i8*, i64, i1)");
     }
+    if (expect || memory_copy) output_.blank();
   }
 
   /**
@@ -2434,7 +3524,7 @@ done:
   void emit_load_byte()
   {
     auto function = name("load_byte");
-    output_.line(
+    output_.emit(
       R"NVVM(define internal i32 @{}(i8* %ptr) alwaysinline nounwind readonly {{
 entry:
   %value8 = load i8, i8* %ptr, align 1
@@ -2452,7 +3542,7 @@ entry:
   {
     auto function  = name("decode_width");
     auto load_byte = name("load_byte");
-    output_.line(
+    output_.emit(
       R"NVVM(define internal i64 @{}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
 entry:
   %in_bounds = icmp ult i64 %pos, %size
@@ -2462,13 +3552,13 @@ missing:
 load:)NVVM",
       function);
     if (ir_.options.characters == character_mode::BYTES) {
-      output_.line(
+      output_.emit(
         R"NVVM(  ret i64 1
 }})NVVM");
       output_.blank();
       return;
     }
-    output_.line(
+    output_.emit(
       R"NVVM(  %ptr = getelementptr i8, i8* %data, i64 %pos
   %first = call i32 @{}(i8* %ptr)
   %ascii = icmp ult i32 %first, 128
@@ -2528,7 +3618,7 @@ valid_multibyte:
     auto function  = name("decode_codepoint");
     auto width     = name("decode_width");
     auto load_byte = name("load_byte");
-    output_.line(
+    output_.emit(
       R"NVVM(define internal i32 @{}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
 entry:
   %available = icmp ult i64 %pos, %size
@@ -2541,13 +3631,13 @@ load:
       function,
       load_byte);
     if (ir_.options.characters == character_mode::BYTES) {
-      output_.line(
+      output_.emit(
         R"NVVM(  ret i32 %first
 }})NVVM");
       output_.blank();
       return;
     }
-    output_.line(
+    output_.emit(
       R"NVVM(  %width = call i64 @{}(i8* %data, i64 %size, i64 %pos)
   %single = icmp eq i64 %width, 1
   br i1 %single, label %single_byte, label %initialize
@@ -2589,7 +3679,7 @@ exit:
   {
     auto function = name("advance");
     auto width    = name("decode_width");
-    output_.line(
+    output_.emit(
       "{}",
       fmt::format(
         R"NVVM(define internal i64 @{function}(i8* %data, i64 %size, i64 %pos, i64 %count) alwaysinline nounwind readonly {{
@@ -2623,7 +3713,7 @@ exit:
   {
     auto function = name("can_peek");
     auto width    = name("decode_width");
-    output_.line(
+    output_.emit(
       "{}",
       fmt::format(
         R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos, i64 %count) alwaysinline nounwind readonly {{
@@ -2679,32 +3769,37 @@ no:
   {
     auto function = name("is_word");
     if (uses_unicode_word_boundaries()) {
-      output_.line(
+      output_.emit(
         R"NVVM(define internal i1 @{}(i32 %cp) alwaysinline nounwind readnone {{
 entry:)NVVM",
         function);
       std::string combined;
       for (std::size_t index = 0; index < std::size(cudf_unicode_word_ranges); ++index) {
         unicode_data_range range = cudf_unicode_word_ranges[index];
-        output_.line("  %word_ge_{} = icmp uge i32 %cp, {}", index, range.first);
-        output_.line("  %word_le_{} = icmp ule i32 %cp, {}", index, range.last);
-        output_.line("  %word_in_{} = and i1 %word_ge_{}, %word_le_{}", index, index, index);
+        output_.emit("{}",
+                     fmt::format(R"NVVM(  %word_ge_{index} = icmp uge i32 %cp, {first}
+  %word_le_{index} = icmp ule i32 %cp, {last}
+  %word_in_{index} = and i1 %word_ge_{index}, %word_le_{index})NVVM",
+                                 fmt::arg("index", index),
+                                 fmt::arg("first", range.first),
+                                 fmt::arg("last", range.last)));
         if (index == 0) {
           combined = "%word_in_0";
         } else {
-          output_.line("  %word_combined_{} = or i1 {}, %word_in_{}", index, combined, index);
+          output_.emit("  %word_combined_{} = or i1 {}, %word_in_{}", index, combined, index);
           combined = fmt::format("%word_combined_{}", index);
         }
       }
-      output_.line("  %word_underscore = icmp eq i32 %cp, 95");
-      output_.line("  %word_result = or i1 {}, %word_underscore", combined);
-      output_.line(
-        R"NVVM(  ret i1 %word_result
-}})NVVM");
+      output_.emit("{}",
+                   fmt::format(R"NVVM(  %word_underscore = icmp eq i32 %cp, 95
+  %word_result = or i1 {combined}, %word_underscore
+  ret i1 %word_result
+}})NVVM",
+                               fmt::arg("combined", combined)));
       output_.blank();
       return;
     }
-    output_.line(
+    output_.emit(
       R"NVVM(define internal i1 @{}(i32 %cp) alwaysinline nounwind readnone {{
 entry:
   %ge_lower = icmp uge i32 %cp, 97
@@ -2732,28 +3827,51 @@ entry:
   void emit_previous_position()
   {
     auto function = name("previous_position");
-    auto advance  = name("advance");
-    output_.line(
+    if (ir_.options.characters == character_mode::BYTES) {
+      output_.emit(
+        R"NVVM(define internal i64 @{}(i8* %data, i64 %size, i64 %target) alwaysinline nounwind readonly {{
+entry:
+  %at_begin = icmp eq i64 %target, 0
+  %previous = sub i64 %target, 1
+  %result = select i1 %at_begin, i64 0, i64 %previous
+  ret i64 %result
+}})NVVM",
+        function);
+      output_.blank();
+      return;
+    }
+
+    auto load_byte = name("load_byte");
+    output_.emit(
       "{}",
       fmt::format(
         R"NVVM(define internal i64 @{function}(i8* %data, i64 %size, i64 %target) alwaysinline nounwind readonly {{
 entry:
   %at_begin = icmp eq i64 %target, 0
-  br i1 %at_begin, label %zero, label %loop
+  br i1 %at_begin, label %zero, label %start
 zero:
   ret i64 0
+start:
+  %initial = sub i64 %target, 1
+  br label %loop
 loop:
-  %cursor = phi i64 [ 0, %entry ], [ %next, %continue ]
-  %next = call i64 @{advance}(i8* %data, i64 %size, i64 %cursor, i64 1)
-  %reached = icmp uge i64 %next, %target
-  br i1 %reached, label %found, label %continue
+  %cursor = phi i64 [ %initial, %start ], [ %previous, %continue ]
+  %pointer = getelementptr i8, i8* %data, i64 %cursor
+  %byte = call i32 @{load_byte}(i8* %pointer)
+  %prefix = and i32 %byte, 192
+  %continuation = icmp eq i32 %prefix, 128
+  %at_zero = icmp eq i64 %cursor, 0
+  %leading = xor i1 %continuation, true
+  %done = or i1 %leading, %at_zero
+  br i1 %done, label %found, label %continue
 continue:
+  %previous = sub i64 %cursor, 1
   br label %loop
 found:
   ret i64 %cursor
 }})NVVM",
         fmt::arg("function", function),
-        fmt::arg("advance", advance)));
+        fmt::arg("load_byte", load_byte)));
     output_.blank();
   }
 
@@ -2767,7 +3885,7 @@ found:
     auto decode   = name("decode_codepoint");
     auto is_word  = name("is_word");
     auto advance  = name("advance");
-    output_.line(
+    output_.emit(
       "{}",
       fmt::format(
         R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos, i32 %kind) inlinehint nounwind readonly {{
@@ -2903,7 +4021,7 @@ false:
         if (match == nullptr) continue;
         auto function = name(fmt::format("predicate_{}", block.id));
         auto decode   = name("decode_codepoint");
-        output_.line(
+        output_.emit(
           "{}",
           fmt::format(
             R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
@@ -2913,9 +4031,9 @@ entry:
             fmt::arg("decode", decode)));
         if (match->predicate.recognized == predicate_class::ANY) {
           if (match->predicate.matches_newline) {
-            output_.line("  ret i1 true");
+            output_.emit("  ret i1 true");
           } else if (match->predicate.extended_newline) {
-            output_.line(
+            output_.emit(
               R"NVVM(  %not_lf = icmp ne i32 %cp, 10
   %not_cr = icmp ne i32 %cp, 13
   %not_nel = icmp ne i32 %cp, 133
@@ -2927,7 +4045,7 @@ entry:
   %result = and i1 %not_crlf, %not_extended_1
   ret i1 %result)NVVM");
           } else {
-            output_.line(
+            output_.emit(
               R"NVVM(  %not_lf = icmp ne i32 %cp, 10
   ret i1 %not_lf)NVVM");
           }
@@ -2937,14 +4055,14 @@ entry:
             auto range = match->predicate.ranges[index];
             if (range.first == range.last) {
               auto comparison = fmt::format("equal_{}", index);
-              output_.line(
+              output_.emit(
                 "  %{} = icmp eq i32 %cp, {}", comparison, static_cast<std::uint32_t>(range.first));
               comparisons.push_back(comparison);
             } else {
               auto ge     = fmt::format("ge_{}", index);
               auto le     = fmt::format("le_{}", index);
               auto inside = fmt::format("inside_{}", index);
-              output_.line("{}",
+              output_.emit("{}",
                            fmt::format(R"NVVM(  %{ge} = icmp uge i32 %cp, {first}
   %{le} = icmp ule i32 %cp, {last}
   %{inside} = and i1 %{ge}, %{le})NVVM",
@@ -2957,25 +4075,25 @@ entry:
             }
           }
           if (comparisons.empty()) {
-            output_.line("  ret i1 {}", match->predicate.negated ? "true" : "false");
+            output_.emit("  ret i1 {}", match->predicate.negated ? "true" : "false");
           } else {
             auto combined = comparisons.front();
             for (std::size_t index = 1; index < comparisons.size(); ++index) {
               auto next = fmt::format("combined_{}", index);
-              output_.line("  %{} = or i1 %{}, %{}", next, combined, comparisons[index]);
+              output_.emit("  %{} = or i1 %{}, %{}", next, combined, comparisons[index]);
               combined = next;
             }
             if (match->predicate.negated) {
-              output_.line(
+              output_.emit(
                 R"NVVM(  %negated = xor i1 %{}, true
   ret i1 %negated)NVVM",
                 combined);
             } else {
-              output_.line("  ret i1 %{}", combined);
+              output_.emit("  ret i1 %{}", combined);
             }
           }
         }
-        output_.line("}}");
+        output_.emit("}}");
         output_.blank();
       }
     }
@@ -3000,7 +4118,7 @@ entry:
                        return value <= 0x7f;
                      });
         if (ascii) {
-          output_.line(
+          output_.emit(
             "{}",
             fmt::format(
               R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
@@ -3015,7 +4133,7 @@ entry:
           for (std::size_t index = 0; index < literal->value.size(); ++index) {
             auto success =
               index + 1 == literal->value.size() ? "success" : fmt::format("check_{}", index + 1);
-            output_.line(
+            output_.emit(
               "{}",
               fmt::format(R"NVVM(check_{index}:
   %byte_pos_{index} = add i64 %pos, {index}
@@ -3028,7 +4146,7 @@ entry:
                           fmt::arg("value", static_cast<std::uint32_t>(literal->value[index])),
                           fmt::arg("success", success)));
           }
-          output_.line(
+          output_.emit(
             R"NVVM(success:
   ret i1 true
 fail:
@@ -3038,7 +4156,7 @@ fail:
           continue;
         }
 
-        output_.line(
+        output_.emit(
           "{}",
           fmt::format(
             R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
@@ -3050,7 +4168,7 @@ entry:
             fmt::arg("size", literal->value.size())));
         for (std::size_t index = 0; index < literal->value.size(); ++index) {
           auto position = index == 0 ? "%pos" : fmt::format("%pos_{}", index);
-          output_.line(
+          output_.emit(
             "{}",
             fmt::format(R"NVVM(check_{index}:
   %cp_{index} = call i32 @{decode}(i8* %data, i64 %size, i64 {position})
@@ -3060,9 +4178,9 @@ entry:
                         fmt::arg("position", position),
                         fmt::arg("codepoint", static_cast<std::uint32_t>(literal->value[index]))));
           if (index + 1 == literal->value.size()) {
-            output_.line("  br i1 %matches_{}, label %success, label %fail", index);
+            output_.emit("  br i1 %matches_{}, label %success, label %fail", index);
           } else {
-            output_.line(
+            output_.emit(
               "{}",
               fmt::format(
                 R"NVVM(  %width_{index} = call i64 @{width}(i8* %data, i64 %size, i64 {position})
@@ -3074,7 +4192,7 @@ entry:
                 fmt::arg("position", position)));
           }
         }
-        output_.line(
+        output_.emit(
           R"NVVM(success:
   ret i1 true
 fail:
@@ -3086,27 +4204,50 @@ fail:
   }
 
   /**
+   * @brief emits constant byte arrays used by a specialized replacement executor
+   */
+  void emit_replacement_globals()
+  {
+    if (ir_.control.result != result_shape::REPLACEMENT) return;
+    for (std::size_t index = 0; index < ir_.replacement.size(); ++index) {
+      auto& token = ir_.replacement[index];
+      if (token.type != replacement_token::kind::LITERAL || token.literal.empty()) continue;
+      output_.emit(R"NVVM(@{} = internal addrspace(4) constant [{} x i8] c"{}", align 1)NVVM",
+                   name(fmt::format("replacement_{}", index)),
+                   token.literal.size(),
+                   format_byte_array(token.literal));
+    }
+    output_.blank();
+  }
+
+  /**
    * @brief emits the recursive dispatcher that executes the instruction block graph
    */
   void emit_blocks()
   {
     // one recursive dispatcher represents cyclic block graphs without forward declarations
     auto function = name("run_block");
-    output_.line(
-      R"NVVM(define internal i1 @{}(i32 %block, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %steps) nounwind {{
+    std::string cases;
+    for (auto& block : ir_.blocks) {
+      fmt::format_to(
+        std::back_inserter(cases), "    i32 {}, label %b{}_op_0\n", block.id, block.id);
+    }
+    output_.emit(
+      "{}",
+      fmt::format(
+        R"NVVM(define internal i1 @{function}(i32 %block, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %steps) nounwind {{
 entry:
   %exhausted = icmp eq i64 %steps, 0
   %next_steps = sub i64 %steps, 1
   br i1 %exhausted, label %return_fail, label %dispatch
 dispatch:
-  switch i32 %block, label %return_fail [)NVVM",
-      function);
-    for (auto& block : ir_.blocks)
-      output_.line("    i32 {}, label %b{}_op_0", block.id, block.id);
-    output_.line("  ]");
+  switch i32 %block, label %return_fail [
+{cases}  ])NVVM",
+        fmt::arg("function", function),
+        fmt::arg("cases", cases)));
     for (auto& block : ir_.blocks)
       emit_block(block);
-    output_.line(
+    output_.emit(
       R"NVVM(return_success:
   ret i1 true
 return_fail:
@@ -3126,7 +4267,7 @@ return_fail:
     std::size_t operation_index = 0;
     bool returned               = false;
     for (auto& item : block.instructions) {
-      output_.line("{}_op_{}:", prefix, operation_index);
+      output_.emit("{}_op_{}:", prefix, operation_index);
       auto next = fmt::format("{}_op_{}", prefix, operation_index + 1);
       if (auto* peek = std::get_if<can_peek>(&item)) {
         auto* next_literal =
@@ -3140,9 +4281,9 @@ return_fail:
           });
         if (fused_ascii_literal) {
           // the ASCII literal helper performs one byte-count bounds check for the fused sequence
-          output_.line("  br label %{}", next);
+          output_.emit("  br label %{}", next);
         } else {
-          output_.line(
+          output_.emit(
             "{}",
             fmt::format(R"NVVM(  %{prefix}_pos_{index} = load i64, i64* %position, align 8
   %{prefix}_peek_{index} = call i1 @{can_peek}(i8* %data, i64 %size, i64 %{prefix}_pos_{index}, i64 {characters})
@@ -3154,31 +4295,38 @@ return_fail:
                         fmt::arg("next", next)));
         }
       } else if (std::holds_alternative<read_character>(item)) {
-        output_.line("  br label %{}", next);
+        output_.emit("  br label %{}", next);
       } else if (auto* capture = std::get_if<write_capture>(&item)) {
         auto slot = static_cast<std::size_t>(capture->capture_index) * 2U +
                     (capture->action == capture_action::END ? 1U : 0U);
-        output_.line("{}",
+        if (std::find(capture_slots_.begin(), capture_slots_.end(), slot) == capture_slots_.end()) {
+          output_.emit("  br label %{}", next);
+          ++operation_index;
+          continue;
+        }
+        auto reset = std::string{};
+        if (capture->action == capture_action::BEGIN) {
+          reset = fmt::format(
+            R"NVVM(  %{prefix}_capture_end_ptr_{index} = getelementptr i64, i64* %captures, i64 {end_slot}
+  store i64 -1, i64* %{prefix}_capture_end_ptr_{index}, align 8
+)NVVM",
+            fmt::arg("prefix", prefix),
+            fmt::arg("index", operation_index),
+            fmt::arg("end_slot", slot + 1U));
+        }
+        output_.emit("{}",
                      fmt::format(
                        R"NVVM(  %{prefix}_capture_pos_{index} = load i64, i64* %position, align 8
   %{prefix}_capture_ptr_{index} = getelementptr i64, i64* %captures, i64 {slot}
-  store i64 %{prefix}_capture_pos_{index}, i64* %{prefix}_capture_ptr_{index}, align 8)NVVM",
+  store i64 %{prefix}_capture_pos_{index}, i64* %{prefix}_capture_ptr_{index}, align 8
+{reset}  br label %{next})NVVM",
                        fmt::arg("prefix", prefix),
                        fmt::arg("index", operation_index),
-                       fmt::arg("slot", slot)));
-        if (capture->action == capture_action::BEGIN) {
-          output_.line(
-            "{}",
-            fmt::format(
-              R"NVVM(  %{prefix}_capture_end_ptr_{index} = getelementptr i64, i64* %captures, i64 {end_slot}
-  store i64 -1, i64* %{prefix}_capture_end_ptr_{index}, align 8)NVVM",
-              fmt::arg("prefix", prefix),
-              fmt::arg("index", operation_index),
-              fmt::arg("end_slot", slot + 1U)));
-        }
-        output_.line("  br label %{}", next);
+                       fmt::arg("slot", slot),
+                       fmt::arg("reset", reset),
+                       fmt::arg("next", next)));
       } else if (std::holds_alternative<match_character>(item)) {
-        output_.line(
+        output_.emit(
           "{}",
           fmt::format(R"NVVM(  %{prefix}_match_pos_{index} = load i64, i64* %position, align 8
   %{prefix}_match_{index} = call i1 @{predicate}(i8* %data, i64 %size, i64 %{prefix}_match_pos_{index})
@@ -3188,7 +4336,7 @@ return_fail:
                       fmt::arg("predicate", name(fmt::format("predicate_{}", block.id))),
                       fmt::arg("next", next)));
       } else if (std::holds_alternative<match_literal>(item)) {
-        output_.line(
+        output_.emit(
           "{}",
           fmt::format(R"NVVM(  %{prefix}_literal_pos_{index} = load i64, i64* %position, align 8
   %{prefix}_literal_{index} = call i1 @{literal}(i8* %data, i64 %size, i64 %{prefix}_literal_pos_{index})
@@ -3207,7 +4355,7 @@ return_fail:
                                                  previous_literal->value.end(),
                                                  [](char32_t value) { return value <= 0x7f; });
         if (matched_ascii_literal) {
-          output_.line(
+          output_.emit(
             "{}",
             fmt::format(R"NVVM(  %{prefix}_advance_pos_{index} = load i64, i64* %position, align 8
   %{prefix}_advanced_{index} = add i64 %{prefix}_advance_pos_{index}, {characters}
@@ -3218,7 +4366,7 @@ return_fail:
                         fmt::arg("characters", advance->characters),
                         fmt::arg("next", next)));
         } else {
-          output_.line("{}",
+          output_.emit("{}",
                        fmt::format(
                          R"NVVM(  %{prefix}_advance_pos_{index} = load i64, i64* %position, align 8
   %{prefix}_advanced_{index} = call i64 @{advance}(i8* %data, i64 %size, i64 %{prefix}_advance_pos_{index}, i64 {characters})
@@ -3231,7 +4379,7 @@ return_fail:
                          fmt::arg("next", next)));
         }
       } else if (auto* assertion = std::get_if<test_assertion>(&item)) {
-        output_.line(
+        output_.emit(
           "{}",
           fmt::format(R"NVVM(  %{prefix}_assert_pos_{index} = load i64, i64* %position, align 8
   %{prefix}_assert_{index} = call i1 @{assertion}(i8* %data, i64 %size, i64 %{prefix}_assert_pos_{index}, i32 {kind})
@@ -3243,7 +4391,7 @@ return_fail:
                       fmt::arg("next", next)));
       } else if (std::holds_alternative<emit_accept>(item)) {
         if (ir_.control.require_end) {
-          output_.line(
+          output_.emit(
             R"NVVM(  %{}_accept_pos = load i64, i64* %position, align 8
   %{}_accept = icmp eq i64 %{}_accept_pos, %size
   ret i1 %{}_accept)NVVM",
@@ -3252,7 +4400,7 @@ return_fail:
             prefix,
             prefix);
         } else {
-          output_.line("  ret i1 true");
+          output_.emit("  ret i1 true");
         }
         returned = true;
       }
@@ -3260,35 +4408,30 @@ return_fail:
     }
 
     if (returned) return;
-    output_.line("{}_op_{}:", prefix, operation_index);
+    output_.emit("{}_op_{}:", prefix, operation_index);
     auto edges = block.successors;
     std::stable_sort(edges.begin(), edges.end(), [](auto& left, auto& right) {
       return left.priority < right.priority;
     });
     if (edges.empty()) {
-      output_.line("  br label %return_fail");
+      output_.emit("  br label %return_fail");
       return;
     }
-    output_.line("  %{}_saved = load i64, i64* %position, align 8", prefix);
-    auto capture_slots = ir_.control.result == result_shape::CAPTURES
-                           ? static_cast<std::size_t>(ir_.capture_count + 1U) * 2U
-                           : 0U;
-    for (std::size_t slot = 0; slot < capture_slots; ++slot) {
-      output_.line(R"NVVM(  %{}_saved_capture_{} = getelementptr i64, i64* %captures, i64 {})NVVM",
-                   prefix,
-                   slot,
-                   slot);
-      output_.line("  %{}_saved_capture_value_{} = load i64, i64* %{}_saved_capture_{}, align 8",
-                   prefix,
-                   slot,
-                   prefix,
-                   slot);
+    output_.emit("  %{}_saved = load i64, i64* %position, align 8", prefix);
+    for (auto slot : capture_slots_) {
+      output_.emit(
+        "{}",
+        fmt::format(
+          R"NVVM(  %{prefix}_saved_capture_{slot} = getelementptr i64, i64* %captures, i64 {slot}
+  %{prefix}_saved_capture_value_{slot} = load i64, i64* %{prefix}_saved_capture_{slot}, align 8)NVVM",
+          fmt::arg("prefix", prefix),
+          fmt::arg("slot", slot)));
     }
-    output_.line("  br label %{}_attempt_0", prefix);
+    output_.emit("  br label %{}_attempt_0", prefix);
     for (std::size_t index = 0; index < edges.size(); ++index) {
       auto failure = index + 1 < edges.size() ? fmt::format("{}_attempt_{}", prefix, index + 1)
                                               : std::string{"return_fail"};
-      output_.line("{}",
+      output_.emit("{}",
                    fmt::format(
                      R"NVVM({prefix}_attempt_{index}:
   %{prefix}_child_{index} = call i1 @{run_block}(i32 {target}, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %next_steps)
@@ -3300,14 +4443,14 @@ return_fail:
                      fmt::arg("run_block", name("run_block")),
                      fmt::arg("target", edges[index].target),
                      fmt::arg("failure", failure)));
-      for (std::size_t slot = 0; slot < capture_slots; ++slot) {
-        output_.line("  store i64 %{}_saved_capture_value_{}, i64* %{}_saved_capture_{}, align 8",
+      for (auto slot : capture_slots_) {
+        output_.emit("  store i64 %{}_saved_capture_value_{}, i64* %{}_saved_capture_{}, align 8",
                      prefix,
                      slot,
                      prefix,
                      slot);
       }
-      output_.line("  br label %{}", failure);
+      output_.emit("  br label %{}", failure);
     }
   }
 
@@ -3319,7 +4462,7 @@ return_fail:
     auto run_block  = name("run_block");
     auto advance    = name("advance");
     auto multiplier = static_cast<std::uint64_t>(ir_.blocks.size()) * 8U + 32U;
-    output_.line(
+    output_.emit(
       "{}",
       fmt::format(R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
 entry:
@@ -3328,8 +4471,8 @@ entry:
   %step_limit = mul i64 %size_plus_one, {multiplier})NVVM",
                   fmt::arg("execute", options_.execute_function),
                   fmt::arg("multiplier", multiplier)));
-    if (!ir_.control.scan_input) {
-      output_.line("{}",
+    if (!ir_.control.scan_input || begins_at_input_start()) {
+      output_.emit("{}",
                    fmt::format(R"NVVM(  store i64 0, i64* %position, align 8
   %matched = call i1 @{run_block}(i32 {entry}, i8* %data, i64 %size, i64* %position, i64* null, i64 %step_limit)
   ret i1 %matched
@@ -3348,7 +4491,7 @@ entry:
 )NVVM";
       }
       auto condition = options_.branch_hints ? "%candidate_likely" : "%candidate";
-      output_.line("{}",
+      output_.emit("{}",
                    fmt::format(
                      R"NVVM(  br label %search
 search:
@@ -3394,7 +4537,7 @@ no:
       return;
     }
 
-    output_.line("{}",
+    output_.emit("{}",
                  fmt::format(R"NVVM(  br label %search
 search:
   %start = phi i64 [ 0, %entry ], [ %next_start, %continue ]
@@ -3419,18 +4562,320 @@ no:
   }
 
   /**
-   * @brief emits the capture-enumeration ABI used by exact CUDA result materialization
+   * @brief emits capture stores selected by a deterministic transition index
+   *
+   * @param prefix unique label and temporary prefix
+   * @param programs capture-update program for each deterministic transition
+   * @param position SSA value recorded by every capture update
+   * @param continuation block reached after applying a program
    */
-  void emit_capture_execute()
+  void emit_capture_action_dispatch(
+    std::string_view prefix,
+    std::vector<std::vector<deterministic_capture_action>> const& programs,
+    std::string_view position,
+    std::string_view continuation)
   {
+    std::vector<std::size_t> active;
+    for (std::size_t index = 0; index < programs.size(); ++index) {
+      if (!programs[index].empty()) active.push_back(index);
+    }
+    if (active.empty()) {
+      output_.emit("  br label %{}", continuation);
+      return;
+    }
+
+    std::string source;
+    fmt::format_to(
+      std::back_inserter(source), "  switch i32 %transition_index, label %{}_done [\n", prefix);
+    for (auto index : active) {
+      fmt::format_to(
+        std::back_inserter(source), "    i32 {}, label %{}_{}\n", index, prefix, index);
+    }
+    fmt::format_to(std::back_inserter(source), "  ]\n");
+    for (auto index : active) {
+      fmt::format_to(std::back_inserter(source), "{}_{}:\n", prefix, index);
+      for (std::size_t action_index = 0; action_index < programs[index].size(); ++action_index) {
+        auto action = programs[index][action_index];
+        fmt::format_to(
+          std::back_inserter(source),
+          R"NVVM(  %{prefix}_{transition}_{action}_ptr = getelementptr i64, i64* %captures, i64 {slot}
+  store i64 {position}, i64* %{prefix}_{transition}_{action}_ptr, align 8
+)NVVM",
+          fmt::arg("prefix", prefix),
+          fmt::arg("transition", index),
+          fmt::arg("action", action_index),
+          fmt::arg("slot", action.slot),
+          fmt::arg("position", position));
+        if (action.reset_end) {
+          fmt::format_to(
+            std::back_inserter(source),
+            R"NVVM(  %{prefix}_{transition}_{action}_end_ptr = getelementptr i64, i64* %captures, i64 {slot}
+  store i64 -1, i64* %{prefix}_{transition}_{action}_end_ptr, align 8
+)NVVM",
+            fmt::arg("prefix", prefix),
+            fmt::arg("transition", index),
+            fmt::arg("action", action_index),
+            fmt::arg("slot", action.slot + 1U));
+        }
+      }
+      fmt::format_to(std::back_inserter(source), "  br label %{}_done\n", prefix);
+    }
+    fmt::format_to(std::back_inserter(source), "{}_done:\n  br label %{}", prefix, continuation);
+    output_.emit("{}", source);
+  }
+
+  /**
+   * @brief emits a direct tagged-DFA matcher for capture-safe deterministic automata
+   *
+   * @param machine deterministic machine and transition capture programs to execute
+   */
+  void emit_tagged_deterministic_find_from(deterministic_machine const& machine)
+  {
+    output_.emit(
+      "{}",
+      fmt::format(
+        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
+entry:
+  br label %search
+search:
+  %start = phi i64 [ %search_start, %entry ], [ %next_start, %advance_start ]
+  %in_range = icmp ule i64 %start, %size
+  br i1 %in_range, label %initialize, label %no
+initialize:)NVVM",
+        fmt::arg("function", name("find_from"))));
+    for (auto slot : capture_slots_) {
+      output_.emit(
+        "{}",
+        fmt::format(R"NVVM(  %capture_{slot}_ptr = getelementptr i64, i64* %captures, i64 {slot}
+  store i64 -1, i64* %capture_{slot}_ptr, align 8)NVVM",
+                    fmt::arg("slot", slot)));
+    }
+    output_.emit("{}",
+                 fmt::format(
+                   R"NVVM(  store i64 %start, i64* %match_begin, align 8
+  br label %loop
+loop:
+  %position = phi i64 [ %start, %initialize ], [ %next_position, %continue ]
+  %state = phi i32 [ {initial_state}, %initialize ], [ %next_state, %continue ]
+  %at_end = icmp eq i64 %position, %size
+  br i1 %at_end, label %candidate_fail, label %load
+load:
+  %input_ptr = getelementptr i8, i8* %data, i64 %position
+  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %is_ascii = icmp ult i32 %first, 128
+  br i1 %is_ascii, label %ascii, label %unicode
+ascii:
+  %ascii_class = call i32 @{classify}(i32 %first)
+  br label %transition
+unicode:
+  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  br label %transition
+transition:
+  %character_class = phi i32 [ %ascii_class, %ascii ], [ %unicode_class, %unicode ]
+  %character_width = phi i64 [ 1, %ascii ], [ %unicode_width, %unicode ]
+  %state_index = and i32 %state, 16383
+  %state_offset = mul nuw i32 %state_index, {class_count}
+  %transition_index = add nuw i32 %state_offset, %character_class
+  %transition_index_i64 = zext i32 %transition_index to i64
+  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
+  %encoded_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
+  %encoded = zext i16 %encoded_i16 to i32
+  %next_state = and i32 %encoded, 16383
+  %dead = icmp eq i32 %next_state, {dead_state}
+  br i1 %dead, label %candidate_fail, label %capture_transition
+capture_transition:)NVVM",
+                   fmt::arg("initial_state", machine.initial_state),
+                   fmt::arg("load_byte", name("load_byte")),
+                   fmt::arg("classify", name("dfa_classify")),
+                   fmt::arg("decode", name("decode_codepoint")),
+                   fmt::arg("width", name("decode_width")),
+                   fmt::arg("class_count", machine.class_count),
+                   fmt::arg("transition_count", machine.transitions.size()),
+                   fmt::arg("transition_address_space", machine.transition_address_space),
+                   fmt::arg("transitions", name("dfa_transitions")),
+                   fmt::arg("dead_state", machine.dead_state)));
+    emit_capture_action_dispatch(
+      "transition_capture", machine.transition_capture_actions, "%position", "consume");
+    output_.emit(
+      R"NVVM(consume:
+  %next_position = add i64 %position, %character_width
+  %accept_bits = and i32 %encoded, 32768
+  %accepted = icmp ne i32 %accept_bits, 0
+  br i1 %accepted, label %capture_accept, label %continue
+continue:
+  br label %loop
+capture_accept:)NVVM");
+    emit_capture_action_dispatch(
+      "accept_capture", machine.accept_capture_actions, "%next_position", "yes");
+    output_.emit("{}",
+                 fmt::format(
+                   R"NVVM(candidate_fail:
+  %at_input_end = icmp eq i64 %start, %size
+  br i1 %at_input_end, label %no, label %advance_start
+advance_start:
+  %next_start = call i64 @{advance}(i8* %data, i64 %size, i64 %start, i64 1)
+  br label %search
+yes:
+  store i64 %next_position, i64* %match_end, align 8
+  ret i1 true
+no:
+  ret i1 false
+}})NVVM",
+                   fmt::arg("advance", name("advance"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits a direct byte-search primitive for an exact ASCII character
+   *
+   * @param byte ASCII byte that forms the complete regex
+   */
+  void emit_single_byte_find_from(std::uint8_t byte)
+  {
+    output_.emit(
+      "{}",
+      fmt::format(
+        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) alwaysinline nounwind {{
+entry:
+  br label %search
+search:
+  %position = phi i64 [ %search_start, %entry ], [ %next_position, %continue ]
+  %in_range = icmp ult i64 %position, %size
+  br i1 %in_range, label %load, label %no
+load:
+  %input_ptr = getelementptr i8, i8* %data, i64 %position
+  %value = call i32 @{load_byte}(i8* %input_ptr)
+  %matched = icmp eq i32 %value, {byte}
+  br i1 %matched, label %yes, label %continue
+continue:
+  %next_position = add nuw i64 %position, 1
+  br label %search
+yes:
+  %end = add nuw i64 %position, 1
+  store i64 %position, i64* %match_begin, align 8
+  store i64 %end, i64* %match_end, align 8
+  ret i1 true
+no:
+  ret i1 false
+}})NVVM",
+        fmt::arg("function", name("find_from")),
+        fmt::arg("load_byte", name("load_byte")),
+        fmt::arg("byte", static_cast<std::uint32_t>(byte))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits a non-recursive leftmost-match primitive for an ordered deterministic automaton
+   *
+   * @param machine deterministic machine whose transitions are known to preserve priority
+   */
+  void emit_deterministic_find_from(deterministic_machine const& machine)
+  {
+    auto initial_accept = (machine.initial_state & 0x8000U) != 0 ? "%start" : "-1";
+    output_.emit(
+      "{}",
+      fmt::format(
+        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
+entry:
+  br label %search
+search:
+  %start = phi i64 [ %search_start, %entry ], [ %next_start, %advance_start ]
+  %in_range = icmp ule i64 %start, %size
+  br i1 %in_range, label %candidate, label %no
+candidate:
+  br label %loop
+loop:
+  %position = phi i64 [ %start, %candidate ], [ %next_position, %continue ]
+  %state = phi i32 [ {initial_state}, %candidate ], [ %next_state, %continue ]
+  %last_accept = phi i64 [ {initial_accept}, %candidate ], [ %next_accept, %continue ]
+  %at_end = icmp eq i64 %position, %size
+  br i1 %at_end, label %candidate_done, label %load
+load:
+  %input_ptr = getelementptr i8, i8* %data, i64 %position
+  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %is_ascii = icmp ult i32 %first, 128
+  br i1 %is_ascii, label %ascii, label %unicode
+ascii:
+  %ascii_class = call i32 @{classify}(i32 %first)
+  br label %transition
+unicode:
+  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  br label %transition
+transition:
+  %character_class = phi i32 [ %ascii_class, %ascii ], [ %unicode_class, %unicode ]
+  %character_width = phi i64 [ 1, %ascii ], [ %unicode_width, %unicode ]
+  %state_index = and i32 %state, 16383
+  %state_offset = mul nuw i32 %state_index, {class_count}
+  %transition_index = add nuw i32 %state_offset, %character_class
+  %transition_index_i64 = zext i32 %transition_index to i64
+  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
+  %encoded_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
+  %encoded = zext i16 %encoded_i16 to i32
+  %stop_bits = and i32 %encoded, 16384
+  %stop_before = icmp ne i32 %stop_bits, 0
+  br i1 %stop_before, label %candidate_done, label %check_transition
+check_transition:
+  %next_state = and i32 %encoded, 16383
+  %dead = icmp eq i32 %next_state, {dead_state}
+  br i1 %dead, label %candidate_done, label %consume
+consume:
+  %next_position = add i64 %position, %character_width
+  %accept_bits = and i32 %encoded, 32768
+  %accepted = icmp ne i32 %accept_bits, 0
+  %next_accept = select i1 %accepted, i64 %next_position, i64 %last_accept
+  br label %continue
+continue:
+  br label %loop
+candidate_done:
+  %accepted_end = phi i64 [ %last_accept, %loop ], [ %last_accept, %transition ], [ %last_accept, %check_transition ]
+  %matched = icmp ne i64 %accepted_end, -1
+  br i1 %matched, label %yes, label %candidate_fail
+candidate_fail:
+  %at_input_end = icmp eq i64 %start, %size
+  br i1 %at_input_end, label %no, label %advance_start
+advance_start:
+  %next_start = call i64 @{advance}(i8* %data, i64 %size, i64 %start, i64 1)
+  br label %search
+yes:
+  store i64 %start, i64* %match_begin, align 8
+  store i64 %accepted_end, i64* %match_end, align 8
+  ret i1 true
+no:
+  ret i1 false
+}})NVVM",
+        fmt::arg("function", name("find_from")),
+        fmt::arg("initial_state", machine.initial_state),
+        fmt::arg("initial_accept", initial_accept),
+        fmt::arg("load_byte", name("load_byte")),
+        fmt::arg("classify", name("dfa_classify")),
+        fmt::arg("decode", name("decode_codepoint")),
+        fmt::arg("width", name("decode_width")),
+        fmt::arg("class_count", machine.class_count),
+        fmt::arg("transition_count", machine.transitions.size()),
+        fmt::arg("transition_address_space", machine.transition_address_space),
+        fmt::arg("transitions", name("dfa_transitions")),
+        fmt::arg("dead_state", machine.dead_state),
+        fmt::arg("advance", name("advance"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the shared leftmost-match primitive used by materializing operations
+   */
+  void emit_find_from()
+  {
+    auto function   = name("find_from");
     auto run_block  = name("run_block");
     auto advance    = name("advance");
     auto multiplier = static_cast<std::uint64_t>(ir_.blocks.size()) * 8U + 32U;
-    auto slots      = static_cast<std::size_t>(ir_.capture_count + 1U) * 2U;
-    output_.line(
+    output_.emit(
       "{}",
       fmt::format(
-        R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size, i64 %search_start, i64* %captures) nounwind {{
+        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
 entry:
   %position = alloca i64, align 8
   %size_plus_one = add i64 %size, 1
@@ -3438,50 +4883,483 @@ entry:
   br label %search
 search:
   %start = phi i64 [ %search_start, %entry ], [ %next_start, %continue ]
-  %in_range = icmp ule i64 %start, %size
-  br i1 %in_range, label %initialize, label %no
-initialize:)NVVM",
-        fmt::arg("execute", options_.execute_function),
+  %in_range = icmp ule i64 %start, %size)NVVM",
+        fmt::arg("function", function),
         fmt::arg("multiplier", multiplier)));
-    for (std::size_t slot = 0; slot < slots; ++slot) {
-      output_.line("  %capture_ptr_{} = getelementptr i64, i64* %captures, i64 {}", slot, slot);
-      output_.line("  store i64 -1, i64* %capture_ptr_{}, align 8", slot);
-    }
-    output_.line("{}",
-                 fmt::format(
-                   R"NVVM(  store i64 %start, i64* %capture_ptr_0, align 8
-  store i64 %start, i64* %position, align 8
-  %matched = call i1 @{run_block}(i32 {entry}, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %step_limit)
-  br i1 %matched, label %yes, label %check_end
-check_end:
+
+    auto prefix = required_ascii_prefix();
+    if (prefix.has_value()) {
+      auto hint = std::string{};
+      if (options_.branch_hints) {
+        hint = R"NVVM(  %prefix_likely = call i1 @llvm.expect.i1(i1 %prefix_candidate, i1 false)
+)NVVM";
+      }
+      auto condition = options_.branch_hints ? "%prefix_likely" : "%prefix_candidate";
+      output_.emit("{}",
+                   fmt::format(R"NVVM(  br i1 %in_range, label %prefix_end, label %no
+prefix_end:
   %at_end = icmp eq i64 %start, %size
-  br i1 %at_end, label %no, label %continue
-continue:
+  br i1 %at_end, label %initialize, label %prefix_filter
+prefix_filter:
+  %prefix_ptr = getelementptr i8, i8* %data, i64 %start
+  %prefix_byte = call i32 @{load_byte}(i8* %prefix_ptr)
+  %prefix_candidate = icmp eq i32 %prefix_byte, {prefix}
+{hint}  br i1 {condition}, label %initialize, label %continue)NVVM",
+                               fmt::arg("load_byte", name("load_byte")),
+                               fmt::arg("prefix", static_cast<std::uint32_t>(*prefix)),
+                               fmt::arg("hint", hint),
+                               fmt::arg("condition", condition)));
+    } else {
+      output_.emit("  br i1 %in_range, label %initialize, label %no");
+    }
+
+    output_.emit("initialize:");
+    for (auto slot : capture_slots_) {
+      output_.emit(
+        "{}",
+        fmt::format(
+          R"NVVM(  %find_capture_ptr_{slot} = getelementptr i64, i64* %captures, i64 {slot}
+  store i64 -1, i64* %find_capture_ptr_{slot}, align 8)NVVM",
+          fmt::arg("slot", slot)));
+    }
+    if (ir_.control.result == result_shape::CAPTURES) {
+      output_.emit("  store i64 %start, i64* %find_capture_ptr_0, align 8");
+    }
+    auto captures = uses_capture_buffer() ? "%captures" : "null";
+    output_.emit("{}",
+                 fmt::format(R"NVVM(  store i64 %start, i64* %position, align 8
+  %matched = call i1 @{run_block}(i32 {entry}, i8* %data, i64 %size, i64* %position, i64* {captures}, i64 %step_limit)
+  br i1 %matched, label %yes, label %check_end
+check_end:)NVVM",
+                             fmt::arg("run_block", run_block),
+                             fmt::arg("entry", ir_.entry),
+                             fmt::arg("captures", captures)));
+    if (prefix.has_value()) {
+      output_.emit("  br i1 %at_end, label %no, label %continue");
+    } else {
+      output_.emit(R"NVVM(  %at_end = icmp eq i64 %start, %size
+  br i1 %at_end, label %no, label %continue)NVVM");
+    }
+    output_.emit("{}",
+                 fmt::format(R"NVVM(continue:
   %next_start = call i64 @{advance}(i8* %data, i64 %size, i64 %start, i64 1)
   br label %search
 yes:
-  %match_end = load i64, i64* %position, align 8
-  store i64 %match_end, i64* %capture_ptr_1, align 8
-  ret i1 true
+  %accepted_end = load i64, i64* %position, align 8
+  store i64 %start, i64* %match_begin, align 8
+  store i64 %accepted_end, i64* %match_end, align 8)NVVM",
+                             fmt::arg("advance", advance)));
+    if (ir_.control.result == result_shape::CAPTURES) {
+      output_.emit("  store i64 %accepted_end, i64* %find_capture_ptr_1, align 8");
+    }
+    output_.emit(R"NVVM(  ret i1 true
 no:
   ret i1 false
+}})NVVM");
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the first-match span ABI for a find operation
+   */
+  void emit_find_execute()
+  {
+    output_.emit(
+      "{}",
+      fmt::format(R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size, i64* %span) nounwind {{
+entry:
+  %match_begin = getelementptr i64, i64* %span, i64 0
+  %match_end = getelementptr i64, i64* %span, i64 1
+  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 0, i64* %match_begin, i64* %match_end, i64* null)
+  ret i1 %matched
 }})NVVM",
-                   fmt::arg("run_block", run_block),
-                   fmt::arg("entry", ir_.entry),
-                   fmt::arg("advance", advance)));
+                  fmt::arg("execute", options_.execute_function),
+                  fmt::arg("find_from", name("find_from"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the first-match capture ABI used by extract and enumeration wrappers
+   */
+  void emit_capture_execute()
+  {
+    output_.emit(
+      "{}",
+      fmt::format(
+        R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size, i64 %search_start, i64* %captures) nounwind {{
+entry:
+  %match_begin = getelementptr i64, i64* %captures, i64 0
+  %match_end = getelementptr i64, i64* %captures, i64 1
+  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures)
+  ret i1 %matched
+}})NVVM",
+        fmt::arg("execute", options_.execute_function),
+        fmt::arg("find_from", name("find_from"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits a complete non-overlapping match-count executor
+   */
+  void emit_count_execute()
+  {
+    output_.emit("{}",
+                 fmt::format(R"NVVM(define i64 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+entry:
+  %match_begin = alloca i64, align 8
+  %match_end = alloca i64, align 8
+  br label %loop
+loop:
+  %search_start = phi i64 [ 0, %entry ], [ %end_value, %nonempty ], [ %empty_next, %advance_empty ]
+  %count = phi i64 [ 0, %entry ], [ %next_count, %nonempty ], [ %next_count, %advance_empty ]
+  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* null)
+  br i1 %matched, label %found, label %done
+found:
+  %begin_value = load i64, i64* %match_begin, align 8
+  %end_value = load i64, i64* %match_end, align 8
+  %next_count = add i64 %count, 1
+  %nonempty_match = icmp ne i64 %begin_value, %end_value
+  br i1 %nonempty_match, label %nonempty, label %empty
+nonempty:
+  br label %loop
+empty:
+  %empty_at_end = icmp eq i64 %end_value, %size
+  br i1 %empty_at_end, label %done_after_match, label %advance_empty
+advance_empty:
+  %empty_next = call i64 @{advance}(i8* %data, i64 %size, i64 %end_value, i64 1)
+  br label %loop
+done_after_match:
+  ret i64 %next_count
+done:
+  ret i64 %count
+}})NVVM",
+                             fmt::arg("execute", options_.execute_function),
+                             fmt::arg("find_from", name("find_from")),
+                             fmt::arg("advance", name("advance"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the range-copy primitive used by the replacement executor
+   */
+  void emit_append_range()
+  {
+    output_.emit(
+      "{}",
+      fmt::format(
+        R"NVVM(define internal i64 @{function}(i8* %source, i64 %begin, i64 %end, i8* %output, i64 %cursor) alwaysinline nounwind {{
+entry:
+  %length = sub i64 %end, %begin
+  %next_cursor = add i64 %cursor, %length
+  %output_missing = icmp eq i8* %output, null
+  %empty = icmp eq i64 %length, 0
+  %skip = or i1 %output_missing, %empty
+  br i1 %skip, label %done, label %copy
+copy:
+  %source_ptr = getelementptr i8, i8* %source, i64 %begin
+  %output_ptr = getelementptr i8, i8* %output, i64 %cursor
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 1 %output_ptr, i8* align 1 %source_ptr, i64 %length, i1 false)
+  br label %done
+done:
+  ret i64 %next_cursor
+}})NVVM",
+        fmt::arg("function", name("append_range"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits a sizing-and-materialization executor specialized for a replacement template
+   */
+  void emit_replace_execute()
+  {
+    emit_append_range();
+    auto capture_argument    = std::string{"null"};
+    auto capture_declaration = std::string{};
+    if (uses_capture_buffer()) {
+      auto slots          = static_cast<std::size_t>(ir_.capture_count + 1U) * 2U;
+      capture_declaration = fmt::format(R"NVVM(  %capture_array = alloca [{slots} x i64], align 8
+  %captures = getelementptr [{slots} x i64], [{slots} x i64]* %capture_array, i64 0, i64 0)NVVM",
+                                        fmt::arg("slots", slots));
+      capture_argument    = "%captures";
+    }
+    output_.emit("{}",
+                 fmt::format(
+                   R"NVVM(define i64 @{execute}(i8* %data, i64 %size, i8* %output) nounwind {{
+entry:
+  %match_begin = alloca i64, align 8
+  %match_end = alloca i64, align 8
+{capture_declaration}
+  br label %loop
+loop:
+  %search_start = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %advanced_start, %advance_empty ]
+  %copied = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %match_end_value, %advance_empty ]
+  %cursor = phi i64 [ 0, %entry ], [ %replacement_cursor, %nonempty ], [ %replacement_cursor, %advance_empty ]
+  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* {captures})
+  br i1 %matched, label %found, label %no_match
+found:
+  %match_begin_value = load i64, i64* %match_begin, align 8
+  %match_end_value = load i64, i64* %match_end, align 8
+  %unmatched_cursor = call i64 @{append}(i8* %data, i64 %copied, i64 %match_begin_value, i8* %output, i64 %cursor))NVVM",
+                   fmt::arg("execute", options_.execute_function),
+                   fmt::arg("capture_declaration", capture_declaration),
+                   fmt::arg("find_from", name("find_from")),
+                   fmt::arg("captures", capture_argument),
+                   fmt::arg("append", name("append_range"))));
+    std::string cursor = "%unmatched_cursor";
+    for (std::size_t index = 0; index < ir_.replacement.size(); ++index) {
+      auto& token = ir_.replacement[index];
+      if (token.type == replacement_token::kind::LITERAL) {
+        if (token.literal.empty()) continue;
+        output_.emit(
+          "{}",
+          fmt::format(
+            R"NVVM(  %replacement_constant_{index} = getelementptr [{size} x i8], [{size} x i8] addrspace(4)* @{constant}, i64 0, i64 0
+  %replacement_literal_{index} = addrspacecast i8 addrspace(4)* %replacement_constant_{index} to i8*
+  %replacement_cursor_{index} = call i64 @{append}(i8* %replacement_literal_{index}, i64 0, i64 {size}, i8* %output, i64 {cursor}))NVVM",
+            fmt::arg("index", index),
+            fmt::arg("size", token.literal.size()),
+            fmt::arg("constant", name(fmt::format("replacement_{}", index))),
+            fmt::arg("append", name("append_range")),
+            fmt::arg("cursor", cursor)));
+      } else if (token.capture_index == 0 || is_whole_match_capture(token.capture_index)) {
+        output_.emit(
+          "{}",
+          fmt::format(
+            R"NVVM(  %replacement_cursor_{index} = call i64 @{append}(i8* %data, i64 %match_begin_value, i64 %match_end_value, i8* %output, i64 {cursor}))NVVM",
+            fmt::arg("index", index),
+            fmt::arg("append", name("append_range")),
+            fmt::arg("cursor", cursor)));
+      } else {
+        auto slot = static_cast<std::size_t>(token.capture_index) * 2U;
+        output_.emit(
+          "{}",
+          fmt::format(
+            R"NVVM(  %replacement_capture_begin_ptr_{index} = getelementptr i64, i64* %captures, i64 {slot}
+  %replacement_capture_end_ptr_{index} = getelementptr i64, i64* %captures, i64 {end_slot}
+  %replacement_capture_begin_{index} = load i64, i64* %replacement_capture_begin_ptr_{index}, align 8
+  %replacement_capture_end_{index} = load i64, i64* %replacement_capture_end_ptr_{index}, align 8
+  %replacement_capture_has_begin_{index} = icmp ne i64 %replacement_capture_begin_{index}, -1
+  %replacement_capture_has_end_{index} = icmp ne i64 %replacement_capture_end_{index}, -1
+  %replacement_capture_valid_{index} = and i1 %replacement_capture_has_begin_{index}, %replacement_capture_has_end_{index}
+  %replacement_capture_safe_begin_{index} = select i1 %replacement_capture_valid_{index}, i64 %replacement_capture_begin_{index}, i64 0
+  %replacement_capture_safe_end_{index} = select i1 %replacement_capture_valid_{index}, i64 %replacement_capture_end_{index}, i64 0
+  %replacement_cursor_{index} = call i64 @{append}(i8* %data, i64 %replacement_capture_safe_begin_{index}, i64 %replacement_capture_safe_end_{index}, i8* %output, i64 {cursor}))NVVM",
+            fmt::arg("index", index),
+            fmt::arg("slot", slot),
+            fmt::arg("end_slot", slot + 1U),
+            fmt::arg("append", name("append_range")),
+            fmt::arg("cursor", cursor)));
+      }
+      cursor = fmt::format("%replacement_cursor_{}", index);
+    }
+    output_.emit("{}",
+                 fmt::format(R"NVVM(  %replacement_cursor = add i64 {cursor}, 0
+  %nonempty_match = icmp ne i64 %match_begin_value, %match_end_value
+  br i1 %nonempty_match, label %nonempty, label %empty
+nonempty:
+  br label %loop
+empty:
+  %empty_at_end = icmp eq i64 %match_end_value, %size
+  br i1 %empty_at_end, label %empty_finish, label %advance_empty
+advance_empty:
+  %advanced_start = call i64 @{advance}(i8* %data, i64 %size, i64 %match_end_value, i64 1)
+  br label %loop
+no_match:
+  br label %finish
+empty_finish:
+  br label %finish
+finish:
+  %tail_begin = phi i64 [ %copied, %no_match ], [ %match_end_value, %empty_finish ]
+  %tail_cursor = phi i64 [ %cursor, %no_match ], [ %replacement_cursor, %empty_finish ]
+  %result_size = call i64 @{append}(i8* %data, i64 %tail_begin, i64 %size, i8* %output, i64 %tail_cursor)
+  ret i64 %result_size
+}})NVVM",
+                             fmt::arg("cursor", cursor),
+                             fmt::arg("advance", name("advance")),
+                             fmt::arg("append", name("append_range"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the optional span-store primitive used by split sizing and materialization
+   */
+  void emit_write_span()
+  {
+    output_.emit(
+      "{}",
+      fmt::format(
+        R"NVVM(define internal void @{function}(i64* %spans, i64 %index, i64 %begin, i64 %end) alwaysinline nounwind {{
+entry:
+  %missing = icmp eq i64* %spans, null
+  br i1 %missing, label %done, label %write
+write:
+  %base = shl i64 %index, 1
+  %end_index = add i64 %base, 1
+  %begin_ptr = getelementptr i64, i64* %spans, i64 %base
+  %end_ptr = getelementptr i64, i64* %spans, i64 %end_index
+  store i64 %begin, i64* %begin_ptr, align 8
+  store i64 %end, i64* %end_ptr, align 8
+  br label %done
+done:
+  ret void
+}})NVVM",
+        fmt::arg("function", name("write_span"))));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits a sizing-and-span-materialization executor specialized for split
+   */
+  void emit_split_execute()
+  {
+    emit_write_span();
+    output_.emit(
+      "{}",
+      fmt::format(R"NVVM(define i64 @{execute}(i8* %data, i64 %size, i64* %spans) nounwind {{
+entry:
+  %match_begin = alloca i64, align 8
+  %match_end = alloca i64, align 8
+  br label %loop
+loop:
+  %search_start = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %advanced_start, %advance_empty ]
+  %copied = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %match_end_value, %advance_empty ]
+  %field_count = phi i64 [ 0, %entry ], [ %next_count, %nonempty ], [ %next_count, %advance_empty ]
+  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* null)
+  br i1 %matched, label %found, label %no_match
+found:
+  %match_begin_value = load i64, i64* %match_begin, align 8
+  %match_end_value = load i64, i64* %match_end, align 8
+  call void @{write_span}(i64* %spans, i64 %field_count, i64 %copied, i64 %match_begin_value)
+  %next_count = add i64 %field_count, 1
+  %nonempty_match = icmp ne i64 %match_begin_value, %match_end_value
+  br i1 %nonempty_match, label %nonempty, label %empty
+nonempty:
+  br label %loop
+empty:
+  %empty_at_end = icmp eq i64 %match_end_value, %size
+  br i1 %empty_at_end, label %empty_finish, label %advance_empty
+advance_empty:
+  %advanced_start = call i64 @{advance}(i8* %data, i64 %size, i64 %match_end_value, i64 1)
+  br label %loop
+no_match:
+  br label %finish
+empty_finish:
+  br label %finish
+finish:
+  %tail_begin = phi i64 [ %copied, %no_match ], [ %match_end_value, %empty_finish ]
+  %tail_index = phi i64 [ %field_count, %no_match ], [ %next_count, %empty_finish ]
+  call void @{write_span}(i64* %spans, i64 %tail_index, i64 %tail_begin, i64 %size)
+  %result_count = add i64 %tail_index, 1
+  ret i64 %result_count
+}})NVVM",
+                  fmt::arg("execute", options_.execute_function),
+                  fmt::arg("find_from", name("find_from")),
+                  fmt::arg("write_span", name("write_span")),
+                  fmt::arg("advance", name("advance"))));
     output_.blank();
   }
 
   instruction_ir const& ir_;
   nvvm_ir_codegen_options const& options_;
   std::optional<deterministic_machine> deterministic_ = std::nullopt;
-  source_buffer output_                               = {};
+  std::optional<std::uint8_t> single_byte_literal_    = std::nullopt;
+  std::vector<std::size_t> capture_slots_             = std::vector<std::size_t>{};
+  source_buffer output_                               = source_buffer{};
 };
+
+std::string_view module_body(std::string_view module)
+{
+  auto begin = std::string_view::npos;
+  for (auto marker :
+       {std::string_view{"\n@"}, std::string_view{"\ndefine "}, std::string_view{"\ndeclare "}}) {
+    auto candidate = module.find(marker);
+    if (candidate != std::string_view::npos) begin = std::min(begin, candidate + 1U);
+  }
+  if (begin == std::string_view::npos) {
+    throw std::invalid_argument("generated alternative module has no declarations");
+  }
+  auto end = module.find("\n!nvvmir.version", begin);
+  return module.substr(begin, end == std::string_view::npos ? end : end - begin);
+}
+
+std::string_view module_without_metadata(std::string_view module)
+{
+  auto end = module.find("\n!nvvmir.version");
+  return module.substr(0, end);
+}
+
+std::optional<std::string> render_large_boolean_alternation(instruction_ir const& ir,
+                                                            nvvm_ir_codegen_options const& options)
+{
+  if (ir.control.result != result_shape::BOOLEAN || ir.blocks.size() < 80U ||
+      ir.entry >= ir.blocks.size()) {
+    return std::nullopt;
+  }
+  auto& entry = ir.blocks[ir.entry];
+  if (!entry.instructions.empty() || entry.successors.size() < 2U) return std::nullopt;
+
+  std::vector<instruction_ir> alternatives;
+  alternatives.reserve(entry.successors.size());
+  for (auto edge : entry.successors) {
+    auto branch    = ir;
+    branch.entry   = edge.target;
+    auto optimized = optimize(std::move(branch));
+    if (!optimized) return std::nullopt;
+    alternatives.push_back(std::move(*optimized.value));
+  }
+
+  std::string result;
+  std::vector<std::string> functions;
+  functions.reserve(alternatives.size());
+  for (std::size_t index = 0; index < alternatives.size(); ++index) {
+    auto branch_options = options;
+    branch_options.symbol_prefix += fmt::format("_alternative_{}", index);
+    branch_options.execute_function += fmt::format("_alternative_{}", index);
+    functions.push_back(branch_options.execute_function);
+    auto nested = render_large_boolean_alternation(alternatives[index], branch_options);
+    auto module = nested.has_value()
+                    ? std::move(*nested)
+                    : nvvm_ir_renderer(alternatives[index], branch_options).render();
+    if (index == 0) {
+      result = module_without_metadata(module);
+    } else {
+      result += '\n';
+      result += module_body(module);
+    }
+  }
+
+  std::string branches;
+  for (std::size_t index = 0; index < functions.size(); ++index) {
+    auto label = index == 0 ? std::string{"entry"} : fmt::format("alternative_{}", index);
+    branches += fmt::format(
+      "{}:\n  %matched_{} = call i1 @{}(i8* %data, i64 %size)\n", label, index, functions[index]);
+    if (index + 1U < functions.size()) {
+      branches +=
+        fmt::format("  br i1 %matched_{}, label %yes, label %alternative_{}\n", index, index + 1U);
+    } else {
+      branches += fmt::format("  ret i1 %matched_{}\n", index);
+    }
+  }
+  result += fmt::format(
+    R"NVVM(
+define zeroext i1 @{}(i8* %data, i64 %size) nounwind readonly {{
+{}yes:
+  ret i1 true
+}}
+)NVVM",
+    options.execute_function,
+    branches);
+  result += "\n!nvvmir.version = !{!0}\n!0 = !{i32 2, i32 0}\n";
+  return result;
+}
 
 }  // namespace
 
 std::string generate_nvvm_ir(instruction_ir const& ir, nvvm_ir_codegen_options const& options)
 {
+  if (auto alternatives = render_large_boolean_alternation(ir, options)) {
+    return std::move(*alternatives);
+  }
   return nvvm_ir_renderer(ir, options).render();
 }
 

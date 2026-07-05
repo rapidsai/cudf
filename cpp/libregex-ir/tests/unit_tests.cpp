@@ -11,6 +11,10 @@
 #include <regex_ir.hpp>
 #include <regex_ir_boolean_kernel.fatbin.inc>
 #include <regex_ir_capture_kernel.fatbin.inc>
+#include <regex_ir_count_kernel.fatbin.inc>
+#include <regex_ir_find_kernel.fatbin.inc>
+#include <regex_ir_replace_kernel.fatbin.inc>
+#include <regex_ir_split_kernel.fatbin.inc>
 
 #include <algorithm>
 #include <array>
@@ -37,6 +41,8 @@ enum class test_suite : std::uint8_t {
   PROJECT    = 0,
   RE2        = 1,
   RUST_REGEX = 2,
+  CPYTHON    = 3,
+  SIHLFALL   = 4,
 };
 
 struct boolean_test_case {
@@ -45,7 +51,7 @@ struct boolean_test_case {
   std::string_view pattern = "";
   std::string_view input   = "";
   operation_kind operation = operation_kind::CONTAINS;
-  compile_options options  = {};
+  compile_options options  = compile_options{};
   bool expected : 1        = false;
 };
 
@@ -72,18 +78,18 @@ using maybe_string = std::optional<std::string>;
 struct cudf_expected_row {
   bool valid : 1                    = true;
   std::int64_t scalar               = 0;
-  std::vector<maybe_string> strings = {};
+  std::vector<maybe_string> strings = std::vector<maybe_string>{};
 };
 
 struct cudf_regex_case {
   std::string test_name                   = "";
   std::string assertion                   = "";
   std::string pattern                     = "";
-  compile_options options                 = {};
+  compile_options options                 = compile_options{};
   cudf_regex_operation operation          = cudf_regex_operation::CONTAINS;
   cudf_capture_mode capture_mode          = cudf_capture_mode::CAPTURE;
-  std::vector<maybe_string> inputs        = {};
-  std::vector<cudf_expected_row> expected = {};
+  std::vector<maybe_string> inputs        = std::vector<maybe_string>{};
+  std::vector<cudf_expected_row> expected = std::vector<cudf_expected_row>{};
   std::string replacement                 = "";
   std::size_t max_matches                 = std::numeric_limits<std::size_t>::max();
   std::size_t capture_index               = 0;
@@ -97,7 +103,7 @@ struct cudf_regex_case {
 struct cudf_compile_case {
   std::string test_name   = "";
   std::string pattern     = "";
-  compile_options options = {};
+  compile_options options = compile_options{};
   bool should_compile : 1 = true;
 };
 
@@ -1048,6 +1054,297 @@ std::span<boolean_test_case const> boolean_test_cases()
      " δ",
      operation_kind::CONTAINS,
      boolean_bytes,
+     true},
+
+    // CPython re_tests cases within the shared regular-language syntax
+    {"cpython_empty", test_suite::CPYTHON, "", "", operation_kind::CONTAINS, {}, true},
+    {"cpython_literal", test_suite::CPYTHON, "abc", "xabcy", operation_kind::CONTAINS, {}, true},
+    {"cpython_literal_miss",
+     test_suite::CPYTHON,
+     "abc",
+     "axc",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"cpython_star_backtracks",
+     test_suite::CPYTHON,
+     "ab*bc",
+     "abbbbc",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_plus_requires_one",
+     test_suite::CPYTHON,
+     "ab+bc",
+     "abc",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"cpython_optional_zero",
+     test_suite::CPYTHON,
+     "ab?bc",
+     "abc",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_full_anchor",
+     test_suite::CPYTHON,
+     "^abc$",
+     "abc",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_full_anchor_rejects",
+     test_suite::CPYTHON,
+     "^abc$",
+     "aabc",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"cpython_suffix_anchor",
+     test_suite::CPYTHON,
+     "abc$",
+     "aabc",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_dot", test_suite::CPYTHON, "a.c", "axc", operation_kind::CONTAINS, {}, true},
+    {"cpython_dot_rejects_lf",
+     test_suite::CPYTHON,
+     "a.b",
+     "a\nb",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"cpython_dot_accepts_cr",
+     test_suite::CPYTHON,
+     "a.b",
+     "a\rb",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_dotall",
+     test_suite::CPYTHON,
+     "a.*b",
+     "acc\nccb",
+     operation_kind::CONTAINS,
+     boolean_dot_all,
+     true},
+    {"cpython_class", test_suite::CPYTHON, "a[bc]d", "abd", operation_kind::CONTAINS, {}, true},
+    {"cpython_class_range",
+     test_suite::CPYTHON,
+     "a[b-d]e",
+     "ace",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_negated_class",
+     test_suite::CPYTHON,
+     "a[^bc]d",
+     "aed",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_word_boundary",
+     test_suite::CPYTHON,
+     R"REGEX(\ba\b)REGEX",
+     "-a-",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_word_boundary_rejects",
+     test_suite::CPYTHON,
+     R"REGEX(\by\b)REGEX",
+     "xyz",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"cpython_non_boundary",
+     test_suite::CPYTHON,
+     R"REGEX(\By\B)REGEX",
+     "xyz",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_alternation",
+     test_suite::CPYTHON,
+     "ab|cd",
+     "abcde",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_nested_alternation",
+     test_suite::CPYTHON,
+     "(ab|cd)e",
+     "abcde",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_nullable_alternative",
+     test_suite::CPYTHON,
+     "(abc|)ef",
+     "abcdef",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_greedy_capture",
+     test_suite::CPYTHON,
+     "(.*)c(.*)",
+     "abcde",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_lazy_repeat",
+     test_suite::CPYTHON,
+     "a(?:b|c|d)+?(.)",
+     "ace",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"cpython_multiline",
+     test_suite::CPYTHON,
+     "^abc",
+     "jkl\nabc\nxyz",
+     operation_kind::CONTAINS,
+     boolean_multiline,
+     true},
+    {"cpython_ignore_case",
+     test_suite::CPYTHON,
+     "m+",
+     "MMM",
+     operation_kind::CONTAINS,
+     boolean_case_insensitive,
+     true},
+
+    // sihlfall's exhaustive RE2-derived categories, projected to booleans
+    {"sihlfall_literal", test_suite::SIHLFALL, "a", "a", operation_kind::CONTAINS, {}, true},
+    {"sihlfall_literal_miss", test_suite::SIHLFALL, "a", "b", operation_kind::CONTAINS, {}, false},
+    {"sihlfall_full_literal",
+     test_suite::SIHLFALL,
+     "^(?:a)$",
+     "a",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_full_literal_rejects_pair",
+     test_suite::SIHLFALL,
+     "^(?:a)$",
+     "aa",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"sihlfall_literal_concatenation",
+     test_suite::SIHLFALL,
+     "(?:a(?:ab))",
+     "aab",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_literal_alternation",
+     test_suite::SIHLFALL,
+     "(?:a|(?:ab))",
+     "ab",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_dot_concatenation",
+     test_suite::SIHLFALL,
+     "(?:a(?:a.))",
+     "aac",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_simple_star",
+     test_suite::SIHLFALL,
+     "^(?:a*)$",
+     "aaaa",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_simple_plus_rejects_empty",
+     test_suite::SIHLFALL,
+     "^(?:a+)$",
+     "",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"sihlfall_simple_optional",
+     test_suite::SIHLFALL,
+     "^(?:a?)$",
+     "a",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_capturing_repeat",
+     test_suite::SIHLFALL,
+     "^((?:a|b)+)$",
+     "abba",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_empty_match",
+     test_suite::SIHLFALL,
+     "^(?:(?:)*)$",
+     "",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_punctuation_literal",
+     test_suite::SIHLFALL,
+     R"REGEX(\+\?\.)REGEX",
+     "+?.",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_line_begin",
+     test_suite::SIHLFALL,
+     "^ab",
+     "ab\ncd",
+     operation_kind::CONTAINS,
+     boolean_multiline,
+     true},
+    {"sihlfall_line_end",
+     test_suite::SIHLFALL,
+     "cd$",
+     "ab\ncd",
+     operation_kind::CONTAINS,
+     boolean_multiline,
+     true},
+    {"sihlfall_character_class",
+     test_suite::SIHLFALL,
+     "^[a-c]+$",
+     "abccba",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_negated_character_class",
+     test_suite::SIHLFALL,
+     "^[^c]+$",
+     "abba",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_negated_character_class_rejects",
+     test_suite::SIHLFALL,
+     "^[^c]+$",
+     "abc",
+     operation_kind::CONTAINS,
+     {},
+     false},
+    {"sihlfall_utf8_literal",
+     test_suite::SIHLFALL,
+     "日本",
+     "x日本y",
+     operation_kind::CONTAINS,
+     {},
+     true},
+    {"sihlfall_utf8_dot", test_suite::SIHLFALL, "^..$", "日本", operation_kind::CONTAINS, {}, true},
+    {"sihlfall_utf8_class",
+     test_suite::SIHLFALL,
+     "^[日語]+$",
+     "日日語",
+     operation_kind::CONTAINS,
+     {},
      true},
   });
   return cases;
@@ -2245,8 +2542,8 @@ void append_contains_cases(std::vector<cudf_regex_case>& cases)
   struct crlf_scalar_assertion {
     std::string pattern                = "";
     cudf_regex_operation operation     = cudf_regex_operation::CONTAINS;
-    compile_options options            = {};
-    std::vector<std::int64_t> expected = {};
+    compile_options options            = compile_options{};
+    std::vector<std::int64_t> expected = std::vector<std::int64_t>{};
   };
   std::vector<crlf_scalar_assertion> edge_assertions{
     {"^abc$", cudf_regex_operation::CONTAINS, extended, {1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0}},
@@ -4254,6 +4551,15 @@ class loaded_module {
   CUmodule module_ = nullptr;
 };
 
+enum class jit_kernel_kind : std::uint8_t {
+  Boolean = 0,
+  Extract = 1,
+  Find    = 2,
+  Count   = 3,
+  Replace = 4,
+  Split   = 5,
+};
+
 class gpu_runtime {
  public:
   gpu_runtime()
@@ -4304,7 +4610,7 @@ class gpu_runtime {
     regex_ir::nvvm_ir_codegen_options options{
       .symbol_prefix    = "unit_boolean_" + std::to_string(next_id_++),
       .execute_function = "regex_ir_test_execute"};
-    auto cubin = compile_and_link(ir, options, false);
+    auto cubin = compile_and_link(ir, options, jit_kernel_kind::Boolean);
     loaded_module module{cubin};
     CUfunction kernel = module.function("regex_ir_boolean_kernel");
     device_allocation device_input{input.size()};
@@ -4332,22 +4638,187 @@ class gpu_runtime {
     regex_ir::nvvm_ir_codegen_options options{
       .symbol_prefix    = "unit_capture_" + std::to_string(next_id_++),
       .execute_function = "regex_ir_test_find_execute"};
-    auto cubin = compile_and_link(ir, options, true);
+    auto cubin = compile_and_link(ir, options, jit_kernel_kind::Extract);
     return execute_capture(cubin, inputs, ir.capture_count);
+  }
+
+  [[nodiscard]] regex_ir::testing::execution_result find(regex_ir::instruction_ir const& ir,
+                                                         std::string_view input)
+  {
+    regex_ir::nvvm_ir_codegen_options options{
+      .symbol_prefix    = "unit_find_" + std::to_string(next_id_++),
+      .execute_function = "regex_ir_test_find"};
+    auto cubin = compile_and_link(ir, options, jit_kernel_kind::Find);
+    loaded_module module{cubin};
+    CUfunction kernel = module.function("regex_ir_find_kernel");
+    device_allocation device_input{input.size()};
+    device_allocation device_span{2U * sizeof(std::uint64_t)};
+    device_allocation device_result{sizeof(int)};
+    if (!input.empty()) {
+      check_cuda(cuMemcpyHtoD(device_input.address(), input.data(), input.size()), "cuMemcpyHtoD");
+    }
+    std::array<std::uint64_t, 2> span{};
+    int matched = 0;
+    check_cuda(cuMemcpyHtoD(device_span.address(), span.data(), sizeof(span)),
+               "cuMemcpyHtoD(span)");
+    check_cuda(cuMemcpyHtoD(device_result.address(), &matched, sizeof(matched)),
+               "cuMemcpyHtoD(result)");
+    CUdeviceptr input_address  = device_input.address();
+    std::size_t input_size     = input.size();
+    CUdeviceptr span_address   = device_span.address();
+    CUdeviceptr result_address = device_result.address();
+    std::array<void*, 4> arguments{&input_address, &input_size, &span_address, &result_address};
+    check_cuda(cuLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, nullptr, arguments.data(), nullptr),
+               "cuLaunchKernel(find)");
+    check_cuda(cuCtxSynchronize(), "cuCtxSynchronize(find)");
+    check_cuda(cuMemcpyDtoH(&matched, device_result.address(), sizeof(matched)),
+               "cuMemcpyDtoH(result)");
+    check_cuda(cuMemcpyDtoH(span.data(), device_span.address(), sizeof(span)),
+               "cuMemcpyDtoH(span)");
+    regex_ir::testing::execution_result result;
+    result.matched = matched != 0;
+    result.count   = result.matched ? 1U : 0U;
+    if (result.matched) result.matches.push_back({span[0], span[1]});
+    return result;
+  }
+
+  [[nodiscard]] regex_ir::testing::execution_result count(regex_ir::instruction_ir const& ir,
+                                                          std::string_view input)
+  {
+    regex_ir::nvvm_ir_codegen_options options{
+      .symbol_prefix    = "unit_count_" + std::to_string(next_id_++),
+      .execute_function = "regex_ir_test_count"};
+    auto cubin = compile_and_link(ir, options, jit_kernel_kind::Count);
+    loaded_module module{cubin};
+    CUfunction kernel = module.function("regex_ir_count_kernel");
+    device_allocation device_input{input.size()};
+    device_allocation device_result{sizeof(std::uint64_t)};
+    if (!input.empty()) {
+      check_cuda(cuMemcpyHtoD(device_input.address(), input.data(), input.size()), "cuMemcpyHtoD");
+    }
+    CUdeviceptr input_address  = device_input.address();
+    std::size_t input_size     = input.size();
+    CUdeviceptr result_address = device_result.address();
+    std::array<void*, 3> arguments{&input_address, &input_size, &result_address};
+    check_cuda(cuLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, nullptr, arguments.data(), nullptr),
+               "cuLaunchKernel(count)");
+    check_cuda(cuCtxSynchronize(), "cuCtxSynchronize(count)");
+    regex_ir::testing::execution_result result;
+    check_cuda(cuMemcpyDtoH(&result.count, device_result.address(), sizeof(result.count)),
+               "cuMemcpyDtoH(count)");
+    result.matched = result.count != 0;
+    return result;
+  }
+
+  [[nodiscard]] std::string replace(regex_ir::instruction_ir const& ir, std::string_view input)
+  {
+    regex_ir::nvvm_ir_codegen_options options{
+      .symbol_prefix    = "unit_replace_" + std::to_string(next_id_++),
+      .execute_function = "regex_ir_test_replace"};
+    auto cubin = compile_and_link(ir, options, jit_kernel_kind::Replace);
+    loaded_module module{cubin};
+    CUfunction kernel = module.function("regex_ir_replace_kernel");
+    device_allocation device_input{input.size()};
+    device_allocation device_size{sizeof(std::uint64_t)};
+    if (!input.empty()) {
+      check_cuda(cuMemcpyHtoD(device_input.address(), input.data(), input.size()), "cuMemcpyHtoD");
+    }
+    CUdeviceptr input_address = device_input.address();
+    std::size_t input_size    = input.size();
+    CUdeviceptr size_address  = device_size.address();
+    auto launch               = [&](CUdeviceptr output_address) {
+      std::array<void*, 4> arguments{&input_address, &input_size, &output_address, &size_address};
+      check_cuda(cuLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, nullptr, arguments.data(), nullptr),
+                 "cuLaunchKernel(replace)");
+      check_cuda(cuCtxSynchronize(), "cuCtxSynchronize(replace)");
+    };
+    launch(0);
+    std::uint64_t result_size = 0;
+    check_cuda(cuMemcpyDtoH(&result_size, device_size.address(), sizeof(result_size)),
+               "cuMemcpyDtoH(replacement size)");
+    device_allocation device_output{result_size};
+    launch(device_output.address());
+    std::string result(result_size, '\0');
+    if (!result.empty()) {
+      check_cuda(cuMemcpyDtoH(result.data(), device_output.address(), result.size()),
+                 "cuMemcpyDtoH(replacement)");
+    }
+    return result;
+  }
+
+  [[nodiscard]] std::vector<std::string> split(regex_ir::instruction_ir const& ir,
+                                               std::string_view input)
+  {
+    regex_ir::nvvm_ir_codegen_options options{
+      .symbol_prefix    = "unit_split_" + std::to_string(next_id_++),
+      .execute_function = "regex_ir_test_split"};
+    auto cubin = compile_and_link(ir, options, jit_kernel_kind::Split);
+    loaded_module module{cubin};
+    CUfunction kernel = module.function("regex_ir_split_kernel");
+    device_allocation device_input{input.size()};
+    device_allocation device_count{sizeof(std::uint64_t)};
+    if (!input.empty()) {
+      check_cuda(cuMemcpyHtoD(device_input.address(), input.data(), input.size()), "cuMemcpyHtoD");
+    }
+    CUdeviceptr input_address = device_input.address();
+    std::size_t input_size    = input.size();
+    CUdeviceptr count_address = device_count.address();
+    auto launch               = [&](CUdeviceptr span_address) {
+      std::array<void*, 4> arguments{&input_address, &input_size, &span_address, &count_address};
+      check_cuda(cuLaunchKernel(kernel, 1, 1, 1, 1, 1, 1, 0, nullptr, arguments.data(), nullptr),
+                 "cuLaunchKernel(split)");
+      check_cuda(cuCtxSynchronize(), "cuCtxSynchronize(split)");
+    };
+    launch(0);
+    std::uint64_t field_count = 0;
+    check_cuda(cuMemcpyDtoH(&field_count, device_count.address(), sizeof(field_count)),
+               "cuMemcpyDtoH(field count)");
+    std::vector<std::uint64_t> spans(field_count * 2U);
+    device_allocation device_spans{spans.size() * sizeof(std::uint64_t)};
+    launch(device_spans.address());
+    if (!spans.empty()) {
+      check_cuda(
+        cuMemcpyDtoH(spans.data(), device_spans.address(), spans.size() * sizeof(spans[0])),
+        "cuMemcpyDtoH(split spans)");
+    }
+    std::vector<std::string> result;
+    result.reserve(field_count);
+    for (std::size_t field = 0; field < field_count; ++field) {
+      auto begin = spans[field * 2U];
+      auto end   = spans[field * 2U + 1U];
+      result.emplace_back(input.substr(begin, end - begin));
+    }
+    return result;
   }
 
  private:
   [[nodiscard]] std::vector<char> compile_and_link(regex_ir::instruction_ir const& ir,
                                                    regex_ir::nvvm_ir_codegen_options const& options,
-                                                   bool capture) const
+                                                   jit_kernel_kind kind) const
   {
     std::string source = regex_ir::generate_nvvm_ir(ir, options);
     std::string ptx    = compile_nvvm(source, compute_architecture_);
-    std::span<unsigned char const> kernel_fatbin =
-      capture ? std::span<unsigned char const>{regex_ir_capture_kernel_fatbin,
-                                               regex_ir_capture_kernel_fatbinLength}
-              : std::span<unsigned char const>{regex_ir_boolean_kernel_fatbin,
-                                               regex_ir_boolean_kernel_fatbinLength};
+    std::span<unsigned char const> kernel_fatbin;
+    switch (kind) {
+      case jit_kernel_kind::Boolean:
+        kernel_fatbin = {regex_ir_boolean_kernel_fatbin, regex_ir_boolean_kernel_fatbinLength};
+        break;
+      case jit_kernel_kind::Extract:
+        kernel_fatbin = {regex_ir_capture_kernel_fatbin, regex_ir_capture_kernel_fatbinLength};
+        break;
+      case jit_kernel_kind::Find:
+        kernel_fatbin = {regex_ir_find_kernel_fatbin, regex_ir_find_kernel_fatbinLength};
+        break;
+      case jit_kernel_kind::Count:
+        kernel_fatbin = {regex_ir_count_kernel_fatbin, regex_ir_count_kernel_fatbinLength};
+        break;
+      case jit_kernel_kind::Replace:
+        kernel_fatbin = {regex_ir_replace_kernel_fatbin, regex_ir_replace_kernel_fatbinLength};
+        break;
+      case jit_kernel_kind::Split:
+        kernel_fatbin = {regex_ir_split_kernel_fatbin, regex_ir_split_kernel_fatbinLength};
+        break;
+    }
     return link_ptx(ptx, kernel_fatbin, sm_architecture_);
   }
 
@@ -4642,6 +5113,8 @@ class RegexTest : public ::testing::Test {
 class Project : public RegexTest {};
 class Re2 : public RegexTest {};
 class RustRegex : public RegexTest {};
+class CPython : public RegexTest {};
+class Sihlfall : public RegexTest {};
 class Cudf : public RegexTest {};
 class Nvvm : public RegexTest {};
 
@@ -4652,6 +5125,10 @@ TEST_F(Project, ImportedCases) { run_boolean_suite(test_suite::PROJECT); }
 TEST_F(Re2, ImportedCases) { run_boolean_suite(test_suite::RE2); }
 
 TEST_F(RustRegex, ImportedCases) { run_boolean_suite(test_suite::RUST_REGEX); }
+
+TEST_F(CPython, ImportedCases) { run_boolean_suite(test_suite::CPYTHON); }
+
+TEST_F(Sihlfall, ImportedCases) { run_boolean_suite(test_suite::SIHLFALL); }
 
 #define REGEX_IR_CUDF_TEST(Name, TestName) \
   TEST_F(Cudf, Name) { run_cudf_test(TestName); }
@@ -4877,6 +5354,11 @@ TEST_F(Project, OptionsAndUnicode)
   expect_boolean(R"REGEX(\x41)REGEX", "A", true, regex_ir::operation_kind::MATCHES);
   expect_boolean(R"REGEX(\x41)REGEX", "a", false, regex_ir::operation_kind::MATCHES);
   expect_boolean(R"REGEX(\x41)REGEX", "a", true, regex_ir::operation_kind::MATCHES, insensitive);
+  expect_boolean("[[:alpha:]]+", "Mark", true, regex_ir::operation_kind::MATCHES);
+  expect_boolean("[[:alpha:]]+", "Mark7", false, regex_ir::operation_kind::MATCHES);
+  expect_boolean(R"REGEX(\p{Sm})REGEX", "=", true, regex_ir::operation_kind::MATCHES);
+  expect_boolean(R"REGEX(\p{Sm})REGEX", "∞", true, regex_ir::operation_kind::MATCHES);
+  expect_boolean(R"REGEX(\p{Sm})REGEX", "a", false, regex_ir::operation_kind::MATCHES);
 }
 
 TEST_F(Project, DiagnosticsAndLimits)
@@ -5067,13 +5549,60 @@ TEST_F(Nvvm, CompilerSelectedLoadsAndDeterministicExecutor)
   expect_boolean("needle[0-9]+", "xxneedle42", true);
 }
 
-TEST_F(Nvvm, AssertionFallback)
+TEST_F(Nvvm, AssertionDeterminization)
 {
-  auto ir            = compile_ok("^needle$", regex_ir::operation::contains());
-  std::string source = regex_ir::generate_nvvm_ir(ir);
-  EXPECT_NE(source.find("; executor: recursive Thompson"), std::string::npos);
-  EXPECT_NE(source.find("@regex_ir_generated_run_block"), std::string::npos);
+  auto prefix_ir     = compile_ok("^needle", regex_ir::operation::contains());
+  auto prefix_source = regex_ir::generate_nvvm_ir(prefix_ir);
+  EXPECT_NE(prefix_source.find("; executor: deterministic table"), std::string::npos);
+  EXPECT_EQ(prefix_source.find("_dfa_boundary_classify"), std::string::npos);
+  expect_boolean("^needle", "needle here", true);
+  expect_boolean("^needle", "a needle", false);
+
+  auto anchored_ir            = compile_ok("^needle$", regex_ir::operation::contains());
+  std::string anchored_source = regex_ir::generate_nvvm_ir(anchored_ir);
+  EXPECT_NE(anchored_source.find("; executor: assertion-aware deterministic table"),
+            std::string::npos);
+  EXPECT_EQ(anchored_source.find("@regex_ir_generated_run_block"), std::string::npos);
   expect_boolean("^needle$", "needle", true);
+
+  auto boundary_ir = compile_ok(R"REGEX(\bneedle\b)REGEX", regex_ir::operation::contains());
+  std::string boundary_source = regex_ir::generate_nvvm_ir(boundary_ir);
+  EXPECT_NE(boundary_source.find("; executor: assertion-aware deterministic table"),
+            std::string::npos);
+  EXPECT_NE(boundary_source.find("_dfa_boundary_classify"), std::string::npos);
+  EXPECT_EQ(boundary_source.find("@regex_ir_generated_run_block"), std::string::npos);
+  EXPECT_NE(compile_nvvm(boundary_source, {}).find(".target sm_"), std::string::npos);
+  expect_boolean(R"REGEX(\bneedle\b)REGEX", "a needle!", true);
+  expect_boolean(R"REGEX(\bneedle\b)REGEX", "needless", false);
+
+  constexpr std::string_view internal_end = R"REGEX(^([0-9]+)(\-| |$)(.*)$)REGEX";
+  auto internal_ir     = compile_ok(internal_end, regex_ir::operation::contains());
+  auto internal_source = regex_ir::generate_nvvm_ir(internal_ir);
+  EXPECT_NE(internal_source.find("; executor: assertion-aware deterministic table"),
+            std::string::npos);
+  EXPECT_EQ(internal_source.find("@regex_ir_generated_run_block"), std::string::npos);
+  EXPECT_NE(compile_nvvm(internal_source, {}).find(".target sm_"), std::string::npos);
+  expect_boolean(internal_end, "100- ftp response", true);
+  expect_boolean(internal_end, "100", true);
+}
+
+TEST_F(Nvvm, LargeBooleanAlternation)
+{
+  constexpr std::string_view pattern =
+    " (Tom|Sawyer|Huckleberry|Finn).{0,30}river|river.{0,30}(Tom|Sawyer|Huckleberry|Finn)";
+  auto ir            = compile_ok(pattern, regex_ir::operation::contains());
+  std::string source = regex_ir::generate_nvvm_ir(ir);
+  EXPECT_NE(source.find("@regex_ir_execute_alternative_0"), std::string::npos);
+  EXPECT_NE(source.find("addrspace(1) constant"), std::string::npos);
+  EXPECT_EQ(source.find("!nvvmir.version"), source.rfind("!nvvmir.version"));
+  EXPECT_NE(compile_nvvm(source, {}).find(".target sm_"), std::string::npos);
+  expect_boolean(pattern, "A note about Tom walking beside the river today.", true);
+
+  auto bounded_ir = compile_ok("[a-q][^u-z]{13}x", regex_ir::operation::contains());
+  auto bounded    = regex_ir::generate_nvvm_ir(bounded_ir);
+  EXPECT_NE(bounded.find("; dfa states: 16385"), std::string::npos);
+  EXPECT_NE(bounded.find("%state_index = and i32 %state, 32767"), std::string::npos);
+  EXPECT_NE(bounded.find("addrspace(1) constant"), std::string::npos);
 }
 
 TEST_F(Nvvm, CaptureEnumerationAbi)
@@ -5101,16 +5630,56 @@ TEST_F(Nvvm, IndependentPrefixes)
   expect_boolean("a|bc", "xxbc", true);
 }
 
-TEST_F(Nvvm, RejectsUnsafeNamesAndResultShapes)
+TEST_F(Nvvm, RejectsUnsafeNames)
 {
   auto boolean_ir = compile_ok("abc", regex_ir::operation::contains());
   EXPECT_THROW(static_cast<void>(regex_ir::generate_nvvm_ir(
                  boolean_ir, regex_ir::nvvm_ir_codegen_options{"bad.name", "execute"})),
                std::invalid_argument);
-  auto count = regex_ir::compile("a", regex_ir::operation::count());
-  ASSERT_TRUE(count);
-  EXPECT_THROW(static_cast<void>(regex_ir::generate_nvvm_ir(*count.value)), std::invalid_argument);
   expect_boolean("abc", "abc", true);
+}
+
+TEST_F(Nvvm, SpecializedOperationAbis)
+{
+  auto find = regex_ir::generate_nvvm_ir(compile_ok("a+", regex_ir::operation::find()));
+  EXPECT_NE(find.find("define zeroext i1 @regex_ir_execute(i8* %data, i64 %size, i64* %span)"),
+            std::string::npos);
+
+  auto count = regex_ir::generate_nvvm_ir(compile_ok("a+", regex_ir::operation::count()));
+  EXPECT_NE(count.find("define i64 @regex_ir_execute(i8* %data, i64 %size)"), std::string::npos);
+
+  auto replace =
+    regex_ir::generate_nvvm_ir(compile_ok("(a+)", regex_ir::operation::replace("<$1>")));
+  EXPECT_NE(replace.find("define i64 @regex_ir_execute(i8* %data, i64 %size, i8* %output)"),
+            std::string::npos);
+  EXPECT_NE(replace.find("; executor: prioritized deterministic table"), std::string::npos);
+  EXPECT_EQ(replace.find("%capture_array"), std::string::npos);
+
+  auto captured_replace =
+    regex_ir::generate_nvvm_ir(compile_ok("(a+)(b+)", regex_ir::operation::replace("<$2>")));
+  EXPECT_NE(captured_replace.find("%capture_array"), std::string::npos);
+
+  auto literal_replace =
+    regex_ir::generate_nvvm_ir(compile_ok("(a+)", regex_ir::operation::replace("literal")));
+  EXPECT_EQ(literal_replace.find("%capture_array"), std::string::npos);
+  EXPECT_EQ(literal_replace.find("_capture_pos_"), std::string::npos);
+
+  auto split = regex_ir::generate_nvvm_ir(compile_ok("a+", regex_ir::operation::split()));
+  EXPECT_NE(split.find("define i64 @regex_ir_execute(i8* %data, i64 %size, i64* %spans)"),
+            std::string::npos);
+}
+
+TEST_F(Nvvm, SingleByteGlobalExecutor)
+{
+  std::array sources{regex_ir::generate_nvvm_ir(compile_ok(" ", regex_ir::operation::count())),
+                     regex_ir::generate_nvvm_ir(compile_ok(" ", regex_ir::operation::replace("_"))),
+                     regex_ir::generate_nvvm_ir(compile_ok(" ", regex_ir::operation::split()))};
+  for (auto& source : sources) {
+    EXPECT_NE(source.find("; executor: single-byte literal scan"), std::string::npos);
+    EXPECT_NE(source.find("%matched = icmp eq i32 %value, 32"), std::string::npos);
+    EXPECT_EQ(source.find("_dfa_transitions"), std::string::npos);
+  }
+  EXPECT_NE(compile_nvvm(sources.front(), {}).find(".target sm_"), std::string::npos);
 }
 
 TEST_F(Nvvm, RuntimeAvailability)
@@ -5119,12 +5688,63 @@ TEST_F(Nvvm, RuntimeAvailability)
   expect_boolean("a(b|c)+", "abcb", true);
 }
 
+TEST_F(Nvvm, SpecializedRuntimeOperations)
+{
+  if (!gpu().available()) GTEST_SKIP() << gpu().unavailable_reason();
+
+  auto find_ir  = compile_ok("a(b|c)+", regex_ir::operation::find());
+  auto find_cpu = regex_ir::testing::execute(find_ir, "xxabcbzz");
+  auto find_gpu = gpu().find(find_ir, "xxabcbzz");
+  EXPECT_EQ(find_gpu.matched, find_cpu.matched);
+  EXPECT_EQ(find_gpu.matches, find_cpu.matches);
+
+  auto count_ir  = compile_ok("a*", regex_ir::operation::count());
+  auto count_cpu = regex_ir::testing::execute(count_ir, "bbb");
+  auto count_gpu = gpu().count(count_ir, "bbb");
+  EXPECT_EQ(count_gpu.count, count_cpu.count);
+
+  constexpr std::array replacement_cases{
+    std::array<std::string_view, 4>{"(a+)", "<$1>", "baaca", "b<aa>c<a>"},
+    std::array<std::string_view, 4>{"b*", "X", "aa", "XaXaX"},
+    std::array<std::string_view, 4>{"a", "$0$0", "aba", "aabaa"}};
+  for (auto& test : replacement_cases) {
+    auto ir = compile_ok(test[0], regex_ir::operation::replace(std::string{test[1]}));
+    EXPECT_EQ(gpu().replace(ir, test[2]), test[3]);
+  }
+
+  auto split_ir  = compile_ok("b*", regex_ir::operation::split());
+  auto split_cpu = regex_ir::testing::execute(split_ir, "aa");
+  EXPECT_EQ(gpu().split(split_ir, "aa"), split_cpu.pieces);
+
+  std::array<maybe_string, 3> tagged_capture_inputs{
+    maybe_string{"xx12 34 yy56 78 "}, maybe_string{"no digits"}, std::nullopt};
+  auto [tagged_ir, tagged_results] =
+    enumerate_both(R"REGEX((\d+) (\d+) )REGEX", {}, tagged_capture_inputs);
+  EXPECT_NE(regex_ir::generate_nvvm_ir(tagged_ir).find(
+              "; executor: tagged prioritized deterministic table"),
+            std::string::npos);
+  ASSERT_EQ(tagged_results.size(), tagged_capture_inputs.size());
+  EXPECT_EQ(tagged_results[0].count, 2U);
+}
+
 TEST_F(Nvvm, ToolchainCompilation)
 {
-  auto ir            = compile_ok("abc[0-9]+", regex_ir::operation::contains());
-  std::string source = regex_ir::generate_nvvm_ir(ir);
-  std::string ptx    = compile_nvvm(source, {});
-  EXPECT_NE(ptx.find(".target sm_"), std::string::npos);
+  std::array operations{regex_ir::operation::contains(),
+                        regex_ir::operation::matches(),
+                        regex_ir::operation::find(),
+                        regex_ir::operation::count(),
+                        regex_ir::operation::extract(),
+                        regex_ir::operation::replace("<$1>"),
+                        regex_ir::operation::split()};
+  for (auto& operation : operations) {
+    auto ir            = compile_ok("(abc)[0-9]+", operation);
+    std::string source = regex_ir::generate_nvvm_ir(ir);
+    std::string ptx    = compile_nvvm(source, {});
+    EXPECT_NE(ptx.find(".target sm_"), std::string::npos);
+    if (operation.kind == regex_ir::operation_kind::REPLACE) {
+      EXPECT_EQ(ptx.find("memcpy"), std::string::npos);
+    }
+  }
 }
 
 }  // namespace regex_ir::test

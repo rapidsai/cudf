@@ -4,8 +4,6 @@
 include_guard(GLOBAL)
 
 function(regex_ir_embed_cuda_lto output_variable variant source symbol)
-  cmake_parse_arguments(PARSE_ARGV 4 argument "" "DEFINITION" "")
-
   if(NOT CMAKE_CUDA_COMPILER)
     message(FATAL_ERROR "regex_ir_embed_cuda_lto requires the CUDA language")
   endif()
@@ -20,11 +18,6 @@ function(regex_ir_embed_cuda_lto output_variable variant source symbol)
   set(output_directory ${CMAKE_CURRENT_BINARY_DIR}/generated)
   set(fatbin ${output_directory}/${variant}.fatbin)
   set(embedded ${output_directory}/${variant}.fatbin.inc)
-  set(definition)
-  if(argument_DEFINITION)
-    set(definition -D${argument_DEFINITION})
-  endif()
-
   add_custom_command(
     OUTPUT ${fatbin}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${output_directory}
@@ -34,7 +27,6 @@ function(regex_ir_embed_cuda_lto output_variable variant source symbol)
             --gen-opt-lto
             --relocatable-device-code=true
             --std=c++20
-            ${definition}
             -o ${fatbin}
             ${source}
     DEPENDS ${source}

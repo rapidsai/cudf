@@ -4,6 +4,7 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/extract.hpp>
@@ -11,11 +12,17 @@
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/split/split_re.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table.hpp>
+#include <cudf/utilities/span.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/device_buffer.hpp>
 
 #include <cuda.h>
+#include <cuda/std/utility>
 #include <cuda_runtime_api.h>
+#include <thrust/execution_policy.h>
+#include <thrust/scan.h>
 
 #include <fmt/format.h>
 #include <nvJitLink.h>
@@ -23,7 +30,10 @@
 #include <nvvm.h>
 #include <regex_ir.hpp>
 #include <regex_ir_benchmark_contains.fatbin.inc>
-#include <regex_ir_benchmark_enumerate.fatbin.inc>
+#include <regex_ir_benchmark_count.fatbin.inc>
+#include <regex_ir_benchmark_extract.fatbin.inc>
+#include <regex_ir_benchmark_replace.fatbin.inc>
+#include <regex_ir_benchmark_split.fatbin.inc>
 
 #include <algorithm>
 #include <array>
@@ -40,6 +50,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -84,6 +95,25 @@ constexpr std::array cudf_transform_patterns{
   benchmark_pattern{"5", ".+[0-9]", "abc7"},
   benchmark_pattern{"6", "[a-z]+Z", "abcZ"},
 };
+
+std::vector<nvbench::int64_t> api_row_counts()
+{
+  // doubling gives evenly spaced samples on the logarithmic presentation axis.
+  return {1'024,
+          2'048,
+          4'096,
+          8'192,
+          16'384,
+          32'768,
+          65'536,
+          131'072,
+          262'144,
+          524'288,
+          1'048'576,
+          2'097'152,
+          4'194'304,
+          8'388'607};
+}
 
 void check_cuda(cudaError_t result, std::string_view operation)
 {
@@ -267,13 +297,13 @@ class loaded_kernel {
   CUfunction function_ = nullptr;
 };
 
-class loaded_enumeration_kernel {
+class loaded_extract_kernel {
  public:
-  explicit loaded_enumeration_kernel(std::vector<char> const& cubin)
+  explicit loaded_extract_kernel(std::vector<char> const& cubin)
   {
     check_driver(cuModuleLoadData(&module_, cubin.data()), "cuModuleLoadData");
     try {
-      check_driver(cuModuleGetFunction(&function_, module_, "regex_ir_benchmark_enumerate"),
+      check_driver(cuModuleGetFunction(&function_, module_, "regex_ir_benchmark_extract_kernel"),
                    "cuModuleGetFunction");
     } catch (...) {
       static_cast<void>(cuModuleUnload(module_));
@@ -281,10 +311,10 @@ class loaded_enumeration_kernel {
     }
   }
 
-  loaded_enumeration_kernel(loaded_enumeration_kernel const&)            = delete;
-  loaded_enumeration_kernel& operator=(loaded_enumeration_kernel const&) = delete;
+  loaded_extract_kernel(loaded_extract_kernel const&)            = delete;
+  loaded_extract_kernel& operator=(loaded_extract_kernel const&) = delete;
 
-  ~loaded_enumeration_kernel()
+  ~loaded_extract_kernel()
   {
     if (module_ != nullptr) static_cast<void>(cuModuleUnload(module_));
   }
@@ -292,14 +322,13 @@ class loaded_enumeration_kernel {
   void launch(char const* chars,
               std::int32_t const* offsets,
               std::int32_t rows,
-              std::uint64_t* counts,
               std::uint64_t* captures,
+              void* pairs,
               std::uint32_t capture_count,
-              std::uint32_t match_limit,
               cudaStream_t stream) const
   {
-    void* arguments[] = {&chars, &offsets, &rows, &counts, &captures, &capture_count, &match_limit};
-    constexpr unsigned block_size = 512;
+    void* arguments[]             = {&chars, &offsets, &rows, &captures, &pairs, &capture_count};
+    constexpr unsigned block_size = 256;
     auto grid_size =
       static_cast<unsigned>((static_cast<std::uint32_t>(rows) + block_size - 1) / block_size);
     check_driver(cuLaunchKernel(function_,
@@ -313,12 +342,170 @@ class loaded_enumeration_kernel {
                                 reinterpret_cast<CUstream>(stream),
                                 arguments,
                                 nullptr),
-                 "cuLaunchKernel(enumerate)");
+                 "cuLaunchKernel(extract)");
   }
 
  private:
   CUmodule module_     = nullptr;
   CUfunction function_ = nullptr;
+};
+
+class loaded_count_kernel {
+ public:
+  explicit loaded_count_kernel(std::vector<char> const& cubin)
+  {
+    check_driver(cuModuleLoadData(&module_, cubin.data()), "cuModuleLoadData");
+    try {
+      check_driver(cuModuleGetFunction(&function_, module_, "regex_ir_benchmark_count_kernel"),
+                   "cuModuleGetFunction");
+    } catch (...) {
+      static_cast<void>(cuModuleUnload(module_));
+      throw;
+    }
+  }
+
+  loaded_count_kernel(loaded_count_kernel const&)            = delete;
+  loaded_count_kernel& operator=(loaded_count_kernel const&) = delete;
+
+  ~loaded_count_kernel()
+  {
+    if (module_ != nullptr) static_cast<void>(cuModuleUnload(module_));
+  }
+
+  void launch(char const* chars,
+              std::int32_t const* offsets,
+              std::int32_t rows,
+              std::int32_t* counts,
+              cudaStream_t stream) const
+  {
+    void* arguments[]             = {&chars, &offsets, &rows, &counts};
+    constexpr unsigned block_size = 256;
+    auto grid_size =
+      static_cast<unsigned>((static_cast<std::uint32_t>(rows) + block_size - 1) / block_size);
+    check_driver(cuLaunchKernel(function_,
+                                grid_size,
+                                1,
+                                1,
+                                block_size,
+                                1,
+                                1,
+                                0,
+                                reinterpret_cast<CUstream>(stream),
+                                arguments,
+                                nullptr),
+                 "cuLaunchKernel(count)");
+  }
+
+ private:
+  CUmodule module_     = nullptr;
+  CUfunction function_ = nullptr;
+};
+
+class loaded_materializing_kernel {
+ public:
+  loaded_materializing_kernel(std::vector<char> const& cubin,
+                              char const* size_function,
+                              char const* emit_function)
+  {
+    check_driver(cuModuleLoadData(&module_, cubin.data()), "cuModuleLoadData");
+    try {
+      check_driver(cuModuleGetFunction(&size_, module_, size_function),
+                   "cuModuleGetFunction(size)");
+      check_driver(cuModuleGetFunction(&emit_, module_, emit_function),
+                   "cuModuleGetFunction(emit)");
+    } catch (...) {
+      static_cast<void>(cuModuleUnload(module_));
+      throw;
+    }
+  }
+
+  loaded_materializing_kernel(loaded_materializing_kernel const&)            = delete;
+  loaded_materializing_kernel& operator=(loaded_materializing_kernel const&) = delete;
+
+  ~loaded_materializing_kernel()
+  {
+    if (module_ != nullptr) static_cast<void>(cuModuleUnload(module_));
+  }
+
+  void launch_size(char const* chars,
+                   std::int32_t const* offsets,
+                   std::int32_t rows,
+                   std::int32_t* sizes,
+                   cudaStream_t stream) const
+  {
+    void* arguments[]             = {&chars, &offsets, &rows, &sizes};
+    constexpr unsigned block_size = 256;
+    auto work_items               = static_cast<std::uint32_t>(rows) + 1U;
+    auto grid_size = static_cast<unsigned>((work_items + block_size - 1U) / block_size);
+    check_driver(cuLaunchKernel(size_,
+                                grid_size,
+                                1,
+                                1,
+                                block_size,
+                                1,
+                                1,
+                                0,
+                                reinterpret_cast<CUstream>(stream),
+                                arguments,
+                                nullptr),
+                 "cuLaunchKernel(transform size)");
+  }
+
+  void launch_emit(char const* chars,
+                   std::int32_t const* offsets,
+                   std::int32_t rows,
+                   std::int32_t const* output_offsets,
+                   void* output,
+                   cudaStream_t stream) const
+  {
+    void* arguments[]             = {&chars, &offsets, &rows, &output_offsets, &output};
+    constexpr unsigned block_size = 256;
+    auto grid_size =
+      static_cast<unsigned>((static_cast<std::uint32_t>(rows) + block_size - 1) / block_size);
+    check_driver(cuLaunchKernel(emit_,
+                                grid_size,
+                                1,
+                                1,
+                                block_size,
+                                1,
+                                1,
+                                0,
+                                reinterpret_cast<CUstream>(stream),
+                                arguments,
+                                nullptr),
+                 "cuLaunchKernel(transform emit)");
+  }
+
+  void launch_split_emit(char const* chars,
+                         std::int32_t const* offsets,
+                         std::int32_t rows,
+                         std::int32_t const* output_offsets,
+                         std::uint64_t* spans,
+                         void* pairs,
+                         cudaStream_t stream) const
+  {
+    void* arguments[]             = {&chars, &offsets, &rows, &output_offsets, &spans, &pairs};
+    constexpr unsigned block_size = 256;
+    auto grid_size =
+      static_cast<unsigned>((static_cast<std::uint32_t>(rows) + block_size - 1) / block_size);
+    check_driver(cuLaunchKernel(emit_,
+                                grid_size,
+                                1,
+                                1,
+                                block_size,
+                                1,
+                                1,
+                                0,
+                                reinterpret_cast<CUstream>(stream),
+                                arguments,
+                                nullptr),
+                 "cuLaunchKernel(split emit)");
+  }
+
+ private:
+  CUmodule module_ = nullptr;
+  CUfunction size_ = nullptr;
+  CUfunction emit_ = nullptr;
 };
 
 struct input_data {
@@ -415,6 +602,7 @@ input_data make_extract_input(std::int32_t rows, std::int32_t row_width)
     while (static_cast<std::int32_t>(sample.size()) < row_width) {
       sample += std::to_string(word_distribution(generator)) + " ";
     }
+    sample.resize(static_cast<std::size_t>(row_width));
   }
   input_data result;
   result.offsets.resize(static_cast<std::size_t>(rows) + 1U);
@@ -517,11 +705,7 @@ class benchmark_workload {
       stream_(state.get_cuda_stream().get_stream()),
       input_(std::move(input)),
       strings_(make_strings(input_, stream_)),
-      strings_view_(strings_->view()),
-      regex_ir_output_(input_.expected.size(), rmm::cuda_stream_view{stream_}),
-      match_counts_(input_.expected.size() * sizeof(std::uint64_t), rmm::cuda_stream_view{stream_}),
-      captures_(input_.expected.size() * 10U * sizeof(std::uint64_t),
-                rmm::cuda_stream_view{stream_})
+      strings_view_(strings_->view())
   {
     check_cuda(cudaStreamSynchronize(stream_), "input synchronization");
   }
@@ -541,18 +725,6 @@ class benchmark_workload {
     return strings_view_.offsets().data<std::int32_t>();
   }
 
-  [[nodiscard]] std::uint8_t* regex_ir_output()
-  {
-    return static_cast<std::uint8_t*>(regex_ir_output_.data());
-  }
-
-  [[nodiscard]] std::uint64_t* match_counts()
-  {
-    return static_cast<std::uint64_t*>(match_counts_.data());
-  }
-
-  [[nodiscard]] std::uint64_t* captures() { return static_cast<std::uint64_t*>(captures_.data()); }
-
   [[nodiscard]] std::vector<std::uint8_t> const& expected() const { return input_.expected; }
 
  private:
@@ -562,10 +734,138 @@ class benchmark_workload {
   input_data input_;
   std::unique_ptr<cudf::column> strings_;
   cudf::strings_column_view strings_view_;
-  rmm::device_buffer regex_ir_output_;
-  rmm::device_buffer match_counts_;
-  rmm::device_buffer captures_;
 };
+
+using cudf_string_pair = cuda::std::pair<char const*, cudf::size_type>;
+static_assert(sizeof(cudf_string_pair) == 16U);
+static_assert(alignof(cudf_string_pair) == alignof(void*));
+
+std::unique_ptr<cudf::column> make_regex_ir_boolean_column(benchmark_workload& workload,
+                                                           loaded_kernel const& kernel,
+                                                           cudaStream_t stream)
+{
+  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::BOOL8},
+                                          workload.rows(),
+                                          cudf::mask_state::UNALLOCATED,
+                                          rmm::cuda_stream_view{stream});
+  kernel.launch(workload.chars(),
+                workload.offsets(),
+                workload.rows(),
+                reinterpret_cast<std::uint8_t*>(output->mutable_view().data<bool>()),
+                stream);
+  return output;
+}
+
+std::unique_ptr<cudf::column> make_regex_ir_count_column(benchmark_workload& workload,
+                                                         loaded_count_kernel const& kernel,
+                                                         cudaStream_t stream)
+{
+  auto output = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                          workload.rows(),
+                                          cudf::mask_state::UNALLOCATED,
+                                          rmm::cuda_stream_view{stream});
+  kernel.launch(workload.chars(),
+                workload.offsets(),
+                workload.rows(),
+                output->mutable_view().data<std::int32_t>(),
+                stream);
+  return output;
+}
+
+std::unique_ptr<cudf::table> make_regex_ir_extract_table(benchmark_workload& workload,
+                                                         loaded_extract_kernel const& kernel,
+                                                         std::uint32_t capture_count,
+                                                         cudaStream_t stream)
+{
+  auto rows = static_cast<std::size_t>(workload.rows());
+  rmm::device_buffer captures(
+    rows * static_cast<std::size_t>((capture_count + 1U) * 2U) * sizeof(std::uint64_t),
+    rmm::cuda_stream_view{stream});
+  rmm::device_buffer pairs(
+    rows * static_cast<std::size_t>(capture_count) * sizeof(cudf_string_pair),
+    rmm::cuda_stream_view{stream});
+  kernel.launch(workload.chars(),
+                workload.offsets(),
+                workload.rows(),
+                static_cast<std::uint64_t*>(captures.data()),
+                pairs.data(),
+                capture_count,
+                stream);
+  auto pair_data = static_cast<cudf_string_pair const*>(pairs.data());
+  std::vector<cudf::device_span<cudf_string_pair const>> columns;
+  columns.reserve(capture_count);
+  for (std::uint32_t capture = 0; capture < capture_count; ++capture) {
+    columns.emplace_back(pair_data + static_cast<std::size_t>(capture) * rows, rows);
+  }
+  auto output = cudf::make_strings_column_batch(columns, rmm::cuda_stream_view{stream});
+  return std::make_unique<cudf::table>(std::move(output));
+}
+
+void scan_transform_sizes(std::int32_t* offsets, std::int32_t rows, cudaStream_t stream)
+{
+  thrust::exclusive_scan(
+    thrust::cuda::par.on(stream), offsets, offsets + static_cast<std::size_t>(rows) + 1U, offsets);
+}
+
+std::int32_t copy_transform_size(std::int32_t const* offsets,
+                                 std::int32_t rows,
+                                 cudaStream_t stream)
+{
+  std::int32_t result = 0;
+  check_cuda(
+    cudaMemcpyAsync(&result, offsets + rows, sizeof(result), cudaMemcpyDeviceToHost, stream),
+    "copy materialized output size");
+  check_cuda(cudaStreamSynchronize(stream), "materialized output size synchronization");
+  if (result < 0) throw std::runtime_error("materialized output exceeds cuDF's int32 limit");
+  return result;
+}
+
+std::unique_ptr<cudf::column> make_regex_ir_replace_column(
+  benchmark_workload& workload, loaded_materializing_kernel const& kernel, cudaStream_t stream)
+{
+  auto offsets     = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                           workload.rows() + 1,
+                                           cudf::mask_state::UNALLOCATED,
+                                           rmm::cuda_stream_view{stream});
+  auto offset_data = offsets->mutable_view().data<std::int32_t>();
+  kernel.launch_size(workload.chars(), workload.offsets(), workload.rows(), offset_data, stream);
+  scan_transform_sizes(offset_data, workload.rows(), stream);
+  auto output_bytes = copy_transform_size(offset_data, workload.rows(), stream);
+  rmm::device_buffer chars(static_cast<std::size_t>(output_bytes), rmm::cuda_stream_view{stream});
+  kernel.launch_emit(
+    workload.chars(), workload.offsets(), workload.rows(), offset_data, chars.data(), stream);
+  return cudf::make_strings_column(
+    workload.rows(), std::move(offsets), std::move(chars), 0, rmm::device_buffer{});
+}
+
+std::unique_ptr<cudf::column> make_regex_ir_split_column(benchmark_workload& workload,
+                                                         loaded_materializing_kernel const& kernel,
+                                                         cudaStream_t stream)
+{
+  auto offsets     = cudf::make_numeric_column(cudf::data_type{cudf::type_id::INT32},
+                                           workload.rows() + 1,
+                                           cudf::mask_state::UNALLOCATED,
+                                           rmm::cuda_stream_view{stream});
+  auto offset_data = offsets->mutable_view().data<std::int32_t>();
+  kernel.launch_size(workload.chars(), workload.offsets(), workload.rows(), offset_data, stream);
+  scan_transform_sizes(offset_data, workload.rows(), stream);
+  auto field_count = copy_transform_size(offset_data, workload.rows(), stream);
+  auto fields      = static_cast<std::size_t>(field_count);
+  rmm::device_buffer spans(fields * 2U * sizeof(std::uint64_t), rmm::cuda_stream_view{stream});
+  rmm::device_buffer pairs(fields * sizeof(cudf_string_pair), rmm::cuda_stream_view{stream});
+  kernel.launch_split_emit(workload.chars(),
+                           workload.offsets(),
+                           workload.rows(),
+                           offset_data,
+                           static_cast<std::uint64_t*>(spans.data()),
+                           pairs.data(),
+                           stream);
+  auto pair_data = static_cast<cudf_string_pair const*>(pairs.data());
+  auto strings   = cudf::make_strings_column(
+    cudf::device_span<cudf_string_pair const>{pair_data, fields}, rmm::cuda_stream_view{stream});
+  return cudf::make_lists_column(
+    workload.rows(), std::move(offsets), std::move(strings), 0, rmm::device_buffer{});
+}
 
 struct target_architecture {
   std::string compute;
@@ -601,7 +901,7 @@ std::unique_ptr<loaded_kernel> make_regex_ir_kernel(target_architecture const& a
   return std::make_unique<loaded_kernel>(cubin);
 }
 
-std::unique_ptr<loaded_enumeration_kernel> make_regex_ir_enumeration_kernel(
+std::unique_ptr<loaded_extract_kernel> make_regex_ir_extract_kernel(
   target_architecture const& architecture, std::string_view pattern)
 {
   check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
@@ -611,19 +911,96 @@ std::unique_ptr<loaded_enumeration_kernel> make_regex_ir_enumeration_kernel(
     throw std::runtime_error("GPU benchmark kernel supports at most four capture groups");
   }
   regex_ir::nvvm_ir_codegen_options options;
-  options.symbol_prefix    = "regex_ir_benchmark_capture";
-  options.execute_function = "regex_ir_benchmark_find";
+  options.symbol_prefix    = "regex_ir_benchmark_extract_ir";
+  options.execute_function = "regex_ir_benchmark_extract";
   auto nvvm_ir             = regex_ir::generate_nvvm_ir(*compiled.value, options);
   auto ptx                 = compile_to_ptx(nvvm_ir, architecture.compute);
-  auto wrapper             = std::span<unsigned char const>{regex_ir_benchmark_enumerate_fatbin,
-                                                            regex_ir_benchmark_enumerate_fatbinLength};
+  auto wrapper             = std::span<unsigned char const>{regex_ir_benchmark_extract_fatbin,
+                                                            regex_ir_benchmark_extract_fatbinLength};
   auto cubin               = link_cubin(ptx, wrapper, architecture.sm);
   auto artifact_id         = next_artifact_id();
   dump_artifact(
-    artifact_id, "enumerate.nvvm.ll", std::span<char const>{nvvm_ir.data(), nvvm_ir.size()});
-  dump_artifact(artifact_id, "enumerate.ptx", std::span<char const>{ptx.data(), ptx.size()});
-  dump_artifact(artifact_id, "enumerate.cubin", std::span<char const>{cubin.data(), cubin.size()});
-  return std::make_unique<loaded_enumeration_kernel>(cubin);
+    artifact_id, "extract.nvvm.ll", std::span<char const>{nvvm_ir.data(), nvvm_ir.size()});
+  dump_artifact(artifact_id, "extract.ptx", std::span<char const>{ptx.data(), ptx.size()});
+  dump_artifact(artifact_id, "extract.cubin", std::span<char const>{cubin.data(), cubin.size()});
+  return std::make_unique<loaded_extract_kernel>(cubin);
+}
+
+std::vector<char> compile_operation_cubin(target_architecture const& architecture,
+                                          std::string_view pattern,
+                                          regex_ir::operation selected,
+                                          std::string_view symbol_prefix,
+                                          std::string_view execute_function,
+                                          std::span<unsigned char const> wrapper,
+                                          std::string_view artifact_name)
+{
+  check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
+  auto compiled = regex_ir::compile(pattern, selected);
+  if (!compiled) throw std::runtime_error("Regex IR compilation failed");
+  regex_ir::nvvm_ir_codegen_options options;
+  options.symbol_prefix    = symbol_prefix;
+  options.execute_function = execute_function;
+  auto nvvm_ir             = regex_ir::generate_nvvm_ir(*compiled.value, options);
+  auto ptx                 = compile_to_ptx(nvvm_ir, architecture.compute);
+  auto cubin               = link_cubin(ptx, wrapper, architecture.sm);
+  auto artifact_id         = next_artifact_id();
+  dump_artifact(artifact_id,
+                fmt::format("{}.nvvm.ll", artifact_name),
+                std::span<char const>{nvvm_ir.data(), nvvm_ir.size()});
+  dump_artifact(artifact_id,
+                fmt::format("{}.ptx", artifact_name),
+                std::span<char const>{ptx.data(), ptx.size()});
+  dump_artifact(artifact_id,
+                fmt::format("{}.cubin", artifact_name),
+                std::span<char const>{cubin.data(), cubin.size()});
+  return cubin;
+}
+
+std::unique_ptr<loaded_count_kernel> make_regex_ir_count_kernel(
+  target_architecture const& architecture, std::string_view pattern)
+{
+  auto wrapper = std::span<unsigned char const>{regex_ir_benchmark_count_fatbin,
+                                                regex_ir_benchmark_count_fatbinLength};
+  auto cubin   = compile_operation_cubin(architecture,
+                                       pattern,
+                                       regex_ir::operation::count(),
+                                       "regex_ir_benchmark_count_ir",
+                                       "regex_ir_benchmark_count",
+                                       wrapper,
+                                       "count");
+  return std::make_unique<loaded_count_kernel>(cubin);
+}
+
+std::unique_ptr<loaded_materializing_kernel> make_regex_ir_replace_kernel(
+  target_architecture const& architecture, std::string_view pattern, std::string replacement)
+{
+  auto wrapper = std::span<unsigned char const>{regex_ir_benchmark_replace_fatbin,
+                                                regex_ir_benchmark_replace_fatbinLength};
+  auto cubin   = compile_operation_cubin(architecture,
+                                       pattern,
+                                       regex_ir::operation::replace(std::move(replacement)),
+                                       "regex_ir_benchmark_replace_ir",
+                                       "regex_ir_benchmark_replace",
+                                       wrapper,
+                                       "replace");
+  return std::make_unique<loaded_materializing_kernel>(
+    cubin, "regex_ir_benchmark_replace_size", "regex_ir_benchmark_replace_emit");
+}
+
+std::unique_ptr<loaded_materializing_kernel> make_regex_ir_split_kernel(
+  target_architecture const& architecture, std::string_view pattern)
+{
+  auto wrapper = std::span<unsigned char const>{regex_ir_benchmark_split_fatbin,
+                                                regex_ir_benchmark_split_fatbinLength};
+  auto cubin   = compile_operation_cubin(architecture,
+                                       pattern,
+                                       regex_ir::operation::split(),
+                                       "regex_ir_benchmark_split_ir",
+                                       "regex_ir_benchmark_split",
+                                       wrapper,
+                                       "split");
+  return std::make_unique<loaded_materializing_kernel>(
+    cubin, "regex_ir_benchmark_split_size", "regex_ir_benchmark_split_emit");
 }
 
 void add_throughput_counters(nvbench::state& state, benchmark_workload const& workload)
@@ -634,20 +1011,7 @@ void add_throughput_counters(nvbench::state& state, benchmark_workload const& wo
                                                "OutputBytes");
 }
 
-void validate_regex_ir(benchmark_workload& workload)
-{
-  std::vector<std::uint8_t> actual(workload.expected().size());
-  check_cuda(cudaMemcpyAsync(actual.data(),
-                             workload.regex_ir_output(),
-                             actual.size(),
-                             cudaMemcpyDeviceToHost,
-                             workload.stream()),
-             "copy Regex IR result");
-  check_cuda(cudaStreamSynchronize(workload.stream()), "Regex IR validation synchronization");
-  if (actual != workload.expected()) throw std::runtime_error("Regex IR result validation failed");
-}
-
-void validate_cudf(benchmark_workload& workload, cudf::column const& output)
+void validate_boolean_output(benchmark_workload& workload, cudf::column const& output)
 {
   std::vector<std::uint8_t> actual(workload.expected().size());
   check_cuda(cudaMemcpyAsync(actual.data(),
@@ -655,9 +1019,57 @@ void validate_cudf(benchmark_workload& workload, cudf::column const& output)
                              actual.size(),
                              cudaMemcpyDeviceToHost,
                              workload.stream()),
-             "copy cuDF result");
-  check_cuda(cudaStreamSynchronize(workload.stream()), "cuDF validation synchronization");
-  if (actual != workload.expected()) throw std::runtime_error("cuDF result validation failed");
+             "copy boolean result");
+  check_cuda(cudaStreamSynchronize(workload.stream()), "boolean validation synchronization");
+  if (actual != workload.expected()) throw std::runtime_error("boolean result validation failed");
+}
+
+void validate_column(cudf::column_view actual,
+                     cudf::column_view expected,
+                     cudaStream_t stream,
+                     std::string_view context)
+{
+  if (actual.type() != expected.type() || actual.size() != expected.size() ||
+      actual.null_count() != expected.null_count() ||
+      actual.num_children() != expected.num_children()) {
+    throw std::runtime_error(fmt::format("{} column shape differs from cuDF", context));
+  }
+  if (cudf::is_fixed_width(actual.type()) && actual.size() != 0) {
+    auto width       = cudf::size_of(actual.type());
+    auto bytes       = static_cast<std::size_t>(actual.size()) * width;
+    auto actual_data = static_cast<char const*>(actual.head<void>()) +
+                       static_cast<std::size_t>(actual.offset()) * width;
+    auto expected_data = static_cast<char const*>(expected.head<void>()) +
+                         static_cast<std::size_t>(expected.offset()) * width;
+    std::vector<char> actual_host(bytes);
+    std::vector<char> expected_host(bytes);
+    check_cuda(
+      cudaMemcpyAsync(actual_host.data(), actual_data, bytes, cudaMemcpyDeviceToHost, stream),
+      "copy Regex IR column validation data");
+    check_cuda(
+      cudaMemcpyAsync(expected_host.data(), expected_data, bytes, cudaMemcpyDeviceToHost, stream),
+      "copy cuDF column validation data");
+    check_cuda(cudaStreamSynchronize(stream), "column validation synchronization");
+    if (actual_host != expected_host) {
+      throw std::runtime_error(fmt::format("{} column data differs from cuDF", context));
+    }
+  }
+  for (cudf::size_type child = 0; child < actual.num_children(); ++child) {
+    validate_column(actual.child(child), expected.child(child), stream, context);
+  }
+}
+
+void validate_table(cudf::table_view actual,
+                    cudf::table_view expected,
+                    cudaStream_t stream,
+                    std::string_view context)
+{
+  if (actual.num_columns() != expected.num_columns() || actual.num_rows() != expected.num_rows()) {
+    throw std::runtime_error(fmt::format("{} table shape differs from cuDF", context));
+  }
+  for (cudf::size_type column = 0; column < actual.num_columns(); ++column) {
+    validate_column(actual.column(column), expected.column(column), stream, context);
+  }
 }
 
 void regex_ir_warm(nvbench::state& state)
@@ -669,19 +1081,11 @@ void regex_ir_warm(nvbench::state& state)
   add_throughput_counters(state, workload);
   auto architecture = get_target_architecture(state);
   auto kernel       = make_regex_ir_kernel(architecture, pattern.expression);
-  kernel->launch(workload.chars(),
-                 workload.offsets(),
-                 workload.rows(),
-                 workload.regex_ir_output(),
-                 workload.stream());
-  validate_regex_ir(workload);
+  auto output       = make_regex_ir_boolean_column(workload, *kernel, workload.stream());
+  validate_boolean_output(workload, *output);
 
-  state.exec([&](nvbench::launch& launch) {
-    kernel->launch(workload.chars(),
-                   workload.offsets(),
-                   workload.rows(),
-                   workload.regex_ir_output(),
-                   launch.get_stream().get_stream());
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    output = make_regex_ir_boolean_column(workload, *kernel, launch.get_stream().get_stream());
   });
 }
 
@@ -694,7 +1098,7 @@ void cudf_warm(nvbench::state& state)
   auto program = cudf::strings::regex_program::create(std::string(pattern.expression));
   auto output  = cudf::strings::contains_re(
     workload.strings_view(), *program, rmm::cuda_stream_view{workload.stream()});
-  validate_cudf(workload, *output);
+  validate_boolean_output(workload, *output);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     output = cudf::strings::contains_re(
@@ -712,23 +1116,17 @@ void regex_ir_cold(nvbench::state& state)
   auto architecture = get_target_architecture(state);
 
   auto validation_kernel = make_regex_ir_kernel(architecture, pattern.expression);
-  validation_kernel->launch(workload.chars(),
-                            workload.offsets(),
-                            workload.rows(),
-                            workload.regex_ir_output(),
-                            workload.stream());
-  validate_regex_ir(workload);
+  auto validation_output =
+    make_regex_ir_boolean_column(workload, *validation_kernel, workload.stream());
+  validate_boolean_output(workload, *validation_output);
   validation_kernel.reset();
 
   state.exec(nvbench::exec_tag::sync | nvbench::exec_tag::timer,
              [&](nvbench::launch& launch, auto& timer) {
                timer.start();
                auto kernel = make_regex_ir_kernel(architecture, pattern.expression);
-               kernel->launch(workload.chars(),
-                              workload.offsets(),
-                              workload.rows(),
-                              workload.regex_ir_output(),
-                              launch.get_stream().get_stream());
+               auto output =
+                 make_regex_ir_boolean_column(workload, *kernel, launch.get_stream().get_stream());
                timer.stop();
              });
 }
@@ -743,7 +1141,7 @@ void cudf_cold(nvbench::state& state)
   auto validation_program = cudf::strings::regex_program::create(std::string(pattern.expression));
   auto validation_output  = cudf::strings::contains_re(
     workload.strings_view(), *validation_program, rmm::cuda_stream_view{workload.stream()});
-  validate_cudf(workload, *validation_output);
+  validate_boolean_output(workload, *validation_output);
 
   state.exec(
     nvbench::exec_tag::sync | nvbench::exec_tag::timer, [&](nvbench::launch& launch, auto& timer) {
@@ -756,10 +1154,10 @@ void cudf_cold(nvbench::state& state)
 }
 
 enum class cudf_benchmark_operation : std::uint8_t {
-  Count   = 0,
-  Extract = 1,
-  Replace = 2,
-  Split   = 3,
+  COUNT   = 0,
+  EXTRACT = 1,
+  REPLACE = 2,
+  SPLIT   = 3,
 };
 
 void regex_ir_cudf_contains(nvbench::state& state)
@@ -774,18 +1172,10 @@ void regex_ir_cudf_contains(nvbench::state& state)
   add_throughput_counters(state, workload);
   target_architecture architecture = get_target_architecture(state);
   auto kernel                      = make_regex_ir_kernel(architecture, pattern.expression);
-  kernel->launch(workload.chars(),
-                 workload.offsets(),
-                 workload.rows(),
-                 workload.regex_ir_output(),
-                 workload.stream());
-  validate_regex_ir(workload);
-  state.exec([&](nvbench::launch& launch) {
-    kernel->launch(workload.chars(),
-                   workload.offsets(),
-                   workload.rows(),
-                   workload.regex_ir_output(),
-                   launch.get_stream().get_stream());
+  auto output = make_regex_ir_boolean_column(workload, *kernel, workload.stream());
+  validate_boolean_output(workload, *output);
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    output = make_regex_ir_boolean_column(workload, *kernel, launch.get_stream().get_stream());
   });
 }
 
@@ -801,7 +1191,7 @@ void cudf_cudf_contains(nvbench::state& state)
   auto program = cudf::strings::regex_program::create(std::string{pattern.expression});
   auto output  = cudf::strings::contains_re(
     workload.strings_view(), *program, rmm::cuda_stream_view{workload.stream()});
-  validate_cudf(workload, *output);
+  validate_boolean_output(workload, *output);
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     output = cudf::strings::contains_re(
       workload.strings_view(), *program, rmm::cuda_stream_view{launch.get_stream().get_stream()});
@@ -811,10 +1201,10 @@ void cudf_cudf_contains(nvbench::state& state)
 std::pair<std::string, std::string> operation_pattern(nvbench::state& state,
                                                       cudf_benchmark_operation operation)
 {
-  if (operation != cudf_benchmark_operation::Extract) {
+  if (operation != cudf_benchmark_operation::EXTRACT) {
     benchmark_pattern pattern = get_indexed_pattern(state, cudf_transform_patterns);
     std::string expression{pattern.expression};
-    if (operation == cudf_benchmark_operation::Replace && state.get_string("Type") == "backref") {
+    if (operation == cudf_benchmark_operation::REPLACE && state.get_string("Type") == "backref") {
       expression = "(" + expression + ")";
     }
     return {std::move(expression), std::string{pattern.matching_text}};
@@ -836,41 +1226,72 @@ void regex_ir_operation(nvbench::state& state, cudf_benchmark_operation operatio
   if (skip_unsupported_workload(state, pattern)) return;
   check_driver(cuInit(0), "cuInit");
   auto input =
-    operation == cudf_benchmark_operation::Extract
+    operation == cudf_benchmark_operation::EXTRACT
       ? make_extract_input(get_axis(state, "Rows"), get_axis(state, "StringBytes"))
       : make_random_string_input(get_axis(state, "Rows"), get_axis(state, "StringBytes"));
   benchmark_workload workload(state, std::move(input));
   state.add_element_count(static_cast<std::size_t>(workload.rows()), "Rows");
   state.add_global_memory_reads<std::uint8_t>(workload.bytes(), "InputBytes");
-  state.add_global_memory_writes<std::uint64_t>(static_cast<std::size_t>(workload.rows()),
-                                                "ResultMetadata");
   target_architecture architecture = get_target_architecture(state);
-  auto kernel                      = make_regex_ir_enumeration_kernel(architecture, expression);
-  std::uint32_t captures =
-    operation == cudf_benchmark_operation::Extract
-      ? static_cast<std::uint32_t>(get_axis(state, "Groups"))
-      : (operation == cudf_benchmark_operation::Replace && state.get_string("Type") == "backref"
-           ? 1U
-           : 0U);
-  std::uint32_t match_limit = operation == cudf_benchmark_operation::Extract ? 1U : 0U;
-  kernel->launch(workload.chars(),
-                 workload.offsets(),
-                 workload.rows(),
-                 workload.match_counts(),
-                 workload.captures(),
-                 captures,
-                 match_limit,
-                 workload.stream());
-  check_cuda(cudaStreamSynchronize(workload.stream()), "enumeration validation synchronization");
-  state.exec([&](nvbench::launch& launch) {
-    kernel->launch(workload.chars(),
-                   workload.offsets(),
-                   workload.rows(),
-                   workload.match_counts(),
-                   workload.captures(),
-                   captures,
-                   match_limit,
-                   launch.get_stream().get_stream());
+  if (operation == cudf_benchmark_operation::COUNT) {
+    auto kernel             = make_regex_ir_count_kernel(architecture, expression);
+    auto output             = make_regex_ir_count_column(workload, *kernel, workload.stream());
+    auto validation_program = cudf::strings::regex_program::create(expression);
+    auto expected           = cudf::strings::count_re(workload.strings_view(), *validation_program);
+    validate_column(output->view(), expected->view(), workload.stream(), "count");
+    check_cuda(cudaStreamSynchronize(workload.stream()), "count warm-up synchronization");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      output = make_regex_ir_count_column(workload, *kernel, launch.get_stream().get_stream());
+    });
+    return;
+  }
+
+  if (operation == cudf_benchmark_operation::EXTRACT) {
+    auto kernel   = make_regex_ir_extract_kernel(architecture, expression);
+    auto captures = static_cast<std::uint32_t>(get_axis(state, "Groups"));
+    auto output   = make_regex_ir_extract_table(workload, *kernel, captures, workload.stream());
+    auto validation_program = cudf::strings::regex_program::create(expression);
+    auto expected           = cudf::strings::extract(workload.strings_view(), *validation_program);
+    validate_table(output->view(), expected->view(), workload.stream(), "extract");
+    check_cuda(cudaStreamSynchronize(workload.stream()), "extract warm-up synchronization");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      output =
+        make_regex_ir_extract_table(workload, *kernel, captures, launch.get_stream().get_stream());
+    });
+    return;
+  }
+
+  if (operation == cudf_benchmark_operation::REPLACE) {
+    auto replacement =
+      state.get_string("Type") == "backref" ? std::string{"#$1X"} : std::string{"77"};
+    auto kernel             = make_regex_ir_replace_kernel(architecture, expression, replacement);
+    auto output             = make_regex_ir_replace_column(workload, *kernel, workload.stream());
+    auto validation_program = cudf::strings::regex_program::create(expression);
+    std::unique_ptr<cudf::column> expected;
+    if (state.get_string("Type") == "backref") {
+      expected = cudf::strings::replace_with_backrefs(
+        workload.strings_view(), *validation_program, std::string{"#\\1X"});
+    } else {
+      cudf::string_scalar replacement_scalar{"77"};
+      expected =
+        cudf::strings::replace_re(workload.strings_view(), *validation_program, replacement_scalar);
+    }
+    validate_column(output->view(), expected->view(), workload.stream(), "replace");
+    check_cuda(cudaStreamSynchronize(workload.stream()), "replace warm-up synchronization");
+    state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+      output = make_regex_ir_replace_column(workload, *kernel, launch.get_stream().get_stream());
+    });
+    return;
+  }
+
+  auto kernel             = make_regex_ir_split_kernel(architecture, expression);
+  auto output             = make_regex_ir_split_column(workload, *kernel, workload.stream());
+  auto validation_program = cudf::strings::regex_program::create(expression);
+  auto expected = cudf::strings::split_record_re(workload.strings_view(), *validation_program);
+  validate_column(output->view(), expected->view(), workload.stream(), "split");
+  check_cuda(cudaStreamSynchronize(workload.stream()), "split warm-up synchronization");
+  state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
+    output = make_regex_ir_split_column(workload, *kernel, launch.get_stream().get_stream());
   });
 }
 
@@ -880,7 +1301,7 @@ void cudf_operation(nvbench::state& state, cudf_benchmark_operation operation)
   benchmark_pattern pattern{"operation", expression, matching};
   if (skip_unsupported_workload(state, pattern)) return;
   auto input =
-    operation == cudf_benchmark_operation::Extract
+    operation == cudf_benchmark_operation::EXTRACT
       ? make_extract_input(get_axis(state, "Rows"), get_axis(state, "StringBytes"))
       : make_random_string_input(get_axis(state, "Rows"), get_axis(state, "StringBytes"));
   benchmark_workload workload(state, std::move(input));
@@ -889,11 +1310,11 @@ void cudf_operation(nvbench::state& state, cudf_benchmark_operation operation)
   auto program = cudf::strings::regex_program::create(expression);
   cudf::string_scalar replacement{"77"};
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
-    if (operation == cudf_benchmark_operation::Count) {
+    if (operation == cudf_benchmark_operation::COUNT) {
       auto output = cudf::strings::count_re(workload.strings_view(), *program);
-    } else if (operation == cudf_benchmark_operation::Extract) {
+    } else if (operation == cudf_benchmark_operation::EXTRACT) {
       auto output = cudf::strings::extract(workload.strings_view(), *program);
-    } else if (operation == cudf_benchmark_operation::Replace) {
+    } else if (operation == cudf_benchmark_operation::REPLACE) {
       if (state.get_string("Type") == "backref") {
         auto output = cudf::strings::replace_with_backrefs(
           workload.strings_view(), *program, std::string{"#\\1X"});
@@ -908,37 +1329,37 @@ void cudf_operation(nvbench::state& state, cudf_benchmark_operation operation)
 
 void regex_ir_count(nvbench::state& state)
 {
-  regex_ir_operation(state, cudf_benchmark_operation::Count);
+  regex_ir_operation(state, cudf_benchmark_operation::COUNT);
 }
 
-void cudf_count(nvbench::state& state) { cudf_operation(state, cudf_benchmark_operation::Count); }
+void cudf_count(nvbench::state& state) { cudf_operation(state, cudf_benchmark_operation::COUNT); }
 
 void regex_ir_extract(nvbench::state& state)
 {
-  regex_ir_operation(state, cudf_benchmark_operation::Extract);
+  regex_ir_operation(state, cudf_benchmark_operation::EXTRACT);
 }
 
 void cudf_extract(nvbench::state& state)
 {
-  cudf_operation(state, cudf_benchmark_operation::Extract);
+  cudf_operation(state, cudf_benchmark_operation::EXTRACT);
 }
 
 void regex_ir_replace(nvbench::state& state)
 {
-  regex_ir_operation(state, cudf_benchmark_operation::Replace);
+  regex_ir_operation(state, cudf_benchmark_operation::REPLACE);
 }
 
 void cudf_replace(nvbench::state& state)
 {
-  cudf_operation(state, cudf_benchmark_operation::Replace);
+  cudf_operation(state, cudf_benchmark_operation::REPLACE);
 }
 
 void regex_ir_split(nvbench::state& state)
 {
-  regex_ir_operation(state, cudf_benchmark_operation::Split);
+  regex_ir_operation(state, cudf_benchmark_operation::SPLIT);
 }
 
-void cudf_split(nvbench::state& state) { cudf_operation(state, cudf_benchmark_operation::Split); }
+void cudf_split(nvbench::state& state) { cudf_operation(state, cudf_benchmark_operation::SPLIT); }
 
 }  // namespace
 
@@ -971,63 +1392,63 @@ NVBENCH_BENCH(cudf_cold)
 NVBENCH_BENCH(regex_ir_cudf_contains)
   .set_name("regex_ir/contains")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("HitRate", {50, 100})
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
 NVBENCH_BENCH(cudf_cudf_contains)
   .set_name("cudf/contains")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("HitRate", {50, 100})
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10});
 
 NVBENCH_BENCH(regex_ir_count)
   .set_name("regex_ir/count")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6});
 
 NVBENCH_BENCH(cudf_count)
   .set_name("cudf/count")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6});
 
 NVBENCH_BENCH(regex_ir_extract)
   .set_name("regex_ir/extract")
   .add_int64_axis("StringBytes", {32, 64, 128, 256})
-  .add_int64_axis("Rows", {32768, 262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Groups", {1, 2, 4});
 
 NVBENCH_BENCH(cudf_extract)
   .set_name("cudf/extract")
   .add_int64_axis("StringBytes", {32, 64, 128, 256})
-  .add_int64_axis("Rows", {32768, 262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Groups", {1, 2, 4});
 
 NVBENCH_BENCH(regex_ir_replace)
   .set_name("regex_ir/replace")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6})
   .add_string_axis("Type", {"replace", "backref"});
 
 NVBENCH_BENCH(cudf_replace)
   .set_name("cudf/replace")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6})
   .add_string_axis("Type", {"replace", "backref"});
 
 NVBENCH_BENCH(regex_ir_split)
   .set_name("regex_ir/split")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6});
 
 NVBENCH_BENCH(cudf_split)
   .set_name("cudf/split")
   .add_int64_axis("StringBytes", {64, 128, 256})
-  .add_int64_axis("Rows", {262144, 2097152})
+  .add_int64_axis("Rows", api_row_counts())
   .add_int64_axis("Pattern", {0, 1, 2, 3, 4, 5, 6});

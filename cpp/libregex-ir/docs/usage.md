@@ -85,11 +85,11 @@ end-of-input requirements, capture retention, and result shape:
 | `operation::replace(text)` | Replacement | Replace non-overlapping matches. |
 | `operation::split()` | Fields | Split at non-overlapping matches. |
 
-NVVM IR generation accepts the two boolean result shapes and the capture result
-shape produced by `operation::extract()`. Count, findall, replacement, and split
-can be materialized around repeated capture-enumeration calls, as demonstrated
-by the `Cudf` fixture in `tests/unit_tests.cpp`. The host interpreter directly
-materializes every result shape.
+NVVM IR generation accepts every operation above. The operation selects both
+the control flow generated around the matcher and the public device ABI; count,
+replacement, and split are not implemented by a generic extract wrapper. The
+host interpreter independently materializes every result shape as a semantic
+oracle.
 
 For stage-by-stage inspection:
 
@@ -127,7 +127,8 @@ or singleton, and `branch_hints` adds the NVVM-supported `llvm.expect`
 intrinsic to the resulting biased candidate branch. Deterministic modules do
 not use either option.
 
-The generated boolean entry ABI is:
+The public entry ABI is selected by `ir.selected_operation`. Contains and
+matches use:
 
 ```llvm
 define zeroext i1 @regex_contains_17(i8* %data, i64 %size)
@@ -140,7 +141,28 @@ define zeroext i1 @regex_contains_17(i8* %data, i64 %size)
   offsets.
 - byte mode treats every byte as one character.
 
-An IR compiled with `operation::extract()` instead uses:
+Find uses:
+
+```llvm
+define zeroext i1 @regex_find_17(
+  i8* %data, i64 %size, i64* %span)
+```
+
+`span` points to two `i64` values. On success they receive the half-open match
+byte range and the function returns true. No span is written when no match is
+found.
+
+Count uses:
+
+```llvm
+define i64 @regex_count_17(i8* %data, i64 %size)
+```
+
+The returned value is the number of leftmost, non-overlapping matches. The
+generated loop handles empty matches itself and advances by one logical
+character to guarantee progress.
+
+Extract uses:
 
 ```llvm
 define zeroext i1 @regex_extract_17(
@@ -154,9 +176,43 @@ define zeroext i1 @regex_extract_17(
   capture remains `-1, -1`.
 - the function returns false when no match exists at or after `search_start`.
 
-Advance the next search to the previous end. After an empty match, advance by
-one decoded character; after an empty match at end of input, stop. This is the
-same enumeration policy used by count, findall, replacement, and split.
+Extract exposes `search_start` so a wrapper can either request only the first
+match or enumerate captures. Advance the next search to the previous end. After
+an empty match, advance by one decoded character; after an empty match at end
+of input, stop.
+
+Replace uses:
+
+```llvm
+define i64 @regex_replace_17(
+  i8* %data, i64 %size, i8* %output)
+```
+
+The function returns the exact number of output bytes. With `output == null`,
+it performs a sizing pass without stores. With non-null storage, it copies
+unmatched ranges and emits the replacement template directly. Output storage
+must not overlap the input. Literal bytes
+are constants in the module; only capture groups referenced by the replacement
+retain capture writes. A typical column wrapper therefore runs the sizing
+kernel, performs an exclusive scan of row sizes, allocates the compact byte
+buffer, and runs the emission kernel with `output + output_offsets[row]`.
+
+Split uses:
+
+```llvm
+define i64 @regex_split_17(
+  i8* %data, i64 %size, i64* %spans)
+```
+
+The return value is the exact field count. With `spans == null`, the function
+only counts fields. Otherwise it writes consecutive begin/end pairs relative
+to the row. A column wrapper sizes each row, scans field counts, allocates
+`2 * total_fields` values, and emits at
+`spans + 2 * field_offsets[row]`. The spans are views into the original input;
+a consumer that needs owned strings can gather their bytes afterward.
+
+All multi-match operations share the same leftmost, non-overlapping progress
+rule, but their loops and outputs are generated into the operation module.
 
 The module contains its own byte/UTF-8 decoding, predicates, assertions,
 literal matching, prioritized control flow, NVPTX data layout, and NVVM IR 2.0
@@ -179,21 +235,53 @@ Priority preserves left-to-right alternation and greedy/lazy behavior.
 | `match_literal{s}` | Compare fused ASCII literals directly as bytes with one bounds check; otherwise decode and compare code points. |
 | `advance_cursor{n}` | Advance by integer byte addition after a proven ASCII literal, or by `n` decoded characters otherwise. |
 | `test_assertion{a}` | Test absolute/line anchors or configured word-boundary state without consuming input. |
-| `write_capture` | Omitted for boolean operations after capture-stripping optimization. |
+| `write_capture` | Retained for extract and for capture groups referenced by replacement; stripped from other operations. |
 | `emit_accept` | Return true, additionally checking `position == size` for matches mode. |
 
-For boolean contains and matches, captures and priority are unobservable. When
-the graph has no position-dependent assertions, the generator computes its
-deterministic states and Unicode predicate-equivalence classes at generation
-time. The emitted function streams each row once through constant class and
-transition tables. Contains includes the initial closure after every character;
-matches starts only at byte zero and tests acceptance at end-of-input.
+The renderer generates an internal `find_from` primitive and only the selected
+public operation loop. Find calls it once; count increments a scalar; replace
+copies unmatched/replacement ranges; split writes field spans; and extract
+exposes the search start and capture buffer. Consequently, a count module
+contains no replacement or split machinery, and a replacement without live
+backreferences contains no capture array.
 
-Assertion-bearing graphs retain the recursive Thompson fallback. In that path,
-an ambiguous block saves its cursor, calls successors in priority order, and
-restores the cursor after a failed branch. A generated step budget bounds
-nullable cycles. The generated header identifies the selected executor and,
-for deterministic output, reports its state and alphabet-class counts.
+Capture-free graphs use subset construction over Unicode
+predicate-equivalence classes. Boolean contains/match results do not observe
+which accepting path won, so their states are canonical sets and use a 15-bit
+index. Assertions extend a state with only the boundary predicate bits used by
+the graph; generation precomputes a conditional epsilon closure for each truth
+assignment and a separate end-of-input acceptance table. Large boolean
+alternatives may be emitted as smaller deterministic functions behind a
+short-circuit wrapper. Other result shapes retain Thompson
+thread order and a stop-before-accept flag, preserving leftmost-first
+alternation and greedy/lazy behavior. Contains injects the initial closure
+after every character; matches starts only at byte zero and tests acceptance
+at end-of-input. Find, count, replacement, and split reuse an anchored
+prioritized table inside their operation-specific loops. Tables above 32 KiB
+use read-only global storage instead of exhausting NVPTX's 64 KiB constant
+segment when several machines share a module.
+
+Capture graphs use tagged deterministic transitions only when generation can
+prove one consuming thread per alphabet class, deterministic capture paths,
+and terminal acceptance. A transition then writes capture boundaries directly
+without a recursive call frame. Whole-pattern replacement captures reuse the
+already-known match span. Global beginning/end anchors can be folded into
+deterministic control flow; end-line acceptance still calls the generated
+assertion helper to preserve newline semantics.
+
+An exact one-byte ASCII count, replacement, or split pattern bypasses the
+transition table and uses a direct byte-search loop. A non-scanning DFA returns
+immediately on its dead state, so absolute-begin and whole-input operations do
+not consume the rest of a row after failure.
+
+Non-boolean internal assertions and ambiguous capture histories retain the
+recursive Thompson fallback. In that path, an ambiguous block saves its cursor,
+calls successors in priority order, and restores the cursor after a failed branch. A
+generated step budget bounds nullable cycles. The generated header identifies
+`single-byte literal scan`, `deterministic table`, `assertion-aware
+deterministic table`, `prioritized deterministic table`, `tagged prioritized
+deterministic table`, or `recursive Thompson` and reports state/alphabet-class
+counts for table executors.
 
 ## 5. Compile generated IR with libNVVM
 
@@ -253,6 +341,58 @@ extern "C" __global__ void contains_kernel(char const* chars,
     chars + begin, static_cast<std::size_t>(end - begin));
 }
 ```
+
+Use the declaration matching the compiled operation; for example:
+
+```cpp
+extern "C" __device__ bool regex_find_17(
+  char const*, std::size_t, std::uint64_t*);
+extern "C" __device__ std::uint64_t regex_count_17(
+  char const*, std::size_t);
+extern "C" __device__ bool regex_extract_17(
+  char const*, std::size_t, std::size_t, std::uint64_t*);
+extern "C" __device__ std::uint64_t regex_replace_17(
+  char const*, std::size_t, char*);
+extern "C" __device__ std::uint64_t regex_split_17(
+  char const*, std::size_t, std::uint64_t*);
+```
+
+For fixed-size results, one CUDA thread calls find, count, or extract for one
+row and stores its scalar/spans. Variable-size output uses two global kernels:
+the first calls replace/split with a null output and stores each row's size;
+after a device exclusive scan, the second calls it with that row's output
+slice. Both global kernels can live in the same precompiled LTO fatbin.
+
+### cuDF column input and output
+
+The generated device ABI is deliberately independent of cuDF, but a cuDF
+integration should expose columns at its host boundary. The benchmark wrappers
+demonstrate the intended contract. They accept an owning cuDF STRING column,
+construct a `cudf::strings_column_view`, and pass its `offsets()` and
+`chars_begin()` children to the linked CUDA kernel. They never rebuild a
+parallel raw input representation.
+
+The wrapper must also return an owning cuDF object, not the generated scalar or
+span scratch storage:
+
+| Operation | cuDF host result |
+|:---|:---|
+| contains | `BOOL8` column |
+| count | `INT32` column |
+| extract | table of capture `STRING` columns |
+| replace | `STRING` column |
+| split | `LIST<STRING>` column |
+
+For contains and count, allocate the fixed-width output column before launching
+and pass its mutable data child to the wrapper kernel. For replace, scan the
+per-row byte counts into an INT32 offsets child, allocate the exact chars
+buffer, emit directly into it, and transfer both children to
+`cudf::make_strings_column`. For extract, convert capture spans to device
+pointer/length pairs and call `cudf::make_strings_column_batch`. For split,
+scan field counts into the parent list offsets, materialize the flattened
+STRING child from pointer/length pairs, and call `cudf::make_lists_column`.
+Output allocation, scans, compaction, and column construction belong inside an
+end-to-end timed API call.
 
 Compile this stable kernel to an LTO-IR fatbin ahead of time, then embed it in
 the host executable with the CUDA Toolkit's `bin2c` utility:
@@ -336,10 +476,31 @@ options, NVVM code-generation options, Regex IR version, CUDA toolkit version,
 and target architecture. Excluding any of these can reuse incompatible code.
 
 The complete compile/link and launch sequence is tested in
-`tests/unit_tests.cpp`; its stable CUDA entry points are in
-`tests/regex_ir_execute_kernel.cu` and `tests/regex_ir_capture_kernel.cu`. The
-optional GPU benchmark in `benchmarks/gpu_benchmark.cpp` uses an equivalent
-libNVVM/nvJitLink path with a benchmark-specific CUDA wrapper.
+`tests/unit_tests.cpp`; its stable boolean, find, count, capture, replace, and
+split CUDA entry points are separate named sources under `tests/fragments/`.
+The optional GPU benchmarks use an equivalent libNVVM/nvJitLink path with a
+benchmark-specific CUDA wrapper.
+
+The cuDF API benchmark is parameterized by NVBench's `Rows` and `StringBytes`
+axes. The published sweep uses 14 doubling row counts from 1,024 through the
+largest common 256-byte input supported by cuDF's signed 32-bit string offsets,
+8,388,607 rows. Width settings are 64, 128, and 256. The main README contains
+the complete contains, count, extract, replace, and split tables plus a linked
+line chart per API. `StringBytes` controls each ported workload's input-width
+distribution; it is not an assertion that every variable-length row has
+exactly that many bytes.
+
+The imported OpenResty, Rust Leipzig, Boost/GCC, and mariomka reports use one
+linked NVIDIA-style grouped horizontal bar chart per suite. Each named case has
+one cuDF baseline bar and one Regex IR bar on a throughput axis, with one aligned
+speedup label. Exact throughput remains in the README tables and CSV data.
+Suites with materially different input groups use independent panels. A panel
+spanning at least 50x uses a visibly marked logarithmic throughput axis;
+narrower panels remain linear. Every bar retains all source bytes; forcing a
+fixed corpus into progressively more rows would eventually benchmark empty
+strings. Run
+`scripts/plot_corpus_benchmarks.py` on the packed large- and compact-corpus
+NVBench exports to refresh the charts, per-case CSV files, and README tables.
 
 ## 9. Command-line tools
 
@@ -351,17 +512,33 @@ regex-ir-codegen \
   --symbol-prefix tenant_17 \
   --execute-function regex_contains_17 \
   'abc[0-9]+' > regex.nvvm
+
+regex-ir-codegen --operation count 'a+' > count.nvvm
+regex-ir-codegen --replace '<$1>' '(a+)' > replace.nvvm
+regex-ir-codegen --operation split '[,;]+' > split.nvvm
 ```
 
 Inspect the pipeline interactively or for one pattern:
 
 ```console
 regex-ir-explorer --nvvm --ir 'abc[0-9]+'
+regex-ir-explorer --operation match --nvvm '^(ab|cd)+$'
+regex-ir-explorer --operation replace --replacement '<$1>' --nvvm '([a-z]+)'
+regex-ir-explorer --ir 'contains("[0-9]", 12834)'
 regex-ir-explorer --help
 ```
 
 The explorer can independently show Automata IR plus its ASCII graph,
-optimized Instruction IR, and generated NVVM IR.
+optimized Instruction IR, and generated NVVM IR for contains, match, find,
+count, extract, replace, and split. In the interactive console, use
+`:operation NAME`, `:replace TEXT`, `:show VIEW`, `:hide VIEW`, and `:status`;
+changing the API regenerates the last pattern with the selected result shape
+and device ABI. A call expression such as `contains("[0-9]", 12834)` selects
+the operation, prints the requested IR views, and executes that optimized IR
+with the CPU interpreter. Its first argument is a quoted pattern and its second
+is quoted input or an unquoted scalar interpreted as text. `replace` takes a
+third replacement argument. Bare patterns continue to compile without being
+executed.
 
 ## 10. Host interpreter for testing
 

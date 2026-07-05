@@ -77,3 +77,45 @@ The Rust `regex` crate is distributed under the following MIT license:
 > LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
+
+## External performance workload inventories
+
+The variable-length GPU corpus driver adapts regular-expression inventories
+and downloads checksum-pinned copies of the complete source datasets from:
+
+- OpenResty's 31-case Regex Engine Matching Speed Benchmark at SRegex commit
+  `ee5944f108f76217760f9b5548e842971c0281b2`:
+  https://openresty.org/misc/re/bench/
+- rust-leipzig/regex-performance commit
+  `52cb0538eca86ad549f6895dbfa9a2f71bc82244`, distributed under Apache License
+  2.0:
+  https://github.com/rust-leipzig/regex-performance
+- Boost.Regex's GCC performance comparison, distributed under Boost Software
+  License 1.0:
+  https://www.boost.org/doc/libs/1_41_0/libs/regex/doc/gcc-performance.html
+- mariomka/regex-benchmark commit
+  `17d073ec864931546e2694783f6231e4696a9ed4`, distributed under the MIT
+  License:
+  https://github.com/mariomka/regex-benchmark
+
+The downloaded data is kept in the build directory, not vendored. OpenResty's
+`abc.txt`, `rand-abc.txt`, and `delim.txt` are generated in memory from the
+full-size upstream recipes; those recipes intentionally left the random seed
+unspecified, so this project uses a fixed deterministic generator. The Mark
+Twain texts are Project Gutenberg works whose use is subject to the notice
+included in each source file.
+
+## CPython and sihlfall regex cases
+
+The `CPython` fixture adapts regular-language cases from CPython's `re_tests`
+suite at commit `8e88bb56337a771f3af5edc5c3a5ba96ea2c3353`:
+https://github.com/python/cpython/blob/8e88bb56337a771f3af5edc5c3a5ba96ea2c3353/Lib/test/re_tests.py
+
+CPython is distributed under the Python Software Foundation License Version 2.
+
+The `Sihlfall` fixture adapts categories and cases from regex-test-cases at
+commit `0ab3381ad388eaa44576fe33fa66aa3458c61c43`:
+https://github.com/sihlfall/regex-test-cases/tree/0ab3381ad388eaa44576fe33fa66aa3458c61c43/test-cases
+
+regex-test-cases is distributed under the 3-clause BSD license included in its
+repository.

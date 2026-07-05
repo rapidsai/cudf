@@ -11,6 +11,9 @@ option(REGEX_IR_BUILD_EXAMPLES "Build Regex IR examples" ON)
 option(REGEX_IR_BUILD_BENCHMARKS "Build the Regex IR interpreter/RE2 CPU comparison" OFF)
 option(REGEX_IR_BUILD_GPU_BENCHMARKS "Build the cuDF/NVVM GPU comparison" OFF)
 set(REGEX_IR_CUDF_ROOT "" CACHE PATH "cuDF installation prefix for GPU benchmarks")
+set(REGEX_IR_BENCHMARK_CORPUS_DIRECTORY
+  "${CMAKE_CURRENT_BINARY_DIR}/benchmark-corpora"
+  CACHE PATH "Directory for verified external benchmark corpora")
 option(REGEX_IR_BUILD_EXPLORER "Build the interactive regex-to-IR explorer" ON)
 option(REGEX_IR_BUILD_CODEGEN "Build the NVVM IR generator command" ON)
 option(REGEX_IR_BUILD_FUZZERS "Build Clang libFuzzer targets" OFF)
@@ -21,8 +24,14 @@ if(REGEX_IR_BUILD_GPU_BENCHMARKS AND CMAKE_VERSION VERSION_LESS 4.0)
 endif()
 
 if(REGEX_IR_BUILD_GPU_BENCHMARKS)
-  find_path(REGEX_IR_FMT_INCLUDE_DIR NAMES fmt/format.h REQUIRED)
-  find_library(REGEX_IR_FMT_LIBRARY NAMES fmt REQUIRED)
+  find_path(REGEX_IR_FMT_INCLUDE_DIR
+    NAMES fmt/format.h
+    HINTS ${REGEX_IR_CUDF_ROOT}/include
+    REQUIRED)
+  find_library(REGEX_IR_FMT_LIBRARY
+    NAMES fmt
+    HINTS ${REGEX_IR_CUDF_ROOT}/lib ${REGEX_IR_CUDF_ROOT}/lib64
+    REQUIRED)
 else()
   find_package(fmt CONFIG REQUIRED)
 endif()
@@ -191,53 +200,94 @@ if(REGEX_IR_BUILD_GPU_BENCHMARKS)
     message(FATAL_ERROR "GPU benchmarks require libNVVM and nvJitLink")
   endif()
 
-  set(REGEX_IR_BENCHMARK_KERNEL_SOURCE ${PROJECT_SOURCE_DIR}/benchmarks/regex_ir_kernels.cu)
+  set(REGEX_IR_BENCHMARK_FRAGMENT_DIRECTORY ${PROJECT_SOURCE_DIR}/benchmarks/fragments)
   set(REGEX_IR_BENCHMARK_KERNEL_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/generated)
   regex_ir_embed_cuda_lto(
     REGEX_IR_BENCHMARK_CONTAINS_KERNEL
     regex_ir_benchmark_contains
-    ${REGEX_IR_BENCHMARK_KERNEL_SOURCE}
+    ${REGEX_IR_BENCHMARK_FRAGMENT_DIRECTORY}/regex_ir_contains_kernel.cu
     regex_ir_benchmark_contains_fatbin)
   regex_ir_embed_cuda_lto(
-    REGEX_IR_BENCHMARK_ENUMERATION_KERNEL
-    regex_ir_benchmark_enumerate
-    ${REGEX_IR_BENCHMARK_KERNEL_SOURCE}
-    regex_ir_benchmark_enumerate_fatbin
-    DEFINITION REGEX_IR_ENUMERATION_KERNEL=1)
+    REGEX_IR_BENCHMARK_EXTRACT_KERNEL
+    regex_ir_benchmark_extract
+    ${REGEX_IR_BENCHMARK_FRAGMENT_DIRECTORY}/regex_ir_extract_kernel.cu
+    regex_ir_benchmark_extract_fatbin)
+  regex_ir_embed_cuda_lto(
+    REGEX_IR_BENCHMARK_COUNT_KERNEL
+    regex_ir_benchmark_count
+    ${REGEX_IR_BENCHMARK_FRAGMENT_DIRECTORY}/regex_ir_count_kernel.cu
+    regex_ir_benchmark_count_fatbin)
+  regex_ir_embed_cuda_lto(
+    REGEX_IR_BENCHMARK_REPLACE_KERNEL
+    regex_ir_benchmark_replace
+    ${REGEX_IR_BENCHMARK_FRAGMENT_DIRECTORY}/regex_ir_replace_kernel.cu
+    regex_ir_benchmark_replace_fatbin)
+  regex_ir_embed_cuda_lto(
+    REGEX_IR_BENCHMARK_SPLIT_KERNEL
+    regex_ir_benchmark_split
+    ${REGEX_IR_BENCHMARK_FRAGMENT_DIRECTORY}/regex_ir_split_kernel.cu
+    regex_ir_benchmark_split_fatbin)
   add_custom_target(regex_ir_benchmark_kernels DEPENDS
     ${REGEX_IR_BENCHMARK_CONTAINS_KERNEL}
-    ${REGEX_IR_BENCHMARK_ENUMERATION_KERNEL})
+    ${REGEX_IR_BENCHMARK_EXTRACT_KERNEL}
+    ${REGEX_IR_BENCHMARK_COUNT_KERNEL}
+    ${REGEX_IR_BENCHMARK_REPLACE_KERNEL}
+    ${REGEX_IR_BENCHMARK_SPLIT_KERNEL})
+  add_custom_target(regex_ir_benchmark_corpora
+    COMMAND ${CMAKE_COMMAND}
+      -DOUTPUT_DIRECTORY=${REGEX_IR_BENCHMARK_CORPUS_DIRECTORY}
+      -P ${PROJECT_SOURCE_DIR}/cmake/FetchBenchmarkCorpora.cmake
+    COMMENT "Verifying complete external benchmark corpora"
+    VERBATIM)
 
-  set_source_files_properties(benchmarks/gpu_benchmark.cpp PROPERTIES LANGUAGE CUDA)
-  add_executable(regex_ir_gpu_benchmark benchmarks/gpu_benchmark.cpp)
-  add_dependencies(regex_ir_gpu_benchmark regex_ir_benchmark_kernels)
-  target_link_libraries(regex_ir_gpu_benchmark PRIVATE
-    regex_ir::regex_ir
-    fmt::fmt
-    ${REGEX_IR_CUDF_LIBRARY}
-    ${REGEX_IR_RMM_LIBRARY}
-    ${REGEX_IR_NVVM_LIBRARY}
-    ${REGEX_IR_NVJITLINK_LIBRARY}
-    nvbench::main
-    CUDA::cuda_driver
-    CUDA::cudart
-    ${CMAKE_DL_LIBS})
-  target_include_directories(regex_ir_gpu_benchmark PRIVATE
-    ${REGEX_IR_BENCHMARK_KERNEL_DIRECTORY})
-  target_include_directories(regex_ir_gpu_benchmark SYSTEM PRIVATE
-    ${REGEX_IR_CUDF_INCLUDE_DIR}
-    ${REGEX_IR_CCCL_INCLUDE_DIR}
-    ${REGEX_IR_NVVM_INCLUDE_DIR}
-    ${REGEX_IR_NVJITLINK_INCLUDE_DIR})
-  target_compile_features(regex_ir_gpu_benchmark PRIVATE cxx_std_20 cuda_std_20)
-  set_target_properties(regex_ir_gpu_benchmark PROPERTIES
-    OUTPUT_NAME regex-ir-gpu-benchmark
-    CUDA_EXTENSIONS OFF
-    BUILD_RPATH "${REGEX_IR_CUDF_ROOT}/lib;${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib64")
-  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(regex_ir_gpu_benchmark PRIVATE
-      $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Wconversion;-Wshadow>)
-  endif()
+  function(regex_ir_add_gpu_benchmark target output_name)
+    set_source_files_properties(${ARGN} PROPERTIES LANGUAGE CUDA)
+    add_executable(${target} ${ARGN})
+    add_dependencies(${target} regex_ir_benchmark_kernels)
+    target_link_libraries(${target} PRIVATE
+      regex_ir::regex_ir
+      ${REGEX_IR_FMT_LIBRARY}
+      ${REGEX_IR_CUDF_LIBRARY}
+      ${REGEX_IR_RMM_LIBRARY}
+      ${REGEX_IR_NVVM_LIBRARY}
+      ${REGEX_IR_NVJITLINK_LIBRARY}
+      nvbench::main
+      CUDA::cuda_driver
+      CUDA::cudart
+      ${CMAKE_DL_LIBS})
+    target_include_directories(${target} PRIVATE
+      ${REGEX_IR_BENCHMARK_KERNEL_DIRECTORY}
+      ${REGEX_IR_FMT_INCLUDE_DIR})
+    target_include_directories(${target} SYSTEM PRIVATE
+      ${REGEX_IR_CUDF_INCLUDE_DIR}
+      ${REGEX_IR_CCCL_INCLUDE_DIR}
+      ${REGEX_IR_NVVM_INCLUDE_DIR}
+      ${REGEX_IR_NVJITLINK_INCLUDE_DIR})
+    target_compile_features(${target} PRIVATE cxx_std_20 cuda_std_20)
+    set_target_properties(${target} PROPERTIES
+      OUTPUT_NAME ${output_name}
+      CUDA_EXTENSIONS OFF
+      BUILD_RPATH "${REGEX_IR_CUDF_ROOT}/lib;${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib64")
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+      target_compile_options(${target} PRIVATE
+        $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic;-Wconversion;-Wshadow>)
+    endif()
+  endfunction()
+
+  regex_ir_add_gpu_benchmark(
+    regex_ir_gpu_benchmark
+    regex-ir-gpu-benchmark
+    benchmarks/gpu_benchmark.cpp)
+  regex_ir_add_gpu_benchmark(
+    regex_ir_corpus_benchmark
+    regex-ir-corpus-benchmark
+    benchmarks/openresty_benchmark.cpp
+    benchmarks/leipzig_benchmark.cpp
+    benchmarks/boost_benchmark.cpp
+    benchmarks/mariomka_benchmark.cpp)
+  add_dependencies(regex_ir_corpus_benchmark regex_ir_benchmark_corpora)
+  target_compile_definitions(regex_ir_corpus_benchmark PRIVATE
+    REGEX_IR_BENCHMARK_CORPUS_DIRECTORY="${REGEX_IR_BENCHMARK_CORPUS_DIRECTORY}")
 endif()
 
 if(REGEX_IR_BUILD_FUZZERS)
