@@ -241,10 +241,10 @@ constexpr std::string_view usage =
   return http_log_fragments::files.subspan(range[0], range[1]);
 }
 
-[[nodiscard]] std::unique_ptr<cudf::table> run_precompiled(cudf::column_view input,
-                                                           operation selected_operation,
-                                                           rmm::cuda_stream_view stream,
-                                                           rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::table> run_regex(cudf::column_view input,
+                                                     operation selected_operation,
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::device_async_resource_ref mr)
 {
   if (selected_operation == operation::REQUEST_LINE) {
     static auto const program =
@@ -344,7 +344,7 @@ constexpr std::string_view usage =
                                                rmm::device_async_resource_ref mr)
 {
   return implementation == variant::PRECOMPILED
-           ? run_precompiled(input, selected_operation, stream, mr)
+           ? run_regex(input, selected_operation, stream, mr)
            : run_two_pass(input, selected_operation, implementation, stream, mr);
 }
 
