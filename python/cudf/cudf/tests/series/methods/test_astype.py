@@ -1587,13 +1587,14 @@ def test_string_astype_int_pep515_underscores(data, dtype):
         ["1_2", "_3"],
     ],
 )
-def test_string_astype_int_invalid_underscores_raises(data):
+@pytest.mark.parametrize("dtype", ["int32", "int64", "uint64"])
+def test_string_astype_int_invalid_underscores_raises(data, dtype):
     # https://github.com/rapidsai/cudf/issues/12047
     # Underscores not surrounded by digits are invalid (PEP 515);
     # both pandas and cudf must reject them.
     assert_exceptions_equal(
         lfunc=pd.Series(data).astype,
         rfunc=cudf.Series(data).astype,
-        lfunc_args_and_kwargs=((), {"dtype": "int64"}),
-        rfunc_args_and_kwargs=((), {"dtype": "int64"}),
+        lfunc_args_and_kwargs=((), {"dtype": dtype}),
+        rfunc_args_and_kwargs=((), {"dtype": dtype}),
     )
