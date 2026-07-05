@@ -34,18 +34,18 @@
 namespace {
 
 enum class variant { PRECOMPILED, JIT, LTO };
-enum class workload { MEDIUM, HIGH };
+enum class operation { REQUEST_LINE, COMBINED_LOG };
 
 struct options {
   std::string input_path;
   std::string output_path;
   variant implementation;
-  workload complexity;
+  operation selected_operation;
   cudf::size_type rows;
   int iterations;
 };
 
-constexpr char medium_sizes_udf[] = R"***(
+constexpr char request_line_sizes_udf[] = R"***(
 __device__ void size_http_request(int32_t* method_size, int32_t* path_size,
                                   int32_t* version_size, cudf::string_view input) {
   auto find_char = [&](char needle, int32_t begin) {
@@ -62,7 +62,7 @@ __device__ void size_http_request(int32_t* method_size, int32_t* path_size,
 }
 )***";
 
-constexpr char medium_output_udf[] = R"***(
+constexpr char request_line_output_udf[] = R"***(
 __device__ void extract_http_request(cuda::std::span<char>* method, cuda::std::span<char>* path,
                                      cuda::std::span<char>* version,
                                      cudf::string_view input) {
@@ -83,7 +83,7 @@ __device__ void extract_http_request(cuda::std::span<char>* method, cuda::std::s
 }
 )***";
 
-constexpr char high_sizes_udf[] = R"***(
+constexpr char combined_log_sizes_udf[] = R"***(
 __device__ void size_combined_log(int32_t* ip, int32_t* timestamp, int32_t* method,
                                   int32_t* path, int32_t* status, int32_t* referer,
                                   int32_t* user_agent, cudf::string_view input) {
@@ -114,7 +114,7 @@ __device__ void size_combined_log(int32_t* ip, int32_t* timestamp, int32_t* meth
 }
 )***";
 
-constexpr char high_output_udf[] = R"***(
+constexpr char combined_log_output_udf[] = R"***(
 __device__ void extract_combined_log(cuda::std::span<char>* ip,
                                      cuda::std::span<char>* timestamp,
                                      cuda::std::span<char>* method,
@@ -166,19 +166,22 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
   throw std::logic_error("Unknown variant");
 }
 
-[[nodiscard]] std::string const& to_string(workload value)
+[[nodiscard]] std::string const& to_string(operation value)
 {
-  static std::string const medium{"medium"};
-  static std::string const high{"high"};
-  return value == workload::MEDIUM ? medium : high;
+  static std::string const request_line{"request-line"};
+  static std::string const combined_log{"combined-log"};
+  return value == operation::REQUEST_LINE ? request_line : combined_log;
 }
+
+constexpr std::string_view usage =
+  "usage: http_log_transforms INPUT.csv OUTPUT.csv "
+  "<precompiled|jit|lto> <request-line|combined-log> ROWS ITERATIONS\n"
+  "       http_log_transforms <usage|--help>\n";
 
 [[nodiscard]] options parse_options(int argc, char const** argv)
 {
   if (argc != 7) {
-    throw std::invalid_argument(
-      "usage: http_log_transforms INPUT.csv OUTPUT.csv "
-      "<precompiled|jit|lto> <medium|high> ROWS ITERATIONS");
+    throw std::invalid_argument("invalid arguments; run http_log_transforms --help for usage");
   }
 
   auto const implementation = std::string_view{argv[3]} == "precompiled" ? variant::PRECOMPILED
@@ -189,9 +192,10 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
     throw std::invalid_argument("variant must be precompiled, jit, or lto");
   }
 
-  auto const complexity = std::string_view{argv[4]} == "medium" ? workload::MEDIUM : workload::HIGH;
-  if (std::string_view{argv[4]} != "medium" && std::string_view{argv[4]} != "high") {
-    throw std::invalid_argument("workload must be medium or high");
+  auto const selected_operation =
+    std::string_view{argv[4]} == "request-line" ? operation::REQUEST_LINE : operation::COMBINED_LOG;
+  if (std::string_view{argv[4]} != "request-line" && std::string_view{argv[4]} != "combined-log") {
+    throw std::invalid_argument("operation must be request-line or combined-log");
   }
 
   auto const rows       = std::stoll(argv[5]);
@@ -200,8 +204,12 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
     throw std::invalid_argument("ROWS is outside the cudf::size_type range");
   }
   if (iterations < 1) { throw std::invalid_argument("ITERATIONS must be positive"); }
-  return {
-    argv[1], argv[2], implementation, complexity, static_cast<cudf::size_type>(rows), iterations};
+  return {argv[1],
+          argv[2],
+          implementation,
+          selected_operation,
+          static_cast<cudf::size_type>(rows),
+          iterations};
 }
 
 [[nodiscard]] std::unique_ptr<cudf::column> make_offsets(cudf::column_view const sizes,
@@ -234,11 +242,11 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
 }
 
 [[nodiscard]] std::unique_ptr<cudf::table> run_precompiled(cudf::column_view input,
-                                                           workload complexity,
+                                                           operation selected_operation,
                                                            rmm::cuda_stream_view stream,
                                                            rmm::device_async_resource_ref mr)
 {
-  if (complexity == workload::MEDIUM) {
+  if (selected_operation == operation::REQUEST_LINE) {
     static auto const program =
       cudf::strings::regex_program::create(R"(^([A-Z]+) ([^ ?]+)[^ ]* HTTP/([0-9]+[.][0-9]+)$)");
     return cudf::strings::extract(cudf::strings_column_view{input}, *program, stream, mr);
@@ -249,7 +257,7 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
 }
 
 [[nodiscard]] std::unique_ptr<cudf::table> run_two_pass(cudf::column_view input,
-                                                        workload complexity,
+                                                        operation selected_operation,
                                                         variant implementation,
                                                         rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
@@ -257,13 +265,15 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
   // Pass 1 emits the exact byte count for every output string and row. Scanning each size column
   // produces run-end offsets, so multi_transform can allocate each chars child once. Pass 2 then
   // receives a cuda::std::span<char> for every row/output and writes directly into final storage.
-  auto const count               = complexity == workload::MEDIUM ? std::size_t{3} : std::size_t{7};
+  auto const count =
+    selected_operation == operation::REQUEST_LINE ? std::size_t{3} : std::size_t{7};
   auto sizes_out                 = output_specs(count, cudf::type_id::INT32);
   cudf::transform_input inputs[] = {input};
 
   std::unique_ptr<cudf::table> sizes;
   if (implementation == variant::JIT) {
-    auto const source = complexity == workload::MEDIUM ? medium_sizes_udf : high_sizes_udf;
+    auto const source = selected_operation == operation::REQUEST_LINE ? request_line_sizes_udf
+                                                                      : combined_log_sizes_udf;
     sizes             = cudf::multi_transform(source,
                                   cudf::udf_source_type::CUDA,
                                   cudf::null_aware::NO,
@@ -275,8 +285,9 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
                                   stream,
                                   mr);
   } else {
-    auto const id = complexity == workload::MEDIUM ? http_log_fragments::http_medium_sizes
-                                                   : http_log_fragments::http_high_sizes;
+    auto const id = selected_operation == operation::REQUEST_LINE
+                      ? http_log_fragments::http_request_line_sizes
+                      : http_log_fragments::http_combined_log_sizes;
     sizes         = cudf::transform_lto(fragment(id),
                                 cudf::lto_binary_type::FATBIN,
                                 cudf::null_aware::NO,
@@ -297,7 +308,8 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
 
   auto strings_out = output_specs(count, cudf::type_id::STRING);
   if (implementation == variant::JIT) {
-    auto const source = complexity == workload::MEDIUM ? medium_output_udf : high_output_udf;
+    auto const source = selected_operation == operation::REQUEST_LINE ? request_line_output_udf
+                                                                      : combined_log_output_udf;
     return cudf::multi_transform(source,
                                  cudf::udf_source_type::CUDA,
                                  cudf::null_aware::NO,
@@ -310,8 +322,9 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
                                  mr);
   }
 
-  auto const id = complexity == workload::MEDIUM ? http_log_fragments::http_medium_output
-                                                 : http_log_fragments::http_high_output;
+  auto const id = selected_operation == operation::REQUEST_LINE
+                    ? http_log_fragments::http_request_line_output
+                    : http_log_fragments::http_combined_log_output;
   return cudf::transform_lto(fragment(id),
                              cudf::lto_binary_type::FATBIN,
                              cudf::null_aware::NO,
@@ -325,21 +338,21 @@ __device__ void extract_combined_log(cuda::std::span<char>* ip,
 }
 
 [[nodiscard]] std::unique_ptr<cudf::table> run(cudf::column_view input,
-                                               workload complexity,
+                                               operation selected_operation,
                                                variant implementation,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
 {
   return implementation == variant::PRECOMPILED
-           ? run_precompiled(input, complexity, stream, mr)
-           : run_two_pass(input, complexity, implementation, stream, mr);
+           ? run_precompiled(input, selected_operation, stream, mr)
+           : run_two_pass(input, selected_operation, implementation, stream, mr);
 }
 
 void write_output(cudf::table_view const result,
-                  workload complexity,
+                  operation selected_operation,
                   std::string const& output_path)
 {
-  auto names   = complexity == workload::MEDIUM
+  auto names   = selected_operation == operation::REQUEST_LINE
                    ? std::vector<std::string>{"method", "path", "http_version"}
                    : std::vector<std::string>{
                      "client_ip", "timestamp", "method", "path", "status", "referer", "user_agent"};
@@ -355,6 +368,12 @@ void write_output(cudf::table_view const result,
 int main(int argc, char const** argv)
 {
   try {
+    if (argc == 2 &&
+        (std::string_view{argv[1]} == "--help" || std::string_view{argv[1]} == "usage")) {
+      std::cout << usage;
+      return EXIT_SUCCESS;
+    }
+
     auto const opts   = parse_options(argc, argv);
     auto const stream = cudf::get_default_stream();
     auto const mr     = cudf::get_current_device_resource_ref();
@@ -368,7 +387,7 @@ int main(int argc, char const** argv)
       opts.rows == input_data.tbl->num_rows()
         ? std::move(input_data.tbl)
         : cudf::sample(input_data.tbl->view(), opts.rows, cudf::sample_with_replacement::TRUE);
-    auto const input_index  = opts.complexity == workload::MEDIUM ? 0 : 1;
+    auto const input_index  = opts.selected_operation == operation::REQUEST_LINE ? 0 : 1;
     auto const input_bytes  = input->get_column(input_index).alloc_size();
     auto const input_column = input->get_column(input_index).view();
 
@@ -378,7 +397,8 @@ int main(int argc, char const** argv)
     stream.synchronize();
     auto const cold_start = std::chrono::steady_clock::now();
     nvtxRangePush("http_log_cold");
-    auto cold_result = run(input_column, opts.complexity, opts.implementation, stream, stats_mr);
+    auto cold_result =
+      run(input_column, opts.selected_operation, opts.implementation, stream, stats_mr);
     stream.synchronize();
     nvtxRangePop();
     auto const cold_seconds =
@@ -390,7 +410,7 @@ int main(int argc, char const** argv)
     nvtxRangePush("http_log_warm");
     for (auto i = 0; i < opts.iterations; ++i) {
       result.reset();
-      result = run(input_column, opts.complexity, opts.implementation, stream, stats_mr);
+      result = run(input_column, opts.selected_operation, opts.implementation, stream, stats_mr);
     }
     stream.synchronize();
     nvtxRangePop();
@@ -399,7 +419,7 @@ int main(int argc, char const** argv)
       opts.iterations;
 
     if (opts.output_path != "-") {
-      write_output(result->view(), opts.complexity, opts.output_path);
+      write_output(result->view(), opts.selected_operation, opts.output_path);
     }
 
     auto const bytes        = stats.get_bytes_counter();
@@ -408,7 +428,7 @@ int main(int argc, char const** argv)
 
     std::cout << std::fixed << std::setprecision(9)
               << "RESULT variant=" << to_string(opts.implementation)
-              << " workload=" << to_string(opts.complexity) << " rows=" << opts.rows
+              << " operation=" << to_string(opts.selected_operation) << " rows=" << opts.rows
               << " cold_seconds=" << cold_seconds << " warm_seconds=" << warm_seconds
               << " rows_per_second=" << static_cast<double>(opts.rows) / warm_seconds
               << " effective_gib_per_second=" << gib / warm_seconds

@@ -10,7 +10,7 @@ extern "C" __device__ int transform(cuda::std::span<char>* method,
                                     cuda::std::span<char>* version,
                                     cudf::string_view input)
 {
-  auto const fields = http_log_udf::parse_medium(input);
+  auto const fields = http_log_udf::parse_request_line(input);
   http_log_udf::copy_range(*method, input, fields.method);
   http_log_udf::copy_range(*path, input, fields.path);
   http_log_udf::copy_range(*version, input, fields.version);

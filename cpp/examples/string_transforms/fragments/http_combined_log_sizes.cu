@@ -14,7 +14,7 @@ extern "C" __device__ int transform(int32_t* client_ip_size,
                                     int32_t* user_agent_size,
                                     cudf::string_view input)
 {
-  auto const fields = http_log_udf::parse_high(input);
+  auto const fields = http_log_udf::parse_combined_log(input);
   *client_ip_size   = fields.client_ip.size();
   *timestamp_size   = fields.timestamp.size();
   *method_size      = fields.method.size();

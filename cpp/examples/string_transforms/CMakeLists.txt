@@ -55,19 +55,21 @@ add_string_transforms_example(localize_phone_jit localize_phone_jit.cpp)
 add_string_transforms_example(localize_phone_precompiled localize_phone_precompiled.cpp)
 
 rtcx_add_embed(http_log_fragments)
-add_fragment(http_log_fragments FRAGMENT http_medium_sizes SOURCE
-             fragments/http_medium_sizes.cu)
-add_fragment(http_log_fragments FRAGMENT http_medium_output SOURCE
-             fragments/http_medium_output.cu)
-add_fragment(http_log_fragments FRAGMENT http_high_sizes SOURCE
-             fragments/http_high_sizes.cu)
-add_fragment(http_log_fragments FRAGMENT http_high_output SOURCE
-             fragments/http_high_output.cu)
+add_fragment(http_log_fragments FRAGMENT http_request_line_sizes SOURCE
+             fragments/http_request_line_sizes.cu)
+add_fragment(http_log_fragments FRAGMENT http_request_line_output SOURCE
+             fragments/http_request_line_output.cu)
+add_fragment(http_log_fragments FRAGMENT http_combined_log_sizes SOURCE
+             fragments/http_combined_log_sizes.cu)
+add_fragment(http_log_fragments FRAGMENT http_combined_log_output SOURCE
+             fragments/http_combined_log_output.cu)
 
 foreach(
   fragment_target
-  http_log_fragments_http_medium_sizes http_log_fragments_http_medium_output
-  http_log_fragments_http_high_sizes http_log_fragments_http_high_output)
+  http_log_fragments_http_request_line_sizes
+  http_log_fragments_http_request_line_output
+  http_log_fragments_http_combined_log_sizes
+  http_log_fragments_http_combined_log_output)
   target_include_directories(${fragment_target}
                              PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 endforeach()

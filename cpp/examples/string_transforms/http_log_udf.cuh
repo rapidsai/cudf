@@ -19,13 +19,13 @@ struct range {
   [[nodiscard]] __device__ int32_t size() const { return end - begin; }
 };
 
-struct medium_fields {
+struct request_line_fields {
   range method;
   range path;
   range version;
 };
 
-struct high_fields {
+struct combined_log_fields {
   range client_ip;
   range timestamp;
   range method;
@@ -45,7 +45,7 @@ struct high_fields {
   return input.size_bytes();
 }
 
-[[nodiscard]] __device__ medium_fields parse_medium(cudf::string_view const input)
+[[nodiscard]] __device__ request_line_fields parse_request_line(cudf::string_view const input)
 {
   auto const method_end              = find(input, ' ', 0);
   auto const target_end              = find(input, ' ', method_end + 1);
@@ -58,7 +58,7 @@ struct high_fields {
           {target_end + http_prefix_size, input.size_bytes()}};
 }
 
-[[nodiscard]] __device__ high_fields parse_high(cudf::string_view const input)
+[[nodiscard]] __device__ combined_log_fields parse_combined_log(cudf::string_view const input)
 {
   auto const ip_end           = find(input, ' ', 0);
   auto const timestamp_begin  = find(input, '[', ip_end) + 1;

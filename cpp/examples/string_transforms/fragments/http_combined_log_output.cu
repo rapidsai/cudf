@@ -14,7 +14,7 @@ extern "C" __device__ int transform(cuda::std::span<char>* client_ip,
                                     cuda::std::span<char>* user_agent,
                                     cudf::string_view input)
 {
-  auto const fields = http_log_udf::parse_high(input);
+  auto const fields = http_log_udf::parse_combined_log(input);
   http_log_udf::copy_range(*client_ip, input, fields.client_ip);
   http_log_udf::copy_range(*timestamp, input, fields.timestamp);
   http_log_udf::copy_range(*method, input, fields.method);

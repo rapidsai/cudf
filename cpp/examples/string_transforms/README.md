@@ -23,9 +23,9 @@ The following examples are included:
    - `lto`: the same sizing and output transform ABI, AOT-compiled to embedded fatbins and JIT-linked
      with libcudf's precompiled transform kernels.
 
-The HTTP example has a medium request-line workload (method, path, and HTTP version) and a
-high-complexity combined-log workload (client IP, timestamp, method, path, status, referer, and user
-agent). Both implement the same extraction groups as their comparative regex variant.
+The `request-line` operation extracts method, path, and HTTP version. The `combined-log` operation
+extracts client IP, timestamp, method, path, status, referer, and user agent. Both implement the same
+extraction groups as their comparative regex variant.
 
 ## Compile and execute
 
@@ -37,40 +37,6 @@ cmake --build build/ --parallel $PARALLEL_LEVEL
 # Execute
 build/output info.csv output.csv 100000
 ```
-
-Run the HTTP example directly:
-
-```bash
-build/http_log_transforms http_logs.csv output.csv jit medium 1000000 10
-build/http_log_transforms http_logs.csv output.csv lto high 1000000 10
-build/http_log_transforms http_logs.csv output.csv precompiled high 1000000 10
-```
-
-Use `-` for the output path to skip CSV materialization during benchmark-only runs.
-
-## Benchmarking and profiling
-
-The benchmark runner records cold and warm wall time, throughput, effective input/output bandwidth,
-and RMM allocation cost for all three variants. With `--profile`, Nsight Compute also records kernel
-time, achieved warp occupancy, DRAM utilization, and bytes read/written. Use an otherwise idle GPU:
-
-```bash
-python tools/benchmark.py \
-  --executable build/http_log_transforms \
-  --input http_logs.csv \
-  --output-dir results \
-  --rows 100000,1000000,10000000 \
-  --iterations 10 --repeats 5 --gpu 0 --profile
-
-python tools/plot_results.py results/benchmark_results.csv
-```
-
-This creates CSV and Markdown tables plus 16:9 PNG presentation graphs using NVIDIA green, black,
-and dark gray. Results should always be reported with the GPU, driver, CUDA toolkit, branch SHA, row
-counts, repetitions, and exact command; the repository does not ship fabricated baseline numbers.
-The runner gives every repetition a fresh `LIBCUDF_KERNEL_CACHE_PATH`, so the reported cold time
-includes CUDA-source compilation or LTO linking while warm iterations reuse the in-process cache;
-it also sets `LIBCUDF_JIT_DISABLE_CUDA_CACHE=1` to prevent the CUDA disk cache from hiding cold cost.
 
 If your machine does not come with a pre-built libcudf binary, expect the
 first build to take some time, as it would build libcudf on the host machine.

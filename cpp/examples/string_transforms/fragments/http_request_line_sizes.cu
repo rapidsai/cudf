@@ -10,7 +10,7 @@ extern "C" __device__ int transform(int32_t* method_size,
                                     int32_t* version_size,
                                     cudf::string_view input)
 {
-  auto const fields = http_log_udf::parse_medium(input);
+  auto const fields = http_log_udf::parse_request_line(input);
   *method_size      = fields.method.size();
   *path_size        = fields.path.size();
   *version_size     = fields.version.size();
