@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -17,9 +17,6 @@ CUDF_POLARS_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name whe
 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
-
-# TODO: Remove before merging. Use rapidsmpf wheels from rapidsai/rapidsmpf#1081.
-source ./ci/use_wheels_from_prs.sh
 
 rapids-logger "Install libcudf, pylibcudf and cudf_polars"
 
