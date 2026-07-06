@@ -215,6 +215,11 @@ class ParquetOptions:
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
         Default is False.
+    use_jit_filter
+        Whether to use JIT compilation for post-read filtering in Parquet scans.
+        When enabled, filter predicates are JIT-compiled to CUDA kernels for
+        improved performance on large datasets with complex filters.
+        Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__PARQUET_OPTIONS"
@@ -256,6 +261,13 @@ class ParquetOptions:
             default=False,
         )
     )
+    use_jit_filter: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_JIT_FILTER",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -272,6 +284,8 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.use_jit_filter, bool):
+            raise TypeError("use_jit_filter must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:
@@ -311,8 +325,8 @@ class DynamicPlanningOptions:
     Parameters
     ----------
     sample_chunk_count
-        The maximum number of chunks to sample before deciding whether
-        to shuffle. Default is 2.
+        The maximum number of chunks to sample before making
+        dynamic-planning decisions. Default is 2.
     join_prefilter_threshold
         Row-count ratio (small / large) below which a join key prefilter is
         applied. Set to 0 to disable join prefiltering. Default is 0.5.
