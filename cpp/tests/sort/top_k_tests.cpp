@@ -227,6 +227,28 @@ TYPED_TEST(TopKTypes, TopKSegmentedEmptyWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
 }
 
+// Sliced input and offsets with a trailing empty segment: both views begin at a non-zero offset.
+TYPED_TEST(TopKTypes, TopKSegmentedEmptySliced)
+{
+  using T    = TypeParam;
+  using LCW  = cudf::test::lists_column_wrapper<T, int32_t>;
+  using LCWO = cudf::test::lists_column_wrapper<cudf::size_type>;
+
+  // Front-padded; sliced views are input=[40,10,30,20], offsets=[0,4,4] (seg1=[4,4) empty).
+  // Seg0 desc top2: 40@0,30@2.
+  auto input_full   = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 40, 10, 30, 20});
+  auto offsets_full = cudf::test::fixed_width_column_wrapper<int32_t>({9, 0, 4, 4});
+  auto input        = cudf::slice(input_full, {1, 5})[0];
+  auto offsets      = cudf::slice(offsets_full, {1, 4})[0];
+
+  LCW expected({LCW{40, 30}, LCW{}});
+  LCWO expected_order({LCWO{0, 2}, LCWO{}});
+  auto result = cudf::segmented_top_k(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  result = cudf::segmented_top_k_order(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+}
+
 struct TopK : public cudf::test::BaseFixture {};
 
 TEST_F(TopK, Empty)
