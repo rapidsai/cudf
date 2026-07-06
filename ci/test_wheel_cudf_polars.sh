@@ -74,6 +74,7 @@ for version in "${VERSIONS[@]}"; do
         "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
         "$(echo "${LIBCUDF_STREAMING_WHEELHOUSE}"/libcudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
         "$(echo "${CUDF_STREAMING_WHEELHOUSE}"/cudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+        ./python/cudf_benchmarks \
         -r "polars-compat-${version}-requirements.txt"
 
     rapids-logger "Running tests for polars ${version}.*"

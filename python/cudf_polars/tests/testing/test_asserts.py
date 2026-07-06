@@ -11,7 +11,7 @@ import pytest
 import polars as pl
 import polars.testing
 
-from cudf_polars.streaming.benchmarks.asserts import (
+from cudf_benchmarks.polars.asserts import (
     ValidationError,
     assert_tpch_result_equal,
 )

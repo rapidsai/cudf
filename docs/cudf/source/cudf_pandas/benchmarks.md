@@ -125,11 +125,15 @@ pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/
     "cudf-cu${CUDA_MAJOR}>=0.0.0a0"
 ```
 
-Then install `tpchgen-cli`, a Rust-based TPC-H data generator used to produce the benchmark
-dataset as Parquet files:
+Then install the benchmarks themselves. They live in the
+[`cudf-benchmarks`](https://github.com/rapidsai/cudf/tree/main/python/cudf_benchmarks) package in
+the cuDF repository, so install it from a checkout. The `pandas` extra pulls in `tpchgen-cli`, the
+Rust-based TPC-H data generator used to produce the dataset as Parquet files:
 
 ```bash
-pip install tpchgen-cli
+git clone https://github.com/rapidsai/cudf.git
+cd cudf
+pip install -e python/cudf_benchmarks[pandas]
 ```
 
 ### Generate data
@@ -178,15 +182,20 @@ for table in tables:
 **CPU** (`--executor cpu`, pandas):
 
 ```bash
-python -m cudf.pandas._benchmarks.pdsh all \
+python -m cudf_benchmarks.pandas.pdsh all \
     --executor cpu \
     --path "${DATA_PATH}"
 ```
 
+Unlike the polars benchmarks, the pandas benchmarks currently require `cudf` even for
+`--executor cpu`: the CPU baseline runs pandas with `cudf.pandas` acceleration disabled, so it
+still imports `cudf` and needs a GPU. Running the pandas benchmarks on a CPU-only machine is not
+yet supported.
+
 **GPU** (`--executor in-memory`, cudf.pandas):
 
 ```bash
-python -m cudf.pandas._benchmarks.pdsh all \
+python -m cudf_benchmarks.pandas.pdsh all \
     --executor in-memory \
     --path "${DATA_PATH}"
 ```

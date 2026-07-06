@@ -1,0 +1,59 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [
+    "setuptools>=77.0.0",
+    "wheel",
+]
+
+[project]
+name = "cudf-benchmarks"
+version = "26.8.0"
+description = "End-to-end workload benchmarks (TPC-H / TPC-DS) for cudf-polars and cudf.pandas"
+readme = { file = "README.md", content-type = "text/markdown" }
+license = "Apache-2.0"
+requires-python = ">=3.11"
+authors = [
+    { name = "NVIDIA Corporation" },
+]
+# Imported at module scope by both the polars and pandas benchmarks.
+dependencies = [
+    "nvtx",
+]
+
+# GPU packages (cudf, cudf-polars, rapidsmpf, kvikio) are intentionally NOT
+# listed. cudf-benchmarks is a single unsuffixed pure wheel that measures a
+# cudf-polars build you bring yourself, so it pins no CUDA-suffixed dependency.
+# The GPU-workload extras install only the non-RAPIDS pieces; install
+# cudf-polars (which brings polars) or cudf yourself for the GPU paths.
+[project.optional-dependencies]
+# CPU-only machines and CI. No GPU libraries, so importing never pulls in CUDA.
+# Pin polars to the range cudf-polars uses so CPU-vs-GPU compares the same version.
+cpu = [
+    "polars>=1.35,<1.43",
+    "duckdb",
+    "pandas",
+    "tpchgen-cli",
+]
+# Single-GPU polars plus the CPU baselines. polars comes via the cudf-polars prerequisite.
+polars = [
+    "duckdb",
+    "tpchgen-cli",
+]
+# cudf.pandas benchmarks. pandas comes via the cudf prerequisite.
+pandas = [
+    "tpchgen-cli",
+]
+# Multi-GPU / multi-node polars, layered on top of the polars prerequisites.
+dask = [
+    "dask",
+    "distributed",
+]
+ray = [
+    "ray",
+]
+
+[tool.setuptools.packages.find]
+include = ["cudf_benchmarks*"]

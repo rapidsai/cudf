@@ -22,17 +22,31 @@ Because `cudf-polars` pins to a tested range of Polars versions, the nightly whe
 the highest Polars version the GPU engine currently supports, which may not be the latest
 Polars release.
 
-<!-- TODO: consider adding a [benchmark] pip extra to cudf-polars that includes tpchgen-cli
-     (and possibly structlog) so benchmark dependencies can be installed in one step:
-     pip install "cudf-polars-cu${CUDA_MAJOR}[ray,benchmark]>=0.0.0a0"
-     Requires changes to pyproject.toml and dependencies.yaml. -->
-
-Then install `tpchgen-cli`, a Rust-based TPC-H data generator used to produce the benchmark
-dataset as Parquet files:
+Then install the benchmarks themselves. They live in the
+[`cudf-benchmarks`](https://github.com/rapidsai/cudf/tree/main/python/cudf_benchmarks) package in
+the cuDF repository, so install it from a checkout. The `polars` extra pulls in the CPU baselines
+and `tpchgen-cli`, the Rust-based TPC-H data generator used to produce the dataset as Parquet
+files:
 
 ```bash
-pip install tpchgen-cli
+git clone https://github.com/rapidsai/cudf.git
+cd cudf
+pip install -e python/cudf_benchmarks[polars]
 ```
+
+#### CPU-only machines
+
+The benchmarks also run on a machine with no GPU. The CPU frontends, `--frontend polars-cpu`
+(the Polars CPU streaming engine) and `--frontend duckdb`, do not import any CUDA libraries.
+On such a machine, skip the `cudf-polars` install above and install only the CPU dependencies:
+
+```bash
+git clone https://github.com/rapidsai/cudf.git
+cd cudf
+pip install -e python/cudf_benchmarks[cpu]
+```
+
+Then generate data and run as below, using `--frontend polars-cpu` or `--frontend duckdb`.
 
 ### Generate data
 
@@ -51,7 +65,7 @@ tpchgen-cli --output-dir="${DATA_PATH}" --format=parquet -s ${SCALE_FACTOR}
 **CPU** (`--frontend polars-cpu`, Polars CPU streaming engine):
 
 ```bash
-python -m cudf_polars.streaming.benchmarks.pdsh all \
+python -m cudf_benchmarks.polars.pdsh all \
     --frontend polars-cpu \
     --path "${DATA_PATH}"
 ```
@@ -59,7 +73,7 @@ python -m cudf_polars.streaming.benchmarks.pdsh all \
 **Single GPU** (`--frontend spmd`, single-process streaming executor, equivalent to `collect(engine="gpu")`):
 
 ```bash
-python -m cudf_polars.streaming.benchmarks.pdsh all \
+python -m cudf_benchmarks.polars.pdsh all \
     --frontend spmd \
     --path "${DATA_PATH}"
 ```
@@ -76,17 +90,17 @@ To limit the number of GPUs, use `--num-gpus`:
 
 ```bash
 # All visible GPUs
-python -m cudf_polars.streaming.benchmarks.pdsh all \
+python -m cudf_benchmarks.polars.pdsh all \
     --frontend ray \
     --path "${DATA_PATH}"
 
 # Specific devices
-CUDA_VISIBLE_DEVICES=0,1,2,3 python -m cudf_polars.streaming.benchmarks.pdsh all \
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -m cudf_benchmarks.polars.pdsh all \
     --frontend ray \
     --path "${DATA_PATH}"
 
 # Limit to N GPUs
-python -m cudf_polars.streaming.benchmarks.pdsh all \
+python -m cudf_benchmarks.polars.pdsh all \
     --frontend ray \
     --num-gpus 4 \
     --path "${DATA_PATH}"
