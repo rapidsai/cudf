@@ -4534,7 +4534,6 @@ NODEIDS_THAT_FAIL = {
     "tests/tslibs/test_to_offset.py::test_to_offset_uppercase_frequency_deprecated[2NS]": "TODO: Add a reason for failure",
     "tests/tslibs/test_to_offset.py::test_to_offset_uppercase_frequency_deprecated[2Us]": "TODO: Add a reason for failure",
     "tests/util/test_assert_frame_equal.py::test_allows_duplicate_labels": "TODO: Add a reason for failure",
-    "tests/util/test_assert_frame_equal.py::test_assert_frame_equal_check_like_different_indexes": "TODO: Add a reason for failure",
     "tests/util/test_assert_frame_equal.py::test_assert_frame_equal_extension_dtype_mismatch": "TODO: Add a reason for failure",
     "tests/util/test_assert_frame_equal.py::test_assert_frame_equal_nested_df_na[None]": "KeyError: 0",
     "tests/util/test_assert_frame_equal.py::test_assert_frame_equal_nested_df_na[nan]": "KeyError: 0",
