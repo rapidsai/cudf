@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,9 +16,7 @@
 #include <nvbench/nvbench.cuh>
 
 void contiguous_split(cudf::table_view const& src_table, std::vector<cudf::size_type> const& splits)
-{
-  auto result = cudf::contiguous_split(src_table, splits);
-}
+{ auto result = cudf::contiguous_split(src_table, splits); }
 
 void chunked_pack(cudf::table_view const& src_table, std::vector<cudf::size_type> const&)
 {

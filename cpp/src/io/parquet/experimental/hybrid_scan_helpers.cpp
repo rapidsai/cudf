@@ -160,9 +160,7 @@ std::vector<text::byte_range_info> aggregate_reader_metadata::page_index_byte_ra
 }
 
 std::vector<FileMetaData> aggregate_reader_metadata::parquet_metadatas() const
-{
-  return {per_file_metadata.begin(), per_file_metadata.end()};
-}
+{ return {per_file_metadata.begin(), per_file_metadata.end()}; }
 
 void aggregate_reader_metadata::setup_page_indexes(
   cudf::host_span<cudf::host_span<uint8_t const> const> page_index_bytes)

@@ -39,9 +39,7 @@ TEST_F(StreamingChannelMetadata, HashScheme)
 }
 
 TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsEmptyKeys)
-{
-  EXPECT_THROW(static_cast<void>(order_scheme({}, nullptr)), std::invalid_argument);
-}
+{ EXPECT_THROW(static_cast<void>(order_scheme({}, nullptr)), std::invalid_argument); }
 
 TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsNullBoundaries)
 {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -62,9 +62,7 @@ constexpr init_flags operator~(init_flags flags) noexcept
 /// @param flag The specific flag to check for
 /// @return true if all bits in `flag` are set in `flags`, false otherwise
 constexpr bool has_flag(init_flags flags, init_flags flag) noexcept
-{
-  return (flags | flag) == flags;
-}
+{ return (flags | flag) == flags; }
 
 /// @brief Initialize the cudf global context
 /// @param flags Optional flags to control which initialization steps to perform.

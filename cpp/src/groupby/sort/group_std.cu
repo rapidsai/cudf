@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -157,9 +157,7 @@ struct var_functor {
   template <typename T, typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
     requires(!std::is_arithmetic_v<T>)
-  {
-    CUDF_FAIL("Only numeric types are supported in std/variance");
-  }
+  { CUDF_FAIL("Only numeric types are supported in std/variance"); }
 };
 
 }  // namespace

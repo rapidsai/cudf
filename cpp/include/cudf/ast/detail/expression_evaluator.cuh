@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -68,9 +68,7 @@ struct expression_result {
   template <typename Element>
   __device__ inline void set_value(cudf::size_type index,
                                    possibly_null_value_t<Element, has_nulls> const& result)
-  {
-    subclass().template set_value<Element>(index, result);
-  }
+  { subclass().template set_value<Element>(index, result); }
 
   [[nodiscard]] __device__ inline bool is_valid() const { return subclass().is_valid(); }
 
@@ -212,9 +210,7 @@ struct single_dispatch_binary_operator {
    */
   template <typename LHS, typename F, typename... Ts>
   __device__ inline auto operator()(F&& f, Ts&&... args)
-  {
-    f.template operator()<LHS, LHS>(cuda::std::forward<Ts>(args)...);
-  }
+  { f.template operator()<LHS, LHS>(cuda::std::forward<Ts>(args)...); }
 };
 
 /**
@@ -348,9 +344,7 @@ struct expression_evaluator {
     IntermediateDataType<has_nulls>* thread_intermediate_storage,
     cudf::size_type left_row_index,
     cudf::size_type right_row_index = {}) const
-  {
-    CUDF_UNREACHABLE("Unsupported type in resolve_input.");
-  }
+  { CUDF_UNREACHABLE("Unsupported type in resolve_input."); }
 
   /**
    * @brief Callable to perform a unary operation.
@@ -403,9 +397,7 @@ struct expression_evaluator {
     cudf::size_type const output_row_index,
     ast_operator const op,
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
-  {
-    CUDF_UNREACHABLE("Unsupported type in operator().");
-  }
+  { CUDF_UNREACHABLE("Unsupported type in operator()."); }
 
   /**
    * @brief Callable to perform a binary operation.
@@ -470,9 +462,7 @@ struct expression_evaluator {
     cudf::size_type const output_row_index,
     ast_operator const op,
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
-  {
-    CUDF_UNREACHABLE("Unsupported type in operator().");
-  }
+  { CUDF_UNREACHABLE("Unsupported type in operator()."); }
 
   /**
    * @brief Evaluate an expression applied to a row.
@@ -490,9 +480,7 @@ struct expression_evaluator {
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const row_index,
     IntermediateDataType<has_nulls>* thread_intermediate_storage) const
-  {
-    evaluate(output_object, row_index, row_index, row_index, thread_intermediate_storage);
-  }
+  { evaluate(output_object, row_index, row_index, row_index, thread_intermediate_storage); }
 
   /**
    * @brief Evaluate an expression applied to a row.
@@ -689,9 +677,7 @@ struct expression_evaluator {
       cudf::size_type const row_index,
       IntermediateDataType<has_nulls>* thread_intermediate_storage,
       possibly_null_value_t<Element, has_nulls> const& result) const
-    {
-      CUDF_UNREACHABLE("Invalid type in resolve_output.");
-    }
+    { CUDF_UNREACHABLE("Invalid type in resolve_output."); }
   };
 
   /**
@@ -750,9 +736,7 @@ struct expression_evaluator {
       possibly_null_value_t<Input, has_nulls> const& input,
       detail::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
-    {
-      CUDF_UNREACHABLE("Invalid unary dispatch operator for the provided input.");
-    }
+    { CUDF_UNREACHABLE("Invalid unary dispatch operator for the provided input."); }
   };
 
   /**
@@ -816,9 +800,7 @@ struct expression_evaluator {
       possibly_null_value_t<RHS, has_nulls> const& rhs,
       detail::device_data_reference const& output,
       IntermediateDataType<has_nulls>* thread_intermediate_storage) const
-    {
-      CUDF_UNREACHABLE("Invalid binary dispatch operator for the provided input.");
-    }
+    { CUDF_UNREACHABLE("Invalid binary dispatch operator for the provided input."); }
   };
 
   table_device_view const& left;   ///< The left table to operate on.

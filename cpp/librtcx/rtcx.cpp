@@ -159,14 +159,10 @@ std::string join_strings(std::span<StringType> strings, std::string_view separat
 }  // namespace
 
 void log_warning(std::string_view msg)
-{
-  std::fprintf(stderr, "[rtcx] warn: %.*s\n", static_cast<int>(msg.size()), msg.data());
-}
+{ std::fprintf(stderr, "[rtcx] warn: %.*s\n", static_cast<int>(msg.size()), msg.data()); }
 
 void log_error(std::string_view msg)
-{
-  std::fprintf(stderr, "[rtcx] error: %.*s\n", static_cast<int>(msg.size()), msg.data());
-}
+{ std::fprintf(stderr, "[rtcx] error: %.*s\n", static_cast<int>(msg.size()), msg.data()); }
 
 #define FOR_EACH_CUDA_FUNC(DO_IT)       \
   DO_IT(GetErrorString)                 \
@@ -499,9 +495,7 @@ blob_t blob_t::from_buffer(byte_buffer buffer)
 }
 
 blob_t blob_t::from_static_data(std::span<std::uint8_t const> data)
-{
-  return blob_t::from_parts(data.data(), data.size(), blob_t::noop_deallocator);
-}
+{ return blob_t::from_parts(data.data(), data.size(), blob_t::noop_deallocator); }
 
 namespace {
 void log_nvrtc_result(compile_params const& params,
@@ -1355,15 +1349,11 @@ bool cache_t::is_enabled()
 
 std::string reflect_template(std::string_view template_name,
                              std::span<std::string_view const> template_args)
-{
-  return std::format("{}<{}>", template_name, join_strings(template_args, ", "));
-}
+{ return std::format("{}<{}>", template_name, join_strings(template_args, ", ")); }
 
 std::string reflect_template(std::string_view template_name,
                              std::span<std::string const> template_args)
-{
-  return std::format("{}<{}>", template_name, join_strings(template_args, ", "));
-}
+{ return std::format("{}<{}>", template_name, join_strings(template_args, ", ")); }
 
 rtcx::byte_buffer decompress_blob(std::span<std::uint8_t const> compressed_binary,
                                   std::size_t uncompressed_size,

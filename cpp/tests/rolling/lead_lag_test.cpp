@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -773,7 +773,7 @@ TYPED_TEST(TypedNestedLeadLagWindowTest, Structs)
                                      {},
                                      {},
                                      {}},
-                                  cudf::test::iterators::nulls_at({3, 4, 5, 9, 10, 11})};
+                                    cudf::test::iterators::nulls_at({3, 4, 5, 9, 10, 11})};
     auto expected_strings_col = cudf::test::strings_column_wrapper{
       {"333", "4444", "55555", "", "", "", "", "40404040", "5050505050", "", "", ""},
       cudf::test::iterators::nulls_at({3, 4, 5, 6, 9, 10, 11})};

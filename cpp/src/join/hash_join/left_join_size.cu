@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,9 +10,7 @@ namespace cudf::detail {
 template <typename Hasher>
 std::size_t hash_join<Hasher>::left_join_size(cudf::table_view const& left,
                                               rmm::cuda_stream_view stream) const
-{
-  return this->template join_size<join_kind::LEFT_JOIN>(left, stream);
-}
+{ return this->template join_size<join_kind::LEFT_JOIN>(left, stream); }
 
 template std::size_t hash_join<hash_join_hasher>::left_join_size(
   cudf::table_view const& left, rmm::cuda_stream_view stream) const;

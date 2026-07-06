@@ -177,9 +177,7 @@ class orc_reader_options {
    * @return Fully qualified names of columns that should be read as 128-bit Decimal
    */
   [[nodiscard]] std::vector<std::string> const& get_decimal128_columns() const
-  {
-    return _decimal128_columns;
-  }
+  { return _decimal128_columns; }
 
   /**
    * @brief Returns whether to ignore writer timezone in the stripe footer.
@@ -187,9 +185,7 @@ class orc_reader_options {
    * @return `true` if the writer timezone in the stripe footer is ignored.
    */
   [[nodiscard]] bool get_ignore_timezone_in_stripe_footer() const
-  {
-    return _ignore_timezone_in_stripe_footer;
-  }
+  { return _ignore_timezone_in_stripe_footer; }
 
   // Setters
 
@@ -282,9 +278,7 @@ class orc_reader_options {
    * @param val Vector of fully qualified column names
    */
   void set_decimal128_columns(std::vector<std::string> val)
-  {
-    _decimal128_columns = std::move(val);
-  }
+  { _decimal128_columns = std::move(val); }
 };
 
 /**
@@ -693,9 +687,7 @@ class orc_writer_options {
    * @return `true` if writing column statistics is enabled
    */
   [[nodiscard]] bool is_enabled_statistics() const
-  {
-    return _stats_freq != statistics_freq::STATISTICS_NONE;
-  }
+  { return _stats_freq != statistics_freq::STATISTICS_NONE; }
 
   /**
    * @brief Returns frequency of statistics collection.
@@ -749,9 +741,7 @@ class orc_writer_options {
    * @return Key-Value footer metadata information
    */
   [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
-  {
-    return _user_data;
-  }
+  { return _user_data; }
 
   /**
    * @brief Returns a shared pointer to the user-provided compression statistics.
@@ -759,9 +749,7 @@ class orc_writer_options {
    * @return Compression statistics
    */
   [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
-  {
-    return _compression_stats;
-  }
+  { return _compression_stats; }
 
   /**
    * @brief Returns whether string dictionaries should be sorted.
@@ -859,9 +847,7 @@ class orc_writer_options {
    * @param metadata Key-Value footer metadata
    */
   void set_key_value_metadata(std::map<std::string, std::string> metadata)
-  {
-    _user_data = std::move(metadata);
-  }
+  { _user_data = std::move(metadata); }
 
   /**
    * @brief Sets the pointer to the output compression statistics.
@@ -869,9 +855,7 @@ class orc_writer_options {
    * @param comp_stats Pointer to compression statistics to be updated after writing
    */
   void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
-  {
-    _compression_stats = std::move(comp_stats);
-  }
+  { _compression_stats = std::move(comp_stats); }
 
   /**
    * @brief Sets whether string dictionaries should be sorted.
@@ -1179,9 +1163,7 @@ class chunked_orc_writer_options {
    * @return Key-Value footer metadata information
    */
   [[nodiscard]] std::map<std::string, std::string> const& get_key_value_metadata() const
-  {
-    return _user_data;
-  }
+  { return _user_data; }
 
   /**
    * @brief Returns a shared pointer to the user-provided compression statistics.
@@ -1189,9 +1171,7 @@ class chunked_orc_writer_options {
    * @return Compression statistics
    */
   [[nodiscard]] std::shared_ptr<writer_compression_statistics> get_compression_statistics() const
-  {
-    return _compression_stats;
-  }
+  { return _compression_stats; }
 
   /**
    * @brief Returns whether string dictionaries should be sorted.
@@ -1282,9 +1262,7 @@ class chunked_orc_writer_options {
    * @param metadata Key-Value footer metadata
    */
   void set_key_value_metadata(std::map<std::string, std::string> metadata)
-  {
-    _user_data = std::move(metadata);
-  }
+  { _user_data = std::move(metadata); }
 
   /**
    * @brief Sets the pointer to the output compression statistics.
@@ -1292,9 +1270,7 @@ class chunked_orc_writer_options {
    * @param comp_stats Pointer to compression statistics to be updated after writing
    */
   void set_compression_statistics(std::shared_ptr<writer_compression_statistics> comp_stats)
-  {
-    _compression_stats = std::move(comp_stats);
-  }
+  { _compression_stats = std::move(comp_stats); }
 
   /**
    * @brief Sets whether string dictionaries should be sorted.

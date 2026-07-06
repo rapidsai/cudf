@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,12 +44,12 @@ std::unique_ptr<column> create_collect_offsets(size_type input_size,
 {
   // Materialize offsets column.
   auto static constexpr size_data_type = data_type{type_to_id<size_type>()};
-  auto sizes                           = make_fixed_width_column(size_data_type,
-                                       input_size,
-                                       mask_state::UNALLOCATED,
-                                       stream,
-                                       cudf::get_current_device_resource_ref());
-  auto mutable_sizes                   = sizes->mutable_view();
+  auto sizes         = make_fixed_width_column(size_data_type,
+                                               input_size,
+                                               mask_state::UNALLOCATED,
+                                               stream,
+                                               cudf::get_current_device_resource_ref());
+  auto mutable_sizes = sizes->mutable_view();
 
   // Consider the following preceding/following values:
   //    preceding = [1,2,2,2,2]

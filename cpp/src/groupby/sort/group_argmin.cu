@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -28,12 +28,12 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                          ? dictionary_column_view(values).keys().type()
                          : values.type();
   auto indices       = type_dispatcher(dispatch_type,
-                                 group_reduction_dispatcher<aggregation::ARGMIN>{},
-                                 values,
-                                 num_groups,
-                                 group_labels,
-                                 stream,
-                                 mr);
+                                       group_reduction_dispatcher<aggregation::ARGMIN>{},
+                                       values,
+                                       num_groups,
+                                       group_labels,
+                                       stream,
+                                       mr);
 
   // The functor returns the indices of minimums based on the sorted keys.
   // We need the indices of minimums from the original unsorted keys

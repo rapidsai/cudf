@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -290,36 +290,28 @@ std::unique_ptr<table> split_re(strings_column_view const& input,
                                 size_type maxsplit,
                                 rmm::cuda_stream_view stream,
                                 rmm::device_async_resource_ref mr)
-{
-  return split_re(input, prog, split_direction::FORWARD, maxsplit, stream, mr);
-}
+{ return split_re(input, prog, split_direction::FORWARD, maxsplit, stream, mr); }
 
 std::unique_ptr<column> split_record_re(strings_column_view const& input,
                                         regex_program const& prog,
                                         size_type maxsplit,
                                         rmm::cuda_stream_view stream,
                                         rmm::device_async_resource_ref mr)
-{
-  return split_record_re(input, prog, split_direction::FORWARD, maxsplit, stream, mr);
-}
+{ return split_record_re(input, prog, split_direction::FORWARD, maxsplit, stream, mr); }
 
 std::unique_ptr<table> rsplit_re(strings_column_view const& input,
                                  regex_program const& prog,
                                  size_type maxsplit,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
-{
-  return split_re(input, prog, split_direction::BACKWARD, maxsplit, stream, mr);
-}
+{ return split_re(input, prog, split_direction::BACKWARD, maxsplit, stream, mr); }
 
 std::unique_ptr<column> rsplit_record_re(strings_column_view const& input,
                                          regex_program const& prog,
                                          size_type maxsplit,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr)
-{
-  return split_record_re(input, prog, split_direction::BACKWARD, maxsplit, stream, mr);
-}
+{ return split_record_re(input, prog, split_direction::BACKWARD, maxsplit, stream, mr); }
 
 }  // namespace detail
 

@@ -20,9 +20,7 @@ namespace {
 struct arity_functor {
   template <ast_operator op>
   void operator()(cudf::size_type& result)
-  {
-    result = operator_functor<op>::arity;
-  }
+  { result = operator_functor<op>::arity; }
 };
 
 /**
@@ -114,9 +112,7 @@ struct single_dispatch_binary_operator_types {
   template <typename LHS, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
     requires(is_valid_binary_op<OperatorFunctor, LHS, LHS>)
-  {
-    f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
-  }
+  { f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...); }
 
   template <typename LHS, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
@@ -198,9 +194,7 @@ struct dispatch_unary_operator_types {
   template <typename InputT, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)
     requires(is_valid_unary_op<OperatorFunctor, InputT>)
-  {
-    f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
-  }
+  { f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...); }
 
   template <typename InputT, typename F, typename... Ts>
   inline void operator()(F&& f, Ts&&... args)

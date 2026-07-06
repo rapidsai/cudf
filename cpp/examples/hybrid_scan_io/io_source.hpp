@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -59,9 +59,7 @@ struct pinned_allocator : public std::allocator<T> {
   }
 
   void deallocate(T* ptr, std::size_t n) noexcept
-  {
-    mr.deallocate(stream, ptr, n * sizeof(T), alignof(T));
-  }
+  { mr.deallocate(stream, ptr, n * sizeof(T), alignof(T)); }
 
  private:
   rmm::host_async_resource_ref mr;

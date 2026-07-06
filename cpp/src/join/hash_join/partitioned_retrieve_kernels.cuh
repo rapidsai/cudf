@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -29,9 +29,7 @@ namespace cudf::detail {
  * @brief Count the number of set bits below a given position in a bitmask.
  */
 __device__ __forceinline__ int count_lower_set_bits(unsigned int mask, int pos)
-{
-  return cuda::std::popcount(mask & ((1u << pos) - 1));
-}
+{ return cuda::std::popcount(mask & ((1u << pos) - 1)); }
 
 /**
  * @brief Retrieve matching build-side rows for each probe key.

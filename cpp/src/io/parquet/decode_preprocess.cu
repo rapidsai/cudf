@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -315,9 +315,9 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   auto* const rep          = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
   bool const process_nulls = should_process_nulls(s);
-  level_t* const def       = !process_nulls
-                               ? nullptr
-                               : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
+  level_t* const def = !process_nulls
+                         ? nullptr
+                         : reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
 
   if (!t) {
     s->page.skipped_values      = -1;

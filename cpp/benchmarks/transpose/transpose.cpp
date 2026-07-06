@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -34,8 +34,8 @@ void bench_transpose(nvbench::state& state)
   state.set_cuda_stream(nvbench::make_cuda_stream_view(stream.value()));
 
   // Collect memory statistics.
-  auto const bytes_read = static_cast<uint64_t>(input.num_columns()) * input.num_rows() *
-                          sizeof(cudf::id_to_type<column_type_id>);
+  auto const bytes_read    = static_cast<uint64_t>(input.num_columns()) * input.num_rows() *
+                             sizeof(cudf::id_to_type<column_type_id>);
   auto const bytes_written = bytes_read;
   // Account for nullability in input and output.
   auto const null_bytes = 2 * static_cast<uint64_t>(input.num_columns()) *

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -135,9 +135,7 @@ struct dispatch_is_letter_fn {
   template <typename T, typename... Args>
   std::unique_ptr<cudf::column> operator()(Args&&...) const
     requires(not cudf::is_index_type<T>())
-  {
-    CUDF_FAIL("The is_letter indices parameter must be an integer type.");
-  }
+  { CUDF_FAIL("The is_letter indices parameter must be an integer type."); }
 };
 
 /**

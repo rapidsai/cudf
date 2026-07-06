@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,9 +46,7 @@ struct aggregation_converter {
 
 template <typename Base>
 std::unique_ptr<Base> convert_to(cudf::rolling_aggregation const& aggr)
-{
-  return cudf::detail::aggregation_dispatcher(aggr.kind, aggregation_converter<Base>{});
-}
+{ return cudf::detail::aggregation_dispatcher(aggr.kind, aggregation_converter<Base>{}); }
 
 /// Compute unbounded rolling window via groupby-aggregation.
 /// Used for input that has groupby key columns.

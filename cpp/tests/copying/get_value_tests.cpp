@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -520,9 +520,7 @@ struct ListGetStructValueTest : public cudf::test::BaseFixture {
                                cudf::test::strings_column_wrapper field2,
                                cudf::test::lists_column_wrapper<T, int32_t> field3,
                                MaskIterator mask)
-  {
-    return SCW{{field1, field2, field3}, mask};
-  }
+  { return SCW{{field1, field2, field3}, mask}; }
 
   /**
    * @brief Concatenate structs columns, allow specifying inputs in `initializer_list`

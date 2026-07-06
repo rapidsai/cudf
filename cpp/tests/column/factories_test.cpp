@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -536,9 +536,7 @@ class ListsStructsLeafTest : public ColumnFactoryTest {
                                cudf::test::strings_column_wrapper field2,
                                cudf::test::lists_column_wrapper<T, int32_t> field3,
                                MaskIterator mask)
-  {
-    return SCW{{field1, field2, field3}, mask};
-  }
+  { return SCW{{field1, field2, field3}, mask}; }
 };
 
 TYPED_TEST_SUITE(ListsStructsLeafTest, cudf::test::FixedWidthTypes);
@@ -625,9 +623,7 @@ class ListsZeroLengthColumnTest : public ColumnFactoryTest {
   StructsCW make_test_structs_column(cudf::test::fixed_width_column_wrapper<int32_t> field1,
                                      cudf::test::strings_column_wrapper field2,
                                      cudf::test::lists_column_wrapper<int32_t> field3)
-  {
-    return StructsCW{field1, field2, field3};
-  }
+  { return StructsCW{field1, field2, field3}; }
 };
 
 TEST_F(ListsZeroLengthColumnTest, MixedTypes)

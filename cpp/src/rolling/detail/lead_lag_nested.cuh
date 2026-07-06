@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -54,9 +54,7 @@ class is_null_index_predicate_impl {
 template <typename GatherMapIter>
 is_null_index_predicate_impl<GatherMapIter> is_null_index_predicate(size_type input_size,
                                                                     GatherMapIter gather)
-{
-  return is_null_index_predicate_impl<GatherMapIter>{input_size, gather};
-}
+{ return is_null_index_predicate_impl<GatherMapIter>{input_size, gather}; }
 
 /**
  * @brief Helper function to calculate LEAD/LAG for nested-type input columns.

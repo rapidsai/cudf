@@ -98,9 +98,7 @@ struct [[nodiscard]] expression {
    * @return `true` if the expression may evaluate to null, otherwise false
    */
   [[nodiscard]] bool may_evaluate_null(table_view const& left, rmm::cuda_stream_view stream) const
-  {
-    return may_evaluate_null(left, left, stream);
-  }
+  { return may_evaluate_null(left, left, stream); }
 
   /**
    * @brief Returns true if the expression may evaluate to null.
@@ -330,9 +328,7 @@ class literal : public expression {
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
-  {
-    return !is_valid(stream);
-  }
+  { return !is_valid(stream); }
 
   /**
    * @brief Check if the underlying scalar is valid.
@@ -341,9 +337,7 @@ class literal : public expression {
    * @return true if the underlying scalar is valid
    */
   [[nodiscard]] bool is_valid(rmm::cuda_stream_view stream) const
-  {
-    return scalar.is_valid(stream);
-  }
+  { return scalar.is_valid(stream); }
 
  private:
   cudf::scalar const& scalar;
@@ -471,9 +465,7 @@ class operation : public expression {
    * @return Vector of operands
    */
   [[nodiscard]] std::vector<std::reference_wrapper<expression const>> const& get_operands() const
-  {
-    return operands;
-  }
+  { return operands; }
 
   /**
    * @copydoc expression::accept
@@ -582,9 +574,7 @@ class column_name_reference : public expression {
   [[nodiscard]] bool may_evaluate_null(table_view const& left,
                                        table_view const& right,
                                        rmm::cuda_stream_view stream) const override
-  {
-    return true;
-  }
+  { return true; }
 
   /**
    * @copydoc expression::accept
@@ -645,9 +635,7 @@ class tree {
    */
   template <typename Expr>
   decltype(auto) push(Expr expr)
-  {
-    return emplace<Expr>(std::move(expr));
-  }
+  { return emplace<Expr>(std::move(expr)); }
 
   /**
    * @brief get the first expression in the tree

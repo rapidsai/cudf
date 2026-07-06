@@ -78,10 +78,10 @@ struct row_group_stats_caster : public stats_caster_base {
         for (auto const rg_idx : row_group_indices[src_idx]) {
           auto const& row_group = per_file_metadata[src_idx].row_groups[rg_idx];
           auto col              = std::find_if(row_group.columns.begin(),
-                                  row_group.columns.end(),
-                                  [mapped_schema_idx](ColumnChunk const& col) {
+                                               row_group.columns.end(),
+                                               [mapped_schema_idx](ColumnChunk const& col) {
                                     return col.schema_idx == mapped_schema_idx;
-                                  });
+                                               });
           if (col != std::end(row_group.columns)) {
             auto const& colchunk = *col;
             // To support deprecated min, max fields.

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -87,9 +87,7 @@ struct device_span {
   CUDF_HOST_DEVICE [[nodiscard]] constexpr element_type* end() const { return _data + _size; }
 
   CUDF_HOST_DEVICE [[nodiscard]] constexpr device_span<T const> as_const() const
-  {
-    return device_span<T const>{_data, _size};
-  }
+  { return device_span<T const>{_data, _size}; }
 };
 
 }  // namespace jit

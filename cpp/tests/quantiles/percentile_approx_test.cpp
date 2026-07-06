@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -131,9 +131,7 @@ struct percentile_approx_dispatch {
                                            std::vector<double> const& percentages,
                                            cudf::size_type ulps)
     requires(!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>())
-  {
-    CUDF_FAIL("Invalid input type for percentile_approx test");
-  }
+  { CUDF_FAIL("Invalid input type for percentile_approx test"); }
 };
 
 void percentile_approx_test(cudf::column_view const& _keys,

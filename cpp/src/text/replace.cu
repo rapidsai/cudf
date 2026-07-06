@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -231,9 +231,7 @@ struct remove_small_tokens_fn : base_token_replacer_fn {
   }
 
   __device__ replace_result token_replacement(cudf::string_view token) const
-  {
-    return replace_result{token.length() < min_token_length, d_replacement};
-  }
+  { return replace_result{token.length() < min_token_length, d_replacement}; }
 
   __device__ void operator()(cudf::size_type idx) const
   {

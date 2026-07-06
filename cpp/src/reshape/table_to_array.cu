@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -77,15 +77,11 @@ struct table_to_array_dispatcher {
 
   template <typename T, CUDF_ENABLE_IF(is_fixed_width<T>())>
   void operator()() const
-  {
-    table_to_array_impl<T>(input, output, stream);
-  }
+  { table_to_array_impl<T>(input, output, stream); }
 
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
   void operator()() const
-  {
-    CUDF_FAIL("Unsupported dtype");
-  }
+  { CUDF_FAIL("Unsupported dtype"); }
 };
 
 }  // namespace

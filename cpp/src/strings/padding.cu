@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -85,9 +85,7 @@ struct pad_fn : base_fn<pad_fn<side>> {
   }
 
   __device__ void pad(string_view d_str, char* output) const
-  {
-    pad_impl<side>(d_str, Base::width, d_fill_char, output);
-  }
+  { pad_impl<side>(d_str, Base::width, d_fill_char, output); }
 };
 
 }  // namespace

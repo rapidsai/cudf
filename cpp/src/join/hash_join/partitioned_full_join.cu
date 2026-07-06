@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -13,9 +13,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 hash_join<Hasher>::partitioned_full_join(cudf::join_partition_context const& context,
                                          rmm::cuda_stream_view stream,
                                          rmm::device_async_resource_ref mr) const
-{
-  return this->partitioned_join_retrieve(join_kind::FULL_JOIN, context, stream, mr);
-}
+{ return this->partitioned_join_retrieve(join_kind::FULL_JOIN, context, stream, mr); }
 
 template std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
                    std::unique_ptr<rmm::device_uvector<size_type>>>

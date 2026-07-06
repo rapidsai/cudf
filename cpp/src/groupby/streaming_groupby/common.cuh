@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -61,9 +61,7 @@ struct first_batch_comparator {
   size_type max_distinct_keys;
 
   __device__ bool operator()(size_type lhs, size_type rhs) const noexcept
-  {
-    return batch_self_eq(lhs - max_distinct_keys, rhs - max_distinct_keys);
-  }
+  { return batch_self_eq(lhs - max_distinct_keys, rhs - max_distinct_keys); }
 };
 
 /*
@@ -171,9 +169,7 @@ struct offset_cache_hasher {
   hash_value_type const* cache;
   size_type offset;
   __device__ hash_value_type operator()(size_type idx) const noexcept
-  {
-    return cache[idx - offset];
-  }
+  { return cache[idx - offset]; }
 };
 
 /*

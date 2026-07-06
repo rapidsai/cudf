@@ -40,14 +40,10 @@ order_scheme::order_scheme(std::vector<order_key> keys,
 }
 
 partitioning_spec partitioning_spec::from_order(order_scheme o)
-{
-  return {.type = type::ORDER, .hash = std::nullopt, .order = std::move(o)};
-}
+{ return {.type = type::ORDER, .hash = std::nullopt, .order = std::move(o)}; }
 
 order_scheme order_scheme::with_keys(std::vector<order_key> new_keys) const
-{
-  return order_scheme(std::move(new_keys), boundaries, strict_boundaries);
-}
+{ return order_scheme(std::move(new_keys), boundaries, strict_boundaries); }
 
 bool order_scheme::boundaries_aligned_with(order_scheme const& other,
                                            rapidsmpf::BufferResource& br) const
@@ -69,16 +65,16 @@ bool order_scheme::boundaries_aligned_with(order_scheme const& other,
   rapidsmpf::cuda_stream_join(stream, other.boundaries->stream());
   for (cudf::size_type i = 0; i < lhs.num_columns(); ++i) {
     auto eq      = cudf::binary_operation(lhs.column(i),
-                                     rhs.column(i),
-                                     cudf::binary_operator::NULL_EQUALS,
-                                     cudf::data_type{cudf::type_id::BOOL8},
-                                     stream,
-                                     br.device_mr());
+                                          rhs.column(i),
+                                          cudf::binary_operator::NULL_EQUALS,
+                                          cudf::data_type{cudf::type_id::BOOL8},
+                                          stream,
+                                          br.device_mr());
     auto result  = cudf::reduce(eq->view(),
-                               *cudf::make_all_aggregation<cudf::reduce_aggregation>(),
-                               cudf::data_type{cudf::type_id::BOOL8},
-                               stream,
-                               br.device_mr());
+                                *cudf::make_all_aggregation<cudf::reduce_aggregation>(),
+                                cudf::data_type{cudf::type_id::BOOL8},
+                                stream,
+                                br.device_mr());
     auto& scalar = static_cast<cudf::numeric_scalar<bool>&>(*result);
     if (!scalar.value(stream)) { return false; }
   }

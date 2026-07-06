@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -86,10 +86,10 @@ static void bench_scatter_lists(nvbench::state& state, nvbench::type_list<TypePa
                                   cudf::create_null_mask(num_rows, cudf::mask_state::UNALLOCATED));
 
   auto scatter_map   = make_fixed_width_column(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                             num_rows,
-                                             cudf::mask_state::UNALLOCATED,
-                                             stream,
-                                             mr);
+                                               num_rows,
+                                               cudf::mask_state::UNALLOCATED,
+                                               stream,
+                                               mr);
   auto m_scatter_map = scatter_map->mutable_view();
   thrust::sequence(rmm::exec_policy_nosync(stream),
                    m_scatter_map.begin<cudf::size_type>(),

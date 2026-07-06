@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/column/column_factories.hpp>
@@ -86,9 +86,7 @@ class murmur_device_row_hasher {
                                           size_type,
                                           Nullate const,
                                           hash_value_type const) const noexcept
-    {
-      CUDF_UNREACHABLE("Unsupported type for MurmurHash3_x64_128");
-    }
+    { CUDF_UNREACHABLE("Unsupported type for MurmurHash3_x64_128"); }
   };
 
   Nullate const _check_nulls;

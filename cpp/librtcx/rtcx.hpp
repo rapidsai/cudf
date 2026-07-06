@@ -24,7 +24,7 @@
 
 #define RTCX_DEFER__CONCATENATE_DETAIL(x, y) x##y
 #define RTCX_DEFER__CONCATENATE(x, y)        RTCX_DEFER__CONCATENATE_DETAIL(x, y)
-#define RTCX_DEFER(...)                      ::rtcx::defer RTCX_DEFER__CONCATENATE(defer_, __COUNTER__)(__VA_ARGS__)
+#define RTCX_DEFER(...) ::rtcx::defer RTCX_DEFER__CONCATENATE(defer_, __COUNTER__)(__VA_ARGS__)
 
 extern "C" {
 typedef struct CUlib_st* CUlibrary;    // NOLINT(modernize-use-using)
@@ -283,9 +283,7 @@ struct [[nodiscard]] blob_t {
   [[nodiscard]] std::span<std::uint8_t const> view() const { return {data_, size_}; }
 
   static blob_t from_parts(std::uint8_t const* data, std::size_t size, deallocator deallocator)
-  {
-    return blob_t{data, size, deallocator};
-  }
+  { return blob_t{data, size, deallocator}; }
 
   static blob_t from_buffer(byte_buffer buffer);
 
@@ -816,9 +814,7 @@ std::string reflect(T value) = delete;
  */
 template <>
 inline std::string reflect<bool>(bool value)
-{
-  return std::format("{}", value);
-}
+{ return std::format("{}", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -827,9 +823,7 @@ inline std::string reflect<bool>(bool value)
  */
 template <>
 inline std::string reflect<std::uint8_t>(std::uint8_t value)
-{
-  return std::format("{}U", value);
-}
+{ return std::format("{}U", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -838,9 +832,7 @@ inline std::string reflect<std::uint8_t>(std::uint8_t value)
  */
 template <>
 inline std::string reflect<std::uint16_t>(std::uint16_t value)
-{
-  return std::format("{}U", value);
-}
+{ return std::format("{}U", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -849,9 +841,7 @@ inline std::string reflect<std::uint16_t>(std::uint16_t value)
  */
 template <>
 inline std::string reflect<std::uint32_t>(std::uint32_t value)
-{
-  return std::format("{}U", value);
-}
+{ return std::format("{}U", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -860,9 +850,7 @@ inline std::string reflect<std::uint32_t>(std::uint32_t value)
  */
 template <>
 inline std::string reflect<std::uint64_t>(std::uint64_t value)
-{
-  return std::format("{}ULL", value);
-}
+{ return std::format("{}ULL", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -871,9 +859,7 @@ inline std::string reflect<std::uint64_t>(std::uint64_t value)
  */
 template <>
 inline std::string reflect<std::int8_t>(std::int8_t value)
-{
-  return std::format("{}", value);
-}
+{ return std::format("{}", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -882,9 +868,7 @@ inline std::string reflect<std::int8_t>(std::int8_t value)
  */
 template <>
 inline std::string reflect<std::int16_t>(std::int16_t value)
-{
-  return std::format("{}", value);
-}
+{ return std::format("{}", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -893,9 +877,7 @@ inline std::string reflect<std::int16_t>(std::int16_t value)
  */
 template <>
 inline std::string reflect<std::int32_t>(std::int32_t value)
-{
-  return std::format("{}", value);
-}
+{ return std::format("{}", value); }
 
 /**
  * @brief Reflect an integer value into its CUDA string representation
@@ -904,9 +886,7 @@ inline std::string reflect<std::int32_t>(std::int32_t value)
  */
 template <>
 inline std::string reflect<std::int64_t>(std::int64_t value)
-{
-  return std::format("{}LL", value);
-}
+{ return std::format("{}LL", value); }
 
 /**
  * @brief Reflect a floating-point value into its CUDA string representation
@@ -915,9 +895,7 @@ inline std::string reflect<std::int64_t>(std::int64_t value)
  */
 template <>
 inline std::string reflect<float>(float value)
-{
-  return std::format("{}F", value);
-}
+{ return std::format("{}F", value); }
 
 /**
  * @brief Reflect a floating-point value into its CUDA string representation
@@ -926,9 +904,7 @@ inline std::string reflect<float>(float value)
  */
 template <>
 inline std::string reflect<double>(double value)
-{
-  return std::format("{}", value);
-}
+{ return std::format("{}", value); }
 
 /**
  * @brief Reflect an enumeration value into its CUDA string representation, given the type name as a
@@ -943,9 +919,7 @@ inline std::string reflect<double>(double value)
 template <typename T>
   requires(std::is_enum_v<T>)
 std::string reflect_enum(std::string_view type, T value)
-{
-  return std::format("{}{}{}{}", type, "{", static_cast<std::underlying_type_t<T>>(value), "}");
-}
+{ return std::format("{}{}{}{}", type, "{", static_cast<std::underlying_type_t<T>>(value), "}"); }
 
 /**
  * @brief Reflect a template instantiation into its CUDA string representation, given the template

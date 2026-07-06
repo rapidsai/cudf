@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -101,9 +101,7 @@ struct table_flattener {
       nullability{nullability},
       stream{stream},
       mr{mr}
-  {
-    superimpose_nulls(input);
-  }
+  { superimpose_nulls(input); }
 
   /**
    * @brief Pushes down nulls from struct columns to children, saves the resulting

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -158,9 +158,7 @@ struct trie {
                      rmm::cuda_stream_view stream,
                      rmm::device_async_resource_ref mr)
 
-  {
-    return create(std::vector<std::string>{std::move(pattern)}, stream, mr);
-  }
+  { return create(std::vector<std::string>{std::move(pattern)}, stream, mr); }
 
   /**
    * @brief Create a trie which represents the given pattern.

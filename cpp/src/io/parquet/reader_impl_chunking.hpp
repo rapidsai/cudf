@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -56,9 +56,7 @@ struct file_intermediate_data {
   size_t global_num_rows;
 
   [[nodiscard]] size_t num_passes() const
-  {
-    return input_pass_row_group_offsets.size() == 0 ? 0 : input_pass_row_group_offsets.size() - 1;
-  }
+  { return input_pass_row_group_offsets.size() == 0 ? 0 : input_pass_row_group_offsets.size() - 1; }
 };
 
 /**

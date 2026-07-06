@@ -36,9 +36,7 @@ hash128_hex_string hash128_hex_string::make(__uint128_t hash)
 }
 
 std::uint8_t hash128::operator[](std::size_t index) const
-{
-  return reinterpret_cast<std::uint8_t const*>(&value)[15 - index];
-}
+{ return reinterpret_cast<std::uint8_t const*>(&value)[15 - index]; }
 
 std::size_t hash128::size() const { return 16; }
 

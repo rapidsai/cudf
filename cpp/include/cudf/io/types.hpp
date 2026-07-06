@@ -185,9 +185,7 @@ class writer_compression_statistics {
    * @return size_t The total size of compression inputs
    */
   [[nodiscard]] auto num_total_input_bytes() const noexcept
-  {
-    return num_compressed_bytes() + num_failed_bytes() + num_skipped_bytes();
-  }
+  { return num_compressed_bytes() + num_failed_bytes() + num_skipped_bytes(); }
 
   /**
    * @brief Returns the compression ratio for the successfully compressed blocks.
@@ -198,9 +196,7 @@ class writer_compression_statistics {
    * compressed output.
    */
   [[nodiscard]] auto compression_ratio() const noexcept
-  {
-    return static_cast<double>(num_compressed_bytes()) / _num_compressed_output_bytes;
-  }
+  { return static_cast<double>(num_compressed_bytes()) / _num_compressed_output_bytes; }
 
  private:
   std::size_t _num_compressed_bytes = 0;  ///< The number of bytes that were successfully compressed
@@ -342,9 +338,7 @@ struct source_info {
    */
   explicit source_info(std::vector<filepath_source> sources)
     : _type(io_type::FILEPATH), _num_sources(sources.size()), _filepath_sources(std::move(sources))
-  {
-    rebuild_filepaths();
-  }
+  { rebuild_filepaths(); }
 
   /**
    * @brief Construct a new source info object for multiple buffers in host memory
@@ -833,9 +827,7 @@ class column_in_metadata {
    * @return Boolean indicating whether precision has been set for this decimal column
    */
   [[nodiscard]] bool is_decimal_precision_set() const noexcept
-  {
-    return _decimal_precision.has_value();
-  }
+  { return _decimal_precision.has_value(); }
 
   /**
    * @brief Get the decimal precision that was set for this column.
@@ -868,9 +860,7 @@ class column_in_metadata {
    * @return Boolean indicating whether parquet field id has been set for this column
    */
   [[nodiscard]] bool is_parquet_field_id_set() const noexcept
-  {
-    return _parquet_field_id.has_value();
-  }
+  { return _parquet_field_id.has_value(); }
 
   /**
    * @brief Get the parquet field id that was set for this column.
@@ -988,9 +978,7 @@ class reader_column_schema {
    * @param child_span span of child schema objects
    */
   reader_column_schema(std::span<reader_column_schema> const& child_span)
-  {
-    children.assign(child_span.begin(), child_span.end());
-  }
+  { children.assign(child_span.begin(), child_span.end()); }
 
   /**
    * @brief Add the children metadata of this column
@@ -1052,9 +1040,7 @@ class reader_column_schema {
    * @return Boolean indicating whether to encode this column as binary data
    */
   [[nodiscard]] bool is_enabled_convert_binary_to_strings() const
-  {
-    return _convert_binary_to_strings;
-  }
+  { return _convert_binary_to_strings; }
 
   /**
    * @brief Get the length in bytes of this fixed length data.

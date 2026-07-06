@@ -358,20 +358,14 @@ streaming_groupby& streaming_groupby::operator=(streaming_groupby&&) noexcept = 
 // Private member functions defined here (requires full impl definition).
 // The public API wrappers in streaming_groupby.cpp call these.
 void streaming_groupby::do_aggregate(table_view const& data, rmm::cuda_stream_view stream)
-{
-  _impl->do_aggregate(data, stream);
-}
+{ _impl->do_aggregate(data, stream); }
 
 void streaming_groupby::do_merge(streaming_groupby const& other, rmm::cuda_stream_view stream)
-{
-  _impl->do_merge(*other._impl, stream);
-}
+{ _impl->do_merge(*other._impl, stream); }
 
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> streaming_groupby::do_finalize(
   rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr) const
-{
-  return _impl->do_finalize(stream, mr);
-}
+{ return _impl->do_finalize(stream, mr); }
 
 size_type streaming_groupby::distinct_keys() const noexcept { return _impl->_distinct_keys; }
 

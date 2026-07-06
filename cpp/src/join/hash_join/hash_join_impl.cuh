@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -29,9 +29,7 @@ struct hash_join<Hasher>::impl {
   struct hasher1 {
     __device__ constexpr hash_value_type operator()(
       cuco::pair<hash_value_type, size_type> const& key) const noexcept
-    {
-      return key.first;
-    }
+    { return key.first; }
   };
 
   struct hasher2 {
@@ -39,9 +37,7 @@ struct hash_join<Hasher>::impl {
 
     __device__ constexpr hash_value_type operator()(
       cuco::pair<hash_value_type, size_type> const& key) const noexcept
-    {
-      return _hash(key.first);
-    }
+    { return _hash(key.first); }
 
    private:
     Hasher _hash;

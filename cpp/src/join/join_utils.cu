@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -70,9 +70,7 @@ struct unmatched_flag {
 // through a zip iterator over (left_out_tail, right_out_tail).
 struct to_no_match_pair {
   __device__ cuda::std::tuple<size_type, size_type> operator()(size_type idx) const noexcept
-  {
-    return cuda::std::make_tuple(cudf::JoinNoMatch, idx);
-  }
+  { return cuda::std::make_tuple(cudf::JoinNoMatch, idx); }
 };
 
 }  // namespace

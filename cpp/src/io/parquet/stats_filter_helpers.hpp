@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -106,9 +106,7 @@ class stats_caster_base {
                           Type const type,
                           int32_t ts_scale = 0)
     requires(cudf::is_dictionary<T>() or cudf::is_nested<T>())
-  {
-    CUDF_FAIL("Unsupported type for stats casting");
-  }
+  { CUDF_FAIL("Unsupported type for stats casting"); }
 
   template <typename T>
   static inline T convert(uint8_t const* stats_val,

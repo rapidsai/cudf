@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -47,9 +47,7 @@ class pair_equal {
 struct output_fn {
   __device__ constexpr cudf::size_type operator()(
     cuco::pair<hash_value_type, cudf::size_type> const& slot) const
-  {
-    return slot.second;
-  }
+  { return slot.second; }
 };
 
 /**
@@ -65,9 +63,7 @@ class primitive_pair_equal {
   __device__ __forceinline__ bool operator()(
     cuco::pair<hash_value_type, size_type> const& lhs,
     cuco::pair<hash_value_type, size_type> const& rhs) const noexcept
-  {
-    return lhs.first == rhs.first and _check_row_equality(lhs.second, rhs.second);
-  }
+  { return lhs.first == rhs.first and _check_row_equality(lhs.second, rhs.second); }
 
  private:
   cudf::detail::row::primitive::row_equality_comparator _check_row_equality;

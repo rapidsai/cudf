@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -129,9 +129,7 @@ void run_benchmark_complex_keys(nvbench::state& state)
 
 void bench_groupby_int_keys(nvbench::state& state) { run_benchmark_complex_keys<true>(state); }
 void bench_groupby_mixed_types_keys(nvbench::state& state)
-{
-  run_benchmark_complex_keys<false>(state);
-}
+{ run_benchmark_complex_keys<false>(state); }
 
 NVBENCH_BENCH(bench_groupby_int_keys)
   .set_name("complex_int_keys")

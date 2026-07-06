@@ -677,9 +677,7 @@ struct search_fenwick_tree_functor {
    * @return Boolean indicating if the value is a power of two
    */
   __device__ bool inline constexpr is_power_of_two(cudf::size_type value) const noexcept
-  {
-    return (value & (value - 1)) == 0;
-  }
+  { return (value & (value - 1)) == 0; }
 
   /**
    * @brief Finds the smallest power of two in the range [start, end). If no power of two is

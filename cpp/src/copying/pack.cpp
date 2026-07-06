@@ -296,7 +296,7 @@ class metadata_builder_impl {
   {
     auto const header = serialized_table_header{_num_root_columns};
     auto output       = std::vector<uint8_t>(sizeof(serialized_table_header) +
-                                       _columns.size() * sizeof(serialized_column));
+                                             _columns.size() * sizeof(serialized_column));
     std::memcpy(output.data(), &header, sizeof(serialized_table_header));
     if (!_columns.empty()) {
       std::memcpy(output.data() + sizeof(serialized_table_header),

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -125,9 +125,7 @@ template <typename Element, typename Enable = void>
 struct column_scatterer_impl {
   template <typename... Args>
   std::unique_ptr<column> operator()(Args&&...) const
-  {
-    CUDF_FAIL("Unsupported type for scatter.");
-  }
+  { CUDF_FAIL("Unsupported type for scatter."); }
 };
 
 template <typename Element>

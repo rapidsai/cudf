@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "avro_gpu.hpp"
@@ -369,16 +369,16 @@ CUDF_KERNEL void __launch_bounds__(num_warps * 32, 2)
     if (threadIdx.x < nrows) {
       bool skipped_row = true;
       cur              = avro_decode_row(schema,
-                            schema_g,
-                            schema_len,
-                            first_row,
-                            cur_row + threadIdx.x,
-                            end_row,
-                            blk->row_offset,
-                            cur,
-                            end,
-                            global_dictionary,
-                            &skipped_row);
+                                         schema_g,
+                                         schema_len,
+                                         first_row,
+                                         cur_row + threadIdx.x,
+                                         end_row,
+                                         blk->row_offset,
+                                         cur,
+                                         end,
+                                         global_dictionary,
+                                         &skipped_row);
       if (!skipped_row) { rows_remaining -= nrows; }
     }
     __syncwarp();

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -46,9 +46,7 @@ struct encode_fn {
   SetRef set_ref;
   column_device_view d_input;
   __device__ size_type operator()(size_type idx)
-  {
-    return d_input.is_valid(idx) ? *cuda::std::get<0>(set_ref.insert_and_find(idx)) : idx;
-  }
+  { return d_input.is_valid(idx) ? *cuda::std::get<0>(set_ref.insert_and_find(idx)) : idx; }
 };
 
 }  // namespace

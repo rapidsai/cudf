@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -245,9 +245,7 @@ std::unique_ptr<cudf::column> clamper(column_view const& input,
                                       rmm::cuda_stream_view stream,
                                       rmm::device_async_resource_ref mr)
   requires(std::is_same_v<T, string_view>)
-{
-  return clamp_string_column(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
-}
+{ return clamp_string_column(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr); }
 
 }  // namespace
 
@@ -259,9 +257,7 @@ std::unique_ptr<column> clamp(column_view const& input,
                               ReplaceScalarIterator hi_replace_itr,
                               rmm::cuda_stream_view stream,
                               rmm::device_async_resource_ref mr)
-{
-  return clamper<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
-}
+{ return clamper<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr); }
 
 struct dispatch_clamp {
   template <typename T>
@@ -300,9 +296,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::list_view>(
   scalar const& hi_replace,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
-{
-  CUDF_FAIL("clamp for list_view not supported");
-}
+{ CUDF_FAIL("clamp for list_view not supported"); }
 
 template <>
 std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(column_view const& input,
@@ -312,9 +306,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<struct_view>(column_view cons
                                                                 scalar const& hi_replace,
                                                                 rmm::cuda_stream_view stream,
                                                                 rmm::device_async_resource_ref mr)
-{
-  CUDF_FAIL("clamp for struct_view not supported");
-}
+{ CUDF_FAIL("clamp for struct_view not supported"); }
 
 template <>
 std::unique_ptr<column> dispatch_clamp::operator()<dictionary32>(column_view const&,
@@ -324,9 +316,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<dictionary32>(column_view con
                                                                  scalar const&,
                                                                  rmm::cuda_stream_view,
                                                                  rmm::device_async_resource_ref)
-{
-  CUDF_UNREACHABLE("clamp type-dispatch error");
-}
+{ CUDF_UNREACHABLE("clamp type-dispatch error"); }
 
 /**
  * @copydoc cudf::clamp(column_view const& input,

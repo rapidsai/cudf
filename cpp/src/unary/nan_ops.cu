@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -54,9 +54,7 @@ struct nan_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::device_async_resource_ref mr)
     requires(!std::is_floating_point_v<T>)
-  {
-    CUDF_FAIL("NAN is not supported in a Non-floating point type column");
-  }
+  { CUDF_FAIL("NAN is not supported in a Non-floating point type column"); }
 };
 
 std::unique_ptr<column> is_nan(cudf::column_view const& input,

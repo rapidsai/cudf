@@ -295,9 +295,7 @@ cudf::io::parquet::OffsetIndex read_offset_index(
 
 // Return as a Statistics from the column chunk
 cudf::io::parquet::Statistics const& get_statistics(cudf::io::parquet::ColumnChunk const& chunk)
-{
-  return chunk.meta_data.statistics;
-}
+{ return chunk.meta_data.statistics; }
 
 // read page header from datasource at location indicated by page_loc,
 // parse and return as a PageHeader struct.
@@ -782,9 +780,7 @@ std::unique_ptr<cudf::table> build_expected_ordered_table(
 // 0 if v1 == v2, and 1 if v1 > v2.
 template <typename T>
 int32_t compare(T& v1, T& v2)
-{
-  return (v1 > v2) - (v1 < v2);
-}
+{ return (v1 > v2) - (v1 < v2); }
 
 // compare two binary statistics blobs based on their physical
 // and converted types. returns -1 if v1 < v2, 0 if v1 == v2, and

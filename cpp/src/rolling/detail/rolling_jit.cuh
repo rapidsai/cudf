@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,9 +44,7 @@ struct variable_window_wrapper : public window_wrapper_base {
   }
 
   __device__ __host__ cudf::size_type operator[](cudf::size_type idx) const
-  {
-    return group_offsets[idx];
-  }
+  { return group_offsets[idx]; }
 };
 
 struct preceding_window_wrapper : public window_wrapper_base {

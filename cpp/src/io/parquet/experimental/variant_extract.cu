@@ -102,14 +102,10 @@ __device__ cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64
 }
 
 __device__ basic_type variant_basic_type(uint8_t value_metadata)
-{
-  return static_cast<basic_type>(value_metadata & 0x03);
-}
+{ return static_cast<basic_type>(value_metadata & 0x03); }
 
 __device__ uint8_t variant_value_header(uint8_t value_metadata)
-{
-  return (value_metadata >> 2) & 0x3F;
-}
+{ return (value_metadata >> 2) & 0x3F; }
 
 struct object_array_header {
   int field_offset_size;  // bytes per field_offset entry
@@ -645,9 +641,7 @@ struct cast_variant_fn {
   template <typename T>
   std::unique_ptr<column> operator()()
     requires(not is_variant_castable<T>)
-  {
-    CUDF_FAIL("unsupported type for variant cast", std::invalid_argument);
-  }
+  { CUDF_FAIL("unsupported type for variant cast", std::invalid_argument); }
 };
 
 std::unique_ptr<column> build_path_column(cudf::host_span<std::string const> steps,

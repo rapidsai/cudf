@@ -99,9 +99,7 @@ device_bloom_filter const device_bloom_filter::view(std::size_t num_blocks,
 std::unique_ptr<rmm::device_buffer> device_bloom_filter::storage(std::size_t num_blocks,
                                                                  rmm::cuda_stream_view stream,
                                                                  rmm::device_async_resource_ref mr)
-{
-  return std::make_unique<rmm::device_buffer>(num_blocks * sizeof(StorageType), stream, mr);
-}
+{ return std::make_unique<rmm::device_buffer>(num_blocks * sizeof(StorageType), stream, mr); }
 
 void device_bloom_filter::add(cudf::table_view const& values_to_hash,
                               rmm::cuda_stream_view stream,
@@ -145,9 +143,7 @@ rmm::device_uvector<bool> device_bloom_filter::contains(cudf::table_view const& 
 }
 
 std::size_t device_bloom_filter::fitting_num_blocks(std::size_t l2size) noexcept
-{
-  return (l2size * 2) / (3 * sizeof(StorageType));
-}
+{ return (l2size * 2) / (3 * sizeof(StorageType)); }
 
 rmm::cuda_stream_view device_bloom_filter::stream() const noexcept { return stream_; }
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -30,9 +30,7 @@ using hash_type = cuco::murmurhash3_32<hash_value_type>;
  */
 struct mixed_join_always_not_equal {
   __device__ constexpr bool operator()(pair_type const&, pair_type const&) const noexcept
-  {
-    return false;
-  }
+  { return false; }
 };
 
 /**
@@ -54,18 +52,14 @@ struct mixed_join_always_not_equal {
  */
 struct mixed_join_hasher1 {
   __device__ constexpr hash_value_type operator()(pair_type const& key) const noexcept
-  {
-    return key.first;
-  }
+  { return key.first; }
 };
 
 struct mixed_join_hasher2 {
   mixed_join_hasher2(hash_value_type seed) : _hash{seed} {}
 
   __device__ constexpr hash_value_type operator()(pair_type const& key) const noexcept
-  {
-    return _hash(key.first);
-  }
+  { return _hash(key.first); }
 
  private:
   hash_type _hash;
@@ -133,8 +127,7 @@ struct pair_expression_equality : public expression_equality<has_nulls> {
 #else
   __forceinline__
 #endif
-  __device__ bool
-  operator()(pair_type const& left_row, pair_type const& right_row) const noexcept
+  __device__ bool operator()(pair_type const& left_row, pair_type const& right_row) const noexcept
   {
     using cudf::detail::row::lhs_index_type;
     using cudf::detail::row::rhs_index_type;
@@ -188,9 +181,7 @@ struct hash_probe_result {
   }
 
   __device__ __forceinline__ bool has_empty_slot() const noexcept
-  {
-    return first_slot_is_empty_ or second_slot_is_empty_;
-  }
+  { return first_slot_is_empty_ or second_slot_is_empty_; }
 
   __device__ __forceinline__ cudf::size_type match_count() const noexcept
   {
@@ -199,9 +190,7 @@ struct hash_probe_result {
   }
 
   __device__ __forceinline__ bool has_match() const noexcept
-  {
-    return first_slot_equals_ or second_slot_equals_;
-  }
+  { return first_slot_equals_ or second_slot_equals_; }
 };
 
 /**
@@ -234,14 +223,10 @@ struct hash_table_prober {
   }
 
   __device__ __forceinline__ hash_probe_result<has_nulls> probe_current_bucket() const
-  {
-    return hash_probe_result<has_nulls>{key_equal_, hash_table_storage_, probe_key_, probe_idx_};
-  }
+  { return hash_probe_result<has_nulls>{key_equal_, hash_table_storage_, probe_key_, probe_idx_}; }
 
   __device__ __forceinline__ void advance() noexcept
-  {
-    probe_idx_ = (probe_idx_ + step_) % extent_;
-  }
+  { probe_idx_ = (probe_idx_ + step_) % extent_; }
 
   __device__ __forceinline__ auto get_bucket_slots() const noexcept
   {

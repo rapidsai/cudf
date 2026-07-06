@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -82,9 +82,7 @@ struct bitwise_group_reduction_functor {
 
   template <typename T, typename... Args, CUDF_ENABLE_IF(!std::is_integral<T>())>
   std::unique_ptr<column> operator()(Args...) const
-  {
-    CUDF_FAIL("Bitwise operations are only supported for integral types.");
-  }
+  { CUDF_FAIL("Bitwise operations are only supported for integral types."); }
 };
 
 }  // namespace

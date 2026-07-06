@@ -56,9 +56,7 @@ context::context(context_config cfg, init_flags flags)
       get_driver_version(), get_runtime_version(), get_current_device_compute_capability()},
     _nvrtc_version{0},
     _nvjitlink_version{0}
-{
-  initialize_components(flags);
-}
+{ initialize_components(flags); }
 
 void context::ensure_nvcomp_loaded() { io::detail::nvcomp::load_nvcomp_library(); }
 
@@ -123,9 +121,7 @@ context_config const& context::config() const { return _config; }
 std::string const& context::get_jit_pch_dir() const { return _config.jit_pch_dir; }
 
 context::device_properties const& context::get_device_properties() const
-{
-  return _device_properties;
-}
+{ return _device_properties; }
 
 std::optional<int32_t> context::nvrtc_version() const { return _nvrtc_version; }
 

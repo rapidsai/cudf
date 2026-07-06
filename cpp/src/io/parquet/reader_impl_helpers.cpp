@@ -278,7 +278,7 @@ void metadata::sanitize_schema()
       auto const& parent_schema    = schema[schema_elem.parent_idx];
       auto const is_parent_variant = parent_schema.logical_type.has_value() &&
                                      parent_schema.logical_type->type == LogicalType::VARIANT;
-      auto const parent_type = parent_schema.converted_type;
+      auto const parent_type       = parent_schema.converted_type;
       if (not is_parent_variant && schema_elem.repetition_type == FieldRepetitionType::REPEATED &&
           schema_elem.num_children >= 1 && parent_type != ConvertedType::LIST &&
           parent_type != ConvertedType::MAP) {
@@ -779,9 +779,7 @@ aggregate_reader_metadata::aggregate_reader_metadata(
     schema_idx_maps(init_schema_idx_maps(has_cols_from_mismatched_srcs)),
     num_rows(calc_num_rows()),
     num_row_groups(calc_num_row_groups())
-{
-  initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs);
-}
+{ initialize_internals(use_arrow_schema, has_cols_from_mismatched_srcs); }
 
 arrow_schema_data_types aggregate_reader_metadata::collect_arrow_schema() const
 {

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -137,9 +137,7 @@ template <typename Element, typename Enable = void>
 struct column_gatherer_impl {
   template <typename... Args>
   std::unique_ptr<column> operator()(Args&&...)
-  {
-    CUDF_FAIL("Unsupported type in gather.");
-  }
+  { CUDF_FAIL("Unsupported type in gather."); }
 };
 
 /**

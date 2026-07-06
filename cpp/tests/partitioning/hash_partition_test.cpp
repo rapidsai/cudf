@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -460,16 +460,12 @@ void run_fixed_width_test(size_t cols,
 }
 
 TYPED_TEST(HashPartitionFixedWidth, MorePartitionsThanRows)
-{
-  run_fixed_width_test<TypeParam>(5, 10, 50);
-}
+{ run_fixed_width_test<TypeParam>(5, 10, 50); }
 
 TYPED_TEST(HashPartitionFixedWidth, LargeInput) { run_fixed_width_test<TypeParam>(10, 1000, 10); }
 
 TYPED_TEST(HashPartitionFixedWidth, HasNulls)
-{
-  run_fixed_width_test<TypeParam>(10, 1000, 10, true);
-}
+{ run_fixed_width_test<TypeParam>(10, 1000, 10, true); }
 
 TEST_F(HashPartition, FixedPointColumnsToHash)
 {

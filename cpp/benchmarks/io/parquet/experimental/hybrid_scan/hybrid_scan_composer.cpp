@@ -1,6 +1,6 @@
 
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -33,7 +33,7 @@ std::unique_ptr<hybrid_scan_reader> setup_reader(cudf::io::datasource& datasourc
   auto const footer_buffer = cudf::io::parquet::fetch_footer_to_host(datasource);
   auto reader              = std::make_unique<hybrid_scan_reader>(
     cudf::host_span<uint8_t const>{static_cast<uint8_t const*>(footer_buffer->data()),
-                                                footer_buffer->size()},
+                                   footer_buffer->size()},
     options);
 
   auto const page_index_byte_range = reader->page_index_byte_range();

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -73,9 +73,7 @@ struct index_changed_fn {
   cudf::detail::input_indexalator const d_rows;
   cudf::size_type const* d_row_map;
   __device__ bool operator()(cudf::size_type idx) const
-  {
-    return (idx == 0) || (d_rows[d_row_map[idx]] != d_rows[d_row_map[idx - 1]]);
-  }
+  { return (idx == 0) || (d_rows[d_row_map[idx]] != d_rows[d_row_map[idx - 1]]); }
 };
 
 /**

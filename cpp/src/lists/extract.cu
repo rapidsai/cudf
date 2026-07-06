@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -175,17 +175,13 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              size_type const index,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
-{
-  return detail::extract_list_element_impl(lists_column, index, stream, mr);
-}
+{ return detail::extract_list_element_impl(lists_column, index, stream, mr); }
 
 std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
                                              column_view const& indices,
                                              rmm::cuda_stream_view stream,
                                              rmm::device_async_resource_ref mr)
-{
-  return detail::extract_list_element_impl(lists_column, indices, stream, mr);
-}
+{ return detail::extract_list_element_impl(lists_column, indices, stream, mr); }
 
 }  // namespace detail
 

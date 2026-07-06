@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -60,9 +60,7 @@ struct SHA512Hash : HashBase<SHA512Hash> {
 std::unique_ptr<column> sha512(table_view const& input,
                                rmm::cuda_stream_view stream,
                                rmm::device_async_resource_ref mr)
-{
-  return sha_hash<SHA512Hash>(input, stream, mr);
-}
+{ return sha_hash<SHA512Hash>(input, stream, mr); }
 
 }  // namespace detail
 

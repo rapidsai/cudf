@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -127,9 +127,7 @@ TEST_F(TransformTest, BoolsToMask)
 }
 
 TEST_F(TransformTest, MaskToBools)
-{
-  cudf::mask_to_bools(nullptr, 0, 0, cudf::test::get_default_stream());
-}
+{ cudf::mask_to_bools(nullptr, 0, 0, cudf::test::get_default_stream()); }
 
 TEST_F(TransformTest, Encode)
 {

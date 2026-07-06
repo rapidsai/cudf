@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf_test/base_fixture.hpp>
@@ -24,9 +24,7 @@ namespace {
 struct valid_bit_functor {
   cudf::bitmask_type const* _null_mask;
   __device__ bool operator()(cudf::size_type element_index) const noexcept
-  {
-    return cudf::bit_is_set(_null_mask, element_index);
-  }
+  { return cudf::bit_is_set(_null_mask, element_index); }
 };
 }  // namespace
 

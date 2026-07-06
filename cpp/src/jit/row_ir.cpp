@@ -114,14 +114,10 @@ enum class [[nodiscard]] types : uint64_t {
 enum class arg_ref : uint8_t { ARG0 = 0, ARG1 = 1, ARG2 = 2, ARG3 = 3 };
 
 constexpr types operator|(types lhs, types rhs)
-{
-  return static_cast<types>(static_cast<uint64_t>(lhs) | static_cast<uint64_t>(rhs));
-}
+{ return static_cast<types>(static_cast<uint64_t>(lhs) | static_cast<uint64_t>(rhs)); }
 
 constexpr types operator&(types lhs, types rhs)
-{
-  return static_cast<types>(static_cast<uint64_t>(lhs) & static_cast<uint64_t>(rhs));
-}
+{ return static_cast<types>(static_cast<uint64_t>(lhs) & static_cast<uint64_t>(rhs)); }
 
 constexpr types operator~(types t) { return static_cast<types>(~static_cast<uint64_t>(t)); }
 
@@ -453,9 +449,7 @@ int32_t instance_context::add_input(input in)
 }
 
 std::string instance_context::make_tmp_id()
-{
-  return std::format("{}{}", tmp_prefix_, num_tmp_vars_++);
-}
+{ return std::format("{}{}", tmp_prefix_, num_tmp_vars_++); }
 
 bool instance_context::has_nulls() const { return has_nulls_; }
 
@@ -513,9 +507,7 @@ node::node(input_reference input)
 
 node::node(output_reference reference, std::unique_ptr<node> arg)
   : reference_{reference}, op_{opcode::SET_OUTPUT}
-{
-  args_.emplace_back(std::move(arg));
-}
+{ args_.emplace_back(std::move(arg)); }
 
 node::node(output_reference reference, node arg)
   : node{reference, std::make_unique<node>(std::move(arg))}
@@ -652,11 +644,11 @@ void node::emit_code(instance_context& instance, target_info const& info, code_s
           auto args_str  = (args_.size() == 1)
                              ? std::string{first_arg}
                              : std::accumulate(args_.begin() + 1,
-                                              args_.end(),
-                                              std::string{first_arg},
-                                              [](auto const& a, auto& node) {
+                                               args_.end(),
+                                               std::string{first_arg},
+                                               [](auto const& a, auto& node) {
                                                 return std::format("{}, {}", a, node->get_id());
-                                              });
+                                               });
 
           if (op_ == opcode::RESCALE) {
             args_str =
@@ -738,8 +730,8 @@ std::unique_ptr<row_ir::node> ast_converter::add_ir_node(ast::column_reference c
   auto table = resolve(expr.get_table_source());
   auto id    = instance_.add_input(
     column_input{.column       = table.column(expr.get_column_index()),
-                    .table_source = (expr.get_table_source() == ast::table_reference::LEFT ? 0 : 1),
-                    .column_index = static_cast<int32_t>(expr.get_column_index())});
+                 .table_source = (expr.get_table_source() == ast::table_reference::LEFT ? 0 : 1),
+                 .column_index = static_cast<int32_t>(expr.get_column_index())});
   return std::make_unique<row_ir::node>(input_reference{id});
 }
 
@@ -857,14 +849,10 @@ std::tuple<std::string, null_aware, output_nullability> ast_converter::generate_
 }
 
 std::variant<column_view, scalar_column_view> get_column_view(scalar_input const& in)
-{
-  return scalar_column_view{in.scalar_column->view()};
-}
+{ return scalar_column_view{in.scalar_column->view()}; }
 
 std::variant<column_view, scalar_column_view> get_column_view(column_input const& in)
-{
-  return column_view{in.column};
-}
+{ return column_view{in.column}; }
 
 // Due to the AST expression tree structure, we can't generate the IR without the target
 // tables

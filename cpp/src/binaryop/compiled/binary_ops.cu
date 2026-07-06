@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -61,9 +61,7 @@ struct scalar_as_column_view {
   }
   template <typename T, CUDF_ENABLE_IF(!is_fixed_width<T>())>
   return_type operator()(scalar const&, rmm::cuda_stream_view, rmm::device_async_resource_ref)
-  {
-    CUDF_FAIL("Unsupported type");
-  }
+  { CUDF_FAIL("Unsupported type"); }
 };
 // specialization for cudf::string_view
 template <>
@@ -125,9 +123,7 @@ auto scalar_to_column_view(
   scalar const& scal,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref())
-{
-  return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr);
-}
+{ return type_dispatcher(scal.type(), scalar_as_column_view{}, scal, stream, mr); }
 
 // This functor does the actual comparison between string column value and a scalar string
 // or between two string column values using a comparator
@@ -378,9 +374,7 @@ void binary_operation(mutable_column_view& out,
                       column_view const& rhs,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
-{
-  operator_dispatcher(out, lhs, rhs, false, false, op, stream);
-}
+{ operator_dispatcher(out, lhs, rhs, false, false, op, stream); }
 // scalar_vector
 void binary_operation(mutable_column_view& out,
                       scalar const& lhs,

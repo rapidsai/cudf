@@ -19,9 +19,7 @@ struct [[nodiscard]] hash128_hex_string {
   char data_[NUM_HEX_DIGITS + 1];  // NOLINT(modernize-avoid-c-arrays)
 
   [[nodiscard]] constexpr std::string_view view() const
-  {
-    return std::string_view{data_, NUM_HEX_DIGITS};
-  }
+  { return std::string_view{data_, NUM_HEX_DIGITS}; }
 
   [[nodiscard]] constexpr operator std::string_view() const { return view(); }
 

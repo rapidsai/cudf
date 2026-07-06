@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,9 +21,7 @@ namespace cudf {
 namespace detail {
 template <typename ColumnDeviceView, typename HostTableView>
 void table_device_view_base<ColumnDeviceView, HostTableView>::destroy()
-{
-  delete this;
-}
+{ delete this; }
 
 template <typename ColumnDeviceView, typename HostTableView>
 table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(

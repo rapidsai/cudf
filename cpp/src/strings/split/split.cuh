@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -53,9 +53,7 @@ struct string_delimiter_fn {
  */
 struct whitespace_delimiter_fn {
   __device__ bool operator()(int64_t idx) const
-  {
-    return idx < chars_bytes && static_cast<u_char>(d_chars[idx]) <= ' ';
-  }
+  { return idx < chars_bytes && static_cast<u_char>(d_chars[idx]) <= ' '; }
   int64_t chars_bytes{};
   char const* d_chars{};
 };

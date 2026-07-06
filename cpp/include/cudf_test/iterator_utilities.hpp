@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,9 +67,7 @@ template <typename Iter>
  * @return auto Validity iterator
  */
 [[maybe_unused]] static auto nulls_at(std::vector<cudf::size_type> const& indices)
-{
-  return nulls_at(indices.cbegin(), indices.cend());
-}
+{ return nulls_at(indices.cbegin(), indices.cend()); }
 
 /**
  * @brief Bool iterator for marking a single null element in a column_wrapper
@@ -87,9 +85,7 @@ template <typename Iter>
  * @return auto Validity iterator
  */
 [[maybe_unused]] static auto null_at(cudf::size_type index)
-{
-  return nulls_at(std::vector<cudf::size_type>{index});
-}
+{ return nulls_at(std::vector<cudf::size_type>{index}); }
 
 /**
  * @brief Bool iterator for marking all elements are null

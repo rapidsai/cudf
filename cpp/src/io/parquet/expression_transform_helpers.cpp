@@ -181,9 +181,7 @@ names_from_expression::names_from_expression(
 }
 
 std::reference_wrapper<ast::expression const> names_from_expression::visit(ast::literal const& expr)
-{
-  return expr;
-}
+{ return expr; }
 
 std::reference_wrapper<ast::expression const> names_from_expression::visit(
   ast::column_reference const& expr)
@@ -293,9 +291,7 @@ void names_from_expression::visit_operands(
   std::vector<std::string> const& skip_names,
   cudf::io::parquet_reader_options const& options,
   std::vector<SchemaElement> const& schema_tree)
-{
-  return names_from_expression(expr, skip_names, options, schema_tree).to_vector();
-}
+{ return names_from_expression(expr, skip_names, options, schema_tree).to_vector(); }
 
 std::optional<std::vector<std::vector<size_type>>> collect_filtered_row_group_indices(
   cudf::table_view table,
@@ -377,8 +373,6 @@ std::reference_wrapper<ast::expression const> offset_column_references::visit(
 
 std::reference_wrapper<ast::expression const> offset_column_references::visit(
   ast::column_name_reference const&)
-{
-  CUDF_FAIL("Column name references are not supported in offset_column_references");
-}
+{ CUDF_FAIL("Column name references are not supported in offset_column_references"); }
 
 }  // namespace cudf::io::parquet::detail

@@ -140,9 +140,7 @@ class key_remapping {
   remap_build_keys(
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const
-  {
-    return remap_right_keys(stream, mr);
-  }
+  { return remap_right_keys(stream, mr); }
 
   /**
    * @brief Remap left keys to integer IDs.
@@ -182,9 +180,7 @@ class key_remapping {
     cudf::table_view const& keys,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref()) const
-  {
-    return remap_left_keys(keys, stream, mr);
-  }
+  { return remap_left_keys(keys, stream, mr); }
 
   /**
    * @brief Check if metrics (distinct_count, max_duplicate_count) were computed.

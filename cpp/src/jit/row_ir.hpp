@@ -146,9 +146,7 @@ struct [[nodiscard]] instance_context {
   }
 
   [[nodiscard]] int32_t add_input(column_view const& column)
-  {
-    return add_input(column_input{.column = column});
-  }
+  { return add_input(column_input{.column = column}); }
 
   /**
    * @brief Generate a globally unique temporary variable identifier

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -307,9 +307,7 @@ struct ast_expression_executor {
 struct jit_expression_executor {
   static std::unique_ptr<cudf::table> filter(cudf::ast::expression const& expr,
                                              cudf::table_view const& table)
-  {
-    return cudf::filter(table, expr, table);
-  }
+  { return cudf::filter(table, expr, table); }
 };
 
 template <typename T>

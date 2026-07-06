@@ -48,9 +48,7 @@ struct mutable_fixed_width_column_view {
   mutable_column_view _view;
 
   auto to_device(rmm::cuda_stream_view stream) const
-  {
-    return mutable_column_device_view::create(_view, stream);
-  }
+  { return mutable_column_device_view::create(_view, stream); }
 };
 
 struct fixed_width_column {
@@ -130,9 +128,7 @@ struct mutable_strings_column_view {
   mutable_column_view _view;
 
   auto to_device(rmm::cuda_stream_view stream) const
-  {
-    return mutable_column_device_view::create(_view, stream);
-  }
+  { return mutable_column_device_view::create(_view, stream); }
 };
 
 struct mutable_strings_column {
@@ -160,8 +156,8 @@ struct mutable_strings_column {
 using input_column_view = transform_input;
 using output_column = std::variant<fixed_width_column, string_views_column, mutable_strings_column>;
 using handle        = std::variant<
-         std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
-         std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
+  std::unique_ptr<column_device_view, std::function<void(column_device_view*)>>,
+  std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>>;
 
 namespace jit_transform {
 
@@ -215,9 +211,7 @@ struct element_type_name_fn {
   template <typename T>
   std::string operator()(column_view const& view, bool use_physical_type) const
     requires(is_fixed_width<T>() || std::same_as<T, cudf::string_view>)
-  {
-    return type_to_name(use_physical_type ? jit::physical_type_of(view.type()) : view.type());
-  }
+  { return type_to_name(use_physical_type ? jit::physical_type_of(view.type()) : view.type()); }
 
   template <typename T>
   std::string operator()(column_view const& view, bool use_physical_type) const
@@ -233,42 +227,28 @@ struct element_type_name_fn {
   std::string operator()(column_view const& view, bool use_physical_type) const
     requires(!is_fixed_width<T>() && !std::same_as<T, cudf::string_view> &&
              !std::same_as<T, cudf::dictionary32>)
-  {
-    CUDF_FAIL("Unsupported type for JIT compilation: " + type_to_name(view.type()));
-  }
+  { CUDF_FAIL("Unsupported type for JIT compilation: " + type_to_name(view.type())); }
 };
 
 std::string get_element_type_name(column_view const& view, bool use_physical_type)
-{
-  return cudf::type_dispatcher(view.type(), element_type_name_fn{}, view, use_physical_type);
-}
+{ return cudf::type_dispatcher(view.type(), element_type_name_fn{}, view, use_physical_type); }
 
 std::string reflect_input_element(column_view const& c, bool use_physical_type)
-{
-  return get_element_type_name(c, use_physical_type);
-}
+{ return get_element_type_name(c, use_physical_type); }
 
 std::string reflect_input_element(scalar_column_view const& c, bool use_physical_type)
-{
-  return get_element_type_name(c.as_column_view(), use_physical_type);
-}
+{ return get_element_type_name(c.as_column_view(), use_physical_type); }
 
 std::string reflect_output_element(fixed_width_column const& c, bool use_physical_type)
-{
-  return get_element_type_name(c._col->view(), use_physical_type);
-}
+{ return get_element_type_name(c._col->view(), use_physical_type); }
 
 std::string reflect_output_element(string_views_column const&,
                                    [[maybe_unused]] bool use_physical_type)
-{
-  return "cudf::string_view";
-}
+{ return "cudf::string_view"; }
 
 std::string reflect_output_element(mutable_strings_column const&,
                                    [[maybe_unused]] bool use_physical_type)
-{
-  return "cuda::std::span<char>";
-}
+{ return "cuda::std::span<char>"; }
 
 std::string reflect_input_value_type(column_view const& c, bool use_physical_type)
 {
@@ -278,46 +258,30 @@ std::string reflect_input_value_type(column_view const& c, bool use_physical_typ
 }
 
 std::string reflect_input_value_type(scalar_column_view const& c, bool use_physical_type)
-{
-  return reflect_input_value_type(c.as_column_view(), use_physical_type);
-}
+{ return reflect_input_value_type(c.as_column_view(), use_physical_type); }
 
 std::string reflect_output_value_type(fixed_width_column const& c, bool use_physical_type)
-{
-  return reflect_output_element(c, use_physical_type);
-}
+{ return reflect_output_element(c, use_physical_type); }
 
 std::string reflect_output_value_type(string_views_column const& c, bool use_physical_type)
-{
-  return reflect_output_element(c, use_physical_type);
-}
+{ return reflect_output_element(c, use_physical_type); }
 
 std::string reflect_output_value_type(mutable_strings_column const& c, bool use_physical_type)
-{
-  return reflect_output_element(c, use_physical_type);
-}
+{ return reflect_output_element(c, use_physical_type); }
 
 std::string reflect_input_column(column_view const&) { return "cudf::column_device_view_core"; }
 
 std::string reflect_input_column(scalar_column_view const&)
-{
-  return "cudf::column_device_view_core";
-}
+{ return "cudf::column_device_view_core"; }
 
 std::string reflect_output_column(fixed_width_column const&)
-{
-  return "cudf::mutable_column_device_view_core";
-}
+{ return "cudf::mutable_column_device_view_core"; }
 
 std::string reflect_output_column(string_views_column const&)
-{
-  return "cudf::jit::mutable_vector_device_view";
-}
+{ return "cudf::jit::mutable_vector_device_view"; }
 
 std::string reflect_output_column(mutable_strings_column const&)
-{
-  return "cudf::jit::mutable_strings_column_device_view";
-}
+{ return "cudf::jit::mutable_strings_column_device_view"; }
 
 auto reflect(std::variant<udf_source_type, lto_binary_type> source_type,
              std::span<input_column_view const> inputs,
@@ -333,11 +297,11 @@ auto reflect(std::variant<udf_source_type, lto_binary_type> source_type,
       std::visit([&](auto& c) { return reflect_input_element(c, use_physical_types); }, in);
     bool as_scalar = std::holds_alternative<scalar_column_view>(in);
     auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
-                                           rtcx::reflect(i),
-                                           column,
-                                           element,
-                                           rtcx::reflect(as_scalar),
-                                           rtcx::reflect(0));
+                                            rtcx::reflect(i),
+                                            column,
+                                            element,
+                                            rtcx::reflect(as_scalar),
+                                            rtcx::reflect(0));
     in_types.push_back(accessor);
   }
 
@@ -350,11 +314,11 @@ auto reflect(std::variant<udf_source_type, lto_binary_type> source_type,
       std::visit([&](auto& c) { return reflect_output_element(c, use_physical_types); }, out);
     bool as_scalar = false;  // never scalar
     auto accessor  = rtcx::reflect_template("cudf::jit::column_accessor",
-                                           rtcx::reflect(i),
-                                           column,
-                                           element,
-                                           rtcx::reflect(as_scalar),
-                                           rtcx::reflect(0));
+                                            rtcx::reflect(i),
+                                            column,
+                                            element,
+                                            rtcx::reflect(as_scalar),
+                                            rtcx::reflect(0));
 
     out_types.push_back(accessor);
   }
@@ -499,13 +463,13 @@ void run(bool is_null_aware,
 {
   auto [in_types, out_types, ptx_in_types, ptx_out_types] = reflect(source_type, inputs, outputs);
   auto kernel                                             = instantiate(is_null_aware,
-                            has_user_data,
-                            in_types,
-                            out_types,
-                            ptx_in_types,
-                            ptx_out_types,
-                            udf,
-                            source_type);
+                                                                        has_user_data,
+                                                                        in_types,
+                                                                        out_types,
+                                                                        ptx_in_types,
+                                                                        ptx_out_types,
+                                                                        udf,
+                                                                        source_type);
   auto [cols, handles]                                    = to_args(inputs, outputs, stream, mr);
   auto* input_cols = reinterpret_cast<column_device_view_core const*>(cols.data());
   auto* output_cols =
@@ -994,16 +958,12 @@ void update_null_counts(std::span<output_column> outputs,
 }
 
 auto finalize_output(fixed_width_column&& c, rmm::cuda_stream_view, rmm::device_async_resource_ref)
-{
-  return std::move(c._col);
-}
+{ return std::move(c._col); }
 
 auto finalize_output(mutable_strings_column&& c,
                      rmm::cuda_stream_view,
                      rmm::device_async_resource_ref)
-{
-  return std::move(c._col);
-}
+{ return std::move(c._col); }
 
 auto finalize_output(string_views_column&& c,
                      rmm::cuda_stream_view stream,
