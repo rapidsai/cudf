@@ -186,17 +186,27 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
-        if self.name in UnaryFunction._horizontal_fold_ops:
-            op = UnaryFunction._horizontal_fold_ops[self.name]
-            if not plc.binaryop.is_supported_operation(
-                self.dtype.plc_type,
-                self.dtype.plc_type,
-                self.dtype.plc_type,
-                op,
-            ):
-                raise NotImplementedError(
-                    f"{self.name} is not supported for dtype {self.dtype.id().name}"
-                )
+        if self.name in {
+            "sum_horizontal",
+            "min_horizontal",
+            "max_horizontal",
+            "mean_horizontal",
+        }:
+            ops: tuple[plc.binaryop.BinaryOperator, ...]
+            if self.name in UnaryFunction._horizontal_fold_ops:
+                ops = (UnaryFunction._horizontal_fold_ops[self.name],)
+            if self.name == "mean_horizontal":
+                ops = (plc.binaryop.BinaryOperator.ADD, plc.binaryop.BinaryOperator.DIV)
+            for op in ops:
+                if not plc.binaryop.is_supported_operation(
+                    self.dtype.plc_type,
+                    self.dtype.plc_type,
+                    self.dtype.plc_type,
+                    op,
+                ):
+                    raise NotImplementedError(
+                        f"{self.name} is not supported for dtype {self.dtype.id().name}"
+                    )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
