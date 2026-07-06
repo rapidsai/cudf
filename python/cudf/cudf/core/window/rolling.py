@@ -19,9 +19,9 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._internals import aggregation
-from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.dtypes import SIZE_TYPE_DTYPE, dtype_from_pylibcudf_column
@@ -358,10 +358,10 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str | Callable, **agg_kwargs
     ) -> ColumnBase:
-        if isinstance(source_column, CategoricalColumn):
+        if isinstance(source_column.dtype, CategoricalDtype):
             # pandas window aggregations operate on the category values,
             # not the codes
-            source_column = source_column._get_decategorized_column()
+            source_column = source_column._get_decategorized_column()  # type: ignore[attr-defined]
         pre, fwd = self._plc_windows
 
         rolling_agg = aggregation.make_aggregation(

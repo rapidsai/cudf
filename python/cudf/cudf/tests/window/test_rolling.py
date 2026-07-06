@@ -547,13 +547,13 @@ def test_rolling_min_periods_zero():
     assert_eq(result, expected)
 
 
-def test_rolling_categorical_aggregates_values_not_codes():
+@pytest.mark.parametrize("method", ["max", "min", "sum", "mean", "std", "var"])
+def test_rolling_categorical_aggregates_values_not_codes(method):
     # pandas window aggregations operate on the category values, not the
     # codes.
     psr = pd.Series(np.arange(10, 0, -2), dtype="category")
     gsr = cudf.from_pandas(psr)
-    for method in ["max", "min", "sum", "mean", "std", "var"]:
-        assert_eq(
-            getattr(psr.rolling(2), method)(),
-            getattr(gsr.rolling(2), method)(),
-        )
+    assert_eq(
+        getattr(psr.rolling(2), method)(),
+        getattr(gsr.rolling(2), method)(),
+    )
