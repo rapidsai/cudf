@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -36,6 +37,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     ChannelManager,
     ChunkStore,
     NormalizedPartitioning,
+    _sample_chunks,
     allgather_reduce,
     chunk_to_frame,
     chunkwise_evaluate,
@@ -220,50 +222,38 @@ async def _sample_chunks_for_size_estimate(
     metadata_in: ChannelMetadata,
     executor: StreamingExecutor,
     collective_ids: list[int],
-) -> tuple[dict[int, TableChunk], int]:
+) -> tuple[ChunkStore, int]:
     """
     Sample chunks and estimate total data size to derive num_partitions dynamically.
 
-    The sampled chunks are returned keyed by sequence number. The caller is
+    The sampled chunks are returned in replay order. The caller is
     responsible for replaying them into a channel via replay_buffered_channel.
     """
     if executor.dynamic_planning is None:
-        return {}, num_partitions
+        return ChunkStore(context), num_partitions
 
     size_estimate_id = collective_ids.pop()
     target_partition_size = executor.target_partition_size
     sample_chunk_count = executor.dynamic_planning.sample_chunk_count
 
-    sampled_chunks: dict[int, TableChunk] = {}
-    sampled_bytes = 0
-    for _ in range(sample_chunk_count):
-        msg = await ch_in.recv(context)
-        if msg is None:
-            break
-        chunk = TableChunk.from_message(msg, br=context.br()).make_available_and_spill(
-            context.br(), allow_overbooking=True
-        )
-        sampled_bytes += chunk.data_alloc_size()
-        sampled_chunks[msg.sequence_number] = chunk
-        if sampled_bytes >= target_partition_size:
-            break
-
-    # Extrapolate local size estimate from samples
-    local_count = metadata_in.local_count
-    local_size = (
-        int(sampled_bytes / len(sampled_chunks) * local_count) if sampled_chunks else 0
+    sample = await _sample_chunks(
+        context,
+        ch_in,
+        sample_chunk_count,
+        target_partition_size,
+        metadata_in.local_count,
     )
 
     # Allgather to get global size estimate across all ranks
     if comm.nranks > 1 and not metadata_in.duplicated:
         (global_size,) = await allgather_reduce(
-            context, comm, size_estimate_id, local_size
+            context, comm, size_estimate_id, sample.total_size
         )
     else:
-        global_size = local_size
+        global_size = sample.total_size
 
-    num_partitions = max(1, global_size // target_partition_size)
-    return sampled_chunks, num_partitions
+    num_partitions = max(1, math.ceil(global_size / target_partition_size))
+    return sample.chunks, num_partitions
 
 
 async def _receive_and_buffer_chunks(
