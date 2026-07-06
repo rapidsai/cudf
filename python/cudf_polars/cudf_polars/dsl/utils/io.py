@@ -13,11 +13,12 @@ import pylibcudf as plc
 
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.streaming.io import FusedScan, Scan, SplitScan, StreamingScan
+from cudf_polars.streaming.io import Scan, StreamingScan
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import StatsCollector
+    from cudf_polars.streaming.io import FusedScan, SplitScan
 
 
 @dataclass(frozen=True)
@@ -205,8 +206,3 @@ def attach_cached_parquet_metadata(
         if isinstance(node, StreamingScan):
             for scan in node.scans:
                 _attach_cached_parquet_info(scan, cached_parquet_info_map)
-        elif isinstance(node, SplitScan | FusedScan):  # pragma: no cover
-            # This should be called on a lowered IR graph. All SplitScan and
-            # FusedScan nodes should be wrapped in a StreamingScan node.
-            msg = "Unexpected 'SplitScan' or 'FusedScan' node in lowered IR graph."
-            raise TypeError(msg)
