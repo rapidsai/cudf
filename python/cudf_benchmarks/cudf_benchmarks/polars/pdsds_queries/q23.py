@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 23."""
@@ -96,14 +96,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year = params["year"]
     month = params["month"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
 
     # Pre-filter date_dim to the 4-year window so the inner join with store_sales
     # naturally excludes out-of-window records before the expensive item join.
@@ -133,7 +137,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="d_date_sk",
         )
         .group_by("ss_customer_sk")
-        .agg((pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("csales"))
+        .agg(
+            (pl.col("ss_quantity") * pl.col("ss_sales_price"))
+            .sum()
+            .alias("csales")
+        )
     )
 
     threshold = customer_sales.select(
@@ -143,7 +151,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     best_customers = (
         store_sales.filter(pl.col("ss_customer_sk").is_not_null())
         .group_by("ss_customer_sk")
-        .agg((pl.col("ss_quantity") * pl.col("ss_sales_price")).sum().alias("ssales"))
+        .agg(
+            (pl.col("ss_quantity") * pl.col("ss_sales_price"))
+            .sum()
+            .alias("ssales")
+        )
         .join(threshold, how="cross")
         .filter(pl.col("ssales") > pl.col("threshold"))
         .select("ss_customer_sk")
@@ -160,7 +172,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     # that only adds c_last_name/c_first_name, so running it on the already-reduced
     # row set avoids the full catalog_sales/web_sales scan width.
     catalog_part = (
-        catalog_sales.join(date_target, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        catalog_sales.join(
+            date_target, left_on="cs_sold_date_sk", right_on="d_date_sk"
+        )
         .join(frequent_ss_items, left_on="cs_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
@@ -174,11 +188,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="c_customer_sk",
         )
         .group_by(["c_last_name", "c_first_name"])
-        .agg((pl.col("cs_quantity") * pl.col("cs_list_price")).sum().alias("sales"))
+        .agg(
+            (pl.col("cs_quantity") * pl.col("cs_list_price"))
+            .sum()
+            .alias("sales")
+        )
     )
 
     web_part = (
-        web_sales.join(date_target, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(
+            date_target, left_on="ws_sold_date_sk", right_on="d_date_sk"
+        )
         .join(frequent_ss_items, left_on="ws_item_sk", right_on="ss_item_sk")
         .join(
             best_customers,
@@ -192,7 +212,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="c_customer_sk",
         )
         .group_by(["c_last_name", "c_first_name"])
-        .agg((pl.col("ws_quantity") * pl.col("ws_list_price")).sum().alias("sales"))
+        .agg(
+            (pl.col("ws_quantity") * pl.col("ws_list_price"))
+            .sum()
+            .alias("sales")
+        )
     )
 
     sort_by = {"c_last_name": False, "c_first_name": False, "sales": False}

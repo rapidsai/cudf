@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 55."""
@@ -61,7 +61,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     manager_id = params["manager_id"]
 
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     sort_by = {"ext_price": True, "brand_id": False}
     limit = 100
@@ -76,7 +78,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            store_sales.select(["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"])
+            store_sales.select(
+                ["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"]
+            )
             .join(
                 filtered_dates,
                 left_on="ss_sold_date_sk",

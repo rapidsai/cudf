@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 78."""
@@ -115,15 +115,21 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     year = params["year"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -135,7 +141,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_year = date_dim.filter(pl.col("d_year") == year).select("d_date_sk")
 
     ws = (
-        web_sales.join(date_year, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(
+            date_year, left_on="ws_sold_date_sk", right_on="d_date_sk"
+        )
         .join(
             web_returns,
             left_on=["ws_order_number", "ws_item_sk"],
@@ -162,7 +170,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .rename({"ws_bill_customer_sk": "ws_customer_sk"})
     )
     cs = (
-        catalog_sales.join(date_year, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        catalog_sales.join(
+            date_year, left_on="cs_sold_date_sk", right_on="d_date_sk"
+        )
         .join(
             catalog_returns,
             left_on=["cs_order_number", "cs_item_sk"],
@@ -189,7 +199,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .rename({"cs_bill_customer_sk": "cs_customer_sk"})
     )
     ss = (
-        store_sales.join(date_year, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_year, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(
             store_returns,
             left_on=["ss_ticket_number", "ss_item_sk"],
@@ -228,7 +240,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             how="left",
         )
         .filter(
-            (pl.col("ws_qty").fill_null(0) > 0) | (pl.col("cs_qty").fill_null(0) > 0)
+            (pl.col("ws_qty").fill_null(0) > 0)
+            | (pl.col("cs_qty").fill_null(0) > 0)
         )
         .select(
             [
@@ -237,22 +250,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 pl.col("ss_customer_sk"),
                 (
                     pl.col("ss_qty")
-                    / (pl.col("ws_qty").fill_null(0) + pl.col("cs_qty").fill_null(0))
+                    / (
+                        pl.col("ws_qty").fill_null(0)
+                        + pl.col("cs_qty").fill_null(0)
+                    )
                 )
                 .round(2)
                 .alias("ratio"),
                 pl.col("ss_qty").alias("store_qty"),
                 pl.col("ss_wc").alias("store_wholesale_cost"),
                 pl.col("ss_sp").alias("store_sales_price"),
-                (pl.col("ws_qty").fill_null(0) + pl.col("cs_qty").fill_null(0)).alias(
-                    "other_chan_qty"
-                ),
-                (pl.col("ws_wc").fill_null(0) + pl.col("cs_wc").fill_null(0)).alias(
-                    "other_chan_wholesale_cost"
-                ),
-                (pl.col("ws_sp").fill_null(0) + pl.col("cs_sp").fill_null(0)).alias(
-                    "other_chan_sales_price"
-                ),
+                (
+                    pl.col("ws_qty").fill_null(0)
+                    + pl.col("cs_qty").fill_null(0)
+                ).alias("other_chan_qty"),
+                (
+                    pl.col("ws_wc").fill_null(0) + pl.col("cs_wc").fill_null(0)
+                ).alias("other_chan_wholesale_cost"),
+                (
+                    pl.col("ws_sp").fill_null(0) + pl.col("cs_sp").fill_null(0)
+                ).alias("other_chan_sales_price"),
             ]
         )
     )

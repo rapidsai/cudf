@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 9."""
@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 9."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=9, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=9,
+        qualification=run_config.qualification,
     )
 
     aggcthen = params["aggcthen"]
@@ -95,17 +97,23 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 9."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=9, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=9,
+        qualification=run_config.qualification,
     )
 
     aggcthen = params["aggcthen"]
     aggcelse = params["aggcelse"]
     rc = params["rc"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     reason = get_data(run_config.dataset_path, "reason", run_config.suffix)
 
-    thresholds = pl.LazyFrame({"bucket": [1, 2, 3, 4, 5], "threshold": list(rc)})
+    thresholds = pl.LazyFrame(
+        {"bucket": [1, 2, 3, 4, 5], "threshold": list(rc)}
+    )
 
     # Single scan: the 5 ss_quantity ranges are non-overlapping, so a group_by
     # computes all counts and averages in one pass over store_sales.
@@ -143,7 +151,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Pivot 5 rows → 1 row with 5 named columns (operates on 5 rows, trivially fast)
     wide = stats.select(
-        pl.col("value").filter(pl.col("bucket") == i).first().alias(f"bucket{i}")
+        pl.col("value")
+        .filter(pl.col("bucket") == i)
+        .first()
+        .alias(f"bucket{i}")
         for i in range(1, 6)
     )
 

@@ -21,8 +21,8 @@ import polars as pl
 
 try:
     from cudf_benchmarks.polars.utils import (
-        COUNT_DTYPE,
         _CPU_ENGINES,
+        COUNT_DTYPE,
         build_parser,
         parse_args,
         run_polars,
@@ -86,13 +86,27 @@ class PDSDSPolarsQueries(PDSDSQueries):
     # for more details.
     EXPECTED_CASTS_DECIMAL: ClassVar[dict] = {
         2: [
-            pl.col("round((sun_sales1 / sun_sales2), 2)").cast(pl.Decimal(38, 2)),
-            pl.col("round((mon_sales1 / mon_sales2), 2)").cast(pl.Decimal(38, 2)),
-            pl.col("round((tue_sales1 / tue_sales2), 2)").cast(pl.Decimal(38, 2)),
-            pl.col("round((wed_sales1 / wed_sales2), 2)").cast(pl.Decimal(38, 2)),
-            pl.col("round((thu_sales1 / thu_sales2), 2)").cast(pl.Decimal(38, 2)),
-            pl.col("round((fri_sales1 / fri_sales2), 2)").cast(pl.Decimal(38, 2)),
-            pl.col("round((sat_sales1 / sat_sales2), 2)").cast(pl.Decimal(38, 2)),
+            pl.col("round((sun_sales1 / sun_sales2), 2)").cast(
+                pl.Decimal(38, 2)
+            ),
+            pl.col("round((mon_sales1 / mon_sales2), 2)").cast(
+                pl.Decimal(38, 2)
+            ),
+            pl.col("round((tue_sales1 / tue_sales2), 2)").cast(
+                pl.Decimal(38, 2)
+            ),
+            pl.col("round((wed_sales1 / wed_sales2), 2)").cast(
+                pl.Decimal(38, 2)
+            ),
+            pl.col("round((thu_sales1 / thu_sales2), 2)").cast(
+                pl.Decimal(38, 2)
+            ),
+            pl.col("round((fri_sales1 / fri_sales2), 2)").cast(
+                pl.Decimal(38, 2)
+            ),
+            pl.col("round((sat_sales1 / sat_sales2), 2)").cast(
+                pl.Decimal(38, 2)
+            ),
         ],
         3: [pl.col("sum_agg").cast(pl.Decimal(18, 2))],
         5: [
@@ -334,6 +348,8 @@ if __name__ == "__main__":
     parser = build_parser(num_queries=99)
     args = parse_args(parser=parser)
     if args.frontend not in _CPU_ENGINES:
-        os.environ["POLARS_MAX_THREADS"] = os.environ.get("POLARS_MAX_THREADS", "1")
+        os.environ["POLARS_MAX_THREADS"] = os.environ.get(
+            "POLARS_MAX_THREADS", "1"
+        )
         os.environ["OMP_NUM_THREADS"] = os.environ.get("OMP_NUM_THREADS", "1")
     run_polars(PDSDSPolarsQueries, args)

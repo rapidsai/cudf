@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 76."""
@@ -99,8 +99,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     nullcol_ws = params["nullcol_ws"]
     nullcol_cs = params["nullcol_cs"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )

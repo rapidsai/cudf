@@ -113,7 +113,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     month = params["month"]
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -145,7 +147,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            store_returns.join(d2, left_on="sr_returned_date_sk", right_on="d_date_sk")
+            store_returns.join(
+                d2, left_on="sr_returned_date_sk", right_on="d_date_sk"
+            )
             .join(
                 store_sales,
                 left_on=["sr_ticket_number", "sr_item_sk", "sr_customer_sk"],

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 39."""
@@ -100,9 +100,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year = params["year"]
     month = params["month"]
 
-    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
+    inventory = get_data(
+        run_config.dataset_path, "inventory", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
     base_agg = (
@@ -110,7 +114,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
         .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
         .filter(pl.col("d_year") == year)
-        .group_by(["w_warehouse_name", "inv_warehouse_sk", "inv_item_sk", "d_moy"])
+        .group_by(
+            ["w_warehouse_name", "inv_warehouse_sk", "inv_item_sk", "d_moy"]
+        )
         .agg(
             [
                 pl.col("inv_quantity_on_hand").std().alias("stdev"),
@@ -126,7 +132,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .alias("cov")
     ).filter(
         pl.when(pl.col("mean") == 0)
-        .then(False)  # noqa: FBT003
+        .then(False)
         .otherwise(pl.col("stdev") / pl.col("mean") > 1.0)
     )
 

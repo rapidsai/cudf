@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 27."""
@@ -61,7 +61,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def level(  # noqa: D103
+def level(
     base_data: pl.LazyFrame,
     agg_exprs: list[pl.Expr],
     group_cols: list[str],
@@ -108,7 +108,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     es = params["es"]
     state = params["state"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
@@ -117,10 +119,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     base_data = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+        .join(
+            customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk"
+        )
         .filter(
             (pl.col("cd_gender") == gen)
             & (pl.col("cd_marital_status") == ms)

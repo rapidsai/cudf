@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 34."""
@@ -88,7 +88,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     county = params["county"]
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     household_demographics = get_data(
@@ -96,11 +98,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     dn = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        .join(
+            household_demographics,
+            left_on="ss_hdemo_sk",
+            right_on="hd_demo_sk",
+        )
         .filter(
-            ((pl.col("d_dom").is_between(1, 3)) | (pl.col("d_dom").is_between(25, 28)))
+            (
+                (pl.col("d_dom").is_between(1, 3))
+                | (pl.col("d_dom").is_between(25, 28))
+            )
             & (
                 (pl.col("hd_buy_potential") == bpone)
                 | (pl.col("hd_buy_potential") == bptwo)
@@ -126,7 +137,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     }
     return QueryResult(
         frame=(
-            dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            dn.join(
+                customer, left_on="ss_customer_sk", right_on="c_customer_sk"
+            )
             .filter(pl.col("cnt").is_between(15, 20))
             .select(
                 [

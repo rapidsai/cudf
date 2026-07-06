@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 71."""
@@ -90,11 +90,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     month = params["month"]
     manager = params["manager"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
@@ -127,7 +131,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         pl.col("ss_sold_time_sk").alias("time_sk"),
     )
 
-    combined_sales = pl.concat([web_component, catalog_component, store_component])
+    combined_sales = pl.concat(
+        [web_component, catalog_component, store_component]
+    )
 
     filtered_items = item.filter(pl.col("i_manager_id") == manager).select(
         ["i_item_sk", "i_brand_id", "i_brand"]

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 33."""
@@ -97,7 +97,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def channel_total(  # noqa: D103
+def channel_total(
     sales: pl.LazyFrame,
     date_dim: pl.LazyFrame,
     customer_address: pl.LazyFrame,
@@ -152,11 +152,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     gmt = params["gmt"]
     category = params["category"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     customer_address = get_data(
@@ -164,7 +168,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     category_manufacturers = (
-        item.filter(pl.col("i_category") == category).select("i_manufact_id").unique()
+        item.filter(pl.col("i_category") == category)
+        .select("i_manufact_id")
+        .unique()
     )
 
     ss = channel_total(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 72."""
@@ -95,8 +95,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    inventory = get_data(
+        run_config.dataset_path, "inventory", run_config.suffix
+    )
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
@@ -105,12 +109,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    promotion = get_data(
+        run_config.dataset_path, "promotion", run_config.suffix
+    )
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
     d1_dates = (
-        date_dim.filter(pl.col("d_year").is_not_null() & (pl.col("d_year") == year))
+        date_dim.filter(
+            pl.col("d_year").is_not_null() & (pl.col("d_year") == year)
+        )
         .select(["d_date_sk", "d_week_seq", "d_date"])
         .rename(
             {
@@ -135,13 +143,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .rename({"d_date_sk": "d3_date_sk", "d_date": "d3_date"})
     )
     filtered_cd = customer_demographics.filter(
-        pl.col("cd_marital_status").is_not_null() & (pl.col("cd_marital_status") == ms)
+        pl.col("cd_marital_status").is_not_null()
+        & (pl.col("cd_marital_status") == ms)
     ).select(["cd_demo_sk"])
     filtered_hd = household_demographics.filter(
-        pl.col("hd_buy_potential").is_not_null() & (pl.col("hd_buy_potential") == bp)
+        pl.col("hd_buy_potential").is_not_null()
+        & (pl.col("hd_buy_potential") == bp)
     ).select(["hd_demo_sk"])
     filtered_catalog_sales = (
-        catalog_sales.join(d1_dates, left_on="cs_sold_date_sk", right_on="d1_date_sk")
+        catalog_sales.join(
+            d1_dates, left_on="cs_sold_date_sk", right_on="d1_date_sk"
+        )
         .join(filtered_cd, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk")
         .join(filtered_hd, left_on="cs_bill_hdemo_sk", right_on="hd_demo_sk")
         .select(
@@ -170,7 +182,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 > pl.col("d1_date").cast(pl.Datetime("us"))
                 + pl.duration(days=5).cast(pl.Duration("us"))
             )
-            .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+            .join(
+                warehouse,
+                left_on="inv_warehouse_sk",
+                right_on="w_warehouse_sk",
+            )
             .join(item, left_on="cs_item_sk", right_on="i_item_sk")
             .with_columns(
                 [
@@ -184,7 +200,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .alias("promo_flag"),
                 ]
             )
-            .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk", how="left")
+            .join(
+                promotion,
+                left_on="cs_promo_sk",
+                right_on="p_promo_sk",
+                how="left",
+            )
             .join(
                 catalog_returns,
                 left_on=["cs_item_sk", "cs_order_number"],

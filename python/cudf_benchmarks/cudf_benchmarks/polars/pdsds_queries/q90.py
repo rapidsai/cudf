@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 90."""
@@ -75,7 +75,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     wp_char_count_min = params["wp_char_count_min"]
     wp_char_count_max = params["wp_char_count_max"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     household_demographics = get_data(
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
@@ -83,7 +85,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
     base_query = (
         web_sales.join(
-            time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk", how="inner"
+            time_dim,
+            left_on="ws_sold_time_sk",
+            right_on="t_time_sk",
+            how="inner",
         )
         .join(
             household_demographics,
@@ -92,7 +97,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             how="inner",
         )
         .join(
-            web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk", how="inner"
+            web_page,
+            left_on="ws_web_page_sk",
+            right_on="wp_web_page_sk",
+            how="inner",
         )
         .filter(
             (
@@ -129,7 +137,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 [
                     pl.when(pl.col("pmc") != 0)
                     .then(
-                        pl.col("amc").cast(pl.Float64) / pl.col("pmc").cast(pl.Float64)
+                        pl.col("amc").cast(pl.Float64)
+                        / pl.col("pmc").cast(pl.Float64)
                     )
                     .otherwise(None)
                     .alias("am_pm_ratio")

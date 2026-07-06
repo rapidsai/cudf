@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 18."""
@@ -69,7 +69,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def level(  # noqa: D103
+def level(
     base_query: pl.LazyFrame,
     agg_exprs: list[pl.Expr],
     null_sentinel: str,
@@ -133,16 +133,25 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Pre-filter each dimension table before joining against catalog_sales [45 partitions].
     # d_year not in GROUP BY — semi-join keeps only the date key in the pipeline.
-    filtered_dates = date_dim.filter(pl.col("d_year") == year).select("d_date_sk")
+    filtered_dates = date_dim.filter(pl.col("d_year") == year).select(
+        "d_date_sk"
+    )
     filtered_cd1 = customer_demographics.filter(
         (pl.col("cd_gender") == gen) & (pl.col("cd_education_status") == es)
     ).select(["cd_demo_sk", "cd_dep_count"])
-    filtered_customer = customer.filter(pl.col("c_birth_month").is_in(month)).select(
-        ["c_customer_sk", "c_current_cdemo_sk", "c_current_addr_sk", "c_birth_year"]
+    filtered_customer = customer.filter(
+        pl.col("c_birth_month").is_in(month)
+    ).select(
+        [
+            "c_customer_sk",
+            "c_current_cdemo_sk",
+            "c_current_addr_sk",
+            "c_birth_year",
+        ]
     )
-    filtered_addr = customer_address.filter(pl.col("ca_state").is_in(state)).select(
-        ["ca_address_sk", "ca_county", "ca_state", "ca_country"]
-    )
+    filtered_addr = customer_address.filter(
+        pl.col("ca_state").is_in(state)
+    ).select(["ca_address_sk", "ca_county", "ca_state", "ca_country"])
 
     base_query = (
         catalog_sales.select(
@@ -159,7 +168,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             ]
         )
         .join(
-            filtered_dates, left_on="cs_sold_date_sk", right_on="d_date_sk", how="semi"
+            filtered_dates,
+            left_on="cs_sold_date_sk",
+            right_on="d_date_sk",
+            how="semi",
         )
         .join(
             item.select(["i_item_sk", "i_item_id"]),
@@ -168,7 +180,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
         .join(filtered_cd1, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk")
         .join(
-            filtered_customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
+            filtered_customer,
+            left_on="cs_bill_customer_sk",
+            right_on="c_customer_sk",
         )
         .join(
             customer_demographics.select("cd_demo_sk"),
@@ -176,7 +190,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="cd_demo_sk",
             how="semi",
         )
-        .join(filtered_addr, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        .join(
+            filtered_addr,
+            left_on="c_current_addr_sk",
+            right_on="ca_address_sk",
+        )
     )
 
     agg_exprs = [
@@ -196,9 +214,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         ["i_item_id", "ca_country", "ca_state", "ca_county"],
     )
     level2 = level(
-        base_query, agg_exprs, null_sentinel, ["ca_country", "ca_state", "ca_county"]
+        base_query,
+        agg_exprs,
+        null_sentinel,
+        ["ca_country", "ca_state", "ca_county"],
     )
-    level3 = level(base_query, agg_exprs, null_sentinel, ["ca_country", "ca_state"])
+    level3 = level(
+        base_query, agg_exprs, null_sentinel, ["ca_country", "ca_state"]
+    )
     level4 = level(base_query, agg_exprs, null_sentinel, ["ca_country"])
     level5 = level(base_query, agg_exprs, null_sentinel, [])
 

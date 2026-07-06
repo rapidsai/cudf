@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 62."""
@@ -84,9 +84,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     dms = params["dms"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
-    ship_mode = get_data(run_config.dataset_path, "ship_mode", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
+    ship_mode = get_data(
+        run_config.dataset_path, "ship_mode", run_config.suffix
+    )
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
@@ -98,16 +104,24 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            web_sales.join(date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk")
-            .join(warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk")
-            .join(ship_mode, left_on="ws_ship_mode_sk", right_on="sm_ship_mode_sk")
+            web_sales.join(
+                date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk"
+            )
+            .join(
+                warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk"
+            )
+            .join(
+                ship_mode,
+                left_on="ws_ship_mode_sk",
+                right_on="sm_ship_mode_sk",
+            )
             .join(web_site, left_on="ws_web_site_sk", right_on="web_site_sk")
             .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
             .with_columns(
                 [
-                    (pl.col("ws_ship_date_sk") - pl.col("ws_sold_date_sk")).alias(
-                        "shipping_delay"
-                    ),
+                    (
+                        pl.col("ws_ship_date_sk") - pl.col("ws_sold_date_sk")
+                    ).alias("shipping_delay"),
                     pl.col("w_warehouse_name")
                     .str.slice(0, 20)
                     .alias("warehouse_substr"),
@@ -158,7 +172,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .select(
                 [
-                    pl.col("warehouse_substr").alias("substr(w_warehouse_name, 1, 20)"),
+                    pl.col("warehouse_substr").alias(
+                        "substr(w_warehouse_name, 1, 20)"
+                    ),
                     "sm_type",
                     "web_name",
                     "30 days",

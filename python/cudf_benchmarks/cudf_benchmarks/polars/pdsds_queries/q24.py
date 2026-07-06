@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -97,7 +97,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     color = params["color"][0]  # Use first color
     amountone = params["amountone"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -117,9 +119,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
-        .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        .join(
+            customer_address,
+            left_on="c_current_addr_sk",
+            right_on="ca_address_sk",
+        )
         .filter(
-            (pl.col("c_birth_country") != pl.col("ca_country").str.to_uppercase())
+            (
+                pl.col("c_birth_country")
+                != pl.col("ca_country").str.to_uppercase()
+            )
             & (pl.col("s_zip") == pl.col("ca_zip"))
             & (pl.col("s_market_id") == market)
         )
@@ -151,7 +160,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         (pl.col("netpaid").mean() * 0.05).alias("threshold")
     )
 
-    sort_by = {"c_last_name": False, "c_first_name": False, "s_store_name": False}
+    sort_by = {
+        "c_last_name": False,
+        "c_first_name": False,
+        "s_store_name": False,
+    }
     limit = None
     return QueryResult(
         frame=(

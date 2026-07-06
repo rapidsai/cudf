@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 40."""
@@ -81,8 +81,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     start_date_obj = sales_date_obj - timedelta(days=30)
     end_date_obj = sales_date_obj + timedelta(days=30)
 
-    target_date = pl.date(sales_date_obj.year, sales_date_obj.month, sales_date_obj.day)
-    start_date = pl.date(start_date_obj.year, start_date_obj.month, start_date_obj.day)
+    target_date = pl.date(
+        sales_date_obj.year, sales_date_obj.month, sales_date_obj.day
+    )
+    start_date = pl.date(
+        start_date_obj.year, start_date_obj.month, start_date_obj.day
+    )
     end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
 
     # Load tables
@@ -92,7 +96,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     sort_by = {"w_state": False, "i_item_id": False}
@@ -106,7 +112,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 right_on=["cr_order_number", "cr_item_sk"],
                 how="left",
             )  # LEFT OUTER JOIN
-            .join(warehouse, left_on="cs_warehouse_sk", right_on="w_warehouse_sk")
+            .join(
+                warehouse, left_on="cs_warehouse_sk", right_on="w_warehouse_sk"
+            )
             .join(item, left_on="cs_item_sk", right_on="i_item_sk")
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             .filter(

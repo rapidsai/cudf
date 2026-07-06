@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 91."""
@@ -85,7 +85,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     hd_buy_potential = params["hd_buy_potential"]
     ca_gmt_offset = params["ca_gmt_offset"]
 
-    call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
+    call_center = get_data(
+        run_config.dataset_path, "call_center", run_config.suffix
+    )
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )

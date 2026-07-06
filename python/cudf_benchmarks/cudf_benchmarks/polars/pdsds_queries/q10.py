@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 10."""
@@ -105,8 +105,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -114,7 +118,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Get customers with store sales in the target period (EXISTS condition 1)
     store_customers = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .filter(
             (pl.col("d_year") == 2002)
             & (pl.col("d_moy").is_between(4, 7, closed="both"))
@@ -125,7 +131,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Get customers with web sales in the target period (EXISTS condition 2a)
     web_customers = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(
+            date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk"
+        )
         .filter(
             (pl.col("d_year") == 2002)
             & (pl.col("d_moy").is_between(4, 7, closed="both"))
@@ -136,7 +144,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Get customers with catalog sales in the target period (EXISTS condition 2b)
     catalog_customers = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        catalog_sales.join(
+            date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk"
+        )
         .filter(
             (pl.col("d_year") == 2002)
             & (pl.col("d_moy").is_between(4, 7, closed="both"))
@@ -146,13 +156,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     # Combine web and catalog customers (OR condition)
-    web_or_catalog_customers = pl.concat([web_customers, catalog_customers]).unique()
+    web_or_catalog_customers = pl.concat(
+        [web_customers, catalog_customers]
+    ).unique()
 
     # Main query: join customer tables and apply filters
     return QueryResult(
         frame=(
             customer.join(
-                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
             )
             .join(
                 customer_demographics,

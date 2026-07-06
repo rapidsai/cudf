@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 67."""
@@ -84,23 +84,33 @@ def _build_rollup_levels(
                 pl.col("sales_amount").sum().alias("sumsales")
             )
             if grp_cols
-            else base_data.select(pl.col("sales_amount").sum().alias("sumsales"))
+            else base_data.select(
+                pl.col("sales_amount").sum().alias("sumsales")
+            )
         )
 
         if null_cols:
             lf = lf.with_columns(
-                [pl.lit(None, dtype=dt).alias(col) for col, dt in null_cols.items()]
+                [
+                    pl.lit(None, dtype=dt).alias(col)
+                    for col, dt in null_cols.items()
+                ]
             )
 
         lf = lf.select(
-            [*(c for c in full_cols if c in grp_cols or c in null_cols), "sumsales"]
+            [
+                *(c for c in full_cols if c in grp_cols or c in null_cols),
+                "sumsales",
+            ]
         )
 
-        missing = [c for c in full_cols if c not in grp_cols and c not in null_cols]
+        missing = [
+            c for c in full_cols if c not in grp_cols and c not in null_cols
+        ]
         if missing:
-            lf = lf.with_columns([pl.lit(None).alias(c) for c in missing]).select(
-                [*full_cols, "sumsales"]
-            )
+            lf = lf.with_columns(
+                [pl.lit(None).alias(c) for c in missing]
+            ).select([*full_cols, "sumsales"])
 
         levels.append(lf)
 
@@ -134,7 +144,14 @@ rollup_specs: list[tuple[list[str], dict[str, pl.DataType]]] = [
         {"s_store_id": pl.String()},
     ),
     (
-        ["i_category", "i_class", "i_brand", "i_product_name", "d_year", "d_qoy"],
+        [
+            "i_category",
+            "i_class",
+            "i_brand",
+            "i_product_name",
+            "d_year",
+            "d_qoy",
+        ],
         {"d_moy": pl.Int64(), "s_store_id": pl.String()},
     ),
     (
@@ -209,7 +226,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     dms = params["dms"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
@@ -238,7 +257,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
         .join(
             item.select(
-                ["i_item_sk", "i_category", "i_class", "i_brand", "i_product_name"]
+                [
+                    "i_item_sk",
+                    "i_category",
+                    "i_class",
+                    "i_brand",
+                    "i_product_name",
+                ]
             ),
             left_on="ss_item_sk",
             right_on="i_item_sk",

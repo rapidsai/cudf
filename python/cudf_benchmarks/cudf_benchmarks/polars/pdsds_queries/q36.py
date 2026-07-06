@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 36."""
@@ -63,7 +63,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def level(  # noqa: D103
+def level(
     base_data: pl.LazyFrame,
     group_cols: list[str],
     null_sentinel: str,
@@ -73,14 +73,18 @@ def level(  # noqa: D103
         lf = base_data.group_by(group_cols).agg(
             [
                 pl.col("ss_net_profit").sum().alias("total_net_profit"),
-                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
+                pl.col("ss_ext_sales_price")
+                .sum()
+                .alias("total_ext_sales_price"),
             ]
         )
     else:
         lf = base_data.select(
             [
                 pl.col("ss_net_profit").sum().alias("total_net_profit"),
-                pl.col("ss_ext_sales_price").sum().alias("total_ext_sales_price"),
+                pl.col("ss_ext_sales_price")
+                .sum()
+                .alias("total_ext_sales_price"),
             ]
         )
     missing = [c for c in ["i_category", "i_class"] if c not in group_cols]
@@ -111,13 +115,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     state = params["state"]
 
     null_sentinel = "NULL"
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     base_data = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .join(item, left_on="ss_item_sk", right_on="i_item_sk")
         .filter((pl.col("d_year") == year) & (pl.col("s_state").is_in(state)))

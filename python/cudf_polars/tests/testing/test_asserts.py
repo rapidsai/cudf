@@ -7,14 +7,14 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
-
-import polars as pl
-import polars.testing
-
 from cudf_benchmarks.polars.asserts import (
     ValidationError,
     assert_tpch_result_equal,
 )
+
+import polars as pl
+import polars.testing
+
 from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,

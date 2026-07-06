@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 99."""
@@ -87,15 +87,24 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
-    ship_mode = get_data(run_config.dataset_path, "ship_mode", run_config.suffix)
-    call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
+    ship_mode = get_data(
+        run_config.dataset_path, "ship_mode", run_config.suffix
+    )
+    call_center = get_data(
+        run_config.dataset_path, "call_center", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
     return QueryResult(
         frame=(
             catalog_sales.join(
-                date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk", how="inner"
+                date_dim,
+                left_on="cs_ship_date_sk",
+                right_on="d_date_sk",
+                how="inner",
             )
             .join(
                 warehouse,
@@ -122,9 +131,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .with_columns(
                 [
-                    (pl.col("cs_ship_date_sk") - pl.col("cs_sold_date_sk")).alias(
-                        "ship_days"
-                    ),
+                    (
+                        pl.col("cs_ship_date_sk") - pl.col("cs_sold_date_sk")
+                    ).alias("ship_days"),
                     pl.col("w_warehouse_name")
                     .str.slice(0, 20)
                     .alias("substr(w_warehouse_name, 1, 20)"),
@@ -136,15 +145,24 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .then(1)
                     .otherwise(0)
                     .alias("days_30"),
-                    pl.when((pl.col("ship_days") > 30) & (pl.col("ship_days") <= 60))
+                    pl.when(
+                        (pl.col("ship_days") > 30)
+                        & (pl.col("ship_days") <= 60)
+                    )
                     .then(1)
                     .otherwise(0)
                     .alias("days_31_60"),
-                    pl.when((pl.col("ship_days") > 60) & (pl.col("ship_days") <= 90))
+                    pl.when(
+                        (pl.col("ship_days") > 60)
+                        & (pl.col("ship_days") <= 90)
+                    )
                     .then(1)
                     .otherwise(0)
                     .alias("days_61_90"),
-                    pl.when((pl.col("ship_days") > 90) & (pl.col("ship_days") <= 120))
+                    pl.when(
+                        (pl.col("ship_days") > 90)
+                        & (pl.col("ship_days") <= 120)
+                    )
                     .then(1)
                     .otherwise(0)
                     .alias("days_91_120"),
@@ -154,7 +172,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .alias("days_120_plus"),
                 ]
             )
-            .group_by(["substr(w_warehouse_name, 1, 20)", "sm_type", "cc_name"])
+            .group_by(
+                ["substr(w_warehouse_name, 1, 20)", "sm_type", "cc_name"]
+            )
             .agg(
                 [
                     pl.col("days_30").sum().alias("30 days"),

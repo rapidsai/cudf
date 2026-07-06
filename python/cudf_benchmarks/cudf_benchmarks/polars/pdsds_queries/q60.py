@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 60."""
@@ -111,11 +111,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     category = params["category"]
     gmt_offset = params["gmt_offset"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
@@ -123,7 +127,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     category_item_ids_lf = (
-        item.filter(pl.col("i_category") == category).select(["i_item_id"]).unique()
+        item.filter(pl.col("i_category") == category)
+        .select(["i_item_id"])
+        .unique()
     )
 
     channels = [

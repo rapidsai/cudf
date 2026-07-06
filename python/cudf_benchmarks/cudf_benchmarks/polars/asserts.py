@@ -208,10 +208,14 @@ def assert_tpch_result_equal(
     left = left.with_columns(*float_casts)
 
     non_float_columns = [
-        col for col in left.columns if left.schema[col] not in (pl.Float32, pl.Float64)
+        col
+        for col in left.columns
+        if left.schema[col] not in (pl.Float32, pl.Float64)
     ]
     float_columns = [
-        col for col in left.columns if left.schema[col] in (pl.Float32, pl.Float64)
+        col
+        for col in left.columns
+        if left.schema[col] in (pl.Float32, pl.Float64)
     ]
     grouped_sort_columns = [*non_float_columns, *float_columns]
 
@@ -230,7 +234,9 @@ def assert_tpch_result_equal(
         # Sort keys are intersected with df.schema so callers can pre-project
         # the frame (e.g. to compare only `sort_by` columns) without payload
         # columns influencing the order.
-        local_sort_columns = [c for c in grouped_sort_columns if c in df.schema]
+        local_sort_columns = [
+            c for c in grouped_sort_columns if c in df.schema
+        ]
         return (
             df.sort(by=local_sort_columns, nulls_last=nulls_last)
             if local_sort_columns
@@ -318,7 +324,9 @@ def assert_tpch_result_equal(
             # of 'd' as well.
 
             filter_exprs = []
-            for (col, val), desc in zip(split_at.items(), descending, strict=True):
+            for (col, val), desc in zip(
+                split_at.items(), descending, strict=True
+            ):
                 if isinstance(val, float):
                     filter_exprs.append(
                         pl.col(col).lt(val - 2 * abs_tol)

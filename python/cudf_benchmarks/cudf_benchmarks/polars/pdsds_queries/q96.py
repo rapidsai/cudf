@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 96."""
@@ -59,7 +59,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     t_minute = params["t_minute"]
     hd_dep_count = params["hd_dep_count"]
     s_store_name = params["s_store_name"]
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     household_demographics = get_data(
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
@@ -68,7 +70,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             store_sales.join(
-                time_dim, left_on="ss_sold_time_sk", right_on="t_time_sk", how="inner"
+                time_dim,
+                left_on="ss_sold_time_sk",
+                right_on="t_time_sk",
+                how="inner",
             )
             .join(
                 household_demographics,
@@ -76,7 +81,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 right_on="hd_demo_sk",
                 how="inner",
             )
-            .join(store, left_on="ss_store_sk", right_on="s_store_sk", how="inner")
+            .join(
+                store,
+                left_on="ss_store_sk",
+                right_on="s_store_sk",
+                how="inner",
+            )
             .filter(
                 (pl.col("t_hour") == t_hour)
                 & (pl.col("t_minute") >= t_minute)

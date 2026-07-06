@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 58."""
@@ -129,22 +129,26 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     sales_date = params["sales_date"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
     # Parse sales_date (format: "YYYY-MM-DD")
     year, month, day = map(int, sales_date.split("-"))
-    target_week = date_dim.filter(pl.col("d_date") == pl.date(year, month, day)).select(
-        "d_week_seq"
-    )
-    week_dates = date_dim.join(target_week, on="d_week_seq", how="inner").select(
-        ["d_date_sk"]
-    )
+    target_week = date_dim.filter(
+        pl.col("d_date") == pl.date(year, month, day)
+    ).select("d_week_seq")
+    week_dates = date_dim.join(
+        target_week, on="d_week_seq", how="inner"
+    ).select(["d_date_sk"])
 
     ss_items = _build_sales_agg(
         store_sales,
@@ -183,32 +187,38 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .filter(
                 (
                     pl.col("ss_item_rev").is_between(
-                        0.9 * pl.col("cs_item_rev"), 1.1 * pl.col("cs_item_rev")
+                        0.9 * pl.col("cs_item_rev"),
+                        1.1 * pl.col("cs_item_rev"),
                     )
                 )
                 & (
                     pl.col("ss_item_rev").is_between(
-                        0.9 * pl.col("ws_item_rev"), 1.1 * pl.col("ws_item_rev")
+                        0.9 * pl.col("ws_item_rev"),
+                        1.1 * pl.col("ws_item_rev"),
                     )
                 )
                 & (
                     pl.col("cs_item_rev").is_between(
-                        0.9 * pl.col("ss_item_rev"), 1.1 * pl.col("ss_item_rev")
+                        0.9 * pl.col("ss_item_rev"),
+                        1.1 * pl.col("ss_item_rev"),
                     )
                 )
                 & (
                     pl.col("cs_item_rev").is_between(
-                        0.9 * pl.col("ws_item_rev"), 1.1 * pl.col("ws_item_rev")
+                        0.9 * pl.col("ws_item_rev"),
+                        1.1 * pl.col("ws_item_rev"),
                     )
                 )
                 & (
                     pl.col("ws_item_rev").is_between(
-                        0.9 * pl.col("ss_item_rev"), 1.1 * pl.col("ss_item_rev")
+                        0.9 * pl.col("ss_item_rev"),
+                        1.1 * pl.col("ss_item_rev"),
                     )
                 )
                 & (
                     pl.col("ws_item_rev").is_between(
-                        0.9 * pl.col("cs_item_rev"), 1.1 * pl.col("cs_item_rev")
+                        0.9 * pl.col("cs_item_rev"),
+                        1.1 * pl.col("cs_item_rev"),
                     )
                 )
             )
@@ -231,15 +241,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .with_columns(
                 [
-                    (pl.col("ss_item_rev") / pl.col("total_rev") / 3 * 100).alias(
-                        "ss_dev"
-                    ),
-                    (pl.col("cs_item_rev") / pl.col("total_rev") / 3 * 100).alias(
-                        "cs_dev"
-                    ),
-                    (pl.col("ws_item_rev") / pl.col("total_rev") / 3 * 100).alias(
-                        "ws_dev"
-                    ),
+                    (
+                        pl.col("ss_item_rev") / pl.col("total_rev") / 3 * 100
+                    ).alias("ss_dev"),
+                    (
+                        pl.col("cs_item_rev") / pl.col("total_rev") / 3 * 100
+                    ).alias("cs_dev"),
+                    (
+                        pl.col("ws_item_rev") / pl.col("total_rev") / 3 * 100
+                    ).alias("ws_dev"),
                 ]
             )
             .select(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 6."""
@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 6."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=6,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -55,7 +57,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 6."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=6, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=6,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -65,13 +69,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "customer_address", run_config.suffix
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     # Subquery 1: d_month_seq values for July year
     target_month_seq_table = (
-        date_dim.filter((pl.col("d_year") == year) & (pl.col("d_moy") == month))
+        date_dim.filter(
+            (pl.col("d_year") == year) & (pl.col("d_moy") == month)
+        )
         .select("d_month_seq")
         .unique()
     )
@@ -86,7 +94,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             customer_address.join(
                 customer, left_on="ca_address_sk", right_on="c_current_addr_sk"
             )
-            .join(store_sales, left_on="c_customer_sk", right_on="ss_customer_sk")
+            .join(
+                store_sales, left_on="c_customer_sk", right_on="ss_customer_sk"
+            )
             .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
             .join(avg_price_per_category, on="i_category")

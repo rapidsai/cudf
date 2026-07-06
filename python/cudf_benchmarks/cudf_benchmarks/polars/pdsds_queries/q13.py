@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 13."""
@@ -88,7 +88,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     state = params["state"]  # 9 states (3 groups of 3)
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
@@ -102,11 +104,25 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     return QueryResult(
         frame=(
-            store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
+            store_sales.join(
+                store, left_on="ss_store_sk", right_on="s_store_sk"
+            )
             .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
-            .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
-            .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
-            .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+            .join(
+                household_demographics,
+                left_on="ss_hdemo_sk",
+                right_on="hd_demo_sk",
+            )
+            .join(
+                customer_demographics,
+                left_on="ss_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
+            .join(
+                customer_address,
+                left_on="ss_addr_sk",
+                right_on="ca_address_sk",
+            )
             .filter(
                 (pl.col("d_year") == 2001)
                 & (pl.col("ca_country") == "United States")

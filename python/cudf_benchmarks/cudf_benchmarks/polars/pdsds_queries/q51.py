@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 51."""
@@ -92,13 +92,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     dms = params["dms"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
     # web_v1: daily sums -> cumulative sum per (item, ordered by date)
     web_v1 = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(
+            date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk"
+        )
         .filter(
             pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ws_item_sk").is_not_null()
@@ -120,7 +126,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # store_v1: daily sums -> cumulative sum per (item, ordered by date)
     store_v1 = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .filter(
             pl.col("d_month_seq").is_between(dms, dms + 11)
             & pl.col("ss_item_sk").is_not_null()
@@ -156,7 +164,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     # Collapse any duplicate (item_sk, d_date) rows by taking the max of each cumulative side
-    collapsed = combined.group_by(["item_sk", "d_date"], maintain_order=True).agg(
+    collapsed = combined.group_by(
+        ["item_sk", "d_date"], maintain_order=True
+    ).agg(
         pl.col("web_sales").max().alias("web_sales"),
         pl.col("store_sales").max().alias("store_sales"),
     )
@@ -177,7 +187,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            with_ff.filter(pl.col("web_cumulative") > pl.col("store_cumulative"))
+            with_ff.filter(
+                pl.col("web_cumulative") > pl.col("store_cumulative")
+            )
             .select(
                 "item_sk",
                 "d_date",

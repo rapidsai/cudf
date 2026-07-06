@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 37."""
@@ -74,12 +74,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     start_date_obj = datetime.strptime(invdate, "%Y-%m-%d")
     end_date_obj = start_date_obj + timedelta(days=60)
 
-    start_date = pl.date(start_date_obj.year, start_date_obj.month, start_date_obj.day)
+    start_date = pl.date(
+        start_date_obj.year, start_date_obj.month, start_date_obj.day
+    )
     end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
 
     # Load tables
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
+    inventory = get_data(
+        run_config.dataset_path, "inventory", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix

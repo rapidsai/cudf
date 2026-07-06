@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 83."""
@@ -153,7 +153,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     weeks = (
@@ -206,7 +208,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .with_columns(
                 [
-                    (pl.col("total_qty") / 3.0).cast(pl.Float64).alias("average"),
+                    (pl.col("total_qty") / 3.0)
+                    .cast(pl.Float64)
+                    .alias("average"),
                     (pl.col("sr_item_qty") / pl.col("total_qty") / 3.0 * 100)
                     .cast(pl.Float64)
                     .alias("sr_dev"),

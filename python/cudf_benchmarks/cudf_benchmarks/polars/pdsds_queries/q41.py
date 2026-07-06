@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 41."""
@@ -96,7 +96,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            item.filter(pl.col("i_manufact_id").is_between(manufact, manufact + 40))
+            item.filter(
+                pl.col("i_manufact_id").is_between(manufact, manufact + 40)
+            )
             .join(manufacturers_with_criteria, on="i_manufact", how="inner")
             .select("i_product_name")
             .unique()

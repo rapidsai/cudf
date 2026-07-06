@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 74."""
@@ -129,8 +129,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year = params["year"]
 
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
     t_s_first = (

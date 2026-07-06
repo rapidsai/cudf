@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 1."""
@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 1."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=1, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=1,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -54,7 +56,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 1."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=1, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=1,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -92,19 +96,29 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Step 2: Calculate average return per store for the subquery
     store_avg_returns = customer_total_return.group_by("ctr_store_sk").agg(
-        [(pl.col("ctr_total_return").mean() * 1.2).alias("avg_return_threshold")]
+        [
+            (pl.col("ctr_total_return").mean() * 1.2).alias(
+                "avg_return_threshold"
+            )
+        ]
     )
 
     # Step 3: Join everything together and apply filters
     return QueryResult(
         frame=(
             customer_total_return.join(
-                store_avg_returns, left_on="ctr_store_sk", right_on="ctr_store_sk"
+                store_avg_returns,
+                left_on="ctr_store_sk",
+                right_on="ctr_store_sk",
             )
-            .filter(pl.col("ctr_total_return") > pl.col("avg_return_threshold"))
+            .filter(
+                pl.col("ctr_total_return") > pl.col("avg_return_threshold")
+            )
             .join(store, left_on="ctr_store_sk", right_on="s_store_sk")
             .filter(pl.col("s_state") == state)
-            .join(customer, left_on="ctr_customer_sk", right_on="c_customer_sk")
+            .join(
+                customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
+            )
             .select(["c_customer_id"])
             .sort("c_customer_id")
             .limit(100)

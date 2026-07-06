@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 25."""
@@ -83,9 +83,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     agg = params["agg"]
 
     # Map SQL aggregation functions to Polars method names
-    polars_agg = "mean" if agg == "avg" else "std" if agg == "stddev_samp" else agg
+    polars_agg = (
+        "mean" if agg == "avg" else "std" if agg == "stddev_samp" else agg
+    )
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -116,13 +120,23 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     # store_returns [6] ≤ broadcast limit: filter to qualifying return dates first,
     # then extract (customer, item) pairs to pre-filter ss and cs before shuffle joins.
     store_returns_filtered = store_returns.join(
-        d2_d3_dates, left_on="sr_returned_date_sk", right_on="d_date_sk", how="semi"
-    ).select(["sr_customer_sk", "sr_item_sk", "sr_ticket_number", "sr_net_loss"])
-    sr_customer_item = store_returns_filtered.select(["sr_customer_sk", "sr_item_sk"])
+        d2_d3_dates,
+        left_on="sr_returned_date_sk",
+        right_on="d_date_sk",
+        how="semi",
+    ).select(
+        ["sr_customer_sk", "sr_item_sk", "sr_ticket_number", "sr_net_loss"]
+    )
+    sr_customer_item = store_returns_filtered.select(
+        ["sr_customer_sk", "sr_item_sk"]
+    )
 
     store_sales_filtered = (
         store_sales.join(
-            d1_dates, left_on="ss_sold_date_sk", right_on="d_date_sk", how="semi"
+            d1_dates,
+            left_on="ss_sold_date_sk",
+            right_on="d_date_sk",
+            how="semi",
         )
         .join(
             sr_customer_item,
@@ -165,7 +179,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     catalog_sales_filtered = (
         catalog_sales.join(
-            d2_d3_dates, left_on="cs_sold_date_sk", right_on="d_date_sk", how="semi"
+            d2_d3_dates,
+            left_on="cs_sold_date_sk",
+            right_on="d_date_sk",
+            how="semi",
         )
         .join(
             sr_customer_item,
@@ -200,7 +217,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 left_on=["ss_customer_sk", "ss_item_sk"],
                 right_on=["cs_bill_customer_sk", "cs_item_sk"],
             )
-            .group_by(["i_item_id", "i_item_desc", "s_store_id", "s_store_name"])
+            .group_by(
+                ["i_item_id", "i_item_desc", "s_store_id", "s_store_name"]
+            )
             .agg(
                 [
                     getattr(pl.col("ss_net_profit"), polars_agg)().alias(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 70."""
@@ -79,12 +79,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     dms = params["dms"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
     top_states = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
         .select("s_state")
@@ -92,7 +96,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     base = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
         .filter(pl.col("d_month_seq").is_between(dms, dms + 11))
         .join(top_states, on="s_state", how="semi")

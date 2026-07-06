@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """PDS-DS query parameter substitutions encoded as a Python dictionary."""
@@ -470,7 +470,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -526,7 +536,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -5.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -5.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 1999,
                 "bpone": "501-1000",
@@ -662,7 +677,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -690,7 +709,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -698,7 +722,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -709,8 +738,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -789,7 +828,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -828,8 +871,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -1304,7 +1355,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -1360,7 +1421,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -6.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -6.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 2000,
                 "bpone": "1001-5000",
@@ -1502,7 +1568,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -1530,7 +1600,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -1538,7 +1613,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -1549,8 +1629,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -1629,7 +1719,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -1668,8 +1762,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -2144,7 +2246,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -2200,7 +2312,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -6.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -6.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 2000,
                 "bpone": "1001-5000",
@@ -2342,7 +2459,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -2370,7 +2491,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -2378,7 +2504,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -2389,8 +2520,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -2469,7 +2610,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -2508,8 +2653,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -2984,7 +3137,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -3040,7 +3203,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -6.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -6.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 1998,
                 "bpone": "1001-5000",
@@ -3150,7 +3318,13 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 1999,
                 "hd_dep_count": 7,
                 "hd_vehicle_count": 1,
-                "cities": ["Centerville", "Oak Grove", "Oakland", "Liberty", "Midway"],
+                "cities": [
+                    "Centerville",
+                    "Oak Grove",
+                    "Oakland",
+                    "Liberty",
+                    "Midway",
+                ],
             },
             "47": {"year": 2001},
             "48": {
@@ -3176,7 +3350,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -3204,7 +3382,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -3212,7 +3395,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -3223,8 +3411,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -3303,7 +3501,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -3342,8 +3544,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -3818,7 +4028,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -3874,7 +4094,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -5.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -5.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 2000,
                 "bpone": "501-1000",
@@ -4016,7 +4241,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -4044,7 +4273,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -4052,7 +4286,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -4063,8 +4302,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -4143,7 +4392,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -4182,8 +4435,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -4658,7 +4919,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -4714,7 +4985,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -6.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -6.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 2000,
                 "bpone": "501-1000",
@@ -4856,7 +5132,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -4884,7 +5164,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -4892,7 +5177,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -4903,8 +5193,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -4983,7 +5283,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -5022,8 +5326,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -5498,7 +5810,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -5554,7 +5876,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -6.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -6.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 1998,
                 "bpone": ">10000",
@@ -5664,7 +5991,13 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 1998,
                 "hd_dep_count": 8,
                 "hd_vehicle_count": 2,
-                "cities": ["Centerville", "Oakland", "Union", "Oakdale", "Buena Vista"],
+                "cities": [
+                    "Centerville",
+                    "Oakland",
+                    "Union",
+                    "Oakdale",
+                    "Buena Vista",
+                ],
             },
             "47": {"year": 2001},
             "48": {
@@ -5690,7 +6023,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -5718,7 +6055,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -5726,7 +6068,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -5737,8 +6084,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -5817,7 +6174,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -5856,8 +6217,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -6332,7 +6701,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -6388,7 +6767,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -6.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -6.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 1998,
                 "bpone": "501-1000",
@@ -6530,7 +6914,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -6558,7 +6946,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -6566,7 +6959,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -6577,8 +6975,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -6657,7 +7065,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -6696,8 +7108,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -7172,7 +7592,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -7228,7 +7658,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -5.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -5.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 1999,
                 "bpone": "501-1000",
@@ -7370,7 +7805,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -7398,7 +7837,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -7406,7 +7850,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -7417,8 +7866,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -7497,7 +7956,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -7536,8 +7999,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -8012,7 +8483,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -8068,7 +8549,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -6.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -6.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 2000,
                 "bpone": "1001-5000",
@@ -8210,7 +8696,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -8238,7 +8728,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -8246,7 +8741,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -8257,8 +8757,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -8337,7 +8847,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -8376,8 +8890,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -8822,7 +9344,13 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "9": {
                 "aggcthen": "ss_ext_sales_price",
                 "aggcelse": "ss_net_paid",
-                "rc": [4328489209, 4797207428, 4737822406, 4787454420, 4721487251],
+                "rc": [
+                    4328489209,
+                    4797207428,
+                    4737822406,
+                    4787454420,
+                    4721487251,
+                ],
             },
             "10": {
                 "county": [
@@ -8852,7 +9380,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["S", "U", "W"],
                 "es": ["Secondary", "4 yr Degree", "2 yr Degree"],
-                "state": ["IA", "MN", "MT", "AR", "IN", "TX", "TN", "NE", "WV"],
+                "state": [
+                    "IA",
+                    "MN",
+                    "MT",
+                    "AR",
+                    "IN",
+                    "TX",
+                    "TN",
+                    "NE",
+                    "WV",
+                ],
             },
             "14": {"year": 1999, "day": 15},
             "15": {"year": 2001, "qoy": 1},
@@ -8908,7 +9446,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2001, "state": "NH"},
             "31": {"year": 2001, "agg": "ss1.ca_county"},
             "32": {"imid": 10, "csdate": "2002-01-05", "year": 2002},
-            "33": {"year": 2001, "month": 5, "gmt": -5.0, "category": "Sports"},
+            "33": {
+                "year": 2001,
+                "month": 5,
+                "gmt": -5.0,
+                "category": "Sports",
+            },
             "34": {
                 "year": 1999,
                 "bpone": "1001-5000",
@@ -9050,7 +9593,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["NH", "OK", "NC"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["NH", "OK", "NC"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["MS", "TX", "TN"],
                         "profit_min": 150,
@@ -9078,7 +9625,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -9086,7 +9638,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"manager_id": 95, "month": 12, "year": 2002},
             "56": {
                 "colors": ["rose", "wheat", "chartreuse"],
@@ -9097,8 +9654,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"category": "Shoes", "year": 2001, "month": 10, "gmt_offset": -5.0},
-            "61": {"gmt_offset": -7.0, "category": "Sports", "year": 2001, "month": 12},
+            "60": {
+                "category": "Shoes",
+                "year": 2001,
+                "month": 10,
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "gmt_offset": -7.0,
+                "category": "Sports",
+                "year": 2001,
+                "month": 12,
+            },
             "62": {"dms": 1176},
             "63": {"dms": 1176},
             "64": {
@@ -9177,7 +9744,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2002,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["NH", "OK", "NC", "MS", "TX", "TN"],
                 "np_min": 100,
                 "np_max": 200,
@@ -9216,8 +9787,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 10, "date": "2002-01-05"},
             "93": {"reason_desc": "reason 70"},
-            "94": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
-            "95": {"date": "2000-5-01", "state": "IA", "web_company_name": "pri"},
+            "94": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "2000-5-01",
+                "state": "IA",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 8,
                 "t_minute": 30,
@@ -9682,7 +10261,17 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "13": {
                 "ms": ["M", "S", "W"],
                 "es": ["Advanced Degree", "College", "2 yr Degree"],
-                "state": ["TX", "OH", "TX", "OR", "NM", "KY", "VA", "TX", "MS"],
+                "state": [
+                    "TX",
+                    "OH",
+                    "TX",
+                    "OR",
+                    "NM",
+                    "KY",
+                    "VA",
+                    "TX",
+                    "MS",
+                ],
             },
             "14": {"year": 1999, "day": 11},
             "15": {"year": 2001, "qoy": 2},
@@ -9738,7 +10327,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "30": {"year": 2002, "state": "GA"},
             "31": {"year": 2000, "agg": "ss1.ca_county"},
             "32": {"csdate": "2000-01-27", "year": 2000, "imid": 977},
-            "33": {"category": "Electronics", "gmt": -5.0, "month": 5, "year": 1998},
+            "33": {
+                "category": "Electronics",
+                "gmt": -5.0,
+                "month": 5,
+                "year": 1998,
+            },
             "34": {
                 "county": [
                     "Williamson County",
@@ -9754,7 +10348,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "bptwo": "Unknown",
                 "bpone": ">10000",
             },
-            "35": {"year": 2002, "aggone": "min", "aggtwo": "max", "aggthree": "avg"},
+            "35": {
+                "year": 2002,
+                "aggone": "min",
+                "aggtwo": "max",
+                "aggthree": "avg",
+            },
             "36": {
                 "state": ["TN", "TN", "TN", "TN", "TN", "TN", "TN", "TN"],
                 "year": 2000,
@@ -9869,7 +10468,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     },
                 ],
                 "geography": [
-                    {"states": ["TX", "NE", "MO"], "profit_min": 0, "profit_max": 2000},
+                    {
+                        "states": ["TX", "NE", "MO"],
+                        "profit_min": 0,
+                        "profit_max": 2000,
+                    },
                     {
                         "states": ["CO", "TN", "ND"],
                         "profit_min": 150,
@@ -9897,7 +10500,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "scholaramalgamalg #9",
                 ],
                 "categories2": ["Women", "Music", "Men"],
-                "classes2": ["accessories", "classical", "fragrances", "pants"],
+                "classes2": [
+                    "accessories",
+                    "classical",
+                    "fragrances",
+                    "pants",
+                ],
                 "brands2": [
                     "amalgimporto #1",
                     "edu packscholar #1",
@@ -9905,7 +10513,12 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                     "importoamalg #1",
                 ],
             },
-            "54": {"category": "Music", "class": "classical", "month": 5, "year": 2001},
+            "54": {
+                "category": "Music",
+                "class": "classical",
+                "month": 5,
+                "year": 2001,
+            },
             "55": {"year": 2002, "month": 12, "manager_id": 95},
             "56": {
                 "year": 1999,
@@ -9916,8 +10529,18 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             "57": {"year": 2001},
             "58": {"sales_date": "2002-03-11"},
             "59": {"dms": 1184},
-            "60": {"year": 2001, "month": 10, "category": "Shoes", "gmt_offset": -5.0},
-            "61": {"year": 2001, "month": 12, "gmt_offset": -7.0, "category": "Sports"},
+            "60": {
+                "year": 2001,
+                "month": 10,
+                "category": "Shoes",
+                "gmt_offset": -5.0,
+            },
+            "61": {
+                "year": 2001,
+                "month": 12,
+                "gmt_offset": -7.0,
+                "category": "Sports",
+            },
             "62": {"dms": 1176},
             "73": {
                 "dom": [1, 2],
@@ -9961,7 +10584,11 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "year": 2000,
                 "ms": ["M", "U", "S"],
                 "es": ["4 yr Degree", "College", "2 yr Degree"],
-                "price_ranges": [[100.0, 150.0], [50.0, 100.0], [150.0, 200.0]],
+                "price_ranges": [
+                    [100.0, 150.0],
+                    [50.0, 100.0],
+                    [150.0, 200.0],
+                ],
                 "states": ["IN", "OH", "NJ", "WI", "CT", "KY"],
                 "np_min": 100,
                 "np_max": 200,
@@ -10035,8 +10662,16 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
             },
             "92": {"manufact_id": 350, "date": "2000-01-27"},
             "93": {"reason_desc": "reason 28"},
-            "94": {"date": "1999-02-01", "state": "IL", "web_company_name": "pri"},
-            "95": {"date": "1999-02-01", "state": "IL", "web_company_name": "pri"},
+            "94": {
+                "date": "1999-02-01",
+                "state": "IL",
+                "web_company_name": "pri",
+            },
+            "95": {
+                "date": "1999-02-01",
+                "state": "IL",
+                "web_company_name": "pri",
+            },
             "96": {
                 "t_hour": 20,
                 "t_minute": 30,
@@ -10044,7 +10679,10 @@ PARAMETERS: dict[str, dict[str, dict[str, dict[str, Any]]]] = {
                 "s_store_name": "ese",
             },
             "97": {"d_month_seq": 1200},
-            "98": {"date": "1999-02-22", "categories": ["Sports", "Books", "Home"]},
+            "98": {
+                "date": "1999-02-22",
+                "categories": ["Sports", "Books", "Home"],
+            },
             "99": {"d_month_seq": 1200},
         },
     }

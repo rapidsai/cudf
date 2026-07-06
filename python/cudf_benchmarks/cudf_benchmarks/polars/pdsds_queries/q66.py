@@ -360,14 +360,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     net_one = params["net_one"]
     net_two = params["net_two"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     time_dim = get_data(run_config.dataset_path, "time_dim", run_config.suffix)
-    ship_mode = get_data(run_config.dataset_path, "ship_mode", run_config.suffix)
+    ship_mode = get_data(
+        run_config.dataset_path, "ship_mode", run_config.suffix
+    )
 
     month_names = [
         "jan",
@@ -385,7 +391,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ]
 
     web_base = (
-        web_sales.join(warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk")
+        web_sales.join(
+            warehouse, left_on="ws_warehouse_sk", right_on="w_warehouse_sk"
+        )
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .join(time_dim, left_on="ws_sold_time_sk", right_on="t_time_sk")
         .join(ship_mode, left_on="ws_ship_mode_sk", right_on="sm_ship_mode_sk")
@@ -485,9 +493,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     per_sqft_exprs = [
-        (pl.col(f"{m}_sales").cast(pl.Float64()) / pl.col("w_warehouse_sq_ft")).alias(
-            f"{m}_sales_per_sq_foot"
-        )
+        (
+            pl.col(f"{m}_sales").cast(pl.Float64())
+            / pl.col("w_warehouse_sq_ft")
+        ).alias(f"{m}_sales_per_sq_foot")
         for m in month_names
     ]
 
@@ -507,8 +516,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .agg(
-                [pl.col(f"{m}_sales").sum().alias(f"{m}_sales") for m in month_names]
-                + [pl.col(f"{m}_net").sum().alias(f"{m}_net") for m in month_names]
+                [
+                    pl.col(f"{m}_sales").sum().alias(f"{m}_sales")
+                    for m in month_names
+                ]
+                + [
+                    pl.col(f"{m}_net").sum().alias(f"{m}_net")
+                    for m in month_names
+                ]
             )
             .with_columns(per_sqft_exprs)
             .select(

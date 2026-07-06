@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 20."""
@@ -92,14 +92,24 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            catalog_sales.join(
+                item, left_on="cs_item_sk", right_on="i_item_sk"
+            )
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             .filter(
                 pl.col("i_category").is_in(categories)
-                & pl.col("d_date").is_between(pl.lit(start_date), pl.lit(end_date))
+                & pl.col("d_date").is_between(
+                    pl.lit(start_date), pl.lit(end_date)
+                )
             )
             .group_by(
-                ["i_item_id", "i_item_desc", "i_category", "i_class", "i_current_price"]
+                [
+                    "i_item_id",
+                    "i_item_desc",
+                    "i_category",
+                    "i_class",
+                    "i_current_price",
+                ]
             )
             .agg([pl.col("cs_ext_sales_price").sum().alias("itemrevenue")])
             .with_columns(

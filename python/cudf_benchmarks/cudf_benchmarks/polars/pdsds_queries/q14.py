@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 14."""
@@ -162,7 +162,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def channel_items(  # noqa: D103
+def channel_items(
     sales: pl.LazyFrame,
     item: pl.LazyFrame,
     date_dim: pl.LazyFrame,
@@ -180,7 +180,7 @@ def channel_items(  # noqa: D103
     )
 
 
-def build_cross_items(  # noqa: D103
+def build_cross_items(
     store_sales: pl.LazyFrame,
     catalog_sales: pl.LazyFrame,
     web_sales: pl.LazyFrame,
@@ -216,12 +216,12 @@ def build_cross_items(  # noqa: D103
     common = store_items.join(
         catalog_items, on=["i_brand_id", "i_class_id", "i_category_id"]
     ).join(web_items, on=["i_brand_id", "i_class_id", "i_category_id"])
-    return item.join(common, on=["i_brand_id", "i_class_id", "i_category_id"]).select(
-        pl.col("i_item_sk").alias("ss_item_sk")
-    )
+    return item.join(
+        common, on=["i_brand_id", "i_class_id", "i_category_id"]
+    ).select(pl.col("i_item_sk").alias("ss_item_sk"))
 
 
-def avg_pairs(  # noqa: D103
+def avg_pairs(
     sales: pl.LazyFrame,
     date_dim: pl.LazyFrame,
     *,
@@ -234,12 +234,15 @@ def avg_pairs(  # noqa: D103
         sales.join(date_dim, left_on=date_key, right_on="d_date_sk")
         .filter(pl.col("d_year").is_between(year, year + 2))
         .select(
-            [pl.col(qty_col).alias("quantity"), pl.col(price_col).alias("list_price")]
+            [
+                pl.col(qty_col).alias("quantity"),
+                pl.col(price_col).alias("list_price"),
+            ]
         )
     )
 
 
-def build_average_sales(  # noqa: D103
+def build_average_sales(
     store_sales: pl.LazyFrame,
     catalog_sales: pl.LazyFrame,
     web_sales: pl.LazyFrame,
@@ -273,12 +276,14 @@ def build_average_sales(  # noqa: D103
     )
     return (
         pl.concat([store_avg, catalog_avg, web_avg])
-        .with_columns((pl.col("quantity") * pl.col("list_price")).alias("sales_amount"))
+        .with_columns(
+            (pl.col("quantity") * pl.col("list_price")).alias("sales_amount")
+        )
         .select(pl.col("sales_amount").mean().alias("average_sales"))
     )
 
 
-def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:  # noqa: D103
+def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:
     if group_cols:
         lf = y.group_by(group_cols).agg(
             [
@@ -302,7 +307,9 @@ def rollup_level(y: pl.LazyFrame, group_cols: list[str]) -> pl.LazyFrame:  # noq
     }
     missing = [c for c in cols if c not in group_cols]
     if missing:
-        lf = lf.with_columns([pl.lit(None, dtype=cols[c]).alias(c) for c in missing])
+        lf = lf.with_columns(
+            [pl.lit(None, dtype=cols[c]).alias(c) for c in missing]
+        )
 
     return lf.select(
         [
@@ -327,11 +334,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year = params["year"]
     day = params["day"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
@@ -355,12 +366,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .select("d_week_seq")
         .unique()
     )
-    week_dates = date_dim.join(target_week, on="d_week_seq").select("d_date_sk")
+    week_dates = date_dim.join(target_week, on="d_week_seq").select(
+        "d_date_sk"
+    )
 
     all_sales = pl.concat(
         [
             store_sales.join(
-                week_dates, left_on="ss_sold_date_sk", right_on="d_date_sk", how="semi"
+                week_dates,
+                left_on="ss_sold_date_sk",
+                right_on="d_date_sk",
+                how="semi",
             ).select(
                 [
                     pl.lit("store").alias("channel"),
@@ -370,7 +386,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             ),
             catalog_sales.join(
-                week_dates, left_on="cs_sold_date_sk", right_on="d_date_sk", how="semi"
+                week_dates,
+                left_on="cs_sold_date_sk",
+                right_on="d_date_sk",
+                how="semi",
             ).select(
                 [
                     pl.lit("catalog").alias("channel"),
@@ -380,7 +399,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             ),
             web_sales.join(
-                week_dates, left_on="ws_sold_date_sk", right_on="d_date_sk", how="semi"
+                week_dates,
+                left_on="ws_sold_date_sk",
+                right_on="d_date_sk",
+                how="semi",
             ).select(
                 [
                     pl.lit("web").alias("channel"),
@@ -398,7 +420,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .group_by(["channel", "i_brand_id", "i_class_id", "i_category_id"])
         .agg(
             [
-                (pl.col("quantity") * pl.col("list_price")).sum().alias("sales"),
+                (pl.col("quantity") * pl.col("list_price"))
+                .sum()
+                .alias("sales"),
                 pl.len().alias("number_sales"),
             ]
         )
@@ -416,7 +440,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
     )
 
-    level1 = rollup_level(y, ["channel", "i_brand_id", "i_class_id", "i_category_id"])
+    level1 = rollup_level(
+        y, ["channel", "i_brand_id", "i_class_id", "i_category_id"]
+    )
     level2 = rollup_level(y, ["channel", "i_brand_id", "i_class_id"])
     level3 = rollup_level(y, ["channel", "i_brand_id"])
     level4 = rollup_level(y, ["channel"])

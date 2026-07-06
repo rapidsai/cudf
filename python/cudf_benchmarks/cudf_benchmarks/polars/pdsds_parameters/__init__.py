@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """PDS-DS query parameters for all scale factors."""
@@ -54,7 +54,9 @@ def load_parameters(
         return scale_params[str(query_id)]
     except KeyError as e:
         param_type = (
-            "qualification" if qualification else f"scale factor {scale_factor}"
+            "qualification"
+            if qualification
+            else f"scale factor {scale_factor}"
         )
         msg = f"No parameters found for query {query_id} at {param_type}"
         raise KeyError(msg) from e

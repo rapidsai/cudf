@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 21."""
@@ -79,8 +79,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     sales_date_str = params["sales_date"]
 
     # Load tables
-    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    inventory = get_data(
+        run_config.dataset_path, "inventory", run_config.suffix
+    )
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
@@ -101,11 +105,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             inventory.join(item, left_on="inv_item_sk", right_on="i_item_sk")
-            .join(warehouse, left_on="inv_warehouse_sk", right_on="w_warehouse_sk")
+            .join(
+                warehouse,
+                left_on="inv_warehouse_sk",
+                right_on="w_warehouse_sk",
+            )
             .join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
             .filter(
                 (pl.col("i_current_price").is_between(0.99, 1.49))
-                & d_date.is_between(start_date_lit, end_date_lit, closed="both")
+                & d_date.is_between(
+                    start_date_lit, end_date_lit, closed="both"
+                )
             )
             .with_columns(
                 [

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 45."""
@@ -73,7 +73,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     item_sks = params["item_sks"]
 
     # Load tables
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
@@ -83,7 +85,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Subquery: filter item table to just those i_item_id matching i_item_sk
     filtered_items = (
-        item.filter(pl.col("i_item_sk").is_in(item_sks)).select("i_item_id").unique()
+        item.filter(pl.col("i_item_sk").is_in(item_sks))
+        .select("i_item_id")
+        .unique()
     )
 
     # Perform all joins first and filter for date
@@ -91,7 +95,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         web_sales.join(
             customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
         )
-        .join(customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk")
+        .join(
+            customer_address,
+            left_on="c_current_addr_sk",
+            right_on="ca_address_sk",
+        )
         .join(item, left_on="ws_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
         .filter((pl.col("d_qoy") == qoy) & (pl.col("d_year") == year))

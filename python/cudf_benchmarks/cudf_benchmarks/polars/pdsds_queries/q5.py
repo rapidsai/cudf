@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 5."""
@@ -20,7 +20,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 5."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=5, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=5,
+        qualification=run_config.qualification,
     )
 
     sales_date = params["sales_date"]
@@ -176,7 +178,9 @@ def _channel_agg(
 ) -> pl.LazyFrame:
     """Aggregate sales and returns for one channel via UNION ALL, producing (entity_id, sales, profit, returns1, profit_loss)."""
     target_dates = date_dim.filter(
-        pl.col("d_date").is_between(pl.lit(start_date), pl.lit(end_date), closed="both")
+        pl.col("d_date").is_between(
+            pl.lit(start_date), pl.lit(end_date), closed="both"
+        )
     ).select("d_date_sk")
 
     sales_leg = sales.select(
@@ -213,13 +217,17 @@ def _channel_agg(
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 5."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=5, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=5,
+        qualification=run_config.qualification,
     )
 
     sales_date_str = params["sales_date"]
     year, month, day = map(int, sales_date_str.split("-"))
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -229,11 +237,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
-    catalog_page = get_data(run_config.dataset_path, "catalog_page", run_config.suffix)
+    catalog_page = get_data(
+        run_config.dataset_path, "catalog_page", run_config.suffix
+    )
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
 
     start_date = date(year, month, day)

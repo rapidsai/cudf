@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 98."""
@@ -69,12 +69,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     date = params["date"]
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     start_date_py = datetime.strptime(date, "%Y-%m-%d").date()
     end_date_py = start_date_py + timedelta(days=30)
-    start_date = pl.date(start_date_py.year, start_date_py.month, start_date_py.day)
+    start_date = pl.date(
+        start_date_py.year, start_date_py.month, start_date_py.day
+    )
     end_date = pl.date(end_date_py.year, end_date_py.month, end_date_py.day)
 
     # Pre-filter item to matching categories before joining against store_sales [58 partitions].
@@ -97,7 +101,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            store_sales.select(["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"])
+            store_sales.select(
+                ["ss_sold_date_sk", "ss_item_sk", "ss_ext_sales_price"]
+            )
             .join(filtered_item, left_on="ss_item_sk", right_on="i_item_sk")
             .join(
                 filtered_dates,
@@ -116,8 +122,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .agg(
                 [
-                    pl.col("ss_ext_sales_price").count().alias("itemrevenue_count"),
-                    pl.col("ss_ext_sales_price").sum().alias("itemrevenue_sum"),
+                    pl.col("ss_ext_sales_price")
+                    .count()
+                    .alias("itemrevenue_count"),
+                    pl.col("ss_ext_sales_price")
+                    .sum()
+                    .alias("itemrevenue_sum"),
                 ]
             )
             .with_columns(
@@ -149,7 +159,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .sort(
-                ["i_category", "i_class", "i_item_id", "i_item_desc", "revenueratio"],
+                [
+                    "i_category",
+                    "i_class",
+                    "i_item_id",
+                    "i_item_desc",
+                    "revenueratio",
+                ],
                 nulls_last=True,
             )
         ),

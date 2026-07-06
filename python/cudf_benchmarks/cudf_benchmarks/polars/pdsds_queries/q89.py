@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 89."""
@@ -88,7 +88,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     class2 = params["class2"]
 
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
@@ -100,8 +102,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     tmp1 = (
-        store_sales.join(item, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
-        .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk", how="inner")
+        store_sales.join(
+            item, left_on="ss_item_sk", right_on="i_item_sk", how="inner"
+        )
+        .join(
+            date_dim,
+            left_on="ss_sold_date_sk",
+            right_on="d_date_sk",
+            how="inner",
+        )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk", how="inner")
         .filter((pl.col("d_year") == year) & (filter1 | filter2))
         .group_by(
@@ -148,7 +157,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .sort(
-                [(pl.col("sum_sales") - pl.col("avg_monthly_sales")), "s_store_name"],
+                [
+                    (pl.col("sum_sales") - pl.col("avg_monthly_sales")),
+                    "s_store_name",
+                ],
                 nulls_last=True,
             )
             .limit(100)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 93."""
@@ -61,7 +61,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     reason_desc = params["reason_desc"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -89,7 +91,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                             & pl.col("ss_sales_price").is_not_null()
                         )
                         .then(
-                            (pl.col("ss_quantity") - pl.col("sr_return_quantity"))
+                            (
+                                pl.col("ss_quantity")
+                                - pl.col("sr_return_quantity")
+                            )
                             * pl.col("ss_sales_price")
                         )
                         .otherwise(None)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 87."""
@@ -59,11 +59,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     d_month_seq = params["d_month_seq"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     store_customers = (
@@ -80,7 +84,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             right_on="d_date_sk",
             how="inner",
         )
-        .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk", how="inner")
+        .join(
+            customer,
+            left_on="ss_customer_sk",
+            right_on="c_customer_sk",
+            how="inner",
+        )
         .select(["c_last_name", "c_first_name", "d_date"])
         .unique()
     )

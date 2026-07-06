@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 30."""
@@ -91,7 +91,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     state = params["state"]
 
     # Load tables
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
@@ -99,9 +101,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # CTE: customer_total_return
     customer_total_return = (
-        web_returns.join(date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk")
+        web_returns.join(
+            date_dim, left_on="wr_returned_date_sk", right_on="d_date_sk"
+        )
         .join(
-            customer_address, left_on="wr_returning_addr_sk", right_on="ca_address_sk"
+            customer_address,
+            left_on="wr_returning_addr_sk",
+            right_on="ca_address_sk",
         )
         .filter(pl.col("d_year") == year)
         .group_by(
@@ -143,11 +149,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             customer.join(
-                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
             )
             .filter(pl.col("ca_state") == state)
             .join(
-                qualified_customers, left_on="c_customer_sk", right_on="ctr_customer_sk"
+                qualified_customers,
+                left_on="c_customer_sk",
+                right_on="ctr_customer_sk",
             )
             .select(
                 [

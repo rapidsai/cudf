@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 88."""
@@ -136,7 +136,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     hd2 = params["hd_dep_count2"]
     hd3 = params["hd_dep_count3"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     household_demographics = get_data(
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
@@ -145,13 +147,22 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Pre-filter each small table before joining against store_sales [58 partitions].
     filtered_hdemo = household_demographics.filter(
-        ((pl.col("hd_dep_count") == hd1) & (pl.col("hd_vehicle_count") <= hd1 + 2))
-        | ((pl.col("hd_dep_count") == hd2) & (pl.col("hd_vehicle_count") <= hd2 + 2))
-        | ((pl.col("hd_dep_count") == hd3) & (pl.col("hd_vehicle_count") <= hd3 + 2))
+        (
+            (pl.col("hd_dep_count") == hd1)
+            & (pl.col("hd_vehicle_count") <= hd1 + 2)
+        )
+        | (
+            (pl.col("hd_dep_count") == hd2)
+            & (pl.col("hd_vehicle_count") <= hd2 + 2)
+        )
+        | (
+            (pl.col("hd_dep_count") == hd3)
+            & (pl.col("hd_vehicle_count") <= hd3 + 2)
+        )
     ).select("hd_demo_sk")
-    filtered_store = store.filter(pl.col("s_store_name") == s_store_name).select(
-        "s_store_sk"
-    )
+    filtered_store = store.filter(
+        pl.col("s_store_name") == s_store_name
+    ).select("s_store_sk")
     # Restrict time_dim to the union of all 8 slot conditions; every surviving row maps
     # to exactly one bucket, so the downstream pl.when chain is exhaustive.
     filtered_time = time_dim.filter(
@@ -178,8 +189,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     counts_lf = (
         store_sales.select(["ss_sold_time_sk", "ss_hdemo_sk", "ss_store_sk"])
         .join(filtered_time, left_on="ss_sold_time_sk", right_on="t_time_sk")
-        .join(filtered_hdemo, left_on="ss_hdemo_sk", right_on="hd_demo_sk", how="semi")
-        .join(filtered_store, left_on="ss_store_sk", right_on="s_store_sk", how="semi")
+        .join(
+            filtered_hdemo,
+            left_on="ss_hdemo_sk",
+            right_on="hd_demo_sk",
+            how="semi",
+        )
+        .join(
+            filtered_store,
+            left_on="ss_store_sk",
+            right_on="s_store_sk",
+            how="semi",
+        )
         .select(
             pl.when((pl.col("t_hour") == 8) & (pl.col("t_minute") >= 30))
             .then(pl.lit(0))

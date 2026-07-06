@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 8."""
@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 8."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=8, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=8,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -62,14 +64,18 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 8."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=8, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=8,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
     qoy = params["qoy"]
     zip_codes = params["zip_codes"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     customer_address = get_data(
@@ -78,7 +84,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
 
     target_zips_5char = (
-        customer_address.select(pl.col("ca_zip").str.slice(0, 5).alias("ca_zip"))
+        customer_address.select(
+            pl.col("ca_zip").str.slice(0, 5).alias("ca_zip")
+        )
         .filter(pl.col("ca_zip").is_in(zip_codes))
         .unique()
     )
@@ -97,7 +105,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # INTERSECT: Get common zip codes between target list and preferred customer zips
     intersect_zips = (
-        target_zips_5char.join(preferred_customer_zips, on="ca_zip", how="inner")
+        target_zips_5char.join(
+            preferred_customer_zips, on="ca_zip", how="inner"
+        )
         # TODO: The 2-char zip prefix is materialized here rather than passed as a join
         # expression key. Using `right_on=pl.col("ca_zip").str.slice(0, 2)` in the join
         # below produces non-deterministic wrong sums under the streaming executor. We need
@@ -112,7 +122,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            store_sales.select(["ss_sold_date_sk", "ss_store_sk", "ss_net_profit"])
+            store_sales.select(
+                ["ss_sold_date_sk", "ss_store_sk", "ss_net_profit"]
+            )
             .join(
                 filtered_dates,
                 left_on="ss_sold_date_sk",
@@ -139,7 +151,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .agg(pl.col("ss_net_profit").sum().alias("sum"))
             .sort("s_store_name", nulls_last=True)
             .limit(100)
-            .select([pl.col("s_store_name"), pl.col("sum").alias("sum(ss_net_profit)")])
+            .select(
+                [
+                    pl.col("s_store_name"),
+                    pl.col("sum").alias("sum(ss_net_profit)"),
+                ]
+            )
         ),
         sort_by=[("s_store_name", False)],
         limit=100,

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 2."""
@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 2."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=2, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=2,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -109,12 +111,16 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 2."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=2, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=2,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
@@ -162,7 +168,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         pl.col("d_year").is_in([year - 1, year, year + 1, year + 2])
     ).select(["d_date_sk", "d_week_seq", "d_day_name"])
     wswscs = (
-        wscs.join(date_dim_prefilter, left_on="sold_date_sk", right_on="d_date_sk")
+        wscs.join(
+            date_dim_prefilter, left_on="sold_date_sk", right_on="d_date_sk"
+        )
         .group_by("d_week_seq")
         .agg(
             [

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 53."""
@@ -97,7 +97,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Load tables
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     month_seq_list = list(range(dms, dms + 12))
@@ -162,7 +164,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             "avg_quarterly_sales",
         ]
     )
-    sort_by = {"avg_quarterly_sales": False, "sum_sales": False, "i_manufact_id": False}
+    sort_by = {
+        "avg_quarterly_sales": False,
+        "sum_sales": False,
+        "i_manufact_id": False,
+    }
     limit = 100
     return QueryResult(
         frame=(

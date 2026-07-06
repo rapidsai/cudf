@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 43."""
@@ -92,7 +92,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     gmt = params["gmt"]
 
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
     # Pre-filter lookup tables before joining against store_sales [58 partitions].
@@ -119,8 +121,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            store_sales.select(["ss_sold_date_sk", "ss_store_sk", "ss_sales_price"])
-            .join(filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            store_sales.select(
+                ["ss_sold_date_sk", "ss_store_sk", "ss_sales_price"]
+            )
+            .join(
+                filtered_dates, left_on="ss_sold_date_sk", right_on="d_date_sk"
+            )
             .join(filtered_store, left_on="ss_store_sk", right_on="s_store_sk")
             .with_columns(
                 [

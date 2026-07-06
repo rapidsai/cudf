@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 94."""
@@ -73,13 +73,17 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     state = params["state"]
     web_company_name = params["web_company_name"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
     )
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     start_date_py = datetime.strptime(date, "%Y-%m-%d")
     start_date = pl.lit(start_date_py, dtype=pl.Datetime("us"))
     end_date = start_date + pl.duration(days=60)
@@ -94,7 +98,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             web_sales.join(
-                date_dim, left_on="ws_ship_date_sk", right_on="d_date_sk", how="inner"
+                date_dim,
+                left_on="ws_ship_date_sk",
+                right_on="d_date_sk",
+                how="inner",
             )
             .join(
                 customer_address,
@@ -103,7 +110,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 how="inner",
             )
             .join(
-                web_site, left_on="ws_web_site_sk", right_on="web_site_sk", how="inner"
+                web_site,
+                left_on="ws_web_site_sk",
+                right_on="web_site_sk",
+                how="inner",
             )
             .filter(
                 (pl.col("d_date") >= start_date)
@@ -127,7 +137,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .select(
                 [
                     pl.col("ws_order_number").n_unique().alias("order count"),
-                    pl.col("ws_ext_ship_cost").sum().alias("total shipping cost"),
+                    pl.col("ws_ext_ship_cost")
+                    .sum()
+                    .alias("total shipping cost"),
                     pl.col("ws_net_profit").sum().alias("total net profit"),
                 ]
             )

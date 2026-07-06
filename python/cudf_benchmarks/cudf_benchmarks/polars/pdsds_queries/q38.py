@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 38."""
@@ -72,33 +72,49 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     dms = params["dms"]
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # Filter date_dim for the specified month sequence range
-    date_filter = date_dim.filter(pl.col("d_month_seq").is_between(dms, dms + 11))
+    date_filter = date_dim.filter(
+        pl.col("d_month_seq").is_between(dms, dms + 11)
+    )
     # Store sales customers with names and dates
     store_customers = (
-        store_sales.join(date_filter, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_filter, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
         .select(["c_last_name", "c_first_name", "d_date"])
         .unique()
     )
     # Catalog sales customers with names and dates
     catalog_customers = (
-        catalog_sales.join(date_filter, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk")
+        catalog_sales.join(
+            date_filter, left_on="cs_sold_date_sk", right_on="d_date_sk"
+        )
+        .join(
+            customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
+        )
         .select(["c_last_name", "c_first_name", "d_date"])
         .unique()
     )
     # Web sales customers with names and dates
     web_customers = (
-        web_sales.join(date_filter, left_on="ws_sold_date_sk", right_on="d_date_sk")
-        .join(customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk")
+        web_sales.join(
+            date_filter, left_on="ws_sold_date_sk", right_on="d_date_sk"
+        )
+        .join(
+            customer, left_on="ws_bill_customer_sk", right_on="c_customer_sk"
+        )
         .select(["c_last_name", "c_first_name", "d_date"])
         .unique()
     )
@@ -124,7 +140,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         frame=(
             intersect_final
             # Cast -> Int64 to match DuckDB
-            .select([pl.len().cast(pl.Int64).alias("count_star()")]).limit(limit)
+            .select([pl.len().cast(pl.Int64).alias("count_star()")]).limit(
+                limit
+            )
         ),
         sort_by=[],
         limit=limit,

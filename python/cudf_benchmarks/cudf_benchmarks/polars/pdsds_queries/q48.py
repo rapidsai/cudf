@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 48."""
@@ -78,7 +78,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     geography = params["geography"]
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
@@ -93,7 +95,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         (
             (pl.col("cd_marital_status") == d["marital_status"])
             & (pl.col("cd_education_status") == d["education_status"])
-            & (pl.col("ss_sales_price").is_between(d["price_min"], d["price_max"]))
+            & (
+                pl.col("ss_sales_price").is_between(
+                    d["price_min"], d["price_max"]
+                )
+            )
         )
         for d in demographics
     ]
@@ -106,7 +112,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         (
             (pl.col("ca_country") == "United States")
             & (pl.col("ca_state").is_in(g["states"]))
-            & (pl.col("ss_net_profit").is_between(g["profit_min"], g["profit_max"]))
+            & (
+                pl.col("ss_net_profit").is_between(
+                    g["profit_min"], g["profit_max"]
+                )
+            )
         )
         for g in geography
     ]
@@ -116,9 +126,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            store_sales.join(store, left_on="ss_store_sk", right_on="s_store_sk")
-            .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
-            .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
+            store_sales.join(
+                store, left_on="ss_store_sk", right_on="s_store_sk"
+            )
+            .join(
+                customer_demographics,
+                left_on="ss_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
+            .join(
+                customer_address,
+                left_on="ss_addr_sk",
+                right_on="ca_address_sk",
+            )
             .join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
             .filter((pl.col("d_year") == year) & demo_filter & geo_filter)
             .select(

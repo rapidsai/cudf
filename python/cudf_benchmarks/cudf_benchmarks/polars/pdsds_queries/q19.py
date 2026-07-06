@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 19."""
@@ -76,7 +76,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Load tables
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     customer_address = get_data(
@@ -95,11 +97,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     return QueryResult(
         frame=(
-            date_dim.join(store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk")
+            date_dim.join(
+                store_sales, left_on="d_date_sk", right_on="ss_sold_date_sk"
+            )
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
             .join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
             .join(
-                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
             )
             .join(store, left_on="ss_store_sk", right_on="s_store_sk")
             .filter(

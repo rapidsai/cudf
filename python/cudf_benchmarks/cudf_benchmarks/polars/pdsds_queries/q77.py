@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 77."""
@@ -214,7 +214,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     sdate = params["sdate"]
     year, month, day = map(int, sdate.split("-"))
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -224,8 +226,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
@@ -246,7 +252,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ).select(["ss_store_sk", "sales", "profit"])
 
     sr = _sum_returns_loss(
-        store_returns.join(store, left_on="sr_store_sk", right_on="s_store_sk"),
+        store_returns.join(
+            store, left_on="sr_store_sk", right_on="s_store_sk"
+        ),
         "sr_returned_date_sk",
         filtered_dates,
         "sr_store_sk",
@@ -273,7 +281,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ).select(["cr_call_center_sk", "returns1", "profit_loss"])
 
     ws = _sum_sales_profit(
-        web_sales.join(web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk"),
+        web_sales.join(
+            web_page, left_on="ws_web_page_sk", right_on="wp_web_page_sk"
+        ),
         "ws_sold_date_sk",
         filtered_dates,
         "ws_web_page_sk",
@@ -282,7 +292,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     ).select(["ws_web_page_sk", "sales", "profit"])
 
     wr = _sum_returns_loss(
-        web_returns.join(web_page, left_on="wr_web_page_sk", right_on="wp_web_page_sk"),
+        web_returns.join(
+            web_page, left_on="wr_web_page_sk", right_on="wp_web_page_sk"
+        ),
         "wr_returned_date_sk",
         filtered_dates,
         "wr_web_page_sk",
@@ -298,7 +310,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             pl.col("ss_store_sk").alias("id"),
             "sales",
             pl.col("returns1").fill_null(0).alias("returns1"),
-            (pl.col("profit") - pl.col("profit_loss").fill_null(0)).alias("profit"),
+            (pl.col("profit") - pl.col("profit_loss").fill_null(0)).alias(
+                "profit"
+            ),
         ]
     )
 
@@ -320,7 +334,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             pl.col("ws_web_page_sk").alias("id"),
             "sales",
             pl.col("returns1").fill_null(0).alias("returns1"),
-            (pl.col("profit") - pl.col("profit_loss").fill_null(0)).alias("profit"),
+            (pl.col("profit") - pl.col("profit_loss").fill_null(0)).alias(
+                "profit"
+            ),
         ]
     )
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 35."""
@@ -128,24 +128,34 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
 
     store_exists = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
         .select("ss_customer_sk")
     )
     web_exists = (
-        web_sales.join(date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(
+            date_dim, left_on="ws_sold_date_sk", right_on="d_date_sk"
+        )
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
         .select(pl.col("ws_bill_customer_sk").alias("customer_sk"))
     )
     catalog_exists = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        catalog_sales.join(
+            date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk"
+        )
         .filter((pl.col("d_year") == year) & (pl.col("d_qoy") < 4))
         .select(pl.col("cs_ship_customer_sk").alias("customer_sk"))
     )
@@ -162,19 +172,29 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     result = (
         customer.join(
-            customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+            customer_address,
+            left_on="c_current_addr_sk",
+            right_on="ca_address_sk",
         )
         .join(
-            customer_demographics, left_on="c_current_cdemo_sk", right_on="cd_demo_sk"
+            customer_demographics,
+            left_on="c_current_cdemo_sk",
+            right_on="cd_demo_sk",
         )
         # Note: Inner join duplicates rows when a customer has multiple sales.
         # Semi join just filters to customers that have at least one match,
         # which is what we need to match the SQL (for `EXISTS`).
         .join(
-            store_exists, left_on="c_customer_sk", right_on="ss_customer_sk", how="semi"
+            store_exists,
+            left_on="c_customer_sk",
+            right_on="ss_customer_sk",
+            how="semi",
         )
         .join(
-            web_or_catalog, left_on="c_customer_sk", right_on="customer_sk", how="semi"
+            web_or_catalog,
+            left_on="c_customer_sk",
+            right_on="customer_sk",
+            how="semi",
         )
         .group_by(
             [
@@ -192,15 +212,25 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .agg(
             [
                 pl.len().alias("cnt1"),
-                _get_agg_expr("cd_dep_count", aggone, f"{aggone}(cd_dep_count)"),
-                _get_agg_expr("cd_dep_count", aggtwo, f"{aggtwo}(cd_dep_count)"),
-                _get_agg_expr("cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)_1"),
-                pl.len().alias("cnt2"),
                 _get_agg_expr(
-                    "cd_dep_employed_count", aggone, f"{aggone}(cd_dep_employed_count)"
+                    "cd_dep_count", aggone, f"{aggone}(cd_dep_count)"
                 ),
                 _get_agg_expr(
-                    "cd_dep_employed_count", aggtwo, f"{aggtwo}(cd_dep_employed_count)"
+                    "cd_dep_count", aggtwo, f"{aggtwo}(cd_dep_count)"
+                ),
+                _get_agg_expr(
+                    "cd_dep_count", aggthree, f"{aggthree}(cd_dep_count)_1"
+                ),
+                pl.len().alias("cnt2"),
+                _get_agg_expr(
+                    "cd_dep_employed_count",
+                    aggone,
+                    f"{aggone}(cd_dep_employed_count)",
+                ),
+                _get_agg_expr(
+                    "cd_dep_employed_count",
+                    aggtwo,
+                    f"{aggtwo}(cd_dep_employed_count)",
                 ),
                 _get_agg_expr(
                     "cd_dep_employed_count",
@@ -209,10 +239,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ),
                 pl.len().alias("cnt3"),
                 _get_agg_expr(
-                    "cd_dep_college_count", aggone, f"{aggone}(cd_dep_college_count)"
+                    "cd_dep_college_count",
+                    aggone,
+                    f"{aggone}(cd_dep_college_count)",
                 ),
                 _get_agg_expr(
-                    "cd_dep_college_count", aggtwo, f"{aggtwo}(cd_dep_college_count)"
+                    "cd_dep_college_count",
+                    aggtwo,
+                    f"{aggtwo}(cd_dep_college_count)",
                 ),
                 _get_agg_expr(
                     "cd_dep_college_count",

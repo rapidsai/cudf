@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 26."""
@@ -78,7 +78,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    promotion = get_data(
+        run_config.dataset_path, "promotion", run_config.suffix
+    )
     sort_by = {"i_item_id": False}
     limit = 100
     return QueryResult(
@@ -88,7 +90,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .join(item, left_on="cs_item_sk", right_on="i_item_sk")
             .join(
-                customer_demographics, left_on="cs_bill_cdemo_sk", right_on="cd_demo_sk"
+                customer_demographics,
+                left_on="cs_bill_cdemo_sk",
+                right_on="cd_demo_sk",
             )
             .join(promotion, left_on="cs_promo_sk", right_on="p_promo_sk")
             .filter(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 22."""
@@ -50,7 +50,7 @@ def duckdb_impl(run_config: RunConfig) -> str:
     """
 
 
-def level(  # noqa: D103
+def level(
     base_data: pl.LazyFrame, agg_exprs: list[pl.Expr], group_cols: list[str]
 ) -> pl.LazyFrame:
     if group_cols:
@@ -63,7 +63,9 @@ def level(  # noqa: D103
         if c not in group_cols
     ]
     if missing:
-        lf = lf.with_columns([pl.lit(None, dtype=pl.String).alias(c) for c in missing])
+        lf = lf.with_columns(
+            [pl.lit(None, dtype=pl.String).alias(c) for c in missing]
+        )
     return lf.select(
         [
             "i_product_name",
@@ -85,10 +87,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     dms = params["dms"]
 
-    inventory = get_data(run_config.dataset_path, "inventory", run_config.suffix)
+    inventory = get_data(
+        run_config.dataset_path, "inventory", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    warehouse = get_data(run_config.dataset_path, "warehouse", run_config.suffix)
+    warehouse = get_data(
+        run_config.dataset_path, "warehouse", run_config.suffix
+    )
     base_data = (
         inventory.join(date_dim, left_on="inv_date_sk", right_on="d_date_sk")
         .join(item, left_on="inv_item_sk", right_on="i_item_sk")
@@ -98,9 +104,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     agg_exprs = [pl.col("inv_quantity_on_hand").mean().alias("qoh")]
 
     level1 = level(
-        base_data, agg_exprs, ["i_product_name", "i_brand", "i_class", "i_category"]
+        base_data,
+        agg_exprs,
+        ["i_product_name", "i_brand", "i_class", "i_category"],
     )
-    level2 = level(base_data, agg_exprs, ["i_product_name", "i_brand", "i_class"])
+    level2 = level(
+        base_data, agg_exprs, ["i_product_name", "i_brand", "i_class"]
+    )
     level3 = level(base_data, agg_exprs, ["i_product_name", "i_brand"])
     level4 = level(base_data, agg_exprs, ["i_product_name"])
     level5 = level(base_data, agg_exprs, [])

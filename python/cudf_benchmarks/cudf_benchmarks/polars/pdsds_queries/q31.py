@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 31."""
@@ -118,8 +118,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     polars_agg = agg.replace("ss1.", "")
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
@@ -127,7 +131,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Pre-filter date_dim to target year to avoid aggregating across all years.
     # Build per-quarter aggregations directly instead of filtering after the fact.
-    date_year = date_dim.filter(pl.col("d_year") == year).select(["d_date_sk", "d_qoy"])
+    date_year = date_dim.filter(pl.col("d_year") == year).select(
+        ["d_date_sk", "d_qoy"]
+    )
 
     def build_quarter_agg(
         sales_table: pl.LazyFrame,
@@ -137,7 +143,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         agg_alias: str,
         quarter: int,
     ) -> pl.LazyFrame:
-        date_q = date_year.filter(pl.col("d_qoy") == quarter).select("d_date_sk")
+        date_q = date_year.filter(pl.col("d_qoy") == quarter).select(
+            "d_date_sk"
+        )
         return (
             sales_table.join(date_q, left_on=date_key, right_on="d_date_sk")
             .join(customer_address, left_on=addr_key, right_on="ca_address_sk")

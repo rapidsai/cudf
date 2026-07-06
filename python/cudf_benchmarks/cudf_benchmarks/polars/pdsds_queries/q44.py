@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 44."""
@@ -90,7 +90,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     store_sk = params["store_sk"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     # Benchmark: global mean profit for the store with null demographics — single row.
@@ -99,7 +101,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     # ConditionalJoin that falls back from multi-partition mode.
     benchmark = (
         store_sales.filter(
-            (pl.col("ss_store_sk") == store_sk) & pl.col("ss_cdemo_sk").is_null()
+            (pl.col("ss_store_sk") == store_sk)
+            & pl.col("ss_cdemo_sk").is_null()
         )
         .select(pl.col("ss_net_profit").mean().alias("benchmark_profit"))
         .with_columns(pl.lit(1, dtype=pl.Int32).alias("_key"))
@@ -117,14 +120,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     ascending_rank = (
-        item_profits.with_columns(pl.col("avg_profit").rank(method="min").alias("rnk"))
+        item_profits.with_columns(
+            pl.col("avg_profit").rank(method="min").alias("rnk")
+        )
         .filter(pl.col("rnk") < 11)
         .select(["ss_item_sk", "rnk"])
     )
 
     descending_rank = (
         item_profits.with_columns(
-            pl.col("avg_profit").rank(method="min", descending=True).alias("rnk")
+            pl.col("avg_profit")
+            .rank(method="min", descending=True)
+            .alias("rnk")
         )
         .filter(pl.col("rnk") < 11)
         .select(["ss_item_sk", "rnk"])
@@ -135,8 +142,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            ascending_rank.join(descending_rank, on="rnk", how="inner", suffix="_desc")
-            .join(item_cols, left_on="ss_item_sk", right_on="i_item_sk", how="inner")
+            ascending_rank.join(
+                descending_rank, on="rnk", how="inner", suffix="_desc"
+            )
+            .join(
+                item_cols,
+                left_on="ss_item_sk",
+                right_on="i_item_sk",
+                how="inner",
+            )
             .join(
                 item_cols,
                 left_on="ss_item_sk_desc",

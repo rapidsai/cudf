@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 80."""
@@ -170,7 +170,10 @@ def q80_segment(
         .join(filtered_promo, left_on=promo_left_key, right_on="p_promo_sk")
         .join(id_dim, left_on=id_left_key, right_on=id_right_key)
         .join(
-            returns, left_on=returns_join_left, right_on=returns_join_right, how="left"
+            returns,
+            left_on=returns_join_left,
+            right_on=returns_join_right,
+            how="left",
         )
         .group_by(id_out_col)
         .agg(
@@ -211,7 +214,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     sdate = params["sdate"]
     year, month, day = map(int, sdate.split("-"))
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -221,14 +226,22 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
-    catalog_page = get_data(run_config.dataset_path, "catalog_page", run_config.suffix)
+    catalog_page = get_data(
+        run_config.dataset_path, "catalog_page", run_config.suffix
+    )
     web_site = get_data(run_config.dataset_path, "web_site", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    promotion = get_data(
+        run_config.dataset_path, "promotion", run_config.suffix
+    )
 
     start_date = (pl.date(year, month, day)).cast(pl.Datetime("us"))
     end_date = (start_date + pl.duration(days=30)).cast(pl.Datetime("us"))
@@ -255,7 +268,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         net_profit_col="ss_net_profit",
         ret_amt_col="sr_return_amt",
         ret_loss_col="sr_net_loss",
-    ).select([pl.col("s_store_id").alias("store_id"), "sales", "returns1", "profit"])
+    ).select(
+        [pl.col("s_store_id").alias("store_id"), "sales", "returns1", "profit"]
+    )
 
     csr = q80_segment(
         catalog_sales,

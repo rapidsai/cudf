@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 69."""
@@ -98,22 +98,31 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     target_dates = date_dim.filter(
-        (pl.col("d_year") == year) & (pl.col("d_moy").is_between(month, month + 2))
+        (pl.col("d_year") == year)
+        & (pl.col("d_moy").is_between(month, month + 2))
     ).select("d_date_sk")
     store_customers = (
-        store_sales.join(target_dates, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            target_dates, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .select("ss_customer_sk")
         .unique()
     )
     web_customers = (
-        web_sales.join(target_dates, left_on="ws_sold_date_sk", right_on="d_date_sk")
+        web_sales.join(
+            target_dates, left_on="ws_sold_date_sk", right_on="d_date_sk"
+        )
         .select(pl.col("ws_bill_customer_sk").alias("customer_sk"))
         .unique()
     )
@@ -128,7 +137,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             customer.join(
-                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
             )
             .filter(pl.col("ca_state").is_in(states))
             .join(
@@ -136,7 +147,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 left_on="c_current_cdemo_sk",
                 right_on="cd_demo_sk",
             )
-            .join(store_customers, left_on="c_customer_sk", right_on="ss_customer_sk")
+            .join(
+                store_customers,
+                left_on="c_customer_sk",
+                right_on="ss_customer_sk",
+            )
             .join(
                 exclude_customers,
                 left_on="c_customer_sk",

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 32."""
@@ -73,29 +73,48 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     start_date_obj = datetime.strptime(csdate, "%Y-%m-%d")
     end_date_obj = start_date_obj + timedelta(days=90)
 
-    start_date = pl.date(start_date_obj.year, start_date_obj.month, start_date_obj.day)
+    start_date = pl.date(
+        start_date_obj.year, start_date_obj.month, start_date_obj.day
+    )
     end_date = pl.date(end_date_obj.year, end_date_obj.month, end_date_obj.day)
 
     # First, calculate the average discount amount for each item in the date range
     item_avg_discounts = (
-        catalog_sales.join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
+        catalog_sales.join(
+            date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk"
+        )
         .filter(pl.col("d_date").is_between(start_date, end_date))
         .group_by("cs_item_sk")
-        .agg([(pl.col("cs_ext_discount_amt").mean() * 1.3).alias("threshold_discount")])
+        .agg(
+            [
+                (pl.col("cs_ext_discount_amt").mean() * 1.3).alias(
+                    "threshold_discount"
+                )
+            ]
+        )
     )
     # Main query: find items with specified manufacturer and high discount amounts
     return QueryResult(
         frame=(
-            catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
+            catalog_sales.join(
+                item, left_on="cs_item_sk", right_on="i_item_sk"
+            )
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             .join(item_avg_discounts, on="cs_item_sk")
             .filter(
                 (pl.col("i_manufact_id") == imid)
                 & (pl.col("d_date").is_between(start_date, end_date))
-                & (pl.col("cs_ext_discount_amt") > pl.col("threshold_discount"))
+                & (
+                    pl.col("cs_ext_discount_amt")
+                    > pl.col("threshold_discount")
+                )
             )
             .select(
-                [pl.col("cs_ext_discount_amt").sum().alias("excess discount amount")]
+                [
+                    pl.col("cs_ext_discount_amt")
+                    .sum()
+                    .alias("excess discount amount")
+                ]
             )
             .limit(100)
         ),

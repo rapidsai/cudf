@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 11."""
@@ -140,10 +140,16 @@ def build_year_total(
     """Aggregate sales joined with customer for a single year, keyed on customer composite."""
     return (
         sales_table.join(year_dates, left_on=date_sk_col, right_on="d_date_sk")
-        .join(customer_table, left_on=customer_sk_col, right_on="c_customer_sk")
+        .join(
+            customer_table, left_on=customer_sk_col, right_on="c_customer_sk"
+        )
         .group_by(CUSTOMER_COMPOSITE)
         .agg(
-            [(pl.col(list_price_col) - pl.col(discount_col)).sum().alias("year_total")]
+            [
+                (pl.col(list_price_col) - pl.col(discount_col))
+                .sum()
+                .alias("year_total")
+            ]
         )
     )
 
@@ -160,12 +166,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year_second = year_first + 1
 
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    date_first = date_dim.filter(pl.col("d_year") == year_first).select("d_date_sk")
-    date_second = date_dim.filter(pl.col("d_year") == year_second).select("d_date_sk")
+    date_first = date_dim.filter(pl.col("d_year") == year_first).select(
+        "d_date_sk"
+    )
+    date_second = date_dim.filter(pl.col("d_year") == year_second).select(
+        "d_date_sk"
+    )
 
     t_s_first = (
         build_year_total(

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 84."""
@@ -71,7 +71,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     household_demographics = get_data(
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
-    income_band = get_data(run_config.dataset_path, "income_band", run_config.suffix)
+    income_band = get_data(
+        run_config.dataset_path, "income_band", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -114,7 +116,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 [
                     pl.col("c_customer_id").alias("customer_id"),
                     (
-                        pl.col("c_last_name") + pl.lit(", ") + pl.col("c_first_name")
+                        pl.col("c_last_name")
+                        + pl.lit(", ")
+                        + pl.col("c_first_name")
                     ).alias("customername"),
                 ]
             )

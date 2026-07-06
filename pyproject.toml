@@ -167,6 +167,8 @@ extend-unsafe-fixes = [
 "ci/*" = ["T201"]
 "docs/*" = ["T201"]
 "cpp/*" = ["T201"]
+# Benchmark runners print results and timings to stdout.
+"python/cudf_benchmarks/*" = ["T201", "T203"]
 
 [tool.cython-lint]
 max-line-length = 120

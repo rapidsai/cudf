@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 64."""
@@ -174,7 +174,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -190,13 +192,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     household_demographics = get_data(
         run_config.dataset_path, "household_demographics", run_config.suffix
     )
-    income_band = get_data(run_config.dataset_path, "income_band", run_config.suffix)
-    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    income_band = get_data(
+        run_config.dataset_path, "income_band", run_config.suffix
+    )
+    promotion = get_data(
+        run_config.dataset_path, "promotion", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 
     # CTE 1: cs_ui - catalog sales items with sales > 2 * refunds
     cs_ui = (
-        catalog_sales.select(["cs_item_sk", "cs_order_number", "cs_ext_list_price"])
+        catalog_sales.select(
+            ["cs_item_sk", "cs_order_number", "cs_ext_list_price"]
+        )
         .join(
             catalog_returns.select(
                 [
@@ -243,19 +251,39 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     # Prepare customer demographics
-    cd1 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
-        {"cd_demo_sk": "cd1_demo_sk", "cd_marital_status": "cd1_marital_status"}
+    cd1 = customer_demographics.select(
+        ["cd_demo_sk", "cd_marital_status"]
+    ).rename(
+        {
+            "cd_demo_sk": "cd1_demo_sk",
+            "cd_marital_status": "cd1_marital_status",
+        }
     )
-    cd2 = customer_demographics.select(["cd_demo_sk", "cd_marital_status"]).rename(
-        {"cd_demo_sk": "cd2_demo_sk", "cd_marital_status": "cd2_marital_status"}
+    cd2 = customer_demographics.select(
+        ["cd_demo_sk", "cd_marital_status"]
+    ).rename(
+        {
+            "cd_demo_sk": "cd2_demo_sk",
+            "cd_marital_status": "cd2_marital_status",
+        }
     )
 
     # Prepare household demographics
-    hd1 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
-        {"hd_demo_sk": "hd1_demo_sk", "hd_income_band_sk": "hd1_income_band_sk"}
+    hd1 = household_demographics.select(
+        ["hd_demo_sk", "hd_income_band_sk"]
+    ).rename(
+        {
+            "hd_demo_sk": "hd1_demo_sk",
+            "hd_income_band_sk": "hd1_income_band_sk",
+        }
     )
-    hd2 = household_demographics.select(["hd_demo_sk", "hd_income_band_sk"]).rename(
-        {"hd_demo_sk": "hd2_demo_sk", "hd_income_band_sk": "hd2_income_band_sk"}
+    hd2 = household_demographics.select(
+        ["hd_demo_sk", "hd_income_band_sk"]
+    ).rename(
+        {
+            "hd_demo_sk": "hd2_demo_sk",
+            "hd_income_band_sk": "hd2_income_band_sk",
+        }
     )
 
     # Prepare income bands
@@ -268,7 +296,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Prepare customer addresses
     ad1 = customer_address.select(
-        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
+        [
+            "ca_address_sk",
+            "ca_street_number",
+            "ca_street_name",
+            "ca_city",
+            "ca_zip",
+        ]
     ).rename(
         {
             "ca_address_sk": "ad1_address_sk",
@@ -279,7 +313,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         }
     )
     ad2 = customer_address.select(
-        ["ca_address_sk", "ca_street_number", "ca_street_name", "ca_city", "ca_zip"]
+        [
+            "ca_address_sk",
+            "ca_street_number",
+            "ca_street_name",
+            "ca_city",
+            "ca_zip",
+        ]
     ).rename(
         {
             "ca_address_sk": "ad2_address_sk",
@@ -293,11 +333,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     # Building the cross-sales for each year separately reduces the size of the table
     # substantially prior to performing the expensive join.
     def build_cross_sales_for_year(target_year: int) -> pl.LazyFrame:
-        d1 = date_dim.filter(pl.col("d_year") == target_year).select("d_date_sk")
+        d1 = date_dim.filter(pl.col("d_year") == target_year).select(
+            "d_date_sk"
+        )
 
         return (
             # Start with the most selective filters: item filter + cs_ui
-            store_sales.join(filtered_items, left_on="ss_item_sk", right_on="i_item_sk")
+            store_sales.join(
+                filtered_items, left_on="ss_item_sk", right_on="i_item_sk"
+            )
             .join(cs_ui, left_on="ss_item_sk", right_on="cs_item_sk")
             # date_dim is the next most selective filter
             .join(d1, left_on="ss_sold_date_sk", right_on="d_date_sk")
@@ -327,11 +371,21 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             )
             .join(cd1, left_on="ss_cdemo_sk", right_on="cd1_demo_sk")
             .join(cd2, left_on="c_current_cdemo_sk", right_on="cd2_demo_sk")
-            .filter(pl.col("cd1_marital_status") != pl.col("cd2_marital_status"))
+            .filter(
+                pl.col("cd1_marital_status") != pl.col("cd2_marital_status")
+            )
             .join(hd1, left_on="ss_hdemo_sk", right_on="hd1_demo_sk")
             .join(hd2, left_on="c_current_hdemo_sk", right_on="hd2_demo_sk")
-            .join(ib1, left_on="hd1_income_band_sk", right_on="ib1_income_band_sk")
-            .join(ib2, left_on="hd2_income_band_sk", right_on="ib2_income_band_sk")
+            .join(
+                ib1,
+                left_on="hd1_income_band_sk",
+                right_on="ib1_income_band_sk",
+            )
+            .join(
+                ib2,
+                left_on="hd2_income_band_sk",
+                right_on="ib2_income_band_sk",
+            )
             .join(ad1, left_on="ss_addr_sk", right_on="ad1_address_sk")
             .join(ad2, left_on="c_current_addr_sk", right_on="ad2_address_sk")
             .join(d2, left_on="c_first_sales_date_sk", right_on="d2_date_sk")

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 17."""
@@ -96,7 +96,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     year = params["year"]
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -114,7 +116,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     q1_q3 = [f"{year}Q1", f"{year}Q2", f"{year}Q3"]
 
     # Pre-filter date_dim to only qualifying d_date_sk values.
-    d1_dates = date_dim.filter(pl.col("d_quarter_name") == q1).select("d_date_sk")
+    d1_dates = date_dim.filter(pl.col("d_quarter_name") == q1).select(
+        "d_date_sk"
+    )
     d_q3_dates = date_dim.filter(pl.col("d_quarter_name").is_in(q1_q3)).select(
         "d_date_sk"
     )
@@ -123,16 +127,31 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     # first, then use the (customer, item) pairs it contains to pre-filter both store_sales
     # and catalog_sales before those larger tables enter the expensive shuffle joins.
     store_returns_filtered = store_returns.join(
-        d_q3_dates, left_on="sr_returned_date_sk", right_on="d_date_sk", how="semi"
-    ).select(["sr_customer_sk", "sr_item_sk", "sr_ticket_number", "sr_return_quantity"])
+        d_q3_dates,
+        left_on="sr_returned_date_sk",
+        right_on="d_date_sk",
+        how="semi",
+    ).select(
+        [
+            "sr_customer_sk",
+            "sr_item_sk",
+            "sr_ticket_number",
+            "sr_return_quantity",
+        ]
+    )
 
     # (customer, item) pairs present in any qualifying store return; stays at [6] partitions
     # so broadcast is free. Polars will CACHE this shared subplan.
-    sr_customer_item = store_returns_filtered.select(["sr_customer_sk", "sr_item_sk"])
+    sr_customer_item = store_returns_filtered.select(
+        ["sr_customer_sk", "sr_item_sk"]
+    )
 
     store_sales_filtered = (
         store_sales.join(
-            d1_dates, left_on="ss_sold_date_sk", right_on="d_date_sk", how="semi"
+            d1_dates,
+            left_on="ss_sold_date_sk",
+            right_on="d_date_sk",
+            how="semi",
         )
         .join(
             sr_customer_item,
@@ -174,7 +193,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     catalog_sales_filtered = (
         catalog_sales.join(
-            d_q3_dates, left_on="cs_sold_date_sk", right_on="d_date_sk", how="semi"
+            d_q3_dates,
+            left_on="cs_sold_date_sk",
+            right_on="d_date_sk",
+            how="semi",
         )
         .join(
             sr_customer_item,
@@ -211,12 +233,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .group_by(["i_item_id", "i_item_desc", "s_state"])
             .agg(
                 [
-                    pl.col("ss_quantity").count().alias("store_sales_quantitycount"),
-                    pl.col("ss_quantity").mean().alias("store_sales_quantityave"),
-                    pl.col("ss_quantity").std().alias("store_sales_quantitystdev"),
-                    (pl.col("ss_quantity").std() / pl.col("ss_quantity").mean()).alias(
-                        "store_sales_quantitycov"
-                    ),
+                    pl.col("ss_quantity")
+                    .count()
+                    .alias("store_sales_quantitycount"),
+                    pl.col("ss_quantity")
+                    .mean()
+                    .alias("store_sales_quantityave"),
+                    pl.col("ss_quantity")
+                    .std()
+                    .alias("store_sales_quantitystdev"),
+                    (
+                        pl.col("ss_quantity").std()
+                        / pl.col("ss_quantity").mean()
+                    ).alias("store_sales_quantitycov"),
                     pl.col("sr_return_quantity")
                     .count()
                     .alias("store_returns_quantitycount"),
@@ -230,12 +259,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                         pl.col("sr_return_quantity").std()
                         / pl.col("sr_return_quantity").mean()
                     ).alias("store_returns_quantitycov"),
-                    pl.col("cs_quantity").count().alias("catalog_sales_quantitycount"),
-                    pl.col("cs_quantity").mean().alias("catalog_sales_quantityave"),
-                    pl.col("cs_quantity").std().alias("catalog_sales_quantitystdev"),
-                    (pl.col("cs_quantity").std() / pl.col("cs_quantity").mean()).alias(
-                        "catalog_sales_quantitycov"
-                    ),
+                    pl.col("cs_quantity")
+                    .count()
+                    .alias("catalog_sales_quantitycount"),
+                    pl.col("cs_quantity")
+                    .mean()
+                    .alias("catalog_sales_quantityave"),
+                    pl.col("cs_quantity")
+                    .std()
+                    .alias("catalog_sales_quantitystdev"),
+                    (
+                        pl.col("cs_quantity").std()
+                        / pl.col("cs_quantity").mean()
+                    ).alias("catalog_sales_quantitycov"),
                 ]
             )
             .sort(sort_by.keys(), nulls_last=True)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 86."""
@@ -60,10 +60,14 @@ def _rollup_level(
         out = (
             base.group_by(group_cols)
             .agg(pl.col("ws_net_paid").sum().alias("total_sum"))
-            .with_columns(pl.lit(lochierarchy, dtype=pl.Int64).alias("lochierarchy"))
+            .with_columns(
+                pl.lit(lochierarchy, dtype=pl.Int64).alias("lochierarchy")
+            )
         )
         if group_cols == ["i_category", "i_class"]:
-            out = out.select(["total_sum", "i_category", "i_class", "lochierarchy"])
+            out = out.select(
+                ["total_sum", "i_category", "i_class", "lochierarchy"]
+            )
         elif group_cols == ["i_category"]:
             out = out.select(
                 [
@@ -85,7 +89,9 @@ def _rollup_level(
     else:
         out = (
             base.select(pl.col("ws_net_paid").sum().alias("total_sum"))
-            .with_columns(pl.lit(lochierarchy, dtype=pl.Int64).alias("lochierarchy"))
+            .with_columns(
+                pl.lit(lochierarchy, dtype=pl.Int64).alias("lochierarchy")
+            )
             .select(
                 [
                     "total_sum",
@@ -108,7 +114,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     d_month_seq = params["d_month_seq"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
 

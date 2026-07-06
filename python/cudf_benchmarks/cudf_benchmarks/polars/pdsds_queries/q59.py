@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 59."""
@@ -124,7 +124,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     dms = params["dms"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
 
@@ -177,7 +179,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         left_on="ss_store_sk",
         right_on="s_store_sk",
     ).join(date_dim.select(["d_week_seq", "d_month_seq"]), on="d_week_seq")
-    y = wss_enriched.filter(pl.col("d_month_seq").is_between(dms, dms + 11)).select(
+    y = wss_enriched.filter(
+        pl.col("d_month_seq").is_between(dms, dms + 11)
+    ).select(
         [
             pl.col("s_store_name").alias("s_store_name1"),
             pl.col("s_store_id").alias("s_store_id1"),
@@ -240,7 +244,11 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             ),
         ]
     )
-    sort_by = {"s_store_name1": False, "s_store_id1": False, "d_week_seq1": False}
+    sort_by = {
+        "s_store_name1": False,
+        "s_store_id1": False,
+        "d_week_seq1": False,
+    }
     limit = 100
     return QueryResult(
         frame=projected.sort(sort_by.keys(), nulls_last=True).limit(limit),

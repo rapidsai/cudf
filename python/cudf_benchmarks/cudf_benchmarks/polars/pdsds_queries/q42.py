@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 42."""
@@ -64,7 +64,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Load tables
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     sort_by = {
         "sum(ss_ext_sales_price)": True,
@@ -75,7 +77,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     limit = 100
     return QueryResult(
         frame=(
-            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            store_sales.join(
+                date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+            )
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
             .filter(
                 (pl.col("i_manager_id") == 1)
@@ -83,14 +87,25 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 & (pl.col("d_year") == year)
             )
             .group_by(["d_year", "i_category_id", "i_category"])
-            .agg([pl.col("ss_ext_sales_price").sum().alias("sum(ss_ext_sales_price)")])
+            .agg(
+                [
+                    pl.col("ss_ext_sales_price")
+                    .sum()
+                    .alias("sum(ss_ext_sales_price)")
+                ]
+            )
             .sort(
                 list(sort_by.keys()),
                 descending=list(sort_by.values()),
                 nulls_last=True,
             )
             .select(
-                ["d_year", "i_category_id", "i_category", "sum(ss_ext_sales_price)"]
+                [
+                    "d_year",
+                    "i_category_id",
+                    "i_category",
+                    "sum(ss_ext_sales_price)",
+                ]
             )
             .limit(limit)
         ),

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 47."""
@@ -113,7 +113,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
 
     # Load tables
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     # Step 1: Create CTE v1 equivalent
@@ -171,7 +173,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 pl.col("d_year")
                 .rank(method="ordinal")
                 .over(
-                    ["i_category", "i_brand", "s_store_name", "s_company_name"],
+                    [
+                        "i_category",
+                        "i_brand",
+                        "s_store_name",
+                        "s_company_name",
+                    ],
                     order_by=["d_year", "d_moy"],
                 )
                 .alias("rn"),
@@ -193,7 +200,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("sum_sales").alias("psum"),
                 ]
             ),
-            left_on=["i_category", "i_brand", "s_store_name", "s_company_name"],
+            left_on=[
+                "i_category",
+                "i_brand",
+                "s_store_name",
+                "s_company_name",
+            ],
             right_on=[
                 "i_category_lag",
                 "i_brand_lag",
@@ -215,7 +227,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     pl.col("sum_sales").alias("nsum"),
                 ]
             ),
-            left_on=["i_category", "i_brand", "s_store_name", "s_company_name"],
+            left_on=[
+                "i_category",
+                "i_brand",
+                "s_store_name",
+                "s_company_name",
+            ],
             right_on=[
                 "i_category_lead",
                 "i_brand_lead",
@@ -250,7 +267,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 (
                     pl.when(pl.col("avg_monthly_sales") > 0)
                     .then(
-                        (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                        (
+                            pl.col("sum_sales") - pl.col("avg_monthly_sales")
+                        ).abs()
                         / pl.col("avg_monthly_sales")
                     )
                     .otherwise(None)

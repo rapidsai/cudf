@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 85."""
@@ -102,8 +102,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     np_min = params["np_min"]
     np_max = params["np_max"]
 
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     web_page = get_data(run_config.dataset_path, "web_page", run_config.suffix)
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
@@ -144,8 +148,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 customer_demographics.select(
                     [
                         pl.col("cd_demo_sk").alias("cd1_demo_sk"),
-                        pl.col("cd_marital_status").alias("cd1_marital_status"),
-                        pl.col("cd_education_status").alias("cd1_education_status"),
+                        pl.col("cd_marital_status").alias(
+                            "cd1_marital_status"
+                        ),
+                        pl.col("cd_education_status").alias(
+                            "cd1_education_status"
+                        ),
                     ]
                 ),
                 left_on="wr_refunded_cdemo_sk",
@@ -156,8 +164,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 customer_demographics.select(
                     [
                         pl.col("cd_demo_sk").alias("cd2_demo_sk"),
-                        pl.col("cd_marital_status").alias("cd2_marital_status"),
-                        pl.col("cd_education_status").alias("cd2_education_status"),
+                        pl.col("cd_marital_status").alias(
+                            "cd2_marital_status"
+                        ),
+                        pl.col("cd_education_status").alias(
+                            "cd2_education_status"
+                        ),
                     ]
                 ),
                 left_on="wr_returning_cdemo_sk",
@@ -170,13 +182,24 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 right_on="ca_address_sk",
                 how="inner",
             )
-            .join(reason, left_on="wr_reason_sk", right_on="r_reason_sk", how="inner")
+            .join(
+                reason,
+                left_on="wr_reason_sk",
+                right_on="r_reason_sk",
+                how="inner",
+            )
             .filter(
                 (
                     (pl.col("cd1_marital_status") == ms[0])
-                    & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
+                    & (
+                        pl.col("cd1_marital_status")
+                        == pl.col("cd2_marital_status")
+                    )
                     & (pl.col("cd1_education_status") == es[0])
-                    & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
+                    & (
+                        pl.col("cd1_education_status")
+                        == pl.col("cd2_education_status")
+                    )
                     & (
                         pl.col("ws_sales_price").is_between(
                             price_ranges[0][0], price_ranges[0][1]
@@ -185,9 +208,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 )
                 | (
                     (pl.col("cd1_marital_status") == ms[1])
-                    & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
+                    & (
+                        pl.col("cd1_marital_status")
+                        == pl.col("cd2_marital_status")
+                    )
                     & (pl.col("cd1_education_status") == es[1])
-                    & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
+                    & (
+                        pl.col("cd1_education_status")
+                        == pl.col("cd2_education_status")
+                    )
                     & (
                         pl.col("ws_sales_price").is_between(
                             price_ranges[1][0], price_ranges[1][1]
@@ -196,9 +225,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 )
                 | (
                     (pl.col("cd1_marital_status") == ms[2])
-                    & (pl.col("cd1_marital_status") == pl.col("cd2_marital_status"))
+                    & (
+                        pl.col("cd1_marital_status")
+                        == pl.col("cd2_marital_status")
+                    )
                     & (pl.col("cd1_education_status") == es[2])
-                    & (pl.col("cd1_education_status") == pl.col("cd2_education_status"))
+                    & (
+                        pl.col("cd1_education_status")
+                        == pl.col("cd2_education_status")
+                    )
                     & (
                         pl.col("ws_sales_price").is_between(
                             price_ranges[2][0], price_ranges[2][1]
@@ -222,7 +257,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .agg(
                 [
                     pl.col("ws_quantity").mean().alias("avg(ws_quantity)"),
-                    pl.col("wr_refunded_cash").mean().alias("avg(wr_refunded_cash)"),
+                    pl.col("wr_refunded_cash")
+                    .mean()
+                    .alias("avg(wr_refunded_cash)"),
                     pl.col("wr_fee").mean().alias("avg(wr_fee)"),
                 ]
             )

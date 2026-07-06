@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 7."""
@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 7."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=7, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=7,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -58,7 +60,9 @@ def duckdb_impl(run_config: RunConfig) -> str:
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 7."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=7, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=7,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -67,19 +71,29 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     education_status = params["education_status"]
     promo_channel = params["promo_channel"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     customer_demographics = get_data(
         run_config.dataset_path, "customer_demographics", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
-    promotion = get_data(run_config.dataset_path, "promotion", run_config.suffix)
+    promotion = get_data(
+        run_config.dataset_path, "promotion", run_config.suffix
+    )
 
     return QueryResult(
         frame=(
-            store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+            store_sales.join(
+                date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+            )
             .join(item, left_on="ss_item_sk", right_on="i_item_sk")
-            .join(customer_demographics, left_on="ss_cdemo_sk", right_on="cd_demo_sk")
+            .join(
+                customer_demographics,
+                left_on="ss_cdemo_sk",
+                right_on="cd_demo_sk",
+            )
             .join(promotion, left_on="ss_promo_sk", right_on="p_promo_sk")
             .filter(pl.col("cd_gender") == gender)
             .filter(pl.col("cd_marital_status") == marital_status)

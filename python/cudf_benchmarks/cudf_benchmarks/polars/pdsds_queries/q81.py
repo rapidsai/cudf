@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 81."""
@@ -107,14 +107,20 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             date_dim, left_on="cr_returned_date_sk", right_on="d_date_sk"
         )
         .join(
-            customer_address, left_on="cr_returning_addr_sk", right_on="ca_address_sk"
+            customer_address,
+            left_on="cr_returning_addr_sk",
+            right_on="ca_address_sk",
         )
         .filter(pl.col("d_year") == 1999)
         .group_by(["cr_returning_customer_sk", "ca_state"])
         .agg(
             [
-                pl.col("cr_return_amt_inc_tax").count().alias("ctr_total_return_count"),
-                pl.col("cr_return_amt_inc_tax").sum().alias("ctr_total_return_sum"),
+                pl.col("cr_return_amt_inc_tax")
+                .count()
+                .alias("ctr_total_return_count"),
+                pl.col("cr_return_amt_inc_tax")
+                .sum()
+                .alias("ctr_total_return_sum"),
             ]
         )
         .with_columns(
@@ -163,7 +169,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 customer, left_on="ctr_customer_sk", right_on="c_customer_sk"
             )
             .join(
-                state_addresses, left_on="c_current_addr_sk", right_on="ca_address_sk"
+                state_addresses,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
             )
             .select(
                 [

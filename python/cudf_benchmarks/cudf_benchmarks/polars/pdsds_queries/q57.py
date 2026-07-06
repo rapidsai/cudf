@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 57."""
@@ -110,12 +110,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
+    call_center = get_data(
+        run_config.dataset_path, "call_center", run_config.suffix
+    )
 
     v1 = (
         catalog_sales.join(item, left_on="cs_item_sk", right_on="i_item_sk")
         .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
-        .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
+        .join(
+            call_center,
+            left_on="cs_call_center_sk",
+            right_on="cc_call_center_sk",
+        )
         .filter(
             (pl.col("d_year") == year)
             | ((pl.col("d_year") == year - 1) & (pl.col("d_moy") == 12))
@@ -144,7 +150,8 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 pl.col("d_year")
                 .rank(method="ordinal")
                 .over(
-                    ["i_category", "i_brand", "cc_name"], order_by=["d_year", "d_moy"]
+                    ["i_category", "i_brand", "cc_name"],
+                    order_by=["d_year", "d_moy"],
                 )
                 .alias("rn"),
             ]
@@ -182,7 +189,16 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             how="inner",
         )
         .filter(pl.col("rn") == pl.col("rn_lead") - 1)
-        .select(["i_brand", "d_year", "avg_monthly_sales", "sum_sales", "psum", "nsum"])
+        .select(
+            [
+                "i_brand",
+                "d_year",
+                "avg_monthly_sales",
+                "sum_sales",
+                "psum",
+                "nsum",
+            ]
+        )
     )
 
     sort_by = {"avg_monthly_sales": False}
@@ -195,7 +211,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 & (
                     pl.when(pl.col("avg_monthly_sales") > 0)
                     .then(
-                        (pl.col("sum_sales") - pl.col("avg_monthly_sales")).abs()
+                        (
+                            pl.col("sum_sales") - pl.col("avg_monthly_sales")
+                        ).abs()
                         / pl.col("avg_monthly_sales")
                     )
                     .otherwise(None)

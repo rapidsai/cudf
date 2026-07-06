@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -44,8 +44,8 @@ else:
             "launch with `python -m cudf.pandas`) when using '--executor cpu'."
         )
 
-from numpy import datetime64  # noqa: E402
 import pandas as pd  # noqa: E402
+from numpy import datetime64  # noqa: E402
 
 from cudf_benchmarks.pandas.utils import (  # noqa: E402
     get_data,

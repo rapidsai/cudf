@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 15."""
@@ -73,10 +73,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             catalog_sales.join(
-                customer, left_on="cs_bill_customer_sk", right_on="c_customer_sk"
+                customer,
+                left_on="cs_bill_customer_sk",
+                right_on="c_customer_sk",
             )
             .join(
-                customer_address, left_on="c_current_addr_sk", right_on="ca_address_sk"
+                customer_address,
+                left_on="c_current_addr_sk",
+                right_on="ca_address_sk",
             )
             .join(date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk")
             .filter(

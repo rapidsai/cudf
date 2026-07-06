@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 4."""
@@ -19,7 +19,9 @@ if TYPE_CHECKING:
 def duckdb_impl(run_config: RunConfig) -> str:
     """Query 4."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=4, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=4,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
@@ -219,21 +221,31 @@ def build_sales_agg(
 def polars_impl(run_config: RunConfig) -> QueryResult:
     """Query 4."""
     params = load_parameters(
-        int(run_config.scale_factor), query_id=4, qualification=run_config.qualification
+        int(run_config.scale_factor),
+        query_id=4,
+        qualification=run_config.qualification,
     )
 
     year = params["year"]
 
     # Load required tables
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
-    date_firstyear = date_dim.filter(pl.col("d_year") == year).select("d_date_sk")
-    date_secyear = date_dim.filter(pl.col("d_year") == year + 1).select("d_date_sk")
+    date_firstyear = date_dim.filter(pl.col("d_year") == year).select(
+        "d_date_sk"
+    )
+    date_secyear = date_dim.filter(pl.col("d_year") == year + 1).select(
+        "d_date_sk"
+    )
 
     # Aggregate each channel x year to (customer composite, year_total)
     t_s_fy = build_sales_agg(
@@ -245,7 +257,12 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         "ss_",
     ).filter(pl.col("year_total") > 0)
     t_s_sy = build_sales_agg(
-        store_sales, date_secyear, customer, "ss_sold_date_sk", "ss_customer_sk", "ss_"
+        store_sales,
+        date_secyear,
+        customer,
+        "ss_sold_date_sk",
+        "ss_customer_sk",
+        "ss_",
     )
     t_c_fy = build_sales_agg(
         catalog_sales,

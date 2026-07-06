@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 68."""
@@ -88,7 +88,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     city_a = params["city_a"]
     city_b = params["city_b"]
 
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     household_demographics = get_data(
@@ -99,9 +101,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     dn = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        .join(
+            household_demographics,
+            left_on="ss_hdemo_sk",
+            right_on="hd_demo_sk",
+        )
         .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
         .filter(
             pl.col("d_dom").is_between(1, 2)
@@ -112,7 +120,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             & pl.col("d_year").is_in([year, year + 1, year + 2])
             & pl.col("s_city").is_in([city_a, city_b])
         )
-        .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"])
+        .group_by(
+            ["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"]
+        )
         .agg(
             [
                 pl.col("ss_ext_sales_price").sum().alias("extended_price"),
@@ -124,7 +134,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     return QueryResult(
         frame=(
-            dn.join(customer, left_on="ss_customer_sk", right_on="c_customer_sk")
+            dn.join(
+                customer, left_on="ss_customer_sk", right_on="c_customer_sk"
+            )
             .join(
                 customer_address.select(
                     ["ca_address_sk", pl.col("ca_city").alias("current_city")]

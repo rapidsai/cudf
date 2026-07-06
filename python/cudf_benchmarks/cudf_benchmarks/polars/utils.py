@@ -27,7 +27,6 @@ from statistics import mean
 from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
-
 import polars as pl
 
 __all__: list[str] = [
@@ -69,13 +68,14 @@ try:
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
     from cudf_polars.engine.core import StreamingEngine
+    from cudf_polars.streaming.explain import explain_query
+    from cudf_polars.streaming.parallel import evaluate_streaming
+    from cudf_polars.utils.config import ConfigOptions
+
     from cudf_benchmarks.polars.asserts import (
         ValidationError,
         assert_tpch_result_equal,
     )
-    from cudf_polars.streaming.explain import explain_query
-    from cudf_polars.streaming.parallel import evaluate_streaming
-    from cudf_polars.utils.config import ConfigOptions
 
     CUDF_POLARS_AVAILABLE = True
 except ImportError:
@@ -224,9 +224,13 @@ class ValidationMethod:
             raise RuntimeError("No expected location given")
 
         # search for either q_{q_id:02d}.parquet or q{q_id:02d}.parquet
-        files = list(Path(self.expected_location).glob(f"q*{q_id:02d}.parquet"))
+        files = list(
+            Path(self.expected_location).glob(f"q*{q_id:02d}.parquet")
+        )
         if not files:
-            raise FileNotFoundError(f"Expected result file for query {q_id} not found")
+            raise FileNotFoundError(
+                f"Expected result file for query {q_id} not found"
+            )
         elif len(files) > 1:
             raise ValueError(
                 f"Multiple expected result files for query {q_id}: {files}"
@@ -396,7 +400,9 @@ class CPUInfo:
             physical_cores = psutil.cpu_count(logical=False)
             logical_cores = psutil.cpu_count(logical=True)
         return cls(
-            model=model, physical_cores=physical_cores, logical_cores=logical_cores
+            model=model,
+            physical_cores=physical_cores,
+            logical_cores=logical_cores,
         )
 
 
@@ -425,14 +431,19 @@ class HardwareInfo:
         """
         if collect_gpus and pynvml is not None:
             pynvml.nvmlInit()
-            gpus = [GPUInfo.from_index(i) for i in range(pynvml.nvmlDeviceGetCount())]
+            gpus = [
+                GPUInfo.from_index(i)
+                for i in range(pynvml.nvmlDeviceGetCount())
+            ]
         else:
             # No GPUs -- CPU-only frontend or NVML unavailable
             gpus = []
         return cls(gpus=gpus, cpu=CPUInfo.collect())
 
 
-def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFrame:
+def get_data(
+    path: str | Path, table_name: str, suffix: str = ""
+) -> pl.LazyFrame:
     """
     Get table from dataset.
 
@@ -446,7 +457,9 @@ def get_data(path: str | Path, table_name: str, suffix: str = "") -> pl.LazyFram
     return pl.scan_parquet(file_path)
 
 
-def _infer_scale_factor(name: str, path: str | Path, suffix: str) -> int | float:
+def _infer_scale_factor(
+    name: str, path: str | Path, suffix: str
+) -> int | float:
     if "pdsh" in name:
         supplier = get_data(path, "supplier", suffix)
         num_rows = supplier.select(pl.len()).collect().item(0, 0)
@@ -477,7 +490,9 @@ class RunConfig:
     qualification: bool = False
 
     # Execution mode
-    frontend: Literal["dask", "duckdb", "in-memory", "polars-cpu", "ray", "spmd"]
+    frontend: Literal[
+        "dask", "duckdb", "in-memory", "polars-cpu", "ray", "spmd"
+    ]
     connect: str | None = None
     num_gpus: int | None = None
 
@@ -509,7 +524,9 @@ class RunConfig:
         default_factory=dict
     )
     plans: dict[int, Any] = dataclasses.field(default_factory=dict)
-    hardware: HardwareInfo = dataclasses.field(default_factory=HardwareInfo.collect)
+    hardware: HardwareInfo = dataclasses.field(
+        default_factory=HardwareInfo.collect
+    )
     run_id: uuid.UUID = dataclasses.field(default_factory=uuid.uuid4)
     timestamp: str = dataclasses.field(
         default_factory=lambda: datetime.now(UTC).isoformat()
@@ -518,7 +535,7 @@ class RunConfig:
     capture_env_vars: str
     roles: list[Role] = dataclasses.field(default_factory=list)
 
-    def __post_init__(self) -> None:  # noqa: D105
+    def __post_init__(self) -> None:
         if self.io_mode == "hot" and self.iterations < 2:
             raise ValueError(
                 "--io-mode hot requires at least 2 iterations: "
@@ -553,7 +570,9 @@ class RunConfig:
         scale_factor = args.scale
 
         if args.qualification and "pdsds" not in name:
-            raise ValueError("--qualification can only be used with PDS-DS benchmarks.")
+            raise ValueError(
+                "--qualification can only be used with PDS-DS benchmarks."
+            )
 
         if scale_factor is None:
             if "pdsds" in name:
@@ -683,12 +702,15 @@ class RunConfig:
             "streaming_options": {
                 "rapidsmpf": opts.to_rapidsmpf_options().get_strings(),
                 "executor": opts.to_executor_options(),
-                "engine": {k: str(v) for k, v in opts.to_engine_options().items()},
+                "engine": {
+                    k: str(v) for k, v in opts.to_engine_options().items()
+                },
             }
             if opts is not None
             else None,
             "records": {
-                k: [dataclasses.asdict(r) for r in v] for k, v in self.records.items()
+                k: [dataclasses.asdict(r) for r in v]
+                for k, v in self.records.items()
             },
             "plans": {},
             "versions": dataclasses.asdict(self.versions),
@@ -732,11 +754,17 @@ class RunConfig:
                 opts = self.streaming_options.to_executor_options()
                 print(f"native_parquet: {self.native_parquet}")
                 print(f"n_workers: {self.n_workers}")
-                print(f"target_partition_size: {opts.get('target_partition_size')}")
+                print(
+                    f"target_partition_size: {opts.get('target_partition_size')}"
+                )
                 print(f"broadcast_limit: {opts.get('broadcast_limit')}")
-                print(f"dynamic_planning: {opts.get('dynamic_planning', 'default')}")
+                print(
+                    f"dynamic_planning: {opts.get('dynamic_planning', 'default')}"
+                )
             valid_durations = [
-                record.duration for record in records if record.status == "success"
+                record.duration
+                for record in records
+                if record.status == "success"
             ]
             if len(valid_durations) > 0:
                 mean_time = mean(valid_durations)
@@ -749,7 +777,9 @@ class RunConfig:
                 print("=======================================")
 
         if total_mean_time > 0:
-            print(f"Total mean time across all queries: {total_mean_time:.4f} seconds")
+            print(
+                f"Total mean time across all queries: {total_mean_time:.4f} seconds"
+            )
         else:
             print("No successful queries")
 
@@ -959,11 +989,14 @@ def run_polars_query_iteration(
     engine: pl.GPUEngine | None,
     expected: pl.DataFrame | None,
     query_result: Any,
-    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame]
+    | None = None,
     result_casts: list[pl.Expr] | None = None,
 ) -> SuccessRecord:
     """Run a single query iteration. Caller must wrap in try/except."""
-    result, duration = execute_query(q_id, iteration, q, run_config, args, engine)
+    result, duration = execute_query(
+        q_id, iteration, q, run_config, args, engine
+    )
 
     if expected is not None and prepare_validation_result is not None:
         result = prepare_validation_result(result)
@@ -1016,13 +1049,16 @@ def run_polars_query(
     engine: pl.GPUEngine | None,
     numeric_type: str,
     date_type: str,
-    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame]
+    | None = None,
 ) -> QueryRunResult:
     """Run all iterations for a single query. Caller must wrap in try/except."""
     query_result: QueryResult = getattr(benchmark, f"q{q_id}")(run_config)
     q = query_result.frame
 
-    print_query_plan(q_id, q, args, run_config, engine, print_plans=args.print_plans)
+    print_query_plan(
+        q_id, q, args, run_config, engine, print_plans=args.print_plans
+    )
     plan = None
     if (args.explain or args.explain_logical) and engine is not None:
         from cudf_polars.streaming.explain import serialize_query
@@ -1113,7 +1149,10 @@ def run_polars_query(
             )
 
         else:
-            if record.validation_result and record.validation_result.status == "Failed":
+            if (
+                record.validation_result
+                and record.validation_result.status == "Failed"
+            ):
                 validation_failed = True
                 print(
                     f"❌ Query {q_id} failed validation!\n{record.validation_result.message}"
@@ -1145,7 +1184,8 @@ def _run_query_loop(
     engine: pl.GPUEngine | None,
     numeric_type: str,
     date_type: str,
-    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame] | None = None,
+    prepare_validation_result: Callable[[pl.DataFrame], pl.DataFrame]
+    | None = None,
 ) -> tuple[
     defaultdict[int, list[SuccessRecord | FailedRecord]],
     dict[int, Any],
@@ -1153,7 +1193,9 @@ def _run_query_loop(
     list[tuple[int, int]],
 ]:
     """Execute all queries in ``run_config`` and return accumulated results."""
-    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = (
+        defaultdict(list)
+    )
     plans: dict[int, SerializablePlan] = {}
     validation_failures: list[int] = []
     query_failures: list[tuple[int, int]] = []
@@ -1195,7 +1237,9 @@ def _run_query_loop(
             validation_failures.append(q_id)
         all_partition_plan_rows.extend(result.partition_plan_rows)
 
-    if all_partition_plan_rows and getattr(args, "explain_partition_plan", False):
+    if all_partition_plan_rows and getattr(
+        args, "explain_partition_plan", False
+    ):
         from cudf_polars.streaming.explain import format_partition_plan_table
 
         print(format_partition_plan_table(all_partition_plan_rows), flush=True)
@@ -1247,7 +1291,9 @@ def run_polars_cpu(
         numeric_type=numeric_type,
         date_type=date_type,
     )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    run_config = dataclasses.replace(
+        run_config, records=dict(records), plans=plans
+    )
     _finalize_benchmark_run(
         args, run_config, validation_failures, query_failures, engine=None
     )
@@ -1279,7 +1325,9 @@ def run_polars_in_memory(
         numeric_type=numeric_type,
         date_type=date_type,
     )
-    run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+    run_config = dataclasses.replace(
+        run_config, records=dict(records), plans=plans
+    )
     run_config = _consolidate_logs(run_config, engine=None)
     _finalize_benchmark_run(
         args, run_config, validation_failures, query_failures, engine=None
@@ -1313,7 +1361,9 @@ def run_polars_spmd(
         from cudf_polars.engine.spmd import (
             allgather_polars_dataframe,
         )
-        from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
+        from cudf_polars.streaming.actor_graph.collectives.common import (
+            reserve_op_id,
+        )
 
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
@@ -1335,12 +1385,18 @@ def run_polars_spmd(
         )
         if engine.rank > 0:
             sys.exit(1 if (query_failures or validation_failures) else 0)
-        run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = dataclasses.replace(
+            run_config, records=dict(records), plans=plans
+        )
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
         _finalize_benchmark_run(
-            args, run_config, validation_failures, query_failures, engine=engine
+            args,
+            run_config,
+            validation_failures,
+            query_failures,
+            engine=engine,
         )
 
 
@@ -1384,7 +1440,9 @@ def run_polars_ray(
             numeric_type,
             date_type,
         )
-        run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
+        run_config = dataclasses.replace(
+            run_config, records=dict(records), plans=plans
+        )
         run_config = _consolidate_logs(run_config, engine=engine)
 
     _finalize_benchmark_run(
@@ -1402,7 +1460,6 @@ def run_polars_dask(
 ) -> None:
     """Run benchmark queries using Dask distributed execution."""
     import distributed
-
     from cudf_polars.engine.dask import DaskEngine
 
     executor_options = get_executor_options(run_config, benchmark=benchmark)
@@ -1432,9 +1489,18 @@ def run_polars_dask(
             engine_options=engine_options,
             dask_client=dask_client,
         ) as engine:
-            run_config = dataclasses.replace(run_config, n_workers=engine.nranks)
-            records, plans, validation_failures, query_failures = _run_query_loop(
-                benchmark, args, run_config, engine, numeric_type, date_type
+            run_config = dataclasses.replace(
+                run_config, n_workers=engine.nranks
+            )
+            records, plans, validation_failures, query_failures = (
+                _run_query_loop(
+                    benchmark,
+                    args,
+                    run_config,
+                    engine,
+                    numeric_type,
+                    date_type,
+                )
             )
             run_config = dataclasses.replace(
                 run_config, records=dict(records), plans=plans
@@ -1495,7 +1561,9 @@ def setup_logging(query_id: int, iteration: int) -> None:
             ),
             structlog.processors.StackInfoRenderer(),
             structlog.dev.set_exc_info,
-            structlog.processors.TimeStamper(fmt="%Y-%m-%d %H:%M:%S.%f", utc=False),
+            structlog.processors.TimeStamper(
+                fmt="%Y-%m-%d %H:%M:%S.%f", utc=False
+            ),
         ]
 
         # For logging to a file
@@ -1567,7 +1635,9 @@ def _consolidate_logs(
     parsed_logs = [json.loads(log) for log in all_logs.splitlines() if log]
     # Some other log records can end up in here. Filter those out.
     scope_values = {s.value for s in Scope}
-    parsed_logs = [log for log in parsed_logs if log.get("scope") in scope_values]
+    parsed_logs = [
+        log for log in parsed_logs if log.get("scope") in scope_values
+    ]
     # Now we want to augment the existing Records with the trace data.
 
     def group_key(x: dict) -> int:
@@ -1725,13 +1795,17 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
     """Run the benchmark with DuckDB."""
     vars(args).update({"query_set": duckdb_queries_cls.name})
     run_config = RunConfig.from_args(args)
-    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = defaultdict(list)
+    records: defaultdict[int, list[SuccessRecord | FailedRecord]] = (
+        defaultdict(list)
+    )
 
     for q_id in run_config.queries:
         try:
             get_q = getattr(duckdb_queries_cls, f"q{q_id}")
         except AttributeError as err:
-            raise NotImplementedError(f"Query {q_id} not implemented.") from err
+            raise NotImplementedError(
+                f"Query {q_id} not implemented."
+            ) from err
 
         sql = get_q(run_config)
 
@@ -1764,7 +1838,9 @@ def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
             record = SuccessRecord(query=q_id, iteration=i, duration=t1 - t0)
             if args.print_results:
                 print(result)
-            print(f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s")
+            print(
+                f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s"
+            )
             records[q_id].append(record)
             if i == 0 and args.output_expected_directory is not None:
                 expected_dir = Path(args.output_expected_directory)
@@ -2164,8 +2240,13 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
 
-    if run_config.connect is not None and run_config.frontend not in ("dask", "ray"):
-        raise ValueError("--connect is only supported with --frontend ray or dask.")
+    if run_config.connect is not None and run_config.frontend not in (
+        "dask",
+        "ray",
+    ):
+        raise ValueError(
+            "--connect is only supported with --frontend ray or dask."
+        )
 
     if run_config.collect_traces and run_config.frontend in _CPU_ENGINES:
         raise ValueError(
@@ -2211,23 +2292,45 @@ def run_polars(benchmark: Any, args: argparse.Namespace) -> None:
     match args.frontend:
         case "dask":
             run_polars_dask(
-                benchmark, args, run_config, parquet_options, numeric_type, date_type
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
             )
         case "duckdb":
             run_duckdb(benchmark().duckdb_queries, args)
         case "in-memory":
             run_polars_in_memory(
-                benchmark, args, run_config, parquet_options, numeric_type, date_type
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
             )
         case "polars-cpu":
-            run_polars_cpu(benchmark, args, run_config, numeric_type, date_type)
+            run_polars_cpu(
+                benchmark, args, run_config, numeric_type, date_type
+            )
         case "ray":
             run_polars_ray(
-                benchmark, args, run_config, parquet_options, numeric_type, date_type
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
             )
         case "spmd":
             run_polars_spmd(
-                benchmark, args, run_config, parquet_options, numeric_type, date_type
+                benchmark,
+                args,
+                run_config,
+                parquet_options,
+                numeric_type,
+                date_type,
             )
         case _:
             raise ValueError(f"Unknown --frontend: {args.frontend!r}")

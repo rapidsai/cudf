@@ -21,8 +21,8 @@ import polars as pl
 
 try:
     from cudf_benchmarks.polars.utils import (
-        COUNT_DTYPE,
         _CPU_ENGINES,
+        COUNT_DTYPE,
         QueryResult,
         RunConfig,
         build_parser,
@@ -70,7 +70,10 @@ if COUNT_DTYPE is not None:
             pl.col("high_line_count").cast(pl.Int32()),
             pl.col("low_line_count").cast(pl.Int32()),
         ],
-        13: [pl.col("c_count").cast(COUNT_DTYPE), pl.col("custdist").cast(COUNT_DTYPE)],
+        13: [
+            pl.col("c_count").cast(COUNT_DTYPE),
+            pl.col("custdist").cast(COUNT_DTYPE),
+        ],
         16: [pl.col("supplier_cnt").cast(COUNT_DTYPE)],
         21: [pl.col("numwait").cast(COUNT_DTYPE)],
         22: [pl.col("numcust").cast(COUNT_DTYPE)],
@@ -142,7 +145,9 @@ class PDSHQueries:
     @staticmethod
     def q1(run_config: RunConfig) -> QueryResult:
         """Query 1."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
 
         var1 = date(1998, 9, 2)
 
@@ -181,9 +186,13 @@ class PDSHQueries:
         """Query 2."""
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
-        partsupp = get_data(run_config.dataset_path, "partsupp", run_config.suffix)
+        partsupp = get_data(
+            run_config.dataset_path, "partsupp", run_config.suffix
+        )
         region = get_data(run_config.dataset_path, "region", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = 15
         var2 = "BRASS"
@@ -234,8 +243,12 @@ class PDSHQueries:
     @staticmethod
     def q3(run_config: RunConfig) -> QueryResult:
         """Query 3."""
-        customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        customer = get_data(
+            run_config.dataset_path, "customer", run_config.suffix
+        )
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
 
         var1 = "BUILDING"
@@ -273,7 +286,9 @@ class PDSHQueries:
     @staticmethod
     def q4(run_config: RunConfig) -> QueryResult:
         """Query 4."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
 
         var1 = date(1993, 7, 1)
@@ -282,12 +297,18 @@ class PDSHQueries:
         frame = (
             # SQL exists translates to semi join in Polars API
             orders.join(
-                (lineitem.filter(pl.col("l_commitdate") < pl.col("l_receiptdate"))),
+                (
+                    lineitem.filter(
+                        pl.col("l_commitdate") < pl.col("l_receiptdate")
+                    )
+                ),
                 left_on="o_orderkey",
                 right_on="l_orderkey",
                 how="semi",
             )
-            .filter(pl.col("o_orderdate").is_between(var1, var2, closed="left"))
+            .filter(
+                pl.col("o_orderdate").is_between(var1, var2, closed="left")
+            )
             .group_by("o_orderpriority")
             .agg(pl.len().alias("order_count"))
             .sort("o_orderpriority")
@@ -325,7 +346,9 @@ class PDSHQueries:
                 right_on=["s_suppkey", "s_nationkey"],
             )
             .filter(pl.col("r_name") == var1)
-            .filter(pl.col("o_orderdate").is_between(var2, var3, closed="left"))
+            .filter(
+                pl.col("o_orderdate").is_between(var2, var3, closed="left")
+            )
             .with_columns(
                 (pl.col("l_extendedprice") * (1 - pl.col("l_discount"))).alias(
                     "revenue"
@@ -355,11 +378,15 @@ class PDSHQueries:
         var5 = 24
 
         frame = (
-            lineitem.filter(pl.col("l_shipdate").is_between(var1, var2, closed="left"))
+            lineitem.filter(
+                pl.col("l_shipdate").is_between(var1, var2, closed="left")
+            )
             .filter(pl.col("l_discount").is_between(var3, var4))
             .filter(pl.col("l_quantity") < var5)
             .with_columns(
-                (pl.col("l_extendedprice") * pl.col("l_discount")).alias("revenue")
+                (pl.col("l_extendedprice") * pl.col("l_discount")).alias(
+                    "revenue"
+                )
             )
             .select(pl.sum("revenue"))
         )
@@ -372,11 +399,17 @@ class PDSHQueries:
     @staticmethod
     def q7(run_config: RunConfig) -> QueryResult:
         """Query 7."""
-        customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        customer = get_data(
+            run_config.dataset_path, "customer", run_config.suffix
+        )
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = "FRANCE"
         var2 = "GERMANY"
@@ -422,19 +455,29 @@ class PDSHQueries:
 
         return QueryResult(
             frame=frame,
-            sort_by=[("supp_nation", False), ("cust_nation", False), ("l_year", False)],
+            sort_by=[
+                ("supp_nation", False),
+                ("cust_nation", False),
+                ("l_year", False),
+            ],
         )
 
     @staticmethod
     def q8(run_config: RunConfig) -> QueryResult:
         """Query 8."""
-        customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        customer = get_data(
+            run_config.dataset_path, "customer", run_config.suffix
+        )
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
         region = get_data(run_config.dataset_path, "region", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = "BRAZIL"
         var2 = "AMERICA"
@@ -537,7 +580,9 @@ class PDSHQueries:
             customer.join(orders, left_on="c_custkey", right_on="o_custkey")
             .join(lineitem, left_on="o_orderkey", right_on="l_orderkey")
             .join(nation, left_on="c_nationkey", right_on="n_nationkey")
-            .filter(pl.col("o_orderdate").is_between(var1, var2, closed="left"))
+            .filter(
+                pl.col("o_orderdate").is_between(var1, var2, closed="left")
+            )
             .filter(pl.col("l_returnflag") == "R")
             .group_by(
                 "c_custkey",
@@ -578,8 +623,12 @@ class PDSHQueries:
     def q11(run_config: RunConfig) -> QueryResult:
         """Query 11."""
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
-        partsupp = get_data(run_config.dataset_path, "partsupp", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        partsupp = get_data(
+            run_config.dataset_path, "partsupp", run_config.suffix
+        )
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = "GERMANY"
         var2 = float(f"{0.0001 / run_config.scale_factor:.12f}")
@@ -619,7 +668,9 @@ class PDSHQueries:
     @staticmethod
     def q12(run_config: RunConfig) -> QueryResult:
         """Query 12."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
 
         var1 = "MAIL"
@@ -632,19 +683,29 @@ class PDSHQueries:
             .filter(pl.col("l_shipmode").is_in([var1, var2]))
             .filter(pl.col("l_commitdate") < pl.col("l_receiptdate"))
             .filter(pl.col("l_shipdate") < pl.col("l_commitdate"))
-            .filter(pl.col("l_receiptdate").is_between(var3, var4, closed="left"))
+            .filter(
+                pl.col("l_receiptdate").is_between(var3, var4, closed="left")
+            )
             .with_columns(
-                pl.when(pl.col("o_orderpriority").is_in(["1-URGENT", "2-HIGH"]))
+                pl.when(
+                    pl.col("o_orderpriority").is_in(["1-URGENT", "2-HIGH"])
+                )
                 .then(1)
                 .otherwise(0)
                 .alias("high_line_count"),
-                pl.when(pl.col("o_orderpriority").is_in(["1-URGENT", "2-HIGH"]).not_())
+                pl.when(
+                    pl.col("o_orderpriority")
+                    .is_in(["1-URGENT", "2-HIGH"])
+                    .not_()
+                )
                 .then(1)
                 .otherwise(0)
                 .alias("low_line_count"),
             )
             .group_by("l_shipmode")
-            .agg(pl.col("high_line_count").sum(), pl.col("low_line_count").sum())
+            .agg(
+                pl.col("high_line_count").sum(), pl.col("low_line_count").sum()
+            )
             .sort("l_shipmode")
         )
 
@@ -656,7 +717,9 @@ class PDSHQueries:
     @staticmethod
     def q13(run_config: RunConfig) -> QueryResult:
         """Query 13."""
-        customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+        customer = get_data(
+            run_config.dataset_path, "customer", run_config.suffix
+        )
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
 
         var1 = "special"
@@ -667,7 +730,9 @@ class PDSHQueries:
         )
 
         frame = (
-            customer.join(orders, left_on="c_custkey", right_on="o_custkey", how="left")
+            customer.join(
+                orders, left_on="c_custkey", right_on="o_custkey", how="left"
+            )
             .group_by("c_custkey")
             .agg(pl.col("o_orderkey").count().alias("c_count"))
             .group_by("c_count")
@@ -684,7 +749,9 @@ class PDSHQueries:
     @staticmethod
     def q14(run_config: RunConfig) -> QueryResult:
         """Query 14."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
 
         var1 = date(1995, 9, 1)
@@ -697,10 +764,14 @@ class PDSHQueries:
                 (
                     100.00
                     * pl.when(pl.col("p_type").str.contains("PROMO*"))
-                    .then(pl.col("l_extendedprice") * (1 - pl.col("l_discount")))
+                    .then(
+                        pl.col("l_extendedprice") * (1 - pl.col("l_discount"))
+                    )
                     .otherwise(0)
                     .sum()
-                    / (pl.col("l_extendedprice") * (1 - pl.col("l_discount"))).sum()
+                    / (
+                        pl.col("l_extendedprice") * (1 - pl.col("l_discount"))
+                    ).sum()
                 )
                 .round(2)
                 .alias("promo_revenue")
@@ -715,28 +786,39 @@ class PDSHQueries:
     @staticmethod
     def q15(run_config: RunConfig) -> QueryResult:
         """Query 15."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = date(1996, 1, 1)
         var2 = date(1996, 4, 1)
 
         revenue = (
-            lineitem.filter(pl.col("l_shipdate").is_between(var1, var2, closed="left"))
+            lineitem.filter(
+                pl.col("l_shipdate").is_between(var1, var2, closed="left")
+            )
             .group_by("l_suppkey")
             .agg(
                 (pl.col("l_extendedprice") * (1 - pl.col("l_discount")))
                 .sum()
                 .alias("total_revenue")
             )
-            .select(pl.col("l_suppkey").alias("supplier_no"), pl.col("total_revenue"))
+            .select(
+                pl.col("l_suppkey").alias("supplier_no"),
+                pl.col("total_revenue"),
+            )
         )
 
         frame = (
             supplier.join(revenue, left_on="s_suppkey", right_on="supplier_no")
             .filter(pl.col("total_revenue") == pl.col("total_revenue").max())
             .with_columns(pl.col("total_revenue").round(2))
-            .select("s_suppkey", "s_name", "s_address", "s_phone", "total_revenue")
+            .select(
+                "s_suppkey", "s_name", "s_address", "s_phone", "total_revenue"
+            )
             .sort("s_suppkey")
         )
 
@@ -749,8 +831,12 @@ class PDSHQueries:
     def q16(run_config: RunConfig) -> QueryResult:
         """Query 16."""
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
-        partsupp = get_data(run_config.dataset_path, "partsupp", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        partsupp = get_data(
+            run_config.dataset_path, "partsupp", run_config.suffix
+        )
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = "Brand#45"
 
@@ -763,7 +849,12 @@ class PDSHQueries:
             .filter(pl.col("p_brand") != var1)
             .filter(pl.col("p_type").str.contains("MEDIUM POLISHED*").not_())
             .filter(pl.col("p_size").is_in([49, 14, 23, 45, 19, 3, 36, 9]))
-            .join(supplier, left_on="ps_suppkey", right_on="s_suppkey", how="left")
+            .join(
+                supplier,
+                left_on="ps_suppkey",
+                right_on="s_suppkey",
+                how="left",
+            )
             .filter(pl.col("ps_suppkey_right").is_null())
             .group_by("p_brand", "p_type", "p_size")
             .agg(pl.col("ps_suppkey").n_unique().alias("supplier_cnt"))
@@ -786,7 +877,9 @@ class PDSHQueries:
     @staticmethod
     def q17(run_config: RunConfig) -> QueryResult:
         """Query 17."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
 
         var1 = "Brand#23"
@@ -795,7 +888,12 @@ class PDSHQueries:
         q1 = (
             part.filter(pl.col("p_brand") == var1)
             .filter(pl.col("p_container") == var2)
-            .join(lineitem, how="inner", left_on="p_partkey", right_on="l_partkey")
+            .join(
+                lineitem,
+                how="inner",
+                left_on="p_partkey",
+                right_on="l_partkey",
+            )
         )
 
         frame = (
@@ -805,7 +903,9 @@ class PDSHQueries:
             .join(q1, left_on="key", right_on="p_partkey")
             .filter(pl.col("l_quantity") < pl.col("avg_quantity"))
             .select(
-                (pl.col("l_extendedprice").sum() / 7.0).round(2).alias("avg_yearly")
+                (pl.col("l_extendedprice").sum() / 7.0)
+                .round(2)
+                .alias("avg_yearly")
             )
         )
 
@@ -832,11 +932,17 @@ class PDSHQueries:
         )
 
         frame = (
-            orders.join(q1, left_on="o_orderkey", right_on="l_orderkey", how="semi")
+            orders.join(
+                q1, left_on="o_orderkey", right_on="l_orderkey", how="semi"
+            )
             .join(lineitem, left_on="o_orderkey", right_on="l_orderkey")
             .join(customer, left_on="o_custkey", right_on="c_custkey")
             .group_by(
-                "c_name", "o_custkey", "o_orderkey", "o_orderdate", "o_totalprice"
+                "c_name",
+                "o_custkey",
+                "o_orderkey",
+                "o_orderdate",
+                "o_totalprice",
             )
             .agg(pl.col("l_quantity").sum().alias("sum(l_quantity)"))
             .select(
@@ -860,7 +966,9 @@ class PDSHQueries:
     @staticmethod
     def q19(run_config: RunConfig) -> QueryResult:
         """Query 19."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
 
         frame = (
@@ -909,11 +1017,17 @@ class PDSHQueries:
     @staticmethod
     def q20(run_config: RunConfig) -> QueryResult:
         """Query 20."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         part = get_data(run_config.dataset_path, "part", run_config.suffix)
-        partsupp = get_data(run_config.dataset_path, "partsupp", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        partsupp = get_data(
+            run_config.dataset_path, "partsupp", run_config.suffix
+        )
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = date(1994, 1, 1)
         var2 = date(1995, 1, 1)
@@ -921,7 +1035,9 @@ class PDSHQueries:
         var4 = "forest"
 
         q1 = (
-            lineitem.filter(pl.col("l_shipdate").is_between(var1, var2, closed="left"))
+            lineitem.filter(
+                pl.col("l_shipdate").is_between(var1, var2, closed="left")
+            )
             .group_by("l_partkey", "l_suppkey")
             .agg((pl.col("l_quantity").sum() * 0.5).alias("sum_quantity"))
         )
@@ -952,10 +1068,14 @@ class PDSHQueries:
     @staticmethod
     def q21(run_config: RunConfig) -> QueryResult:
         """Query 21."""
-        lineitem = get_data(run_config.dataset_path, "lineitem", run_config.suffix)
+        lineitem = get_data(
+            run_config.dataset_path, "lineitem", run_config.suffix
+        )
         nation = get_data(run_config.dataset_path, "nation", run_config.suffix)
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
-        supplier = get_data(run_config.dataset_path, "supplier", run_config.suffix)
+        supplier = get_data(
+            run_config.dataset_path, "supplier", run_config.suffix
+        )
 
         var1 = "SAUDI ARABIA"
 
@@ -964,7 +1084,9 @@ class PDSHQueries:
             .agg(pl.col("l_suppkey").len().alias("n_supp_by_order"))
             .filter(pl.col("n_supp_by_order") > 1)
             .join(
-                lineitem.filter(pl.col("l_receiptdate") > pl.col("l_commitdate")),
+                lineitem.filter(
+                    pl.col("l_receiptdate") > pl.col("l_commitdate")
+                ),
                 on="l_orderkey",
             )
         )
@@ -994,11 +1116,15 @@ class PDSHQueries:
     @staticmethod
     def q22(run_config: RunConfig) -> QueryResult:
         """Query 22."""
-        customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
+        customer = get_data(
+            run_config.dataset_path, "customer", run_config.suffix
+        )
         orders = get_data(run_config.dataset_path, "orders", run_config.suffix)
 
         q1 = (
-            customer.with_columns(pl.col("c_phone").str.slice(0, 2).alias("cntrycode"))
+            customer.with_columns(
+                pl.col("c_phone").str.slice(0, 2).alias("cntrycode")
+            )
             .filter(pl.col("cntrycode").str.contains("13|31|23|29|30|18|17"))
             .select("c_acctbal", "c_custkey", "cntrycode")
         )
@@ -1801,6 +1927,8 @@ if __name__ == "__main__":
     parser = build_parser(num_queries=22)
     args = parse_args(parser=parser)
     if args.frontend not in _CPU_ENGINES:
-        os.environ["POLARS_MAX_THREADS"] = os.environ.get("POLARS_MAX_THREADS", "1")
+        os.environ["POLARS_MAX_THREADS"] = os.environ.get(
+            "POLARS_MAX_THREADS", "1"
+        )
         os.environ["OMP_NUM_THREADS"] = os.environ.get("OMP_NUM_THREADS", "1")
     run_polars(PDSHQueries, args)

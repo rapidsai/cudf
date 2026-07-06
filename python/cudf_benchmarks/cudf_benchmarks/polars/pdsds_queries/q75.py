@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 75."""
@@ -122,17 +122,29 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
     filtered_items = item.filter(pl.col("i_category") == category).select(
-        ["i_item_sk", "i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"]
+        [
+            "i_item_sk",
+            "i_brand_id",
+            "i_class_id",
+            "i_category_id",
+            "i_manufact_id",
+        ]
     )
 
     def build_year_sales(target_year: int) -> pl.LazyFrame:
@@ -175,7 +187,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
 
         sto = (
-            store_sales.join(filtered_items, left_on="ss_item_sk", right_on="i_item_sk")
+            store_sales.join(
+                filtered_items, left_on="ss_item_sk", right_on="i_item_sk"
+            )
             .join(date_yr, left_on="ss_sold_date_sk", right_on="d_date_sk")
             .join(
                 store_returns,
@@ -208,7 +222,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
 
         web = (
-            web_sales.join(filtered_items, left_on="ws_item_sk", right_on="i_item_sk")
+            web_sales.join(
+                filtered_items, left_on="ws_item_sk", right_on="i_item_sk"
+            )
             .join(date_yr, left_on="ws_sold_date_sk", right_on="d_date_sk")
             .join(
                 web_returns,
@@ -243,7 +259,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         return (
             pl.concat([cat, sto, web])
             .unique()
-            .group_by(["i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"])
+            .group_by(
+                ["i_brand_id", "i_class_id", "i_category_id", "i_manufact_id"]
+            )
             .agg(
                 [
                     pl.col("sales_cnt").sum().alias("sales_cnt"),

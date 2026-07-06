@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utility functions/classes for running the PDS-H and PDS-DS benchmarks."""
@@ -358,32 +358,26 @@ class RunConfig:
 
     def summarize(self) -> None:
         """Print a summary of the results."""
-        print("Iteration Summary")  # noqa: T201
-        print("=======================================")  # noqa: T201
+        print("Iteration Summary")
+        print("=======================================")
 
         for query, records in self.records.items():
-            print(f"query: {query}")  # noqa: T201
-            print(f"path: {self.dataset_path}")  # noqa: T201
-            print(f"scale_factor: {self.scale_factor}")  # noqa: T201
-            print(f"executor: {self.executor}")  # noqa: T201
+            print(f"query: {query}")
+            print(f"path: {self.dataset_path}")
+            print(f"scale_factor: {self.scale_factor}")
+            print(f"executor: {self.executor}")
             if len(records) > 0:
                 valid_durations = [
                     record.duration
                     for record in records
                     if record.status == "success"
                 ]
-                print(f"iterations: {self.iterations}")  # noqa: T201
-                print("---------------------------------------")  # noqa: T201
-                print(  # noqa: T201
-                    f"min time : {min(valid_durations):0.4f}"
-                )
-                print(  # noqa: T201
-                    f"max time : {max(valid_durations):0.4f}"
-                )
-                print(  # noqa: T201
-                    f"mean time: {statistics.mean(valid_durations):0.4f}"
-                )
-                print("=======================================")  # noqa: T201
+                print(f"iterations: {self.iterations}")
+                print("---------------------------------------")
+                print(f"min time : {min(valid_durations):0.4f}")
+                print(f"max time : {max(valid_durations):0.4f}")
+                print(f"mean time: {statistics.mean(valid_durations):0.4f}")
+                print("=======================================")
         total_mean_time = sum(
             statistics.mean(
                 record.duration
@@ -393,7 +387,7 @@ class RunConfig:
             for records in self.records.values()
             if records
         )
-        print(  # noqa: T201
+        print(
             f"Total mean time across all queries: {total_mean_time:.4f} seconds"
         )
 
@@ -422,7 +416,9 @@ def execute_query(
     ):
         if run_config.executor == "cpu" and CUDF_PANDAS_ENABLED:
             # CPU baseline inside an accelerated run: turn cudf.pandas off for this query.
-            from cudf.pandas.module_accelerator import disable_module_accelerator
+            from cudf.pandas.module_accelerator import (
+                disable_module_accelerator,
+            )
 
             with disable_module_accelerator():
                 start_time = time.monotonic()
@@ -622,7 +618,7 @@ def run_pandas_query_iteration(
         validation_result = None
 
     if args.print_results:
-        print(result)  # noqa: T201
+        print(result)
 
     return SuccessRecord(
         query=q_id, duration=duration, validation_result=validation_result
@@ -649,7 +645,9 @@ def run_pandas_query(
     elif validation_files is not None:
         # Read the golden file with real pandas (the slow proxy when cudf.pandas is on).
         read_parquet = (
-            pd._fsproxy_slow.read_parquet if CUDF_PANDAS_ENABLED else pd.read_parquet
+            pd._fsproxy_slow.read_parquet
+            if CUDF_PANDAS_ENABLED
+            else pd.read_parquet
         )
         expected = read_parquet(validation_files[q_id])
     else:
@@ -666,8 +664,8 @@ def run_pandas_query(
                 q_id, i, q, run_config, args, expected
             )
         except Exception:
-            print(f"❌ query={q_id} iteration={i} failed!")  # noqa: T201
-            print(traceback.format_exc())  # noqa: T201
+            print(f"❌ query={q_id} iteration={i} failed!")
+            print(traceback.format_exc())
             iteration_failures.append((q_id, i))
             record = FailedRecord(
                 query=q_id,
@@ -680,13 +678,13 @@ def run_pandas_query(
                 and record.validation_result.status == "Failed"
             ):
                 validation_failed = True
-                print(  # noqa: T201
+                print(
                     f"❌ Query {q_id} failed validation!\n{record.validation_result.message}"
                 )
                 if record.validation_result.details:
-                    pprint.pprint(record.validation_result.details)  # noqa: T203
+                    pprint.pprint(record.validation_result.details)
                 else:
-                    print(  # noqa: T201
+                    print(
                         f"Query {q_id} - Iteration {i} finished in {record.duration:0.4f}s",
                         flush=True,
                     )
@@ -731,8 +729,8 @@ def run_pandas(
                 validation_files=validation_files,
             )
         except Exception:
-            print(f"❌ query={q_id} failed (setup or execution)!")  # noqa: T201
-            print(traceback.format_exc())  # noqa: T201
+            print(f"❌ query={q_id} failed (setup or execution)!")
+            print(traceback.format_exc())
             query_failures.append((q_id, -1))
             record = FailedRecord(
                 query=q_id,
@@ -756,14 +754,14 @@ def run_pandas(
         run_config.summarize()
 
     if args.validate and run_config.executor != "cpu":
-        print("\nValidation Summary")  # noqa: T201
-        print("==================")  # noqa: T201
+        print("\nValidation Summary")
+        print("==================")
         if validation_failures:
-            print(  # noqa: T201
+            print(
                 f"{len(validation_failures)} queries failed validation: {sorted(set(validation_failures))}"
             )
         else:
-            print("All validated queries passed.")  # noqa: T201
+            print("All validated queries passed.")
 
     args.output.write(json.dumps(run_config.serialize()))
     args.output.write("\n")

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 12."""
@@ -71,7 +71,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     categories = params["category"]
 
     # Load tables
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
     item = get_data(run_config.dataset_path, "item", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
@@ -93,7 +95,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 )
             )
             .group_by(
-                ["i_item_id", "i_item_desc", "i_category", "i_class", "i_current_price"]
+                [
+                    "i_item_id",
+                    "i_item_desc",
+                    "i_category",
+                    "i_class",
+                    "i_current_price",
+                ]
             )
             .agg(
                 [
@@ -116,7 +124,13 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 ]
             )
             .sort(
-                ["i_category", "i_class", "i_item_id", "i_item_desc", "revenueratio"],
+                [
+                    "i_category",
+                    "i_class",
+                    "i_item_id",
+                    "i_item_desc",
+                    "revenueratio",
+                ],
                 nulls_last=True,
             )
             .limit(100)

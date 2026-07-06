@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 49."""
@@ -175,15 +175,21 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     month = params["month"]
 
     # Load tables
-    web_sales = get_data(run_config.dataset_path, "web_sales", run_config.suffix)
-    web_returns = get_data(run_config.dataset_path, "web_returns", run_config.suffix)
+    web_sales = get_data(
+        run_config.dataset_path, "web_sales", run_config.suffix
+    )
+    web_returns = get_data(
+        run_config.dataset_path, "web_returns", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     catalog_returns = get_data(
         run_config.dataset_path, "catalog_returns", run_config.suffix
     )
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     store_returns = get_data(
         run_config.dataset_path, "store_returns", run_config.suffix
     )
@@ -212,8 +218,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 (
                     pl.when(pl.col("ws_quantity").drop_nulls().count() > 0)
                     .then(
-                        pl.col("wr_return_quantity").fill_null(0).sum().cast(pl.Float64)
-                        / pl.col("ws_quantity").fill_null(0).sum().cast(pl.Float64)
+                        pl.col("wr_return_quantity")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Float64)
+                        / pl.col("ws_quantity")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Float64)
                     )
                     .otherwise(None)
                 ).alias("return_ratio"),
@@ -232,12 +244,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             [
                 pl.col("ws_item_sk").alias("item"),
                 pl.col("return_ratio").rank(method="min").alias("return_rank"),
-                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
+                pl.col("currency_ratio")
+                .rank(method="min")
+                .alias("currency_rank"),
             ]
         )
-        .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
+        .filter(
+            (pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10)
+        )
         .with_columns([pl.lit("web").alias("channel")])
-        .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
+        .select(
+            ["channel", "item", "return_ratio", "return_rank", "currency_rank"]
+        )
     )
     # Catalog channel data
     catalog_data = (
@@ -263,8 +281,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 (
                     pl.when(pl.col("cs_quantity").drop_nulls().count() > 0)
                     .then(
-                        pl.col("cr_return_quantity").fill_null(0).sum().cast(pl.Float64)
-                        / pl.col("cs_quantity").fill_null(0).sum().cast(pl.Float64)
+                        pl.col("cr_return_quantity")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Float64)
+                        / pl.col("cs_quantity")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Float64)
                     )
                     .otherwise(None)
                 ).alias("return_ratio"),
@@ -283,12 +307,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             [
                 pl.col("cs_item_sk").alias("item"),
                 pl.col("return_ratio").rank(method="min").alias("return_rank"),
-                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
+                pl.col("currency_ratio")
+                .rank(method="min")
+                .alias("currency_rank"),
             ]
         )
-        .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
+        .filter(
+            (pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10)
+        )
         .with_columns([pl.lit("catalog").alias("channel")])
-        .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
+        .select(
+            ["channel", "item", "return_ratio", "return_rank", "currency_rank"]
+        )
     )
     # Store channel data
     store_data = (
@@ -314,8 +344,14 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 (
                     pl.when(pl.col("ss_quantity").drop_nulls().count() > 0)
                     .then(
-                        pl.col("sr_return_quantity").fill_null(0).sum().cast(pl.Float64)
-                        / pl.col("ss_quantity").fill_null(0).sum().cast(pl.Float64)
+                        pl.col("sr_return_quantity")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Float64)
+                        / pl.col("ss_quantity")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Float64)
                     )
                     .otherwise(None)
                 ).alias("return_ratio"),
@@ -334,12 +370,18 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             [
                 pl.col("ss_item_sk").alias("item"),
                 pl.col("return_ratio").rank(method="min").alias("return_rank"),
-                pl.col("currency_ratio").rank(method="min").alias("currency_rank"),
+                pl.col("currency_ratio")
+                .rank(method="min")
+                .alias("currency_rank"),
             ]
         )
-        .filter((pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10))
+        .filter(
+            (pl.col("return_rank") <= 10) | (pl.col("currency_rank") <= 10)
+        )
         .with_columns([pl.lit("store").alias("channel")])
-        .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
+        .select(
+            ["channel", "item", "return_ratio", "return_rank", "currency_rank"]
+        )
     )
     # Union all channels and apply final ordering
     sort_by = {"channel": False, "return_rank": False, "currency_rank": False}
@@ -347,7 +389,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             pl.concat([web_data, catalog_data, store_data])
-            .select(["channel", "item", "return_ratio", "return_rank", "currency_rank"])
+            .select(
+                [
+                    "channel",
+                    "item",
+                    "return_ratio",
+                    "return_rank",
+                    "currency_rank",
+                ]
+            )
             .sort(sort_by.keys(), nulls_last=True)
             .limit(limit)
         ),

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 97."""
@@ -78,14 +78,19 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
 
     d_month_seq = params["d_month_seq"]
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     catalog_sales = get_data(
         run_config.dataset_path, "catalog_sales", run_config.suffix
     )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     ssci = (
         store_sales.join(
-            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk", how="inner"
+            date_dim,
+            left_on="ss_sold_date_sk",
+            right_on="d_date_sk",
+            how="inner",
         )
         .filter(
             (pl.col("d_month_seq") >= d_month_seq)
@@ -102,7 +107,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     )
     csci = (
         catalog_sales.join(
-            date_dim, left_on="cs_sold_date_sk", right_on="d_date_sk", how="inner"
+            date_dim,
+            left_on="cs_sold_date_sk",
+            right_on="d_date_sk",
+            how="inner",
         )
         .filter(
             (pl.col("d_month_seq") >= d_month_seq)
@@ -120,7 +128,10 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     return QueryResult(
         frame=(
             ssci.join(
-                csci, on=["customer_sk", "item_sk"], how="full", suffix="_catalog"
+                csci,
+                on=["customer_sk", "item_sk"],
+                how="full",
+                suffix="_catalog",
             )
             .select(
                 [

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 16."""
@@ -89,7 +89,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer_address = get_data(
         run_config.dataset_path, "customer_address", run_config.suffix
     )
-    call_center = get_data(run_config.dataset_path, "call_center", run_config.suffix)
+    call_center = get_data(
+        run_config.dataset_path, "call_center", run_config.suffix
+    )
 
     # Construct start date (YYYY-MM-01)
     start_date_obj = date(year, month, 1)
@@ -99,11 +101,23 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     end_date_lit = pl.lit(end_date_obj)
     # First apply basic filters to catalog_sales
     filtered_sales = (
-        catalog_sales.join(date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk")
-        .join(customer_address, left_on="cs_ship_addr_sk", right_on="ca_address_sk")
-        .join(call_center, left_on="cs_call_center_sk", right_on="cc_call_center_sk")
+        catalog_sales.join(
+            date_dim, left_on="cs_ship_date_sk", right_on="d_date_sk"
+        )
+        .join(
+            customer_address,
+            left_on="cs_ship_addr_sk",
+            right_on="ca_address_sk",
+        )
+        .join(
+            call_center,
+            left_on="cs_call_center_sk",
+            right_on="cc_call_center_sk",
+        )
         .filter(
-            pl.col("d_date").is_between(start_date_lit, end_date_lit, closed="both")
+            pl.col("d_date").is_between(
+                start_date_lit, end_date_lit, closed="both"
+            )
             & (pl.col("ca_state") == state)
             & pl.col("cc_county").is_in(county)
         )
@@ -113,9 +127,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     exists_condition = (
         filtered_sales.with_row_index("row_id")
         .join(
-            catalog_sales.select(["cs_order_number", "cs_warehouse_sk"]).rename(
-                {"cs_warehouse_sk": "other_warehouse_sk"}
-            ),
+            catalog_sales.select(
+                ["cs_order_number", "cs_warehouse_sk"]
+            ).rename({"cs_warehouse_sk": "other_warehouse_sk"}),
             on="cs_order_number",
         )
         .filter(pl.col("cs_warehouse_sk") != pl.col("other_warehouse_sk"))
@@ -137,7 +151,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             .select(
                 [
                     pl.col("cs_order_number").n_unique().alias("order count"),
-                    pl.col("cs_ext_ship_cost").sum().alias("total shipping cost"),
+                    pl.col("cs_ext_ship_cost")
+                    .sum()
+                    .alias("total shipping cost"),
                     pl.col("cs_net_profit").sum().alias("total net profit"),
                 ]
             )

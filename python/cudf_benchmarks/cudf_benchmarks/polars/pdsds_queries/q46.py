@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 46."""
@@ -90,7 +90,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     cities = params["cities"]
 
     # Load tables
-    store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
+    store_sales = get_data(
+        run_config.dataset_path, "store_sales", run_config.suffix
+    )
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
     store = get_data(run_config.dataset_path, "store", run_config.suffix)
     household_demographics = get_data(
@@ -102,9 +104,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     customer = get_data(run_config.dataset_path, "customer", run_config.suffix)
     # Step 1: Create the subquery (dn) equivalent
     subquery_dn = (
-        store_sales.join(date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk")
+        store_sales.join(
+            date_dim, left_on="ss_sold_date_sk", right_on="d_date_sk"
+        )
         .join(store, left_on="ss_store_sk", right_on="s_store_sk")
-        .join(household_demographics, left_on="ss_hdemo_sk", right_on="hd_demo_sk")
+        .join(
+            household_demographics,
+            left_on="ss_hdemo_sk",
+            right_on="hd_demo_sk",
+        )
         .join(customer_address, left_on="ss_addr_sk", right_on="ca_address_sk")
         .filter(
             # Demographics filter (OR condition)
@@ -122,7 +130,9 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             # City filter
             (pl.col("s_city").is_in(cities))
         )
-        .group_by(["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"])
+        .group_by(
+            ["ss_ticket_number", "ss_customer_sk", "ss_addr_sk", "ca_city"]
+        )
         .agg(
             [
                 pl.col("ss_coupon_amt").sum().alias("amt_sum"),
@@ -145,7 +155,15 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         )
         .drop(["amt_sum", "amt_count", "profit_sum", "profit_count"])
         .with_columns([pl.col("ca_city").alias("bought_city")])
-        .select(["ss_ticket_number", "ss_customer_sk", "bought_city", "amt", "profit"])
+        .select(
+            [
+                "ss_ticket_number",
+                "ss_customer_sk",
+                "bought_city",
+                "amt",
+                "profit",
+            ]
+        )
     )
     sort_by = {
         "c_last_name": False,
