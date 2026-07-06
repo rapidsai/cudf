@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for dynamic join path in join_actor (including Right and Full joins)."""
@@ -15,7 +15,10 @@ from cudf_polars import Translator
 from cudf_polars.dsl.ir import Cache, Join
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.engine.options import StreamingOptions
-from cudf_polars.streaming.actor_graph.join import _use_pwise_join
+from cudf_polars.streaming.actor_graph.join import (
+    _select_join_prefilter,
+    _use_pwise_join,
+)
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.parallel import lower_ir_graph
 from cudf_polars.streaming.shuffle import Shuffle
@@ -248,6 +251,181 @@ def test_bloom_filter_join(how, streaming_engine_factory):
     assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
 
 
+def test_multi_key_join_prefilter_preserves_full_join(
+    streaming_engine_factory,
+) -> None:
+    streaming_engine = streaming_engine_factory(
+        StreamingOptions(
+            max_rows_per_partition=2,
+            broadcast_limit=1,
+            target_partition_size=10,
+            dynamic_planning={
+                "join_prefilter_threshold": 0.5,
+                "join_prefilter_max_key_columns": 1,
+            },
+        ),
+    )
+    fact = pl.LazyFrame(
+        {
+            "k1": range(200),
+            "k2": [i % 3 for i in range(200)],
+            "v": range(200),
+        }
+    )
+    dim = pl.LazyFrame(
+        {
+            "k1": range(10),
+            "k2": [(i + 1) % 3 for i in range(10)],
+            "d": range(10),
+        }
+    )
+    q = fact.join(dim, on=["k1", "k2"], how="inner")
+    assert_gpu_result_equal(q, engine=streaming_engine, check_row_order=False)
+
+
+def test_join_prefilter_skips_when_sides_are_similar_size() -> None:
+    decision = _select_join_prefilter(
+        "Inner",
+        100,
+        120,
+        (0,),
+        (0,),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "ratio_above_threshold"
+
+
+def test_join_prefilter_filters_large_side_with_key_prefix() -> None:
+    decision = _select_join_prefilter(
+        "Inner",
+        10,
+        1_000,
+        (0, 1),
+        (3, 4),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert decision.enabled
+    assert decision.filter_side == "right"
+    assert decision.build_indices == (0,)
+    assert decision.apply_indices == (3,)
+    assert decision.key_column_count == 1
+
+
+def test_join_prefilter_can_use_all_join_keys() -> None:
+    decision = _select_join_prefilter(
+        "Inner",
+        10,
+        1_000,
+        (0, 1),
+        (3, 4),
+        threshold=0.5,
+        max_key_columns=None,
+    )
+    assert decision.enabled
+    assert decision.build_indices == (0, 1)
+    assert decision.apply_indices == (3, 4)
+    assert decision.key_column_count == 2
+
+
+@pytest.mark.parametrize("how", ["Left", "Anti"])
+def test_join_prefilter_outer_semantics_only_filter_right_side(how) -> None:
+    decision = _select_join_prefilter(
+        how,
+        1_000,
+        10,
+        (0,),
+        (0,),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "no_legal_large_side"
+
+    decision = _select_join_prefilter(
+        how,
+        10,
+        1_000,
+        (0,),
+        (0,),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert decision.enabled
+    assert decision.filter_side == "right"
+
+
+def test_join_prefilter_right_join_only_filters_left_side() -> None:
+    decision = _select_join_prefilter(
+        "Right",
+        10,
+        1_000,
+        (0,),
+        (0,),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "no_legal_large_side"
+
+    decision = _select_join_prefilter(
+        "Right",
+        1_000,
+        10,
+        (0,),
+        (0,),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert decision.enabled
+    assert decision.filter_side == "left"
+
+
+def test_join_prefilter_skips_unsupported_full_join() -> None:
+    decision = _select_join_prefilter(
+        "Full",
+        10,
+        1_000,
+        (0,),
+        (0,),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "unsupported_join_type"
+
+
+def test_join_prefilter_skips_unsupported_cross_join() -> None:
+    decision = _select_join_prefilter(
+        "Cross",
+        10,
+        1_000,
+        (),
+        (),
+        threshold=0.5,
+        max_key_columns=1,
+    )
+    assert not decision.enabled
+    assert decision.reason_skipped == "unsupported_join_type"
+
+
+def test_join_prefilter_asserts_mismatched_key_count() -> None:
+    with pytest.raises(
+        AssertionError, match="left and right join key counts must match"
+    ):
+        _select_join_prefilter(
+            "Inner",
+            10,
+            1_000,
+            (0,),
+            (0, 1),
+            threshold=0.5,
+            max_key_columns=1,
+        )
+
+
 @pytest.mark.parametrize(
     "maintain_order", ["left_right", "right_left", "left", "right"]
 )
@@ -415,6 +593,7 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
             target_partition_size=1,
             max_rows_per_partition=4,
             broadcast_limit=1,  # Disable broadcast joins
+            fallback_mode="warn",
         ),
     )
     if engine.nranks < 2:
@@ -461,4 +640,9 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
         left_on="zip_prefix",
         right_on=pl.col("full_zip").str.slice(0, 2),
     )
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match=r"Multi-partition Join not supported for keys with expressions\.",
+    ):
+        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
