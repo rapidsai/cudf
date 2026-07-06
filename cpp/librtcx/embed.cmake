@@ -1,19 +1,23 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
 
 if(NOT TARGET zstd)
-  message(FATAL_ERROR "embed(): zstd target is required for LIBRTCX embedding.")
+  message(FATAL_ERROR "zstd target is required for LIBRTCX embedding.")
+endif()
+
+if(NOT TARGET xxhash)
+  message(FATAL_ERROR "xxhash target is required for LIBRTCX embedding.")
 endif()
 
 # This function initializes a target for JIT embedding. It must be called before any calls to
 # embed_includes() or embed_blob() for the target. It creates a dedicated INTERFACE library target
 # that is used to track registered files and dependencies via target properties. The TARGET argument
 # specifies the name of the target being initialized.
-function(add_embed TARGET)
+function(rtcx_add_embed TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS)
   set(MULTI_VALUE_ARGS)
@@ -24,10 +28,11 @@ function(add_embed TARGET)
   endif()
 
   add_library(${TARGET}__embed_props INTERFACE)
+  set_property(TARGET ${TARGET}__embed_props PROPERTY EMBED_FILE_INDEX 0)
 endfunction()
 
 # This function registers a directory of include files to be embedded for JIT compilation.
-function(embed_includes TARGET)
+function(rtcx_embed_includes TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS SOURCE_DIRECTORY # Source directory where files will be copied from
                      DEST_DIRECTORY # Destination directory where files will be copied to
@@ -106,17 +111,26 @@ function(embed_includes TARGET)
     PROPERTY EMBED_INCLUDE_DIRECTORIES ${ARG_INCLUDE_DIRECTORIES}
   )
 
+  get_property(
+    SOURCE_FILE_IDS
+    TARGET ${TARGET}__embed_props
+    PROPERTY EMBED_SOURCE_FILE_IDS
+  )
+  list(LENGTH SOURCE_FILE_IDS IDX)
+
+  set_property(TARGET ${TARGET}__embed_props PROPERTY EMBED_FILE_INDEX ${IDX})
+
 endfunction()
 
 # This function registers a single file to be embedded for JIT compilation.
-function(embed_blob TARGET)
+function(rtcx_embed_blob TARGET)
   set(OPTIONS)
   set(ONE_VALUE_ARGS ID FILE DEST)
   set(MULTI_VALUE_ARGS ARRAY_IDS ARRAY_VALUES)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
   if(NOT TARGET ${TARGET}__embed_props)
-    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
+    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with rtcx_add_embed()")
   endif()
 
   if(NOT ARG_ID
@@ -157,6 +171,14 @@ function(embed_blob TARGET)
       APPEND
       PROPERTY EMBED_TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>
     )
+    # Also record the target name itself. Depending only on $<TARGET_OBJECTS:...> creates file-level
+    # dependencies without a target-level ordering, which breaks the Makefiles generator (Ninja
+    # resolves it via its global build graph).
+    set_property(
+      TARGET ${TARGET}__embed_props
+      APPEND
+      PROPERTY EMBED_TARGET_DEP_NAMES ${CMAKE_MATCH_1}
+    )
   else()
     if(NOT EXISTS "${ARG_FILE}")
       message(FATAL_ERROR "Source file '${ARG_FILE}' does not exist")
@@ -179,6 +201,15 @@ function(embed_blob TARGET)
     PROPERTY EMBED_SOURCE_FILE_DESTS ${ARG_DEST}
   )
 
+  get_property(
+    SOURCE_FILE_IDS
+    TARGET ${TARGET}__embed_props
+    PROPERTY EMBED_SOURCE_FILE_IDS
+  )
+  list(LENGTH SOURCE_FILE_IDS IDX)
+
+  set_property(TARGET ${TARGET}__embed_props PROPERTY EMBED_FILE_INDEX ${IDX})
+
 endfunction()
 
 #[==[
@@ -186,14 +217,14 @@ endfunction()
 # for JIT compilation.
 #]==]
 # cmake-lint: disable=R0915
-function(embed TARGET)
+function(rtcx_embed TARGET)
   set(OPTIONS "")
   set(ONE_VALUE_ARGS "COMPRESSION" "OUTPUT_DIRECTORY")
   set(MULTI_VALUE_ARGS "")
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
   if(NOT TARGET ${TARGET}__embed_props)
-    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with add_embed()")
+    message(FATAL_ERROR "embed target '${TARGET}' has not been initialized with rtcx_add_embed()")
   endif()
 
   if(NOT DEFINED ARG_COMPRESSION)
@@ -231,6 +262,11 @@ function(embed TARGET)
     EMBED_TARGET_DEPS
     TARGET ${TARGET}__embed_props
     PROPERTY EMBED_TARGET_DEPS
+  )
+  get_property(
+    EMBED_TARGET_DEP_NAMES
+    TARGET ${TARGET}__embed_props
+    PROPERTY EMBED_TARGET_DEP_NAMES
   )
   get_property(
     EMBED_ARRAY_IDS
@@ -271,8 +307,10 @@ function(embed TARGET)
   )
 
   set(RUNNER "${TARGET}__jit_embed_run")
-  add_executable(${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}")
-  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} zstd)
+  add_executable(
+    ${RUNNER} EXCLUDE_FROM_ALL "${EMBED_SCRIPT}" ${CMAKE_CURRENT_FUNCTION_LIST_DIR}/hash.cpp
+  )
+  target_link_libraries(${RUNNER} PRIVATE ${CMAKE_DL_LIBS} xxhash zstd)
   target_include_directories(
     ${RUNNER} PRIVATE ${CMAKE_CURRENT_FUNCTION_LIST_DIR} ${ZSTD_INCLUDE_DIR}
   )
@@ -281,7 +319,7 @@ function(embed TARGET)
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
     COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${RUNNER}>
-    DEPENDS "${EMBED_SCRIPT}" ${EMBED_SOURCE_FILES} ${EMBED_TARGET_DEPS}
+    DEPENDS "${EMBED_SCRIPT}" ${EMBED_SOURCE_FILES} ${EMBED_TARGET_DEPS} ${EMBED_TARGET_DEP_NAMES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating JIT embed for ${TARGET} into ${OUTPUT_DIR}"
     VERBATIM
