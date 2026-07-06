@@ -25,13 +25,11 @@ from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.actor import run_actor_network
 
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.ir import (
-    IRExecutionContext,
-    Scan,
+from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.dsl.utils.io import (
+    attach_cached_parquet_metadata,
+    prefetch_parquet_file_metadata_for_ir,
 )
-from cudf_polars.dsl.traversal import traversal
-from cudf_polars.dsl.utils.io import prefetch_parquet_file_metadata_for_ir
-from cudf_polars.dsl.utils.replace import replace
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
@@ -684,8 +682,6 @@ def evaluate_on_rank(
     metadata
         Collected channel metadata.
     """
-    from cudf_polars.streaming.io import StreamingScan
-
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
     ir, partition_info = lower_ir_graph(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
@@ -706,31 +702,7 @@ def evaluate_on_rank(
             ir_context.py_executor,
             stats=stats,
         )
-        # We'll replace scan nodes with variants that have the prefetched metadata set.
-        # We also update partition_info to point to the new nodes.
-        replacements: dict[IR, IR] = {}
-
-        new_node: Scan | StreamingScan
-        for node in traversal([ir]):
-            if isinstance(node, StreamingScan):
-                new_node = StreamingScan.with_prefetched_parquet_metadata(
-                    node, cached_parquet_info_map
-                )
-                replacements[node] = new_node
-
-            elif isinstance(node, Scan) and node.typ == "parquet":  # pragma: no cover
-                raise RuntimeError(
-                    "Unexpected parquet 'Scan' node in lowered IR graph."
-                )
-
-        old_ir = ir
-        ir = replace([ir], replacements)[0]
-        partition_info = {
-            new_node: partition_info[old_node]
-            for old_node, new_node in zip(
-                traversal([old_ir]), traversal([ir]), strict=True
-            )
-        }
+        attach_cached_parquet_metadata(ir, cached_parquet_info_map)
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(

@@ -13,7 +13,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.streaming.io import Scan
+from cudf_polars.streaming.io import FusedScan, Scan, SplitScan, StreamingScan
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
@@ -173,3 +173,37 @@ def prefetch_parquet_file_metadata_for_ir(
             for info in future.result():
                 cached_parquet_info[info.path] = info
     return cached_parquet_info
+
+
+def _attach_cached_parquet_info(
+    node: SplitScan | FusedScan,
+    cached_parquet_info_map: dict[str, CachedParquetInfo],
+) -> None:
+    cached = [cached_parquet_info_map[path] for path in node.paths]
+    Scan._validate_cached_parquet_info(node.paths, cached)
+    node.cached_parquet_info = cached
+    node._non_child_args = (*node._non_child_args[:-1], cached)
+
+
+def attach_cached_parquet_metadata(
+    root: IR,
+    cached_parquet_info_map: dict[str, CachedParquetInfo],
+) -> None:
+    """
+    Attach prefetched metadata to scan nodes.
+
+    This is an optimization only and does not affect IR identity.
+
+    Parameters
+    ----------
+    root
+        Root of the IR graph to update.
+    cached_parquet_info_map
+        Mapping from file paths to cached parquet metadata.
+    """
+    for node in traversal([root]):
+        if isinstance(node, StreamingScan):
+            for scan in node.scans:
+                _attach_cached_parquet_info(scan, cached_parquet_info_map)
+        elif isinstance(node, SplitScan | FusedScan):
+            _attach_cached_parquet_info(node, cached_parquet_info_map)

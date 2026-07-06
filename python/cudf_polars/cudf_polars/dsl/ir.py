@@ -666,7 +666,6 @@ class Scan(IR):
         "include_file_paths",
         "predicate",
         "parquet_options",
-        "cached_parquet_info",
     )
     _n_non_child_args = 12
     typ: str
@@ -711,7 +710,7 @@ class Scan(IR):
         include_file_paths: str | None,
         predicate: expr.NamedExpr | None,
         parquet_options: ParquetOptions,
-        cached_parquet_info: list[CachedParquetInfo] | None,
+        cached_parquet_info: list[CachedParquetInfo] | None = None,
     ):
         self.schema = schema
         self.typ = typ

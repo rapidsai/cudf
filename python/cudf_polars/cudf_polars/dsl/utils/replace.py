@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for replacing nodes in a DAG."""
@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Generic
 
-from cudf_polars.dsl.traversal import CachingVisitor
+from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged
 from cudf_polars.typing import NodeT, TypedDict
 
 if TYPE_CHECKING:
@@ -41,15 +41,7 @@ def _replace(
     try:
         return fn.state["replacements"][node]
     except KeyError:
-        # replacement must propagate when children are rebuilt,
-        # even if child __eq__ intentionally ignores children (e.g. Cache).
-        # So we use identity, not equality like reuse_if_unchanged, to decide unchanged.
-        new_children = [fn(c) for c in node.children]
-        if all(
-            new is old for new, old in zip(new_children, node.children, strict=True)
-        ):
-            return node
-        return node.reconstruct(new_children)
+        return reuse_if_unchanged(node, fn)
 
 
 def replace(

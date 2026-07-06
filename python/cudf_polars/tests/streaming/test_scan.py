@@ -550,25 +550,63 @@ def test_streaming_scan_identity_equality() -> None:
         0,
         2,
         base.parquet_options,
-        _make_cached_parquet_info(base.paths, size=10),
+        _make_cached_parquet_info(base.paths, size=11),
     )
-    split_diff_metadata = SplitScan(
+    split_diff = SplitScan(
         base.schema,
         base,
         base.paths,
-        0,
+        1,
         2,
         base.parquet_options,
-        _make_cached_parquet_info(base.paths, size=11),
+        _make_cached_parquet_info(base.paths, size=10),
     )
 
     a = StreamingScan([split], base, "split")
     b = StreamingScan([split_same], base, "split")
-    c = StreamingScan([split_diff_metadata], base, "split")
+    c = StreamingScan([split_diff], base, "split")
 
     assert a == b
     assert hash(a) == hash(b)
     assert a != c
+
+
+def test_cached_parquet_info_excluded_from_identity() -> None:
+    base = _make_parquet_scan(["a.parquet"])
+    info = _make_cached_parquet_info(base.paths)
+
+    scan_without = _make_parquet_scan(base.paths)
+    scan_with = Scan(
+        base.schema,
+        "parquet",
+        {},
+        None,
+        base.paths,
+        None,
+        0,
+        -1,
+        None,
+        None,
+        None,
+        base.parquet_options,
+        info,
+    )
+    assert scan_without == scan_with
+    assert hash(scan_without) == hash(scan_with)
+
+    split_without = SplitScan(
+        base.schema, base, base.paths, 0, 4, base.parquet_options, None
+    )
+    split_with = SplitScan(
+        base.schema, base, base.paths, 0, 4, base.parquet_options, info
+    )
+    assert split_without == split_with
+    assert hash(split_without) == hash(split_with)
+
+    fused_without = FusedScan(base.schema, base, base.paths, base.parquet_options, None)
+    fused_with = FusedScan(base.schema, base, base.paths, base.parquet_options, info)
+    assert fused_without == fused_with
+    assert hash(fused_without) == hash(fused_with)
 
 
 class FooSource(DataSourceInfo):
