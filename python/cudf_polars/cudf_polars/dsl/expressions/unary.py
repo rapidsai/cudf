@@ -12,6 +12,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -586,10 +587,17 @@ class UnaryFunction(Expr):
         elif self.name in ("min_horizontal", "max_horizontal"):
             op = UnaryFunction._horizontal_fold_ops[self.name]
             columns = [
-                child.evaluate(df, context=context)
-                .astype(self.dtype, stream=df.stream)
-                .obj
-                for child in self.children
+                col.obj
+                for col in broadcast(
+                    *(
+                        child.evaluate(df, context=context).astype(
+                            self.dtype, stream=df.stream
+                        )
+                        for child in self.children
+                    ),
+                    target_length=df.num_rows,
+                    stream=df.stream,
+                )
             ]
             result = columns[0]
             for other in columns[1:]:
@@ -600,10 +608,17 @@ class UnaryFunction(Expr):
         elif self.name == "sum_horizontal":
             (ignore_nulls,) = self.options
             columns = [
-                child.evaluate(df, context=context)
-                .astype(self.dtype, stream=df.stream)
-                .obj
-                for child in self.children
+                col.obj
+                for col in broadcast(
+                    *(
+                        child.evaluate(df, context=context).astype(
+                            self.dtype, stream=df.stream
+                        )
+                        for child in self.children
+                    ),
+                    target_length=df.num_rows,
+                    stream=df.stream,
+                )
             ]
             if ignore_nulls:
                 # Treat nulls as the additive identity so that a row is only
@@ -628,10 +643,17 @@ class UnaryFunction(Expr):
             add = plc.binaryop.BinaryOperator.ADD
             denominator: plc.Column | plc.Scalar
             columns = [
-                child.evaluate(df, context=context)
-                .astype(self.dtype, stream=df.stream)
-                .obj
-                for child in self.children
+                col.obj
+                for col in broadcast(
+                    *(
+                        child.evaluate(df, context=context).astype(
+                            self.dtype, stream=df.stream
+                        )
+                        for child in self.children
+                    ),
+                    target_length=df.num_rows,
+                    stream=df.stream,
+                )
             ]
             if ignore_nulls:
                 zero = plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream)
