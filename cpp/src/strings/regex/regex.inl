@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.  All rights reserved.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -450,7 +450,10 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  return match ? match_result({begin, end}) : cuda::std::nullopt;
+  // a capture group that did not participate in the overall match
+  // (e.g. an unmatched optional group) has no valid range and must not be
+  // reported as an (empty) match
+  return (match && (group_id == 0 || begin >= 0)) ? match_result({begin, end}) : cuda::std::nullopt;
 }
 
 template <positional P>
