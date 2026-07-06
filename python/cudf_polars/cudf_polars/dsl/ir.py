@@ -684,7 +684,7 @@ class Scan(IR):
             def read_csv_header(
                 path: Path | str, sep: str
             ) -> list[str]:  # pragma: no cover
-                with Path(path).open() as f:
+                with Path(path).open(encoding="utf-8") as f:
                     for line in f:
                         stripped = line.strip()
                         if stripped:
