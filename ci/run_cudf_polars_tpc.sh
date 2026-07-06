@@ -24,6 +24,7 @@ rapids-dependency-file-generator \
     --config dependencies.yaml \
     --file-key test_cudf_polars_tpch \
     --output requirements \
+    --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
     > "${TPCH_REQUIREMENTS}"
 
 rapids-pip-retry install \
