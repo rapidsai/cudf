@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from cython.operator cimport dereference
@@ -28,6 +28,7 @@ from pylibcudf.libcudf.interop cimport (
     to_arrow_schema_raw,
 )
 from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
 
 from .column cimport Column
 from .types cimport DataType
@@ -39,6 +40,7 @@ from pylibcudf._interop_helpers cimport (
     _metadata_to_libcudf,
 )
 from ._interop_helpers import ArrowLike, ColumnMetadata, _ObjectWithArrowMetadata
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 try:
     import pyarrow as pa
@@ -62,12 +64,13 @@ cdef class Table:
 
     Parameters
     ----------
-    columns : list
+    columns : Sequence[Column]
         The columns in this table.
     """
     __hash__ = None
 
-    def __init__(self, list columns):
+    def __init__(self, columns):
+        columns = tuple(columns)
         if not all(isinstance(c, Column) for c in columns):
             raise ValueError("All columns must be pylibcudf Column objects")
         self._columns = columns
@@ -105,7 +108,7 @@ cdef class Table:
     def from_arrow(
         obj: ArrowLike,
         dtype: DataType | None = None,
-        Stream stream=None,
+        object stream=None,
         DeviceMemoryResource mr=None
     ) -> Table:
         """
@@ -154,7 +157,8 @@ cdef class Table:
         cdef _ArrowTableHolder result
         cdef unique_ptr[arrow_table] c_result
 
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
         mr = _get_memory_resource(mr)
 
         if hasattr(obj, "__arrow_c_device_array__"):
@@ -170,7 +174,7 @@ cdef class Table:
                 c_result = make_unique[arrow_table](
                     move(dereference(c_schema)),
                     move(dereference(c_array)),
-                    stream.view(),
+                    _cs,
                     result.mr.get_mr(),
                 )
             result.tbl.swap(c_result)
@@ -193,7 +197,7 @@ cdef class Table:
             with nogil:
                 c_result = make_unique[arrow_table](
                     move(dereference(c_stream)),
-                    stream.view(),
+                    _cs,
                     result.mr.get_mr(),
                 )
             result.tbl.swap(c_result)
@@ -213,7 +217,7 @@ cdef class Table:
         else:
             raise ValueError("Invalid Arrow-like object")
 
-    cdef table_view view(self) nogil:
+    cdef table_view view(self):
         """Generate a libcudf table_view to pass to libcudf algorithms.
 
         This method is for pylibcudf's functions to use to generate inputs when
@@ -224,16 +228,15 @@ cdef class Table:
         # self._columns whenever new columns are added or columns are removed.
         cdef vector[column_view] c_columns
 
-        with gil:
-            for col in self._columns:
-                c_columns.push_back((<Column> col).view())
+        for col in self._columns:
+            c_columns.push_back((<Column> col).view())
 
         return table_view(c_columns)
 
     @staticmethod
     cdef Table from_libcudf(
         unique_ptr[table] libcudf_tbl,
-        Stream stream,
+        object stream,
         DeviceMemoryResource mr
     ):
         """Create a Table from a libcudf table.
@@ -275,7 +278,7 @@ cdef class Table:
     cdef Table from_table_view_of_arbitrary(
         const table_view& tv,
         object owner,
-        Stream stream,
+        object stream,
     ):
         """Create a Table from a libcudf table_view into an arbitrary owner.
 
@@ -292,8 +295,9 @@ cdef class Table:
         # For efficiency, prohibit calling this overload with a Table owner.
         assert not isinstance(owner, Table)
         cdef int i
+        cdef Stream _stream = <Stream>stream
         return Table([
-            Column.from_column_view_of_arbitrary(tv.column(i), owner, stream)
+            Column.from_column_view_of_arbitrary(tv.column(i), owner, _stream)
             for i in range(tv.num_columns())
         ])
 
@@ -307,15 +311,27 @@ cdef class Table:
             return 0
         return self._columns[0].size()
 
-    cpdef list columns(self):
+    cpdef tuple columns(self):
         """The columns in this table."""
         return self._columns
+
+    cpdef list release(self):
+        """Release ownership of this table's columns and leave it empty.
+
+        Returns
+        -------
+        list
+            The columns that were in this table.
+        """
+        cdef list columns = list(self._columns)
+        self._columns = ()
+        return columns
 
     cpdef tuple shape(self):
         """The shape of this table"""
         return (self.num_rows(), self.num_columns())
 
-    cpdef Table copy(self, Stream stream=None, DeviceMemoryResource mr=None):
+    cpdef Table copy(self, object stream=None, DeviceMemoryResource mr=None):
         """Create a deep copy of the table.
 
         Parameters
@@ -330,9 +346,9 @@ cdef class Table:
         Table
             A new Table with deep copies of all columns.
         """
-        stream = _get_stream(stream)
+        cdef Stream _stream = _get_stream(stream)
         mr = _get_memory_resource(mr)
-        return Table([col.copy(stream, mr) for col in self._columns])
+        return Table([col.copy(_stream, mr) for col in self._columns])
 
     def _to_schema(self, metadata=None):
         """Create an Arrow schema from this table."""
@@ -351,23 +367,28 @@ cdef class Table:
             c_metadata.push_back(_metadata_to_libcudf(meta))
 
         cdef ArrowSchema* raw_schema_ptr
+        cdef table_view c_self = self.view()
         with nogil:
-            raw_schema_ptr = to_arrow_schema_raw(self.view(), c_metadata)
+            raw_schema_ptr = to_arrow_schema_raw(c_self, c_metadata)
 
         return PyCapsule_New(<void*>raw_schema_ptr, "arrow_schema", _release_schema)
 
-    def _to_host_array(self, Stream stream):
+    def _to_host_array(self, object stream):
         cdef ArrowArray* raw_host_array_ptr
+        cdef Stream _stream = _get_stream(stream)
+        cdef cudaStream_t _cs = _stream.view().value()
+        cdef table_view c_self = self.view()
 
         with nogil:
-            raw_host_array_ptr = to_arrow_host_raw(self.view(), stream.view())
+            raw_host_array_ptr = to_arrow_host_raw(c_self, _cs)
 
         return PyCapsule_New(<void*>raw_host_array_ptr, "arrow_array", _release_array)
 
     def _to_device_array(self):
         cdef ArrowDeviceArray* raw_device_array_ptr
+        cdef table_view c_self = self.view()
         with nogil:
-            raw_device_array_ptr = to_arrow_device_raw(self.view(), self)
+            raw_device_array_ptr = to_arrow_device_raw(c_self, self)
 
         return PyCapsule_New(
             <void*>raw_device_array_ptr,

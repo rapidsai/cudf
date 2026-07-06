@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,6 +10,7 @@
 #include <cudf/detail/device_scalar.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <cub/block/block_reduce.cuh>
 #include <cuda/std/tuple>
@@ -113,7 +114,7 @@ CUDF_KERNEL void infer_column_type_kernel(OptionsView options,
        idx += gridDim.x * blockDim.x) {
     auto const field_offset = cuda::std::get<0>(*(offset_length_begin + idx));
     auto const field_len    = cuda::std::get<1>(*(offset_length_begin + idx));
-    auto const field_begin  = data.begin() + field_offset;
+    auto const field_begin  = data.data() + field_offset;
 
     if (cudf::detail::serialized_trie_contains(
           options.trie_na, {field_begin, static_cast<std::size_t>(field_len)})) {
@@ -231,12 +232,14 @@ cudf::io::column_type_histogram infer_column_type(OptionsView const& options,
   constexpr int block_size = 128;
 
   auto const grid_size = (size + block_size - 1) / block_size;
-  auto d_column_info   = cudf::detail::device_scalar<cudf::io::column_type_histogram>(stream);
+  auto d_column_info   = cudf::detail::device_scalar<cudf::io::column_type_histogram>(
+    stream, cudf::get_current_device_resource_ref());
   CUDF_CUDA_TRY(cudaMemsetAsync(
     d_column_info.data(), 0, sizeof(cudf::io::column_type_histogram), stream.value()));
 
   infer_column_type_kernel<block_size><<<grid_size, block_size, 0, stream.value()>>>(
     options, data, offset_length_begin, size, d_column_info.data());
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return d_column_info.value(stream);
 }

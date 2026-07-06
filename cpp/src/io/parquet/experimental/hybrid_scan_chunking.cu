@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,9 +8,9 @@
 #include "io/parquet/reader_impl_chunking.hpp"
 #include "io/parquet/reader_impl_chunking_utils.cuh"
 
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -18,10 +18,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/binary_search.h>
 #include <thrust/host_vector.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/transform_scan.h>
 
 #include <numeric>
@@ -33,8 +32,8 @@ using parquet::detail::pass_intermediate_data;
 
 void hybrid_scan_reader_impl::handle_chunking(
   read_mode mode,
-  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
-  cudf::host_span<bool const> data_page_mask)
+  std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  host_span<bool const> data_page_mask)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
@@ -79,7 +78,7 @@ void hybrid_scan_reader_impl::handle_chunking(
 }
 
 void hybrid_scan_reader_impl::setup_next_pass(
-  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data)
+  std::span<cudf::device_span<uint8_t const> const> column_chunk_data)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,
@@ -87,7 +86,7 @@ void hybrid_scan_reader_impl::setup_next_pass(
 
   // always create the pass struct, even if we end up with no work.
   // this will also cause the previous pass information to be deleted
-  _pass_itm_data = std::make_unique<pass_intermediate_data>();
+  _pass_itm_data = std::make_unique<pass_intermediate_data>(_stream);
 
   if (_file_itm_data.global_num_rows > 0 && not _file_itm_data.row_groups.empty() &&
       not _input_columns.empty() && _file_itm_data._current_input_pass < num_passes) {

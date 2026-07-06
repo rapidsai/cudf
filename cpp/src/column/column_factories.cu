@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/utilities/memory_resource.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/uninitialized_fill.h>
 
 namespace cudf {
@@ -49,7 +49,11 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   if (!value.is_valid(stream)) {
     return make_strings_column(
       size,
-      make_column_from_scalar(numeric_scalar<int32_t>(0, true, stream), size + 1, stream, mr),
+      make_column_from_scalar(
+        numeric_scalar<int32_t>(0, true, stream, cudf::get_current_device_resource_ref()),
+        size + 1,
+        stream,
+        mr),
       rmm::device_buffer{},
       size,
       cudf::detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr));
@@ -64,7 +68,10 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
     d_str.empty() ? cudf::strings::detail::string_index_pair{"", 0}
                   : cudf::strings::detail::string_index_pair{d_str.data(), d_str.size_bytes()};
   thrust::uninitialized_fill(
-    rmm::exec_policy_nosync(stream), indices.begin(), indices.end(), row_value);
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    indices.begin(),
+    indices.end(),
+    row_value);
   return cudf::strings::detail::make_strings_column(indices.begin(), indices.end(), stream, mr);
 }
 
@@ -93,9 +100,9 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr) const
 {
-  if (size == 0) CUDF_FAIL("0-length struct column is unsupported.");
+  CUDF_EXPECTS(size != 0, "0-length struct column is unsupported.");
   auto& ss  = static_cast<scalar_type_t<cudf::struct_view> const&>(value);
-  auto iter = thrust::make_constant_iterator(0);
+  auto iter = cuda::make_constant_iterator(0);
 
   auto children =
     detail::gather(ss.view(), iter, iter + size, out_of_bounds_policy::NULLIFY, stream, mr);

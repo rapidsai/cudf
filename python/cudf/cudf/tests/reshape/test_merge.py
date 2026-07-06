@@ -1,20 +1,13 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
-import operator
 import string
-from collections import defaultdict
 
 import numpy as np
 import pandas as pd
 import pytest
 
 import cudf
-from cudf.core._compat import (
-    PANDAS_CURRENT_SUPPORTED_VERSION,
-    PANDAS_GE_220,
-    PANDAS_VERSION,
-)
 from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, Decimal128Dtype
 from cudf.testing import assert_eq
 from cudf.testing._utils import (
@@ -376,7 +369,7 @@ def test_indicator():
     gdf = cudf.DataFrame({"x": [1, 2, 1]})
     gdf.merge(gdf, indicator=False)
 
-    with pytest.raises(NotImplementedError, match=".*indicator=False.*"):
+    with pytest.raises(NotImplementedError, match=r".*indicator=False.*"):
         gdf.merge(gdf, indicator=True)
 
 
@@ -395,6 +388,43 @@ def test_merge_suffixes():
         lfunc_args_and_kwargs=([pdf], {"lsuffix": "left", "rsuffix": "right"}),
         rfunc_args_and_kwargs=([gdf], {"lsuffix": "left", "rsuffix": "right"}),
     )
+
+
+@pytest.mark.parametrize(
+    "col1, col2, suffixes, expected_cols",
+    [
+        (0, 0, ("", "_dup"), ["0", "0_dup"]),
+        (0, 0, (None, "_dup"), [0, "0_dup"]),
+        ("a", "a", ("_x", None), ["a_x", "a"]),
+        ("a", "a", (None, "_x"), ["a", "a_x"]),
+        (0.0, 0.0, ("_x", None), ["0.0_x", 0.0]),
+        (0, 0, ("_a", None), ["0_a", 0]),
+    ],
+)
+def test_merge_suffix_none_and_non_string(col1, col2, suffixes, expected_cols):
+    # A ``None`` suffix leaves that side's (possibly non-string) label
+    # unchanged; a string suffix is appended (coercing to a string), matching
+    # pandas.
+    a = cudf.DataFrame({col1: [1, 2, 3]})
+    b = cudf.DataFrame({col2: [4, 5, 6]})
+    pa = a.to_pandas()
+    pb = b.to_pandas()
+
+    result = a.merge(b, left_index=True, right_index=True, suffixes=suffixes)
+    expected = pa.merge(
+        pb, left_index=True, right_index=True, suffixes=suffixes
+    )
+    assert result.columns.tolist() == expected_cols
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("suffixes", [{"_x", "_y"}, {"left": 0, "right": 0}])
+def test_merge_suffixes_non_sequence_raises(suffixes):
+    # pandas rejects sets/dicts passed as ``suffixes`` with a TypeError.
+    a = cudf.DataFrame({"a": [1, 2, 3]})
+    b = cudf.DataFrame({"b": [3, 4, 5]})
+    with pytest.raises(TypeError, match="Passing 'suffixes' as a"):
+        a.merge(b, left_index=True, right_index=True, suffixes=suffixes)
 
 
 def test_merge_left_on_right_on():
@@ -1364,148 +1394,9 @@ def test_merge_datetime_timedelta_error(temporal_types_as_str):
         df1.merge(df2)
 
 
-if PANDAS_GE_220:
-    # Behaviour in sort=False case didn't match documentation in many
-    # cases prior to https://github.com/pandas-dev/pandas/pull/54611
-    # (released as part of pandas 2.2)
-    def expected(left, right, sort, *, how):
-        left = left.to_pandas()
-        right = right.to_pandas()
-        return left.merge(right, on="key", how=how, sort=sort)
-
-else:
-
-    def expect_inner(left, right, sort):
-        left_key = left.key.values_host.tolist()
-        left_val = left.val.values_host.tolist()
-        right_key = right.key.values_host.tolist()
-        right_val = right.val.values_host.tolist()
-
-        right_have = defaultdict(list)
-        for i, k in enumerate(right_key):
-            right_have[k].append(i)
-        keys = []
-        val_x = []
-        val_y = []
-        for k, v in zip(left_key, left_val, strict=True):
-            if k not in right_have:
-                continue
-            for i in right_have[k]:
-                keys.append(k)
-                val_x.append(v)
-                val_y.append(right_val[i])
-
-        if sort:
-            # Python sort is stable, so this will preserve input order for
-            # equal items.
-            keys, val_x, val_y = zip(
-                *sorted(
-                    zip(keys, val_x, val_y, strict=True),
-                    key=operator.itemgetter(0),
-                ),
-                strict=True,
-            )
-        return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
-
-    def expect_left(left, right, sort):
-        left_key = left.key.values_host.tolist()
-        left_val = left.val.values_host.tolist()
-        right_key = right.key.values_host.tolist()
-        right_val = right.val.values_host.tolist()
-
-        right_have = defaultdict(list)
-        for i, k in enumerate(right_key):
-            right_have[k].append(i)
-        keys = []
-        val_x = []
-        val_y = []
-        for k, v in zip(left_key, left_val, strict=True):
-            if k not in right_have:
-                right_vals = [None]
-            else:
-                right_vals = [right_val[i] for i in right_have[k]]
-
-            for rv in right_vals:
-                keys.append(k)
-                val_x.append(v)
-                val_y.append(rv)
-
-        if sort:
-            # Python sort is stable, so this will preserve input order for
-            # equal items.
-            keys, val_x, val_y = zip(
-                *sorted(
-                    zip(keys, val_x, val_y, strict=True),
-                    key=operator.itemgetter(0),
-                ),
-                strict=True,
-            )
-        return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
-
-    def expect_outer(left, right, sort):
-        left_key = left.key.values_host.tolist()
-        left_val = left.val.values_host.tolist()
-        right_key = right.key.values_host.tolist()
-        right_val = right.val.values_host.tolist()
-        right_have = defaultdict(list)
-        for i, k in enumerate(right_key):
-            right_have[k].append(i)
-        keys = []
-        val_x = []
-        val_y = []
-        for k, v in zip(left_key, left_val, strict=True):
-            if k not in right_have:
-                right_vals = [None]
-            else:
-                right_vals = [right_val[i] for i in right_have[k]]
-            for rv in right_vals:
-                keys.append(k)
-                val_x.append(v)
-                val_y.append(rv)
-        left_have = set(left_key)
-        for k, v in zip(right_key, right_val, strict=True):
-            if k not in left_have:
-                keys.append(k)
-                val_x.append(None)
-                val_y.append(v)
-
-        # Python sort is stable, so this will preserve input order for
-        # equal items.
-        # outer joins are always sorted, but we test both sort values
-        keys, val_x, val_y = zip(
-            *sorted(
-                zip(keys, val_x, val_y, strict=True),
-                key=operator.itemgetter(0),
-            ),
-            strict=True,
-        )
-        return cudf.DataFrame({"key": keys, "val_x": val_x, "val_y": val_y})
-
-    def expected(left, right, sort, *, how):
-        if how == "inner":
-            return expect_inner(left, right, sort)
-        elif how == "outer":
-            return expect_outer(left, right, sort)
-        elif how == "left":
-            return expect_left(left, right, sort)
-        elif how == "right":
-            return expect_left(right, left, sort).rename(
-                {"val_x": "val_y", "val_y": "val_x"}, axis=1
-            )
-        else:
-            raise NotImplementedError()
-
-
 def test_join_ordering_pandas_compat(request, sort, how):
     if how in ["leftanti", "leftsemi", "cross"]:
         pytest.skip(f"Test not applicable for {how}")
-    request.applymarker(
-        pytest.mark.xfail(
-            PANDAS_VERSION >= PANDAS_CURRENT_SUPPORTED_VERSION
-            and how == "right",
-            reason="TODO: Result ording of suffix'ed columns is incorrect",
-        )
-    )
     left_key = [1, 3, 2, 1, 1, 2, 5, 1, 4, 5, 8, 12, 12312, 1] * 100
     left_val = range(len(left_key))
     left = cudf.DataFrame({"key": left_key, "val": left_val})
@@ -1516,7 +1407,9 @@ def test_join_ordering_pandas_compat(request, sort, how):
     right = cudf.DataFrame({"key": right_key, "val": right_val})
     with cudf.option_context("mode.pandas_compatible", True):
         actual = left.merge(right, on="key", how=how, sort=sort)
-    expect = expected(left, right, sort, how=how)
+    expect = left.to_pandas().merge(
+        right.to_pandas(), on="key", how=how, sort=sort
+    )
     assert_eq(expect, actual)
 
 
@@ -1582,8 +1475,8 @@ def test_merge_combinations(
         else:
             expected, other, other_unique = right, left, left_unique
         if how == "inner":
-            keep_values = set(left["key"].values_host).intersection(
-                right["key"].values_host
+            keep_values = set(left["key"].to_numpy()).intersection(
+                right["key"].to_numpy()
             )
             keep_mask = expected["key"].isin(keep_values)
             expected = expected[keep_mask]
@@ -1605,8 +1498,8 @@ def test_merge_combinations(
             right_counts = right["key"].value_counts()
             expected_counts = left_counts.mul(right_counts, fill_value=1)
             expected_counts = expected_counts.astype(np.intp)
-            expected = expected_counts.index.values_host.repeat(
-                expected_counts.values_host
+            expected = expected_counts.index.to_numpy().repeat(
+                expected_counts.to_numpy()
             )
             expected = cudf.DataFrame({"key": expected})
             expected = expected.sort_values("key")

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -10,14 +10,13 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/default_stream.hpp>
-#include <cudf/utilities/export.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
 
-namespace CUDF_EXPORT cudf {
+namespace cudf {
 namespace reduction::detail {
 /**
  * @brief Computes sum of elements in input column
@@ -41,25 +40,26 @@ std::unique_ptr<scalar> sum(column_view const& col,
                             rmm::device_async_resource_ref mr);
 
 /**
- * @brief Computes sum with overflow detection of int64_t elements in input column
+ * @brief Computes sum with overflow detection of signed integer or decimal elements in input column
  *
- * Returns a struct scalar with {sum: int64_t, overflow: bool} fields.
- * Only supports int64_t input columns.
+ * Returns a struct scalar with {sum: same type as input, overflow: bool} fields.
+ * Supported input types: signed integers (int8/16/32/64) and decimals (decimal32/64/128).
  *
- * @throw std::invalid_argument if input column type is not int64_t
+ * @throw std::invalid_argument if input column type is not a supported signed integer or decimal
+ * @throw std::invalid_argument if `output_type` is not STRUCT
  *
- * @param col input column to compute sum with overflow detection (must be int64_t)
- * @param output_type data type of return type (must be struct)
+ * @param col input column to compute sum with overflow detection
+ * @param output_type data type of return type (must be STRUCT)
  * @param init initial value of the sum
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Struct scalar with sum and overflow flag
  */
-std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
-                                          data_type const output_type,
-                                          std::optional<std::reference_wrapper<scalar const>> init,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr);
+std::unique_ptr<scalar> sum_overflow(column_view const& col,
+                                     data_type const output_type,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes minimum of elements in input column
@@ -474,4 +474,4 @@ std::unique_ptr<scalar> count(column_view const& col,
                               rmm::device_async_resource_ref mr);
 
 }  // namespace reduction::detail
-}  // namespace CUDF_EXPORT cudf
+}  // namespace cudf

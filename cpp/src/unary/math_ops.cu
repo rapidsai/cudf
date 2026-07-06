@@ -15,12 +15,12 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cuda/std/bit>
 #include <cuda/std/cmath>
+#include <cuda/std/type_traits>
 #include <thrust/transform.h>
-
-#include <type_traits>
 
 namespace cudf {
 namespace detail {
@@ -179,13 +179,13 @@ struct DeviceFloor {
 struct DeviceAbs {
   template <typename T>
   T __device__ operator()(T data)
-    requires(std::is_signed_v<T>)
+    requires(cuda::std::is_signed_v<T>)
   {
     return cuda::std::abs(data);
   }
   template <typename T>
   T __device__ operator()(T data)
-    requires(!std::is_signed_v<T>)
+    requires(!cuda::std::is_signed_v<T>)
   {
     return data;
   }
@@ -320,7 +320,7 @@ std::unique_ptr<column> unary_op_with(column_view const& input,
     n *= 10;
   }
 
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input.begin<Type>(),
                     input.end<Type>(),
                     out_view.begin<Type>(),
@@ -350,8 +350,11 @@ std::unique_ptr<cudf::column> transform_fn(InputIterator begin,
                             mr);
 
   auto output_view = output->mutable_view();
-  thrust::transform(
-    rmm::exec_policy_nosync(stream), begin, end, output_view.begin<OutputType>(), UFN{});
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                    begin,
+                    end,
+                    output_view.begin<OutputType>(),
+                    UFN{});
   output->set_null_count(null_count);
   return output;
 }

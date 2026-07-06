@@ -48,11 +48,12 @@ def binaryop(
     op = _op_map.get(op, op)
 
     with access_columns(lhs, rhs, mode="read", scope="internal") as (lhs, rhs):
-        return ColumnBase.from_pylibcudf(
+        return ColumnBase.create(
             plc.binaryop.binary_operation(
                 lhs.plc_column if isinstance(lhs, ColumnBase) else lhs,
                 rhs.plc_column if isinstance(rhs, ColumnBase) else rhs,
                 plc.binaryop.BinaryOperator[op],
                 dtype_to_pylibcudf_type(dtype),
-            )
-        )._with_type_metadata(dtype)
+            ),
+            dtype,
+        )

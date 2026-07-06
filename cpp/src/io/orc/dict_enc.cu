@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -64,6 +64,7 @@ void rowgroup_char_counts(device_2dspan<size_type> counts,
 
   rowgroup_char_counts_kernel<<<num_blocks, block_size, 0, stream.value()>>>(
     counts, orc_columns, rowgroup_bounds, str_col_indexes);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 struct equality_functor {
@@ -169,7 +170,7 @@ CUDF_KERNEL void __launch_bounds__(block_size)
 
   for (size_type i = 0; i < dict.map_slots.size(); i += block_size) {
     if (t + i < dict.map_slots.size()) {
-      auto* slot     = dict.map_slots.begin() + t + i;
+      auto* slot     = dict.map_slots.data() + t + i;
       auto const key = slot->first;
       if (key != KEY_SENTINEL) {
         auto loc       = counter.fetch_add(1, memory_order_relaxed);
@@ -231,6 +232,7 @@ void populate_dictionary_hash_maps(device_2dspan<stripe_dictionary> dictionaries
   constexpr int block_size = 256;
   populate_dictionary_hash_maps_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries, columns);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
@@ -240,6 +242,7 @@ void collect_map_entries(device_2dspan<stripe_dictionary> dictionaries,
   constexpr int block_size = 1024;
   collect_map_entries_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
@@ -250,6 +253,7 @@ void get_dictionary_indices(device_2dspan<stripe_dictionary> dictionaries,
   constexpr int block_size = 1024;
   get_dictionary_indices_kernel<block_size>
     <<<dictionaries.count(), block_size, 0, stream.value()>>>(dictionaries, columns);
+  CUDF_CUDA_TRY(cudaGetLastError());
 }
 
 }  // namespace cudf::io::orc::detail

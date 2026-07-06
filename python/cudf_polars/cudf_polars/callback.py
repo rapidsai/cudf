@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -15,6 +15,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Literal, assert_never, overload
 
 import nvtx
+from cuda.bindings import runtime
 
 from polars.exceptions import ComputeError, PerformanceWarning
 
@@ -27,6 +28,7 @@ from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import (
+    MemoryResourceConfig,
     _env_get_int,
     get_total_device_memory,
 )
@@ -40,9 +42,29 @@ if TYPE_CHECKING:
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.typing import NodeTraverser
-    from cudf_polars.utils.config import ConfigOptions, MemoryResourceConfig
+    from cudf_polars.utils.config import ConfigOptions, ExecutorType
 
 __all__: list[str] = ["execute_with_cudf"]
+
+
+def _is_concurrent_managed_access_supported() -> bool:
+    """
+    Check the availability of concurrent managed access (UVM).
+
+    Note that WSL2 does not support managed memory.
+    """
+    # Ensure CUDA is initialized before checking cudaDevAttrConcurrentManagedAccess
+    runtime.cudaFree(0)
+
+    device_id = 0
+    err, supports_managed_access = runtime.cudaDeviceGetAttribute(
+        runtime.cudaDeviceAttr.cudaDevAttrConcurrentManagedAccess, device_id
+    )
+    if err != runtime.cudaError_t.cudaSuccess:
+        raise RuntimeError(
+            f"Failed to check cudaDevAttrConcurrentManagedAccess with error {err}"
+        )  # pragma: no cover
+    return supports_managed_access != 0
 
 
 @cache
@@ -75,10 +97,7 @@ def default_memory_resource(
     try:
         if memory_resource_config is not None:
             mr = memory_resource_config.create_memory_resource()
-        elif (
-            cuda_managed_memory
-            and pylibcudf.utils._is_concurrent_managed_access_supported()
-        ):
+        elif cuda_managed_memory and _is_concurrent_managed_access_supported():
             # Allocating 80% of the available memory for the pool.
             # Leaving a 20% headroom to avoid OOM errors.
             free_memory, _ = rmm.mr.available_device_memory()
@@ -112,6 +131,7 @@ def default_memory_resource(
 def set_memory_resource(
     mr: rmm.mr.DeviceMemoryResource | None,
     memory_resource_config: MemoryResourceConfig | None,
+    executor: ExecutorType,
 ) -> Generator[rmm.mr.DeviceMemoryResource, None, None]:
     """
     Set the current memory resource for an execution block.
@@ -124,6 +144,8 @@ def set_memory_resource(
     memory_resource_config
         Memory resource configuration to use when a concrete memory resource.
         is not provided. If ``None``, the default memory resource is used.
+    executor
+        Executor configuration.
 
     Returns
     -------
@@ -137,6 +159,19 @@ def set_memory_resource(
     """
     previous = rmm.mr.get_current_device_resource()
     if mr is None:
+        # Use cuda async by default with the streaming executor.
+        if (
+            memory_resource_config is None
+            and executor.name == "streaming"
+            and (device_size := get_total_device_memory()) is not None
+        ):  # pragma: no cover
+            memory_resource_config = MemoryResourceConfig(
+                qualname="rmm.mr.CudaAsyncMemoryResource",
+                options={
+                    "release_threshold": int(0.5 * device_size / 256) * 256,
+                },
+            )
+
         device: int = gpu.getDevice()
         mr = default_memory_resource(
             device=device,
@@ -258,30 +293,32 @@ def _callback(
         nvtx.annotate(message="ExecuteIR", domain=CUDF_POLARS_NVTX_DOMAIN),
         # Device must be set before memory resource is obtained.
         set_device(config_options.device),
-        set_memory_resource(memory_resource, config_options.memory_resource_config),
+        set_memory_resource(
+            memory_resource,
+            config_options.memory_resource_config,
+            config_options.executor,
+        ),
     ):
         if config_options.executor.name == "in-memory":
-            context = IRExecutionContext.from_config_options(config_options)
+            context = IRExecutionContext()
             df = ir.evaluate(cache={}, timer=timer, context=context).to_polars()
             if timer is None:
                 return df
             else:
                 return df, timer.timings
         elif config_options.executor.name == "streaming":
-            from cudf_polars.experimental.parallel import evaluate_streaming
+            from cudf_polars.streaming.parallel import evaluate_streaming
 
             if timer is not None:
                 msg = textwrap.dedent("""\
                     LazyFrame.profile() is not supported with the streaming executor.
-                    To profile execution with the streaming executor, use:
-
-                    - NVIDIA NSight Systems with the 'streaming' scheduler.
-                    - Dask's built-in profiling tools with the 'distributed' scheduler.
+                    To profile execution with the streaming executor, use NVIDIA
+                    NSight Systems with the 'streaming' scheduler.
                     """)
                 raise NotImplementedError(msg)
 
             return evaluate_streaming(ir, config_options)
-        assert_never(f"Unknown executor '{config_options.executor}'")
+        assert_never(config_options.executor)
 
 
 def execute_with_cudf(
@@ -328,12 +365,6 @@ def execute_with_cudf(
         if timer is not None:
             timer.store(start, time.monotonic_ns(), "gpu-ir-translation")
 
-        if (
-            memory_resource is None
-            and translator.config_options.executor.name == "streaming"
-            and translator.config_options.executor.cluster == "distributed"
-        ):  # pragma: no cover; Requires distributed cluster
-            memory_resource = rmm.mr.get_current_device_resource()
         if len(ir_translation_errors):
             # TODO: Display these errors in user-friendly way.
             # tracked in https://github.com/rapidsai/cudf/issues/17051
@@ -346,7 +377,7 @@ def execute_with_cudf(
                 f"\nThe errors were:\n{formatted_errors}"
             )
             exception = NotImplementedError(error_message, unique_errors)
-            if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+            if bool(int(os.environ.get("POLARS_VERBOSE", "0"))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
             if translator.config_options.raise_on_fail:
                 raise exception

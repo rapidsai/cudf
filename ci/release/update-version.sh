@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 ########################
 # cuDF Version Updater #
@@ -93,19 +93,58 @@ function sed_runner() {
     sed -i.bak ''"$1"'' "$2" && rm -f "${2}".bak
 }
 
+# latest numba-cuda upper bound
+NUMBA_CUDA_JSON=$(curl -sL https://pypi.org/pypi/numba-cuda/json) || true
+if [[ -n "$NUMBA_CUDA_JSON" ]]; then
+  NUMBA_CUDA_VERSIONS=$(echo "$NUMBA_CUDA_JSON" | python -c "
+import json, sys
+from packaging.version import Version
+try:
+    data = json.load(sys.stdin)
+    releases = [v for v in data.get('releases', []) if not Version(v).is_prerelease]
+    latest = max(releases, key=lambda v: Version(v)) if releases else None
+    if not latest:
+        sys.exit(1)
+    v = Version(latest)
+    r = v.release
+    # exclusive upper bound = next minor (e.g. 0.23.1 -> 0.24.0)
+    upper = '.'.join(str(x) for x in (r[0], r[1] + 1, 0))
+    print(latest, upper)
+except Exception:
+    sys.exit(1)
+") || NUMBA_CUDA_VERSIONS=""
+  if [[ -n "$NUMBA_CUDA_VERSIONS" ]]; then
+    LATEST_NUMBA_CUDA="${NUMBA_CUDA_VERSIONS%% *}"
+    NUMBA_CUDA_UPPER="${NUMBA_CUDA_VERSIONS##* }"
+    CURRENT_LOWER=$(grep -oE 'numba-cuda>=[0-9]+\.[0-9]+\.[0-9][0-9.]*' dependencies.yaml 2>/dev/null | head -1 | cut -d= -f2)
+    echo "Updating numba-cuda: lower bound ${CURRENT_LOWER}, upper bound <${NUMBA_CUDA_UPPER} (latest release: ${LATEST_NUMBA_CUDA})"
+    NUMBA_CUDA_SPEC=">=${CURRENT_LOWER},<${NUMBA_CUDA_UPPER}"
+    for FILE in dependencies.yaml conda/recipes/cudf/recipe.yaml; do
+      for f in $FILE; do
+        [[ -f "$f" ]] || continue
+        sed_runner "s/numba-cuda>=[0-9]\+\.[0-9]\+\.[0-9][0-9.]*/numba-cuda${NUMBA_CUDA_SPEC}/g" "$f"
+        sed_runner "s/numba-cuda\[cu12\]>=[0-9]\+\.[0-9]\+\.[0-9][0-9.]*/numba-cuda[cu12]${NUMBA_CUDA_SPEC}/g" "$f"
+        sed_runner "s/numba-cuda\[cu13\]>=[0-9]\+\.[0-9]\+\.[0-9][0-9.]*/numba-cuda[cu13]${NUMBA_CUDA_SPEC}/g" "$f"
+        sed_runner "s/numba-cuda >=[0-9]\+\.[0-9]\+\.[0-9][0-9.]*/numba-cuda ${NUMBA_CUDA_SPEC}/g" "$f"
+      done
+    done
+  else
+    echo "Warning: Could not determine latest numba-cuda version; leaving existing pins unchanged"
+  fi
+else
+  echo "Warning: Could not fetch numba-cuda metadata from PyPI; leaving existing pins unchanged"
+fi
+
 # Centralized version file update
 echo "${NEXT_FULL_TAG}" > VERSION
+# The cudf version file must be a copy, see https://github.com/rapidsai/cudf/pull/18198
 echo "${NEXT_FULL_TAG}" > python/cudf/cudf/VERSION
 echo "${RAPIDS_BRANCH_NAME}" > RAPIDS_BRANCH
 
-# Wheel testing script
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_dask_cudf.sh
-sed_runner "s|\\bmain\\b|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_dask_cudf.sh
-
 DEPENDENCIES=(
   cudf
-  cudf_kafka
   cudf-polars
+  cudf_kafka
   cugraph
   cuml
   custreamz
@@ -114,8 +153,8 @@ DEPENDENCIES=(
   kvikio
   libcudf
   libcudf-example
-  libcudf_kafka
   libcudf-tests
+  libcudf_kafka
   libkvikio
   librmm
   pylibcudf
@@ -146,6 +185,9 @@ sed_runner "s|/tree/\\bmain\\b/|/tree/${RAPIDS_BRANCH_NAME}/|g" python/cudf_pola
 sed_runner "s|CUDF_TAG release/[0-9]\+\.[0-9]\+|CUDF_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/examples/versions.cmake
 sed_runner "s|CUDF_TAG \\bmain\\b|CUDF_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/examples/versions.cmake
 
+# .pre-commit-config.yaml
+sed_runner "/rmm-cu[0-9]*==/ s/==.*\*,/==${NEXT_SHORT_TAG_PEP440}.*,/g" .pre-commit-config.yaml
+
 # CI files
 for FILE in .github/workflows/*.yaml .github/workflows/*.yml; do
   sed_runner "/shared-workflows/ s|@.*|@${WORKFLOW_BRANCH_REF}|g" "${FILE}"
@@ -153,16 +195,6 @@ for FILE in .github/workflows/*.yaml .github/workflows/*.yml; do
   sed_runner "s|dask-cuda.git@\\bmain\\b|dask-cuda.git@${RAPIDS_BRANCH_NAME}|g" "${FILE}"
   sed_runner "s|:[0-9]*\\.[0-9]*-|:${NEXT_SHORT_TAG}-|g" "${FILE}"
 done
-
-# Test scripts
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_cudf_polars.sh
-sed_runner "s|\\bmain\\b|${RAPIDS_BRANCH_NAME}|g" ci/test_wheel_cudf_polars.sh
-
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/test_cudf_polars_polars_tests.sh
-sed_runner "s|\\bmain\\b|${RAPIDS_BRANCH_NAME}|g" ci/test_cudf_polars_polars_tests.sh
-
-sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" ci/cudf_pandas_scripts/pandas-tests/run.sh
-sed_runner "s|-b \\bmain\\b|-b ${RAPIDS_BRANCH_NAME}|g" ci/cudf_pandas_scripts/pandas-tests/run.sh
 
 # Java files
 NEXT_FULL_JAVA_TAG="${NEXT_SHORT_TAG}.${PATCH_PEP440}-SNAPSHOT"
@@ -172,13 +204,6 @@ sed_runner "s|cudf-.*-SNAPSHOT|cudf-${NEXT_FULL_JAVA_TAG}|g" java/ci/README.md
 # Java documentation references
 sed_runner "s|release/[0-9]\+\.[0-9]\+|${RAPIDS_BRANCH_NAME}|g" java/ci/README.md
 sed_runner "s|-b \\bmain\\b|-b ${RAPIDS_BRANCH_NAME}|g" java/ci/README.md
-
-# CMake thirdparty references
-sed_runner "s|GIT_TAG release/[0-9]\+\.[0-9]\+|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/libcudf_kafka/cmake/thirdparty/get_cudf.cmake
-sed_runner "s|GIT_TAG \\bmain\\b|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/libcudf_kafka/cmake/thirdparty/get_cudf.cmake
-
-sed_runner "s|GIT_TAG release/[0-9]\+\.[0-9]\+|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/cmake/thirdparty/get_kvikio.cmake
-sed_runner "s|GIT_TAG \\bmain\\b|GIT_TAG ${RAPIDS_BRANCH_NAME}|g" cpp/cmake/thirdparty/get_kvikio.cmake
 
 # Other documentation references
 sed_runner "s|/blob/release/[0-9]\+\.[0-9]\+/|/blob/${RAPIDS_BRANCH_NAME}/|g" docs/cudf/source/pylibcudf/developer_docs.md

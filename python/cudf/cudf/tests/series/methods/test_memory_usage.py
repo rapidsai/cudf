@@ -27,10 +27,11 @@ def test_series_memory_usage():
     sr = cudf.Series([1, 2, 3, 4], dtype="int64")
     assert sr.memory_usage() == 32
 
-    # Sliced series still refers to the original data, so it's memory footprint is the
-    # same unless CoW is on and we modify it.
+    # Sliced series reports actual data size, not the base buffer size.
+    # This is important to make correct decisions about data transfers, for
+    # example in Dask.
     sliced_sr = sr[2:]
-    assert sliced_sr.memory_usage() == 32
+    assert sliced_sr.memory_usage() == 16
 
     sliced_sr[3] = None
     assert sliced_sr.memory_usage() == 80

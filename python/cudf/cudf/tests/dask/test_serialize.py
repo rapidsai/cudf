@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import decimal
 import itertools
@@ -57,18 +57,16 @@ from cudf.testing import assert_eq
         ),
         lambda: pd.Index([True, False] * 5),
         lambda: pd.CategoricalIndex(["a", "b", "a", "b"], ["a", "b", "c"]),
-        lambda: (
-            cudf.DataFrame(
-                {
-                    "a": [1, 2, 3],
-                    "b": ["c", "e", "g"],
-                    "d": [True, False, True],
-                },
-                index=cudf.MultiIndex.from_tuples(
-                    [("i1", "i2"), ("i3", "i4"), ("i5", "i6")],
-                    names=["foo", "bar"],
-                ),
-            )
+        lambda: cudf.DataFrame(
+            {
+                "a": [1, 2, 3],
+                "b": ["c", "e", "g"],
+                "d": [True, False, True],
+            },
+            index=cudf.MultiIndex.from_tuples(
+                [("i1", "i2"), ("i3", "i4"), ("i5", "i6")],
+                names=["foo", "bar"],
+            ),
         ),
         lambda: cudf.Index(
             cudf.date_range(start="2011-01-01", end="2012-01-01", periods=13)
@@ -389,7 +387,7 @@ def test_serialize_sliced_string():
     # https://github.com/rapidsai/cudf/issues/7735
     data = ["hi", "hello", None]
     pd_series = pd.Series(data, dtype=pd.StringDtype())
-    gd_series = cudf.Series(data, dtype="str")
+    gd_series = cudf.Series(data, dtype=pd_series.dtype)
     sliced = gd_series[0:3]
     serialized_gd_series = gd_series.serialize()
     serialized_sliced = sliced.serialize()
@@ -473,3 +471,51 @@ def test_serialize_categorical_columns(data):
     df = cudf.DataFrame(data)
     recreated = df.__class__.deserialize(*df.serialize())
     assert_eq(recreated, df)
+
+
+def test_sliced_column_serialization_efficiency():
+    """Test that sliced columns are compacted during serialization.
+
+    After PR #20961, column.data returns the base buffer instead of a sliced
+    view. This test ensures that sliced columns are automatically compacted
+    before serialization to avoid transferring entire base buffers over the
+    network.
+    """
+    pytest.importorskip("cupy")
+    import cupy as cp
+
+    # Create a large DataFrame
+    n_rows = 1_000_000
+    full_df = cudf.DataFrame({"data": cp.random.random(n_rows)})
+
+    # Create a sliced DataFrame (10% of original)
+    slice_size = 100_000
+    sliced_df = full_df.iloc[:slice_size]
+
+    # Get columns
+    sliced_col = sliced_df["data"]._column
+    full_col = full_df["data"]._column
+
+    # Serialize both columns
+    _, sliced_frames = sliced_col.serialize()
+    _, full_frames = full_col.serialize()
+
+    sliced_size = sum(f.size for f in sliced_frames)
+    full_size = sum(f.size for f in full_frames)
+
+    # The sliced column should serialize to approximately 10% of the full size
+    # (allowing for some overhead from metadata)
+    ratio = sliced_size / full_size
+    assert ratio < 0.15, (
+        f"Sliced column is {ratio:.1%} of full size, expected < 15%"
+    )
+
+    # Verify correctness: deserialized data should match original
+    from cudf.core.column import ColumnBase
+
+    recreated = ColumnBase.deserialize(*sliced_col.serialize())
+    assert_eq(
+        cudf.Series._from_column(recreated),
+        cudf.Series._from_column(sliced_col),
+        check_names=False,
+    )

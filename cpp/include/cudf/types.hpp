@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -27,10 +27,11 @@
 
 #include <cudf/utilities/export.hpp>
 
+#include <cuda/std/iterator>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <iterator>
 
 /**
  * @file
@@ -98,7 +99,7 @@ using char_utf8         = uint32_t;  ///< UTF-8 characters are 1-4 bytes
 template <typename T>
 size_type distance(T f, T l)
 {
-  return static_cast<size_type>(std::distance(f, l));
+  return static_cast<size_type>(cuda::std::distance(f, l));
 }
 
 /**
@@ -261,6 +262,23 @@ enum class output_nullability : uint8_t {
 };
 
 /**
+ * @brief Indicates whether a function nullifies its output on error.
+ *
+ */
+enum class error_policy : uint8_t {
+  PROPAGATE = 0,  ///< The function propagates errors
+  NULLIFY   = 1   ///< The function nullifies its output on error
+};
+
+/**
+ * @brief Indicates the source language of a user defined function (UDF) to be used in JIT APIs.
+ */
+enum class udf_source_type : uint8_t {
+  CUDA = 0,  ///< The UDF is a CUDA function
+  PTX  = 1   ///< The UDF is a PTX function
+};
+
+/**
  * @brief Indicator for the logical data type of an element in a column.
  *
  * Simple types can be entirely described by their `id()`, but some types
@@ -344,7 +362,7 @@ class data_type {
  */
 constexpr bool operator==(data_type const& lhs, data_type const& rhs)
 {
-  // use std::tie in the future, breaks JITIFY currently
+  // use std::tie in the future, breaks NVRTC currently
   return lhs.id() == rhs.id() && lhs.scale() == rhs.scale();
 }
 

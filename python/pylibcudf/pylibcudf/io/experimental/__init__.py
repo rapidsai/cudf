@@ -1,14 +1,14 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 from pylibcudf.io.experimental.hybrid_scan import (
-    FileMetaData,
     HybridScanReader,
     UseDataPageMask,
 )
+from pylibcudf.io.parquet_metadata import FileMetaData
 
 __all__ = [
-    "FileMetaData",
+    "FileMetaData",  # backwards compatibility
     "HybridScanReader",
     "UseDataPageMask",
 ]

@@ -143,8 +143,9 @@ def test_round_trip_dlpack_plc_table():
 
 
 @pytest.mark.parametrize("array", [np.array, cp.array])
-def test_round_trip_dlpack_array(array):
-    arr = array([1, 2, 3])
+def test_round_trip_dlpack_array(array, patch_cupy_stream):
+    with patch_cupy_stream:
+        arr = array([1, 2, 3])
     result = plc.interop.from_dlpack(arr.__dlpack__())
     expected = pa.table({"a": [1, 2, 3]})
     assert_table_eq(expected, result)
@@ -243,15 +244,3 @@ def test_arrow_object_lifetime():
     except ValueError:
         # Ignore the exception. A failure in this test is a seg fault
         pass
-
-
-def test_deprecate_arrow_interop_apis():
-    with pytest.warns(
-        FutureWarning, match="pylibcudf.interop.from_arrow is deprecated"
-    ):
-        foo = plc.interop.from_arrow(pa.array([1]))
-
-    with pytest.warns(
-        FutureWarning, match="pylibcudf.interop.to_arrow is deprecated"
-    ):
-        plc.interop.to_arrow(foo)

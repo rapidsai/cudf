@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -403,10 +403,7 @@ std::enable_if_t<std::disjunction_v<std::is_same<T, int32_t>,
                  std::size_t>
 get_decimal_precision()
 {
-  if constexpr (std::is_same_v<T, int64_t>)
-    return 18;
-  else
-    return cudf::detail::max_precision<T>();
+  return std::numeric_limits<T>::digits10;
 }
 
 struct VectorOfArrays {
@@ -433,7 +430,7 @@ struct VectorOfArrays {
     return 0;
   }
 
-  static const char* get_last_error(ArrowArrayStream* stream) { return nullptr; }
+  static char const* get_last_error(ArrowArrayStream* stream) { return nullptr; }
 
   static void release(ArrowArrayStream* stream)
   {

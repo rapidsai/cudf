@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,7 @@
 #include <cudf/table/table.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <nanoarrow/nanoarrow.h>
 #include <nanoarrow/nanoarrow.hpp>
@@ -45,9 +45,7 @@ std::unique_ptr<column> make_empty_column_from_schema(ArrowSchema const* schema,
                                      cudf::make_empty_column(data_type{type_id::INT32}),
                                      make_empty_column_from_schema(schema->children[0], stream, mr),
                                      0,
-                                     {},
-                                     stream,
-                                     mr);
+                                     {});
     }
     case type_id::STRUCT: {
       std::vector<std::unique_ptr<column>> child_columns;
@@ -80,12 +78,16 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
   NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetSchema(input, &schema, nullptr));
 
   std::vector<std::unique_ptr<cudf::table>> chunks;
-  ArrowArray chunk;
+  // Keep each input chunk alive until the stream has executed the host-to-device copies enqueued
+  // by `from_arrow`. Those copies use `cudaMemcpyBatchAsync` with `cudaMemcpySrcAccessOrderStream`,
+  // which defers reading the host source until the stream reaches the copy.
+  std::vector<nanoarrow::UniqueArray> sources;
   while (true) {
-    NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, &chunk, nullptr));
-    if (chunk.release == nullptr) { break; }
-    chunks.push_back(from_arrow(&schema, &chunk, stream, mr));
-    chunk.release(&chunk);
+    nanoarrow::UniqueArray chunk;
+    NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, chunk.get(), nullptr));
+    if (chunk->release == nullptr) { break; }
+    sources.push_back(std::move(chunk));
+    chunks.push_back(from_arrow(&schema, sources.back().get(), stream, mr));
   }
   input->release(input);
 
@@ -110,6 +112,10 @@ std::unique_ptr<table> from_arrow_stream(ArrowArrayStream* input,
 
   schema.release(&schema);
 
+  // Ensure all host-to-device copies enqueued above have completed before `sources` releases the
+  // host-side Arrow buffers.
+  stream.synchronize();
+
   if (chunks.size() == 1) { return std::move(chunks[0]); }
   auto chunk_views = std::vector<table_view>{};
   chunk_views.reserve(chunks.size());
@@ -133,12 +139,17 @@ std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
   NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetSchema(input, &schema, nullptr));
 
   std::vector<std::unique_ptr<cudf::column>> chunks;
-  ArrowArray chunk;
+  // Keep each input chunk alive until the stream has executed the host-to-device copies enqueued
+  // by `from_arrow_column`. Those copies use `cudaMemcpyBatchAsync` with
+  // `cudaMemcpySrcAccessOrderStream`, which defers reading the host source until the stream reaches
+  // the copy.
+  std::vector<nanoarrow::UniqueArray> sources;
   while (true) {
-    NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, &chunk, nullptr));
-    if (chunk.release == nullptr) { break; }
-    chunks.push_back(from_arrow_column(&schema, &chunk, stream, mr));
-    chunk.release(&chunk);
+    nanoarrow::UniqueArray chunk;
+    NANOARROW_THROW_NOT_OK(ArrowArrayStreamGetNext(input, chunk.get(), nullptr));
+    if (chunk->release == nullptr) { break; }
+    sources.push_back(std::move(chunk));
+    chunks.push_back(from_arrow_column(&schema, sources.back().get(), stream, mr));
   }
   input->release(input);
 
@@ -149,6 +160,10 @@ std::unique_ptr<column> from_arrow_stream_column(ArrowArrayStream* input,
   }
 
   schema.release(&schema);
+
+  // Ensure all host-to-device copies enqueued above have completed before `sources` releases the
+  // host-side Arrow buffers.
+  stream.synchronize();
 
   if (chunks.size() == 1) { return std::move(chunks[0]); }
   auto chunk_views = std::vector<column_view>{};

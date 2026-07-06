@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
@@ -31,7 +31,7 @@ def test_dataframe_hash_partition(nparts):
     for p in got:
         if len(p):
             # Take rows of the keycolumns and build a set of the key-values
-            unique_keys = set(map(tuple, p[keycols].values_host))
+            unique_keys = set(map(tuple, p[keycols].to_numpy()))
             # Ensure that none of the key-values have occurred in other groups
             assert not (unique_keys & part_unique_keys)
             part_unique_keys |= unique_keys

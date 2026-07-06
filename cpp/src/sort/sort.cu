@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,9 +16,6 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <thrust/functional.h>
-#include <thrust/sort.h>
 
 namespace cudf {
 namespace detail {
@@ -47,7 +44,7 @@ std::unique_ptr<table> sort_by_key(table_view const& values,
   return detail::gather(values,
                         sorted_order->view(),
                         out_of_bounds_policy::DONT_CHECK,
-                        detail::negative_index_policy::NOT_ALLOWED,
+                        negative_index_policy::NOT_ALLOWED,
                         stream,
                         mr);
 }

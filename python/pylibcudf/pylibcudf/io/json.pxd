@@ -1,10 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.vector cimport vector
 
-from rmm.pylibrmm.stream cimport Stream
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 
 from pylibcudf.io.types cimport (
@@ -83,7 +82,7 @@ cdef class JsonReaderOptionsBuilder:
     cpdef build(self)
 
 cpdef TableWithMetadata read_json(
-    JsonReaderOptions options, Stream stream = *, DeviceMemoryResource mr = *
+    JsonReaderOptions options, object stream = *, DeviceMemoryResource mr = *
 )
 
 cpdef TableWithMetadata read_json_from_string_column(
@@ -93,7 +92,7 @@ cpdef TableWithMetadata read_json_from_string_column(
     list dtypes = *,
     compression_type compression = *,
     json_recovery_mode_t recovery_mode = *,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *)
 
 cdef class JsonWriterOptions:
@@ -117,13 +116,13 @@ cdef class JsonWriterOptionsBuilder:
     cpdef JsonWriterOptionsBuilder utf8_escaped(self, bool val)
     cpdef JsonWriterOptions build(self)
 
-cpdef void write_json(JsonWriterOptions options, Stream stream = *)
+cpdef void write_json(JsonWriterOptions options, object stream = *)
 
 cpdef bool is_supported_write_json(DataType type)
 
 cpdef tuple chunked_read_json(
     JsonReaderOptions options,
     int chunk_size= *,
-    Stream stream = *,
+    object stream = *,
     DeviceMemoryResource mr = *,
 )

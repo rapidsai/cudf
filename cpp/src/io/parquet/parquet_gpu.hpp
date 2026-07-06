@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,9 +22,9 @@
 #include <rmm/device_uvector.hpp>
 
 #include <cuda/atomic>
+#include <cuda/std/optional>
 #include <cuda_runtime.h>
 
-#include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -102,17 +102,18 @@ __device__ constexpr void set_error(kernel_error::value_type error,
  * These values are used as bitmasks, so they must be powers of 2.
  */
 enum class decode_error : kernel_error::value_type {
-  DATA_STREAM_OVERRUN      = 0x1,
-  LEVEL_STREAM_OVERRUN     = 0x2,
-  UNSUPPORTED_ENCODING     = 0x4,
-  INVALID_LEVEL_RUN        = 0x8,
-  INVALID_DATA_TYPE        = 0x10,
-  EMPTY_PAGE               = 0x20,
-  INVALID_DICT_WIDTH       = 0x40,
-  DELTA_PARAM_MISMATCH     = 0x80,
-  DELTA_PARAMS_UNSUPPORTED = 0x100,
-  INVALID_PAGE_TYPE        = 0x200,
-  INVALID_PAGE_HEADER      = 0x400,
+  DATA_STREAM_OVERRUN            = 0x1,
+  LEVEL_STREAM_OVERRUN           = 0x2,
+  UNSUPPORTED_ENCODING           = 0x4,
+  INVALID_LEVEL_RUN              = 0x8,
+  INVALID_DATA_TYPE              = 0x10,
+  EMPTY_PAGE                     = 0x20,
+  INVALID_DICT_WIDTH             = 0x40,
+  DELTA_PARAM_MISMATCH           = 0x80,
+  DELTA_PARAMS_UNSUPPORTED       = 0x100,
+  INVALID_PAGE_TYPE              = 0x200,
+  INVALID_PAGE_HEADER            = 0x400,
+  INVALID_BYTE_STREAM_SPLIT_SIZE = 0x800,
 };
 
 /**
@@ -302,6 +303,19 @@ struct PageNestingInfo {
 struct PageInfo {
   uint8_t* page_data;  // Compressed page data before decompression, or uncompressed data after
                        // decompression
+  size_t str_offset;   // offset into string data for this page
+  // nesting information (input/output) for each page. this array contains
+  // input column nesting information, output column nesting information and
+  // mappings between the two. the length of the array, nesting_info_size is
+  // max(num_output_nesting_levels, max_definition_levels + 1)
+  PageNestingInfo* nesting;
+  PageNestingDecodeInfo* nesting_decode;
+  // level decode buffers
+  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
+  // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
+  int64_t temp_string_size;
+  uint8_t* temp_string_buf;
+
   int32_t compressed_page_size;    // compressed data size in bytes
   int32_t uncompressed_page_size;  // uncompressed data size in bytes
   // for V2 pages, the def and rep level data is not compressed, and lacks the 4-byte length
@@ -316,10 +330,8 @@ struct PageInfo {
   // - In the case of a nested schema, you have to decode the repetition and definition
   //   levels to extract actual column values
   int32_t num_input_values;
-  int32_t chunk_row;          // starting row of this page relative to the start of the chunk
-  int32_t num_rows;           // number of rows in this page
-  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
-                              // adjusted to compensate for the list row size estimates.
+  int32_t chunk_row;  // starting row of this page relative to the start of the chunk
+  int32_t num_rows;   // number of rows in this page
   // the next four are calculated in compute_page_string_sizes_kernel
   int32_t num_nulls;       // number of null values (V2 header), but recalculated for string cols
   int32_t num_valids;      // number of non-null values, taking into account skip_rows/num_rows
@@ -327,12 +339,6 @@ struct PageInfo {
   int32_t end_val;         // index of last value in string data stream
   int32_t chunk_idx;       // column chunk this page belongs to
   int32_t src_col_schema;  // schema index of this column
-  uint8_t flags;           // PAGEINFO_FLAGS_XXX
-  Encoding encoding;       // Encoding for data or dictionary page
-  Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
-  Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
-  bool is_compressed;                  // Whether the page is compressed (V2 header)
-
   // for nested types, we run a preprocess step in order to determine output
   // column sizes. Because of this, we can jump directly to the position in the
   // input data to start decoding instead of reading all of the data and discarding
@@ -347,33 +353,27 @@ struct PageInfo {
   int32_t skipped_leaf_values;
   // for string columns only, the size of all the chars in the string for
   // this page. only valid/computed during the base preprocess pass
-  size_t str_offset;      // offset into string data for this page
   int32_t str_bytes;      // in the case where we have selected a subset of rows, this will
                           // reflect the subset
   int32_t str_bytes_all;  // this reflects all rows
-  bool has_page_index;    // true if str_bytes, num_valids, etc are derivable from page indexes
-
-  // nesting information (input/output) for each page. this array contains
-  // input column nesting information, output column nesting information and
-  // mappings between the two. the length of the array, nesting_info_size is
-  // max(num_output_nesting_levels, max_definition_levels + 1)
   int32_t num_output_nesting_levels;
   int32_t nesting_info_size;
-  PageNestingInfo* nesting;
-  PageNestingDecodeInfo* nesting_decode;
-
-  // level decode buffers
-  uint8_t* lvl_decode_buf[level_type::NUM_LEVEL_TYPES];  // NOLINT
-
-  // temporary space for decoding DELTA_BYTE_ARRAY encoded strings
-  int64_t temp_string_size;
-  uint8_t* temp_string_buf;
-
-  decode_kernel_mask kernel_mask;
-
+  // Number of level values actually decoded (may be less than num_input_values when using
+  // skip_rows/num_rows). Kernels must clamp level buffer accesses to this.
+  int32_t num_decoded_level_values{};
   // str_bytes from page index. because str_bytes needs to be reset each iteration
   // while doing chunked reads, persist the value from the page index here.
   int32_t str_bytes_from_index;
+  decode_kernel_mask kernel_mask;
+
+  bool is_num_rows_adjusted;  // Flag to indicate if the number of rows of this page have been
+                              // adjusted to compensate for the list row size estimates.
+  uint8_t flags;              // PAGEINFO_FLAGS_XXX
+  Encoding encoding;          // Encoding for data or dictionary page
+  Encoding definition_level_encoding;  // Encoding used for definition levels (data page)
+  Encoding repetition_level_encoding;  // Encoding used for repetition levels (data page)
+  bool is_compressed;                  // Whether the page is compressed (V2 header)
+  bool has_page_index;  // true if str_bytes, num_valids, etc are derivable from page indexes
 };
 
 // forward declaration
@@ -412,7 +412,7 @@ struct ColumnChunkDesc {
                            uint8_t def_level_bits_,
                            uint8_t rep_level_bits_,
                            Compression codec_,
-                           std::optional<LogicalType> logical_type_,
+                           cuda::std::optional<LogicalType> logical_type_,
                            int32_t ts_clock_rate_,
                            int32_t src_col_index_,
                            int32_t src_col_schema_,
@@ -458,13 +458,13 @@ struct ColumnChunkDesc {
   int32_t num_data_pages{};                           // number of data pages
   int32_t num_dict_pages{};                           // number of dictionary pages
   PageInfo const* dict_page{};
-  string_index_pair* str_dict_index{};        // index for string dictionary
-  bitmask_type** valid_map_base{};            // base pointers of valid bit map for this column
-  void** column_data_base{};                  // base pointers of column data
-  void** column_string_base{};                // base pointers of column string data
-  uint32_t* column_string_offset_base{};      // base pointer of column string offset data
-  Compression codec{};                        // compressed codec enum
-  std::optional<LogicalType> logical_type{};  // logical type
+  string_index_pair* str_dict_index{};    // index for string dictionary
+  bitmask_type** valid_map_base{};        // base pointers of valid bit map for this column
+  void** column_data_base{};              // base pointers of column data
+  void** column_string_base{};            // base pointers of column string data
+  uint32_t* column_string_offset_base{};  // base pointer of column string offset data
+  Compression codec{};                    // compressed codec enum
+  cuda::std::optional<LogicalType> logical_type{};  // logical type
   int32_t ts_clock_rate{};  // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 
   int32_t src_col_index{};   // my input column index
@@ -526,8 +526,8 @@ struct PageFragment {
                              //!< non-leaf level
   uint32_t num_valid;        //<! Number of non-null leaf values
   size_type start_row;       //!< First row in fragment
-  uint16_t num_rows;         //!< Number of rows in fragment
-  uint16_t num_dict_vals;    //!< Number of unique dictionary entries
+  size_type num_rows;        //!< Number of rows in fragment
+  size_type num_dict_vals;   //!< Number of unique dictionary entries
   EncColumnChunk* chunk;     //!< The chunk that this fragment belongs to
 };
 
@@ -575,6 +575,7 @@ struct EncColumnChunk {
   uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
+  uint32_t num_fragments;   //!< Number of fragments in chunk
   EncPage* pages;           //!< Ptr to pages that belong to this chunk
   uint32_t first_page;      //!< First page of chunk
   uint32_t num_pages;       //!< Number of pages in chunk
@@ -646,6 +647,7 @@ struct EncPage {
   Encoding encoding;       //!< Encoding used for page data
   uint16_t num_fragments;  //!< Number of fragments in page
   bool is_compressed;      //!< Whether this page is compressed (for V2 page-level compression)
+  uint8_t dict_rle_bits;   //!< RLE bit width for this data page's dict indices
 
   [[nodiscard]] CUDF_HOST_DEVICE constexpr bool is_v2() const
   {
@@ -731,10 +733,12 @@ void decode_page_headers_with_pgidx(cudf::device_span<ColumnChunkDesc const> chu
  *
  * @param[in] chunks List of column chunks
  * @param[in] num_chunks Number of column chunks
+ * @param[out] error_code Pointer to the error code for kernel failures
  * @param[in] stream CUDA stream to use
  */
 void build_string_dictionary_index(ColumnChunkDesc* chunks,
                                    int32_t num_chunks,
+                                   kernel_error::pointer error_code,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -764,7 +768,8 @@ uint32_t get_aggregated_decode_kernel_mask(cudf::detail::hostdevice_span<PageInf
  *
  * @param pages All pages to be decoded
  * @param chunks All chunks to be decoded
- * @param min_rows crop all rows below min_row
+ * @param page_mask Boolean vector indicating if a page needs to be decoded or is pruned
+ * @param min_row crop all rows below min_row
  * @param num_rows Maximum number of rows to read
  * @param compute_num_rows If set to true, the num_rows field in PageInfo will be
  * computed
@@ -791,11 +796,13 @@ void compute_page_sizes(cudf::detail::hostdevice_span<PageInfo> pages,
  * @param[in,out] pages All pages to be decoded
  * @param[in] chunks All chunks to be decoded
  * @param[in] page_mask Boolean vector indicating if a page needs to be decoded or is pruned
- * @param[out] temp_string_buf Temporary space needed for decoding DELTA_BYTE_ARRAY strings
- * @param[in] min_rows crop all rows below min_row
+ * @param[out] page_string_offset_indices Temporary space needed for decoding DELTA_BYTE_ARRAY
+ * strings
+ * @param[in] min_row crop all rows below min_row
  * @param[in] num_rows Maximum number of rows to read
  * @param[in] kernel_mask Mask of kernels to run
  * @param[in] all_rows If true, all rows will be read, regardless of `min_row` and `num_rows`
+ * @param[in] level_type_size Size in bytes of the type for level decoding
  * @param[in] stream CUDA stream to use
  */
 void compute_page_string_sizes_pass1(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -985,6 +992,29 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
                                rmm::cuda_stream_view stream);
 
 /**
+ * @brief Launches pre-processing kernel to decode definition and repetition levels
+ *
+ * This kernel runs before most preprocessing to pre-decode all definition and
+ * repetition levels, storing them in the pre-allocated level decode buffers. This
+ * allows other kernels to skip RLE decoding and directly access decoded levels.
+ *
+ * @param[in,out] pages All pages to be processed
+ * @param[in] chunks All chunks to be processed
+ * @param[in] page_mask Boolean vector indicating which pages need to be processed
+ * @param[in] min_row Minimum row index to read
+ * @param[in] num_rows Number of rows to read starting from min_row
+ * @param[in] level_type_size Size in bytes of the type for level decoding (1 or 2)
+ * @param[in] stream CUDA stream to use
+ */
+void preprocess_levels(cudf::detail::hostdevice_span<PageInfo> pages,
+                       cudf::detail::hostdevice_span<ColumnChunkDesc const> chunks,
+                       cudf::device_span<bool const> page_mask,
+                       size_t min_row,
+                       size_t num_rows,
+                       int level_type_size,
+                       rmm::cuda_stream_view stream);
+
+/**
  * @brief Launches kernel for reading non-dictionary fixed width column data stored in the pages
  *
  * The page data will be written to the output pointed to in the page's
@@ -1067,14 +1097,16 @@ void InitFragmentStatistics(device_span<statistics_group> groups,
  *
  * @param[in,out] chunks Column chunks [rowgroup][column]
  * @param[out] pages Encode page array (null if just counting pages)
+ * @param[out] page_sizes Page sizes in bytes
+ * @param[in] comp_page_sizes Compressed page sizes in bytes
  * @param[in] col_desc Column description array [column_id]
- * @param[in] num_rowgroups Number of fragments per column
  * @param[in] num_columns Number of columns
- * @param[in] page_grstats Setup for page-level stats
+ * @param[in] max_page_size_bytes Maximum uncompressed page size in bytes
+ * @param[in] max_page_size_rows Maximum number of rows per page
  * @param[in] page_align Required alignment for uncompressed pages
  * @param[in] write_v2_headers True if V2 page headers should be written
+ * @param[in] page_grstats Setup for page-level stats
  * @param[in] chunk_grstats Setup for chunk-level stats
- * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
  * @param[in] stream CUDA stream to use
  */
 void InitEncoderPages(cudf::detail::device_2dspan<EncColumnChunk> chunks,

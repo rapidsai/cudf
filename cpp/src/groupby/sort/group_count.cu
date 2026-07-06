@@ -5,8 +5,8 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -15,9 +15,8 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <thrust/adjacent_difference.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -52,15 +51,15 @@ std::unique_ptr<column> group_count_valid(column_view const& values,
     cudf::detail::reduce_by_key_async(group_labels.begin(),
                                       group_labels.end(),
                                       bitmask_iterator,
-                                      thrust::make_discard_iterator(),
+                                      cuda::make_discard_iterator(),
                                       result->mutable_view().begin<size_type>(),
                                       cuda::std::plus<size_type>(),
                                       stream);
   } else {
     cudf::detail::reduce_by_key_async(group_labels.begin(),
                                       group_labels.end(),
-                                      thrust::make_constant_iterator(1),
-                                      thrust::make_discard_iterator(),
+                                      cuda::make_constant_iterator(1),
+                                      cuda::make_discard_iterator(),
                                       result->mutable_view().begin<size_type>(),
                                       cuda::std::plus<size_type>(),
                                       stream);
@@ -81,10 +80,11 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
 
   if (num_groups == 0) { return result; }
 
-  thrust::adjacent_difference(rmm::exec_policy_nosync(stream),
-                              group_offsets.begin() + 1,
-                              group_offsets.end(),
-                              result->mutable_view().begin<size_type>());
+  thrust::adjacent_difference(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    group_offsets.begin() + 1,
+    group_offsets.end(),
+    result->mutable_view().begin<size_type>());
   return result;
 }
 

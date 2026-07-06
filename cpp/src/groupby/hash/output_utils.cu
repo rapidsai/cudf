@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,8 +19,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cuco/static_set.cuh>
+#include <cuda/iterator>
 #include <thrust/scatter.h>
 #include <thrust/transform.h>
 
@@ -40,7 +42,7 @@ namespace {
  * @brief Functor to create the result columns for hash-based groupby aggregations
  *
  * This functor handles the creation of appropriately typed and sized columns for each
- * aggregation, including special handling for SUM_WITH_OVERFLOW which requires a struct column.
+ * aggregation, including special handling for SUM_OVERFLOW which requires a struct column.
  * For data types smaller than 4 bytes, the buffer size is adjusted to be a multiple of 4 to
  * ensure memory safety when atomic operations use 4-byte CAS loops to emulate smaller atomics.
  */
@@ -78,7 +80,7 @@ struct result_column_creator {
       }
       return make_fixed_width_column(d_type, size, state, stream, mr);
     };
-    if (agg != aggregation::SUM_WITH_OVERFLOW) {
+    if (agg != aggregation::SUM_OVERFLOW) {
       auto const target_type = cudf::detail::target_type(col_type, agg);
       auto const mask_flag   = nullable ? mask_state::ALL_NULL : mask_state::UNALLOCATED;
       return make_uninitialized_column(target_type, output_size, mask_flag);
@@ -99,8 +101,12 @@ struct result_column_creator {
       }
       return {rmm::device_buffer{}, 0};
     }();
-    return create_structs_hierarchy(
-      output_size, make_children(output_size), null_count, std::move(null_mask), stream);
+    return create_structs_hierarchy(output_size,
+                                    make_children(output_size),
+                                    null_count,
+                                    std::move(null_mask),
+                                    stream,
+                                    cudf::get_current_device_resource_ref());
   }
 };
 
@@ -164,9 +170,9 @@ rmm::device_uvector<size_type> compute_key_transform_map(
   // indices (indices of the keys in the final output table, which contains only the extracted
   // unique keys). Only these extracted unique keys are mapped.
   rmm::device_uvector<size_type> key_transform_map(num_total_keys, stream, mr);
-  thrust::scatter(rmm::exec_policy_nosync(stream),
-                  thrust::make_counting_iterator(0),
-                  thrust::make_counting_iterator(static_cast<size_type>(unique_key_indices.size())),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                  cuda::counting_iterator<cudf::size_type>{0},
+                  cuda::counting_iterator{static_cast<size_type>(unique_key_indices.size())},
                   unique_key_indices.begin(),
                   key_transform_map.begin());
 
@@ -179,7 +185,7 @@ rmm::device_uvector<size_type> compute_target_indices(device_span<size_type cons
                                                       rmm::device_async_resource_ref mr)
 {
   rmm::device_uvector<size_type> target_indices(input.size(), stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     input.begin(),
                     input.end(),
                     target_indices.begin(),

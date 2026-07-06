@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -18,7 +18,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 
 // for use with groupby and reduction aggregation tests.
 

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,7 +15,7 @@
 #include <cudf/strings/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <vector>
@@ -152,7 +152,7 @@ TEST_F(StringsColumnTest, GatherTooBig)
                                  0,
                                  0,
                                  {offsets});
-  auto map   = thrust::constant_iterator<int8_t>(0);
+  auto map   = cuda::constant_iterator<int8_t>(0);
   cudf::test::fixed_width_column_wrapper<int8_t> gather_map(map, map + 1000);
   EXPECT_THROW(cudf::gather(cudf::table_view{{input}}, gather_map), std::overflow_error);
 }
@@ -180,7 +180,7 @@ TEST_F(StringsColumnTest, ScatterScalar)
   cudf::test::fixed_width_column_wrapper<int32_t> scatter_map({0, 5});
 
   cudf::string_scalar scalar("__");
-  auto source  = std::vector<std::reference_wrapper<const cudf::scalar>>({scalar});
+  auto source  = std::vector<std::reference_wrapper<cudf::scalar const>>({scalar});
   auto results = cudf::scatter(source, scatter_map, cudf::table_view({target}));
 
   cudf::test::strings_column_wrapper expected({"__", "bb", "", "", "aa", "__", "ééé"},
@@ -198,7 +198,7 @@ TEST_F(StringsColumnTest, ScatterZeroSizeStringsColumn)
   cudf::test::expect_column_empty(results->view().column(0));
 
   cudf::string_scalar scalar("");
-  auto scalar_source = std::vector<std::reference_wrapper<const cudf::scalar>>({scalar});
+  auto scalar_source = std::vector<std::reference_wrapper<cudf::scalar const>>({scalar});
   results            = cudf::scatter(scalar_source, scatter_map, cudf::table_view({target}));
   cudf::test::expect_column_empty(results->view().column(0));
 }

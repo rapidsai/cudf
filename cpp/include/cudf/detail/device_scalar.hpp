@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -58,14 +58,14 @@ class device_scalar : public rmm::device_scalar<T> {
 
   [[nodiscard]] T value(rmm::cuda_stream_view stream) const
   {
-    cuda_memcpy<T>(bounce_buffer, device_span<T const>{this->data(), 1}, stream);
+    cuda_memcpy<T>(bounce_buffer, device_span<T const>(this->data(), 1), stream);
     return std::move(bounce_buffer[0]);
   }
 
   void set_value_async(T const& value, rmm::cuda_stream_view stream)
   {
     bounce_buffer[0] = value;
-    cuda_memcpy_async<T>(device_span<T>{this->data(), 1}, bounce_buffer, stream);
+    cuda_memcpy_async<T>(device_span<T>(this->data(), 1), bounce_buffer, stream);
   }
 
   void set_value_async(T&& value, rmm::cuda_stream_view stream)

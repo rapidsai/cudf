@@ -28,15 +28,11 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
-#include <cuda/std/iterator>
+#include <cuda/iterator>
 #include <cuda/std/span>
 #include <cuda/std/tuple>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <thrust/functional.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/merge.h>
@@ -618,13 +614,14 @@ void generate_cluster_limits(int delta,
       delta,
       num_gpu_groups,
       nearest_weight,
-      thrust::make_counting_iterator(num_cpu_groups),
+      cuda::counting_iterator{num_cpu_groups},
       group_info,
       cumulative_weight,
       group_cluster_wl,
       group_num_clusters,
       group_cluster_start,
       has_nulls);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 
   // overlap CPU work
@@ -654,9 +651,9 @@ size_t compute_simple_cluster_count(int delta,
   auto const num_groups = group_num_clusters.size();
 
   // worst-case sizes
-  auto iter = thrust::make_counting_iterator(0);
+  auto iter = cuda::counting_iterator<cudf::size_type>{0};
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     iter,
     iter + num_groups,
     group_num_clusters.begin(),
@@ -669,8 +666,9 @@ size_t compute_simple_cluster_count(int delta,
     }));
 
   // total size
-  return thrust::reduce(
-    rmm::exec_policy_nosync(stream), group_num_clusters.begin(), group_num_clusters.end());
+  return thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                        group_num_clusters.begin(),
+                        group_num_clusters.end());
 }
 
 /**
@@ -687,7 +685,7 @@ void compute_cluster_starts(cluster_info& cinfo, rmm::cuda_stream_view stream)
       [group_num_clusters = cinfo.num_clusters.begin(), num_groups] __device__(size_type index) {
         return index == num_groups ? 0 : group_num_clusters[index];
       }));
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          cluster_size,
                          cluster_size + num_groups + 1,
                          cinfo.cluster_start.begin(),
@@ -704,12 +702,13 @@ void compute_cluster_starts(cluster_info& cinfo, rmm::cuda_stream_view stream)
  *
  * Each input group gets an independent set of clusters generated.
  *
- * @param delta_             tdigest compression level
+ * @param delta              tdigest compression level
  * @param num_groups         The number of input groups
  * @param nearest_weight     A functor which returns the nearest weight in the input
  * stream that falls before our current cluster limit
  * @param group_info         A functor which returns the info for the specified group (total weight,
  * size and start offset)
+ * @param cumulative_weight  Cumulative weight column for computing cluster boundaries
  * @param has_nulls          Whether or not the input data contains nulls
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -830,8 +829,9 @@ cluster_info generate_group_cluster_info(int delta,
   // Note: group_cluster_start does not need to be updated.
   cinfo.total_clusters =
     (simple_mem_usage <= max_simple_cluster_usage)
-      ? thrust::reduce(
-          rmm::exec_policy_nosync(stream), cinfo.num_clusters.begin(), cinfo.num_clusters.end())
+      ? thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       cinfo.num_clusters.begin(),
+                       cinfo.num_clusters.end())
       : allocated_clusters;
 
   stream.synchronize();
@@ -863,7 +863,9 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
     if (!has_nulls) { return 0; }
     auto iter = cudf::detail::make_counting_transform_iterator(
       0, cuda::proclaim_return_type<size_type>(is_stub_digest));
-    return thrust::reduce(rmm::exec_policy_nosync(stream), iter, iter + num_rows);
+    return thrust::reduce(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                          iter,
+                          iter + num_rows);
   }();
 
   // if there are no stub tdigests, we can return immediately.
@@ -882,10 +884,10 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   auto remove_stubs = [&](column_view const& col, size_type num_stubs) {
     auto result = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, col.size() - num_stubs, mask_state::UNALLOCATED, stream, mr);
-    thrust::remove_copy_if(rmm::exec_policy_nosync(stream),
+    thrust::remove_copy_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                            col.begin<double>(),
                            col.end<double>(),
-                           thrust::make_counting_iterator(0),
+                           cuda::counting_iterator<cudf::size_type>{0},
                            result->mutable_view().begin<double>(),
                            is_stub_weight);
     return result;
@@ -897,9 +899,9 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   // adjust offsets.
   rmm::device_uvector<size_type> sizes(num_rows, stream);
   thrust::transform(
-    rmm::exec_policy_nosync(stream),
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(0) + num_rows,
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator<cudf::size_type>{0} + num_rows,
     sizes.begin(),
     cuda::proclaim_return_type<size_type>([offsets = offsets->view().begin<size_type>()] __device__(
                                             size_type i) { return offsets[i + 1] - offsets[i]; }));
@@ -909,7 +911,7 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
       [sizes = sizes.begin(), is_stub_digest, num_rows] __device__(size_type i) {
         return i == num_rows || is_stub_digest(i) ? 0 : sizes[i];
       }));
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream),
+  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          iter,
                          iter + num_rows + 1,
                          offsets->mutable_view().begin<size_type>(),
@@ -977,13 +979,11 @@ struct compute_tdigests_keys_fn {
  * @param delta              tdigest compression level
  * @param centroids_begin    Beginning of the range of centroids.
  * @param centroids_end      End of the range of centroids.
- * @param cumulative_weight  Functor which returns cumulative weight and group information for
+ * @param group_cumulative_weight Functor which returns cumulative weight and group information for
  * an absolute input value index.
  * @param min_col            Column containing the minimum value per group.
  * @param max_col            Column containing the maximum value per group.
- * @param group_cluster_wl   Cluster weight limits for each group.
- * @param group_cluster_start R-value reference of start positions by group into the
- * @param total_clusters     Total number of clusters in all groups.
+ * @param cinfo              Clustering info per group.
  * @param has_nulls          Whether or not the input contains nulls
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -1026,7 +1026,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   // into the range 0-99).  But since we have multiple tdigests, we need to keep the keys unique
   // between the groups, so we add our group start offset.
   auto keys = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
+    cuda::counting_iterator<cudf::size_type>{0},
     compute_tdigests_keys_fn<CumulativeWeight>{delta,
                                                cinfo.cluster_wl.begin(),
                                                cinfo.cluster_start.begin(),
@@ -1044,16 +1044,16 @@ std::unique_ptr<column> compute_tdigests(int delta,
 
   // reduce the centroids into the clusters
   auto output = thrust::make_zip_iterator(cuda::std::make_tuple(
-    mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
+    mean_col.begin<double>(), weight_col.begin<double>(), cuda::make_discard_iterator()));
 
   auto const num_values = std::distance(centroids_begin, centroids_end);
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         keys,
-                        keys + num_values,                // keys
-                        centroids_begin,                  // values
-                        thrust::make_discard_iterator(),  // key output
-                        output,                           // output
-                        cuda::std::equal_to{},            // key equality check
+                        keys + num_values,              // keys
+                        centroids_begin,                // values
+                        cuda::make_discard_iterator(),  // key output
+                        output,                         // output
+                        cuda::std::equal_to{},          // key equality check
                         merge_centroids{});
 
   // generate offsets column. if we are running in the simple case, cinfo.cluster_start will not
@@ -1149,10 +1149,10 @@ struct typed_group_tdigest {
       return generate_group_cluster_info(
         delta,
         num_groups,
-        nearest_value_scalar_weights_grouped{group_offsets.begin()},
-        scalar_group_info_grouped{group_valid_counts.begin(), group_offsets.begin()},
+        nearest_value_scalar_weights_grouped{group_offsets.data()},
+        scalar_group_info_grouped{group_valid_counts.data(), group_offsets.data()},
         cumulative_scalar_weight_grouped{
-          cuda::std::span<size_type const>{group_offsets.begin(), group_offsets.size()}},
+          cuda::std::span<size_type const>{group_offsets.data(), group_offsets.size()}},
         col.null_count() > 0,
         stream,
         mr);
@@ -1168,12 +1168,12 @@ struct typed_group_tdigest {
     auto max_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + num_groups,
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<cudf::size_type>{0},
+      cuda::counting_iterator<cudf::size_type>{0} + num_groups,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
                                                       max_col->mutable_view().begin<double>())),
-      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.begin()});
+      get_scalar_minmax_grouped<T>{*d_col, group_offsets, group_valid_counts.data()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
@@ -1247,9 +1247,9 @@ struct typed_reduce_tdigest {
     auto max_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED, stream, mr);
     thrust::transform(
-      rmm::exec_policy_nosync(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + 1,
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+      cuda::counting_iterator<cudf::size_type>{0},
+      cuda::counting_iterator<cudf::size_type>{0} + 1,
       thrust::make_zip_iterator(cuda::std::make_tuple(min_col->mutable_view().begin<double>(),
                                                       max_col->mutable_view().begin<double>())),
       get_scalar_minmax<T>{*d_col, valid_count});
@@ -1445,11 +1445,11 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     thrust::make_transform_iterator(thrust::make_zip_iterator(cuda::std::make_tuple(
                                       tdv.min_begin(), cudf::tdigest::detail::size_begin(tdv))),
                                     tdigest_min{});
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         group_labels,
                         group_labels + num_group_labels,
                         min_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
                         cuda::minimum{});
@@ -1460,11 +1460,11 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     thrust::make_transform_iterator(thrust::make_zip_iterator(cuda::std::make_tuple(
                                       tdv.max_begin(), cudf::tdigest::detail::size_begin(tdv))),
                                     tdigest_max{});
-  thrust::reduce_by_key(rmm::exec_policy_nosync(stream),
+  thrust::reduce_by_key(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                         group_labels,
                         group_labels + num_group_labels,
                         max_iter,
-                        thrust::make_discard_iterator(),
+                        cuda::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
                         cuda::std::equal_to{},  // key equality check
                         cuda::maximum{});
@@ -1477,13 +1477,13 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
     0,
     group_num_clusters_func<decltype(group_offsets)>{group_offsets,
                                                      tdigest_offsets.begin<size_type>()});
-  thrust::replace_if(rmm::exec_policy_nosync(stream),
+  thrust::replace_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      merged_min_col->mutable_view().begin<double>(),
                      merged_min_col->mutable_view().end<double>(),
                      group_num_clusters,
                      group_is_empty{},
                      0);
-  thrust::replace_if(rmm::exec_policy_nosync(stream),
+  thrust::replace_if(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                      merged_max_col->mutable_view().begin<double>(),
                      merged_max_col->mutable_view().end<double>(),
                      group_num_clusters,
@@ -1503,18 +1503,19 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
 
   // generate group keys for all centroids in the entire column
   rmm::device_uvector<size_type> group_keys(num_centroids, stream, temp_mr);
-  auto iter = thrust::make_counting_iterator(0);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  auto iter = cuda::counting_iterator<cudf::size_type>{0};
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     iter,
                     iter + num_centroids,
                     group_keys.begin(),
                     group_key_func<decltype(group_labels)>{
                       group_labels, tdigest_offsets.begin<size_type>(), tdigest_offsets.size()});
-  thrust::inclusive_scan_by_key(rmm::exec_policy_nosync(stream),
-                                group_keys.begin(),
-                                group_keys.begin() + num_centroids,
-                                merged_weights.begin(),
-                                cumulative_weights.begin());
+  thrust::inclusive_scan_by_key(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    group_keys.begin(),
+    group_keys.begin() + num_centroids,
+    merged_weights.begin(),
+    cumulative_weights.begin());
 
   auto const delta = max_centroids;
 
@@ -1530,7 +1531,7 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
       auto pinned_mr = cudf::get_pinned_memory_resource();
 
       rmm::device_uvector<size_type> _p_group_offsets(num_groups + 1, stream, pinned_mr);
-      thrust::copy(rmm::exec_policy_nosync(stream),
+      thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    group_offsets,
                    group_offsets + _p_group_offsets.size(),
                    _p_group_offsets.begin());
@@ -1539,13 +1540,13 @@ std::unique_ptr<column> merge_tdigests(tdigest_column_view const& tdv,
       rmm::device_uvector<double> p_cumulative_weights(cumulative_weights, stream, pinned_mr);
 
       rmm::device_uvector<size_type> p_tdigest_offsets(tdigest_offsets.size(), stream, pinned_mr);
-      thrust::copy(rmm::exec_policy_nosync(stream),
+      thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    tdigest_offsets.begin<size_type>(),
                    tdigest_offsets.begin<size_type>() + p_tdigest_offsets.size(),
                    p_tdigest_offsets.begin());
 
       rmm::device_uvector<size_type> _p_group_labels(num_group_labels, stream, pinned_mr);
-      thrust::copy(rmm::exec_policy_nosync(stream),
+      thrust::copy(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                    group_labels,
                    group_labels + num_group_labels,
                    _p_group_labels.begin());
@@ -1647,7 +1648,7 @@ std::unique_ptr<scalar> reduce_merge_tdigest(column_view const& input,
 
   auto group_offsets_ = group_offsets_fn{input.size()};
   auto group_offsets  = cudf::detail::make_counting_transform_iterator(0, group_offsets_);
-  auto group_labels   = thrust::make_constant_iterator(0);
+  auto group_labels   = cuda::make_constant_iterator(0);
   return to_tdigest_scalar(
     merge_tdigests(tdv, group_offsets, group_labels, input.size(), 1, max_centroids, stream, mr),
     stream,

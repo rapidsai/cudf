@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/detail/copy.hpp>
@@ -35,6 +35,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   CUDF_EXPECTS(!gather_map.has_nulls(), "Gather map contains nulls", std::invalid_argument);
   CUDF_EXPECTS(value_column.size() == gather_map.size(),
                "Gather map and list column should be same size");
+  if (value_column.is_empty()) { return empty_like(value_column.parent()); }
 
   auto const gather_map_sliced_child = gather_map.get_sliced_child(stream);
   auto const gather_map_size         = gather_map_sliced_child.size();
@@ -102,9 +103,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
                            std::move(output_offset),
                            std::move(child),
                            null_count,
-                           std::move(null_mask),
-                           stream,
-                           mr);
+                           std::move(null_mask));
 }
 
 }  // namespace detail

@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (C) 2002-2013 Mark Adler, all rights reserved
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
 
@@ -44,6 +44,8 @@ Mark Adler    madler@alumni.caltech.edu
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/std/algorithm>
+#include <cuda/std/cmath>
 #include <cuda/std/tuple>
 #include <thrust/gather.h>
 #include <thrust/sequence.h>
@@ -108,9 +110,9 @@ struct prefetch_queue_s {
 };
 
 template <typename T>
-inline __device__ volatile uint32_t* prefetch_addr32(volatile prefetch_queue_s& q, T* ptr)
+inline __device__ volatile uint32_t* prefetch_addr32(prefetch_queue_s volatile& q, T* ptr)
 {
-  return reinterpret_cast<volatile uint32_t*>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
+  return reinterpret_cast<uint32_t volatile*>(&q.pref_data[(prefetch_size - 4) & (size_t)(ptr)]);
 }
 
 #endif  // ENABLE_PREFETCH
@@ -140,7 +142,7 @@ struct inflate_state_s {
   uint16_t first_slow_dist;
   uint16_t index_slow_dist;
 
-  volatile xwarp_s x;
+  xwarp_s volatile x;
 #if ENABLE_PREFETCH
   volatile prefetch_queue_s pref;
 #endif
@@ -316,7 +318,7 @@ __device__ int construct(
 }
 
 /// permutation of code length codes
-static const __device__ __constant__ uint8_t g_code_order[19 + 1] = {
+static __device__ const __constant__ uint8_t g_code_order[19 + 1] = {
   16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15, 0xff};
 
 /// Dynamic block (custom huffman tables)
@@ -491,18 +493,18 @@ __device__ int init_fixed(inflate_state_s* s)
  */
 
 /// permutation of code length codes
-static const __device__ __constant__ uint16_t g_lens[29] = {  // Size base for length codes 257..285
+static __device__ const __constant__ uint16_t g_lens[29] = {  // Size base for length codes 257..285
   3,  4,  5,  6,  7,  8,  9,  10, 11,  13,  15,  17,  19,  23, 27,
   31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258};
-static const __device__ __constant__ uint16_t
+static __device__ const __constant__ uint16_t
   g_lext[29] = {  // Extra bits for length codes 257..285
     0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0};
 
-static const __device__ __constant__ uint16_t
+static __device__ const __constant__ uint16_t
   g_dists[30] = {  // Offset base for distance codes 0..29
     1,   2,   3,   4,   5,   7,    9,    13,   17,   25,   33,   49,   65,    97,    129,
     193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577};
-static const __device__ __constant__ uint16_t g_dext[30] = {  // Extra bits for distance codes 0..29
+static __device__ const __constant__ uint16_t g_dext[30] = {  // Extra bits for distance codes 0..29
   0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13};
 
 /// @brief Thread 0 only: decode bitstreams and output symbols into the symbol queue
@@ -516,11 +518,11 @@ __device__ void decode_symbols(inflate_state_s* s)
   int32_t sym, batch_len;
 
   do {
-    volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
+    uint32_t volatile* b = &s->x.u.symqueue[batch * batch_size];
     // Wait for the next batch entry to be empty
 #if ENABLE_PREFETCH
     // Wait for prefetcher to fetch a worst-case of 48 bits per symbol
-    while ((*(volatile int32_t*)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
+    while ((*(int32_t volatile*)&s->pref.cur_p - (int32_t)(size_t)cur < batch_size * 6) ||
            (s->x.batch_len[batch] != 0)) {}
 #else
     while (s->x.batch_len[batch] != 0) {}
@@ -779,7 +781,7 @@ __device__ void process_symbols(inflate_state_s* s, int t)
   int batch              = 0;
 
   do {
-    volatile uint32_t* b = &s->x.u.symqueue[batch * batch_size];
+    uint32_t volatile* b = &s->x.u.symqueue[batch * batch_size];
     int batch_len        = 0;
     if (t == 0) {
       while ((batch_len = s->x.batch_len[batch]) == 0) {}
@@ -944,14 +946,14 @@ __device__ void init_prefetcher(inflate_state_s* s, int t)
   }
 }
 
-__device__ void prefetch_warp(volatile inflate_state_s* s, int t)
+__device__ void prefetch_warp(inflate_state_s volatile* s, int t)
 {
   uint8_t const* cur_p = s->pref.cur_p;
   uint8_t const* end   = s->end;
   while (shuffle((t == 0) ? s->pref.run : 0)) {
     auto cur_lo = (int32_t)(size_t)cur_p;
     int do_pref =
-      shuffle((t == 0) ? (cur_lo - *(volatile int32_t*)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
+      shuffle((t == 0) ? (cur_lo - *(int32_t volatile*)&s->cur < prefetch_size - 32 * 4 - 4) : 0);
     if (do_pref) {
       uint8_t const* p             = cur_p + 4 * t;
       *prefetch_addr32(s->pref, p) = (p < end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
@@ -1216,7 +1218,8 @@ class cost_model {
                                              task_type task_type)
   {
     if (task_type == task_type::DECOMPRESSION) {
-      auto const compression_ratio = std::max(1., static_cast<double>(output_size) / input_size);
+      auto const compression_ratio =
+        cuda::std::max(1., static_cast<double>(output_size) / input_size);
       // When the compression ratio is one, the cost factor is the same as the copy cost ratio,
       // meaning that the cost of decompressing the block is the same as the cost of copying it. The
       // cost factor asymptotes to one as the compression ratio increases, meaning that the cost
@@ -1260,11 +1263,13 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
 {
   CUDF_FUNC_RANGE();
   rmm::device_uvector<std::size_t> order(inputs.size(), stream, mr);
-  thrust::sequence(rmm::exec_policy_nosync(stream), order.begin(), order.end());
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   order.begin(),
+                   order.end());
 
   // Precompute costs to avoid repeated computation during sorting
   rmm::device_uvector<double> costs(inputs.size(), stream, mr);
-  thrust::transform(rmm::exec_policy_nosync(stream),
+  thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                     thrust::make_zip_iterator(inputs.begin(), outputs.begin()),
                     thrust::make_zip_iterator(inputs.end(), outputs.end()),
                     costs.begin(),
@@ -1274,7 +1279,7 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                       return cost_model::task_device_cost(input.size(), output.size(), task_type);
                     });
 
-  thrust::sort(rmm::exec_policy_nosync(stream),
+  thrust::sort(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                order.begin(),
                order.end(),
                [costs = costs.data()] __device__(std::size_t a, std::size_t b) {
@@ -1282,14 +1287,14 @@ sorted_codec_parameters sort_tasks(device_span<device_span<uint8_t const> const>
                });
 
   auto sorted_inputs = rmm::device_uvector<device_span<uint8_t const>>(inputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  order.begin(),
                  order.end(),
                  inputs.begin(),
                  sorted_inputs.begin());
 
   auto sorted_outputs = rmm::device_uvector<device_span<uint8_t>>(outputs.size(), stream, mr);
-  thrust::gather(rmm::exec_policy_nosync(stream),
+  thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  order.begin(),
                  order.end(),
                  outputs.begin(),
@@ -1365,6 +1370,7 @@ void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
   if (inputs.size() > 0) {
     inflate_kernel_no_racecheck<block_size>
       <<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs, results, parse_hdr);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -1375,6 +1381,7 @@ void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> 
   constexpr auto block_size = 1024;
   if (inputs.size() > 0) {
     copy_uncompressed_kernel<<<inputs.size(), block_size, 0, stream.value()>>>(inputs, outputs);
+    CUDF_CUDA_TRY(cudaGetLastError());
   }
 }
 
@@ -1400,7 +1407,7 @@ void copy_results_to_original_order(device_span<codec_exec_result const> sorted_
                                     device_span<std::size_t const> order,
                                     rmm::cuda_stream_view stream)
 {
-  thrust::scatter(rmm::exec_policy_nosync(stream),
+  thrust::scatter(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   sorted_results.begin(),
                   sorted_results.end(),
                   order.begin(),

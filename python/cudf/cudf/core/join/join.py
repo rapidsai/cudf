@@ -1,14 +1,15 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import copy
 import itertools
 from typing import TYPE_CHECKING, Any
 
 import pylibcudf as plc
 
 from cudf.core._internals import sorting
-from cudf.core.column import ColumnBase, access_columns, as_column
+from cudf.core.column import ColumnBase, access_columns
 from cudf.core.copy_types import GatherMap
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.join._join_helpers import (
@@ -50,8 +51,8 @@ class Merge:
                 plc.types.NullEquality.EQUAL,
             )
             return (
-                ColumnBase.from_pylibcudf(left_rows),
-                ColumnBase.from_pylibcudf(right_rows),
+                ColumnBase.create(left_rows, SIZE_TYPE_DTYPE),
+                ColumnBase.create(right_rows, SIZE_TYPE_DTYPE),
             )
 
     def __init__(
@@ -279,16 +280,16 @@ class Merge:
         # tables, we gather from iota on both right and left, and then
         # sort the gather maps with those two columns as key.
         key_order = [
-            as_column(range(n), dtype=SIZE_TYPE_DTYPE).take(
-                map_, nullify=null, check_bounds=False
-            )
+            ColumnBase.from_range(range(n))
+            .astype(SIZE_TYPE_DTYPE)
+            .take(map_, nullify=null, check_bounds=False)
             for map_, n, null in zip(maps, lengths, nullify, strict=True)
         ]
         if self.how == "right":
             # If how is right, right map is primary sort key.
             key_order = reversed(key_order)
         return [
-            ColumnBase.from_pylibcudf(col)
+            ColumnBase.create(col, SIZE_TYPE_DTYPE)
             for col in sorting.sort_by_key(
                 maps,
                 key_order,
@@ -332,23 +333,24 @@ class Merge:
                 plc.Table([col.plc_column for col in self.rhs._columns]),
             )
             columns = lib_table.columns()
-            left_names, right_names = (
-                self.lhs._column_names,
-                self.rhs._column_names,
-            )
+            num_left_cols = len(self.lhs._column_names)
             left_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
-                    for col, lib_col in zip(
-                        left_names, columns[: len(left_names)], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.lhs._dtypes,
+                        columns[:num_left_cols],
+                        strict=True,
                     )
                 }
             )
             right_result = DataFrame._from_data(
                 {
-                    col: ColumnBase.from_pylibcudf(lib_col)
-                    for col, lib_col in zip(
-                        right_names, columns[len(left_names) :], strict=True
+                    col: ColumnBase.create(lib_col, dtype)
+                    for (col, dtype), lib_col in zip(
+                        self.rhs._dtypes,
+                        columns[num_left_cols:],
+                        strict=True,
                     )
                 }
             )
@@ -391,6 +393,17 @@ class Merge:
             result = self._sort_result(result)
         if self._return_rangeindex:
             result = result.reset_index(drop=True)
+        # Mirror pandas' merge `__finalize__` with `input_objs`: propagate
+        # attrs only when both inputs have equal non-empty attrs, and AND
+        # ``allows_duplicate_labels`` across inputs.
+        lhs_attrs = self.lhs.attrs
+        rhs_attrs = self.rhs.attrs
+        if lhs_attrs and rhs_attrs and lhs_attrs == rhs_attrs:
+            result._attrs = copy.deepcopy(lhs_attrs)
+        result.flags["allows_duplicate_labels"] = (
+            self.lhs.flags.allows_duplicate_labels
+            and self.rhs.flags.allows_duplicate_labels
+        )
         return result
 
     def _merge_results(self, left_result: DataFrame, right_result: DataFrame):
@@ -425,8 +438,17 @@ class Merge:
             if self.how == "cross"
             else common_names - self._key_columns_with_same_name
         )
+
+        def _suffixed(name, suffix):
+            # Mirror pandas: a ``None`` suffix leaves the label (and its type,
+            # e.g. an integer column name) unchanged, while a string suffix is
+            # appended (coercing the label to a string).
+            if name in cols_to_suffix and suffix is not None:
+                return f"{name}{suffix}"
+            return name
+
         data = {
-            (f"{name}{self.lsuffix}" if name in cols_to_suffix else name): col
+            _suffixed(name, self.lsuffix): col
             for name, col in left_result._column_labels_and_values
         }
 
@@ -438,7 +460,7 @@ class Merge:
                     self.how == "cross"
                     or name not in self._key_columns_with_same_name
                 ):
-                    r_label = f"{name}{self.rsuffix}"
+                    r_label = _suffixed(name, self.rsuffix)
                     if r_label in data:
                         raise NotImplementedError(
                             f"suffixes={(self.lsuffix, self.rsuffix)} would introduce a "
@@ -529,7 +551,12 @@ class Merge:
                 stable=True,
             )
             result = result._from_columns_like_self(
-                [ColumnBase.from_pylibcudf(col) for col in result_columns],
+                [
+                    ColumnBase.create(col, original.dtype)
+                    for col, original in zip(
+                        result_columns, to_sort, strict=True
+                    )
+                ],
                 result._column_names,
                 index_names,
             )
@@ -555,6 +582,13 @@ class Merge:
             raise TypeError("left must be a Series or DataFrame")
         if not isinstance(rhs, (Series, DataFrame)):
             raise TypeError("right must be a Series or DataFrame")
+        # ``suffixes`` must be an ordered pair; pandas rejects unordered/mapping
+        # containers such as sets and dicts.
+        if not isinstance(suffixes, (list, tuple)):
+            raise TypeError(
+                f"Passing 'suffixes' as a {type(suffixes)}, is not supported. "
+                "Provide 'suffixes' as a tuple instead."
+            )
         # We must actually support the requested merge type
         if how not in {
             "left",
@@ -686,12 +720,13 @@ class MergeSemi(Merge):
             n_lhs = len(lhs)
             lhs = accessed[:n_lhs]  # type: ignore[assignment]
             rhs = accessed[n_lhs:]  # type: ignore[assignment]
-            return ColumnBase.from_pylibcudf(
+            return ColumnBase.create(
                 join_func(
                     plc.Table([col.plc_column for col in lhs]),
                     plc.Table([col.plc_column for col in rhs]),
                     plc.types.NullEquality.EQUAL,
-                )
+                ),
+                SIZE_TYPE_DTYPE,
             ), None
 
     def _merge_results(self, lhs: DataFrame, rhs: DataFrame):

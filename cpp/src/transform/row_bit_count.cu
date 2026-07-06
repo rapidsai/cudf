@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,7 +26,6 @@
 
 #include <cuda/functional>
 #include <cuda/std/optional>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/tabulate.h>
 
 namespace cudf {
@@ -138,6 +137,7 @@ struct hierarchy_info {
  * @param out: (output) Flattened vector of output column_views
  * @param info: (output) Additional per-output column_view metadata needed by the gpu
  * @param h_info: (output) Information about the hierarchy
+ * @param stream CUDA stream used for device memory operations and kernel launches
  * @param cur_depth: Current absolute depth in the hierarchy
  * @param cur_branch_depth: Current branch depth
  * @param parent_index: Index into `out` representing our owning parent column
@@ -503,7 +503,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
   // trivially computed
   if (h_info.complex_type_count <= 0) {
     thrust::tabulate(
-      rmm::exec_policy_nosync(stream),
+      rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
       mcv.begin<size_type>(),
       mcv.end<size_type>(),
       cuda::proclaim_return_type<size_type>(
@@ -520,7 +520,8 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
   }
 
   // create a contiguous block of column_device_views
-  auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
+  auto d_cols =
+    create_column_device_views<column_device_view>(host_span<column_view const>{cols}, stream);
 
   // move stack info to the gpu
   rmm::device_uvector<column_info> d_info =
@@ -551,6 +552,7 @@ std::unique_ptr<column> segmented_row_bit_count(table_view const& t,
     {mcv.data<size_type>(), static_cast<std::size_t>(mcv.size())},
     segment_length,
     h_info.max_branch_depth);
+  CUDF_CUDA_TRY(cudaGetLastError());
 
   return output;
 }

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,50 +24,14 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
 namespace cudf::groupby::detail::hash {
 namespace {
-/**
- * @brief List of aggregation operations that can be computed with a hash-based implementation.
- *
- * For single pass aggregations, the supported operations are the ones that can be atomically
- * updated: SUM, SUM_WITH_OVERFLOW, SUM_OF_SQUARES, PRODUCT, MIN, MAX, COUNT_VALID, COUNT_ALL.
- * For compound aggregations, the supported operations are the ones that depends on the single pass
- * aggregations above: ARGMIN(MIN), ARGMAX(MAX), MEAN(SUM, COUNT_VALID), M2/STD/VARIANCE(M2,
- * COUNT_VALID).
- */
-const auto hash_aggregations = std::unordered_set{// Single pass aggregations:
-                                                  aggregation::SUM,
-                                                  aggregation::SUM_WITH_OVERFLOW,
-                                                  aggregation::SUM_OF_SQUARES,
-                                                  aggregation::PRODUCT,
-                                                  aggregation::MIN,
-                                                  aggregation::MAX,
-                                                  aggregation::COUNT_VALID,
-                                                  aggregation::COUNT_ALL,
-                                                  // Compound aggregations:
-                                                  aggregation::ARGMIN,
-                                                  aggregation::ARGMAX,
-                                                  aggregation::MEAN,
-                                                  aggregation::M2,
-                                                  aggregation::STD,
-                                                  aggregation::VARIANCE};
-
-/**
- * @brief Indicates whether the specified aggregation operation can be computed
- * with a hash-based implementation.
- *
- * @param t The aggregation operation to verify
- * @return true `t` is valid for a hash based groupby
- * @return false `t` is invalid for a hash based groupby
- */
-bool is_hash_aggregation(aggregation::Kind t) { return hash_aggregations.contains(t); }
 
 std::unique_ptr<table> dispatch_groupby(table_view const& keys,
-                                        host_span<aggregation_request const> requests,
+                                        std::span<aggregation_request const> requests,
                                         cudf::detail::result_cache* cache,
                                         bool const keys_have_nulls,
                                         null_policy const include_null_keys,
@@ -147,7 +111,7 @@ struct can_use_hash_groupby_fn {
  * @return true A hash-based groupby should be used
  * @return false A hash-based groupby should not be used
  */
-bool can_use_hash_groupby(host_span<aggregation_request const> requests)
+bool can_use_hash_groupby(std::span<aggregation_request const> requests)
 {
   return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
     auto const v_type = is_dictionary(r.values.type())
@@ -168,7 +132,7 @@ bool can_use_hash_groupby(host_span<aggregation_request const> requests)
 // Hash-based groupby
 std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   table_view const& keys,
-  host_span<aggregation_request const> requests,
+  std::span<aggregation_request const> requests,
   null_policy include_null_keys,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)

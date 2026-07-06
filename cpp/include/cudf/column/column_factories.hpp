@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -480,32 +480,23 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * data    (depth 2)   {1, 2, 3, 4, 5, 6, 7}
  * @endcode
  *
- * @param[in] num_rows The number of lists the column represents.
- * @param[in] offsets_column The column of offset values for this column. Each value should
+ * @param num_rows The number of lists the column represents.
+ * @param offsets_column The column of offset values for this column. Each value should
  * represent the starting offset into the child elements that corresponds to the beginning of the
  * row, with the first row starting at 0. The length of row N can be determined by subtracting
- * offsets[N+1] - offsets[N]. The total number of offsets should be 1 longer than the # of rows in
- * the column.
- * @param[in] child_column The column of nested data referenced by the lists represented by the
- *                     offsets_column. Note: the child column may itself be
- *                     further nested.
- * @param[in] null_count The number of null list entries.
- * @param[in] null_mask The bits specifying the null lists in device memory.
- *                  Arrow format for nulls is used for interpreting this bitmask.
- * @param[in] stream Optional stream for use with all memory allocation
- *               and device kernels
- * @param[in] mr Optional resource to use for device memory
- *           allocation of the column's `null_mask` and children.
+ * `offsets[N+1] - offsets[N]`. The total number of offsets should be 1 longer than the
+ * number of rows in the column.
+ * @param child_column The column of nested data referenced by the lists represented by the
+ * offsets_column. Note: the child column may itself be further nested.
+ * @param null_count The number of null list entries.
+ * @param null_mask The bits specifying the null lists in device memory.
  * @return Constructed lists column
  */
-std::unique_ptr<cudf::column> make_lists_column(
-  size_type num_rows,
-  std::unique_ptr<column> offsets_column,
-  std::unique_ptr<column> child_column,
-  size_type null_count,
-  rmm::device_buffer&& null_mask,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+std::unique_ptr<cudf::column> make_lists_column(size_type num_rows,
+                                                std::unique_ptr<column> offsets_column,
+                                                std::unique_ptr<column> child_column,
+                                                size_type null_count,
+                                                rmm::device_buffer&& null_mask);
 
 /**
  * @brief Create an empty LIST column
@@ -513,14 +504,9 @@ std::unique_ptr<cudf::column> make_lists_column(
  * A list column requires a child type and so cannot be created with `make_empty_column`.
  *
  * @param child_type The type used for the empty child column
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New empty lists column
  */
-std::unique_ptr<column> make_empty_lists_column(
-  data_type child_type,
-  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+std::unique_ptr<column> make_empty_lists_column(data_type child_type);
 
 /**
  * @brief Construct a STRUCT column using specified child columns as members.

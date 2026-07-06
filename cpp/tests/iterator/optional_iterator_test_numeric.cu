@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <tests/iterator/optional_iterator_test.cuh>
@@ -59,7 +59,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   transformer_optional_meanvar<T> transformer{};
 
   int const column_size{50};
-  const T init{0};
+  T const init{0};
 
   // data and valid arrays
   std::vector<T> host_values(column_size);
@@ -92,7 +92,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
 
   // GPU test
-  auto it_dev         = d_col->optional_begin<T>(cudf::nullate::YES{});
+  auto it_dev         = d_col->template optional_begin<T>(cudf::nullate::YES{});
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
 
   // this can be computed with a single reduce and without a temporary output vector

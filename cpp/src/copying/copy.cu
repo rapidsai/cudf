@@ -1,15 +1,15 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <cudf/detail/algorithms/copy_if.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/copy_if_else.cuh>
@@ -22,8 +22,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/iterator>
-#include <thrust/iterator/counting_iterator.h>
 
 #include <stdexcept>
 
@@ -157,8 +157,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::device_async_resource_ref mr)
 {
   auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const gather_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
-                                                    thrust::counting_iterator(size_type{size}),
+  auto const gather_map_end = cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
+                                                    cuda::counting_iterator<size_type>{size},
                                                     gather_map.begin(),
                                                     is_left,
                                                     stream);
@@ -191,8 +191,8 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                      rmm::device_async_resource_ref mr)
 {
   auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = cudf::detail::copy_if(thrust::counting_iterator(size_type{0}),
-                                                     thrust::counting_iterator(size_type{size}),
+  auto const scatter_map_end = cudf::detail::copy_if(cuda::counting_iterator<size_type>{0},
+                                                     cuda::counting_iterator<size_type>{size},
                                                      scatter_map.begin(),
                                                      is_left,
                                                      stream);
@@ -322,7 +322,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
   column_device_view bool_mask_device = *bool_mask_device_p;
 
   auto const has_nulls = boolean_mask.has_nulls();
-  auto filter          = [bool_mask_device, has_nulls] __device__(cudf::size_type i) {
+  auto filter          = [bool_mask_device, has_nulls] __device__(cudf::size_type i) -> bool {
     return (!has_nulls || bool_mask_device.is_valid_nocheck(i)) and
            bool_mask_device.element<bool>(i);
   };

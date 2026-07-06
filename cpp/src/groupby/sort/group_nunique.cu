@@ -5,8 +5,8 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/row_operator/equality.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
@@ -14,8 +14,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/discard_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace cudf {
@@ -93,9 +92,9 @@ std::unique_ptr<column> group_nunique(column_view const& values,
                                     null_handling,
                                     group_offsets.data(),
                                     group_labels.data()};
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<size_type>(0),
-                      thrust::make_counting_iterator<size_type>(values.size()),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<size_type>{0},
+                      cuda::counting_iterator<size_type>{values.size()},
                       d_result.begin(),
                       fn);
   };
@@ -115,7 +114,7 @@ std::unique_ptr<column> group_nunique(column_view const& values,
   cudf::detail::reduce_by_key_async(group_labels.begin(),
                                     group_labels.end(),
                                     d_result.begin(),
-                                    thrust::make_discard_iterator(),
+                                    cuda::make_discard_iterator(),
                                     result->mutable_view().begin<size_type>(),
                                     cuda::std::plus<size_type>(),
                                     stream);

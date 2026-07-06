@@ -3,13 +3,16 @@
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from cudf.api.types import is_dtype_equal
+from cudf.core.dtype.validators import (
+    is_dtype_obj_numeric,
+    is_dtype_obj_string,
+)
 from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal32Dtype,
@@ -20,7 +23,6 @@ from cudf.core.reshape import concat
 from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
-    is_dtype_obj_numeric,
 )
 
 if TYPE_CHECKING:
@@ -58,7 +60,14 @@ class _IndexIndexer(_Indexer):
         return obj.index._data[self.name]
 
     def set(self, obj: DataFrame, value: ColumnBase):
-        obj.index._data.set_by_label(self.name, value)
+        if isinstance(obj.index.dtype, CategoricalDtype):
+            # We need to update the categories of the index as well as the
+            # codes when setting a new column on a categorical index. The
+            # categories are stored in the dtype of the index, so we need to
+            # update the dtype of the index to reflect the new categories.
+            obj.index = obj.index._from_data_like_self({self.name: value})
+        else:
+            obj.index._data.set_by_label(self.name, value)
 
 
 def _match_join_keys(
@@ -79,7 +88,16 @@ def _match_join_keys(
         return _match_categorical_dtypes_both(lcol, rcol, how)  # type: ignore[arg-type]
     elif left_is_categorical or right_is_categorical:
         if left_is_categorical:
-            if how in {"left", "leftsemi", "leftanti"}:
+            if how in {"leftsemi", "leftanti"}:
+                # Decategorize both sides and find a common type
+                # instead of casting right to left's categorical
+                # type, which would introduce spurious nulls for
+                # right values not in the left categories.
+                common_type = find_common_type(
+                    (ltype.categories.dtype, rtype)  # type: ignore[union-attr]
+                )
+                return lcol.astype(common_type), rcol.astype(common_type)
+            if how == "left":
                 return lcol, rcol.astype(ltype)
             common_type = get_dtype_of_same_kind(rtype, ltype.categories.dtype)  # type: ignore[union-attr]
         else:
@@ -102,11 +120,16 @@ def _match_join_keys(
         and is_dtype_obj_numeric(rtype)
         and not (ltype.kind == "m" or rtype.kind == "m")
     ):
-        common_type = (
-            max(ltype, rtype)
-            if ltype.kind == rtype.kind
-            else find_common_type((ltype, rtype))
-        )
+        if ltype.kind == rtype.kind:
+            try:
+                common_type = max(ltype, rtype)
+            except TypeError:
+                # e.g. numpy bool and pandas BooleanDtype both have kind "b"
+                # but are not orderable via ``>``; fall back to the
+                # type-promotion helper that understands extension dtypes.
+                common_type = find_common_type((ltype, rtype))
+        else:
+            common_type = find_common_type((ltype, rtype))
     elif (ltype.kind == "M" and rtype.kind == "M") or (
         ltype.kind == "m" and rtype.kind == "m"
     ):
@@ -124,8 +147,11 @@ def _match_join_keys(
 
     if how == "left" and rcol.fillna(0).can_cast_safely(ltype):
         return lcol, rcol.astype(ltype)
-    elif common_type is None:
-        common_type = np.dtype(np.float64)
+    if common_type is None:
+        if is_dtype_obj_string(ltype) and is_dtype_obj_string(rtype):
+            common_type = find_common_type((ltype, rtype))
+        else:
+            common_type = np.dtype(np.float64)
     return lcol.astype(common_type), rcol.astype(common_type)
 
 
@@ -169,11 +195,9 @@ def _match_categorical_dtypes_both(
         return lcol, rcol._get_decategorized_column().astype(ltype)
     else:
         # merge categories
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            merged_categories = concat(
-                [ltype.categories, rtype.categories]
-            ).unique()
+        merged_categories = concat(
+            [ltype.categories, rtype.categories]
+        ).unique()
         common_type = CategoricalDtype(
             categories=merged_categories, ordered=False
         )

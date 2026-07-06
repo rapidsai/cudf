@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -14,13 +14,10 @@
 
 #include <rmm/cuda_device.hpp>
 #include <rmm/mr/cuda_memory_resource.hpp>
-#include <rmm/mr/device_memory_resource.hpp>
-#include <rmm/mr/owning_wrapper.hpp>
 #include <rmm/mr/pool_memory_resource.hpp>
 
 #include <chrono>
 #include <iostream>
-#include <memory>
 #include <string>
 
 /**
@@ -42,29 +39,6 @@ std::unique_ptr<cudf::column> redact_strings(cudf::column_view const& names,
                                              cudf::column_view const& visibilities);
 
 /**
- * @brief Create CUDA memory resource
- */
-auto make_cuda_mr() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
-
-/**
- * @brief Create a pool device memory resource
- */
-auto make_pool_mr()
-{
-  return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-    make_cuda_mr(), rmm::percent_of_free_device_memory(50));
-}
-
-/**
- * @brief Create memory resource for libcudf functions
- */
-std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(std::string const& name)
-{
-  if (name == "pool") { return make_pool_mr(); }
-  return make_cuda_mr();
-}
-
-/**
  * @brief Main for strings examples
  *
  * Command line parameters:
@@ -81,8 +55,13 @@ int main(int argc, char const** argv)
   }
 
   auto const mr_name = std::string{argc > 2 ? std::string(argv[2]) : std::string("cuda")};
-  auto resource      = create_memory_resource(mr_name);
-  cudf::set_current_device_resource(resource.get());
+  rmm::mr::cuda_memory_resource cuda_mr{};
+  rmm::mr::pool_memory_resource pool_mr{cuda_mr, rmm::percent_of_free_device_memory(50)};
+  if (mr_name == "pool") {
+    cudf::set_current_device_resource(pool_mr);
+  } else {
+    cudf::set_current_device_resource(cuda_mr);
+  }
 
   auto const csv_file   = std::string{argv[1]};
   auto const csv_result = [csv_file] {

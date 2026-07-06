@@ -1,17 +1,19 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/column/column_stream.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -23,8 +25,11 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 
+#include <rmm/cuda_stream.hpp>
+
 #include <numeric>
 #include <random>
+#include <vector>
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
@@ -606,11 +611,9 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
 
 TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
 {
-  auto valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 == 0; });
+  auto valids = cudf::test::iterators::valids_at_multiples_of(2);
 
-  auto expect_valids =
-    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2 != 0; });
+  auto expect_valids = cudf::test::iterators::nulls_at_multiples_of(2);
 
   using LCW = cudf::test::lists_column_wrapper<TypeParam>;
 
@@ -633,6 +636,51 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(
     cudf::mask_to_bools(result->view().null_mask(), 0, 4)->view(),
     cudf::mask_to_bools(static_cast<cudf::column_view>(expect).null_mask(), 0, 4)->view());
+}
+
+struct RebindStreamColumnTest : public cudf::test::BaseFixture {};
+
+TEST_F(RebindStreamColumnTest, RebindStreamPreservesNestedStructData)
+{
+  rmm::cuda_stream stream_a{};
+  rmm::cuda_stream stream_b{};
+
+  constexpr cudf::size_type num_rows{4};
+  std::vector<int32_t> h_ints(static_cast<std::size_t>(num_rows));
+  std::iota(h_ints.begin(), h_ints.end(), int32_t{0});
+
+  auto d_ints = cudf::detail::make_device_uvector_async(
+    h_ints, stream_a, cudf::get_current_device_resource_ref());
+  auto null_mask = cudf::create_null_mask(
+    num_rows, cudf::mask_state::ALL_VALID, stream_a, cudf::get_current_device_resource_ref());
+
+  stream_a.synchronize();
+
+  std::vector<std::unique_ptr<cudf::column>> children;
+  children.push_back(std::make_unique<cudf::column>(std::move(d_ints), std::move(null_mask), 0));
+
+  cudf::test::strings_column_wrapper strings_child{"", "a", "bb", "ccc"};
+  children.push_back(strings_child.release());
+
+  cudf::test::lists_column_wrapper<int32_t> lists_child{{1}, {2, 3}, {}, {4, 5}};
+  children.push_back(lists_child.release());
+
+  cudf::test::structs_column_wrapper struct_wrapper{std::move(children)};
+  auto col = struct_wrapper.release();
+
+  auto const expected = std::make_unique<cudf::column>(col->view(), cudf::get_default_stream());
+
+  auto rebound = cudf::rebind_stream(std::move(*col), stream_b);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), rebound->view());
+
+  cudf::test::fixed_width_column_wrapper<int32_t> idempotent_src{1, 2, 3, 4, 5};
+  auto idempotent_col = idempotent_src.release();
+  auto const idempotent_expected =
+    std::make_unique<cudf::column>(idempotent_col->view(), cudf::get_default_stream());
+  auto idempotent_rebound =
+    cudf::rebind_stream(std::move(*idempotent_col), cudf::get_default_stream());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(idempotent_expected->view(), idempotent_rebound->view());
 }
 
 CUDF_TEST_PROGRAM_MAIN()

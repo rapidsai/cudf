@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,9 @@
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <cuda/std/cmath>
+#include <cuda/std/type_traits>
+
 #include <tuple>
 
 namespace cudf {
@@ -37,9 +40,11 @@ struct conversion_map;
 template <is_int96_timestamp INT96>
 struct conversion_map<io_file_format::ORC, INT96> {
   using types = std::tuple<std::pair<cudf::timestamp_s, cudf::timestamp_ns>,
+                           std::pair<cudf::timestamp_ms, cudf::timestamp_ns>,
                            std::pair<cudf::timestamp_us, cudf::timestamp_ns>,
                            std::pair<cudf::timestamp_ns, cudf::timestamp_ns>,
                            std::pair<cudf::duration_s, cudf::duration_ns>,
+                           std::pair<cudf::duration_ms, cudf::duration_ns>,
                            std::pair<cudf::duration_us, cudf::duration_ns>,
                            std::pair<cudf::duration_ns, cudf::duration_ns>>;
 };
@@ -204,8 +209,8 @@ class aggregation_type {
       return val.size_bytes();
     } else if constexpr (std::is_integral_v<T>) {
       return val;
-    } else if constexpr (std::is_floating_point_v<T>) {
-      return isnan(val) ? 0 : val;
+    } else if constexpr (cuda::std::is_floating_point_v<T>) {
+      return cuda::std::isnan(val) ? 0 : val;
     } else if constexpr (cudf::is_fixed_point<T>()) {
       return val.value();
     } else if constexpr (cudf::is_duration<T>()) {

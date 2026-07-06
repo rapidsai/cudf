@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -29,6 +29,7 @@ import org.apache.parquet.hadoop.util.HadoopInputFile;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.OriginalType;
+import org.apache.parquet.schema.Type;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -84,6 +85,29 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_JSON_WHITESPACES_FILE = TestUtils.getResourceAsFile("whitespaces.json");
   private static final File TEST_MIXED_TYPE_1_JSON = TestUtils.getResourceAsFile("mixed_types_1.json");
   private static final File TEST_MIXED_TYPE_2_JSON = TestUtils.getResourceAsFile("mixed_types_2.json");
+
+  private static class TempFile implements AutoCloseable {
+    private final File file;
+
+    private TempFile(File file) {
+      this.file = file;
+    }
+
+    static TempFile create(String prefix, String suffix) throws IOException {
+      File file = File.createTempFile(prefix, suffix);
+      file.deleteOnExit();
+      return new TempFile(file);
+    }
+
+    File getFile() {
+      return file;
+    }
+
+    @Override
+    public void close() {
+      file.delete();
+    }
+  }
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -1098,24 +1122,6 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  byte[][] sliceBytes(byte[] data, int slices) {
-    slices = Math.min(data.length, slices);
-    // We are not going to worry about making it super even here.
-    // The last one gets the extras.
-    int bytesPerSlice = data.length / slices;
-    byte[][] ret = new byte[slices][];
-    int startingAt = 0;
-    for (int i = 0; i < (slices - 1); i++) {
-      ret[i] = new byte[bytesPerSlice];
-      System.arraycopy(data, startingAt, ret[i], 0, bytesPerSlice);
-      startingAt += bytesPerSlice;
-    }
-    // Now for the last one
-    ret[slices - 1] = new byte[data.length - startingAt];
-    System.arraycopy(data, startingAt, ret[slices - 1], 0, data.length - startingAt);
-    return ret;
-  }
-
   @Test
   void testReadCSVBufferMultiBuffer() {
     CSVOptions opts = CSVOptions.builder()
@@ -1126,7 +1132,7 @@ public class TableTest extends CudfTestBase {
             .withQuote('\'')
             .withNullValue("NULL")
             .build();
-    byte[][] data = sliceBytes(CSV_DATA_BUFFER, 10);
+    byte[][] data = TableTestUtils.sliceBytes(CSV_DATA_BUFFER, 10);
     try (Table expected = new Table.TestBuilder()
             .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
             .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, null, 118.2, 119.8)
@@ -1135,25 +1141,6 @@ public class TableTest extends CudfTestBase {
          Table table = Table.readCSV(TableTest.CSV_DATA_BUFFER_SCHEMA, opts, source)) {
       assertTablesAreEqual(expected, table);
     }
-  }
-
-  public static byte[] arrayFrom(File f) throws IOException {
-    long len = f.length();
-    if (len > Integer.MAX_VALUE) {
-      throw new IllegalArgumentException("Sorry cannot read " + f +
-              " into an array it does not fit");
-    }
-    int remaining = (int)len;
-    byte[] ret = new byte[remaining];
-    try (java.io.FileInputStream fin = new java.io.FileInputStream(f)) {
-      int at = 0;
-      while (remaining > 0) {
-        int amount = fin.read(ret, at, remaining);
-        at += amount;
-        remaining -= amount;
-      }
-    }
-    return ret;
   }
 
   public static MultiBufferDataSource sourceFrom(File f) throws IOException {
@@ -1298,7 +1285,6 @@ public class TableTest extends CudfTestBase {
 
   private void testWriteCSVToFileImpl(char fieldDelim, boolean includeHeader,
                                       String trueValue, String falseValue) throws IOException {
-    File outputFile = File.createTempFile("testWriteCSVToFile", ".csv");
     Schema schema = Schema.builder()
                           .column(DType.INT32, "i")
                           .column(DType.FLOAT64, "f")
@@ -1314,31 +1300,31 @@ public class TableTest extends CudfTestBase {
                                                .withTrueValue(trueValue)
                                                .withFalseValue(falseValue)
                                                .build();
-    try (Table inputTable
-          = new Table.TestBuilder()
-              .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-              .column(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
-              .column(false, true, false, true, false, true, false, true, false, true)
-              .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", "grey")
-              .build()) {
-      inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+    CSVOptions readOptions = CSVOptions.builder()
+                                       .includeColumn("i")
+                                       .includeColumn("f")
+                                       .includeColumn("b")
+                                       .includeColumn("str")
+                                       .hasHeader(includeHeader)
+                                       .withDelim(fieldDelim)
+                                       .withTrueValue(trueValue)
+                                       .withFalseValue(falseValue)
+                                       .build();
+    try (TempFile outputTempFile = TempFile.create("testWriteCSVToFile", ".csv")) {
+      File outputFile = outputTempFile.getFile();
+      try (Table inputTable = new Table.TestBuilder()
+          .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+          .column(0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0)
+          .column(false, true, false, true, false, true, false, true, false, true)
+          .column("All", "the", "leaves", "are", "brown", "and", "the", "sky", "is", "grey")
+          .build()) {
+        inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
 
-      // Read back.
-      CSVOptions readOptions = CSVOptions.builder()
-                                         .includeColumn("i")
-                                         .includeColumn("f")
-                                         .includeColumn("b")
-                                         .includeColumn("str")
-                                         .hasHeader(includeHeader)
-                                         .withDelim(fieldDelim)
-                                         .withTrueValue(trueValue)
-                                         .withFalseValue(falseValue)
-                                         .build();
-      try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
-        assertTablesAreEqual(inputTable, readTable);
+        // Read back.
+        try (Table readTable = Table.readCSV(schema, readOptions, outputFile)) {
+          assertTablesAreEqual(inputTable, readTable);
+        }
       }
-    } finally {
-      outputFile.delete();
     }
   }
 
@@ -1353,7 +1339,6 @@ public class TableTest extends CudfTestBase {
   }
 
   private void testWriteUnquotedCSVToFileImpl(char fieldDelim) throws IOException {
-    File outputFile = File.createTempFile("testWriteUnquotedCSVToFile", ".csv");
     Schema schema = Schema.builder()
                           .column(DType.STRING, "str")
                           .build();
@@ -1365,29 +1350,29 @@ public class TableTest extends CudfTestBase {
                                                .withNullValue("\\N")
                                                .withQuoteStyle(QuoteStyle.NONE)
                                                .build();
-    try (Table inputTable
-          = new Table.TestBuilder()
-              .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
-                      "are\"brown",
-                      "and\nthe\nsky\nis\ngrey")
-              .build()) {
-      inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+    CSVOptions readOptions = CSVOptions.builder()
+                                       .includeColumn("str")
+                                       .hasHeader(false)
+                                       .withDelim(fieldDelim)
+                                       .withQuoteStyle(QuoteStyle.NONE)
+                                       .build();
+    try (TempFile outputTempFile = TempFile.create("testWriteUnquotedCSVToFile", ".csv")) {
+      File outputFile = outputTempFile.getFile();
+      try (Table inputTable = new Table.TestBuilder()
+          .column("All" + fieldDelim + "the" + fieldDelim + "leaves",
+                  "are\"brown",
+                  "and\nthe\nsky\nis\ngrey")
+          .build()) {
+        inputTable.writeCSVToFile(writeOptions, outputFile.getAbsolutePath());
+      }
 
       // Read back.
-      CSVOptions readOptions = CSVOptions.builder()
-                                         .includeColumn("str")
-                                         .hasHeader(false)
-                                         .withDelim(fieldDelim)
-                                         .withQuoteStyle(QuoteStyle.NONE)
-                                         .build();
       try (Table readTable = Table.readCSV(schema, readOptions, outputFile);
            Table expected = new Table.TestBuilder()
              .column("All", "are\"brown", "and", "the", "sky", "is", "grey")
              .build()) {
         assertTablesAreEqual(expected, readTable);
       }
-    } finally {
-      outputFile.delete();
     }
   }
 
@@ -1544,7 +1529,7 @@ public class TableTest extends CudfTestBase {
             .includeColumn("zip")
             .includeColumn("num_units")
             .build();
-    byte [][] data = sliceBytes(arrayFrom(TEST_PARQUET_FILE), 10);
+    byte [][] data = TableTestUtils.sliceBytes(TableTestUtils.arrayFrom(TEST_PARQUET_FILE), 10);
     try (MultiBufferDataSource source = sourceFrom(data);
          Table table = Table.readParquet(opts, source)) {
       long rows = table.getRowCount();
@@ -7863,6 +7848,240 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  private static void assertSumOverflowResult(Table results,
+                                                  int[] expectedKeys,
+                                                  long[] expectedSums,
+                                                  boolean[] expectedOvf) {
+    ColumnVector structCol = results.getColumn(1);
+    assertEquals(DType.STRUCT, structCol.getType());
+    try (ColumnView ovfChild = structCol.getChildColumnView(1);
+         ColumnVector ovfCol = ovfChild.copyToColumnVector();
+         ColumnVector expectedKeyCol = ColumnVector.fromInts(expectedKeys);
+         ColumnVector expectedOvfCol = ColumnVector.fromBooleans(expectedOvf)) {
+      assertColumnsAreEqual(expectedKeyCol, results.getColumn(0));
+      assertColumnsAreEqual(expectedOvfCol, ovfCol);
+      if (expectedSums != null) {
+        try (ColumnView sumChild = structCol.getChildColumnView(0);
+             ColumnVector sumCol = sumChild.copyToColumnVector();
+             ColumnVector expectedSumCol = ColumnVector.fromLongs(expectedSums)) {
+          assertEquals(DType.INT64, sumCol.getType());
+          assertColumnsAreEqual(expectedSumCol, sumCol);
+        }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumOverflow() {
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 3, 1, 2, 2, 1, 3, 3, 2)
+             .column(10L, 20L, 30L, 11L, 21L, 22L, 12L, 31L, 32L, 23L)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      assertEquals(2, sorted.getNumberOfColumns());
+      assertEquals(3, sorted.getRowCount());
+      assertSumOverflowResult(sorted,
+          new int[]{1, 2, 3}, new long[]{33L, 86L, 93L}, new boolean[]{false, false, false});
+    }
+  }
+
+  @Test
+  void testGroupByHashSumOverflowDetectsOverflow() {
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      assertSumOverflowResult(sorted, new int[]{1, 2}, null, new boolean[]{true, false});
+    }
+  }
+
+  @Test
+  void testGroupByHashSumOverflowInt32() {
+    // Int32 input: hash groupby supports it (reduction does not).
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .column(1, 10, 2, 20)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.fromInts(3, 30);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.INT32, sumCol.getType());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupBySortSumOverflow() {
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .column(1L, 2L, 3L, 4L)
+             .build();
+         // median() is sort-only, so it forces the sort-based groupby path
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1),
+             GroupByAggregation.median().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      assertSumOverflowResult(sorted,
+          new int[]{1, 2}, new long[]{3L, 7L}, new boolean[]{false, false});
+    }
+  }
+
+  @Test
+  void testGroupBySortSumOverflowDetectsOverflow() {
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .column(Long.MAX_VALUE, Long.MAX_VALUE, 3L, 4L)
+             .build();
+         // median() is sort-only, so it forces the sort-based groupby path
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1),
+             GroupByAggregation.median().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      assertSumOverflowResult(sorted, new int[]{1, 2}, null, new boolean[]{true, false});
+    }
+  }
+
+  // For SUM_OVERFLOW on fixed-point inputs, cudf's hash groupby produces a
+  // STRUCT whose sum-child has the same decimal type AND scale as the input
+  // (target_type_impl<fixed_point, SUM_OVERFLOW> uses Source as the sum
+  // type at cpp/include/cudf/detail/aggregation/aggregation.hpp). The three
+  // tests below assert both the values and that scale is preserved end-to-end
+  // through the JNI struct-column extraction path.
+  @Test
+  void testGroupByHashSumOverflowDecimal32() {
+    final int scale = -2;
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2, 1)
+             .decimal32Column(scale, 100, 200, 150, 250, 50)  // 1.00, 2.00, 1.50, 2.50, 0.50
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector keyCol = sorted.getColumn(0);
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedKeys = ColumnVector.fromInts(1, 2);
+           ColumnVector expectedSum = ColumnVector.decimalFromInts(scale, 300, 450);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL32, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedKeys, keyCol);
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumOverflowDecimal64() {
+    final int scale = -4;
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .decimal64Column(scale, 10000L, 20000L, 30000L, 40000L)  // 1.0000, 2.0000, ...
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.decimalFromLongs(scale, 40000L, 60000L);
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL64, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumOverflowDecimal128() {
+    final int scale = -10;
+    BigInteger v1 = BigInteger.valueOf(123456789L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v2 = BigInteger.valueOf(987654321L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v3 = BigInteger.valueOf(111111111L).multiply(BigInteger.TEN.pow(10));
+    BigInteger v4 = BigInteger.valueOf(222222222L).multiply(BigInteger.TEN.pow(10));
+    try (Table input = new Table.TestBuilder()
+             .column(1, 2, 1, 2)
+             .decimal128Column(scale, RoundingMode.UNNECESSARY, v1, v2, v3, v4)
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector sumCol = sumChild.copyToColumnVector();
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedSum = ColumnVector.decimalFromBigInt(scale,
+               v1.add(v3), v2.add(v4));
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(false, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL128, sumCol.getType().getTypeId());
+        assertEquals(scale, sumCol.getType().getScale());
+        assertColumnsAreEqual(expectedSum, sumCol);
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByHashSumOverflowDecimal128DetectsOverflow() {
+    // Pick a value with at most 38 significant digits (the MathContext cap in
+    // Table.TestBuilder.decimal128Column) that still overflows int128_max when
+    // summed with itself. 10^38 - 1 is 38 nines; 2 * (10^38 - 1) ~= 2e38 which
+    // exceeds int128_max ~= 1.7e38, so cudf's kernel flags overflow. The sum
+    // value for the overflowed group is unspecified so only the flag is checked.
+    final int scale = 0;
+    BigInteger nearMax = BigInteger.TEN.pow(38).subtract(BigInteger.ONE);
+    try (Table input = new Table.TestBuilder()
+             .column(1, 1, 2, 2)
+             .decimal128Column(scale, RoundingMode.UNNECESSARY,
+                 nearMax, nearMax, BigInteger.valueOf(3), BigInteger.valueOf(4))
+             .build();
+         Table results = input.groupBy(0).aggregate(
+             GroupByAggregation.sumOverflow().onColumn(1));
+         Table sorted = results.orderBy(OrderByArg.asc(0))) {
+      ColumnVector structCol = sorted.getColumn(1);
+      assertEquals(DType.STRUCT, structCol.getType());
+
+      try (ColumnView sumChild = structCol.getChildColumnView(0);
+           ColumnView ovfChild = structCol.getChildColumnView(1);
+           ColumnVector ovfCol = ovfChild.copyToColumnVector();
+           ColumnVector expectedOvf = ColumnVector.fromBooleans(true, false)) {
+        assertEquals(DType.DTypeEnum.DECIMAL128, sumChild.getType().getTypeId());
+        assertEquals(scale, sumChild.getType().getScale());
+        assertColumnsAreEqual(expectedOvf, ovfCol);
+      }
+    }
+  }
+
   @Test
   void testGroupByMergeM2() {
     StructType nestedType = new StructType(false,
@@ -8122,7 +8341,7 @@ public class TableTest extends CudfTestBase {
   /**
    * A wrapper for ContiguousTable[] to implement AutoCloseable
    */
-  static class ContiguousSplitRes implements AutoCloseable {
+  private static class ContiguousSplitRes implements AutoCloseable {
     // to be closed
     private ContiguousTable[] splits;
 
@@ -9269,33 +9488,36 @@ public class TableTest extends CudfTestBase {
             new ColumnWriterOptions("key0", false),
             new ColumnWriterOptions("value0"),
             true)).build();
-    File f = File.createTempFile("test-map", ".parquet");
-    List<HostColumnVector.StructData> list1 =
-        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
-    List<HostColumnVector.StructData> list2 =
-        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
-    List<HostColumnVector.StructData> list3 =
-     Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
-    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
-     Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
-        new HostColumnVector.BasicType(true, DType.STRING)));
-    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-            structType), list1, list2, list3);
-         Table t0 = new Table(listColumn)) {
-      try (TableWriter writer = Table.writeParquetChunked(options, f)) {
-        writer.write(t0);
+    try (TempFile tempFile = TempFile.create("test-map", ".parquet")) {
+      File f = tempFile.getFile();
+      List<HostColumnVector.StructData> list1 =
+          Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+      List<HostColumnVector.StructData> list2 =
+          Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+      List<HostColumnVector.StructData> list3 =
+          Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+      HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+          Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+              new HostColumnVector.BasicType(true, DType.STRING)));
+      try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+              structType), list1, list2, list3);
+           Table t0 = new Table(listColumn)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, f)) {
+          writer.write(t0);
+        }
+        try (ParquetFileReader reader =
+             ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()),
+                 new Configuration()))) {
+          MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+          assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
+        }
       }
-      ParquetFileReader reader =
-       ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()),
-           new Configuration()));
-      MessageType schema = reader.getFooter().getFileMetaData().getSchema();
-      assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
-    }
-    try (ColumnVector cv = Table.readParquet(f).getColumn(0);
-         Scalar aString = Scalar.fromString("a");
-         ColumnVector res = cv.getMapValue(aString);
-         ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
-      assertColumnsAreEqual(expected, res);
+      try (Table table = Table.readParquet(f);
+           Scalar aString = Scalar.fromString("a");
+           ColumnVector res = table.getColumn(0).getMapValue(aString);
+           ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+        assertColumnsAreEqual(expected, res);
+      }
     }
   }
 
@@ -9330,6 +9552,8 @@ public class TableTest extends CudfTestBase {
       optBuilder.withCompressionType(CompressionType.NONE)
       .withRowGroupSizeRows(10000)
       .withRowGroupSizeBytes(10000)
+      .withMaxDictionarySize(2 * 1024 * 1024)
+      .withDictionaryPolicy(ParquetWriterOptions.DictionaryPolicy.ALWAYS)
       .build();
     try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
@@ -9362,10 +9586,38 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  /**
+   * Exercises the file-chunked Parquet write path with the dictionary configuration
+   * setters so any signature/forwarding drift between {@code writeParquetFileBegin}
+   * and {@code writeParquetBufferBegin} is caught.
+   */
+  @Test
+  void testParquetWriteToFileChunkedWithDictionaryOptions() throws IOException {
+    try (TempFile tempFile = TempFile.create("test-dict-options", ".parquet");
+         Table table0 = getExpectedFileTableWithDecimals()) {
+      File file = tempFile.getFile();
+      ParquetWriterOptions options = ParquetWriterOptions.builder()
+          .withNonNullableColumns("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+          .withDecimalColumn("eighth", 5)
+          .withDecimalColumn("ninth", 6)
+          .withCompressionType(CompressionType.NONE)
+          .withMaxDictionarySize(2 * 1024 * 1024)
+          .withDictionaryPolicy(ParquetWriterOptions.DictionaryPolicy.ALWAYS)
+          .build();
+      try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
+        writer.write(table0);
+      }
+      try (Table table2 = Table.readParquet(file.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table2);
+      }
+    }
+  }
+
   @Test
   void testParquetWriteToFileWithNames() throws IOException {
-    File tempFile = File.createTempFile("test-names", ".parquet");
-    try (Table table0 = getExpectedFileTableWithDecimals()) {
+    try (TempFile tempFile = TempFile.create("test-names", ".parquet");
+         Table table0 = getExpectedFileTableWithDecimals()) {
+      File file = tempFile.getFile();
       ParquetWriterOptions options = ParquetWriterOptions.builder()
           .withNonNullableColumns("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withDecimalColumn("eighth", 5)
@@ -9373,21 +9625,20 @@ public class TableTest extends CudfTestBase {
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+      try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
         writer.write(table0);
       }
-      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
+      try (Table table2 = Table.readParquet(file.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
-    } finally {
-      tempFile.delete();
     }
   }
 
   @Test
   void testParquetWriteToFileWithNamesAndMetadata() throws IOException {
-    File tempFile = File.createTempFile("test-names-metadata", ".parquet");
-    try (Table table0 = getExpectedFileTableWithDecimals()) {
+    try (TempFile tempFile = TempFile.create("test-names-metadata", ".parquet");
+         Table table0 = getExpectedFileTableWithDecimals()) {
+      File file = tempFile.getFile();
       ParquetWriterOptions options = ParquetWriterOptions.builder()
           .withNonNullableColumns("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
           .withDecimalColumn("eighth", 6)
@@ -9396,21 +9647,20 @@ public class TableTest extends CudfTestBase {
           .withCompressionType(CompressionType.NONE)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+      try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
         writer.write(table0);
       }
-      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
+      try (Table table2 = Table.readParquet(file.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
-    } finally {
-      tempFile.delete();
     }
   }
 
   @Test
   void testParquetWriteToFileUncompressedNoStats() throws IOException {
-    File tempFile = File.createTempFile("test-uncompressed", ".parquet");
-    try (Table table0 = getExpectedFileTableWithDecimals()) {
+    try (TempFile tempFile = TempFile.create("test-uncompressed", ".parquet");
+         Table table0 = getExpectedFileTableWithDecimals()) {
+      File file = tempFile.getFile();
       ParquetWriterOptions options = ParquetWriterOptions.builder()
           .withNonNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
           .withDecimalColumn("_c7", 4)
@@ -9420,14 +9670,12 @@ public class TableTest extends CudfTestBase {
           .withRowGroupSizeBytes(10000)
           .withStatisticsFrequency(ParquetWriterOptions.StatisticsFrequency.NONE)
           .build();
-      try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+      try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
         writer.write(table0);
       }
-      try (Table table2 = Table.readParquet(tempFile.getAbsoluteFile())) {
+      try (Table table2 = Table.readParquet(file.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
-    } finally {
-      tempFile.delete();
     }
   }
 
@@ -9447,8 +9695,8 @@ public class TableTest extends CudfTestBase {
         .withColumns( true, "c5")
         .build();
 
-    File tempFile = File.createTempFile("test-field-id", ".parquet");
-    try {
+    try (TempFile tempFile = TempFile.create("test-field-id", ".parquet")) {
+      File file = tempFile.getFile();
       HostColumnVector.StructType structType = new HostColumnVector.StructType(
           true,
           new HostColumnVector.BasicType(true, DType.STRING),
@@ -9462,13 +9710,13 @@ public class TableTest extends CudfTestBase {
           .timestampMicrosecondsColumn(1000L, 2000L) // c4
           .column("a", "b") // c5
           .build()) {
-        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
           writer.write(table0);
         }
       }
 
       try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
-          new Path(tempFile.getAbsolutePath()),
+          new Path(file.getAbsolutePath()),
           new Configuration()))) {
         MessageType schema = reader.getFooter().getFileMetaData().getSchema();
         assert (schema.getFields().get(0).getId().intValue() == -1);
@@ -9479,8 +9727,6 @@ public class TableTest extends CudfTestBase {
         assert (schema.getFields().get(3).getId().intValue() == -4);
         assert (schema.getFields().get(4).getId() == null);
       }
-    } finally {
-      tempFile.delete();
     }
   }
 
@@ -9512,8 +9758,8 @@ public class TableTest extends CudfTestBase {
         .withColumn(true, "c4", 0)
         .build();
 
-    File tempFile = File.createTempFile("test-field-id", ".parquet");
-    try {
+    try (TempFile tempFile = TempFile.create("test-field-id", ".parquet")) {
+      File file = tempFile.getFile();
       HostColumnVector.StructType structType = new HostColumnVector.StructType(
           true,
           new HostColumnVector.BasicType(true, DType.STRING),
@@ -9528,13 +9774,13 @@ public class TableTest extends CudfTestBase {
               new HostColumnVector.StructData("a", "b"), new HostColumnVector.StructData("a", "b"))
           .column("a", "b") // c4
           .build()) {
-        try (TableWriter writer = Table.writeParquetChunked(options, tempFile.getAbsoluteFile())) {
+        try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
           writer.write(table0);
         }
       }
 
       try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
-          new Path(tempFile.getAbsolutePath()),
+          new Path(file.getAbsolutePath()),
           new Configuration()))) {
         MessageType schema = reader.getFooter().getFileMetaData().getSchema();
         assert (schema.getFields().get(0).getId() == null);
@@ -9546,8 +9792,153 @@ public class TableTest extends CudfTestBase {
         assert (((GroupType) schema.getFields().get(3)).getFields().get(1).getId() == null);
         assert (schema.getFields().get(4).getId().intValue() == 0);
       }
-    } finally {
-      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testParquetWriteFieldIdOnOuterListBinaryAndMap() throws IOException {
+    // Regression test for cudf #22347: parquet field IDs supplied via
+    // withBinaryColumn(name, nullable, id), listBuilder(name, nullable, id) and
+    // mapColumn(name, key, value, isNullable, id) must end up on the outer
+    // (list/map) column on disk, not on the inner element/key_value child.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withBinaryColumn("_c0", true, 1)
+        .withListColumn(listBuilder("_c1", true, 2)
+            .withColumn(false, "element", 22)
+            .build())
+        .withMapColumn(mapColumn("_c2",
+            new ColumnWriterOptions("key", false),
+            new ColumnWriterOptions("value"),
+            true, 3))
+        .build();
+
+    try (TempFile tempFile = TempFile.create("test-field-id-outer", ".parquet")) {
+      File file = tempFile.getFile();
+      List<Byte> bin1 = asList("ABC");
+      List<Byte> bin2 = asList("DEF");
+      HostColumnVector.ListType binType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType listOfInt = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.INT32));
+      HostColumnVector.StructType kvType = new HostColumnVector.StructType(true,
+          Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                        new HostColumnVector.BasicType(true, DType.STRING)));
+      HostColumnVector.ListType mapType = new HostColumnVector.ListType(true, kvType);
+
+      try (ColumnVector binCol = ColumnVector.fromLists(binType, bin1, bin2);
+           ColumnVector listCol = ColumnVector.fromLists(listOfInt,
+               Arrays.asList(1, 2, 3), Arrays.asList(4, 5));
+           ColumnVector mapCol = ColumnVector.fromLists(mapType,
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b"))),
+               Arrays.asList(new HostColumnVector.StructData(Arrays.asList("c", "d"))));
+           Table t0 = new Table(binCol, listCol, mapCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(file.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // The id supplied to the API must land on the outer (BINARY/LIST/MAP) column.
+        assertEquals(1, schema.getFields().get(0).getId().intValue());
+        assertEquals(2, schema.getFields().get(1).getId().intValue());
+        assertEquals(3, schema.getFields().get(2).getId().intValue());
+
+        // No nested descendant must inherit the outer id (catches "id placed on
+        // both outer and inner" regressions, including the original bug where
+        // withBinary(...id) attached the id to the inner BINARY_DATA child).
+        assertNoNestedIdEquals(schema.getFields().get(0), 1);
+        assertNoNestedIdEquals(schema.getFields().get(1), 2);
+        assertNoNestedIdEquals(schema.getFields().get(2), 3);
+
+        // The explicit child id on the LIST<INT> "element" must be preserved.
+        Type listElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(listElement);
+        assertEquals(22, listElement.getId().intValue());
+      }
+    }
+  }
+
+  private static void assertNoNestedIdEquals(Type type, int outerId) {
+    if (type.isPrimitive()) return;
+    for (Type child : type.asGroupType().getFields()) {
+      if (child.getId() != null) {
+        assertNotEquals(outerId, child.getId().intValue(),
+            "Field " + child.getName() + " unexpectedly inherited outer id " + outerId);
+      }
+      assertNoNestedIdEquals(child, outerId);
+    }
+  }
+
+  private static Type findDescendantByName(Type type, String name) {
+    if (type.isPrimitive()) {
+      return name.equals(type.getName()) ? type : null;
+    }
+    for (Type child : type.asGroupType().getFields()) {
+      if (name.equals(child.getName())) return child;
+      Type found = findDescendantByName(child, name);
+      if (found != null) return found;
+    }
+    return null;
+  }
+
+  @Test
+  void testParquetWriteFieldIdOnNestedArrayOfBinaryAndString() throws IOException {
+    // Regression test for cudf #22347: the original Spark-Rapids/Iceberg
+    // failure ("Missing required field ... optional binary element is not in
+    // the store") came from array<binary> / array<string> columns where
+    // iceberg looks the leaf up by its parquet field id. Lock that nested path
+    // down here in addition to the top-level cases.
+    ParquetWriterOptions options = ParquetWriterOptions.builder()
+        .withListColumn(listBuilder("arr_bin", true, 10)
+            .withBinaryColumn("element", true, 11)
+            .build())
+        .withListColumn(listBuilder("arr_str", true, 20)
+            .withColumn(true, "element", 21)
+            .build())
+        .build();
+
+    try (TempFile tempFile = TempFile.create("test-field-id-nested", ".parquet")) {
+      File file = tempFile.getFile();
+      HostColumnVector.ListType binEl = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(false, DType.UINT8));
+      HostColumnVector.ListType arrBinType = new HostColumnVector.ListType(true, binEl);
+      HostColumnVector.ListType arrStrType = new HostColumnVector.ListType(true,
+          new HostColumnVector.BasicType(true, DType.STRING));
+
+      try (ColumnVector arrBinCol = ColumnVector.fromLists(arrBinType,
+               Arrays.asList(asList("ABC"), asList("DEF")),
+               Arrays.asList(asList("GHI")));
+           ColumnVector arrStrCol = ColumnVector.fromLists(arrStrType,
+               Arrays.asList("a", "b"),
+               Arrays.asList("c"));
+           Table t0 = new Table(arrBinCol, arrStrCol)) {
+        try (TableWriter writer = Table.writeParquetChunked(options, file.getAbsoluteFile())) {
+          writer.write(t0);
+        }
+      }
+
+      try (ParquetFileReader reader = ParquetFileReader.open(HadoopInputFile.fromPath(
+          new Path(file.getAbsolutePath()), new Configuration()))) {
+        MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+        // Outer LIST ids must land on the outer list groups.
+        assertEquals(10, schema.getFields().get(0).getId().intValue());
+        assertEquals(20, schema.getFields().get(1).getId().intValue());
+
+        // Outer ids must not leak into nested descendants.
+        assertNoNestedIdEquals(schema.getFields().get(0), 10);
+        assertNoNestedIdEquals(schema.getFields().get(1), 20);
+
+        // Inner element ids must reach the leaf — this is the iceberg lookup
+        // path that broke before the fix on array<binary>.
+        Type binElement = findDescendantByName(schema.getFields().get(0), "element");
+        assertNotNull(binElement);
+        assertEquals(11, binElement.getId().intValue());
+        Type strElement = findDescendantByName(schema.getFields().get(1), "element");
+        assertNotNull(strElement);
+        assertEquals(21, strElement.getId().intValue());
+      }
     }
   }
 
@@ -9614,34 +10005,29 @@ public class TableTest extends CudfTestBase {
     "we don't automatically upcast to decimal128 on conversion to arrow, we have" +
     "to wait until it supports those types, then upgrade")
   void testArrowIPCWriteToFileWithNamesAndMetadata() throws IOException {
-    File tempFile = File.createTempFile("test-names-metadata", ".arrow");
-    String[] columnNames = WriteUtils.getNonNestedColumns(false);
-    try (Table table0 = getExpectedFileTable(columnNames)) {
-      ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
-              .withColumnNames(columnNames)
-              .build();
-      try (TableWriter writer = Table.writeArrowIPCChunked(options, tempFile.getAbsoluteFile())) {
-        writer.write(table0);
-      }
-      // Reading from Arrow converts decimals to DECIMAL128
-      try (StreamedTableReader reader = Table.readArrowIPCChunked(tempFile);
-           Table expected = castDecimal64To128(table0)) {
-        boolean done = false;
-        int count = 0;
-        while (!done) {
-          try (Table t = reader.getNextIfAvailable()) {
-            if (t == null) {
-              done = true;
-            } else {
+    try (TempFile tempFile = TempFile.create("test-names-metadata", ".arrow")) {
+      File file = tempFile.getFile();
+      String[] columnNames = WriteUtils.getNonNestedColumns(false);
+      try (Table table0 = getExpectedFileTable(columnNames)) {
+        ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
+                .withColumnNames(columnNames)
+                .build();
+        try (TableWriter writer = Table.writeArrowIPCChunked(options, file.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+        // Reading from Arrow converts decimals to DECIMAL128
+        try (StreamedTableReader reader = Table.readArrowIPCChunked(file);
+             Table expected = castDecimal64To128(table0)) {
+          int count;
+          for (count = 0; ; count++) {
+            try (Table t = reader.getNextIfAvailable()) {
+              if (t == null) break;
               assertTablesAreEqual(expected, t);
-              count++;
             }
           }
+          assertEquals(1, count);
         }
-        assertEquals(1, count);
       }
-    } finally {
-      tempFile.delete();
     }
   }
 
@@ -9756,20 +10142,20 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testORCWriteToFileChunked() throws IOException {
-    File tempFile = File.createTempFile("test", ".orc");
-    String[] selectedColumns = WriteUtils.getAllColumns(false);
-    try (Table table0 = getExpectedFileTable(selectedColumns)) {
-      ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
-      WriteUtils.buildWriterOptions(builder, selectedColumns);
-      ORCWriterOptions opts = builder.build();
-      try (TableWriter writer = Table.writeORCChunked(opts, tempFile.getAbsoluteFile())) {
-        writer.write(table0);
+    try (TempFile tempFile = TempFile.create("test", ".orc")) {
+      File file = tempFile.getFile();
+      String[] selectedColumns = WriteUtils.getAllColumns(false);
+      try (Table table0 = getExpectedFileTable(selectedColumns)) {
+        ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
+        WriteUtils.buildWriterOptions(builder, selectedColumns);
+        ORCWriterOptions opts = builder.build();
+        try (TableWriter writer = Table.writeORCChunked(opts, file.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+        try (Table table1 = Table.readORC(file.getAbsoluteFile())) {
+          assertTablesAreEqual(table0, table1);
+        }
       }
-      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
-        assertTablesAreEqual(table0, table1);
-      }
-    } finally {
-      tempFile.delete();
     }
   }
 
@@ -9780,7 +10166,6 @@ public class TableTest extends CudfTestBase {
                     new ColumnWriterOptions("key0", false),
                     new ColumnWriterOptions("value0"),
                     true)).build();
-    File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
             Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
     List<HostColumnVector.StructData> list2 =
@@ -9790,82 +10175,84 @@ public class TableTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
             Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
                     new HostColumnVector.BasicType(true, DType.STRING)));
-    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
-            structType), list1, list2, list3);
-         Table t0 = new Table(listColumn)) {
-      try (TableWriter writer = Table.writeORCChunked(options, f)) {
-        writer.write(t0);
-      }
-      try (Table res = Table.readORC(f)) {
-        assertTablesAreEqual(t0, res);
+    try (TempFile tempFile = TempFile.create("test-map", ".orc")) {
+      File f = tempFile.getFile();
+      try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+              structType), list1, list2, list3);
+           Table t0 = new Table(listColumn)) {
+        try (TableWriter writer = Table.writeORCChunked(options, f)) {
+          writer.write(t0);
+        }
+        try (Table res = Table.readORC(f)) {
+          assertTablesAreEqual(t0, res);
+        }
       }
     }
   }
 
   @Test
   void testORCWriteToFileWithColNames() throws IOException {
-    File tempFile = File.createTempFile("test", ".orc");
-    String[] colNames = WriteUtils.getNonNestedColumns(false);
-    try (Table table0 = getExpectedFileTable(colNames)) {
-      ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
-      WriteUtils.buildWriterOptions(optBuilder, colNames);
-      ORCWriterOptions options = optBuilder.build();
-      try (TableWriter writer = Table.writeORCChunked(options, tempFile.getAbsoluteFile())) {
-        writer.write(table0);
+    try (TempFile tempFile = TempFile.create("test", ".orc")) {
+      File file = tempFile.getFile();
+      String[] colNames = WriteUtils.getNonNestedColumns(false);
+      try (Table table0 = getExpectedFileTable(colNames)) {
+        ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
+        WriteUtils.buildWriterOptions(optBuilder, colNames);
+        ORCWriterOptions options = optBuilder.build();
+        try (TableWriter writer = Table.writeORCChunked(options, file.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+        ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
+        try (Table table1 = Table.readORC(opts, file.getAbsoluteFile())) {
+          assertTablesAreEqual(table0, table1);
+        }
       }
-      ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
-      try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
-        assertTablesAreEqual(table0, table1);
-      }
-    } finally {
-      tempFile.delete();
     }
   }
 
   @Test
   void testORCReadAndWriteForDecimal128() throws IOException {
-    File tempFile = File.createTempFile("test", ".orc");
-    String[] colNames = new String[]{Columns.DECIMAL64.name,
-        Columns.DECIMAL128.name, Columns.STRUCT_DEC128.name, Columns.LIST_DEC128.name};
-    try (Table table0 = getExpectedFileTable(colNames)) {
-      ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
-      WriteUtils.buildWriterOptions(optBuilder, colNames);
-      ORCWriterOptions options = optBuilder.build();
-      try (TableWriter writer = Table.writeORCChunked(options, tempFile.getAbsoluteFile())) {
-        writer.write(table0);
+    try (TempFile tempFile = TempFile.create("test", ".orc")) {
+      File file = tempFile.getFile();
+      String[] colNames = new String[]{Columns.DECIMAL64.name,
+          Columns.DECIMAL128.name, Columns.STRUCT_DEC128.name, Columns.LIST_DEC128.name};
+      try (Table table0 = getExpectedFileTable(colNames)) {
+        ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
+        WriteUtils.buildWriterOptions(optBuilder, colNames);
+        ORCWriterOptions options = optBuilder.build();
+        try (TableWriter writer = Table.writeORCChunked(options, file.getAbsoluteFile())) {
+          writer.write(table0);
+        }
+        ORCOptions opts = ORCOptions.builder()
+            .includeColumn(colNames)
+            .decimal128Column(Columns.DECIMAL128.name,
+                String.format("%s.%s", Columns.STRUCT_DEC128.name, "ch_dec128"),
+                String.format("%s.1.%s", Columns.LIST_DEC128.name, "ch_dec128"))
+            .build();
+        try (Table table1 = Table.readORC(opts, file.getAbsoluteFile())) {
+          assertTablesAreEqual(table0, table1);
+        }
       }
-      ORCOptions opts = ORCOptions.builder()
-          .includeColumn(colNames)
-          .decimal128Column(Columns.DECIMAL128.name,
-              String.format("%s.%s", Columns.STRUCT_DEC128.name, "ch_dec128"),
-              String.format("%s.1.%s", Columns.LIST_DEC128.name, "ch_dec128"))
-          .build();
-      try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
-        assertTablesAreEqual(table0, table1);
-      }
-    } finally {
-      tempFile.delete();
     }
   }
 
   @Test
   void testORCWriteToFileUncompressed() throws IOException {
-    File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
-    try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
+    try (TempFile tempFileUncompressed = TempFile.create("test-uncompressed", ".orc");
+         Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
+      File file = tempFileUncompressed.getFile();
       String[] colNames = WriteUtils.getNonNestedColumns(false);
       ORCWriterOptions.Builder optsBuilder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(optsBuilder, colNames);
       optsBuilder.withCompressionType(CompressionType.NONE);
       ORCWriterOptions opts = optsBuilder.build();
       try (TableWriter writer =
-               Table.writeORCChunked(opts,tempFileUncompressed.getAbsoluteFile())) {
+               Table.writeORCChunked(opts, file.getAbsoluteFile())) {
         writer.write(table0);
       }
-      try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
+      try (Table table2 = Table.readORC(file.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
-    } finally {
-      tempFileUncompressed.delete();
     }
   }
 

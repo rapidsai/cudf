@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from libcpp.memory cimport unique_ptr
@@ -7,7 +7,9 @@ from libcpp.vector cimport vector
 from pylibcudf.libcudf cimport sorting as cpp_sorting
 from pylibcudf.libcudf.aggregation cimport rank_method
 from pylibcudf.libcudf.column.column cimport column
+from pylibcudf.libcudf.column.column_view cimport column_view
 from pylibcudf.libcudf.table.table cimport table
+from pylibcudf.libcudf.table.table_view cimport table_view
 from pylibcudf.libcudf.types cimport null_order, null_policy, order, size_type
 from rmm.pylibrmm.memory_resource cimport DeviceMemoryResource
 from rmm.pylibrmm.stream cimport Stream
@@ -15,6 +17,7 @@ from rmm.pylibrmm.stream cimport Stream
 from .column cimport Column
 from .table cimport Table
 from .utils cimport _get_stream, _get_memory_resource
+from cuda.bindings.cyruntime cimport cudaStream_t
 
 __all__ = [
     "is_sorted",
@@ -33,7 +36,7 @@ cpdef Column sorted_order(
     Table source_table,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Computes the row indices required to sort the table.
@@ -58,25 +61,27 @@ cpdef Column sorted_order(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_source_table = source_table.view()
     with nogil:
         c_result = cpp_sorting.sorted_order(
-            source_table.view(),
+            c_source_table,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column stable_sorted_order(
     Table source_table,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Computes the row indices required to sort the table,
@@ -102,18 +107,20 @@ cpdef Column stable_sorted_order(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_source_table = source_table.view()
     with nogil:
         c_result = cpp_sorting.stable_sorted_order(
-            source_table.view(),
+            c_source_table,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column rank(
@@ -123,7 +130,7 @@ cpdef Column rank(
     null_policy null_handling,
     null_order null_precedence,
     bool percentage,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Computes the rank of each element in the column.
@@ -152,25 +159,27 @@ cpdef Column rank(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_input_view = input_view.view()
     with nogil:
         c_result = cpp_sorting.rank(
-            input_view.view(),
+            c_input_view,
             method,
             column_order,
             null_handling,
             null_precedence,
             percentage,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef bool is_sorted(
-    Table tbl, list column_order, list null_precedence, Stream stream=None
+    Table tbl, list column_order, list null_precedence, object stream=None
 ):
     """Checks if the table is sorted.
 
@@ -194,14 +203,16 @@ cpdef bool is_sorted(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
+    cdef table_view c_tbl = tbl.view()
 
     with nogil:
         c_result = cpp_sorting.is_sorted(
-            tbl.view(),
+            c_tbl,
             c_orders,
             c_null_precedence,
-            stream.view()
+            _cs
         )
     return c_result
 
@@ -212,7 +223,7 @@ cpdef Table segmented_sort_by_key(
     Column segment_offsets,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Sorts the table by key, within segments.
@@ -241,20 +252,24 @@ cpdef Table segmented_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_values = values.view()
+    cdef table_view c_keys = keys.view()
+    cdef column_view c_segment_offsets = segment_offsets.view()
     with nogil:
         c_result = cpp_sorting.segmented_sort_by_key(
-            values.view(),
-            keys.view(),
-            segment_offsets.view(),
+            c_values,
+            c_keys,
+            c_segment_offsets,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table stable_segmented_sort_by_key(
@@ -263,7 +278,7 @@ cpdef Table stable_segmented_sort_by_key(
     Column segment_offsets,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Sorts the table by key preserving order of equal elements,
@@ -293,20 +308,24 @@ cpdef Table stable_segmented_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_values = values.view()
+    cdef table_view c_keys = keys.view()
+    cdef column_view c_segment_offsets = segment_offsets.view()
     with nogil:
         c_result = cpp_sorting.stable_segmented_sort_by_key(
-            values.view(),
-            keys.view(),
-            segment_offsets.view(),
+            c_values,
+            c_keys,
+            c_segment_offsets,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table sort_by_key(
@@ -314,7 +333,7 @@ cpdef Table sort_by_key(
     Table keys,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Sorts the table by key.
@@ -341,19 +360,22 @@ cpdef Table sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_values = values.view()
+    cdef table_view c_keys = keys.view()
     with nogil:
         c_result = cpp_sorting.sort_by_key(
-            values.view(),
-            keys.view(),
+            c_values,
+            c_keys,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table stable_sort_by_key(
@@ -361,7 +383,7 @@ cpdef Table stable_sort_by_key(
     Table keys,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Sorts the table by key preserving order of equal elements.
@@ -388,26 +410,29 @@ cpdef Table stable_sort_by_key(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_values = values.view()
+    cdef table_view c_keys = keys.view()
     with nogil:
         c_result = cpp_sorting.stable_sort_by_key(
-            values.view(),
-            keys.view(),
+            c_values,
+            c_keys,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table sort(
     Table source_table,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Sorts the table.
@@ -432,25 +457,27 @@ cpdef Table sort(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_source_table = source_table.view()
     with nogil:
         c_result = cpp_sorting.sort(
-            source_table.view(),
+            c_source_table,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Table stable_sort(
     Table source_table,
     list column_order,
     list null_precedence,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """Sorts the table preserving order of equal elements.
@@ -475,25 +502,27 @@ cpdef Table stable_sort(
     cdef vector[order] c_orders = column_order
     cdef vector[null_order] c_null_precedence = null_precedence
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef table_view c_source_table = source_table.view()
     with nogil:
         c_result = cpp_sorting.stable_sort(
-            source_table.view(),
+            c_source_table,
             c_orders,
             c_null_precedence,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Table.from_libcudf(move(c_result), stream, mr)
+    return Table.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column top_k(
     Column col,
     size_type k,
     order sort_order = order.DESCENDING,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -518,25 +547,27 @@ cpdef Column top_k(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_col = col.view()
     with nogil:
         c_result = cpp_sorting.top_k(
-            col.view(),
+            c_col,
             k,
             sort_order,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)
 
 
 cpdef Column top_k_order(
     Column col,
     size_type k,
     order sort_order = order.DESCENDING,
-    Stream stream=None,
+    object stream=None,
     DeviceMemoryResource mr=None,
 ):
     """
@@ -564,15 +595,17 @@ cpdef Column top_k_order(
     """
     cdef unique_ptr[column] c_result
 
-    stream = _get_stream(stream)
+    cdef Stream _stream = _get_stream(stream)
+    cdef cudaStream_t _cs = _stream.view().value()
     mr = _get_memory_resource(mr)
 
+    cdef column_view c_col = col.view()
     with nogil:
         c_result = cpp_sorting.top_k_order(
-            col.view(),
+            c_col,
             k,
             sort_order,
-            stream.view(),
+            _cs,
             mr.get_mr()
         )
-    return Column.from_libcudf(move(c_result), stream, mr)
+    return Column.from_libcudf(move(c_result), _stream, mr)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: Document BooleanFunction to remove noqa
 # ruff: noqa: D101
@@ -19,6 +19,7 @@ from cudf_polars.dsl.expressions.base import (
     ExecutionContext,
     Expr,
 )
+from cudf_polars.dsl.expressions.literal import LiteralColumn
 
 if TYPE_CHECKING:
     from typing import Self
@@ -33,6 +34,15 @@ if TYPE_CHECKING:
 __all__ = ["BooleanFunction"]
 
 
+def _nesting_level(dtype: pl.DataType) -> int:
+    level = 0
+    current = dtype
+    while isinstance(current, pl.List):
+        level += 1
+        current = cast("pl.DataType", current.inner)
+    return level
+
+
 class BooleanFunction(Expr):
     class Name(IntEnum):
         """Internal and picklable representation of polars' `BooleanFunction`."""
@@ -41,9 +51,11 @@ class BooleanFunction(Expr):
         AllHorizontal = auto()
         Any = auto()
         AnyHorizontal = auto()
+        HasNulls = auto()
         IsBetween = auto()
         IsClose = auto()
         IsDuplicated = auto()
+        IsEmpty = auto()
         IsFinite = auto()
         IsFirstDistinct = auto()
         IsIn = auto()
@@ -53,6 +65,7 @@ class BooleanFunction(Expr):
         IsNotNan = auto()
         IsNotNull = auto()
         IsNull = auto()
+        IsSorted = auto()
         IsUnique = auto()
         Not = auto()
 
@@ -88,14 +101,33 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsDuplicated,
             BooleanFunction.Name.IsFirstDistinct,
             BooleanFunction.Name.IsLastDistinct,
+            BooleanFunction.Name.IsSorted,
             BooleanFunction.Name.IsUnique,
         )
         if self.name in {
+            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsClose,
+            BooleanFunction.Name.IsEmpty,
         }:
             raise NotImplementedError(
                 f"Boolean function {self.name}"
             )  # pragma: no cover
+        if self.name is BooleanFunction.Name.IsIn and len(children) == 2:
+            # TODO: Polars should raise an error ahead of time
+            # for us for these kind of shape mismatches
+            needles, haystack = children
+            if (
+                isinstance(needles, LiteralColumn)
+                and isinstance(haystack, LiteralColumn)
+                and len(needles.value) != len(haystack.value)
+            ):
+                needles_level = _nesting_level(needles.dtype.polars_type)
+                haystack_level = _nesting_level(haystack.dtype.polars_type)
+
+                if needles_level != haystack_level:
+                    raise NotImplementedError(
+                        f"arguments for `is_in` have different lengths ({len(needles.value)} != {len(haystack.value)})"
+                    )
 
     @staticmethod
     def _distinct(
@@ -357,7 +389,8 @@ class BooleanFunction(Expr):
                     haystack.obj.children()[1],
                     dtype=DataType(
                         cast(
-                            pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner
+                            "pl.DataType",
+                            cast("pl.List", haystack.dtype.polars_type).inner,
                         )
                     ),
                 ).astype(needles.dtype, stream=df.stream)
@@ -374,6 +407,26 @@ class BooleanFunction(Expr):
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(py_val=False, stream=df.stream),
                     needles.size,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is BooleanFunction.Name.IsSorted:
+            (column,) = columns
+            (descending, nulls_last) = self.options
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+            null_order = (
+                plc.types.NullOrder.AFTER if nulls_last else plc.types.NullOrder.BEFORE
+            )
+            bool_result: bool = column.check_sorted(
+                order=order, null_order=null_order, stream=df.stream
+            )
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(py_val=bool_result, stream=df.stream),
+                    1,
                     stream=df.stream,
                 ),
                 dtype=self.dtype,

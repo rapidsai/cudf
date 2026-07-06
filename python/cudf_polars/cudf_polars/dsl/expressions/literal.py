@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # TODO: remove need for this
 # ruff: noqa: D101
@@ -57,8 +57,14 @@ class Literal(Expr):
             "Not expecting to require agg request of literal"
         )  # pragma: no cover
 
+    def get_hashable(self) -> Hashable:
+        """Get the hash of the literal."""
+        return (type(self), self.dtype.plc_type, id(self.value))
+
     def astype(self, dtype: DataType) -> Literal:
         """Cast self to dtype."""
+        if dtype.id() == plc.TypeId.STRUCT:
+            raise NotImplementedError("Struct literals are not supported")
         if self.value is None:
             return Literal(dtype, self.value)
         else:
@@ -71,13 +77,20 @@ class Literal(Expr):
 
 
 class LiteralColumn(Expr):
-    __slots__ = ("value",)
-    _non_child = ("dtype", "value")
+    __slots__ = ("is_scalar", "value")
+    _non_child = ("dtype", "value", "is_scalar")
     value: pl.Series
+    is_scalar: bool
 
-    def __init__(self, dtype: DataType, value: pl.Series) -> None:
+    def __init__(
+        self, dtype: DataType, value: pl.Series, *, is_scalar: bool = False
+    ) -> None:
+        # is_scalar records whether this originated from a scalar literal
+        # rather than a column. In a groupby aggregation a column literal is
+        # imploded into a list per group, while a scalar is broadcast.
         self.dtype = dtype
         self.value = value
+        self.is_scalar = is_scalar
         self.children = ()
         self.is_pointwise = True
 

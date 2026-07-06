@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Conversion of expression nodes to libcudf AST nodes."""
@@ -8,7 +8,7 @@ from __future__ import annotations
 from functools import partial, reduce, singledispatch
 from typing import TYPE_CHECKING, TypeAlias, TypedDict, cast
 
-import polars as pl
+import polars as pl  # noqa: TC002 (used at runtime for pl.datatypes, pl.Series etc.)
 
 import pylibcudf as plc
 from pylibcudf import expressions as plc_expr
@@ -76,23 +76,7 @@ UOP_TO_ASTOP = {
     plc.unary.UnaryOperator.NOT: plc_expr.ASTOperator.NOT,
 }
 
-SUPPORTED_STATISTICS_BINOPS = {
-    plc.binaryop.BinaryOperator.EQUAL,
-    plc.binaryop.BinaryOperator.NOT_EQUAL,
-    plc.binaryop.BinaryOperator.LESS,
-    plc.binaryop.BinaryOperator.LESS_EQUAL,
-    plc.binaryop.BinaryOperator.GREATER,
-    plc.binaryop.BinaryOperator.GREATER_EQUAL,
-}
-
-REVERSED_COMPARISON = {
-    plc.binaryop.BinaryOperator.EQUAL: plc.binaryop.BinaryOperator.EQUAL,
-    plc.binaryop.BinaryOperator.NOT_EQUAL: plc.binaryop.BinaryOperator.NOT_EQUAL,
-    plc.binaryop.BinaryOperator.LESS: plc.binaryop.BinaryOperator.GREATER,
-    plc.binaryop.BinaryOperator.LESS_EQUAL: plc.binaryop.BinaryOperator.GREATER_EQUAL,
-    plc.binaryop.BinaryOperator.GREATER: plc.binaryop.BinaryOperator.LESS,
-    plc.binaryop.BinaryOperator.GREATER_EQUAL: plc.binaryop.BinaryOperator.LESS_EQUAL,
-}
+_DECIMAL_IDS = {plc.TypeId.DECIMAL32, plc.TypeId.DECIMAL64, plc.TypeId.DECIMAL128}
 
 
 class ASTState(TypedDict):
@@ -194,59 +178,65 @@ def _(node: expr.BinOp, self: Transformer) -> plc_expr.Expression:
                 )
             ),
         )
-    if self.state["for_parquet"]:
-        op1_col, op2_col = (isinstance(op, expr.Col) for op in node.children)
-        if op1_col ^ op2_col:
-            op: plc.binaryop.BinaryOperator = node.op
-            if op not in SUPPORTED_STATISTICS_BINOPS:
-                raise NotImplementedError(
-                    f"Parquet filter binop with column doesn't support {node.op!r}"
-                )
-            op1, op2 = node.children
-            if op2_col:
-                (op1, op2) = (op2, op1)
-                op = REVERSED_COMPARISON[op]
-            if not isinstance(op2, expr.Literal):
-                raise NotImplementedError(
-                    "Parquet filter binops must have form 'col binop literal'"
-                )
-            return plc_expr.Operation(BINOP_TO_ASTOP[op], self(op1), self(op2))
-        elif op1_col and op2_col:
+    c1, c2 = node.children
+    if c1.dtype != c2.dtype:
+        if isinstance(c1, expr.Literal):  # pragma: no cover
+            c1 = c1.astype(c2.dtype)
+        elif isinstance(c2, expr.Literal):
+            c2 = c2.astype(c1.dtype)
+        elif (
+            isinstance(c1, (expr.Col, expr.ColRef)) and c1.dtype.id() in _DECIMAL_IDS
+        ) or (
+            isinstance(c2, (expr.Col, expr.ColRef)) and c2.dtype.id() in _DECIMAL_IDS
+        ):
+            # Allow mixed-precision decimal, or mixed decimal-float operations through
+            # unchanged.
+            pass
+        else:
             raise NotImplementedError(
-                "Parquet filter binops must have one column reference not two"
-            )
-    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, node.children))
+                "BinOp with mismatching dtypes"
+            )  # pragma: no cover
+    children = (c1, c2)
+    return plc_expr.Operation(BINOP_TO_ASTOP[node.op], *map(self, children))
 
 
 @_to_ast.register
 def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
     if node.name is expr.BooleanFunction.Name.IsIn:
         needles, haystack = node.children
-        if isinstance(haystack, expr.LiteralColumn) and len(haystack.value) < 16:
-            # 16 is an arbitrary limit
-            needle_ref = self(needles)
+        if isinstance(haystack, expr.LiteralColumn):
             if haystack.dtype.id() == plc.TypeId.LIST:
-                # Because we originally translated pl_expr.Literal with a list scalar
-                # to a expr.LiteralColumn, so the actual type is in the inner type
+                # A list literal is stored as a single-row list column, so the
+                # search values are the elements of that inner list, at the
+                # list's inner dtype.
                 # .inner returns DataTypeClass | DataType, need to cast to DataType
+                needle_values = haystack.value.explode()
                 plc_dtype = DataType(
-                    cast(pl.DataType, cast(pl.List, haystack.dtype.polars_type).inner)
+                    cast(
+                        "pl.DataType", cast("pl.List", haystack.dtype.polars_type).inner
+                    )
                 ).plc_type
-            else:
-                plc_dtype = haystack.dtype.plc_type  # pragma: no cover
-            values = (
-                plc_expr.Literal(
-                    plc.Scalar.from_py(val, plc_dtype, stream=self.state["stream"])
+            else:  # pragma: no cover
+                needle_values = haystack.value
+                plc_dtype = haystack.dtype.plc_type
+            if len(needle_values) < 16:
+                # 16 is an arbitrary limit
+                needle_ref = self(needles)
+                values = (
+                    plc_expr.Literal(
+                        plc.Scalar.from_py(val, plc_dtype, stream=self.state["stream"])
+                    )
+                    for val in needle_values
                 )
-                for val in haystack.value
-            )
-            return reduce(
-                partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
-                (
-                    plc_expr.Operation(plc_expr.ASTOperator.EQUAL, needle_ref, value)
-                    for value in values
-                ),
-            )
+                return reduce(
+                    partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_OR),
+                    (
+                        plc_expr.Operation(
+                            plc_expr.ASTOperator.EQUAL, needle_ref, value
+                        )
+                        for value in values
+                    ),
+                )
     if self.state["for_parquet"] and isinstance(node.children[0], expr.Col):
         raise NotImplementedError(
             f"Parquet filters don't support {node.name} on columns"
@@ -289,6 +279,17 @@ def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | 
     -------
     pylibcudf Expression if conversion is possible, otherwise None.
     """
+    # Converts a boolean column reference (e.g., filter(pl.col("foo")))
+    # to an explicit comparison for parquet filters (e.g., filter(pl.col("foo") == True)).
+    # TODO: Have polars pass us the comparison instead
+    if isinstance(node, expr.Col) and node.dtype.id() == plc.TypeId.BOOL8:
+        node = expr.BinOp(
+            node.dtype,
+            plc.binaryop.BinaryOperator.EQUAL,
+            node,
+            expr.Literal(node.dtype, value=True),
+        )
+
     mapper: Transformer = CachingVisitor(
         _to_ast, state={"for_parquet": True, "stream": stream}
     )

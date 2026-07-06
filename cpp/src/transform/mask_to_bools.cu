@@ -15,8 +15,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
+#include <cuda/iterator>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -37,9 +36,9 @@ std::unique_ptr<column> mask_to_bools(bitmask_type const* bitmask,
   if (length > 0) {
     auto mutable_view = out_col->mutable_view();
 
-    thrust::transform(rmm::exec_policy_nosync(stream),
-                      thrust::make_counting_iterator<cudf::size_type>(begin_bit),
-                      thrust::make_counting_iterator<cudf::size_type>(end_bit),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                      cuda::counting_iterator<cudf::size_type>{begin_bit},
+                      cuda::counting_iterator<cudf::size_type>{end_bit},
                       mutable_view.begin<bool>(),
                       [bitmask] __device__(auto index) { return bit_is_set(bitmask, index); });
   }

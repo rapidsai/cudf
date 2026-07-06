@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,8 @@
 #include <cudf/strings/strings_column_view.hpp>
 
 #include <nvtext/minhash.hpp>
+
+#include <cuda/iterator>
 
 #include <vector>
 
@@ -33,7 +35,7 @@ TEST_F(MinHashTest, Permuted)
 
   auto view = cudf::strings_column_view(input);
 
-  auto first   = thrust::counting_iterator<uint32_t>(10);
+  auto first   = cuda::counting_iterator<uint32_t>{10};
   auto params  = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
   auto results = nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
 
@@ -83,7 +85,7 @@ TEST_F(MinHashTest, PermutedWide)
   auto input = cudf::test::strings_column_wrapper({small, wide});
   auto view  = cudf::strings_column_view(input);
 
-  auto first   = thrust::counting_iterator<uint32_t>(20);
+  auto first   = cuda::counting_iterator<uint32_t>{20};
   auto params  = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
   auto results = nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
 
@@ -117,7 +119,7 @@ TEST_F(MinHashTest, PermutedManyParameters)
   auto input = cudf::test::strings_column_wrapper({small, wide});
   auto view  = cudf::strings_column_view(input);
 
-  auto first = thrust::counting_iterator<uint32_t>(20);
+  auto first = cuda::counting_iterator<uint32_t>{20};
   // more than params_per_thread
   auto params  = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 31);
   auto results = nvtext::minhash(view, 0, cudf::column_view(params), cudf::column_view(params), 4);
@@ -211,7 +213,7 @@ TEST_F(MinHashTest, ErrorsTest)
   input = cudf::test::strings_column_wrapper(h_input.begin(), h_input.end());
   view  = cudf::strings_column_view(input);
 
-  auto const zeroes = thrust::constant_iterator<uint32_t>(0);
+  auto const zeroes = cuda::constant_iterator<uint32_t>(0);
   auto params       = cudf::test::fixed_width_column_wrapper<uint32_t>(zeroes, zeroes + 50000);
   auto pview        = cudf::column_view(params);
   EXPECT_THROW(nvtext::minhash(view, 0, pview, pview, 4), std::overflow_error);
@@ -220,8 +222,8 @@ TEST_F(MinHashTest, ErrorsTest)
   EXPECT_THROW(nvtext::minhash64(view, 0, pview64, pview64, 4), std::overflow_error);
 
   auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>(
-    thrust::counting_iterator<cudf::size_type>(0),
-    thrust::counting_iterator<cudf::size_type>(h_input.size() + 1));
+    cuda::counting_iterator<cudf::size_type>{0},
+    cuda::counting_iterator{static_cast<cudf::size_type>(h_input.size() + 1)});
   auto input_ngrams =
     cudf::make_lists_column(h_input.size(), offsets.release(), input.release(), 0, {});
   lview = cudf::lists_column_view(input_ngrams->view());
@@ -239,7 +241,7 @@ TEST_F(MinHashTest, Ngrams)
 
   auto view = cudf::lists_column_view(input);
 
-  auto first  = thrust::counting_iterator<uint32_t>(10);
+  auto first  = cuda::counting_iterator<uint32_t>{10};
   auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
   auto results =
     nvtext::minhash_ngrams(view, 4, 0, cudf::column_view(params), cudf::column_view(params));
@@ -277,7 +279,7 @@ TEST_F(MinHashTest, NgramsWide)
 
   auto view = cudf::lists_column_view(input->view());
 
-  auto first  = thrust::counting_iterator<uint32_t>(10);
+  auto first  = cuda::counting_iterator<uint32_t>{10};
   auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
   auto results =
     nvtext::minhash_ngrams(view, 4, 0, cudf::column_view(params), cudf::column_view(params));
@@ -314,7 +316,7 @@ TEST_F(MinHashTest, NgramsSliced)
           LCWS{"ignored", "row"}});
 
   auto view  = cudf::lists_column_view(cudf::slice(input, {1, 4}).front());
-  auto first = thrust::counting_iterator<uint32_t>(10);
+  auto first = cuda::counting_iterator<uint32_t>{10};
 
   auto params = cudf::test::fixed_width_column_wrapper<uint32_t>(first, first + 3);
   auto results =

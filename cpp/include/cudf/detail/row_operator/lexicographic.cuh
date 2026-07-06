@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -8,7 +8,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/row_operator/common_utils.cuh>
-#include <cudf/detail/utilities/algorithm.cuh>
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/detail/dremel.hpp>
@@ -422,8 +421,8 @@ class device_row_comparator {
                                  cuda::std::numeric_limits<int>::max());
         }
 
-        lcol = detail::structs_column_device_view(lcol).get_sliced_child(0);
-        rcol = detail::structs_column_device_view(rcol).get_sliced_child(0);
+        lcol = structs_column_device_view(lcol).get_sliced_child(0);
+        rcol = structs_column_device_view(rcol).get_sliced_child(0);
         ++depth;
       }
 
@@ -468,8 +467,8 @@ class device_row_comparator {
       column_device_view rcol = _rhs.slice(rhs_element_index, 1);
 
       while (lcol.type().id() == type_id::LIST) {
-        lcol = detail::lists_column_device_view(lcol).get_sliced_child();
-        rcol = detail::lists_column_device_view(rcol).get_sliced_child();
+        lcol = lists_column_device_view(lcol).get_sliced_child();
+        rcol = lists_column_device_view(rcol).get_sliced_child();
       }
 
       auto const l_offsets = _l_dremel_device_view->offsets;
@@ -589,15 +588,15 @@ class device_row_comparator {
   }
 
  private:
-  table_device_view const _lhs;
-  table_device_view const _rhs;
-  device_span<detail::dremel_device_view const> const _l_dremel;
-  device_span<detail::dremel_device_view const> const _r_dremel;
-  Nullate const _check_nulls;
-  cuda::std::optional<device_span<int const>> const _depth;
-  cuda::std::optional<device_span<order const>> const _column_order;
-  cuda::std::optional<device_span<null_order const>> const _null_precedence;
-  PhysicalElementComparator const _comparator;
+  table_device_view _lhs;
+  table_device_view _rhs;
+  device_span<detail::dremel_device_view const> _l_dremel;
+  device_span<detail::dremel_device_view const> _r_dremel;
+  Nullate _check_nulls;
+  cuda::std::optional<device_span<int const>> _depth;
+  cuda::std::optional<device_span<order const>> _column_order;
+  cuda::std::optional<device_span<null_order const>> _null_precedence;
+  PhysicalElementComparator _comparator;
 };
 
 /**
@@ -625,7 +624,7 @@ struct weak_ordering_comparator_impl {
     cudf::detail::weak_ordering const result = comparator(lhs_index, rhs_index);
     return ((result == values) || ...);
   }
-  Comparator const comparator;
+  Comparator comparator;
 };
 
 /**
@@ -1038,7 +1037,7 @@ struct strong_index_comparator_adapter {
     return cudf::detail::weak_ordering::EQUIVALENT;
   }
 
-  Comparator const comparator;
+  Comparator comparator;
 };
 // @endcond
 

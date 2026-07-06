@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <cuda/functional>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
 
 #include <future>
@@ -57,6 +56,7 @@ void generate_depth_remappings(
  * @param column_chunk_offsets File offset for all chunks
  * @param chunk_source_map Association between each column chunk and its source
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned device buffers
  *
  * @return A future object for reading synchronization
  */
@@ -68,7 +68,8 @@ void generate_depth_remappings(
   size_t end_chunk,
   std::vector<size_t> const& column_chunk_offsets,
   std::vector<size_type> const& chunk_source_map,
-  rmm::cuda_stream_view stream);
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Return the number of total pages from the given column chunks.
@@ -107,7 +108,7 @@ std::string encoding_to_string(Encoding encoding);
 /**
  * @brief Helper function to convert an encoding bitmask to a readable string
  *
- * @param bitmask Bitmask of found unsupported encodings
+ * @param encoding_bitmask Bitmask of found unsupported encodings
  * @returns Human readable string with unsupported encodings
  */
 [[nodiscard]] std::string encoding_bitmask_to_str(uint32_t encoding_bitmask);
@@ -371,7 +372,7 @@ struct chunk_row_output_iter {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  CUDF_HOST_DEVICE constexpr inline chunk_row_output_iter operator+(int i) { return {p + i}; }
+  CUDF_HOST_DEVICE constexpr inline chunk_row_output_iter operator+(int i) const { return {p + i}; }
 
   CUDF_HOST_DEVICE constexpr inline chunk_row_output_iter& operator++()
   {
@@ -399,7 +400,7 @@ struct start_offset_output_iterator {
   using reference         = size_type&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  constexpr inline void operator=(start_offset_output_iterator const& other)
+  CUDF_HOST_DEVICE constexpr inline void operator=(start_offset_output_iterator const& other)
   {
     pages      = other.pages;
     cur_index  = other.cur_index;
@@ -408,12 +409,12 @@ struct start_offset_output_iterator {
     num_pages  = other.num_pages;
   }
 
-  constexpr inline start_offset_output_iterator operator+(size_t i)
+  CUDF_HOST_DEVICE constexpr inline start_offset_output_iterator operator+(size_t i) const
   {
     return start_offset_output_iterator{pages, cur_index + i, input_cols, max_depth, num_pages};
   }
 
-  constexpr inline start_offset_output_iterator& operator++()
+  CUDF_HOST_DEVICE constexpr inline start_offset_output_iterator& operator++()
   {
     cur_index++;
     return *this;
@@ -466,7 +467,10 @@ struct page_offset_output_iter {
   using reference         = size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  CUDF_HOST_DEVICE constexpr inline page_offset_output_iter operator+(int i) { return {p + i}; }
+  CUDF_HOST_DEVICE constexpr inline page_offset_output_iter operator+(int i) const
+  {
+    return {p + i};
+  }
 
   CUDF_HOST_DEVICE constexpr inline page_offset_output_iter& operator++()
   {

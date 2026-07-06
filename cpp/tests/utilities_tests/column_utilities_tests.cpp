@@ -1,11 +1,12 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/random.hpp>
 #include <cudf_test/testing_main.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -13,7 +14,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
 
-#include <thrust/iterator/constant_iterator.h>
+#include <cuda/iterator>
 #include <thrust/iterator/transform_iterator.h>
 
 template <typename T>
@@ -105,7 +106,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
   auto sequence = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return cudf::test::make_type_param_scalar<TypeParam>(i); });
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   auto size = this->size();
 
@@ -133,7 +134,7 @@ TEST_F(ColumnUtilitiesEquivalenceTest, DoubleTest)
 
 TEST_F(ColumnUtilitiesEquivalenceTest, NullabilityTest)
 {
-  auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto all_valid = cudf::test::iterators::no_nulls();
   cudf::test::fixed_width_column_wrapper<double> col1{1, 2, 3};
   cudf::test::fixed_width_column_wrapper<double> col2({1, 2, 3}, all_valid);
 
@@ -220,7 +221,7 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 {
   // list<int>, nullable vs. non-nullable
   {
-    auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto all_valid = cudf::test::iterators::no_nulls();
     cudf::test::lists_column_wrapper<int> a{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}};
     cudf::test::lists_column_wrapper<int> b{{{1, 2, 3}, {5, 6}, {8, 9}, {10}, {14, 15}}, all_valid};
 
@@ -237,7 +238,7 @@ TEST_F(ColumnUtilitiesListsTest, Equivalence)
 
   // list<list<int>>, nullable vs. non-nullable
   {
-    auto all_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+    auto all_valid = cudf::test::iterators::no_nulls();
     cudf::test::lists_column_wrapper<int> a{{{1, 2, 3}, {5, 6}}, {{8, 9}, {10}}, {{14, 15}}};
     cudf::test::lists_column_wrapper<int> b{{{{1, 2, 3}, {5, 6}}, {{8, 9}, {10}}, {{14, 15}}},
                                             all_valid};
@@ -378,7 +379,7 @@ TEST_F(ColumnUtilitiesStructsTest, Properties)
   cudf::test::structs_column_wrapper s0_scol2({s0_sscol0, s0_sscol1, s0_sscol2});
   cudf::test::structs_column_wrapper s_col0({s0_scol0, s0_scol1, s0_scol2});
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   cudf::test::strings_column_wrapper s1_scol0{"mno", "jkl", "ghi", "def", "abc"};
   cudf::test::fixed_width_column_wrapper<float> s1_scol1{5, 4, 3, 2, 1};
@@ -408,7 +409,7 @@ TEST_F(ColumnUtilitiesStructsTest, Values)
   cudf::test::structs_column_wrapper s0_scol2({s0_sscol0, s0_sscol1, s0_sscol2});
   cudf::test::structs_column_wrapper s_col0({s0_scol0, s0_scol1, s0_scol2});
 
-  auto all_valid = thrust::make_constant_iterator<bool>(true);
+  auto all_valid = cuda::make_constant_iterator<bool>(true);
 
   cudf::test::strings_column_wrapper s1_scol0{"mno", "jkl", "ghi", "def", "abc"};
   cudf::test::fixed_width_column_wrapper<float> s1_scol1{5, 4, 3, 2, 1};

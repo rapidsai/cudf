@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """A dataframe, with some properties."""
@@ -14,6 +14,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column, DataType
 from cudf_polars.utils import conversion
+from cudf_polars.utils.versions import POLARS_VERSION_LT_138
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence, Set
@@ -41,6 +42,11 @@ def _create_polars_column_metadata(
             _create_polars_column_metadata(field.name, field.dtype)
             for field in dtype.fields
         ]
+    elif isinstance(dtype, pl.List):
+        children_meta = [
+            plc.interop.ColumnMetadata(name="offsets"),
+            _create_polars_column_metadata("element", dtype.inner),
+        ]
     elif isinstance(dtype, pl.Datetime):
         timezone = dtype.time_zone or timezone
     elif isinstance(dtype, pl.Decimal):
@@ -67,7 +73,7 @@ class _ObjectWithArrowMetadata:
         self.stream = stream
 
     def __arrow_c_array__(
-        self, requested_schema: None = None
+        self, requested_schema: object | None = None
     ) -> tuple[CapsuleType, CapsuleType]:
         return self.obj._to_schema(self.metadata), self.obj._to_host_array(
             stream=self.stream
@@ -87,23 +93,36 @@ class DataFrame:
     table: plc.Table
     columns: list[NamedColumn]
     stream: Stream
+    _num_rows_override: int | None
 
-    def __init__(self, columns: Iterable[Column], stream: Stream) -> None:
+    def __init__(
+        self, columns: Iterable[Column], stream: Stream, num_rows: int | None = None
+    ) -> None:
         columns = list(columns)
         if any(c.name is None for c in columns):
             raise ValueError("All columns must have a name")
-        self.columns = [cast(NamedColumn, c) for c in columns]
+        self.columns = [cast("NamedColumn", c) for c in columns]
         self.dtypes = [c.dtype for c in self.columns]
         self.column_map = {c.name: c for c in self.columns}
         self.table = plc.Table([c.obj for c in self.columns])
         self.stream = stream
+        self._num_rows_override = num_rows
 
     def copy(self) -> Self:
         """Return a shallow copy of self."""
-        return type(self)((c.copy() for c in self.columns), stream=self.stream)
+        return type(self)(
+            (c.copy() for c in self.columns),
+            stream=self.stream,
+            num_rows=self._num_rows_override,
+        )
 
     def to_polars(self) -> pl.DataFrame:
         """Convert to a polars DataFrame."""
+        if self._num_rows_override is not None and len(self.column_map) == 0:
+            if POLARS_VERSION_LT_138:  # pragma: no cover
+                return pl.DataFrame()
+            return pl.DataFrame(height=self._num_rows_override)
+
         # If the arrow table has empty names, from_arrow produces
         # column_$i. But here we know there is only one such column
         # (by construction) and it should have an empty name.
@@ -144,7 +163,9 @@ class DataFrame:
     @cached_property
     def num_rows(self) -> int:
         """Number of rows."""
-        return self.table.num_rows() if self.column_map else 0
+        if self._num_rows_override is not None:
+            return self._num_rows_override
+        return self.table.num_rows()
 
     @classmethod
     def from_polars(cls, df: pl.DataFrame, stream: Stream) -> Self:
@@ -183,6 +204,7 @@ class DataFrame:
         names: Sequence[str],
         dtypes: Sequence[DataType],
         stream: Stream,
+        num_rows: int | None = None,
     ) -> Self:
         """
         Create from a pylibcudf table.
@@ -199,6 +221,10 @@ class DataFrame:
             CUDA stream used for device memory operations and kernel launches
             on this dataframe. The caller is responsible for ensuring that
             the data in ``table`` is valid on ``stream``.
+        num_rows
+            Optional row count override for zero-width tables. Used to
+            preserve row count when zero-width tables lose their row count
+            during conversion. See https://github.com/rapidsai/cudf/issues/21428
 
         Returns
         -------
@@ -218,6 +244,7 @@ class DataFrame:
                 for c, name, dtype in zip(table.columns(), names, dtypes, strict=True)
             ),
             stream=stream,
+            num_rows=num_rows,
         )
 
     @classmethod
@@ -272,7 +299,7 @@ class DataFrame:
 
         To enable dask support, dask serializers must be registered
 
-            >>> from cudf_polars.experimental.dask_serialize import register
+            >>> from cudf_polars.streaming.dask_serialize import register
             >>> register()
 
         Parameters

@@ -1,10 +1,11 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "page_index_filter_utils.hpp"
 
+#include <cudf/detail/labeling/label_segments.cuh>
 #include <cudf/detail/utilities/host_vector.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -12,7 +13,6 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
 
 #include <thrust/gather.h>
 
@@ -35,13 +35,13 @@ size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_
   return std::distance(row_group.columns.begin(), colchunk_iter);
 }
 
-bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
-                            cudf::host_span<std::vector<size_type> const> row_group_indices)
+bool compute_has_page_index(std::span<metadata_base const> file_metadatas,
+                            std::span<std::vector<size_type> const> row_group_indices)
 {
   // For all parquet data sources
   return std::all_of(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
     [&](auto const src_index) {
       // For all row groups in this parquet data source
       auto const& rg_indices = row_group_indices[src_index];
@@ -55,25 +55,20 @@ bool compute_has_page_index(cudf::host_span<metadata_base const> file_metadatas,
     });
 }
 
-std::tuple<cudf::detail::host_vector<size_type>,
-           cudf::detail::host_vector<size_type>,
-           cudf::detail::host_vector<size_type>>
-compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_file_metadata,
-                                    cudf::host_span<std::vector<size_type> const> row_group_indices,
-                                    size_type schema_idx,
-                                    rmm::cuda_stream_view stream)
+std::pair<cudf::detail::host_vector<size_type>, cudf::detail::host_vector<size_type>>
+compute_page_row_offsets_and_colchunk_page_offsets(
+  std::span<metadata_base const> per_file_metadata,
+  std::span<std::vector<size_type> const> row_group_indices,
+  size_type schema_idx,
+  rmm::cuda_stream_view stream)
 {
   // Compute total number of row groups
   auto const total_row_groups =
     std::accumulate(row_group_indices.begin(),
                     row_group_indices.end(),
-                    size_t{0},
+                    std::size_t{0},
                     [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
-  // Vector to store how many rows are present in each page - set initial capacity to two data pages
-  // per row group
-  auto page_row_counts =
-    cudf::detail::make_empty_host_vector<cudf::size_type>(2 * total_row_groups, stream);
   // Vector to store the cumulative number of rows in each page - - set initial capacity to two data
   // pages per row group
   auto page_row_offsets =
@@ -87,8 +82,8 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 
   // For all data sources
   std::for_each(
-    thrust::counting_iterator<size_t>(0),
-    thrust::counting_iterator(row_group_indices.size()),
+    cuda::counting_iterator<std::size_t>{0},
+    cuda::counting_iterator{row_group_indices.size()},
     [&](auto src_idx) {
       // For all column chunks in this data source
       auto const& rg_indices = row_group_indices[src_idx];
@@ -101,7 +96,7 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
         }
         auto const& colchunk_iter = row_group.columns.begin() + colchunk_iter_offset.value();
 
-        // Compute page row counts and offsets if this column chunk has column and offset indexes
+        // Compute page row offsets if this column chunk has column and offset indexes
         if (colchunk_iter->offset_index.has_value()) {
           // Get the offset index of the column chunk
           auto const& offset_index       = colchunk_iter->offset_index.value();
@@ -109,10 +104,10 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
 
           col_chunk_page_offsets.push_back(col_chunk_page_offsets.back() + row_group_num_pages);
 
-          // For all pages in this column chunk, update page row counts and offsets.
+          // For all pages in this column chunk, update page row offsets.
           std::for_each(
-            thrust::counting_iterator<size_t>(0),
-            thrust::counting_iterator(row_group_num_pages),
+            cuda::counting_iterator<std::size_t>{0},
+            cuda::counting_iterator{row_group_num_pages},
             [&](auto const page_idx) {
               int64_t const first_row_idx = offset_index.page_locations[page_idx].first_row_index;
               // For the last page, this is simply the total number of rows in the column chunk
@@ -121,36 +116,34 @@ compute_page_row_counts_and_offsets(cudf::host_span<metadata_base const> per_fil
                   ? offset_index.page_locations[page_idx + 1].first_row_index
                   : row_group.num_rows;
 
-              // Update the page row counts and offsets
-              page_row_counts.push_back(last_row_idx - first_row_idx);
-              page_row_offsets.push_back(page_row_offsets.back() + page_row_counts.back());
+              // Update the page row offsets.
+              page_row_offsets.push_back(page_row_offsets.back() + last_row_idx - first_row_idx);
             });
         }
       });
     });
 
-  return {
-    std::move(page_row_counts), std::move(page_row_offsets), std::move(col_chunk_page_offsets)};
+  return {std::move(page_row_offsets), std::move(col_chunk_page_offsets)};
 }
 
 std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
   cudf::host_span<metadata_base const> per_file_metadata,
-  cudf::host_span<std::vector<size_type> const> row_group_indices,
+  std::span<std::vector<size_type> const> row_group_indices,
   cudf::size_type schema_idx)
 {
   // Compute total number of row groups
   auto const total_row_groups =
     std::accumulate(row_group_indices.begin(),
                     row_group_indices.end(),
-                    size_t{0},
+                    std::size_t{0},
                     [](auto sum, auto const& rg_indices) { return sum + rg_indices.size(); });
 
   std::vector<size_type> page_row_offsets;
   page_row_offsets.push_back(0);
   size_type max_page_size = 0;
 
-  std::for_each(thrust::counting_iterator<size_t>(0),
-                thrust::counting_iterator(row_group_indices.size()),
+  std::for_each(cuda::counting_iterator<std::size_t>{0},
+                cuda::counting_iterator{row_group_indices.size()},
                 [&](auto const src_idx) {
                   // For all row groups in this source
                   auto const& rg_indices = row_group_indices[src_idx];
@@ -166,8 +159,8 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
                       row_group.columns.begin() + colchunk_iter_offset.value();
                     auto const& offset_index       = colchunk_iter->offset_index.value();
                     auto const row_group_num_pages = offset_index.page_locations.size();
-                    std::for_each(thrust::counting_iterator<size_t>(0),
-                                  thrust::counting_iterator(row_group_num_pages),
+                    std::for_each(cuda::counting_iterator<std::size_t>{0},
+                                  cuda::counting_iterator{row_group_num_pages},
                                   [&](auto const page_idx) {
                                     int64_t const first_row_idx =
                                       offset_index.page_locations[page_idx].first_row_index;
@@ -186,37 +179,17 @@ std::pair<std::vector<size_type>, size_type> compute_page_row_offsets(
 }
 
 rmm::device_uvector<size_type> compute_page_indices_async(
-  cudf::host_span<cudf::size_type const> page_row_counts,
   cudf::host_span<cudf::size_type const> page_row_offsets,
   cudf::size_type total_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  // Copy page-level row counts and offsets to device
-  auto row_counts = cudf::detail::make_device_uvector_async(
-    page_row_counts, stream, cudf::get_current_device_resource_ref());
   auto row_offsets = cudf::detail::make_device_uvector_async(
     page_row_offsets, stream, cudf::get_current_device_resource_ref());
 
-  // Make a zeroed device vector to store page indices of each row
-  auto page_indices =
-    cudf::detail::make_zeroed_device_uvector_async<cudf::size_type>(total_rows, stream, mr);
-
-  // Scatter page indices across the their first row's index
-  thrust::scatter_if(rmm::exec_policy_nosync(stream),
-                     thrust::counting_iterator<size_type>(0),
-                     thrust::counting_iterator<size_type>(row_counts.size()),
-                     row_offsets.begin(),
-                     row_counts.begin(),
-                     page_indices.begin());
-
-  // Inclusive scan with maximum to replace zeros with the (increasing) page index it belongs to.
-  // Page indices are scattered at their first row's index.
-  thrust::inclusive_scan(rmm::exec_policy_nosync(stream),
-                         page_indices.begin(),
-                         page_indices.end(),
-                         page_indices.begin(),
-                         cuda::maximum<cudf::size_type>());
+  auto page_indices = rmm::device_uvector<cudf::size_type>(total_rows, stream, mr);
+  cudf::detail::label_segments(
+    row_offsets.begin(), row_offsets.end(), page_indices.begin(), page_indices.end(), stream);
   return page_indices;
 }
 

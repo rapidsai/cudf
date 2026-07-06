@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from cudf_polars.testing.asserts import assert_gpu_result_equal
 )
 @pytest.mark.parametrize("then", [pl.lit(10), pl.col("a")])
 @pytest.mark.parametrize("otherwise", [pl.lit(-2), pl.col("b")])
-def test_when_then(when, then, otherwise):
+def test_when_then(engine: pl.GPUEngine, when, then, otherwise):
     df = pl.LazyFrame(
         {
             "a": [1, 2, 3, 4, 5, 6, 7],
@@ -30,4 +30,4 @@ def test_when_then(when, then, otherwise):
     )
 
     q = df.select(pl.when(when).then(then).otherwise(otherwise))
-    assert_gpu_result_equal(q)
+    assert_gpu_result_equal(q, engine=engine)

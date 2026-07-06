@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -9,9 +9,9 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/utility>
 #include <cuda_runtime.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
 namespace CUDF_EXPORT cudf {
@@ -21,7 +21,7 @@ namespace CUDF_EXPORT cudf {
  * a list of elements of arbitrary type (including further nested lists).
  */
 class list_device_view {
-  using lists_column_device_view = cudf::detail::lists_column_device_view;
+  using lists_column_device_view = cudf::lists_column_device_view;
 
  public:
   list_device_view() = default;
@@ -144,12 +144,12 @@ class list_device_view {
   /// const pair iterator for the list
   template <typename T>
   using const_pair_iterator =
-    thrust::transform_iterator<pair_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
+    thrust::transform_iterator<pair_accessor<T>, cuda::counting_iterator<cudf::size_type>>;
 
   /// const pair iterator type for the list
   template <typename T>
   using const_pair_rep_iterator =
-    thrust::transform_iterator<pair_rep_accessor<T>, thrust::counting_iterator<cudf::size_type>>;
+    thrust::transform_iterator<pair_rep_accessor<T>, cuda::counting_iterator<cudf::size_type>>;
 
   /**
    * @brief Fetcher for a pair iterator to the first element in the list_device_view.
@@ -170,7 +170,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_begin() const
   {
-    return const_pair_iterator<T>{thrust::counting_iterator<size_type>(0), pair_accessor<T>{*this}};
+    return const_pair_iterator<T>{cuda::counting_iterator<size_type>{0}, pair_accessor<T>{*this}};
   }
 
   /**
@@ -183,7 +183,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_iterator<T> pair_end() const
   {
-    return const_pair_iterator<T>{thrust::counting_iterator<size_type>(size()),
+    return const_pair_iterator<T>{cuda::counting_iterator<size_type>{size()},
                                   pair_accessor<T>{*this}};
   }
 
@@ -208,7 +208,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_begin() const
   {
-    return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(0),
+    return const_pair_rep_iterator<T>{cuda::counting_iterator<size_type>{0},
                                       pair_rep_accessor<T>{*this}};
   }
 
@@ -222,7 +222,7 @@ class list_device_view {
   template <typename T>
   [[nodiscard]] __device__ inline const_pair_rep_iterator<T> pair_rep_end() const
   {
-    return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(size()),
+    return const_pair_rep_iterator<T>{cuda::counting_iterator<size_type>{size()},
                                       pair_rep_accessor<T>{*this}};
   }
 
@@ -325,14 +325,13 @@ class list_device_view {
  *
  */
 struct list_size_functor {
-  detail::lists_column_device_view const d_column;  ///< The list column to access
+  lists_column_device_view const d_column;  ///< The list column to access
   /**
    * @brief Constructor
    *
    * @param d_col The cudf::lists_column_device_view whose rows are being accessed
    */
-  CUDF_HOST_DEVICE inline list_size_functor(detail::lists_column_device_view const& d_col)
-    : d_column(d_col)
+  CUDF_HOST_DEVICE inline list_size_functor(lists_column_device_view const& d_col) : d_column(d_col)
   {
   }
   /**
@@ -363,7 +362,7 @@ struct list_size_functor {
  * @param c The list_column_device_view to iterate over
  * @return An iterator that returns the size of the list by row index
  */
-CUDF_HOST_DEVICE auto inline make_list_size_iterator(detail::lists_column_device_view const& c)
+CUDF_HOST_DEVICE auto inline make_list_size_iterator(lists_column_device_view const& c)
 {
   return detail::make_counting_transform_iterator(0, list_size_functor{c});
 }

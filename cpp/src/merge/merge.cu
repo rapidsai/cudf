@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,11 +32,10 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/functional>
+#include <cuda/iterator>
 #include <cuda/std/iterator>
 #include <cuda/std/utility>
 #include <thrust/binary_search.h>
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/merge.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -118,7 +117,7 @@ CUDF_KERNEL void materialize_merged_bitmask_kernel(
   column_device_view right_dcol,
   bitmask_type* out_validity,
   size_type const num_destination_rows,
-  index_type const* const __restrict__ merged_indices)
+  index_type const* __restrict__ const merged_indices)
 {
   auto const stride = detail::grid_1d::grid_stride();
 
@@ -170,16 +169,19 @@ void materialize_bitmask(column_view const& left_col,
       materialize_merged_bitmask_kernel<true, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       materialize_merged_bitmask_kernel<true, false>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     }
   } else {
     if (right_col.has_nulls()) {
       materialize_merged_bitmask_kernel<false, true>
         <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream.value()>>>(
           left_valid, right_valid, out_validity, num_elements, merged_indices);
+      CUDF_CUDA_TRY(cudaGetLastError());
     } else {
       CUDF_FAIL("materialize_merged_bitmask_kernel<false, false>() should never be called.");
     }
@@ -254,7 +256,7 @@ index_vector generate_merged_indices(table_view const& left_table,
 
     auto ineq_op = detail::row_lexicographic_tagged_comparator<true>(
       *lhs_device_view, *rhs_device_view, d_column_order, d_null_precedence);
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -264,7 +266,7 @@ index_vector generate_merged_indices(table_view const& left_table,
   } else {
     auto ineq_op = detail::row_lexicographic_tagged_comparator<false>(
       *lhs_device_view, *rhs_device_view, d_column_order, {});
-    thrust::merge(rmm::exec_policy_nosync(stream),
+    thrust::merge(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                   left_begin,
                   left_begin + left_size,
                   right_begin,
@@ -303,9 +305,9 @@ index_vector generate_merged_indices_nested(table_view const& left_table,
   auto const left_indices_end     = left_indices.end<cudf::size_type>();
   auto left_indices_mutable_begin = left_indices_mutable.begin<cudf::size_type>();
 
-  auto const total_counter = thrust::make_counting_iterator(0);
+  auto const total_counter = cuda::counting_iterator<cudf::size_type>{0};
   thrust::for_each(
-    rmm::exec_policy_nosync(stream),
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
     total_counter,
     total_counter + total_size,
     [merged = merged_indices.data(), left = left_indices_begin, left_size, right_size] __device__(
@@ -390,7 +392,7 @@ struct column_merger {
     // and "gather" into merged_view.data()[indx_merged]
     // from lcol or rcol, depending on side;
     //
-    thrust::transform(rmm::exec_policy_nosync(stream),
+    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                       row_order_.begin(),
                       row_order_.end(),
                       merged_view.begin<Element>(),

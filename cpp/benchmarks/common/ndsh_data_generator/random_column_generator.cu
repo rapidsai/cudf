@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,8 +16,8 @@
 
 #include <rmm/exec_policy.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/tuple>
-#include <thrust/iterator/counting_iterator.h>
 #include <thrust/random.h>
 #include <thrust/transform.h>
 
@@ -58,7 +58,7 @@ struct random_number_generator {
 
   CUDF_HOST_DEVICE random_number_generator(T lower, T upper) : lower(lower), upper(upper) {}
 
-  __device__ T operator()(const int64_t idx) const
+  __device__ T operator()(int64_t const idx) const
   {
     if constexpr (cudf::is_integral<T>()) {
       thrust::default_random_engine engine;
@@ -116,8 +116,8 @@ std::unique_ptr<cudf::column> generate_random_numeric_column(T lower,
   cudf::size_type begin = 0;
   cudf::size_type end   = num_rows;
   thrust::transform(rmm::exec_policy_nosync(stream),
-                    thrust::make_counting_iterator(begin),
-                    thrust::make_counting_iterator(end),
+                    cuda::counting_iterator{begin},
+                    cuda::counting_iterator{end},
                     col->mutable_view().begin<T>(),
                     random_number_generator<T>(lower, upper));
   return col;
@@ -171,7 +171,7 @@ std::unique_ptr<cudf::column> generate_repeat_string_column(std::string const& v
 }
 
 std::unique_ptr<cudf::column> generate_random_string_column_from_set(
-  cudf::host_span<const char* const> set,
+  cudf::host_span<char const* const> set,
   cudf::size_type num_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)

@@ -1,9 +1,10 @@
-# SPDX-FileCopyrightText: Copyright (c) 2022-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
 # SPDX-License-Identifier: Apache-2.0
 
 """Common utilities for fixture creation and benchmarking."""
 
 import inspect
+import os
 import re
 import textwrap
 from collections.abc import MutableSet
@@ -11,7 +12,7 @@ from itertools import groupby
 from numbers import Real
 
 import pytest_cases
-from config import NUM_COLS, NUM_ROWS, cudf, cupy
+from config import NUM_COLS_FIXTURES, NUM_ROWS_FIXTURES, cudf, cupy
 
 
 def make_gather_map(len_gather_map: Real, len_column: Real, how: str):
@@ -118,18 +119,27 @@ def benchmark_with_object(
         null_str = f"_nulls_{nulls}".lower()
 
     col_str = ""
+    # DataFrame fixtures always include a number of columns, and if we're in debug mode
+    # there is only a single value so no collapsing occurs. Therefore, we must have a
+    # nonempty cols value so that a valid fixture is selected
+    if (
+        "CUDF_BENCHMARKS_DEBUG_ONLY" in os.environ
+        and cols is None
+        and cls == "dataframe"
+    ):
+        cols = NUM_COLS_FIXTURES[0]
     if cols is not None:
-        assert cols in NUM_COLS, (
+        assert cols in NUM_COLS_FIXTURES, (
             f"You have requested a DataFrame with {cols} columns but fixtures "
-            f"only exist for the values {', '.join(NUM_COLS)}"
+            f"only exist for the values {', '.join(str(x) for x in NUM_COLS_FIXTURES)}"
         )
         col_str = f"_cols_{cols}"
 
     row_str = ""
     if rows is not None:
-        assert rows in NUM_ROWS, (
+        assert rows in NUM_ROWS_FIXTURES, (
             f"You have requested a {cls} with {rows} rows but fixtures "
-            f"only exist for the values {', '.join(NUM_ROWS)}"
+            f"only exist for the values {', '.join(str(x) for x in NUM_ROWS_FIXTURES)}"
         )
         row_str = f"_rows_{rows}"
 

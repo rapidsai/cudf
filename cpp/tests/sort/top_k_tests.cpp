@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -11,7 +11,10 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/sorting.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+
+#include <cuda/iterator>
 
 #include <type_traits>
 #include <vector>
@@ -28,7 +31,35 @@ TYPED_TEST(TopKTypes, TopK)
 {
   using T = TypeParam;
 
-  auto itr   = thrust::counting_iterator<int32_t>(0);
+  auto itr   = cuda::counting_iterator<int32_t>{0};
+  auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(itr, itr + 100);
+  auto expected =
+    cudf::test::fixed_width_column_wrapper<T, int32_t>({90, 91, 92, 93, 94, 95, 96, 97, 98, 99});
+  auto result = cudf::top_k(input, 10);
+  result      = std::move(cudf::sort(cudf::table_view({result->view()}))->release().front());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
+  result = cudf::top_k_order(input, 10);
+  result = std::move(cudf::sort(cudf::table_view({result->view()}))->release().front());
+  auto expected_order = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    {90, 91, 92, 93, 94, 95, 96, 97, 98, 99});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_order, result->view());
+
+  result   = cudf::top_k(input, 10, cudf::order::ASCENDING);
+  result   = std::move(cudf::sort(cudf::table_view({result->view()}))->release().front());
+  expected = cudf::test::fixed_width_column_wrapper<T, int32_t>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, result->view());
+  result = cudf::top_k_order(input, 10, cudf::order::ASCENDING);
+  result = std::move(cudf::sort(cudf::table_view({result->view()}))->release().front());
+  expected_order =
+    cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 1, 2, 3, 4, 5, 6, 7, 8, 9});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_order, result->view());
+}
+
+TYPED_TEST(TopKTypes, TopK_Nulls)
+{
+  using T = TypeParam;
+
+  auto itr   = cuda::counting_iterator<int32_t>{0};
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
     itr, itr + 100, cudf::test::iterators::null_at(4));
   auto expected =
@@ -55,7 +86,7 @@ TYPED_TEST(TopKTypes, TopKSegmented)
   using LCW  = cudf::test::lists_column_wrapper<T, int32_t>;
   using LCWO = cudf::test::lists_column_wrapper<cudf::size_type>;
 
-  auto itr   = thrust::counting_iterator<int32_t>(0);
+  auto itr   = cuda::counting_iterator<int32_t>{0};
   auto input = cudf::test::fixed_width_column_wrapper<T, int32_t>(
     itr, itr + 100, cudf::test::iterators::null_at(4));
   auto offsets =
@@ -109,7 +140,7 @@ TEST_F(TopK, Empty)
 
 TEST_F(TopK, Errors)
 {
-  auto itr   = thrust::counting_iterator<int64_t>(0);
+  auto itr   = cuda::counting_iterator<int64_t>{0};
   auto input = cudf::test::fixed_width_column_wrapper<int64_t>(itr, itr + 100);
 
   EXPECT_THROW(cudf::top_k(input, -1), std::invalid_argument);

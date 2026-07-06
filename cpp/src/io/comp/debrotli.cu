@@ -1,7 +1,7 @@
 /*
  * SPDX-FileCopyrightText: Copyright 2013 Google Inc. All Rights Reserved.
  * SPDX-FileCopyrightText: Copyright(c) 2009, 2010, 2013 - 2016 by the Brotli Authors.
- * SPDX-FileCopyrightText: Copyright (c) 2018-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0 AND MIT
  */
 
@@ -50,6 +50,7 @@ THE SOFTWARE.
 #include "io/utilities/block_utils.cuh"
 
 #include <cudf/detail/utilities/cuda.hpp>
+#include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -189,6 +190,17 @@ struct debrotli_state_s {
 
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
 
+/// @brief Safely read up to 4 bytes with bounds checking, handling end-of-buffer cases
+inline __device__ uint32_t safe_load_u32(uint8_t const* p, uint8_t const* end)
+{
+  if (p >= end) { return 0; }
+
+  uint32_t result = 0;
+  cuda::std::memcpy(
+    &result, p, cuda::std::min<size_t>(cuda::std::distance(p, end), sizeof(uint32_t)));
+  return result;
+}
+
 /// @brief initializes the bit reader
 __device__ void initbits(debrotli_state_s* s, uint8_t const* base, size_t len, size_t pos = 0)
 {
@@ -198,9 +210,9 @@ __device__ void initbits(debrotli_state_s* s, uint8_t const* base, size_t len, s
   s->base     = base;
   s->end      = base + len;
   s->cur      = p;
-  s->bitbuf.x = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
+  s->bitbuf.x = safe_load_u32(p, s->end);
   p += 4;
-  s->bitbuf.y = (p < s->end) ? *reinterpret_cast<uint32_t const*>(p) : 0;
+  s->bitbuf.y = safe_load_u32(p, s->end);
   s->bitpos   = prefix_bytes * 8;
 }
 
@@ -223,7 +235,7 @@ inline __device__ void skipbits(debrotli_state_s* s, uint32_t n)
   if (bitpos >= 32) {
     uint8_t const* cur = s->cur + 8;
     s->bitbuf.x        = s->bitbuf.y;
-    s->bitbuf.y        = (cur < s->end) ? *reinterpret_cast<uint32_t const*>(cur) : 0;
+    s->bitbuf.y        = safe_load_u32(cur, s->end);
     s->cur             = cur - 4;
     bitpos &= 0x1f;
   }
@@ -343,7 +355,7 @@ static __device__ uint8_t* ext_heap_alloc(uint32_t bytes,
                                           uint32_t ext_heap_size)
 {
   uint32_t len              = (bytes + 0xf) & ~0xf;
-  volatile auto* heap_ptr   = reinterpret_cast<volatile uint32_t*>(ext_heap_base);
+  auto volatile* heap_ptr   = reinterpret_cast<uint32_t volatile*>(ext_heap_base);
   uint32_t first_free_block = ~0;
   for (;;) {
     uint32_t blk_next, blk_prev;
@@ -413,7 +425,7 @@ static __device__ void ext_heap_free(void* ptr,
                                      uint32_t ext_heap_size)
 {
   uint32_t len              = (bytes + 0xf) & ~0xf;
-  volatile auto* heap_ptr   = (volatile uint32_t*)ext_heap_base;
+  auto volatile* heap_ptr   = (uint32_t volatile*)ext_heap_base;
   uint32_t first_free_block = ~0;
   auto cur_blk              = static_cast<uint32_t>(static_cast<uint8_t*>(ptr) - ext_heap_base);
   for (;;) {
@@ -2086,20 +2098,18 @@ void gpu_debrotli(device_span<device_span<uint8_t const> const> inputs,
   CUDF_CUDA_TRY(cudaMemsetAsync(scratch.data(), 0, 2 * sizeof(uint32_t), stream.value()));
   // NOTE: The 128KB dictionary copy can have a relatively large overhead since source isn't
   // page-locked
-  CUDF_CUDA_TRY(cudaMemcpyAsync(scratch.data() + fb_heap_size,
-                                get_brotli_dictionary(),
-                                sizeof(brotli_dictionary_s),
-                                cudaMemcpyDefault,
-                                stream.value()));
+  CUDF_CUDA_TRY(cudf::detail::memcpy_async(
+    scratch.data() + fb_heap_size, get_brotli_dictionary(), sizeof(brotli_dictionary_s), stream));
   gpu_debrotli_kernel<<<dim_grid, dim_block, 0, stream.value()>>>(
     inputs, outputs, results, scratch.data(), fb_heap_size);
+  CUDF_CUDA_TRY(cudaGetLastError());
 #if DUMP_FB_HEAP
   uint32_t dump[2];
   uint32_t cur = 0;
   printf("heap dump (%d bytes)\n", fb_heap_size);
   while (cur < fb_heap_size && !(cur & 3)) {
-    CUDF_CUDA_TRY(cudaMemcpyAsync(
-      &dump[0], scratch.data() + cur, 2 * sizeof(uint32_t), cudaMemcpyDefault, stream.value()));
+    CUDF_CUDA_TRY(
+      cudf::detail::memcpy_async(&dump[0], scratch.data() + cur, 2 * sizeof(uint32_t), stream));
     stream.synchronize();
     printf("@%d: next = %d, size = %d\n", cur, dump[0], dump[1]);
     cur = (dump[0] > cur) ? dump[0] : 0xffff'ffffu;

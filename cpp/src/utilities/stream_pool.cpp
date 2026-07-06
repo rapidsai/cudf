@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -52,8 +52,8 @@ struct cuda_event {
   virtual ~cuda_event() { CUDF_ASSERT_CUDA_SUCCESS(cudaEventDestroy(e_)); }
 
   // Moveable but not copyable.
-  cuda_event(const cuda_event&)            = delete;
-  cuda_event& operator=(const cuda_event&) = delete;
+  cuda_event(cuda_event const&)            = delete;
+  cuda_event& operator=(cuda_event const&) = delete;
 
   cuda_event(cuda_event&&)            = default;
   cuda_event& operator=(cuda_event&&) = default;
@@ -108,7 +108,7 @@ class rmm_cuda_stream_pool : public cuda_stream_pool {
   rmm::cuda_stream_pool _pool;
 
  public:
-  rmm_cuda_stream_pool() : _pool{STREAM_POOL_SIZE} {}
+  rmm_cuda_stream_pool() : _pool{STREAM_POOL_SIZE, rmm::cuda_stream::flags::non_blocking} {}
   rmm::cuda_stream_view get_stream() override { return _pool.get_stream(); }
   rmm::cuda_stream_view get_stream(stream_id_type stream_id) override
   {

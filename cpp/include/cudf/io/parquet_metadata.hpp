@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,6 +15,7 @@
 #include <cudf/io/types.hpp>
 #include <cudf/utilities/export.hpp>
 
+#include <span>
 #include <string_view>
 #include <vector>
 
@@ -39,7 +40,7 @@ struct parquet_column_schema {
    *
    * This has been added since Cython requires a default constructor to create objects on stack.
    */
-  explicit parquet_column_schema() = default;
+  explicit parquet_column_schema() : _cudf_type{data_type{type_id::EMPTY}} {}
 
   /**
    * @brief constructor
@@ -47,11 +48,13 @@ struct parquet_column_schema {
    * @param name column name
    * @param type parquet type
    * @param children child columns (empty for non-nested types)
+   * @param cudf_type cudf data type
    */
   parquet_column_schema(std::string_view name,
                         Type type,
-                        std::vector<parquet_column_schema> children)
-    : _name{name}, _type{type}, _children{std::move(children)}
+                        std::vector<parquet_column_schema>&& children,
+                        data_type cudf_type)
+    : _name{name}, _type{type}, _children{std::move(children)}, _cudf_type{cudf_type}
   {
   }
 
@@ -104,11 +107,21 @@ struct parquet_column_schema {
    */
   [[nodiscard]] auto num_children() const { return children().size(); }
 
+  /**
+   * @brief Returns the cudf data type for this column
+   *
+   * This is the resolved cudf data type mapped from the Parquet physical/logical types.
+   *
+   * @return cudf data type
+   */
+  [[nodiscard]] auto cudf_type() const { return _cudf_type; }
+
  private:
   std::string _name;
   // 3 types available: Physical, Converted, Logical
   Type _type;  // Physical type
   std::vector<parquet_column_schema> _children;
+  data_type _cudf_type;
 };
 
 /**
@@ -280,7 +293,7 @@ parquet_metadata read_parquet_metadata(source_info const& src_info);
  * @return List of FileMetaData objects, one per parquet source
  */
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  cudf::host_span<std::unique_ptr<cudf::io::datasource> const> sources);
+  std::span<std::unique_ptr<cudf::io::datasource> const> sources);
 
 /** @} */  // end of group
 }  // namespace io

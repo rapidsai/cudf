@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -8,6 +8,8 @@
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <span>
 
 namespace CUDF_EXPORT cudf {
 namespace dictionary {
@@ -19,24 +21,23 @@ namespace dictionary {
 
 /**
  * @brief Create a new dictionary column by adding the new keys elements
- * to the existing dictionary_column.
+ * to the existing dictionary_column
  *
- * The indices are updated if any of the new keys are sorted
- * before any of the existing dictionary elements.
+ * The indices remain the same while unique new keys are added.
  *
  * @code{.pseudo}
  * d1 = { keys=["a", "c", "d"], indices=[2, 0, 1, 0, 1]}
  * d2 = add_keys( d1, ["b", "c"] )
- * d2 is now {keys=["a", "b", "c", "d"], indices=[3, 0, 2, 0, 2]}
+ * d2 is now {keys=["a", "c", "d", "b"], indices=[2, 0, 1, 0, 1]}
  * @endcode
  *
  * The output column will have the same number of rows as the input column.
  * Null entries from the input column are copied to the output column.
  * No new null entries are created by this operation.
  *
- * @throw cudf::logic_error if the new_keys type does not match the keys type in
+ * @throw cudf::data_type_error if the new_keys type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf::logic_error if the new_keys contain nulls.
+ * @throw std::invalid_argument if the new_keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param new_keys New keys to incorporate into the dictionary_column.
@@ -66,9 +67,9 @@ std::unique_ptr<column> add_keys(
  * @endcode
  * Note that "a" has been removed so output row[2] becomes null.
  *
- * @throw cudf::logic_error if the keys_to_remove type does not match the keys type in
+ * @throw cudf::data_type_error if the keys_to_remove type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf::logic_error if the keys_to_remove contain nulls.
+ * @throw std::invalid_argument if the keys_to_remove contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys_to_remove The keys to remove from the dictionary_column.
@@ -122,9 +123,9 @@ std::unique_ptr<column> remove_unused_keys(
  * d2 is now {keys=["b", "c", "d"], indices=[1, x, 0, 1, 0], valids=[1, 0, 1, 1, 1]}
  * @endcode
  *
- * @throw cudf::logic_error if the keys type does not match the keys type in
+ * @throw cudf::data_type_error if the keys type does not match the keys type in
  *        the dictionary_column.
- * @throw cudf::logic_error if the keys contain nulls.
+ * @throw std::invalid_argument if the keys contain nulls.
  *
  * @param dictionary_column Existing dictionary column.
  * @param keys New keys to use for the output column. Must not contain nulls.
@@ -150,7 +151,7 @@ std::unique_ptr<column> set_keys(
  * @return New dictionary columns.
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
-  cudf::host_span<dictionary_column_view const> input,
+  std::span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
