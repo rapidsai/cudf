@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -198,7 +198,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> mixed_join_semi(
     cuda::counting_iterator<size_type>{left.num_rows()},
     left_table_keep_mask.begin(),
     gather_map->begin(),
-    [join_type] __device__(bool keep_row) {
+    [join_type] __device__(bool keep_row) -> bool {
       return keep_row == (join_type == join_kind::LEFT_SEMI_JOIN);
     },
     stream);

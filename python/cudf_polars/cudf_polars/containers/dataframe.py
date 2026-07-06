@@ -73,7 +73,7 @@ class _ObjectWithArrowMetadata:
         self.stream = stream
 
     def __arrow_c_array__(
-        self, requested_schema: None = None
+        self, requested_schema: object | None = None
     ) -> tuple[CapsuleType, CapsuleType]:
         return self.obj._to_schema(self.metadata), self.obj._to_host_array(
             stream=self.stream

@@ -1144,8 +1144,7 @@ class Index(SingleColumnFrame):
         sorted by.
 
         >>> idx.sort_values(ascending=False, return_indexer=True)
-        (Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2],
-                                                            dtype=int32))
+        (Index([1000, 100, 10, 1], dtype='int64'), array([3, 1, 0, 2]))
 
         Sorting values in a MultiIndex:
 
