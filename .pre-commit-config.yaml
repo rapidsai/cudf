@@ -332,6 +332,39 @@ repos:
     rev: v1.27.0
     hooks:
       - id: zizmor
+  # lychee checks local/relative links only (--offline): no external URL liveness
+  # checking, so it stays fast and network-independent as a commit hook.
+  # Anchors/fragments after '#' are also not validated.
+  # Notebook link checking would require markdown extraction before lychee.
+  - repo: https://github.com/lycheeverse/lychee
+    rev: lychee-v0.24.2
+    hooks:
+      - id: lychee
+        name: lychee (markdown)
+        files: \.md$
+        exclude: |
+          (?x)
+            ^docs/cudf/source/|
+            ^python/(cudf|cudf_kafka|cudf_polars|libcudf|pylibcudf)/README[.]md$
+        args:
+          [
+            "--offline",
+            "--no-progress",
+            "--root-dir", ".",
+            "--fallback-extensions", "md,rst,ipynb",
+          ]
+      - id: lychee
+        name: lychee (sphinx docs)
+        files: ^docs/cudf/source/.*[.]md$
+        args:
+          [
+            "--offline",
+            "--no-progress",
+            "--root-dir", "docs/cudf/source",
+            "--fallback-extensions", "md,rst,ipynb",
+            "--exclude", "(^|/)cudf-pandas-profiling$",
+            "--exclude", "(^|/)api[.]options$",
+          ]
 
 default_language_version:
       python: python3
