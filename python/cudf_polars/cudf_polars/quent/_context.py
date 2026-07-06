@@ -45,10 +45,19 @@ class QuentContext:
     """
     A Quent context that is globally valid for a query.
 
-    This context will be used by all ranks involved in executing the query. All
-    the fields here are serializable and valid on all ranks. Rank-specific
-    fields (like a Worker ID) are generated on the local rank and passed
-    around in a ``LocalQuentContext`` object.
+    Parameters
+    ----------
+    engine
+        A Quent Engine object. By default, a new Engine object is created
+        with the cudf-polars Implementation.
+    query_group
+        A Quent QueryGroup object. By default, a new QueryGroup with no
+        instance name is created.
+
+        This query group is used for all queries executed by this engine.
+    query
+        A Query Query object. By default, a new Query with no instance name
+        is created.
     """
 
     engine: Engine = dataclasses.field(default_factory=Engine)
