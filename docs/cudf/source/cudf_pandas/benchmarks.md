@@ -116,30 +116,56 @@ The steps below reproduce the PDS-H benchmark results using cudf.pandas.
 
 ### Setup
 
-Install the benchmarks with the `pandas` extra. It pulls in the matching-nightly `cudf` (for
-`cudf.pandas`), `pandas`, and `tpchgen-cli`, the Rust-based TPC-H data generator used to produce
-the dataset as Parquet files:
+Choose the option that matches what you want to benchmark. Each installs `cudf_benchmarks` into
+your environment; the [data generation](#generate-data) and [run](#run) steps are the same
+afterwards. The `cudf-benchmarks` wheels are published nightly-only.
+
+#### Option 1: nightly wheel (benchmark the nightly engine)
+
+Installs the matching-nightly `cudf` (for `cudf.pandas`), `pandas`, and `tpchgen-cli`, the
+Rust-based TPC-H data generator:
 
 ```bash
 CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
-pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+pip install --pre --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
     "cudf-benchmarks-cu${CUDA_MAJOR}[pandas]>=0.0.0a0"
 ```
 
-To hack on the benchmarks, install from a checkout instead (`pip install -e python/cudf_benchmarks[pandas]`),
-and bring your own `cudf`.
+#### Option 2: from source (benchmark a checkout)
+
+Use this to modify the benchmarks or pin a specific commit. Bring your own `cudf`; the extra adds
+`pandas` and `tpchgen-cli`:
+
+```bash
+git clone https://github.com/rapidsai/cudf.git && cd cudf
+pip install -e python/cudf_benchmarks[pandas]
+```
+
+#### Option 3: a released engine
+
+Benchmark a released `cudf` with a harness from the same release, so the two are API-compatible.
+A nightly harness can rely on `cudf.pandas` internals an older release does not have. The wheels
+are nightly-only, so check out the matching release tag and install from source. At that tag the
+`pandas` extra pins to the release line rather than nightlies, so it resolves the released `cudf`
+from the stable index:
+
+```bash
+RELEASE=v26.08.00   # the release tag to benchmark; see https://github.com/rapidsai/cudf/tags
+git clone https://github.com/rapidsai/cudf.git && cd cudf
+git checkout "${RELEASE}"
+pip install --extra-index-url https://pypi.nvidia.com \
+    -e python/cudf_benchmarks[pandas]
+```
 
 #### CPU-only machines
 
-The `--executor cpu` benchmark runs on plain pandas and imports no CUDA libraries, so it runs on
-a machine with no GPU. Install the separate CUDA-free wheel:
+The `--executor cpu` benchmark runs on plain pandas and imports no CUDA libraries, so it runs on a
+machine with no GPU. Install the separate CUDA-free wheel (`--executor in-memory` still needs a
+GPU install from one of the options above):
 
 ```bash
 pip install cudf-benchmarks-cpu
 ```
-
-Then generate data and run as below with `--executor cpu`. Only `--executor in-memory` needs
-`cudf`.
 
 ### Generate data
 

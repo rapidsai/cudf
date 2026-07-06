@@ -12,12 +12,12 @@ These are whole-engine benchmarks that run at scale and compare against CPU engi
 
 The benchmarks ship as two wheels so they work on both GPU and CPU-only machines:
 
-- `cudf-benchmarks` — CUDA-suffixed (e.g. `cudf-benchmarks-cu12`). Its extras install the
+- `cudf-benchmarks`: CUDA-suffixed (e.g. `cudf-benchmarks-cu12`). Its extras install the
   matching-nightly RAPIDS packages, so the benchmark version is tied to the engine it measures.
-- `cudf-benchmarks-cpu` — an unsuffixed, CUDA-free wheel (polars, DuckDB, pandas) for machines
+- `cudf-benchmarks-cpu`: a CUDA-free wheel (polars, DuckDB, pandas) for machines
   with no GPU.
 
-GPU extras on `cudf-benchmarks`:
+The wheels are published nightly-only. The GPU extras on `cudf-benchmarks` are:
 
 | Extra | Installs |
 |-------|----------|
@@ -26,9 +26,10 @@ GPU extras on `cudf-benchmarks`:
 | `dask` | rapids-dask-dependency (multi-GPU / multi-node, with `polars`) |
 | `ray` | ray (multi-GPU / multi-node, with `polars`) |
 
-## Running the benchmarks
+## Installing and running
 
-The docs walk through installation, data generation, running, and tuning for each engine:
+The docs walk through installation (nightly wheel, from source, or against a released engine),
+data generation, running, and tuning for each engine:
 
 - [cudf-polars PDS-H / PDS-DS benchmarks](../../docs/cudf/source/cudf_polars/benchmarks.md)
 - [cudf.pandas PDS-H benchmarks](../../docs/cudf/source/cudf_pandas/benchmarks.md)

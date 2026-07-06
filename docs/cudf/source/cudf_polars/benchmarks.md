@@ -8,34 +8,59 @@ The steps below reproduce the PDS-H benchmark results using the Polars GPU engin
 
 ### Setup
 
-Install the benchmarks with the `polars` extra (add `ray` for multi-GPU benchmarking). The extra
-pulls in the matching-nightly `cudf-polars`, `rapidsmpf`, and `kvikio`, plus the CPU baselines and
-`tpchgen-cli`, the Rust-based TPC-H data generator used to produce the dataset as Parquet files:
+Choose the option that matches what you want to benchmark. Each installs `cudf_benchmarks` into
+your environment; the [data generation](#generate-data) and [run](#run) steps are the same
+afterwards.
+
+The `cudf-benchmarks` wheels are published nightly-only, so the `polars` extra pins to a tested
+range of Polars versions. The nightly wheel installs the highest Polars version the GPU engine
+currently supports, which may not be the latest Polars release.
+
+#### Option 1: nightly wheel (benchmark the nightly engine)
+
+Installs the matching-nightly `cudf-polars`, `rapidsmpf`, and `kvikio`, plus the CPU baselines and
+`tpchgen-cli`, the Rust-based TPC-H data generator. Add `ray` (or `dask`) for multi-GPU:
 
 ```bash
 CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
-pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+pip install --pre --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
     "cudf-benchmarks-cu${CUDA_MAJOR}[polars,ray]>=0.0.0a0"
 ```
 
-Because `cudf-polars` pins to a tested range of Polars versions, the nightly wheel will install
-the highest Polars version the GPU engine currently supports, which may not be the latest
-Polars release.
+#### Option 2: from source (benchmark a checkout)
 
-To hack on the benchmarks, install from a checkout instead (`pip install -e python/cudf_benchmarks[polars]`),
-and bring your own `cudf-polars`/`rapidsmpf`/`kvikio`.
+Use this to modify the benchmarks or pin a specific commit. Bring your own
+`cudf-polars`/`rapidsmpf`/`kvikio`; the extra adds the CPU baselines and `tpchgen-cli`:
+
+```bash
+git clone https://github.com/rapidsai/cudf.git && cd cudf
+pip install -e python/cudf_benchmarks[polars]
+```
+
+#### Option 3: a released engine
+
+Benchmark a released `cudf-polars` with a harness from the same release, so the two are
+API-compatible. A nightly harness can rely on engine features an older release does not have. The
+wheels are nightly-only, so check out the matching release tag and install from source. At that
+tag the `polars` extra pins to the release line rather than nightlies, so it resolves the released
+`cudf-polars`, `rapidsmpf`, and `kvikio` from the stable index:
+
+```bash
+RELEASE=v26.08.00   # the release tag to benchmark; see https://github.com/rapidsai/cudf/tags
+git clone https://github.com/rapidsai/cudf.git && cd cudf
+git checkout "${RELEASE}"
+pip install --extra-index-url https://pypi.nvidia.com \
+    -e python/cudf_benchmarks[polars]
+```
 
 #### CPU-only machines
 
-The benchmarks also run on a machine with no GPU. The CPU frontends, `--frontend polars-cpu`
-(the Polars CPU streaming engine) and `--frontend duckdb`, do not import any CUDA libraries.
-Install the separate CUDA-free wheel:
+On a machine with no GPU, the CPU frontends (`--frontend polars-cpu`, `--frontend duckdb`) import
+no CUDA libraries. Install the separate CUDA-free wheel and run with a CPU frontend:
 
 ```bash
 pip install cudf-benchmarks-cpu
 ```
-
-Then generate data and run as below, using `--frontend polars-cpu` or `--frontend duckdb`.
 
 ### Generate data
 
