@@ -1715,7 +1715,9 @@ def execute_duckdb_query(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
             )
-        return pl.from_arrow(conn.sql(query))
+        result = pl.from_arrow(conn.sql(query))
+        assert isinstance(result, pl.DataFrame)
+        return result
 
 
 def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
