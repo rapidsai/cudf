@@ -777,10 +777,8 @@ class StreamingExecutor:
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
-    quent_context: QuentContext | None = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__QUENT_CONTEXT", _quent_context_converter, default=None
-        )
+    quent_context: QuentContext = dataclasses.field(
+        default_factory=default_quent_context
     )
     enable_quent: bool = dataclasses.field(
         default_factory=_make_default_factory(
@@ -858,11 +856,10 @@ class StreamingExecutor:
 
         # Hash the quent context UUIDs as ints
         quent_context = d["quent_context"]
-        if quent_context is not None:
-            for key in ["engine", "query_group", "query"]:
-                quent_context[key]["id"] = int(quent_context[key]["id"])
+        for key in ["engine", "query_group", "query"]:
+            quent_context[key]["id"] = int(quent_context[key]["id"])
 
-            d["quent_context"] = json.dumps(quent_context)
+        d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
 
 

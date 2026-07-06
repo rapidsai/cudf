@@ -115,24 +115,21 @@ def evaluate_pipeline_spmd_mode(
     py_executor = config_options.executor.spmd_context.py_executor
 
     quent_context = config_options.executor.quent_context
-    if quent_context is not None:
-        quent_context._emit_query_group_events(
-            config_options.executor.spmd_context.quent_logger
-        )
-        quent_context._emit_query_events(
-            config_options.executor.spmd_context.quent_logger
-        )
+    quent_context._emit_query_group_events(
+        config_options.executor.spmd_context.quent_logger
+    )
+    quent_context._emit_query_events(config_options.executor.spmd_context.quent_logger)
 
-        # I don't like recreating the Worker here...
-        local_quent_context = LocalQuentContext(
-            context=quent_context,
-            worker=Worker(
-                id=config_options.executor.spmd_context.worker_id,
-                engine=quent_context.engine,
-                instance_name=f"rank-{comm.rank}",
-            ),
-            logger=config_options.executor.spmd_context.quent_logger,
-        )
+    # I don't like recreating the Worker here...
+    local_quent_context = LocalQuentContext(
+        context=quent_context,
+        worker=Worker(
+            id=config_options.executor.spmd_context.worker_id,
+            engine=quent_context.engine,
+            instance_name=f"rank-{comm.rank}",
+        ),
+        logger=config_options.executor.spmd_context.quent_logger,
+    )
 
     df, metadata = evaluate_on_rank(
         context,
@@ -143,10 +140,9 @@ def evaluate_pipeline_spmd_mode(
         local_quent_context=local_quent_context,
         query_id=query_id,
     )
-    if quent_context is not None:
-        quent_context._emit_query_exit_events(
-            config_options.executor.spmd_context.quent_logger
-        )
+    quent_context._emit_query_exit_events(
+        config_options.executor.spmd_context.quent_logger
+    )
     return df, metadata if collect_metadata else None
 
 

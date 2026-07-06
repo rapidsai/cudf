@@ -584,9 +584,8 @@ def evaluate_pipeline_dask_mode(
     dask_context = config_options.executor.dask_context
 
     quent_context = config_options.executor.quent_context
-    if quent_context is not None:
-        quent_context._emit_query_group_events(dask_context.quent_logger)
-        quent_context._emit_query_events(dask_context.quent_logger)
+    quent_context._emit_query_group_events(dask_context.quent_logger)
+    quent_context._emit_query_events(dask_context.quent_logger)
 
     # Strip dask_context before pickling config_options for remote calls.
     worker_config = dataclasses.replace(
@@ -610,8 +609,7 @@ def evaluate_pipeline_dask_mode(
         if md is not None:
             metadata_collector.extend(md)
 
-    if quent_context is not None:
-        quent_context._emit_query_exit_events(dask_context.quent_logger)
+    quent_context._emit_query_exit_events(dask_context.quent_logger)
     return pl.concat(dfs), metadata_collector or None
 
 
