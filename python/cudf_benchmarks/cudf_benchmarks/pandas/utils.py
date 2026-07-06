@@ -571,6 +571,13 @@ def parse_args(
         raise ValueError(
             "Specify either --validate-directory or --validate, not both."
         )
+    if parsed_args.validate and parsed_args.executor == "cpu":
+        # TODO: support validating the cpu executor against DuckDB directly.
+        raise ValueError(
+            "--validate is not supported with --executor cpu, which would compare "
+            "pandas against itself. Use --validate-directory to validate cpu results "
+            "against pre-computed results."
+        )
     if (
         parsed_args.validate_directory is not None
         and not parsed_args.validate_directory.exists()
@@ -753,7 +760,7 @@ def run_pandas(
     if args.summarize:
         run_config.summarize()
 
-    if args.validate and run_config.executor != "cpu":
+    if args.validate:
         print("\nValidation Summary")
         print("==================")
         if validation_failures:
