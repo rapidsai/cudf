@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@ namespace lists {
  * @addtogroup set_operations
  * @{
  * @file
+ * @brief APIs for set operations (overlap, intersection, union, difference) on list columns
  */
 
 /**

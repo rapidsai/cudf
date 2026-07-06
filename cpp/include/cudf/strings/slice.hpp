@@ -17,6 +17,7 @@ namespace strings {
  * @addtogroup strings_slice
  * @{
  * @file
+ * @brief Strings column APIs for extracting substrings by character position.
  */
 
 /**

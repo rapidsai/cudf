@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,6 +25,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief APIs for reading and writing ORC files.
  */
 
 constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;  ///< 64MB default orc stripe size
