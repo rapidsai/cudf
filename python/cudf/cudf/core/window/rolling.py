@@ -690,8 +690,13 @@ class RollingGroupby(Rolling):
             )
             pos = cupy.asarray(positions.values)
             off = cupy.asarray(offsets)
-            sizes = off[1:] - off[:-1]
-            row_first_pos = cupy.repeat(pos[off[:-1]], sizes)
+            # broadcast each group's first-appearance position to its rows
+            # (searchsorted maps each row to its group block; older cupy
+            # does not support an ndarray ``repeats`` in ``cupy.repeat``)
+            row_group = (
+                cupy.searchsorted(off, cupy.arange(len(pos)), side="right") - 1
+            )
+            row_first_pos = pos[off[:-1]][row_group]
             # lexsort: primary key is each row's group-first-appearance
             # position, ties broken by the current (key-sorted) order
             order = cupy.lexsort(
