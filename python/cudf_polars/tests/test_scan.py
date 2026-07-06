@@ -28,6 +28,7 @@ from cudf_polars.utils.config import ConfigOptions, ParquetOptions
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_138,
     POLARS_VERSION_LT_139,
+    POLARS_VERSION_LT_142,
 )
 
 if TYPE_CHECKING:
@@ -575,6 +576,7 @@ def test_scan_with_row_index(engine: pl.GPUEngine, tmp_path: Path) -> None:
         pytest.param(
             "foo=bar",
             marks=pytest.mark.xfail(
+                condition=POLARS_VERSION_LT_142,
                 reason="https://github.com/pola-rs/polars/issues/27840",
                 strict=True,
             ),
@@ -855,3 +857,16 @@ def test_scan_parquet_is_between_literal_dtype_mismatch_22622(
     )
 
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_142,
+    reason="hive::HivePartitionedDf not exposed in the logical plan before 1.42",
+)
+def test_scan_parquet_hive_partitioned_raises(
+    engine: pl.GPUEngine, tmp_path: Path
+) -> None:
+    (tmp_path / "part=1").mkdir()
+    pl.DataFrame({"x": [1, 2, 3]}).write_parquet(tmp_path / "part=1" / "data.parquet")
+    q = pl.scan_parquet(tmp_path, hive_schema={"part": pl.Int32})
+    assert_ir_translation_raises(q, engine, NotImplementedError)
