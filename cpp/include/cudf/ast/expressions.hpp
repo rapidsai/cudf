@@ -48,6 +48,7 @@ namespace ast {
  * @addtogroup expressions
  * @{
  * @file
+ * @brief Class definitions for building and evaluating abstract syntax tree expressions.
  */
 
 // Forward declaration.
