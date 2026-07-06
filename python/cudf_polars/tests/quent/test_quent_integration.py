@@ -33,14 +33,14 @@ def engine_with_quent_context(
         import cudf_polars.engine.ray
 
         return cudf_polars.engine.ray.RayEngine(
-            executor_options={"quent_context": quent_context}
+            executor_options={"quent_context": quent_context, "enable_quent": True}
         )
     elif backend == "dask":
         pytest.importorskip("distributed")
         import cudf_polars.engine.dask
 
         return cudf_polars.engine.dask.DaskEngine(
-            executor_options={"quent_context": quent_context}
+            executor_options={"quent_context": quent_context, "enable_quent": True}
         )
     elif backend == "spmd":
         from rapidsmpf import bootstrap
@@ -63,7 +63,8 @@ def engine_with_quent_context(
             )
 
         return cudf_polars.engine.spmd.SPMDEngine(
-            executor_options={"quent_context": quent_context}, comm=comm
+            executor_options={"quent_context": quent_context, "enable_quent": True},
+            comm=comm,
         )
     else:
         raise ValueError(f"Invalid backend: {backend}")

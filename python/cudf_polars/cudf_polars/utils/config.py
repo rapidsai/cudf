@@ -684,13 +684,13 @@ class StreamingExecutor:
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
+    enable_quent
+        Whether to enable Quent tracing for the streaming executor.
+        When disabled (default), no Quent events are emitted.
     quent_context
-        Whether to enable Quent tracing for the streaming executor, or a
-        configured QuentContext. By default, Quent tracing is disabled. Enable
-        or explicitly disable Quent tracing by setting the environment variable
-        ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` to a boolean value.
-
-        Fully customize QuentContext in Python.
+        A fully customized QuentContext. When provided, the streaming executor will
+        use this QuentContext for tracing. When not provided, the streaming executor
+        will create a default QuentContext.
 
     Notes
     -----
@@ -766,6 +766,11 @@ class StreamingExecutor:
     quent_context: QuentContext | None = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__QUENT_CONTEXT", _quent_context_converter, default=None
+        )
+    )
+    enable_quent: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__ENABLE_QUENT", bool, default=False
         )
     )
 
