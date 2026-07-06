@@ -26,6 +26,7 @@ def main() -> None:
     if args.output_dir is None:
         parser.error("--output-dir is required (or set TPCDS_DATA_DIR).")
 
+    # TODO: switch to the Rust TPC-DS generator
     conn = duckdb.connect()
     conn.execute(f"INSTALL tpcds; LOAD tpcds; CALL dsdgen(sf={args.scale});")
     for table in conn.execute("SHOW TABLES").df()["name"]:
