@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -28,8 +28,6 @@ import importlib.util
 import json
 import os
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
-
-from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -144,12 +142,13 @@ class Cluster(enum.StrEnum):
 
 
 T = TypeVar("T")
+DefaultT = TypeVar("DefaultT")
 
 
 def _make_default_factory(
-    key: str, converter: Callable[[str], T], *, default: T
-) -> Callable[[], T]:
-    def default_factory() -> T:
+    key: str, converter: Callable[[str], T], *, default: DefaultT
+) -> Callable[[], T | DefaultT]:
+    def default_factory() -> T | DefaultT:
         v = os.environ.get(key)
         if v is None:
             return default
@@ -166,6 +165,16 @@ def _bool_converter(v: str) -> bool:
         return False
     else:
         raise ValueError(f"Invalid boolean value: '{v}'")
+
+
+def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
+    if v.lower() in {"none", "null"}:
+        return None
+    return parse(v)
+
+
+def _optional_int_converter(v: str) -> int | None:
+    return _optional_converter(v, int)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -205,6 +214,11 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
+        Default is False.
+    use_jit_filter
+        Whether to use JIT compilation for post-read filtering in Parquet scans.
+        When enabled, filter predicates are JIT-compiled to CUDA kernels for
+        improved performance on large datasets with complex filters.
         Default is False.
     """
 
@@ -247,6 +261,13 @@ class ParquetOptions:
             default=False,
         )
     )
+    use_jit_filter: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_JIT_FILTER",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -263,6 +284,8 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.use_jit_filter, bool):
+            raise TypeError("use_jit_filter must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:
@@ -302,12 +325,17 @@ class DynamicPlanningOptions:
     Parameters
     ----------
     sample_chunk_count
-        The maximum number of chunks to sample before deciding whether
-        to shuffle. Default is 2.
-    bloom_filter_threshold
-        Row-count ratio (small / large) below which a bloom filter is applied
-        to pre-filter the large side of an inner or semi shuffle join.
-        Set to 0 to disable bloom filtering. Default is 0.5.
+        The maximum number of chunks to sample before making
+        dynamic-planning decisions. Default is 2.
+    join_prefilter_threshold
+        Row-count ratio (small / large) below which a join key prefilter is
+        applied. Set to 0 to disable join prefiltering. Default is 0.5.
+    join_prefilter_max_key_columns
+        Maximum number of columns from the join-key prefix to use for the
+        prefilter. Set to ``None`` to use the full join-key list. Default is 1.
+    join_prefilter_trace
+        Whether to collect input/output row counts around applied join
+        prefilters. Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -317,9 +345,25 @@ class DynamicPlanningOptions:
             f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
         )
     )
-    bloom_filter_threshold: float = dataclasses.field(
+    join_prefilter_threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
+            f"{_env_prefix}__JOIN_PREFILTER_THRESHOLD",
+            float,
+            default=0.5,
+        )
+    )
+    join_prefilter_max_key_columns: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_PREFILTER_MAX_KEY_COLUMNS",
+            _optional_int_converter,
+            default=1,
+        )
+    )
+    join_prefilter_trace: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_PREFILTER_TRACE",
+            _bool_converter,
+            default=False,
         )
     )
 
@@ -328,10 +372,26 @@ class DynamicPlanningOptions:
             raise TypeError("sample_chunk_count must be an int")
         if self.sample_chunk_count < 1:
             raise ValueError("sample_chunk_count must be at least 1")
-        if not isinstance(self.bloom_filter_threshold, float):
-            raise TypeError("bloom_filter_threshold must be a float")
-        if not 0.0 <= self.bloom_filter_threshold <= 1.0:
-            raise ValueError("bloom_filter_threshold must be between 0 and 1")
+        join_prefilter_threshold = self.join_prefilter_threshold
+        if isinstance(join_prefilter_threshold, bool) or not isinstance(
+            join_prefilter_threshold, (int, float)
+        ):
+            raise TypeError("join_prefilter_threshold must be a float or int")
+        join_prefilter_threshold = float(join_prefilter_threshold)
+        object.__setattr__(self, "join_prefilter_threshold", join_prefilter_threshold)
+        if not 0.0 <= join_prefilter_threshold <= 1.0:
+            raise ValueError("join_prefilter_threshold must be between 0 and 1")
+        if self.join_prefilter_max_key_columns is not None:
+            if isinstance(self.join_prefilter_max_key_columns, bool) or not isinstance(
+                self.join_prefilter_max_key_columns, int
+            ):
+                raise TypeError("join_prefilter_max_key_columns must be an int or None")
+            if self.join_prefilter_max_key_columns < 1:
+                raise ValueError(
+                    "join_prefilter_max_key_columns must be at least 1 or None"
+                )
+        if not isinstance(self.join_prefilter_trace, bool):
+            raise TypeError("join_prefilter_trace must be a bool")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -762,74 +822,6 @@ ExecutorType = TypeVar("ExecutorType", StreamingExecutor, InMemoryExecutor)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
-class CUDAStreamPoolConfig:
-    """
-    Configuration for the CUDA stream pool.
-
-    Parameters
-    ----------
-    pool_size
-        The size of the CUDA stream pool.
-    flags
-        The flags to use for the CUDA stream pool.
-    """
-
-    pool_size: int = 16
-    flags: CudaStreamFlags = CudaStreamFlags.NON_BLOCKING
-
-    def build(self) -> CudaStreamPool:
-        return CudaStreamPool(
-            pool_size=self.pool_size,
-            flags=self.flags,
-        )
-
-
-def _convert_cuda_stream_policy(
-    user_cuda_stream_policy: dict | str,
-) -> CUDAStreamPoolConfig | None:
-    match user_cuda_stream_policy:
-        case "default":
-            return None
-        case "pool":
-            return CUDAStreamPoolConfig()
-        case dict():
-            return CUDAStreamPoolConfig(**user_cuda_stream_policy)
-        case str():
-            # assume it's a JSON encoded CUDAStreamPoolConfig
-            try:
-                d = json.loads(user_cuda_stream_policy)
-            except json.JSONDecodeError:
-                raise ValueError(
-                    f"Invalid CUDA stream policy: '{user_cuda_stream_policy}'"
-                ) from None
-            match d:
-                case {"pool_size": int(), "flags": int()}:
-                    return CUDAStreamPoolConfig(
-                        pool_size=d["pool_size"], flags=CudaStreamFlags(d["flags"])
-                    )
-                case {"pool_size": int(), "flags": str()}:
-                    # convert the string names to enums
-                    return CUDAStreamPoolConfig(
-                        pool_size=d["pool_size"],
-                        flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
-                    )
-                case _:
-                    try:
-                        return CUDAStreamPoolConfig(**d)
-                    except TypeError:
-                        raise ValueError(
-                            f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
-                        ) from None
-
-
-def _default_cuda_stream_policy() -> CUDAStreamPoolConfig | None:
-    v = os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY")
-    if v is None:
-        return None
-    return _convert_cuda_stream_policy(v)
-
-
-@dataclasses.dataclass(frozen=True, eq=True)
 class ConfigOptions(Generic[ExecutorType]):
     """
     Configuration for the polars GPUEngine.
@@ -848,10 +840,6 @@ class ConfigOptions(Generic[ExecutorType]):
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
-    cuda_stream_policy
-        The policy to use for CUDA streams. ``None`` (the default) uses the
-        default CUDA stream. A :class:`~cudf_polars.utils.config.CUDAStreamPoolConfig`
-        can be used to configure a stream pool.
     """
 
     raise_on_fail: bool = False
@@ -863,9 +851,6 @@ class ConfigOptions(Generic[ExecutorType]):
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
-    cuda_stream_policy: CUDAStreamPoolConfig | None = dataclasses.field(
-        default_factory=_default_cuda_stream_policy
-    )
 
     @classmethod
     def from_polars_engine(
@@ -880,7 +865,6 @@ class ConfigOptions(Generic[ExecutorType]):
             "parquet_options",
             "raise_on_fail",
             "memory_resource_config",
-            "cuda_stream_policy",
             "hardware_binding",
         }
 
@@ -950,30 +934,5 @@ class ConfigOptions(Generic[ExecutorType]):
             "device": engine.device,
             "memory_resource_config": user_memory_resource_config,
         }
-
-        # Handle "cuda-stream-policy".
-        # The default will depend on the executor.
-        user_cuda_stream_policy = engine.config.get(
-            "cuda_stream_policy", None
-        ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
-
-        cuda_stream_policy: CUDAStreamPoolConfig | None
-
-        if user_cuda_stream_policy is None:
-            if executor.name == "streaming":
-                cuda_stream_policy = CUDAStreamPoolConfig()
-            else:
-                cuda_stream_policy = None
-        else:
-            cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
-
-        if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
-            executor.name != "streaming"
-        ):
-            raise ValueError(
-                "A stream pool is only supported by the streaming executor."
-            )
-
-        kwargs["cuda_stream_policy"] = cuda_stream_policy
 
         return cls(**kwargs)

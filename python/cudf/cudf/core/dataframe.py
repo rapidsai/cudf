@@ -581,8 +581,16 @@ def _listlike_to_column_accessor(
         if index is None:
             index = cudf.RangeIndex(0)
         if columns is not None:
+            # An empty (zero-row) column with no data has no inferable type;
+            # default it to ``object`` to match pandas (cudf otherwise uses
+            # the default string dtype). Scoped to zero-row columns so the
+            # padded case keeps the string dtype and does not surface the
+            # inherent None-vs-NaN difference.
+            empty_col_dtype = (
+                np.dtype("object") if len(index) == 0 else DEFAULT_STRING_DTYPE
+            )
             col_data = {
-                col_label: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
+                col_label: column_empty(len(index), dtype=empty_col_dtype)
                 for col_label in columns
             }
         else:
@@ -675,7 +683,7 @@ def _listlike_to_column_accessor(
                     ser = ser.reindex(temp_index)
                 temp_data[i] = ser._column
 
-            temp_frame = DataFrame._from_data(
+            combined = DataFrame._from_data(
                 ColumnAccessor(
                     temp_data,
                     verify=False,
@@ -683,9 +691,18 @@ def _listlike_to_column_accessor(
                 ),
                 index=temp_index,
             )
-            transpose = temp_frame.T
         else:
-            transpose = cudf.concat(data, axis=1).T
+            combined = cudf.concat(data, axis=1)
+        # Aligning rows above can upcast integer columns that gained nulls
+        # (e.g. int -> float64), leaving columns with differing dtypes;
+        # transpose requires a single dtype, so promote to a common one
+        # first (matching pandas, which upcasts the whole frame).
+        if combined._num_columns > 1:
+            common_dtype = find_common_type(
+                [dtype for _, dtype in combined._dtypes]
+            )
+            combined = combined.astype(common_dtype)
+        transpose = combined.T
 
         if columns is None:
             columns = pd.RangeIndex(transpose._num_columns)
@@ -1088,7 +1105,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     index = index[:0]
                     col_accessor = ColumnAccessor(
                         {
-                            col: column_empty(0, dtype=DEFAULT_STRING_DTYPE)
+                            # Zero-row no-data columns default to ``object``
+                            # to match pandas.
+                            col: column_empty(0, dtype=np.dtype("object"))
                             for col in columns
                         },
                         verify=False,
@@ -1106,9 +1125,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if index is None:
                 index = RangeIndex(0)
             if columns is not None:
+                # Zero-row no-data columns default to ``object`` to match
+                # pandas; padded columns keep the string dtype.
+                empty_col_dtype = (
+                    np.dtype("object")
+                    if len(index) == 0
+                    else DEFAULT_STRING_DTYPE
+                )
                 col_accessor = ColumnAccessor(
                     {
-                        k: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
+                        k: column_empty(len(index), dtype=empty_col_dtype)
                         for k in columns
                     },
                     verify=False,
@@ -3213,6 +3239,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def reindex(
         self,
         labels=None,
+        *,
         index=None,
         columns=None,
         axis=None,
@@ -3275,20 +3302,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> new_index = ['Safari', 'Iceweasel', 'Comodo Dragon', 'IE10',
         ...              'Chrome']
         >>> df.reindex(new_index)
-                    http_status response_time
-        Safari                404          0.07
-        Iceweasel            <NA>           NaN
-        Comodo Dragon        <NA>           NaN
-        IE10                  404          0.08
-        Chrome                200          0.02
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.reindex`
-
-            Note: One difference from Pandas is that ``NA`` is used for rows
-            that do not match, rather than ``NaN``. One side effect of this is
-            that the column ``http_status`` retains an integer dtype in cuDF
-            where it is cast to float in Pandas.
+                      http_status response_time
+        Safari              404.0          0.07
+        Iceweasel             NaN           NaN
+        Comodo Dragon         NaN           NaN
+        IE10                404.0          0.08
+        Chrome              200.0          0.02
 
         We can fill in the missing values by
         passing a value to the keyword ``fill_value``.
@@ -3324,6 +3343,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if labels is None and index is None and columns is None:
             return self.copy(deep=copy)
+
+        if labels is not None and index is not None and columns is not None:
+            raise TypeError(
+                "Cannot specify all of 'labels', 'index', 'columns'."
+            )
 
         # pandas simply ignores the labels keyword if it is provided in
         # addition to index and columns, but it prohibits the axis arg.
@@ -3526,7 +3550,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             and not isinstance(keys[0], (cudf.MultiIndex, pd.MultiIndex))
         ):
             # Don't turn single level MultiIndex into an Index
-            idx = Index._from_column(data_to_add[0], name=names[0])
+            freq = (
+                getattr(keys[0], "freq", None)
+                if isinstance(keys[0], (cudf.Index, pd.Index))
+                else None
+            )
+            if freq is not None and data_to_add[0].dtype.kind == "M":
+                # Preserve the freq of a DatetimeIndex passed as the key.
+                idx = cudf.DatetimeIndex._from_column(
+                    data_to_add[0], name=names[0], freq=freq
+                )
+            else:
+                idx = Index._from_column(data_to_add[0], name=names[0])
         else:
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
@@ -3909,7 +3944,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     self.index, how="right", sort=False
                 )
 
-        value = as_column(value, nan_as_null=nan_as_null)
+        if isinstance(value, (list, tuple)) and len(value) == 0:
+            # An empty list-like assigned as a DataFrame column has no
+            # inferable dtype and becomes float64, matching pandas (note
+            # pd.Series([]) is object, but DataFrame column assignment is
+            # float64).
+            value = as_column(
+                value, nan_as_null=nan_as_null, dtype=np.dtype(np.float64)
+            )
+        else:
+            value = as_column(value, nan_as_null=nan_as_null)
         self._data.insert(name, value, loc=loc)
 
     @property
@@ -4223,16 +4267,27 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
             if level is not None and isinstance(self.index, MultiIndex):
-                level = self.index._get_level_label(level)
+                # Resolve to the ColumnAccessor label (e.g. the positional key
+                # ``0`` for an unnamed level), NOT the level *name* (which is
+                # ``None`` for unnamed levels and would insert a spurious extra
+                # column rather than overwrite the level being renamed).
+                ca_label, _ = self.index._level_to_ca_label(level)
                 level_values = self.index.get_level_values(level)
                 ca = self.index._data.copy(deep=copy)
-                ca[level] = level_values._column.find_and_replace(
+                vals = list(index.values())
+                is_all_na = all(val is None for val in vals)
+                ca[ca_label] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
-                    replacement=list(index.values()),
+                    replacement=vals,
+                    all_nan=is_all_na,
                 )
                 out_index = type(self.index)._from_data(
                     ca, name=self.index.name
                 )
+                # ``_from_data`` derives level names from the ColumnAccessor
+                # keys (positional ints for an unnamed MultiIndex); restore the
+                # original level names so renaming a level does not rename it.
+                out_index.names = self.index.names
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
@@ -6731,19 +6786,57 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Single    5
         dtype: int64
 
+        Count non-NA entries per row with ``axis=1``:
+
+        >>> df.count(axis=1)
+        0    3
+        1    2
+        2    3
+        3    3
+        4    3
+        dtype: int64
+
         .. pandas-compat::
             :meth:`pandas.DataFrame.count`
-
-            Parameters currently not supported are `axis` and `numeric_only`.
         """
         axis = self._get_axis_from_axis_arg(axis)
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 is currently supported.")
-        return Series._from_column(
-            as_column([col.count for col in self._columns]),
-            index=Index(self._data.to_pandas_index),
-            attrs=self.attrs,
-        )
+        source = self
+        if numeric_only:
+            numeric_cols = (
+                name
+                for name, dtype in self._dtypes
+                if is_dtype_obj_numeric(dtype)
+            )
+            source = self._get_columns_by_label(numeric_cols)
+        if axis == 0:
+            return Series._from_column(
+                as_column([col.count for col in source._columns]),
+                index=Index(source._data.to_pandas_index),
+                attrs=self.attrs,
+            )
+        elif axis == 1:
+            # count non-NA cells per row, i.e. the row-wise sum of each
+            # column's validity. Implemented on-device to avoid a cudf.pandas
+            # fallback that would copy the whole frame to host.
+            if len(source._columns) == 0:
+                result_col = as_column(
+                    0, length=len(self), dtype=np.dtype(np.int64)
+                )
+            else:
+                result_col = functools.reduce(
+                    lambda left, right: left + right,
+                    (
+                        col.notnull().astype(np.dtype(np.int64))
+                        for col in source._columns
+                    ),
+                )
+            return Series._from_column(
+                result_col, index=self.index, attrs=self.attrs
+            )
+        else:
+            raise NotImplementedError(
+                "Only axis=0 and axis=1 are currently supported."
+            )
 
     _SUPPORT_AXIS_LOOKUP = {
         0: 0,
@@ -7017,13 +7110,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         3       bird     2   NaN
 
         By default, missing values are not considered, and the mode of wings
-        are both 0 and 2. The second row of species and legs contains ``NA``,
+        are both 0 and 2. The second row of species and legs contains ``NaN``,
         because they have only one mode, but the DataFrame has two rows.
 
         >>> df.mode()
-          species  legs  wings
-        0    bird     2    0.0
-        1     NaN  <NA>    2.0
+          species legs  wings
+        0    bird  2.0    0.0
+        1     NaN  NaN    2.0
 
         Setting ``dropna=False``, ``NA`` values are considered and they can be
         the mode (like for wings).
@@ -7036,9 +7129,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         computed, and columns of other types are ignored.
 
         >>> df.mode(numeric_only=True)
-           legs  wings
-        0     2    0.0
-        1  <NA>    2.0
+          legs  wings
+        0  2.0    0.0
+        1  NaN    2.0
 
         .. pandas-compat::
             :meth:`pandas.DataFrame.transpose`
@@ -7480,6 +7573,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         index=True,
         encoding=None,
         compression=None,
+        quoting=None,
         lineterminator=None,
         chunksize=None,
         storage_options=None,
@@ -7502,6 +7596,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             encoding=encoding,
             compression=compression,
             storage_options=storage_options,
+            quoting=quoting,
         )
 
     @ioutils.doc_to_orc()

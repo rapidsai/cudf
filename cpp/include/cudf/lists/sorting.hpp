@@ -16,6 +16,7 @@ namespace lists {
  * @addtogroup lists_sort
  * @{
  * @file
+ * @brief API for segmented sorting of elements within each row of a list column
  */
 
 /**

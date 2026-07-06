@@ -413,6 +413,9 @@ include(cmake/thirdparty/get_nanoarrow.cmake)
 # find thread_pool
 include(cmake/thirdparty/get_thread_pool.cmake)
 
+# find xxhash
+include(cmake/thirdparty/get_xxhash.cmake)
+
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
@@ -421,6 +424,9 @@ add_subdirectory(librtcx)
 
 # JIT Embedding helper functions
 include(librtcx/embed.cmake)
+
+# Pre-compiled fragment management helper functions
+include(cmake/Modules/AddFragment.cmake)
 
 # Workaround until https://github.com/rapidsai/rapids-cmake/issues/176 is resolved
 if(NOT BUILD_SHARED_LIBS)
@@ -444,39 +450,39 @@ if(NOT BUILD_SHARED_LIBS)
   )
 endif()
 
-add_embed(cudf_cuda_embed)
+rtcx_add_embed(cudf_cuda_embed)
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
   librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf DEST_DIRECTORY
   cudf/cpp/include/cudf INCLUDE_DIRECTORIES cudf/cpp/include
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/jit DEST_DIRECTORY
   cudf/cpp/src/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/binaryop/jit DEST_DIRECTORY
   cudf/cpp/src/binaryop/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/join/jit DEST_DIRECTORY
   cudf/cpp/src/join/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/rolling DEST_DIRECTORY
   cudf/cpp/src/rolling INCLUDE_DIRECTORIES cudf/cpp/src
 )
 
-embed_includes(
+rtcx_embed_includes(
   cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/transform/jit DEST_DIRECTORY
   cudf/cpp/src/transform/jit INCLUDE_DIRECTORIES cudf/cpp/src
 )
@@ -486,13 +492,91 @@ get_target_property(LIBCUDACXX_RAW_INCLUDE_DIRS CCCL::libcudacxx INTERFACE_INCLU
 foreach(INC_DIR IN LISTS LIBCUDACXX_RAW_INCLUDE_DIRS)
   cmake_path(GET INC_DIR FILENAME INC_DIR_NAME)
 
-  embed_includes(
+  rtcx_embed_includes(
     cudf_cuda_embed SOURCE_DIRECTORY ${INC_DIR} DEST_DIRECTORY CCCL/libcudacxx/${INC_DIR_NAME}
     INCLUDE_DIRECTORIES CCCL/libcudacxx/${INC_DIR_NAME}
   )
 endforeach()
 
-embed(cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+rtcx_embed(
+  cudf_cuda_embed COMPRESSION zstd OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
+
+rtcx_add_embed(cudf_fragments)
+
+list(APPEND CUDF_PRECOMPILE_PHYSICAL_TYPES uint8_t uint16_t uint32_t uint64_t numeric::decimal32
+     numeric::decimal64 numeric::decimal128
+)
+
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
+  set(FRAGMENT_NAME transform_kernel)
+  get_property(
+    FILE_INDEX
+    TARGET cudf_fragments__embed_props
+    PROPERTY EMBED_FILE_INDEX
+  )
+  set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+  set(INSTANCE
+      "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+  )
+  add_fragment(
+    cudf_fragments
+    FRAGMENT
+    ${VARIANT_NAME}
+    SOURCE
+    src/transform/jit/kernel.cu
+    KERNEL_INSTANCE
+    ${INSTANCE}
+    UDF_TYPE
+    "int(${TYPE} *, ${TYPE})"
+    DEFINITIONS
+    CUDF_LTO_MODE
+    ARRAY_IDS
+    ${FRAGMENT_NAME}_FILE_INDEX
+    ${FRAGMENT_NAME}_INSTANCE
+    ARRAY_VALUES
+    ${FILE_INDEX}
+    "${INSTANCE}"
+  )
+endforeach()
+
+foreach(TYPE IN ITEMS ${CUDF_PRECOMPILE_PHYSICAL_TYPES})
+  foreach(RHS_IS_SCALAR IN ITEMS "false" "true")
+    set(FRAGMENT_NAME transform_kernel)
+    get_property(
+      FILE_INDEX
+      TARGET cudf_fragments__embed_props
+      PROPERTY EMBED_FILE_INDEX
+    )
+    set(VARIANT_NAME transform_kernel_${FILE_INDEX})
+    set(INSTANCE
+        "cudf::jit::transform_kernel<false, false, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::column_device_view_core, ${TYPE}, false, 0>, cudf::jit::column_accessor<1ULL, cudf::column_device_view_core, ${TYPE}, ${RHS_IS_SCALAR}, 0>>, cudf::jit::type_list<cudf::jit::column_accessor<0ULL, cudf::mutable_column_device_view_core, ${TYPE}, false, 0>>>"
+    )
+    add_fragment(
+      cudf_fragments
+      FRAGMENT
+      ${VARIANT_NAME}
+      SOURCE
+      src/transform/jit/kernel.cu
+      KERNEL_INSTANCE
+      ${INSTANCE}
+      UDF_TYPE
+      "int(${TYPE} *, ${TYPE}, ${TYPE})"
+      DEFINITIONS
+      CUDF_LTO_MODE
+      ARRAY_IDS
+      ${FRAGMENT_NAME}_FILE_INDEX
+      ${FRAGMENT_NAME}_INSTANCE
+      ARRAY_VALUES
+      ${FILE_INDEX}
+      "${INSTANCE}"
+    )
+  endforeach()
+endforeach()
+
+rtcx_embed(
+  cudf_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
 
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
@@ -503,6 +587,7 @@ add_library(
   src/aggregation/result_cache.cpp
   src/ast/expression_parser.cpp
   src/ast/expressions.cpp
+  src/ast/jit/expressions.cpp
   src/ast/operators.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/ATan2.cu
@@ -877,7 +962,7 @@ add_library(
   src/reductions/std.cu
   src/reductions/sum.cu
   src/reductions/sum_of_squares.cu
-  src/reductions/sum_with_overflow.cu
+  src/reductions/sum_overflow.cu
   src/reductions/unique_count.cu
   src/reductions/unique_count_column.cu
   src/reductions/var.cu
@@ -1053,9 +1138,10 @@ add_library(
   src/utilities/type_checks.cpp
   src/utilities/type_dispatcher.cpp
   ${cudf_cuda_embed_SOURCE_DIR}/cudf_cuda_embed.s
+  ${cudf_fragments_SOURCE_DIR}/cudf_fragments.s
 )
 
-add_dependencies(cudf cudf_cuda_embed)
+add_dependencies(cudf cudf_cuda_embed cudf_fragments)
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
@@ -1125,7 +1211,9 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
+          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
           "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
+          "$<BUILD_INTERFACE:${cudf_fragments_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
@@ -1167,8 +1255,15 @@ target_compile_definitions(cudf PRIVATE THRUST_FORCE_32_BIT_OFFSET_TYPE=1 CCCL_A
 target_link_libraries(
   cudf
   PUBLIC CCCL::CCCL $<BUILD_LOCAL_INTERFACE:BS::thread_pool>
-  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp> $<BUILD_LOCAL_INTERFACE:cuco::cuco> ZLIB::ZLIB
-          ${CUDF_nvcomp_TARGET} kvikio::kvikio ${CUDF_nanoarrow_TARGET} zstd rtcx::rtcx
+  PRIVATE $<BUILD_LOCAL_INTERFACE:nvtx3::nvtx3-cpp>
+          $<BUILD_LOCAL_INTERFACE:cuco::cuco>
+          ZLIB::ZLIB
+          ${CUDF_nvcomp_TARGET}
+          kvikio::kvikio
+          ${CUDF_nanoarrow_TARGET}
+          zstd
+          $<BUILD_LOCAL_INTERFACE:xxhash>
+          rtcx::rtcx
 )
 
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public

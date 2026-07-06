@@ -204,10 +204,10 @@ struct MixedJoinTest : public cudf::test::BaseFixture {
   /**
    * Compare two join results, sorting both before comparison since order is not guaranteed.
    */
-  void compare_join_results(const PairJoinReturn& expected_result,
-                            const PairJoinReturn& actual_result)
+  void compare_join_results(PairJoinReturn const& expected_result,
+                            PairJoinReturn const& actual_result)
   {
-    auto device_results_to_host = [](const PairJoinReturn& result) {
+    auto device_results_to_host = [](PairJoinReturn const& result) {
       // Create column views from device_uvectors
       auto left_view  = cudf::column_view(cudf::data_type{cudf::type_to_id<cudf::size_type>()},
                                          result.first->size(),
@@ -669,7 +669,7 @@ TEST_F(MixedInnerJoinTestInt32, LargeDataMultiBlockCoordination)
   EXPECT_EQ(result.second->size(), expected_size);
   EXPECT_GT(expected_size, 0);
 
-  auto to_sorted_pairs = [](const PairJoinReturn& join_result) {
+  auto to_sorted_pairs = [](PairJoinReturn const& join_result) {
     std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
     for (size_t i = 0; i < join_result.first->size(); ++i) {
       result_pairs.emplace_back(join_result.first->element(i, cudf::get_default_stream()),

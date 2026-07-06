@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -32,8 +32,8 @@ using parquet::detail::pass_intermediate_data;
 
 void hybrid_scan_reader_impl::handle_chunking(
   read_mode mode,
-  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
-  cudf::host_span<bool const> data_page_mask)
+  std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
+  host_span<bool const> data_page_mask)
 {
   // if this is our first time in here, setup the first pass.
   if (!_pass_itm_data) {
@@ -78,7 +78,7 @@ void hybrid_scan_reader_impl::handle_chunking(
 }
 
 void hybrid_scan_reader_impl::setup_next_pass(
-  cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data)
+  std::span<cudf::device_span<uint8_t const> const> column_chunk_data)
 {
   auto const num_passes = _file_itm_data.num_passes();
   CUDF_EXPECTS(num_passes == 1,

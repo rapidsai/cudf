@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -34,6 +35,7 @@ struct sort_groupby_helper;
  * @addtogroup aggregation_groupby
  * @{
  * @file
+ * @brief Class definitions for grouping and aggregating values within groups of rows.
  */
 
 /**
@@ -174,7 +176,7 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> aggregate(
-    host_span<aggregation_request const> requests,
+    std::span<aggregation_request const> requests,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
   /**
@@ -230,7 +232,7 @@ class groupby {
    * specified in `requests`.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> scan(
-    host_span<scan_request const> requests,
+    std::span<scan_request const> requests,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -287,7 +289,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> shift(
     table_view const& values,
-    host_span<size_type const> offsets,
+    std::span<size_type const> offsets,
     std::vector<std::reference_wrapper<scalar const>> const& fill_values,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
@@ -361,7 +363,7 @@ class groupby {
    */
   std::pair<std::unique_ptr<table>, std::unique_ptr<table>> replace_nulls(
     table_view const& values,
-    host_span<cudf::replace_policy const> replace_policies,
+    std::span<cudf::replace_policy const> replace_policies,
     rmm::cuda_stream_view stream      = cudf::get_default_stream(),
     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
@@ -392,18 +394,18 @@ class groupby {
    * aggregation requests.
    */
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> dispatch_aggregation(
-    host_span<aggregation_request const> requests,
+    std::span<aggregation_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
   // Sort-based groupby
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_aggregate(
-    host_span<aggregation_request const> requests,
+    std::span<aggregation_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 
   std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> sort_scan(
-    host_span<scan_request const> requests,
+    std::span<scan_request const> requests,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr);
 };
