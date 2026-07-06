@@ -18,7 +18,6 @@ from cudf_polars.streaming.io import Scan, StreamingScan
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import StatsCollector
-    from cudf_polars.streaming.io import FusedScan, SplitScan
 
 
 @dataclass(frozen=True)
@@ -176,16 +175,6 @@ def prefetch_parquet_file_metadata_for_ir(
     return cached_parquet_info
 
 
-def _attach_cached_parquet_info(
-    node: SplitScan | FusedScan,
-    cached_parquet_info_map: dict[str, CachedParquetInfo],
-) -> None:
-    cached = [cached_parquet_info_map[path] for path in node.paths]
-    Scan._validate_cached_parquet_info(node.paths, cached)
-    node.cached_parquet_info = cached
-    node._non_child_args = (*node._non_child_args[:-1], cached)
-
-
 def attach_cached_parquet_metadata(
     root: IR,
     cached_parquet_info_map: dict[str, CachedParquetInfo],
@@ -205,4 +194,7 @@ def attach_cached_parquet_metadata(
     for node in traversal([root]):
         if isinstance(node, StreamingScan):
             for scan in node.scans:
-                _attach_cached_parquet_info(scan, cached_parquet_info_map)
+                cached = [cached_parquet_info_map[path] for path in scan.paths]
+                Scan._validate_cached_parquet_info(scan.paths, cached)
+                scan.cached_parquet_info = cached
+                scan._non_child_args = (*scan._non_child_args[:-1], cached)
