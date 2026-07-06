@@ -331,6 +331,9 @@ aggregate_reader_metadata::read_bloom_filters(
 
   // Flag to check if we have at least one valid bloom filter offset
   auto have_bloom_filters = false;
+  // Speculatively read when a bloom filter's length is absent, enough to cover the header (and
+  // often the whole bitset).
+  auto constexpr speculative_read_size = int64_t{512};
   // Build complete bloom filter byte ranges (header + bitset) for every column chunk
   std::vector<std::vector<cudf::io::text::byte_range_info>> bloom_filter_byte_ranges_per_source(
     row_group_indices.size());
@@ -352,7 +355,7 @@ aggregate_reader_metadata::read_bloom_filters(
             // Length absent: read a speculative chunk to recover the bitset size.
             auto const length = col_meta.bloom_filter_length.has_value()
                                   ? static_cast<int64_t>(col_meta.bloom_filter_length.value())
-                                  : bloom_filter_speculative_read_size;
+                                  : speculative_read_size;
             source_ranges.push_back(
               cudf::io::text::byte_range_info{col_meta.bloom_filter_offset.value(), length});
           } else {

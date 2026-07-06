@@ -145,11 +145,6 @@ struct surviving_row_group_metrics {
 };
 
 /**
- * @brief Bytes enough to recover the header (and often the whole bitset) in one speculative read.
- */
-inline constexpr int64_t bloom_filter_speculative_read_size = 512;
-
-/**
  * @brief Parses and validates a Parquet `BloomFilterHeader` from the front of `bytes`
  *
  * @param bytes Host bytes starting at the beginning of a bloom filter (header followed by bitset)
