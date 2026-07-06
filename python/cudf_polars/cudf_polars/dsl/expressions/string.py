@@ -284,8 +284,8 @@ class StringFunction(Expr):
             format, strict, exact, _ = self.options
             if not format and not strict:
                 raise NotImplementedError("format inference requires strict checking")
-            # cache is CPU-only memoization of parsed values; it has no effect
-            # on the result so we ignore it on the GPU.
+            if format is not None:
+                _validate_datetime_format(format)
             if not exact:
                 raise NotImplementedError("Strptime does not support exact=False")
         elif self.name in {
@@ -1079,6 +1079,38 @@ class StringFunction(Expr):
         )  # pragma: no cover; handled by init raising
 
 
+# Specifiers understood by libcudf's datetime format compiler
+# (see cpp/src/strings/convert/convert_datetime.cu). Any other specifier
+# (e.g. %F, %+, %.f, %#z) is unsupported on the GPU engine.
+_LIBCUDF_DATETIME_SPECIFIERS = frozenset("YymdHIMSfzZpjWwUu")
+
+
+def _validate_datetime_format(format: str) -> None:
+    """Raise ``NotImplementedError`` if libcudf cannot parse ``format``."""
+    i = 0
+    n = len(format)
+    while i < n:
+        if format[i] != "%":
+            i += 1
+            continue
+        i += 1
+        if i < n and format[i] == "%":  # escaped literal '%'
+            i += 1
+            continue
+        # libcudf only accepts a single-digit precision prefix before 'f'.
+        if i < n and format[i].isdigit():
+            if i + 1 >= n or format[i + 1] != "f":
+                raise NotImplementedError(
+                    f"Unsupported datetime format {format!r} for the GPU engine"
+                )
+            i += 1
+        if i >= n or format[i] not in _LIBCUDF_DATETIME_SPECIFIERS:
+            raise NotImplementedError(
+                f"Unsupported datetime format {format!r} for the GPU engine"
+            )
+        i += 1
+
+
 def _infer_datetime_format(val: str) -> str | None:
     # port of parts of infer.rs and patterns.rs from polars rust
     DATETIME_DMY_RE = re.compile(
@@ -1099,7 +1131,7 @@ def _infer_datetime_format(val: str) -> str | None:
                 :?
                 (\d{1,2})
                 (
-                    \.(\d{1,9})
+                    \.(?P<frac>\d{1,9})
                 )?
             )?
         )?
@@ -1127,7 +1159,7 @@ def _infer_datetime_format(val: str) -> str | None:
                 :?
                 (\d{1,2})
                 (
-                    \.(\d{1,9})
+                    \.(?P<frac>\d{1,9})
                 )?
             )?
         )?
@@ -1165,23 +1197,44 @@ def _infer_datetime_format(val: str) -> str | None:
     """,
         re.VERBOSE,
     )
+    # Formats ending in "%S" are tried first so that, when a fractional
+    # component is present, its precision can be appended as "%<n>f" (libcudf
+    # reads exactly ``n`` sub-second digits). No-seconds variants follow, and
+    # date-only formats come last.
     PATTERN_FORMATS = {
         "DATETIME_DMY": [
-            "%d-%m-%Y",
-            "%d/%m/%Y",
-            "%d.%m.%Y",
             "%d-%m-%Y %H:%M:%S",
             "%d/%m/%Y %H:%M:%S",
             "%d.%m.%Y %H:%M:%S",
+            "%d-%m-%YT%H:%M:%S",
+            "%d/%m/%YT%H:%M:%S",
+            "%d.%m.%YT%H:%M:%S",
+            "%d-%m-%Y %H:%M",
+            "%d/%m/%Y %H:%M",
+            "%d.%m.%Y %H:%M",
+            "%d-%m-%YT%H:%M",
+            "%d/%m/%YT%H:%M",
+            "%d.%m.%YT%H:%M",
+            "%d-%m-%Y",
+            "%d/%m/%Y",
+            "%d.%m.%Y",
         ],
         "DATETIME_YMD": [
-            "%Y/%m/%d",
-            "%Y-%m-%d",
-            "%Y.%m.%d",
             "%Y-%m-%d %H:%M:%S",
             "%Y/%m/%d %H:%M:%S",
             "%Y.%m.%d %H:%M:%S",
             "%Y-%m-%dT%H:%M:%S",
+            "%Y/%m/%dT%H:%M:%S",
+            "%Y.%m.%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%Y/%m/%d %H:%M",
+            "%Y.%m.%d %H:%M",
+            "%Y-%m-%dT%H:%M",
+            "%Y/%m/%dT%H:%M",
+            "%Y.%m.%dT%H:%M",
+            "%Y-%m-%d",
+            "%Y/%m/%d",
+            "%Y.%m.%d",
         ],
         "DATETIME_YMDZ": [
             "%Y-%m-%dT%H:%M:%S%z",
@@ -1199,11 +1252,28 @@ def _infer_datetime_format(val: str) -> str | None:
             month = int(m.group("month"))
             if not (1 <= month <= 12):
                 continue
-            for fmt in PATTERN_FORMATS[pattern_name]:
-                try:
-                    datetime.strptime(val, fmt)
-                except ValueError:
-                    continue
-                else:
-                    return fmt
+            frac = m.groupdict().get("frac")
+            if frac is not None:
+                # datetime.strptime cannot validate chrono-style optional
+                # fractions, so strip the ".<digits>" portion, match the
+                # seconds skeleton, and re-attach the observed precision.
+                dot = m.start("frac") - 1
+                skeleton = val[:dot] + val[m.end("frac") :]
+                for fmt in PATTERN_FORMATS[pattern_name]:
+                    if not fmt.endswith("%S"):
+                        continue
+                    try:
+                        datetime.strptime(skeleton, fmt)
+                    except ValueError:
+                        continue
+                    else:
+                        return f"{fmt}.%{len(frac)}f"
+            else:
+                for fmt in PATTERN_FORMATS[pattern_name]:
+                    try:
+                        datetime.strptime(val, fmt)
+                    except ValueError:
+                        continue
+                    else:
+                        return fmt
     return None
