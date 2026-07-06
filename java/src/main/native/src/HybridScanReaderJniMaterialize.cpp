@@ -19,14 +19,9 @@ using namespace cudf::jni::hybrid_scan;
 
 namespace {
 
-// When the row mask is all-true (filter path with RowMaskKind::ALL_TRUE), the computed data page
-// mask is also all-true and bit-identical to passing NO, so short-circuit to skip the compute.
-// Payload paths pass row_mask_all_true = false (the default).
-exp_pq::use_data_page_mask resolve_data_page_mask_mode(bool use_data_page_mask,
-                                                       bool row_mask_all_true = false)
+inline exp_pq::use_data_page_mask to_data_page_mask(bool use_data_page_mask)
 {
-  return (use_data_page_mask && !row_mask_all_true) ? exp_pq::use_data_page_mask::YES
-                                                    : exp_pq::use_data_page_mask::NO;
+  return use_data_page_mask ? exp_pq::use_data_page_mask::YES : exp_pq::use_data_page_mask::NO;
 }
 
 }  // namespace
@@ -34,19 +29,18 @@ exp_pq::use_data_page_mask resolve_data_page_mask_mode(bool use_data_page_mask,
 extern "C" {
 
 // ----------------------------------------------------------------------
-// Single-shot materialize
+// Two-step materialize (filter + payload)
 // ----------------------------------------------------------------------
 
 // Returns: [row_mask_col_handle, filter_table_col0_handle, ..., filter_table_colN_handle]
 JNIEXPORT jlongArray JNICALL
-Java_ai_rapids_cudf_HybridScanReader_materializeFilterColumnsWithKind(JNIEnv* env,
-                                                                      jclass,
-                                                                      jlong handle,
-                                                                      jintArray j_row_groups,
-                                                                      jlongArray j_addrs,
-                                                                      jlongArray j_lens,
-                                                                      jboolean use_data_page_mask,
-                                                                      jboolean all_true)
+Java_ai_rapids_cudf_HybridScanReader_materializeFilterColumns(JNIEnv* env,
+                                                              jclass,
+                                                              jlong handle,
+                                                              jintArray j_row_groups,
+                                                              jlongArray j_addrs,
+                                                              jlongArray j_lens,
+                                                              jboolean use_page_level_pruning)
 {
   JNI_NULL_CHECK(env, handle, "handle is null", nullptr);
   JNI_NULL_CHECK(env, j_row_groups, "row groups is null", nullptr);
@@ -58,13 +52,14 @@ Java_ai_rapids_cudf_HybridScanReader_materializeFilterColumnsWithKind(JNIEnv* en
     auto spans    = make_device_spans(env, j_addrs, j_lens);
     auto stream   = cudf::get_default_stream();
     auto mr       = cudf::get_current_device_resource_ref();
-    // Build the owned row mask according to the requested kind.
-    auto row_mask_col = all_true
-                          ? wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr)
-                          : wrapper->reader->build_row_mask_with_page_index_stats(
-                              holder.span(), wrapper->options, stream, mr);
+    // Build the owned row mask. Seed with page index stats when page-level pruning is enabled,
+    // otherwise build an all-true mask.
+    auto row_mask_col = use_page_level_pruning
+                          ? wrapper->reader->build_row_mask_with_page_index_stats(
+                              holder.span(), wrapper->options, stream, mr)
+                          : wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr);
     auto mut_view     = row_mask_col->mutable_view();
-    auto mode         = resolve_data_page_mask_mode(use_data_page_mask, all_true);
+    auto mode         = to_data_page_mask(use_page_level_pruning);
     auto result       = wrapper->reader->materialize_filter_columns(
       holder.span(), spans, mut_view, mode, wrapper->options, stream, mr);
     // Pack: [row_mask_handle, table_col0, ..., table_colN]
@@ -93,7 +88,7 @@ Java_ai_rapids_cudf_HybridScanReader_materializePayloadColumns(JNIEnv* env,
                                                                jlongArray j_addrs,
                                                                jlongArray j_lens,
                                                                jlong row_mask_view_handle,
-                                                               jboolean use_data_page_mask)
+                                                               jboolean use_page_level_pruning)
 {
   JNI_NULL_CHECK(env, handle, "handle is null", nullptr);
   JNI_NULL_CHECK(env, j_row_groups, "row groups is null", nullptr);
@@ -105,7 +100,7 @@ Java_ai_rapids_cudf_HybridScanReader_materializePayloadColumns(JNIEnv* env,
     auto holder    = make_row_group_span(env, j_row_groups);
     auto spans     = make_device_spans(env, j_addrs, j_lens);
     auto* row_mask = reinterpret_cast<cudf::column_view const*>(row_mask_view_handle);
-    auto mode      = resolve_data_page_mask_mode(use_data_page_mask);
+    auto mode      = to_data_page_mask(use_page_level_pruning);
     auto result =
       wrapper->reader->materialize_payload_columns(holder.span(),
                                                    spans,
@@ -118,6 +113,10 @@ Java_ai_rapids_cudf_HybridScanReader_materializePayloadColumns(JNIEnv* env,
   }
   JNI_CATCH(env, nullptr);
 }
+
+// ----------------------------------------------------------------------
+// One-shot materialize (all columns)
+// ----------------------------------------------------------------------
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_HybridScanReader_materializeAllColumns(
   JNIEnv* env, jclass, jlong handle, jintArray j_row_groups, jlongArray j_addrs, jlongArray j_lens)
@@ -144,21 +143,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_HybridScanReader_materializeAll
 // Chunked materialize
 // ----------------------------------------------------------------------
 
-// Builds the row mask according to the requested kind, sets up chunking state in the
-// underlying reader, and stores the owned row mask in the wrapper. Subsequent
-// materializeFilterColumnsChunk calls mutate this column in place; takeFilterRowMask
-// transfers ownership of the mutated column out to Java.
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_setupChunkingForFilterColumnsWithKind(
-  JNIEnv* env,
-  jclass,
-  jlong handle,
-  jlong chunk_read_limit,
-  jlong pass_read_limit,
-  jintArray j_row_groups,
-  jboolean use_data_page_mask,
-  jboolean all_true,
-  jlongArray j_addrs,
-  jlongArray j_lens)
+// Builds the row mask, sets up chunking state in the underlying reader, and
+// stores the owned row mask in the wrapper. Subsequent materializeFilterColumnsChunk
+// calls mutate this column in place. takeFilterRowMask transfers ownership of the
+// mutated column out to Java.
+JNIEXPORT void JNICALL
+Java_ai_rapids_cudf_HybridScanReader_setupChunkingForFilterColumns(JNIEnv* env,
+                                                                   jclass,
+                                                                   jlong handle,
+                                                                   jlong chunk_read_limit,
+                                                                   jlong pass_read_limit,
+                                                                   jintArray j_row_groups,
+                                                                   jboolean use_page_level_pruning,
+                                                                   jlongArray j_addrs,
+                                                                   jlongArray j_lens)
 {
   JNI_NULL_CHECK(env, handle, "handle is null", );
   JNI_NULL_CHECK(env, j_row_groups, "row groups is null", );
@@ -177,12 +175,11 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_setupChunkingForFilt
     // Discard any prior chunked-filter row mask: starting a new chunked filter pipeline
     // implicitly ends the previous one.
     wrapper->chunked_filter_row_mask.reset();
-    // Build the owned row mask according to the requested kind.
-    auto row_mask_col = all_true
-                          ? wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr)
-                          : wrapper->reader->build_row_mask_with_page_index_stats(
-                              holder.span(), wrapper->options, stream, mr);
-    auto mode         = resolve_data_page_mask_mode(use_data_page_mask, all_true);
+    auto row_mask_col = use_page_level_pruning
+                          ? wrapper->reader->build_row_mask_with_page_index_stats(
+                              holder.span(), wrapper->options, stream, mr)
+                          : wrapper->reader->build_all_true_row_mask(holder.span(), stream, mr);
+    auto mode         = to_data_page_mask(use_page_level_pruning);
     wrapper->reader->setup_chunking_for_filter_columns(chunk_limit,
                                                        pass_limit,
                                                        holder.span(),
@@ -251,7 +248,7 @@ Java_ai_rapids_cudf_HybridScanReader_setupChunkingForPayloadColumns(JNIEnv* env,
                                                                     jlong pass_read_limit,
                                                                     jintArray j_row_groups,
                                                                     jlong row_mask_view_handle,
-                                                                    jboolean use_data_page_mask,
+                                                                    jboolean use_page_level_pruning,
                                                                     jlongArray j_addrs,
                                                                     jlongArray j_lens)
 {
@@ -267,7 +264,7 @@ Java_ai_rapids_cudf_HybridScanReader_setupChunkingForPayloadColumns(JNIEnv* env,
     auto holder            = make_row_group_span(env, j_row_groups);
     auto spans             = make_device_spans(env, j_addrs, j_lens);
     auto* row_mask         = reinterpret_cast<cudf::column_view const*>(row_mask_view_handle);
-    auto mode              = resolve_data_page_mask_mode(use_data_page_mask);
+    auto mode              = to_data_page_mask(use_page_level_pruning);
     wrapper->reader->setup_chunking_for_payload_columns(chunk_limit,
                                                         pass_limit,
                                                         holder.span(),

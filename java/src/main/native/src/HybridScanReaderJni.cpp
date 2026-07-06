@@ -5,6 +5,7 @@
 
 #include "cudf_jni_apis.hpp"
 #include "hybrid_scan_jni_internal.hpp"
+#include "jni_compiled_expr.hpp"
 #include "jni_utils.hpp"
 
 #include <cudf/column/column.hpp>
@@ -31,7 +32,6 @@ Java_ai_rapids_cudf_HybridScanReader_createFromFooter(JNIEnv* env,
                                                       jclass,
                                                       jlong footer_address,
                                                       jlong footer_length,
-                                                      jlong filter_handle,
                                                       jobjectArray j_column_names,
                                                       jbooleanArray j_binary_as_str,
                                                       jint time_unit_type_id)
@@ -40,9 +40,8 @@ Java_ai_rapids_cudf_HybridScanReader_createFromFooter(JNIEnv* env,
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
-    auto const len = checked_size_t(env, footer_length, "footerLength");
-    auto opts =
-      build_options(env, filter_handle, j_column_names, j_binary_as_str, time_unit_type_id);
+    auto const len         = checked_size_t(env, footer_length, "footerLength");
+    auto opts              = build_options(env, j_column_names, j_binary_as_str, time_unit_type_id);
     auto const* footer_ptr = reinterpret_cast<uint8_t const*>(footer_address);
     cudf::host_span<uint8_t const> footer_bytes{footer_ptr, len};
     auto wrapper = std::make_unique<hybrid_scan_reader_wrapper>(footer_bytes, std::move(opts));
@@ -59,6 +58,33 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_destroy(JNIEnv* env,
   {
     cudf::jni::auto_set_device(env);
     delete reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
+  }
+  JNI_CATCH(env, );
+}
+
+// Install or clear the AST filter, then invalidate the cached column selection so the next
+// filter/materialize/byte-range call re-selects columns against the new filter.
+//
+// parquet_reader_options::set_filter installs a filter but has no clear_filter. To support
+// filter replacement / clearing without rebuilding the reader, the wrapper caches a
+// filterless snapshot (`base_options`); we start from that snapshot on every call and then
+// (optionally) install the new filter on top.
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_HybridScanReader_setFilter(JNIEnv* env,
+                                                                      jclass,
+                                                                      jlong handle,
+                                                                      jlong filter_handle)
+{
+  JNI_NULL_CHECK(env, handle, "handle is null", );
+  JNI_TRY
+  {
+    cudf::jni::auto_set_device(env);
+    auto* wrapper    = reinterpret_cast<hybrid_scan_reader_wrapper*>(handle);
+    wrapper->options = wrapper->base_options;
+    if (filter_handle != 0) {
+      auto const* expr = reinterpret_cast<cudf::jni::ast::compiled_expr const*>(filter_handle);
+      wrapper->options.set_filter(expr->get_top_expression());
+    }
+    wrapper->reader->reset_column_selection();
   }
   JNI_CATCH(env, );
 }

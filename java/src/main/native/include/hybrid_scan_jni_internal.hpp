@@ -31,19 +31,27 @@ using cudf::io::text::byte_range_info;
  *        most reader methods need to be supplied alongside the call. Keeping them together
  *        avoids the need for the caller (Java) to round-trip the options across JNI on each
  *        call.
+ *
+ *        Also caches a filterless snapshot of the options (`base_options`) so that
+ *        setFilter can clear or replace the filter without reconstructing the reader:
+ *        parquet_reader_options exposes set_filter to install a filter but has no
+ *        clear_filter, so replacing/clearing is done by copying base_options over
+ *        `options` and optionally re-installing the new filter on top.
  */
 struct hybrid_scan_reader_wrapper {
   cudf::io::parquet_reader_options options;
+  cudf::io::parquet_reader_options base_options;
   std::unique_ptr<exp_pq::hybrid_scan_reader> reader;
   // Owns the row mask for the duration of a chunked filter-column pipeline.
-  // Set by setup_chunking_for_filter_columns_with_kind, mutated in place by each
+  // Set by setup_chunking_for_filter_columns, mutated in place by each
   // materialize_filter_columns_chunk call, and transferred to Java by take_filter_row_mask.
   // nullptr outside of an active chunked-filter session.
   std::unique_ptr<cudf::column> chunked_filter_row_mask;
 
   hybrid_scan_reader_wrapper(cudf::host_span<uint8_t const> footer_bytes,
                              cudf::io::parquet_reader_options opts)
-    : options(std::move(opts)),
+    : options(opts),
+      base_options(std::move(opts)),
       reader(std::make_unique<exp_pq::hybrid_scan_reader>(footer_bytes, options))
   {
   }
@@ -61,9 +69,10 @@ struct row_group_span_holder {
 /**
  * @brief Build a parquet_reader_options from the supplied JNI args. The footer is provided
  *        separately because the hybrid_scan_reader does not consume it via the options.
+ *        The returned options carry no filter; use HybridScanReader.setFilter (JNI:
+ *        Java_ai_rapids_cudf_HybridScanReader_setFilter) to install one after construction.
  */
 cudf::io::parquet_reader_options build_options(JNIEnv* env,
-                                               jlong filter_handle,
                                                jobjectArray j_column_names,
                                                jbooleanArray j_read_binary_as_string,
                                                jint time_unit_type_id);

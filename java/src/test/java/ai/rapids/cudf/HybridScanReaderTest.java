@@ -48,7 +48,53 @@ public class HybridScanReaderTest extends CudfTestBase {
   @Test
   void testNullFooterThrows() {
     assertThrows(IllegalArgumentException.class,
-        () -> new HybridScanReader(null, optsForColumns("id"), null));
+        () -> new HybridScanReader(null, optsForColumns("id")));
+  }
+
+  // --------------------------------------------------------------------
+  // Tests: setFilter()
+  // --------------------------------------------------------------------
+
+  /**
+   * Verifies setFilter() invalidates the C++ reader's cached column-selection state:
+   * calling filterRowGroupsWithStats() after replacing filterA with filterB yields the
+   * same result as a freshly-constructed reader with filterB. If reset_column_selection
+   * did not fire, the second call would silently reuse filterA's cached filter columns.
+   */
+  @Test
+  void testSetFilterInvalidatesCachedColumnSelection(@TempDir Path tmp) throws IOException {
+    // filterA prunes group 0 (max zip 109,900); filterB prunes groups 0 and 1 (max zip 209,900).
+    try (OpenReader open = OpenReader.standard(tmp).withFilter("zip_code", BinaryOperator.GREATER, 150000)) {
+      int[] afterA = open.reader.filterRowGroupsWithStats(open.reader.allRowGroups());
+      assertArrayEquals(new int[]{1, 2}, afterA, "filterA prunes group 0 only");
+      open.withFilter("zip_code", BinaryOperator.GREATER, 250000);
+      int[] afterB = open.reader.filterRowGroupsWithStats(open.reader.allRowGroups());
+      assertArrayEquals(new int[]{2}, afterB,
+          "filterB must produce fresh pruning; stale cached filter-columns would return afterA");
+    }
+  }
+
+  /**
+   * Verifies setFilter(null) clears the filter: after clearing, filter-based APIs behave
+   * as though no filter was ever installed. The most direct signal is that the C++
+   * reader's "Empty input filter expression" precondition fires on
+   * filterRowGroupsWithStats(), which happily succeeded (returning a subset) with the
+   * filter installed. If setFilter(null) had left the filter in place, the second call
+   * would silently return the same pruned subset instead of throwing.
+   */
+  @Test
+  void testSetFilterNullClearsFilter(@TempDir Path tmp) throws IOException {
+    try (OpenReader open = OpenReader.standard(tmp).withFilter("zip_code", BinaryOperator.GREATER, 150000)) {
+      assertArrayEquals(new int[]{1, 2},
+          open.reader.filterRowGroupsWithStats(open.reader.allRowGroups()),
+          "sanity: filter prunes group 0");
+      open.reader.setFilter(null);
+      open.filter.close();
+      open.filter = null;
+      assertThrows(CudfException.class,
+          () -> open.reader.filterRowGroupsWithStats(open.reader.allRowGroups()),
+          "after setFilter(null), filter-based APIs must reject with 'Empty input filter expression'");
+    }
   }
 
   // --------------------------------------------------------------------
@@ -113,8 +159,7 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(survived));
       try (HybridScanReader.FilterMaterializationResult fr =
-               reader.materializeFilterColumns(survived, filterCols, UseDataPageMask.YES,
-                   HybridScanReader.RowMaskKind.PAGE_INDEX_STATS)) {
+               reader.materializeFilterColumns(survived, filterCols, true)) {
         assertEquals(5000L, fr.table().getRowCount(),
             "Group 2 (zip_code 100,000–104,999) entirely satisfies zip_code > 99,999");
       } finally {
@@ -124,9 +169,9 @@ public class HybridScanReaderTest extends CudfTestBase {
   }
 
   /**
-   * Verifies that materializeFilterColumns(..., PAGE_INDEX_STATS) throws when invoked
-   * without a prior setupPageIndex() call: the page-index metadata must be materialised
-   * before page-level row-mask construction can succeed.
+   * Verifies that materializeFilterColumns(..., usePageLevelPruning=true) throws when
+   * invoked without a prior setupPageIndex() call: the page-index metadata must be
+   * materialised before page-level row-mask construction can succeed.
    */
   @Test
   void testPageIndexStatsRequiresSetupPageIndex(@TempDir Path tmp) throws IOException {
@@ -137,8 +182,7 @@ public class HybridScanReaderTest extends CudfTestBase {
           open.file, reader.filterColumnChunksByteRanges(survived));
       try {
         assertThrows(CudfException.class, () ->
-            reader.materializeFilterColumns(survived, filterCols, UseDataPageMask.YES,
-                HybridScanReader.RowMaskKind.PAGE_INDEX_STATS));
+            reader.materializeFilterColumns(survived, filterCols, true));
       } finally {
         closeAll(filterCols);
       }
@@ -513,8 +557,7 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(survived));
       try (HybridScanReader.FilterMaterializationResult fr =
-               reader.materializeFilterColumns(survived, filterCols, UseDataPageMask.NO,
-                   HybridScanReader.RowMaskKind.ALL_TRUE)) {
+               reader.materializeFilterColumns(survived, filterCols, false)) {
         assertEquals(1599L, fr.table().getRowCount());
         assertEquals(1, fr.table().getNumberOfColumns(), "filter table contains only zip_code");
       } finally {
@@ -542,10 +585,9 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] payloadCols = copyRangesToDevice(
           open.file, reader.payloadColumnChunksByteRanges(survived));
       try (HybridScanReader.FilterMaterializationResult fr =
-               reader.materializeFilterColumns(survived, filterCols, UseDataPageMask.NO,
-                   HybridScanReader.RowMaskKind.ALL_TRUE);
+               reader.materializeFilterColumns(survived, filterCols, false);
            Table payload = reader.materializePayloadColumns(survived, payloadCols,
-               fr.rowMask(), UseDataPageMask.NO)) {
+               fr.rowMask(), false)) {
         assertEquals(1599L, payload.getRowCount());
         assertEquals(2, payload.getNumberOfColumns(), "payload table contains id + num_units");
       } finally {
@@ -597,8 +639,7 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(survived));
       try {
-        reader.setupChunkingForFilterColumns(0L, 0L, survived,
-            UseDataPageMask.NO, HybridScanReader.RowMaskKind.ALL_TRUE, filterCols);
+        reader.setupChunkingForFilterColumns(0L, 0L, survived, false, filterCols);
         assertTrue(reader.hasNextTableChunk(), "chunking active after setup");
       } finally {
         closeAll(filterCols);
@@ -625,8 +666,7 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(survived));
       try {
-        reader.setupChunkingForFilterColumns(0L, 0L, survived,
-            UseDataPageMask.NO, HybridScanReader.RowMaskKind.ALL_TRUE, filterCols);
+        reader.setupChunkingForFilterColumns(0L, 0L, survived, false, filterCols);
         long total = 0;
         while (reader.hasNextTableChunk()) {
           try (Table chunk = reader.materializeFilterColumnsChunk()) {
@@ -677,13 +717,12 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(survived));
       try {
-        reader.setupChunkingForFilterColumns(0L, 0L, survived,
-            UseDataPageMask.NO, HybridScanReader.RowMaskKind.ALL_TRUE, filterCols);
+        reader.setupChunkingForFilterColumns(0L, 0L, survived, false, filterCols);
         try (ColumnVector rowMask = reader.takeFilterRowMask()) {
           assertEquals(2000L, rowMask.getRowCount(),
               "Mask spans input rows of surviving row groups (groups 1+2)");
           assertEquals(2000L, countTrue(rowMask),
-              "All entries true: ALL_TRUE seed, no filter evaluation has run");
+              "All entries true: all-true seed, no filter evaluation has run");
         }
       } finally {
         closeAll(filterCols);
@@ -707,8 +746,7 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] filterCols = copyRangesToDevice(
           open.file, reader.filterColumnChunksByteRanges(allRgs));
       try {
-        reader.setupChunkingForFilterColumns(0L, 0L, allRgs,
-            UseDataPageMask.YES, HybridScanReader.RowMaskKind.PAGE_INDEX_STATS, filterCols);
+        reader.setupChunkingForFilterColumns(0L, 0L, allRgs, true, filterCols);
         try (ColumnVector rowMask = reader.takeFilterRowMask()) {
           assertEquals(15000L, rowMask.getRowCount(),
               "Mask spans all 3 row groups: 3 × 5000 = 15,000");
@@ -739,11 +777,9 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] payloadCols = copyRangesToDevice(
           open.file, reader.payloadColumnChunksByteRanges(survived));
       try {
-        reader.setupChunkingForFilterColumns(0L, 0L, survived,
-            UseDataPageMask.NO, HybridScanReader.RowMaskKind.ALL_TRUE, filterCols);
+        reader.setupChunkingForFilterColumns(0L, 0L, survived, false, filterCols);
         try (ColumnVector rowMask = reader.takeFilterRowMask()) {
-          reader.setupChunkingForPayloadColumns(0L, 0L, survived,
-              rowMask, UseDataPageMask.NO, payloadCols);
+          reader.setupChunkingForPayloadColumns(0L, 0L, survived, rowMask, false, payloadCols);
           assertTrue(reader.hasNextTableChunk(), "payload chunking active after setup");
         }
       } finally {
@@ -772,14 +808,12 @@ public class HybridScanReaderTest extends CudfTestBase {
       DeviceMemoryBuffer[] payloadCols = copyRangesToDevice(
           open.file, reader.payloadColumnChunksByteRanges(survived));
       try {
-        reader.setupChunkingForFilterColumns(0L, 0L, survived,
-            UseDataPageMask.NO, HybridScanReader.RowMaskKind.ALL_TRUE, filterCols);
+        reader.setupChunkingForFilterColumns(0L, 0L, survived, false, filterCols);
         while (reader.hasNextTableChunk()) {
           reader.materializeFilterColumnsChunk().close();
         }
         try (ColumnVector rowMask = reader.takeFilterRowMask()) {
-          reader.setupChunkingForPayloadColumns(0L, 0L, survived,
-              rowMask, UseDataPageMask.NO, payloadCols);
+          reader.setupChunkingForPayloadColumns(0L, 0L, survived, rowMask, false, payloadCols);
           long total = 0;
           while (reader.hasNextTableChunk()) {
             try (Table chunk = reader.materializePayloadColumnsChunk(rowMask)) {
@@ -972,31 +1006,26 @@ public class HybridScanReaderTest extends CudfTestBase {
         invocation("payloadColumnChunksByteRanges", r -> r.payloadColumnChunksByteRanges(null)),
         invocation("allColumnChunksByteRanges", r -> r.allColumnChunksByteRanges(null)),
         invocation("materializeFilterColumns", r -> r.materializeFilterColumns(null,
-            new DeviceMemoryBuffer[0], UseDataPageMask.NO,
-            HybridScanReader.RowMaskKind.ALL_TRUE)),
+            new DeviceMemoryBuffer[0], false)),
         invocation("materializeFilterColumnsNullBuffers", r -> r.materializeFilterColumns(
-            new int[]{0}, null, UseDataPageMask.NO,
-            HybridScanReader.RowMaskKind.ALL_TRUE)),
+            new int[]{0}, null, false)),
         invocation("materializeFilterColumnsNullBufferElement", r -> r.materializeFilterColumns(
-            new int[]{0}, new DeviceMemoryBuffer[]{null}, UseDataPageMask.NO,
-            HybridScanReader.RowMaskKind.ALL_TRUE)),
+            new int[]{0}, new DeviceMemoryBuffer[]{null}, false)),
         invocation("materializePayloadColumnsNullRowGroups", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.materializePayloadColumns(null, new DeviceMemoryBuffer[0],
-                mask, UseDataPageMask.NO);
+            r.materializePayloadColumns(null, new DeviceMemoryBuffer[0], mask, false);
           }
         }),
         invocation("materializePayloadColumnsNullRowMask", r -> r.materializePayloadColumns(
-            new int[]{0}, new DeviceMemoryBuffer[0], null, UseDataPageMask.NO)),
+            new int[]{0}, new DeviceMemoryBuffer[0], null, false)),
         invocation("materializePayloadColumnsNullBuffers", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.materializePayloadColumns(new int[]{0}, null, mask, UseDataPageMask.NO);
+            r.materializePayloadColumns(new int[]{0}, null, mask, false);
           }
         }),
         invocation("materializePayloadColumnsNullBufferElement", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.materializePayloadColumns(new int[]{0}, new DeviceMemoryBuffer[]{null},
-                mask, UseDataPageMask.NO);
+            r.materializePayloadColumns(new int[]{0}, new DeviceMemoryBuffer[]{null}, mask, false);
           }
         }),
         invocation("materializeAllColumns", r -> r.materializeAllColumns(null,
@@ -1006,32 +1035,29 @@ public class HybridScanReaderTest extends CudfTestBase {
         invocation("materializeAllColumnsNullBufferElement", r -> r.materializeAllColumns(
             new int[]{0}, new DeviceMemoryBuffer[]{null})),
         invocation("setupChunkingForFilterColumns", r -> r.setupChunkingForFilterColumns(
-            0L, 0L, null, UseDataPageMask.NO, HybridScanReader.RowMaskKind.ALL_TRUE,
-            new DeviceMemoryBuffer[0])),
+            0L, 0L, null, false, new DeviceMemoryBuffer[0])),
         invocation("setupChunkingForFilterColumnsNullBuffers", r ->
-            r.setupChunkingForFilterColumns(0L, 0L, new int[]{0}, UseDataPageMask.NO,
-                HybridScanReader.RowMaskKind.ALL_TRUE, null)),
+            r.setupChunkingForFilterColumns(0L, 0L, new int[]{0}, false, null)),
         invocation("setupChunkingForFilterColumnsNullBufferElement", r ->
-            r.setupChunkingForFilterColumns(0L, 0L, new int[]{0}, UseDataPageMask.NO,
-                HybridScanReader.RowMaskKind.ALL_TRUE, new DeviceMemoryBuffer[]{null})),
+            r.setupChunkingForFilterColumns(0L, 0L, new int[]{0}, false,
+                new DeviceMemoryBuffer[]{null})),
         invocation("setupChunkingForPayloadColumnsNullRowGroups", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.setupChunkingForPayloadColumns(0L, 0L, null, mask, UseDataPageMask.NO,
+            r.setupChunkingForPayloadColumns(0L, 0L, null, mask, false,
                 new DeviceMemoryBuffer[0]);
           }
         }),
         invocation("setupChunkingForPayloadColumnsNullRowMask", r ->
-            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, null, UseDataPageMask.NO,
+            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, null, false,
                 new DeviceMemoryBuffer[0])),
         invocation("setupChunkingForPayloadColumnsNullBuffers", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, UseDataPageMask.NO,
-                null);
+            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, false, null);
           }
         }),
         invocation("setupChunkingForPayloadColumnsNullBufferElement", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, UseDataPageMask.NO,
+            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, false,
                 new DeviceMemoryBuffer[]{null});
           }
         }),
@@ -1065,12 +1091,11 @@ public class HybridScanReaderTest extends CudfTestBase {
     // both arguments are validated independently.
     return Stream.of(
         invocation("setupChunkingForFilterColumns", r -> r.setupChunkingForFilterColumns(
-            -1L, 0L, new int[]{0}, UseDataPageMask.NO,
-            HybridScanReader.RowMaskKind.ALL_TRUE, new DeviceMemoryBuffer[0])),
+            -1L, 0L, new int[]{0}, false, new DeviceMemoryBuffer[0])),
         invocation("setupChunkingForPayloadColumns", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.setupChunkingForPayloadColumns(-1L, 0L, new int[]{0}, mask,
-                UseDataPageMask.NO, new DeviceMemoryBuffer[0]);
+            r.setupChunkingForPayloadColumns(-1L, 0L, new int[]{0}, mask, false,
+                new DeviceMemoryBuffer[0]);
           }
         }),
         invocation("setupChunkingForAllColumns", r ->
@@ -1078,8 +1103,8 @@ public class HybridScanReaderTest extends CudfTestBase {
         invocation("constructRowGroupPasses", r ->
             r.constructRowGroupPasses(new int[]{0}, -1L)),
         invocation("setupChunkingForFilterColumnsPassLimit", r ->
-            r.setupChunkingForFilterColumns(0L, -1L, new int[]{0}, UseDataPageMask.NO,
-                HybridScanReader.RowMaskKind.ALL_TRUE, new DeviceMemoryBuffer[0]))
+            r.setupChunkingForFilterColumns(0L, -1L, new int[]{0}, false,
+                new DeviceMemoryBuffer[0]))
     );
   }
 
@@ -1122,24 +1147,21 @@ public class HybridScanReaderTest extends CudfTestBase {
         invocation("payloadColumnChunksByteRanges", r -> r.payloadColumnChunksByteRanges(new int[]{0})),
         invocation("allColumnChunksByteRanges", r -> r.allColumnChunksByteRanges(new int[]{0})),
         invocation("materializeFilterColumns", r -> r.materializeFilterColumns(new int[]{0},
-            new DeviceMemoryBuffer[0], UseDataPageMask.NO,
-            HybridScanReader.RowMaskKind.ALL_TRUE)),
+            new DeviceMemoryBuffer[0], false)),
         invocation("materializePayloadColumns", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.materializePayloadColumns(new int[]{0}, new DeviceMemoryBuffer[0],
-                mask, UseDataPageMask.NO);
+            r.materializePayloadColumns(new int[]{0}, new DeviceMemoryBuffer[0], mask, false);
           }
         }),
         invocation("materializeAllColumns", r -> r.materializeAllColumns(new int[]{0},
             new DeviceMemoryBuffer[0])),
         invocation("setupChunkingForFilterColumns", r -> r.setupChunkingForFilterColumns(
-            0L, 0L, new int[]{0}, UseDataPageMask.NO,
-            HybridScanReader.RowMaskKind.ALL_TRUE, new DeviceMemoryBuffer[0])),
+            0L, 0L, new int[]{0}, false, new DeviceMemoryBuffer[0])),
         invocation("materializeFilterColumnsChunk", HybridScanReader::materializeFilterColumnsChunk),
         invocation("takeFilterRowMask", HybridScanReader::takeFilterRowMask),
         invocation("setupChunkingForPayloadColumns", r -> {
           try (ColumnVector mask = ColumnVector.fromBooleans(true)) {
-            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, UseDataPageMask.NO,
+            r.setupChunkingForPayloadColumns(0L, 0L, new int[]{0}, mask, false,
                 new DeviceMemoryBuffer[0]);
           }
         }),
@@ -1152,7 +1174,8 @@ public class HybridScanReaderTest extends CudfTestBase {
             0L, 0L, new int[]{0}, new DeviceMemoryBuffer[0])),
         invocation("materializeAllColumnsChunk", HybridScanReader::materializeAllColumnsChunk),
         invocation("hasNextTableChunk", HybridScanReader::hasNextTableChunk),
-        invocation("constructRowGroupPasses", r -> r.constructRowGroupPasses(new int[]{0}, 0L))
+        invocation("constructRowGroupPasses", r -> r.constructRowGroupPasses(new int[]{0}, 0L)),
+        invocation("setFilter", r -> r.setFilter(null))
     );
   }
 
@@ -1205,7 +1228,7 @@ public class HybridScanReaderTest extends CudfTestBase {
       HybridScanReader reader = null;
       try {
         footer = extractFooter(file);
-        reader = new HybridScanReader(footer, optsForColumns(cols), null);
+        reader = new HybridScanReader(footer, optsForColumns(cols));
       } catch (Throwable t) {
         for (AutoCloseable c : new AutoCloseable[]{reader, footer, file}) {
           if (c != null) {
@@ -1222,33 +1245,23 @@ public class HybridScanReaderTest extends CudfTestBase {
     }
 
     /**
-     * Replace the inner reader with one constructed from the same buffers and the supplied
-     * filter expression. Closes the previous reader (and any previous filter) but keeps the
-     * file/footer buffers, so the caller's try-with-resources still owns the same lifetime.
+     * Install a fresh filter expression on the existing reader via
+     * {@link HybridScanReader#setFilter(CompiledExpression)}. Closes any previously
+     * installed filter after the new one is committed so this fixture retains a single
+     * live filter at any time.
      */
     OpenReader withFilter(String col, BinaryOperator op, int literal) {
-      CompiledExpression newFilter = null;
-      HybridScanReader newReader = null;
+      CompiledExpression newFilter = new BinaryOperation(op, new ColumnNameReference(col),
+          Literal.ofInt(literal)).compile();
       try {
-        newFilter = new BinaryOperation(op, new ColumnNameReference(col),
-            Literal.ofInt(literal)).compile();
-        newReader = new HybridScanReader(footer, optsForColumns(DEFAULT_COLS), newFilter);
+        reader.setFilter(newFilter);
       } catch (Throwable t) {
-        if (newReader != null) newReader.close();
-        if (newFilter != null) newFilter.close();
+        newFilter.close();
         throw t;
       }
-      // Swap fields before closing the old resources so that close() will still see and
-      // release the new ones if any of the old closes throws.
-      HybridScanReader oldReader = this.reader;
       CompiledExpression oldFilter = this.filter;
-      this.reader = newReader;
       this.filter = newFilter;
-      try {
-        if (oldFilter != null) oldFilter.close();
-      } finally {
-        oldReader.close();
-      }
+      if (oldFilter != null) oldFilter.close();
       return this;
     }
 

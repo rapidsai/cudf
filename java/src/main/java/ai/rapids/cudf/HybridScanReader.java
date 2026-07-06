@@ -22,19 +22,31 @@ import java.util.Arrays;
  *   <li>Read the Parquet footer (and optional page index) to drive row-group / page-level
  *       pruning.</li>
  *   <li>Filter the row groups using statistics, bloom filters, and dictionary pages.</li>
- *   <li>Materialize the <em>filter</em> columns; the reader builds an initial row mask from
- *       the chosen {@link RowMaskKind} and then mutates it down to only the rows that
- *       survive the AST filter.</li>
+ *   <li>Materialize the <em>filter</em> columns; the reader builds an initial row mask
+ *       (all true or seeded from page index stats when page-level pruning is enabled)
+ *       and then mutates it down to only the rows that survive the AST filter.</li>
  *   <li>Materialize the <em>payload</em> columns using the surviving row mask.</li>
  * </ol>
  *
- * <p>Single-shot convenience methods are provided for the common cases
- * ({@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], UseDataPageMask, RowMaskKind)}
- * and {@link #materializeAllColumns(int[], DeviceMemoryBuffer[])}).
+ * <p>A two-step convenience flow is provided for selective filters
+ * ({@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], boolean)} then
+ * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, boolean)}),
+ * and a one-shot {@link #materializeAllColumns(int[], DeviceMemoryBuffer[])} is provided
+ * for small files or broad filters.
  *
  * <p>Chunked / streaming materialization is also supported via the
  * {@code setupChunkingFor*} + {@code materialize*Chunk} family of methods, mirroring the C++
  * chunked reader pipeline.
+ *
+ * <p>The filter and payload materialization paths accept a boolean that toggles
+ * page-level pruning: skips decode of pages the filter (or row mask) proves empty, in
+ * exchange for a per-page stats scan and a carried row-mask column. Enable when the
+ * workload prunes many pages; on the filter path this requires prior
+ * {@link #setupPageIndex(HostMemoryBuffer)}.
+ *
+ * <p>The reader is created with no filter expression installed. Filter-related APIs
+ * behave as though nothing has been filtered out unless a filter is first supplied via
+ * {@link #setFilter(CompiledExpression)}.
  *
  * <p>The APIs in this file are experimental and subject to change.
  */
@@ -42,22 +54,6 @@ import java.util.Arrays;
 public class HybridScanReader implements AutoCloseable {
   static {
     NativeDepsLoader.loadNativeDeps();
-  }
-
-  /**
-   * Selects which row mask is built internally by
-   * {@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], UseDataPageMask, RowMaskKind)}
-   * and
-   * {@link #setupChunkingForFilterColumns(long, long, int[], UseDataPageMask, RowMaskKind, DeviceMemoryBuffer[])}.
-   */
-  public enum RowMaskKind {
-    /** All rows initially visible — no page-level pruning. */
-    ALL_TRUE,
-    /**
-     * Row visibility seeded from page-index statistics. Requires that
-     * {@link #setupPageIndex(HostMemoryBuffer)} has already been called.
-     */
-    PAGE_INDEX_STATS
   }
 
   /**
@@ -130,9 +126,8 @@ public class HybridScanReader implements AutoCloseable {
   }
 
   private final HybridScanReaderCleaner cleaner;
-  // Strong ref so the native options' raw pointer to the AST is not collected
-  // while this reader is alive.
-  private final CompiledExpression filter;
+
+  private CompiledExpression filter = null;
   private boolean isClosed = false;
 
   /**
@@ -141,38 +136,52 @@ public class HybridScanReader implements AutoCloseable {
    * <p>The {@code footerBuffer} can be obtained by reading the last few bytes of a Parquet
    * file. See the {@code hybrid_scan_io} example for a helper that does exactly that.
    *
+   * <p>The reader is created with no filter expression installed. Filter-related APIs
+   * (e.g. {@link #filterRowGroupsWithStats(int[])},
+   * {@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], boolean)}) behave as
+   * though nothing has been filtered out unless a filter is first supplied via
+   * {@link #setFilter(CompiledExpression)}.
+   *
    * @param footerBuffer host-resident footer bytes (must remain valid until this constructor
    *                     returns; the JNI reads the bytes synchronously)
    * @param opts         Parquet reader options. {@link ParquetOptions#DEFAULT} by default.
-   * @param filter       optional compiled AST filter expression. May be {@code null}.
-   *                     The expression typically uses {@link ai.rapids.cudf.ast.ColumnNameReference}
-   *                     to refer to columns by name. If non-{@code null}, it must remain
-   *                     unclosed for the entire lifetime of this reader.
    */
-  public HybridScanReader(HostMemoryBuffer footerBuffer,
-                          ParquetOptions opts,
-                          CompiledExpression filter) {
+  public HybridScanReader(HostMemoryBuffer footerBuffer, ParquetOptions opts) {
     if (footerBuffer == null) {
       throw new IllegalArgumentException("footerBuffer must not be null");
     }
     if (opts == null) {
       opts = ParquetOptions.DEFAULT;
     }
-    this.filter = filter;
-    long filterHandle = (filter != null) ? filter.getNativeHandle() : 0;
     String[] columnNames = opts.getIncludeColumnNames();
     boolean[] readBinaryAsString = opts.getReadBinaryAsString();
     DType timeUnit = opts.timeUnit();
     long handle = createFromFooter(
         footerBuffer.getAddress(),
         footerBuffer.getLength(),
-        filterHandle,
         columnNames,
         readBinaryAsString,
         timeUnit.getTypeId().getNativeId());
     this.cleaner = new HybridScanReaderCleaner(handle);
     MemoryCleaner.register(this, cleaner);
     cleaner.addRef();
+  }
+
+  /**
+   * Install or replace the filter expression used by all subsequent filter-related APIs on
+   * this reader; pass {@code null} to clear. Cheap to call, so callers can sweep the same
+   * file with several candidate predicates in a loop.
+   *
+   * <p>The caller retains ownership of any previously installed {@code CompiledExpression}
+   * and must close it themselves — this method replaces this reader's strong reference only.
+   *
+   * @param filter the new filter expression, or {@code null} to clear
+   */
+  public void setFilter(CompiledExpression filter) {
+    assertNotClosed();
+    long filterHandle = (filter != null) ? filter.getNativeHandle() : 0;
+    setFilter(cleaner.nativeHandle, filterHandle);
+    this.filter = filter;
   }
 
   // ----------------------------------------------------------------------
@@ -188,8 +197,8 @@ public class HybridScanReader implements AutoCloseable {
 
   /**
    * Materialize the {@code ColumnIndex} / {@code OffsetIndex} structs (collectively, the page
-   * index) from the supplied bytes so that subsequent calls using
-   * {@link RowMaskKind#PAGE_INDEX_STATS} can use them.
+   * index) from the supplied bytes. Required before any filter or payload materialization
+   * call with {@code usePageLevelPruning == true}.
    *
    * @param pageIndexBuffer host-resident page index bytes
    */
@@ -298,7 +307,7 @@ public class HybridScanReader implements AutoCloseable {
    *
    * <p>This result is order-dependent. If filter columns have already been processed on this
    * reader (e.g. via {@link #filterColumnChunksByteRanges(int[])} or
-   * {@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], UseDataPageMask, RowMaskKind)}),
+   * {@link #materializeFilterColumns(int[], DeviceMemoryBuffer[], boolean)}),
    * the filter columns are excluded and only the payload columns are returned. If filter columns
    * have not yet been processed, nothing is excluded and the ranges cover the full set of columns
    * that would be read i.e. the columns projected via {@link ParquetOptions}, or all columns in
@@ -318,36 +327,38 @@ public class HybridScanReader implements AutoCloseable {
   }
 
   // ----------------------------------------------------------------------
-  // Single-shot materialize
+  // Two-step materialize (filter + payload)
   // ----------------------------------------------------------------------
 
   /**
-   * Build a row mask according to {@code kind} and materialize the filter columns, applying
-   * the compiled filter expression. The row mask and the resulting filter table are returned
+   * Build the initial row mask, materialize the filter columns, and evaluate the compiled
+   * filter expression against them. The row mask and the resulting filter table are returned
    * together as a {@link FilterMaterializationResult}; close it via try-with-resources.
    *
-   * <p>Pass {@link RowMaskKind#ALL_TRUE} when no page-index-based pruning is needed.
-   * Pass {@link RowMaskKind#PAGE_INDEX_STATS} to seed the mask from page-level statistics
-   * (requires {@link #setupPageIndex(HostMemoryBuffer)} to have been called first).
+   * <p>Set {@code usePageLevelPruning = true} to skip decompression and decode of pages
+   * the filter proves empty. Requires prior {@link #setupPageIndex(HostMemoryBuffer)}.
    *
-   * @param rowGroupIndices  row groups to read
-   * @param columnChunkData  device buffers holding the filter column chunks, in the order
-   *                         returned by {@link #filterColumnChunksByteRanges(int[])}
-   * @param mode             whether to compute and use a data page mask
-   * @param kind             how to initialise the row mask
+   * <p>Cost: a per-page stats scan of filter columns and a carried row-mask column.
+   * Payoff: pruned pages are skipped entirely, typically the dominant read cost. Enable
+   * when a meaningful fraction of pages can be pruned; otherwise leave {@code false}.
+   *
+   * @param rowGroupIndices        row groups to read
+   * @param columnChunkData        device buffers holding the filter column chunks, in the
+   *                               order returned by {@link #filterColumnChunksByteRanges(int[])}
+   * @param usePageLevelPruning    seed the row mask from page-index stats and enable the
+   *                               data page mask; requires prior
+   *                               {@link #setupPageIndex(HostMemoryBuffer)}
    * @return combined filter table and mutated row mask; caller must close this result
    */
   public FilterMaterializationResult materializeFilterColumns(int[] rowGroupIndices,
                                                               DeviceMemoryBuffer[] columnChunkData,
-                                                              UseDataPageMask mode,
-                                                              RowMaskKind kind) {
+                                                              boolean usePageLevelPruning) {
     assertNotClosed();
     requireNonNullRowGroups(rowGroupIndices);
     long[] addrs = bufferAddrs(columnChunkData);
     long[] lens = bufferLens(columnChunkData);
-    boolean allTrue = (kind == RowMaskKind.ALL_TRUE);
-    long[] handles = materializeFilterColumnsWithKind(cleaner.nativeHandle, rowGroupIndices,
-        addrs, lens, mode.getNativeValue(), allTrue);
+    long[] handles = materializeFilterColumns(cleaner.nativeHandle, rowGroupIndices,
+        addrs, lens, usePageLevelPruning);
     ColumnVector rowMask = new ColumnVector(handles[0]);
     try {
       long[] tableHandles = Arrays.copyOfRange(handles, 1, handles.length);
@@ -362,26 +373,36 @@ public class HybridScanReader implements AutoCloseable {
   /**
    * Materialize only the payload columns, applying the supplied row mask to the output.
    *
+   * <p>Set {@code usePageLevelPruning = true} to skip decompression and decode of pages
+   * containing no rows surviving {@code rowMask}. Adds a small mask-build cost; wins
+   * when {@code rowMask} prunes a meaningful fraction of pages.
+   *
    * @param rowGroupIndices  row groups to read
    * @param columnChunkData  device buffers holding the payload column chunks, in the order
    *                         returned by {@link #payloadColumnChunksByteRanges(int[])}
    * @param rowMask          row mask (read-only)
-   * @param mode             whether to compute and use a data page mask
+   * @param usePageLevelPruning  enable the data page mask to skip decode of pages the row
+   *                             mask proves empty; requires prior
+   *                             {@link #setupPageIndex(HostMemoryBuffer)}
    * @return the materialized payload column table
    */
   public Table materializePayloadColumns(int[] rowGroupIndices,
                                          DeviceMemoryBuffer[] columnChunkData,
                                          ColumnVector rowMask,
-                                         UseDataPageMask mode) {
+                                         boolean usePageLevelPruning) {
     assertNotClosed();
     requireNonNullRowGroups(rowGroupIndices);
     requireNonNullRowMask(rowMask);
     long[] addrs = bufferAddrs(columnChunkData);
     long[] lens = bufferLens(columnChunkData);
     long[] handles = materializePayloadColumns(cleaner.nativeHandle, rowGroupIndices,
-        addrs, lens, rowMask.getNativeView(), mode.getNativeValue());
+        addrs, lens, rowMask.getNativeView(), usePageLevelPruning);
     return new Table(handles);
   }
+
+  // ----------------------------------------------------------------------
+  // One-shot materialize (all columns)
+  // ----------------------------------------------------------------------
 
   /**
    * Materialize all (or selected) columns in a single pass. The filter expression is applied
@@ -403,12 +424,19 @@ public class HybridScanReader implements AutoCloseable {
   // ----------------------------------------------------------------------
 
   /**
-   * Build a row mask according to {@code kind} and set up chunking state for filter-column
-   * materialization. The row mask is owned internally by the reader for the duration of
-   * the chunked filter pipeline; subsequent calls to {@link #materializeFilterColumnsChunk()}
-   * mutate it in place. After all chunks are drained, call {@link #takeFilterRowMask()} to
-   * transfer ownership of the row mask to the caller (typically to feed it into
-   * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, UseDataPageMask)}).
+   * Build the initial row mask and set up chunking state for filter-column materialization.
+   * The row mask is owned internally by the reader for the duration of the chunked filter
+   * pipeline; subsequent calls to {@link #materializeFilterColumnsChunk()} mutate it in
+   * place. After all chunks are drained, call {@link #takeFilterRowMask()} to transfer
+   * ownership of the row mask to the caller (typically to feed it into
+   * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, boolean)}).
+   *
+   * <p>Set {@code usePageLevelPruning = true} to skip decompression and decode of pages
+   * the filter proves empty. Requires prior {@link #setupPageIndex(HostMemoryBuffer)}.
+   *
+   * <p>Cost: a per-page stats scan of filter columns and a carried row-mask column.
+   * Payoff: pruned pages are skipped entirely, typically the dominant read cost. Enable
+   * when a meaningful fraction of pages can be pruned; otherwise leave {@code false}.
    *
    * <p>Calling this method again before {@link #takeFilterRowMask()} discards the previous
    * chunked-filter row mask.
@@ -416,23 +444,35 @@ public class HybridScanReader implements AutoCloseable {
    * <p>Caller must keep {@code columnChunkData} open until {@link #takeFilterRowMask()} (or
    * a re-setup); the native reader holds references to it across chunk calls.
    *
-   * @param chunkReadLimit  per-chunk byte limit, or 0 for no limit
-   * @param passReadLimit   per-pass byte limit, or 0 for no limit
-   * @param kind            how to initialise the row mask
+   * @param chunkReadLimit         soft limit (in bytes) on each output chunk returned by
+   *                               the matching {@code materialize*Chunk} call, or 0 for no limit
+   * @param passReadLimit          soft limit (in bytes) on the working memory used to
+   *                               decompress and decode a single subpass (a page-level slice
+   *                               of the selected row groups), or 0 for no limit. Hybrid scan
+   *                               hardcodes the number of row-group passes to 1, so this
+   *                               parameter only bounds the subpass (decode) working set;
+   *                               it does not repartition row groups. To split row groups
+   *                               across multiple passes up front, call
+   *                               {@link #constructRowGroupPasses(int[], long)} first and
+   *                               issue a separate chunked run per returned partition.
+   * @param rowGroupIndices        row groups to read
+   * @param usePageLevelPruning    seed the row mask from page-index stats and enable the
+   *                               data page mask; requires prior
+   *                               {@link #setupPageIndex(HostMemoryBuffer)}
+   * @param columnChunkData        device buffers holding the filter column chunks, in the
+   *                               order returned by {@link #filterColumnChunksByteRanges(int[])}
    */
   public void setupChunkingForFilterColumns(long chunkReadLimit,
                                             long passReadLimit,
                                             int[] rowGroupIndices,
-                                            UseDataPageMask mode,
-                                            RowMaskKind kind,
+                                            boolean usePageLevelPruning,
                                             DeviceMemoryBuffer[] columnChunkData) {
     assertNotClosed();
     requireNonNullRowGroups(rowGroupIndices);
     long[] addrs = bufferAddrs(columnChunkData);
     long[] lens = bufferLens(columnChunkData);
-    boolean allTrue = (kind == RowMaskKind.ALL_TRUE);
-    setupChunkingForFilterColumnsWithKind(cleaner.nativeHandle,
-        chunkReadLimit, passReadLimit, rowGroupIndices, mode.getNativeValue(), allTrue,
+    setupChunkingForFilterColumns(cleaner.nativeHandle,
+        chunkReadLimit, passReadLimit, rowGroupIndices, usePageLevelPruning,
         addrs, lens);
   }
 
@@ -451,11 +491,11 @@ public class HybridScanReader implements AutoCloseable {
    * Transfer ownership of the row mask produced by the chunked filter-column materialization
    * to the caller. Typically called after all {@link #materializeFilterColumnsChunk()} calls
    * complete and immediately before
-   * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, UseDataPageMask)}.
+   * {@link #materializePayloadColumns(int[], DeviceMemoryBuffer[], ColumnVector, boolean)}.
    *
    * <p>After this call the reader has no chunked-filter row mask; subsequent
    * {@link #materializeFilterColumnsChunk()} calls will fail until
-   * {@link #setupChunkingForFilterColumns(long, long, int[], UseDataPageMask, RowMaskKind, DeviceMemoryBuffer[])}
+   * {@link #setupChunkingForFilterColumns(long, long, int[], boolean, DeviceMemoryBuffer[])}
    * is invoked again. If never called, the row mask is freed when the reader is closed.
    *
    * @return the owned row mask {@link ColumnVector}; caller must close it.
@@ -469,14 +509,36 @@ public class HybridScanReader implements AutoCloseable {
    * Set up chunking state for payload-column materialization. Subsequent calls to
    * {@link #materializePayloadColumnsChunk(ColumnVector)} will yield successive chunks.
    *
+   * <p>Set {@code usePageLevelPruning = true} to skip decompression and decode of pages
+   * containing no rows surviving {@code rowMask}. Adds a small mask-build cost; wins
+   * when {@code rowMask} prunes a meaningful fraction of pages.
+   *
    * <p>Caller must keep {@code columnChunkData} open until {@link #hasNextTableChunk()}
    * returns {@code false}; the native reader holds references to it across chunk calls.
+   *
+   * @param chunkReadLimit   soft limit (in bytes) on each output chunk returned by the
+   *                         matching {@code materialize*Chunk} call, or 0 for no limit
+   * @param passReadLimit    soft limit (in bytes) on the working memory used to decompress
+   *                         and decode a single subpass (a page-level slice of the selected
+   *                         row groups), or 0 for no limit. Hybrid scan hardcodes the
+   *                         number of row-group passes to 1, so this parameter only bounds
+   *                         the subpass (decode) working set; it does not repartition row
+   *                         groups. To split row groups across multiple passes up front,
+   *                         call {@link #constructRowGroupPasses(int[], long)} first and
+   *                         issue a separate chunked run per returned partition.
+   * @param rowGroupIndices  row groups to read
+   * @param rowMask          row mask (read-only)
+   * @param usePageLevelPruning  enable the data page mask to skip decode of pages the row
+   *                             mask proves empty; requires prior
+   *                             {@link #setupPageIndex(HostMemoryBuffer)}
+   * @param columnChunkData  device buffers holding the payload column chunks, in the order
+   *                         returned by {@link #payloadColumnChunksByteRanges(int[])}
    */
   public void setupChunkingForPayloadColumns(long chunkReadLimit,
                                              long passReadLimit,
                                              int[] rowGroupIndices,
                                              ColumnVector rowMask,
-                                             UseDataPageMask mode,
+                                             boolean usePageLevelPruning,
                                              DeviceMemoryBuffer[] columnChunkData) {
     assertNotClosed();
     requireNonNullRowGroups(rowGroupIndices);
@@ -484,7 +546,7 @@ public class HybridScanReader implements AutoCloseable {
     long[] addrs = bufferAddrs(columnChunkData);
     long[] lens = bufferLens(columnChunkData);
     setupChunkingForPayloadColumns(cleaner.nativeHandle, chunkReadLimit, passReadLimit,
-        rowGroupIndices, rowMask.getNativeView(), mode.getNativeValue(), addrs, lens);
+        rowGroupIndices, rowMask.getNativeView(), usePageLevelPruning, addrs, lens);
   }
 
   /** @return the next payload-column chunk; throws if no chunk is available. */
@@ -502,6 +564,20 @@ public class HybridScanReader implements AutoCloseable {
    *
    * <p>Caller must keep {@code columnChunkData} open until {@link #hasNextTableChunk()}
    * returns {@code false}; the native reader holds references to it across chunk calls.
+   *
+   * @param chunkReadLimit   soft limit (in bytes) on each output chunk returned by the
+   *                         matching {@code materialize*Chunk} call, or 0 for no limit
+   * @param passReadLimit    soft limit (in bytes) on the working memory used to decompress
+   *                         and decode a single subpass (a page-level slice of the selected
+   *                         row groups), or 0 for no limit. Hybrid scan hardcodes the
+   *                         number of row-group passes to 1, so this parameter only bounds
+   *                         the subpass (decode) working set; it does not repartition row
+   *                         groups. To split row groups across multiple passes up front,
+   *                         call {@link #constructRowGroupPasses(int[], long)} first and
+   *                         issue a separate chunked run per returned partition.
+   * @param rowGroupIndices  row groups to read
+   * @param columnChunkData  device buffers holding all column chunks, in the order returned
+   *                         by {@link #allColumnChunksByteRanges(int[])}
    */
   public void setupChunkingForAllColumns(long chunkReadLimit,
                                          long passReadLimit,
@@ -533,7 +609,11 @@ public class HybridScanReader implements AutoCloseable {
    * given limit. The returned array contains one inner array per pass.
    *
    * @param rowGroupIndices row groups to partition
-   * @param passReadLimit   limit on the amount of memory used by a single pass, or 0 for no limit
+   * @param passReadLimit   limit on the memory used by a single pass, or 0 for no limit.
+   *                        Each returned pass can then be fed to a
+   *                        {@code setupChunkingFor*} call, which will further stream that
+   *                        pass in subpass-sized chunks bounded by its own
+   *                        {@code passReadLimit} argument.
    * @return an array of arrays of row group indices, one per pass
    */
   public int[][] constructRowGroupPasses(int[] rowGroupIndices, long passReadLimit) {
@@ -624,10 +704,11 @@ public class HybridScanReader implements AutoCloseable {
 
   private static native long createFromFooter(long footerAddress,
                                               long footerLength,
-                                              long filterHandle,
                                               String[] columnNames,
                                               boolean[] readBinaryAsString,
                                               int timeUnitTypeId);
+
+  private static native void setFilter(long handle, long filterHandle);
 
   private static native void destroy(long handle);
 
@@ -652,20 +733,21 @@ public class HybridScanReader implements AutoCloseable {
   private static native long[] payloadColumnChunksByteRanges(long handle, int[] rowGroupIndices);
   private static native long[] allColumnChunksByteRanges(long handle, int[] rowGroupIndices);
 
-  // Single-shot materialize
+  // Two-step materialize (filter + payload)
   // Returns: [row_mask_col_handle, table_col0_handle, ..., table_colN_handle]
-  private static native long[] materializeFilterColumnsWithKind(long handle,
-                                                                int[] rowGroupIndices,
-                                                                long[] bufferAddresses,
-                                                                long[] bufferLengths,
-                                                                boolean useDataPageMask,
-                                                                boolean allTrue);
+  private static native long[] materializeFilterColumns(long handle,
+                                                        int[] rowGroupIndices,
+                                                        long[] bufferAddresses,
+                                                        long[] bufferLengths,
+                                                        boolean usePageLevelPruning);
   private static native long[] materializePayloadColumns(long handle,
                                                          int[] rowGroupIndices,
                                                          long[] bufferAddresses,
                                                          long[] bufferLengths,
                                                          long rowMaskViewHandle,
-                                                         boolean useDataPageMask);
+                                                         boolean usePageLevelPruning);
+
+  // One-shot materialize (all columns)
   private static native long[] materializeAllColumns(long handle,
                                                      int[] rowGroupIndices,
                                                      long[] bufferAddresses,
@@ -675,14 +757,13 @@ public class HybridScanReader implements AutoCloseable {
   // Builds the row mask, sets up chunking state, and stores the owned row mask column on
   // the C++ wrapper. Subsequent materializeFilterColumnsChunk calls mutate that column in
   // place; takeFilterRowMask transfers it out to Java.
-  private static native void setupChunkingForFilterColumnsWithKind(long handle,
-                                                                   long chunkReadLimit,
-                                                                   long passReadLimit,
-                                                                   int[] rowGroupIndices,
-                                                                   boolean useDataPageMask,
-                                                                   boolean allTrue,
-                                                                   long[] bufferAddresses,
-                                                                   long[] bufferLengths);
+  private static native void setupChunkingForFilterColumns(long handle,
+                                                           long chunkReadLimit,
+                                                           long passReadLimit,
+                                                           int[] rowGroupIndices,
+                                                           boolean usePageLevelPruning,
+                                                           long[] bufferAddresses,
+                                                           long[] bufferLengths);
   private static native long[] materializeFilterColumnsChunk(long handle);
   private static native long takeFilterRowMask(long handle);
   private static native void setupChunkingForPayloadColumns(long handle,
@@ -690,7 +771,7 @@ public class HybridScanReader implements AutoCloseable {
                                                             long passReadLimit,
                                                             int[] rowGroupIndices,
                                                             long rowMaskViewHandle,
-                                                            boolean useDataPageMask,
+                                                            boolean usePageLevelPruning,
                                                             long[] bufferAddresses,
                                                             long[] bufferLengths);
   private static native long[] materializePayloadColumnsChunk(long handle,

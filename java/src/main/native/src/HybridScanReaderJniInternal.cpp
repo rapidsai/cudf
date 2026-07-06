@@ -4,7 +4,6 @@
  */
 
 #include "hybrid_scan_jni_internal.hpp"
-#include "jni_compiled_expr.hpp"
 
 #include <cudf/utilities/error.hpp>
 
@@ -16,13 +15,14 @@ namespace jni {
 namespace hybrid_scan {
 
 cudf::io::parquet_reader_options build_options(JNIEnv* env,
-                                               jlong filter_handle,
                                                jobjectArray j_column_names,
                                                jbooleanArray j_read_binary_as_string,
                                                jint time_unit_type_id)
 {
   // The hybrid_scan_reader's options builder is constructed without a source_info because
   // the reader works on already-parsed footer bytes (and on byte ranges fetched separately).
+  // Filter is not installed here; use HybridScanReader.setFilter (JNI setFilter) after
+  // construction.
   cudf::io::parquet_reader_options_builder builder;
 
   cudf::jni::native_jstringArray names(env, j_column_names);
@@ -48,17 +48,10 @@ cudf::io::parquet_reader_options build_options(JNIEnv* env,
 
   // convert_strings_to_categories and ignore_missing_columns are fixed to match the
   // standard cudf-java Parquet reader (see readParquet in TableJni.cpp).
-  auto opts = builder.convert_strings_to_categories(false)
-                .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(time_unit_type_id)))
-                .ignore_missing_columns(true)
-                .build();
-
-  if (filter_handle != 0) {
-    auto const* filter_expr = reinterpret_cast<cudf::jni::ast::compiled_expr const*>(filter_handle);
-    opts.set_filter(filter_expr->get_top_expression());
-  }
-
-  return opts;
+  return builder.convert_strings_to_categories(false)
+    .timestamp_type(cudf::data_type(static_cast<cudf::type_id>(time_unit_type_id)))
+    .ignore_missing_columns(true)
+    .build();
 }
 
 row_group_span_holder make_row_group_span(JNIEnv* env, jintArray j_row_groups)
