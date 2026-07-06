@@ -8,44 +8,31 @@ The steps below reproduce the PDS-H benchmark results using the Polars GPU engin
 
 ### Setup
 
-Install `cudf-polars` following the
-[RAPIDS installation guide](https://docs.rapids.ai/install). For nightly wheels, install with
-the `ray` extra (required for multi-GPU benchmarking):
+Install the benchmarks with the `polars` extra (add `ray` for multi-GPU benchmarking). The extra
+pulls in the matching-nightly `cudf-polars`, `rapidsmpf`, and `kvikio`, plus the CPU baselines and
+`tpchgen-cli`, the Rust-based TPC-H data generator used to produce the dataset as Parquet files:
 
 ```bash
 CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
 pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
-    "cudf-polars-cu${CUDA_MAJOR}[ray]>=0.0.0a0"
+    "cudf-benchmarks-cu${CUDA_MAJOR}[polars,ray]>=0.0.0a0"
 ```
 
 Because `cudf-polars` pins to a tested range of Polars versions, the nightly wheel will install
 the highest Polars version the GPU engine currently supports, which may not be the latest
 Polars release.
 
-Then install the benchmarks themselves. They live in the
-[`cudf-benchmarks`](https://github.com/rapidsai/cudf/tree/main/python/cudf_benchmarks) package in
-the cuDF repository, so install it from a checkout. The `polars` extra pulls in the CPU baselines
-and `tpchgen-cli`, the Rust-based TPC-H data generator used to produce the dataset as Parquet
-files:
-
-```bash
-git clone https://github.com/rapidsai/cudf.git
-cd cudf
-pip install python/cudf_benchmarks[polars]
-```
-
-Pass `-e` for an editable install if you plan to modify the benchmarks.
+To hack on the benchmarks, install from a checkout instead (`pip install -e python/cudf_benchmarks[polars]`),
+and bring your own `cudf-polars`/`rapidsmpf`/`kvikio`.
 
 #### CPU-only machines
 
 The benchmarks also run on a machine with no GPU. The CPU frontends, `--frontend polars-cpu`
 (the Polars CPU streaming engine) and `--frontend duckdb`, do not import any CUDA libraries.
-On such a machine, skip the `cudf-polars` install above and install only the CPU dependencies:
+Install the separate CUDA-free wheel:
 
 ```bash
-git clone https://github.com/rapidsai/cudf.git
-cd cudf
-pip install python/cudf_benchmarks[cpu]
+pip install cudf-benchmarks-cpu
 ```
 
 Then generate data and run as below, using `--frontend polars-cpu` or `--frontend duckdb`.

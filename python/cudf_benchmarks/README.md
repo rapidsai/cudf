@@ -8,20 +8,23 @@ SPDX-License-Identifier: Apache-2.0
 End-to-end workload benchmarks (TPC-H / TPC-DS) for cudf-polars and cudf.pandas.
 
 These are whole-engine benchmarks that run at scale and compare against CPU engines
-(polars, DuckDB, pandas). They live in their own package so they can run on CPU-only
-machines without importing CUDA.
+(polars, DuckDB, pandas).
 
-Install it from a checkout of the cuDF repository. The extras install only non-RAPIDS
-packages; the GPU packages (cudf, cudf-polars, rapidsmpf, kvikio) are prerequisites you
-install yourself.
+The benchmarks ship as two wheels so they work on both GPU and CPU-only machines:
 
-| Extra | Installs | Prerequisites (bring your own) |
-|-------|----------|--------------------------------|
-| `cpu` | polars, duckdb, pandas, tpchgen-cli | none |
-| `polars` | duckdb, tpchgen-cli | cudf-polars (brings polars), rapidsmpf, kvikio |
-| `pandas` | tpchgen-cli | cudf (brings pandas) |
-| `dask` | dask, distributed | via `polars` |
-| `ray` | ray | via `polars` |
+- `cudf-benchmarks` — CUDA-suffixed (e.g. `cudf-benchmarks-cu12`). Its extras install the
+  matching-nightly RAPIDS packages, so the benchmark version is tied to the engine it measures.
+- `cudf-benchmarks-cpu` — an unsuffixed, CUDA-free wheel (polars, DuckDB, pandas) for machines
+  with no GPU.
+
+GPU extras on `cudf-benchmarks`:
+
+| Extra | Installs |
+|-------|----------|
+| `polars` | cudf-polars, rapidsmpf, kvikio, duckdb, tpchgen-cli |
+| `pandas` | cudf, pandas, tpchgen-cli |
+| `dask` | rapids-dask-dependency (multi-GPU / multi-node, with `polars`) |
+| `ray` | ray (multi-GPU / multi-node, with `polars`) |
 
 ## Running the benchmarks
 

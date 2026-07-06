@@ -420,6 +420,91 @@ jobs:
       package-name: cudf_polars
       package-type: python
       publish-wheel-search-key: cudf_wheel_python_cudf-polars
+  wheel-build-cudf-benchmarks:
+    # Benchmarks are a nightly-only, reproducibility tool; not published to the release index.
+    if: inputs.build_type == 'nightly'
+    needs: telemetry-setup
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      node_type: cpu8
+      script: ci/build_wheel_cudf_benchmarks.sh
+      package-name: cudf_benchmarks
+      package-type: python
+      pure-wheel: true
+  wheel-build-cudf-benchmarks-cpu:
+    if: inputs.build_type == 'nightly'
+    needs: telemetry-setup
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-build.yaml@main
+    with:
+      # This selects "ARCH=amd64 + the latest supported Python + CUDA".
+      matrix_filter: map(select(.ARCH == "amd64")) | group_by(.CUDA_VER|split(".")|map(tonumber)|.[0]) | map(max_by([(.PY_VER|split(".")|map(tonumber)), (.CUDA_VER|split(".")|map(tonumber))]))
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      node_type: cpu8
+      script: ci/build_wheel_cudf_benchmarks_cpu.sh
+      package-name: cudf_benchmarks_cpu
+      package-type: python
+      pure-wheel: true
+  wheel-publish-cudf-benchmarks:
+    if: inputs.build_type == 'nightly'
+    needs: wheel-build-cudf-benchmarks
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: cudf_benchmarks
+      package-type: python
+      publish-wheel-search-key: cudf_wheel_python_cudf-benchmarks
+  wheel-publish-cudf-benchmarks-cpu:
+    if: inputs.build_type == 'nightly'
+    needs: wheel-build-cudf-benchmarks-cpu
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+      packages: read
+      pull-requests: read
+    secrets: inherit # zizmor: ignore[secrets-inherit]
+    uses: rapidsai/shared-workflows/.github/workflows/wheels-publish.yaml@main
+    with:
+      build_type: ${{ inputs.build_type || 'branch' }}
+      branch: ${{ inputs.branch }}
+      sha: ${{ inputs.sha }}
+      date: ${{ inputs.date }}
+      package-name: cudf_benchmarks_cpu
+      package-type: python
+      publish-wheel-search-key: cudf_wheel_python_cudf-benchmarks-cpu
   trigger-pandas-tests:
     if: inputs.build_type == 'nightly'
     needs: wheel-build-cudf
@@ -454,6 +539,8 @@ jobs:
       - upload-conda
       - wheel-publish-cudf
       - wheel-publish-cudf-polars
+      - wheel-publish-cudf-benchmarks
+      - wheel-publish-cudf-benchmarks-cpu
       - wheel-publish-dask-cudf
       - wheel-publish-libcudf
       - wheel-publish-pylibcudf

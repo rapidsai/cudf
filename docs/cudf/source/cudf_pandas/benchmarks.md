@@ -116,38 +116,26 @@ The steps below reproduce the PDS-H benchmark results using cudf.pandas.
 
 ### Setup
 
-Install `cudf` following the
-[RAPIDS installation guide](https://docs.rapids.ai/install). For nightly wheels:
+Install the benchmarks with the `pandas` extra. It pulls in the matching-nightly `cudf` (for
+`cudf.pandas`), `pandas`, and `tpchgen-cli`, the Rust-based TPC-H data generator used to produce
+the dataset as Parquet files:
 
 ```bash
 CUDA_MAJOR=$(nvidia-smi | grep -oP 'CUDA Version: \K[0-9]+')
 pip install --extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
-    "cudf-cu${CUDA_MAJOR}>=0.0.0a0"
+    "cudf-benchmarks-cu${CUDA_MAJOR}[pandas]>=0.0.0a0"
 ```
 
-Then install the benchmarks themselves. They live in the
-[`cudf-benchmarks`](https://github.com/rapidsai/cudf/tree/main/python/cudf_benchmarks) package in
-the cuDF repository, so install it from a checkout. The `pandas` extra pulls in `tpchgen-cli`, the
-Rust-based TPC-H data generator used to produce the dataset as Parquet files:
-
-```bash
-git clone https://github.com/rapidsai/cudf.git
-cd cudf
-pip install python/cudf_benchmarks[pandas]
-```
-
-Pass `-e` for an editable install if you plan to modify the benchmarks.
+To hack on the benchmarks, install from a checkout instead (`pip install -e python/cudf_benchmarks[pandas]`),
+and bring your own `cudf`.
 
 #### CPU-only machines
 
 The `--executor cpu` benchmark runs on plain pandas and imports no CUDA libraries, so it runs on
-a machine with no GPU. On such a machine, skip the `cudf` install above and install only the CPU
-dependencies:
+a machine with no GPU. Install the separate CUDA-free wheel:
 
 ```bash
-git clone https://github.com/rapidsai/cudf.git
-cd cudf
-pip install python/cudf_benchmarks[cpu]
+pip install cudf-benchmarks-cpu
 ```
 
 Then generate data and run as below with `--executor cpu`. Only `--executor in-memory` needs

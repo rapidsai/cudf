@@ -14,6 +14,7 @@ PYLIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel
 CUDF_POLARS_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python cudf-polars cudf --pure --arch any --cuda "$RAPIDS_CUDA_VERSION")")
 LIBCUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_cpp libcudf-streaming cudf --cuda "$RAPIDS_CUDA_VERSION")")
 CUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python cudf-streaming cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
+CUDF_BENCHMARKS_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_python cudf-benchmarks cudf --pure --arch any --cuda "$RAPIDS_CUDA_VERSION")")
 
 rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
 
@@ -36,6 +37,7 @@ rapids-pip-retry install \
     "$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${LIBCUDF_STREAMING_WHEELHOUSE}"/libcudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     "$(echo "${CUDF_STREAMING_WHEELHOUSE}"/cudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
+    "$(echo "${CUDF_BENCHMARKS_WHEELHOUSE}"/cudf_benchmarks_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     -r "${TPCH_REQUIREMENTS}"
 
 rapids-logger "Generating TPC-H data at SF=0.01"
@@ -52,9 +54,7 @@ python3 "$(dirname "$0")/generate_tpcds_data.py" --scale 0.01 --output-dir "${TP
 
 rapids-logger "Running TPC-H validation tests"
 
-cd python/cudf_polars
-
-python -m cudf_polars.streaming.benchmarks.pdsh all \
+python -m cudf_benchmarks.polars.pdsh all \
     --path "${TPCH_DATA_DIR}" \
     --suffix "/*.parquet" \
     --frontend spmd \
@@ -63,7 +63,7 @@ python -m cudf_polars.streaming.benchmarks.pdsh all \
 
 rapids-logger "Running TPC-DS validation tests"
 
-python -m cudf_polars.streaming.benchmarks.pdsds all \
+python -m cudf_benchmarks.polars.pdsds all \
     --path "${TPCDS_DATA_DIR}" \
     --scale 0.01 \
     --qualification \
