@@ -132,7 +132,7 @@ def _setup_root(
     dask_worker: distributed.Worker | None = None,
     engine_id: uuid.UUID,
     worker_id: uuid.UUID,
-    executor_options: dict[str, object],
+    quent_context: cudf_polars.quent.QuentContext | None,
 ) -> bytes:
     """
     Initialize the root rank on one Dask worker.
@@ -161,8 +161,8 @@ def _setup_root(
         Unique identifier for the engine this worker belongs to.
     worker_id
         Unique identifier for this worker.
-    executor_options
-        Executor options (e.g. ``quent_context``).
+    quent_context: QuentContext | None
+        Quent context to use for this worker, if quent is enabled.
 
     Returns
     -------
@@ -187,7 +187,7 @@ def _setup_root(
         instance_name=f"rank-{comm.rank}",
     )
 
-    if executor_options.get("quent_context") is not None:
+    if quent_context is not None:
         quent_logger: cudf_polars.quent._logging.QuentLogger | None = (
             cudf_polars.quent._logging.QuentLogger()
         )
@@ -220,6 +220,7 @@ def _setup_worker(
     memory_resource_config: MemoryResourceConfig | None,
     worker_ids: list[uuid.UUID],
     engine_id: uuid.UUID,
+    quent_context: cudf_polars.quent.QuentContext | None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -254,6 +255,8 @@ def _setup_worker(
         :meth:`cudf_polars.utils.config.MemoryResourceConfig.default`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
+    quent_context
+        Quent context to use for this worker, if quent is enabled.
 
     """
     assert dask_worker is not None
@@ -304,7 +307,7 @@ def _setup_worker(
         thread_name_prefix="dask-executor",
     )
 
-    if executor_options.get("quent_context") is not None:
+    if quent_context is not None:
         quent_logger: cudf_polars.quent._logging.QuentLogger | None = (
             cudf_polars.quent._logging.QuentLogger()
         )
@@ -808,7 +811,7 @@ class DaskEngine(StreamingEngine):
             ),
             nranks,
             rapidsmpf_options_as_bytes,
-            executor_options=executor_options,
+            quent_context,
             workers=[root_worker],
         )
         root_ucxx_address_as_bytes: bytes = root_result[root_worker]
@@ -828,7 +831,7 @@ class DaskEngine(StreamingEngine):
             root_ucxx_address_as_bytes,
             nranks,
             rapidsmpf_options_as_bytes,
-            executor_options,
+            quent_context,
         )
 
         dask_ctx = DaskContext(
