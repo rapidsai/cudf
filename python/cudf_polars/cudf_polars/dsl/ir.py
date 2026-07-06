@@ -902,7 +902,7 @@ class Scan(IR):
             def read_csv_header(
                 path: Path | str, sep: str
             ) -> list[str]:  # pragma: no cover
-                with Path(path).open() as f:
+                with Path(path).open(encoding="utf-8") as f:
                     for line in f:
                         stripped = line.strip()
                         if stripped:
@@ -946,7 +946,7 @@ class Scan(IR):
             for p in paths:
                 skiprows = reader_options["skip_rows"]
                 path = Path(p)
-                with path.open() as f:
+                with path.open(encoding="utf-8") as f:
                     while f.readline() == "\n":
                         skiprows += 1
                 options = (
@@ -1016,11 +1016,14 @@ class Scan(IR):
                     ),
                     stream=stream,
                 )
-            parquet_reader_options = (
-                plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(paths))
-                .decimal_width(plc.TypeId.DECIMAL128)
-                .build()
+            builder = plc.io.parquet.ParquetReaderOptions.builder(
+                plc.io.SourceInfo(paths)
             )
+            if filters is not None and parquet_options.use_jit_filter:
+                builder.use_jit_filter(use_jit_filter=True)
+            parquet_reader_options = builder.decimal_width(
+                plc.TypeId.DECIMAL128
+            ).build()
 
             if with_columns is not None:
                 parquet_reader_options.set_column_names(with_columns)

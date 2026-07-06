@@ -95,9 +95,11 @@ struct transform_output {
  *
  *
  * @throws std::invalid_argument if any of the input columns have different sizes (except scalars)
- * @throws std::invalid_argument if `output_type` or any of the input types are not supported.
- * CUDA-supported types are fixed-width and string types, while PTX-supported types are integral and
- * floating-point types.
+ * @throws std::invalid_argument if any of the output or input types are not supported.
+ * CUDA-supported input types are fixed-width, string, and their dictionary types. PTX-supported
+ * input types are integrals, floats, and their dictionary types. CUDA-supported output types are
+ * fixed-width, string, and their dictionary types. PTX-supported output types are integrals,
+ * floats, and their dictionary types.
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
@@ -145,6 +147,11 @@ std::unique_ptr<column> transform_extended(
  * @throws std::invalid_argument if the inputs only have a scalar with no column inputs and
  * `row_size` is not provided. This is because the row size cannot be inferred from the inputs in
  * this case.
+ * @throws std::invalid_argument if any of the output or input types are not supported.
+ * CUDA-supported input types are fixed-width, string, and their dictionary types. PTX-supported
+ * input types are integrals, floats, and their dictionary types. CUDA-supported output types are
+ * fixed-width, string, and their dictionary types. PTX-supported output types are integrals,
+ * floats, and their dictionary types.
  * @throws std::invalid_argument if string offsets are provided for non-string output columns, or
  * if the number of string offsets does not match the number of output columns.
  * @throws cudf::evaluation_error if the UDF produces an error during execution.
@@ -181,6 +188,14 @@ std::unique_ptr<table> multi_transform(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief The type of LTO Binary
+ */
+enum class lto_binary_type : uint8_t {
+  LTO_IR,  //< LTO-IR binary
+  FATBIN   //< FATBIN binary
+};
+
+/**
  * @brief Creates a new table by applying a transform function against every
  * element of the input columns.
  *
@@ -201,12 +216,12 @@ std::unique_ptr<table> multi_transform(
  * The size of the resulting column is the `row_size` if provided, otherwise it is inferred from
  * the input and pre-allocated output columns.
  *
- * @param udf           The PTX/CUDA string of the transform function to apply
- * @param source_type   The source type of the UDF (CUDA or PTX)
+ * @param udf           The LTO-IR fragment containing the transform function to apply. The UDF must
+ * be named `transform` and follow the CUDF UDF ABI
+ * @param binary_type   The type of the LTO binary provided in `udf`
  * @param is_null_aware Signifies the UDF will receive row inputs as optional values
- * @param is_fallible   Signifies the UDF may produce errors during execution
  * @param user_data     User-defined device data to pass to the UDF
- * @param inputs        Immutable views of the inputs to transform (columns and scalar columns)
+ * @param inputs        Immutable views of the inputs to transform
  * @param outputs       Specification of the output columns to be created
  * @param string_offsets For string output columns, the offsets can be pre-allocated and passed in
  * to prevent overhead of compacting string views into run-end strings column.
@@ -218,11 +233,10 @@ std::unique_ptr<table> multi_transform(
  * function to every element of the input according to the output specifications
  *
  */
-std::unique_ptr<table> multi_transform(
-  std::string const& udf,
-  udf_source_type source_type,
+std::unique_ptr<table> transform_lto(
+  std::span<uint8_t const> udf,
+  lto_binary_type binary_type,
   null_aware is_null_aware,
-  fallible is_fallible,
   std::optional<void*> user_data,
   std::span<transform_input const> inputs,
   std::span<transform_output const> outputs,
