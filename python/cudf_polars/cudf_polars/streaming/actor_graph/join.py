@@ -40,6 +40,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,
     ChannelManager,
+    ChunkStore,
     NormalizedPartitioning,
     TableSizeStats,
     _sample_chunks,
@@ -1221,8 +1222,14 @@ async def _choose_strategy(
     ):
         # We can use a chunkwise join
         chunkwise = True
-        left_sample = TableSizeStats(total_chunks=left_metadata.local_count)
-        right_sample = TableSizeStats(total_chunks=right_metadata.local_count)
+        left_sample = TableSizeStats(
+            chunks=ChunkStore(context),
+            total_chunks=left_metadata.local_count,
+        )
+        right_sample = TableSizeStats(
+            chunks=ChunkStore(context),
+            total_chunks=right_metadata.local_count,
+        )
     else:
         # Need to shuffle or broadcast - Use sampled data to choose a strategy
         chunkwise = False
