@@ -31,8 +31,10 @@ files:
 ```bash
 git clone https://github.com/rapidsai/cudf.git
 cd cudf
-pip install -e python/cudf_benchmarks[polars]
+pip install python/cudf_benchmarks[polars]
 ```
+
+Pass `-e` for an editable install if you plan to modify the benchmarks.
 
 #### CPU-only machines
 
@@ -43,7 +45,7 @@ On such a machine, skip the `cudf-polars` install above and install only the CPU
 ```bash
 git clone https://github.com/rapidsai/cudf.git
 cd cudf
-pip install -e python/cudf_benchmarks[cpu]
+pip install python/cudf_benchmarks[cpu]
 ```
 
 Then generate data and run as below, using `--frontend polars-cpu` or `--frontend duckdb`.

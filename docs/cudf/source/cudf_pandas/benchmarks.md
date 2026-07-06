@@ -133,8 +133,10 @@ Rust-based TPC-H data generator used to produce the dataset as Parquet files:
 ```bash
 git clone https://github.com/rapidsai/cudf.git
 cd cudf
-pip install -e python/cudf_benchmarks[pandas]
+pip install python/cudf_benchmarks[pandas]
 ```
+
+Pass `-e` for an editable install if you plan to modify the benchmarks.
 
 #### CPU-only machines
 
@@ -145,7 +147,7 @@ dependencies:
 ```bash
 git clone https://github.com/rapidsai/cudf.git
 cd cudf
-pip install -e python/cudf_benchmarks[cpu]
+pip install python/cudf_benchmarks[cpu]
 ```
 
 Then generate data and run as below with `--executor cpu`. Only `--executor in-memory` needs
@@ -203,7 +205,7 @@ python -m cudf_benchmarks.pandas.pdsh all \
 ```
 
 `--executor cpu` runs on plain pandas and imports no CUDA libraries, so it works on a CPU-only
-machine (install with the `cpu` extra instead of `cudf`, see below). Do not enable `cudf.pandas`
+machine (install with the `cpu` extra instead of `cudf`, see above). Do not enable `cudf.pandas`
 for a CPU run: if `cudf.pandas` is active in the process (for example when launched with
 `python -m cudf.pandas`), `--executor cpu` fails with an error rather than reporting accelerated
 timings as if they were a CPU baseline.

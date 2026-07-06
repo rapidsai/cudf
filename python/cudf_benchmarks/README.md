@@ -11,35 +11,9 @@ These are whole-engine benchmarks that run at scale and compare against CPU engi
 (polars, DuckDB, pandas). They live in their own package so they can run on CPU-only
 machines without importing CUDA.
 
-## Install
-
-Install it from a checkout of the cuDF repository:
-
-```shell
-git clone https://github.com/rapidsai/cudf.git
-cd cudf
-```
-
-The extras install only non-RAPIDS packages; the GPU packages (cudf, cudf-polars, rapidsmpf,
-kvikio) are prerequisites you install yourself. Pick the extra that matches what you want to run:
-
-```shell
-# CPU-only machine or CI (no GPU, no CUDA import)
-pip install -e python/cudf_benchmarks[cpu]
-
-# Single-GPU polars + CPU baselines (bring cudf-polars, rapidsmpf, kvikio yourself)
-pip install -e python/cudf_benchmarks[polars]
-
-# Multi-GPU / multi-node polars
-pip install -e python/cudf_benchmarks[polars,ray]     # or [polars,dask]
-
-# cudf.pandas benchmarks (bring cudf yourself)
-pip install -e python/cudf_benchmarks[pandas]
-```
-
-To install the GPU prerequisites, follow the [RAPIDS installation guide](https://docs.rapids.ai/install)
-(for `[polars]`, install `cudf-polars`; for `[pandas]`, install `cudf`). The full benchmark
-docs linked below walk through this step by step.
+Install it from a checkout of the cuDF repository. The extras install only non-RAPIDS
+packages; the GPU packages (cudf, cudf-polars, rapidsmpf, kvikio) are prerequisites you
+install yourself.
 
 | Extra | Installs | Prerequisites (bring your own) |
 |-------|----------|--------------------------------|
@@ -49,21 +23,9 @@ docs linked below walk through this step by step.
 | `dask` | dask, distributed | via `polars` |
 | `ray` | ray | via `polars` |
 
-## Run
+## Running the benchmarks
 
-```shell
-python -m cudf_benchmarks.polars.pdsh ...
-python -m cudf_benchmarks.polars.pdsds ...
-python -m cudf_benchmarks.pandas.pdsh ...
-```
+The docs walk through installation, data generation, running, and tuning for each engine:
 
-Both run on a CPU-only machine (install the `cpu` extra): the polars benchmarks with
-`--frontend polars-cpu` or `--frontend duckdb`, the pandas benchmarks with `--executor cpu`.
-
-## Full instructions
-
-These reproduce published results end to end, with data generation, tuning options, multi-GPU
-runs, and the results format:
-
-- [cudf-polars PDS-H / PDS-DS benchmarks](https://docs.rapids.ai/api/cudf/stable/cudf_polars/benchmarks/)
-- [cudf.pandas PDS-H benchmarks](https://docs.rapids.ai/api/cudf/stable/cudf_pandas/benchmarks/)
+- [cudf-polars PDS-H / PDS-DS benchmarks](../../docs/cudf/source/cudf_polars/benchmarks.md)
+- [cudf.pandas PDS-H benchmarks](../../docs/cudf/source/cudf_pandas/benchmarks.md)
