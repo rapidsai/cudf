@@ -265,7 +265,7 @@ bool positions_chars_overlap(gkprog const& gp, uint32_t const p, uint32_t const 
  *
  * Two rules:
  *   Rule 1 – END before char: an ACCEPT item appears before the first CHAR_POS
- *             item in Thompson priority order → the pattern is nullable in a way
+ *             item in Thompson priority order → the pattern can empty-match in a way
  *             that priority_kill cannot handle correctly.
  *   Rule 2 – non-monotone gpos + char overlap: two CHAR_POS items appear with
  *             the higher-priority one at a larger gpos (inverted bit order), AND
@@ -387,7 +387,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
   int32_t const num_insts = prog.insts_count();
 
   // ---- Step 1: Reject ineligible patterns ----------------------------------
-  // Glushkov cannot handle zero-width assertions or lazy quantifiers
+  // Glushkov cannot handle zero-width assertions
   for (int32_t i = 0; i < num_insts; ++i) {
     if (is_assertion(prog.insts_data()[i].type)) { return nullptr; }
   }
@@ -438,7 +438,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
     empty_matchable = is_accept;
   }
 
-  // Nullable patterns have ε-paths not represented as Glushkov positions.
+  // Empty-matchable patterns have ε-paths not represented as Glushkov positions.
   // When the ε-path is the first alternative (e.g. `(|a)`), Thompson gives it
   // highest priority (its END fires first), but Glushkov has no position to
   // represent that priority.
