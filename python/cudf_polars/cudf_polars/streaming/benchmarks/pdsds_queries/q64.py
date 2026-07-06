@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 64."""
@@ -134,11 +134,11 @@ def duckdb_impl(run_config: RunConfig) -> str:
            cs1.s1,
            cs1.s2,
            cs1.s3,
-           cs2.s1,
-           cs2.s2,
-           cs2.s3,
-           cs2.syear,
-           cs2.cnt
+           cs2.s1    AS s1_1,
+           cs2.s2    AS s2_1,
+           cs2.s3    AS s3_1,
+           cs2.syear AS syear_1,
+           cs2.cnt   AS cnt_1
     FROM   cross_sales cs1,
            cross_sales cs2
     WHERE  cs1.item_sk = cs2.item_sk

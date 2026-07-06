@@ -1216,6 +1216,11 @@ def _finalize_benchmark_run(
                 f"{len(validation_failures)} queries failed validation: "
                 f"{sorted(set(validation_failures))}"
             )
+        elif query_failures:
+            print(
+                f"⚠️  {len({q for q, _ in query_failures})} queries failed to run; "
+                "validation was skipped."
+            )
         else:
             print("✅ All validated queries passed.")
     args.output.write(json.dumps(run_config.serialize(engine=engine)))
@@ -1710,7 +1715,7 @@ def execute_duckdb_query(
                 f"CREATE OR REPLACE VIEW {name} AS "
                 f"SELECT * FROM parquet_scan('{pattern}');"
             )
-        return conn.execute(query).pl()
+        return pl.from_arrow(conn.sql(query))
 
 
 def run_duckdb(duckdb_queries_cls: Any, args: argparse.Namespace) -> None:
