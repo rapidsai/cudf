@@ -164,7 +164,9 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
-    _quent_logger: cudf_polars.quent._logging.QuentLogger
+    _quent_logger: (
+        cudf_polars.quent._logging.QuentLogger | cudf_polars.quent._logging.NoOpLogger
+    )
     rapidsmpf_options: rapidsmpf.config.Options
     # Process-wide registry of every live :class:`StreamingEngine`. Used by
     # :class:`DefaultSingletonEngine` to enforce that no other engine is
@@ -704,42 +706,42 @@ def evaluate_on_rank(
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
-    logical_plan_id = ir.get_stable_plan_id()
 
-    physical_plan_id = uuid.uuid4()
-
-    plan, ops, ports, logical_op_by_id = build_plan(
-        ir,
-        config_options,
-        query=local_quent_context.context.query,
-        plan_id=logical_plan_id,
-        worker=local_quent_context.worker,
-        instance_name="logical",
-        parent_plan=None,
-        parent_operators_by_node_id=None,
-    )
-    if comm.rank == 0:
-        local_quent_context.context._emit_plan_declarations(
-            local_quent_context.logger, plan, ops, ports
+    if config_options.executor.enable_quent:
+        logical_plan_id = ir.get_stable_plan_id()
+        plan, ops, ports, logical_op_by_id = build_plan(
+            ir,
+            config_options,
+            query=local_quent_context.context.query,
+            plan_id=logical_plan_id,
+            worker=local_quent_context.worker,
+            instance_name="logical",
+            parent_plan=None,
+            parent_operators_by_node_id=None,
         )
+        if comm.rank == 0:
+            local_quent_context.context._emit_plan_declarations(
+                local_quent_context.logger, plan, ops, ports
+            )
 
     ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
 
-    if comm.rank == 0:
-        log_query_plan(ir, config_options)
-
-    local_quent_context.context._emit_physical_plan_events(
-        local_quent_context.logger,
-        ir,
-        config_options,
-        plan_id=physical_plan_id,
-        worker=local_quent_context.worker,
-        parent_plan=plan,
-        node_map=node_map,
-        logical_op_by_id=logical_op_by_id,
-    )
+    if config_options.executor.enable_quent:
+        physical_plan_id = uuid.uuid4()
+        if comm.rank == 0:
+            log_query_plan(ir, config_options)
+        local_quent_context.context._emit_physical_plan_events(
+            local_quent_context.logger,
+            ir,
+            config_options,
+            plan_id=physical_plan_id,
+            worker=local_quent_context.worker,
+            parent_plan=plan,
+            node_map=node_map,
+            logical_op_by_id=logical_op_by_id,
+        )
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(

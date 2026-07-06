@@ -8,7 +8,7 @@ from __future__ import annotations
 import collections
 import logging
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 try:
     import structlog
@@ -21,6 +21,23 @@ if TYPE_CHECKING:
     from cudf_polars.quent._types import Event
 
 QUENT_SCOPE = "QUENT"
+
+
+class Logger(Protocol):
+    """A protocol for Quent event logging."""
+
+    def emit(self, event: Event) -> None: ...
+    def drain(self) -> list[dict[str, Any]]: ...
+
+
+class NoOpLogger:
+    """A no-op implementation of the Quent Logger protocol."""
+
+    def emit(self, event: Event) -> None:
+        pass
+
+    def drain(self) -> list[dict[str, Any]]:
+        return []
 
 
 class QuentLogger:

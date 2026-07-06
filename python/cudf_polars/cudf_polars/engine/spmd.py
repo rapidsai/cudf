@@ -393,7 +393,16 @@ class SPMDEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
-        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+        quent_logger: (
+            cudf_polars.quent._logging.QuentLogger
+            | cudf_polars.quent._logging.NoOpLogger
+        )
+
+        if executor_options.get("enable_quent", False):
+            quent_logger = cudf_polars.quent._logging.QuentLogger()
+        else:
+            quent_logger = cudf_polars.quent._logging.NoOpLogger()
+        self._quent_logger = quent_logger
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(

@@ -196,6 +196,7 @@ class RankActor:
         memory_resource_config: MemoryResourceConfig | None,
         worker_id: uuid.UUID,
         engine: cudf_polars.quent.Engine,
+        enable_quent: bool,
     ) -> None:
         bind_to_gpu(hardware_binding)
         memory_resource_config = (
@@ -218,7 +219,15 @@ class RankActor:
         )
         self._comm: Communicator | None = None
         self._ctx: Context | None = None
-        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+        quent_logger: (
+            cudf_polars.quent._logging.QuentLogger
+            | cudf_polars.quent._logging.NoOpLogger
+        )
+        if enable_quent:
+            quent_logger = cudf_polars.quent._logging.QuentLogger()
+        else:
+            quent_logger = cudf_polars.quent._logging.NoOpLogger()
+        self._quent_logger = quent_logger
         self._quent_worker = Worker(
             id=worker_id,
             engine=engine,
@@ -612,9 +621,16 @@ class RayEngine(StreamingEngine):
 
         check_reserved_keys(executor_options, engine_options)
 
-        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
-        # a typed config object here.
-        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+        quent_logger: (
+            cudf_polars.quent._logging.QuentLogger
+            | cudf_polars.quent._logging.NoOpLogger
+        )
+
+        if executor_options.get("enable_quent", False):
+            quent_logger = cudf_polars.quent._logging.QuentLogger()
+        else:
+            quent_logger = cudf_polars.quent._logging.NoOpLogger()
+        self._quent_logger = quent_logger
         quent_context: cudf_polars.quent.QuentContext = executor_options.get(
             "quent_context", cudf_polars.quent.QuentContext()
         )
@@ -673,6 +689,7 @@ class RayEngine(StreamingEngine):
                     memory_resource_config=mr_config,
                     worker_id=worker_id,
                     engine=quent_context.engine,
+                    enable_quent=executor_options.get("enable_quent", False),
                 )
                 for worker_id in worker_ids
             ]

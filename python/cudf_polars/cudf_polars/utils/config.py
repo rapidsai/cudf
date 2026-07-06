@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.engine.ray import RankActor
     from cudf_polars.quent._context import QuentContext
-    from cudf_polars.quent._logging import QuentLogger
+    from cudf_polars.quent._logging import Logger
 
 
 __all__ = [
@@ -532,7 +532,7 @@ class SPMDContext:
     py_executor: ThreadPoolExecutor
     engine_id: uuid.UUID
     worker_id: uuid.UUID
-    quent_logger: QuentLogger
+    quent_logger: Logger
 
 
 @dataclasses.dataclass(frozen=True)
@@ -555,7 +555,7 @@ class RayContext:
     """
 
     rank_actors: list[ActorHandle[RankActor]]
-    quent_logger: QuentLogger
+    quent_logger: Logger
 
 
 @dataclasses.dataclass(frozen=True)
@@ -585,7 +585,7 @@ class DaskContext:
 
     client: distributed.Client
     rapidsmpf_id: str
-    quent_logger: QuentLogger
+    quent_logger: Logger
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
 
@@ -733,6 +733,12 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
+    enable_quent: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__ENABLE_QUENT", bool, default=False
+        )
+    )
+
     min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None

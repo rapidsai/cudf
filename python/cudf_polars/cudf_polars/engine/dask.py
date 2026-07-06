@@ -117,7 +117,7 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     base_mr: rmm.mr.DeviceMemoryResource | None
-    quent_logger: cudf_polars.quent._logging.QuentLogger
+    quent_logger: cudf_polars.quent._logging.Logger
     quent_worker: cudf_polars.quent._types.Worker
     mr: RmmResourceAdaptor | None = None  # set after `Context` is built (below).
 
@@ -132,6 +132,7 @@ def _setup_root(
     dask_worker: distributed.Worker | None = None,
     engine_id: uuid.UUID,
     worker_id: uuid.UUID,
+    executor_options: dict[str, object],
 ) -> bytes:
     """
     Initialize the root rank on one Dask worker.
@@ -160,6 +161,8 @@ def _setup_root(
         Unique identifier for the engine this worker belongs to.
     worker_id
         Unique identifier for this worker.
+    executor_options
+        Executor options (e.g. ``enable_quent``).
 
     Returns
     -------
@@ -184,6 +187,15 @@ def _setup_root(
         instance_name=f"rank-{comm.rank}",
     )
 
+    quent_logger: (
+        cudf_polars.quent._logging.QuentLogger | cudf_polars.quent._logging.NoOpLogger
+    )
+
+    if executor_options.get("enable_quent", False):
+        quent_logger = cudf_polars.quent._logging.QuentLogger()
+    else:
+        quent_logger = cudf_polars.quent._logging.NoOpLogger()
+
     setattr(
         dask_worker,
         f"_cudf_polars_mp_context_{uid}",
@@ -193,7 +205,7 @@ def _setup_root(
             py_executor=None,
             base_mr=base_mr,
             quent_worker=quent_worker,
-            quent_logger=cudf_polars.quent._logging.QuentLogger(),
+            quent_logger=quent_logger,
         ),
     )
     return get_root_ucxx_address(comm)
@@ -294,6 +306,15 @@ def _setup_worker(
         thread_name_prefix="dask-executor",
     )
 
+    quent_logger: (
+        cudf_polars.quent._logging.QuentLogger | cudf_polars.quent._logging.NoOpLogger
+    )
+
+    if executor_options.get("enable_quent", False):
+        quent_logger = cudf_polars.quent._logging.QuentLogger()
+    else:
+        quent_logger = cudf_polars.quent._logging.NoOpLogger()
+
     mp_ctx = _WorkerContext(
         comm=comm,
         ctx=ctx,
@@ -301,7 +322,7 @@ def _setup_worker(
         base_mr=base_mr,
         mr=mr,
         quent_worker=quent_worker,
-        quent_logger=cudf_polars.quent._logging.QuentLogger(),
+        quent_logger=quent_logger,
     )
     setattr(dask_worker, attr, mp_ctx)
     mp_ctx.quent_logger.emit(quent_worker._init())
@@ -691,7 +712,17 @@ class DaskEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
-        self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+
+        quent_logger: (
+            cudf_polars.quent._logging.QuentLogger
+            | cudf_polars.quent._logging.NoOpLogger
+        )
+
+        if executor_options.get("enable_quent", False):
+            quent_logger = cudf_polars.quent._logging.QuentLogger()
+        else:
+            quent_logger = cudf_polars.quent._logging.NoOpLogger()
+        self._quent_logger = quent_logger
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -771,6 +802,7 @@ class DaskEngine(StreamingEngine):
             ),
             nranks,
             rapidsmpf_options_as_bytes,
+            executor_options=executor_options,
             workers=[root_worker],
         )
         root_ucxx_address_as_bytes: bytes = root_result[root_worker]
