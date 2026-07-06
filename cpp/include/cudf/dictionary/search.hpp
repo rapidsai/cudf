@@ -14,6 +14,7 @@ namespace dictionary {
  * @addtogroup dictionary_search
  * @{
  * @file
+ * @brief APIs for searching for a key value within a dictionary column's keys.
  */
 
 /**

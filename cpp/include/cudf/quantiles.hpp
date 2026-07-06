@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup column_quantiles
  * @{
  * @file
+ * @brief APIs for computing quantiles and percentiles of columns and tables.
  */
 
 /**
