@@ -534,7 +534,6 @@ class RunConfig:
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
         """Create a RunConfig from command line arguments."""
-        # Only the GPU frontends need cudf-polars (and therefore CUDA).
         if args.frontend in _CPU_ENGINES:
             streaming_options = None
         else:

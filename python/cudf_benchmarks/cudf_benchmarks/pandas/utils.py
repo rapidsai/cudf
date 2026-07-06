@@ -706,7 +706,6 @@ def run_pandas(
     """Run the queries using the given benchmark and executor options."""
     global CUDF_PANDAS_ENABLED
     args = parse_args(options, num_queries=num_queries)
-    # cudf.pandas is on iff the entry point installed it for the in-memory executor.
     CUDF_PANDAS_ENABLED = args.executor == "in-memory"
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
