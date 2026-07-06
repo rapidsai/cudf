@@ -10,6 +10,9 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 
+#include <cooperative_groups.h>
+#include <cuda/barrier>
+
 namespace cudf::io::parquet::detail {
 
 template <int num_threads>
@@ -202,8 +205,9 @@ struct rle_stream {
                        uint8_t const* _end,
                        level_t* _output,
                        int _total_values,
-                       uint8_t* _smem_stage = nullptr,
-                       int _smem_stage_size = 0)
+                       uint8_t* _smem_stage                                   = nullptr,
+                       int _smem_stage_size                                   = 0,
+                       cuda::barrier<cuda::thread_scope_block>* _copy_barrier = nullptr)
   {
     level_bits = _level_bits;
     cur        = _start;
@@ -218,36 +222,19 @@ struct rle_stream {
     fill_index   = 0;
     decode_index = -1;  // signals the first iteration. Nothing to decode.
 
-    // If smem staging is active, since init() is called by every thread in the
-    // block the copy below is block-cooperative. It deliberately performs no
-    // barrier of its own: every existing caller issues a block-wide sync
-    // immediately after init() (before the first parse in
-    // fill_run_batch/skip_runs), which is what publishes the staged bytes.
+    // If smem staging is active, use cuda::memcpy_async for a
+    // block-cooperative global-to-shared copy that automatically dispatches to
+    // the best copy path (cp.async, cp.async.bulk, or TMA) depending on the
+    // hardware. Callers must provide a copy_barrier when using smem staging,
+    // and must issue copy_barrier->arrive_and_wait() after init() to complete
+    // the async copy.
     smem_stage      = _smem_stage;
     smem_stage_size = _smem_stage_size;
     if (smem_stage != nullptr) {
       auto const len = static_cast<int>(_end - _start);
       if (len > 0 && len <= smem_stage_size) {
-        auto* const s_dst  = _smem_stage;
-        int const t        = threadIdx.x;
-        int const nthreads = blockDim.x;
-        // 16-byte vectorized copy of the aligned body; byte copy for the tail.
-        // Falls back to a plain byte copy when the source is not 16B-aligned.
-        if ((reinterpret_cast<uintptr_t>(_start) & 15u) == 0) {
-          int const nvec = len >> 4;
-          auto const* g4 = reinterpret_cast<uint4 const*>(_start);
-          auto* const s4 = reinterpret_cast<uint4*>(s_dst);
-          for (int i = t; i < nvec; i += nthreads) {
-            s4[i] = g4[i];
-          }
-          for (int i = (nvec << 4) + t; i < len; i += nthreads) {
-            s_dst[i] = _start[i];
-          }
-        } else {
-          for (int i = t; i < len; i += nthreads) {
-            s_dst[i] = _start[i];
-          }
-        }
+        auto group = cooperative_groups::this_thread_block();
+        cuda::memcpy_async(group, _smem_stage, _start, static_cast<size_t>(len), *_copy_barrier);
         // Rebase the parse cursor and end onto the shared copy. All downstream
         // reads (get_rle_run_info, decode, skip_runs) follow cur/end and now hit
         // shared memory with no other changes required.

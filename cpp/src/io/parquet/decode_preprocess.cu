@@ -14,6 +14,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuda/barrier>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 
@@ -427,6 +428,11 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   constexpr int level_stage_bytes = 8 * 1024;
   __shared__ uint8_t def_stage[level_stage_bytes];
   __shared__ uint8_t rep_stage[level_stage_bytes];
+  using barrier_t = cuda::barrier<cuda::thread_scope_block>;
+  __shared__ alignas(barrier_t) char copy_barrier_storage[sizeof(barrier_t)];
+  auto* copy_barrier = reinterpret_cast<barrier_t*>(copy_barrier_storage);
+  if (t == 0) { init(copy_barrier, block.size()); }
+  block.sync();
 
   // Get the level decode buffers for this page
   auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
@@ -446,7 +452,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           def,
                                           num_to_decode,
                                           def_stage,
-                                          level_stage_bytes);
+                                          level_stage_bytes,
+                                          copy_barrier);
   }
   if (has_repetition) {
     decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
@@ -455,9 +462,10 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           rep,
                                           num_to_decode,
                                           rep_stage,
-                                          level_stage_bytes);
+                                          level_stage_bytes,
+                                          copy_barrier);
   }
-  block.sync();
+  copy_barrier->arrive_and_wait();
 
   // Decode levels for this page up to the last row needed.
   // If skipping the first rows, we still need to decode their levels.
