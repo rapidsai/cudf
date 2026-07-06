@@ -487,9 +487,8 @@ class RunConfig:
     collect_traces: bool = False
     native_parquet: bool = True
     max_io_threads: int = 2
-    # All streaming/rapidsmpf/engine knobs
-    # None for CPU frontends (polars-cpu, duckdb), which do not use cudf-polars
-    # and must not import it (it would pull in CUDA on a CPU-only machine).
+    # All streaming/rapidsmpf/engine knobs. None for the CPU frontends, which don't use
+    # cudf-polars.
     streaming_options: StreamingOptions | None = None
 
     # Validation
@@ -535,8 +534,7 @@ class RunConfig:
     @classmethod
     def from_args(cls, args: argparse.Namespace) -> RunConfig:
         """Create a RunConfig from command line arguments."""
-        # cudf-polars (and therefore CUDA) is only needed for the GPU frontends.
-        # CPU frontends leave streaming_options unset so a CPU-only machine can run.
+        # Only the GPU frontends need cudf-polars (and therefore CUDA).
         if args.frontend in _CPU_ENGINES:
             streaming_options = None
         else:
@@ -2099,8 +2097,7 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
         help="Add the 'nsys' role to the benchmark run output.",
     )
 
-    # GPU/RapidsMPF streaming options require cudf-polars. Skip them on CPU-only
-    # installs so the CPU frontends (polars-cpu, duckdb) can build the parser.
+    # The streaming options require cudf-polars, so skip them when it isn't installed.
     if CUDF_POLARS_AVAILABLE:
         from cudf_polars.engine.options import StreamingOptions
 

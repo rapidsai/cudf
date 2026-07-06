@@ -23,11 +23,8 @@ dependencies = [
     "nvtx",
 ]
 
-# GPU packages (cudf, cudf-polars, rapidsmpf, kvikio) are intentionally NOT
-# listed. cudf-benchmarks is a single unsuffixed pure wheel that measures a
-# cudf-polars build you bring yourself, so it pins no CUDA-suffixed dependency.
-# The GPU-workload extras install only the non-RAPIDS pieces; install
-# cudf-polars (which brings polars) or cudf yourself for the GPU paths.
+# The extras install only non-RAPIDS packages. GPU packages (cudf, cudf-polars, rapidsmpf,
+# kvikio) are not listed; install them yourself for the GPU paths.
 [project.optional-dependencies]
 # CPU-only machines and CI. No GPU libraries, so importing never pulls in CUDA.
 # Pin polars to the range cudf-polars uses so CPU-vs-GPU compares the same version.

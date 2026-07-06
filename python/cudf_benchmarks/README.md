@@ -20,10 +20,8 @@ git clone https://github.com/rapidsai/cudf.git
 cd cudf
 ```
 
-The package is a single pure wheel and pins no CUDA-suffixed dependency. GPU packages
-(cudf, cudf-polars, rapidsmpf, kvikio) are prerequisites you install yourself; the
-extras below install only the non-RAPIDS pieces. Pick the extra that matches what you want
-to run:
+The extras install only non-RAPIDS packages; the GPU packages (cudf, cudf-polars, rapidsmpf,
+kvikio) are prerequisites you install yourself. Pick the extra that matches what you want to run:
 
 ```shell
 # CPU-only machine or CI (no GPU, no CUDA import)
@@ -59,9 +57,8 @@ python -m cudf_benchmarks.polars.pdsds ...
 python -m cudf_benchmarks.pandas.pdsh ...
 ```
 
-The polars benchmarks run on a CPU-only machine with `--frontend polars-cpu` or
-`--frontend duckdb`. The pandas benchmarks currently require `cudf` even for
-`--executor cpu`.
+Both run on a CPU-only machine (install the `cpu` extra): the polars benchmarks with
+`--frontend polars-cpu` or `--frontend duckdb`, the pandas benchmarks with `--executor cpu`.
 
 ## Full instructions
 

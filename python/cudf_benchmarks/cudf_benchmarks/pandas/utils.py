@@ -25,10 +25,8 @@ from typing import TYPE_CHECKING, Any, Literal
 import nvtx
 import pandas as pd
 
-# Whether cudf.pandas Pandas Accelerator Mode is on in this process. The entry point
-# (pdsh.py) installs cudf.pandas before importing pandas when the in-memory executor is
-# selected; run_pandas sets this flag from the executor, and it gates the cudf.pandas-only
-# code paths below so that `--executor cpu` never imports cudf.
+# Whether cudf.pandas is on in this process. Set from the executor in run_pandas; gates the
+# cudf.pandas-only paths below so that --executor cpu never touches cudf.
 CUDF_PANDAS_ENABLED = False
 
 try:
@@ -423,8 +421,7 @@ def execute_query(
         color="green",
     ):
         if run_config.executor == "cpu" and CUDF_PANDAS_ENABLED:
-            # Accelerated process computing the CPU baseline: turn cudf.pandas off for
-            # this query so it runs on real pandas.
+            # CPU baseline inside an accelerated run: turn cudf.pandas off for this query.
             from cudf.pandas.module_accelerator import disable_module_accelerator
 
             with disable_module_accelerator():
@@ -650,8 +647,7 @@ def run_pandas_query(
         cpu_run_config = dataclasses.replace(run_config, executor="cpu")
         expected, _ = execute_query(q_id, 0, q, cpu_run_config)
     elif validation_files is not None:
-        # With cudf.pandas on, pd is the proxy; use the slow (real pandas) reader so the
-        # golden file is read on the CPU. Without it, pd is already real pandas.
+        # Read the golden file with real pandas (the slow proxy when cudf.pandas is on).
         read_parquet = (
             pd._fsproxy_slow.read_parquet if CUDF_PANDAS_ENABLED else pd.read_parquet
         )

@@ -17,9 +17,8 @@ import argparse
 import sys
 from typing import TYPE_CHECKING
 
-# cudf.pandas.install() must run before `import pandas`, and only for the GPU (in-memory)
-# executor, so peek at --executor before importing pandas. This keeps `--executor cpu` free
-# of any cudf/CUDA import so the pandas benchmarks run on a CPU-only machine.
+# cudf.pandas.install() must run before `import pandas`, so peek at --executor first and
+# install only for the in-memory executor. This keeps --executor cpu free of any cudf import.
 _pre = argparse.ArgumentParser(add_help=False)
 _pre.add_argument("-e", "--executor", default="in-memory")
 if _pre.parse_known_args()[0].executor == "in-memory":
@@ -33,9 +32,8 @@ if _pre.parse_known_args()[0].executor == "in-memory":
         ) from e
     cudf.pandas.install()
 else:
-    # The CPU benchmark must run on real pandas. If cudf.pandas was activated for this
-    # process (e.g. launched via `python -m cudf.pandas`), an '--executor cpu' run would
-    # be silently accelerated and not a real CPU baseline, so fail loudly.
+    # Fail loudly if cudf.pandas is already active (e.g. `python -m cudf.pandas`), otherwise
+    # a cpu run would be silently accelerated instead of a real pandas baseline.
     _cudf_pandas = sys.modules.get("cudf.pandas")
     if _cudf_pandas is not None and getattr(_cudf_pandas, "LOADED", False):
         raise RuntimeError(
