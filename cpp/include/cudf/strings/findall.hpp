@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -18,6 +18,7 @@ struct regex_program;
  * @addtogroup strings_contains
  * @{
  * @file
+ * @brief Strings column APIs for finding all regex matches within each string.
  */
 
 /**
