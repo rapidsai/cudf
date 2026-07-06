@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -55,11 +55,11 @@ std::unique_ptr<scalar> sum(column_view const& col,
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Struct scalar with sum and overflow flag
  */
-std::unique_ptr<scalar> sum_with_overflow(column_view const& col,
-                                          data_type const output_type,
-                                          std::optional<std::reference_wrapper<scalar const>> init,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::device_async_resource_ref mr);
+std::unique_ptr<scalar> sum_overflow(column_view const& col,
+                                     data_type const output_type,
+                                     std::optional<std::reference_wrapper<scalar const>> init,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::device_async_resource_ref mr);
 
 /**
  * @brief Computes minimum of elements in input column

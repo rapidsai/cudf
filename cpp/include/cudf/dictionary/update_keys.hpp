@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -9,12 +9,15 @@
 #include <cudf/utilities/memory_resource.hpp>
 #include <cudf/utilities/span.hpp>
 
+#include <span>
+
 namespace CUDF_EXPORT cudf {
 namespace dictionary {
 /**
  * @addtogroup dictionary_update
  * @{
  * @file
+ * @brief APIs for adding, removing, and matching the keys of dictionary columns.
  */
 
 /**
@@ -149,7 +152,7 @@ std::unique_ptr<column> set_keys(
  * @return New dictionary columns.
  */
 std::vector<std::unique_ptr<column>> match_dictionaries(
-  cudf::host_span<dictionary_column_view const> input,
+  std::span<dictionary_column_view const> input,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

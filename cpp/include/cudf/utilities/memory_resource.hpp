@@ -20,6 +20,7 @@ namespace cudf {
  * @addtogroup memory_resource
  * @{
  * @file
+ * @brief APIs for getting and setting the current device memory resource.
  */
 
 /**

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -149,8 +149,8 @@ void streaming_groupby::impl::initialize(table_view const& data, rmm::cuda_strea
                  "Streaming groupby does not support MIN/MAX on variable-width types "
                  "(internally decomposed to ARGMIN/ARGMAX).",
                  std::invalid_argument);
-    CUDF_EXPECTS(k != aggregation::SUM_WITH_OVERFLOW,
-                 "Streaming groupby does not support SUM_WITH_OVERFLOW "
+    CUDF_EXPECTS(k != aggregation::SUM_OVERFLOW,
+                 "Streaming groupby does not support SUM_OVERFLOW "
                  "(struct intermediate cannot be merged across batches).",
                  std::invalid_argument);
   }
@@ -327,7 +327,7 @@ streaming_groupby::impl::do_finalize(rmm::cuda_stream_view stream,
 
   return {std::move(keys),
           detail::extract_results(
-            host_span<aggregation_request const>{user_requests}, cache, stream, mr)};
+            std::span<aggregation_request const>{user_requests}, cache, stream, mr)};
 }
 
 streaming_groupby::impl::batch_insert_result streaming_groupby::impl::probe_and_insert(

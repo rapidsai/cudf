@@ -21,6 +21,7 @@ from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
     Empty,
+    PythonScan,
     Scan,
     Sink,
 )
@@ -89,21 +90,35 @@ def scan_partition_plan(
             ]
             if (file_size := sum(column_sizes)) > 0:
                 if file_size > blocksize:
-                    # Split large files
-                    factor = math.ceil(file_size / blocksize)
-                    return IOPartitionPlan(
-                        factor,
-                        IOPartitionFlavor.SPLIT_FILES,
-                        estimated_chunk_bytes=file_size // factor,
+                    k_lo = file_size // blocksize
+                    k_hi = k_lo + 1
+                    factor = (
+                        k_lo
+                        if abs(file_size / k_lo - blocksize)
+                        <= abs(file_size / k_hi - blocksize)
+                        else k_hi
                     )
+                    if factor >= 2:
+                        return IOPartitionPlan(
+                            factor,
+                            IOPartitionFlavor.SPLIT_FILES,
+                            estimated_chunk_bytes=file_size // factor,
+                        )
                 else:
-                    # Fuse small files
-                    factor = min(max(blocksize // int(file_size), 1), len(ir.paths))
-                    return IOPartitionPlan(
-                        factor,
-                        IOPartitionFlavor.FUSED_FILES,
-                        estimated_chunk_bytes=file_size * factor,
+                    k_lo = min(blocksize // int(file_size), len(ir.paths))
+                    k_hi = k_lo + 1
+                    factor = (
+                        k_hi
+                        if k_hi <= len(ir.paths)
+                        and abs(k_hi * file_size - blocksize)
+                        <= abs(k_lo * file_size - blocksize)
+                        else k_lo
                     )
+                return IOPartitionPlan(
+                    factor,
+                    IOPartitionFlavor.FUSED_FILES,
+                    estimated_chunk_bytes=file_size * factor,
+                )
 
     # TODO: Use file sizes for csv and json
     return IOPartitionPlan(1, IOPartitionFlavor.SINGLE_FILE)
@@ -442,6 +457,21 @@ def _(
     ir: Empty, rec: LowerIRTransformer
 ) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
     return ir, {ir: PartitionInfo(count=1)}  # pragma: no cover
+
+
+@lower_ir_node.register(PythonScan)
+def _(
+    ir: PythonScan, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+    # A PythonScan can emit multiple chunks and the count is unknown at lowering,
+    # so it always lowers as multi-partition (count > 1) regardless of world size.
+    # This forces downstream global operators to insert the required reduction
+    # instead of evaluating chunkwise.
+    #
+    # TODO: Remove this workaround once dynamic planning is mandatory. Under
+    # dynamic planning the runtime adapts to the real chunk count, so this
+    # lowering estimate no longer gates correctness.
+    return ir, {ir: PartitionInfo(count=2)}
 
 
 def can_use_native_parquet_node(

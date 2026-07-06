@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -17,6 +17,7 @@ namespace lists {
  * @addtogroup lists_filtering
  * @{
  * @file
+ * @brief APIs for filtering elements from each row of a list column using a boolean mask
  */
 
 /**

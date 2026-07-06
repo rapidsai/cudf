@@ -419,9 +419,14 @@ class StringColumn(ColumnBase, Scannable):
         result = super().to_arrow()
         # libcudf produces arrow string (32-bit offsets), but pandas 3.0
         # uses large_string (64-bit offsets) for pyarrow-backed string
-        # dtypes. Cast to large_string to match pandas arrow output.
-        if pa.types.is_string(result.type) and self._should_use_large_string:
-            result = result.cast(pa.large_string())
+        # dtypes. Cast to match the offset width declared by self.dtype so
+        # that the physical arrow type is consistent with the cudf dtype
+        # regardless of the offset width preserved from the source.
+        if self._should_use_large_string:
+            if pa.types.is_string(result.type):
+                result = result.cast(pa.large_string())
+        elif pa.types.is_large_string(result.type):
+            result = result.cast(pa.string())
         return result
 
     def to_pandas(
@@ -435,9 +440,14 @@ class StringColumn(ColumnBase, Scannable):
                 f"{arrow_type=} and {nullable=} cannot both be set."
             )
         if arrow_type:
-            # Use the raw column arrow (without large_string cast)
-            # so that ArrowExtensionArray preserves the original type.
-            pa_array = ColumnBase.to_arrow(self)
+            # When the dtype is an explicit ArrowDtype, honor the offset width
+            # (string vs large_string) it declares via self.to_arrow().
+            # Otherwise (e.g. a default StringDtype) preserve the source's raw
+            # arrow offset width so round-trips do not silently widen.
+            if isinstance(self.dtype, pd.ArrowDtype):
+                pa_array = self.to_arrow()
+            else:
+                pa_array = ColumnBase.to_arrow(self)
             return pd.Index(
                 pd.arrays.ArrowExtensionArray(pa_array), copy=False
             )
