@@ -349,10 +349,10 @@ aggregate_reader_metadata::read_bloom_filters(
           auto const& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
           if (col_meta.bloom_filter_offset.has_value()) {
             have_bloom_filters = true;
-            // When the length is absent, read up to the max header size to recover the bitset size.
+            // Length absent: read a speculative chunk to recover the bitset size.
             auto const length = col_meta.bloom_filter_length.has_value()
                                   ? static_cast<int64_t>(col_meta.bloom_filter_length.value())
-                                  : bloom_filter_header_max_size;
+                                  : bloom_filter_speculative_read_size;
             source_ranges.push_back(
               cudf::io::text::byte_range_info{col_meta.bloom_filter_offset.value(), length});
           } else {
