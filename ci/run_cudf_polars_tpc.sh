@@ -38,11 +38,11 @@ rapids-pip-retry install \
     "$(echo "${CUDF_STREAMING_WHEELHOUSE}"/cudf_streaming_"${RAPIDS_PY_CUDA_SUFFIX}"*.whl)" \
     -r "${TPCH_REQUIREMENTS}"
 
-rapids-logger "Generating TPC-H data at SF=0.01"
+rapids-logger "Generating TPC-H data at SF=1"
 
 export TPCH_DATA_DIR
 TPCH_DATA_DIR=$(mktemp -d)
-tpchgen-cli parquet -s 0.01 --parts=4 --output-dir="${TPCH_DATA_DIR}"
+tpchgen-cli parquet -s 1 --parts=4 --output-dir="${TPCH_DATA_DIR}"
 
 rapids-logger "Generating TPC-DS data at SF=0.01"
 
@@ -59,7 +59,14 @@ python -m cudf_polars.streaming.benchmarks.pdsh all \
     --suffix "/*.parquet" \
     --frontend spmd \
     --validate-against duckdb \
-    --iterations 2
+    --iterations 2 \
+    --debug \
+    --print-results \
+    --explain \
+    --explain-logical \
+    --explain-partition-plan \
+    --rapidsmpf-log DEBUG \
+    --rapidsmpf-statistics
 
 rapids-logger "Running TPC-DS validation tests"
 
