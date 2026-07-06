@@ -728,11 +728,12 @@ def evaluate_on_rank(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
 
+    if comm.rank == 0:
+        log_query_plan(ir, config_options)
+
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
         physical_plan_id = uuid.uuid4()
-        if comm.rank == 0:
-            log_query_plan(ir, config_options)
         local_quent_context.context._emit_physical_plan_events(
             local_quent_context.logger,
             ir,
