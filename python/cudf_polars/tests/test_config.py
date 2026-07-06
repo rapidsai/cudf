@@ -372,6 +372,14 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.quent_context is not None
 
 
+def test_quent_context_from_env_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR__QUENT_CONTEXT", "foo")
+        engine = pl.GPUEngine()
+        with pytest.raises(ValueError, match="Invalid value for quent_context: 'foo'"):
+            ConfigOptions.from_polars_engine(engine)
+
+
 def test_target_partition_from_env(
     monkeypatch: pytest.MonkeyPatch, recwarn: pytest.WarningsRecorder
 ) -> None:

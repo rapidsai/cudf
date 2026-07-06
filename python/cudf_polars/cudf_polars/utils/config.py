@@ -160,15 +160,11 @@ def _make_default_factory(
     return default_factory
 
 
-_TRUE_VALUES = {"true", "yes", "y", "1"}
-_FALSE_VALUES = {"false", "no", "n", "0"}
-
-
 def _bool_converter(v: str) -> bool:
     lowered = v.lower()
-    if lowered in _TRUE_VALUES:
+    if lowered in {"true", "yes", "y", "1"}:
         return True
-    elif lowered in _FALSE_VALUES:
+    elif lowered in {"false", "no", "n", "0"}:
         return False
     else:
         raise ValueError(f"Invalid boolean value: '{v}'")
