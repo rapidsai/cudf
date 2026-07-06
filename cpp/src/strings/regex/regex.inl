@@ -450,10 +450,7 @@ __device__ __forceinline__ match_result reprog_device::regexec(string_view const
     checkstart = jnk.list1->get_size() == 0;
   } while (!last_character && (!checkstart || !match));
 
-  // a capture group that did not participate in the overall match
-  // (e.g. an unmatched optional group) has no valid range and must not be
-  // reported as an (empty) match
-  return (match && (group_id == 0 || begin >= 0)) ? match_result({begin, end}) : cuda::std::nullopt;
+  return match ? match_result({begin, end}) : cuda::std::nullopt;
 }
 
 template <positional P>
@@ -471,8 +468,13 @@ __device__ __forceinline__ match_result reprog_device::extract(int32_t const thr
                                                                cudf::size_type end,
                                                                cudf::size_type const group_id) const
 {
-  end = begin.position() + 1;
-  return call_regexec(thread_idx, dstr, begin, end, group_id + 1);
+  end               = begin.position() + 1;
+  auto const result = call_regexec(thread_idx, dstr, begin, end, group_id + 1);
+  // a capture group that did not participate in the overall match
+  // (e.g. an unmatched optional group) has no valid range and must not be
+  // reported as an (empty) match
+  if (result && (result->first < 0)) { return cuda::std::nullopt; }
+  return result;
 }
 
 template <positional P>
