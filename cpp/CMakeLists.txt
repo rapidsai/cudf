@@ -419,11 +419,8 @@ include(cmake/thirdparty/get_xxhash.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
-# Build librtcx as a subdirectory (zstd and nvtx3 are already available at this point)
-add_subdirectory(librtcx)
-
-# JIT Embedding helper functions
-include(librtcx/embed.cmake)
+# Fetch librtcx via CPM (zstd and nvtx3 are already available at this point)
+include(cmake/thirdparty/get_rtcx.cmake)
 
 # Pre-compiled fragment management helper functions
 include(cmake/Modules/AddFragment.cmake)
@@ -443,18 +440,13 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
-  install(
-    TARGETS rtcx
-    EXPORT cudf-exports
-    DESTINATION ${lib_dir}
-  )
 endif()
 
 rtcx_add_embed(cudf_cuda_embed)
 
 rtcx_embed_includes(
-  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
-  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
+  cudf_cuda_embed SOURCE_DIRECTORY ${rtcx_SOURCE_DIR}/libcxx DEST_DIRECTORY librtcx/libcxx
+  INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
 rtcx_embed_includes(
