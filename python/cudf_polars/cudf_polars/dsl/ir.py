@@ -572,7 +572,8 @@ _COMPARISON_BINOPS = {
 def _parquet_physical_types(
     paths: list[str], columns: list[str] | None
 ) -> dict[str, plc.DataType]:
-    # This may not be able use prefetched metadata, since we don't (currently) have a Schema.
+    # TODO: Use prefetched metadata
+    # https://github.com/rapidsai/cudf/issues/22940
     metadata = plc.io.parquet_metadata.read_parquet_metadata(plc.io.SourceInfo(paths))
     column_types = metadata.schema().column_types()
 
