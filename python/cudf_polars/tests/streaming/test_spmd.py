@@ -415,12 +415,8 @@ def test_quent_context_user_provided(spmd_engine: SPMDEngine) -> None:
 
 
 def test_quent_context_default(spmd_engine: SPMDEngine) -> None:
-    # Ensure that the user-provided quent context is used if provided
     with SPMDEngine(comm=spmd_engine.comm) as engine:
-        quent_context: cudf_polars.quent.QuentContext = engine.config[
-            "executor_options"
-        ]["quent_context"]
-        assert quent_context.engine.implementation.name == "cudf-polars"
+        assert engine.config["executor_options"].get("quent_context") is None
 
 
 # Group keys probed with num_partitions=2, nranks=2, ROUND_ROBIN:

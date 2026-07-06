@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.engine.ray import RankActor
     from cudf_polars.quent._context import QuentContext
-    from cudf_polars.quent._logging import Logger
+    from cudf_polars.quent._logging import QuentLogger
 
 
 __all__ = [
@@ -564,7 +564,7 @@ class SPMDContext:
     py_executor: ThreadPoolExecutor
     engine_id: uuid.UUID
     worker_id: uuid.UUID
-    quent_logger: Logger
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -587,7 +587,7 @@ class RayContext:
     """
 
     rank_actors: list[ActorHandle[RankActor]]
-    quent_logger: Logger
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -617,16 +617,9 @@ class DaskContext:
 
     client: distributed.Client
     rapidsmpf_id: str
-    quent_logger: Logger
+    quent_logger: QuentLogger | None
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
-
-
-def default_quent_context() -> QuentContext:
-    # Just avoiding a circular import
-    from cudf_polars.quent import QuentContext
-
-    return QuentContext()
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -698,13 +691,12 @@ class StreamingExecutor:
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
-    enable_quent
-        Whether to enable Quent tracing for the streaming executor.
-        When disabled (default), no Quent events are emitted.
     quent_context
-        A fully customized QuentContext. When provided, the streaming executor will
-        use this QuentContext for tracing. When not provided, the streaming executor
-        will create a default QuentContext.
+        Quent tracing context. When ``None`` (default), Quent tracing is disabled.
+        Pass a :class:`~cudf_polars.quent.QuentContext` instance to enable tracing.
+        Can be set via the ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` environment
+        variable (``true`` enables tracing with a default context, ``false``
+        disables it).
 
     Notes
     -----
@@ -777,12 +769,9 @@ class StreamingExecutor:
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
-    quent_context: QuentContext = dataclasses.field(
-        default_factory=default_quent_context
-    )
-    enable_quent: bool = dataclasses.field(
+    quent_context: QuentContext | None = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__ENABLE_QUENT", bool, default=False
+            f"{_env_prefix}__QUENT_CONTEXT", _quent_context_converter, default=None
         )
     )
 
@@ -856,10 +845,10 @@ class StreamingExecutor:
 
         # Hash the quent context UUIDs as ints
         quent_context = d["quent_context"]
-        for key in ["engine", "query_group", "query"]:
-            quent_context[key]["id"] = int(quent_context[key]["id"])
-
-        d["quent_context"] = json.dumps(quent_context)
+        if quent_context is not None:
+            for key in ["engine", "query_group", "query"]:
+                quent_context[key]["id"] = int(quent_context[key]["id"])
+            d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
 
 

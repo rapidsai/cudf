@@ -115,21 +115,21 @@ def evaluate_pipeline_spmd_mode(
     py_executor = config_options.executor.spmd_context.py_executor
 
     quent_context = config_options.executor.quent_context
-    quent_context._emit_query_group_events(
-        config_options.executor.spmd_context.quent_logger
-    )
-    quent_context._emit_query_events(config_options.executor.spmd_context.quent_logger)
-
-    # I don't like recreating the Worker here...
-    local_quent_context = LocalQuentContext(
-        context=quent_context,
-        worker=Worker(
-            id=config_options.executor.spmd_context.worker_id,
-            engine=quent_context.engine,
-            instance_name=f"rank-{comm.rank}",
-        ),
-        logger=config_options.executor.spmd_context.quent_logger,
-    )
+    local_quent_context: LocalQuentContext | None = None
+    if quent_context is not None:
+        quent_logger = config_options.executor.spmd_context.quent_logger
+        assert quent_logger is not None
+        quent_context._emit_query_group_events(quent_logger)
+        quent_context._emit_query_events(quent_logger)
+        local_quent_context = LocalQuentContext(
+            context=quent_context,
+            worker=Worker(
+                id=config_options.executor.spmd_context.worker_id,
+                engine=quent_context.engine,
+                instance_name=f"rank-{comm.rank}",
+            ),
+            logger=quent_logger,
+        )
 
     df, metadata = evaluate_on_rank(
         context,
@@ -140,9 +140,11 @@ def evaluate_pipeline_spmd_mode(
         local_quent_context=local_quent_context,
         query_id=query_id,
     )
-    quent_context._emit_query_exit_events(
-        config_options.executor.spmd_context.quent_logger
-    )
+    if quent_context is not None:
+        assert config_options.executor.spmd_context.quent_logger is not None
+        quent_context._emit_query_exit_events(
+            config_options.executor.spmd_context.quent_logger
+        )
     return df, metadata if collect_metadata else None
 
 
@@ -393,16 +395,13 @@ class SPMDEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
-        quent_logger: (
-            cudf_polars.quent._logging.QuentLogger
-            | cudf_polars.quent._logging.NoOpLogger
+        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+            "quent_context"
         )
-
-        if executor_options.get("enable_quent", False):
-            quent_logger = cudf_polars.quent._logging.QuentLogger()
+        if quent_context is not None:
+            self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         else:
-            quent_logger = cudf_polars.quent._logging.NoOpLogger()
-        self._quent_logger = quent_logger
+            self._quent_logger = None
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
@@ -459,24 +458,17 @@ class SPMDEngine(StreamingEngine):
             exit_stack.enter_context(set_memory_resource(self._mr))
             exit_stack.callback(self._cleanup_ctx)
 
-            quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
-                "quent_context"
-            )
-
-            if quent_context is None:
-                # We only need the collective synchronize_quent_context
-                # in the case that the user's program doesn't provide a QuentContext.
-                quent_context = synchronize_quent_context(
-                    comm=comm,
-                    context=self._ctx,
-                )
-
-            executor_options["quent_context"] = quent_context
-            quent_context._emit_engine_init_events(self._quent_logger)
+            if quent_context is not None:
+                executor_options["quent_context"] = quent_context
+                assert self._quent_logger is not None
+                quent_context._emit_engine_init_events(self._quent_logger)
+                engine_id = quent_context.engine.id
+            else:
+                engine_id = uuid.uuid4()
 
             self._quent_worker = Worker(
                 id=uuid.uuid4(),
-                engine=quent_context.engine,
+                engine=cudf_polars.quent.Engine(id=engine_id),
                 instance_name=f"rank-{self.rank}",  # relies on self.comm
             )
 
@@ -500,7 +492,7 @@ class SPMDEngine(StreamingEngine):
                     "cluster": "spmd",
                     "spmd_context": SPMDContext(
                         comm=comm,
-                        engine_id=quent_context.engine.id,
+                        engine_id=engine_id,
                         worker_id=self._quent_worker.id,
                         quent_logger=self._quent_logger,
                         context=self._ctx,
@@ -514,7 +506,8 @@ class SPMDEngine(StreamingEngine):
                 exit_stack=exit_stack,
             )
 
-            self._quent_logger.emit(self._quent_worker._init())
+            if self._quent_logger is not None:
+                self._quent_logger.emit(self._quent_worker._init())
         except Exception:
             exit_stack.close()
             raise
@@ -590,8 +583,8 @@ class SPMDEngine(StreamingEngine):
             if existing_quent_context is not None:
                 executor_options.setdefault("quent_context", existing_quent_context)
         engine_options = engine_options or {}
-        quent_context: cudf_polars.quent.QuentContext = executor_options.get(
-            "quent_context", cudf_polars.quent.QuentContext()
+        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+            "quent_context"
         )
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
 
@@ -618,11 +611,15 @@ class SPMDEngine(StreamingEngine):
         self._mr = self._ctx.br().device_mr_adaptor()
         rmm.mr.set_current_device_resource(self._mr)
 
-        quent_context = synchronize_quent_context(
-            comm=self._comm,
-            context=self._ctx,
-        )
-        executor_options["quent_context"] = quent_context
+        if quent_context is not None:
+            quent_context = synchronize_quent_context(
+                comm=self._comm,
+                context=self._ctx,
+            )
+            executor_options["quent_context"] = quent_context
+            engine_id = quent_context.engine.id
+        else:
+            engine_id = uuid.uuid4()
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,
@@ -639,7 +636,7 @@ class SPMDEngine(StreamingEngine):
                     comm=self._comm,
                     context=self._ctx,
                     py_executor=self.py_executor,
-                    engine_id=quent_context.engine.id,
+                    engine_id=engine_id,
                     worker_id=self._quent_worker.id,
                     quent_logger=self._quent_logger,
                 ),
@@ -777,18 +774,22 @@ class SPMDEngine(StreamingEngine):
         # quent traces before that.
         # Clear the references only after shutdown completes.
 
-        self._quent_logger.emit(self._quent_worker._exit())
-        quent_context: cudf_polars.quent.QuentContext = self.config["executor_options"][
-            "quent_context"
-        ]
-        quent_context._emit_engine_exit_events(self._quent_logger)
+        if self._quent_logger is not None:
+            self._quent_logger.emit(self._quent_worker._exit())
+        quent_context: cudf_polars.quent.QuentContext | None = self.config[
+            "executor_options"
+        ].get("quent_context")
+        if quent_context is not None:
+            assert self._quent_logger is not None
+            quent_context._emit_engine_exit_events(self._quent_logger)
 
         super().shutdown()
 
         self._comm = None
         self._ctx = None
         # TODO: Figure out multi-rank handling.
-        self._quent_events_raw.extend(self._quent_logger.drain())
+        if self._quent_logger is not None:
+            self._quent_events_raw.extend(self._quent_logger.drain())
         self._quent_events_raw.sort(key=lambda x: x["timestamp"])
         self._py_executor = None
 

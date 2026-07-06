@@ -117,7 +117,7 @@ class _WorkerContext:
     ctx: Context | None
     py_executor: ThreadPoolExecutor | None
     base_mr: rmm.mr.DeviceMemoryResource | None
-    quent_logger: cudf_polars.quent._logging.Logger
+    quent_logger: cudf_polars.quent._logging.QuentLogger | None
     quent_worker: cudf_polars.quent._types.Worker
     mr: RmmResourceAdaptor | None = None  # set after `Context` is built (below).
 
@@ -162,7 +162,7 @@ def _setup_root(
     worker_id
         Unique identifier for this worker.
     executor_options
-        Executor options (e.g. ``enable_quent``).
+        Executor options (e.g. ``quent_context``).
 
     Returns
     -------
@@ -187,14 +187,12 @@ def _setup_root(
         instance_name=f"rank-{comm.rank}",
     )
 
-    quent_logger: (
-        cudf_polars.quent._logging.QuentLogger | cudf_polars.quent._logging.NoOpLogger
-    )
-
-    if executor_options.get("enable_quent", False):
-        quent_logger = cudf_polars.quent._logging.QuentLogger()
+    if executor_options.get("quent_context") is not None:
+        quent_logger: cudf_polars.quent._logging.QuentLogger | None = (
+            cudf_polars.quent._logging.QuentLogger()
+        )
     else:
-        quent_logger = cudf_polars.quent._logging.NoOpLogger()
+        quent_logger = None
 
     setattr(
         dask_worker,
@@ -306,14 +304,12 @@ def _setup_worker(
         thread_name_prefix="dask-executor",
     )
 
-    quent_logger: (
-        cudf_polars.quent._logging.QuentLogger | cudf_polars.quent._logging.NoOpLogger
-    )
-
-    if executor_options.get("enable_quent", False):
-        quent_logger = cudf_polars.quent._logging.QuentLogger()
+    if executor_options.get("quent_context") is not None:
+        quent_logger: cudf_polars.quent._logging.QuentLogger | None = (
+            cudf_polars.quent._logging.QuentLogger()
+        )
     else:
-        quent_logger = cudf_polars.quent._logging.NoOpLogger()
+        quent_logger = None
 
     mp_ctx = _WorkerContext(
         comm=comm,
@@ -325,7 +321,8 @@ def _setup_worker(
         quent_logger=quent_logger,
     )
     setattr(dask_worker, attr, mp_ctx)
-    mp_ctx.quent_logger.emit(quent_worker._init())
+    if mp_ctx.quent_logger is not None:
+        mp_ctx.quent_logger.emit(quent_worker._init())
 
 
 def _teardown_worker(
@@ -349,9 +346,8 @@ def _teardown_worker(
     mp_ctx: _WorkerContext | None = getattr(dask_worker, attr, None)
     traces = []
     if mp_ctx is not None:
-        if mp_ctx.quent_worker is not None:
+        if mp_ctx.quent_worker is not None and mp_ctx.quent_logger is not None:
             mp_ctx.quent_logger.emit(mp_ctx.quent_worker._exit())
-
             traces = mp_ctx.quent_logger.drain()
 
         if mp_ctx.py_executor is not None:
@@ -458,8 +454,8 @@ def _worker_evaluate(
     uid: str,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
+    quent_context: cudf_polars.quent.QuentContext | None = None,
     dask_worker: distributed.Worker | None = None,
-    quent_context: cudf_polars.quent.QuentContext,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
     Lower and execute a Polars IR query on this Dask worker's GPU.
@@ -498,11 +494,14 @@ def _worker_evaluate(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     if mp_ctx.ctx is None or mp_ctx.comm is None or mp_ctx.py_executor is None:
         raise RuntimeError("_setup_worker must be called before _worker_evaluate")
-    local_quent_context = LocalQuentContext(
-        context=quent_context,
-        worker=mp_ctx.quent_worker,
-        logger=mp_ctx.quent_logger,
-    )
+    local_quent_context: LocalQuentContext | None = None
+    if quent_context is not None:
+        assert mp_ctx.quent_logger is not None
+        local_quent_context = LocalQuentContext(
+            context=quent_context,
+            worker=mp_ctx.quent_worker,
+            logger=mp_ctx.quent_logger,
+        )
     # evaluate_on_rank always collects metadata internally so we can read
     # metadata[-1].duplicated to decide whether to suppress this rank's output.
     # The client concatenates each rank's result, so without this dedup an
@@ -533,7 +532,7 @@ def drain_quent_events(
     assert dask_worker is not None
 
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
-    if mp_ctx.quent_worker is not None:
+    if mp_ctx.quent_worker is not None and mp_ctx.quent_logger is not None:
         return mp_ctx.quent_logger.drain()
     return []
 
@@ -584,8 +583,11 @@ def evaluate_pipeline_dask_mode(
     dask_context = config_options.executor.dask_context
 
     quent_context = config_options.executor.quent_context
-    quent_context._emit_query_group_events(dask_context.quent_logger)
-    quent_context._emit_query_events(dask_context.quent_logger)
+    if quent_context is not None:
+        quent_logger = dask_context.quent_logger
+        assert quent_logger is not None
+        quent_context._emit_query_group_events(quent_logger)
+        quent_context._emit_query_events(quent_logger)
 
     # Strip dask_context before pickling config_options for remote calls.
     worker_config = dataclasses.replace(
@@ -609,7 +611,10 @@ def evaluate_pipeline_dask_mode(
         if md is not None:
             metadata_collector.extend(md)
 
-    quent_context._emit_query_exit_events(dask_context.quent_logger)
+    if quent_context is not None:
+        quent_logger = dask_context.quent_logger
+        assert quent_logger is not None
+        quent_context._emit_query_exit_events(quent_logger)
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -713,16 +718,13 @@ class DaskEngine(StreamingEngine):
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
-        quent_logger: (
-            cudf_polars.quent._logging.QuentLogger
-            | cudf_polars.quent._logging.NoOpLogger
+        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+            "quent_context"
         )
-
-        if executor_options.get("enable_quent", False):
-            quent_logger = cudf_polars.quent._logging.QuentLogger()
+        if quent_context is not None:
+            self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         else:
-            quent_logger = cudf_polars.quent._logging.NoOpLogger()
-        self._quent_logger = quent_logger
+            self._quent_logger = None
 
         if bootstrap.is_running_with_rrun():
             raise RuntimeError(
@@ -743,11 +745,15 @@ class DaskEngine(StreamingEngine):
 
         # TODO: there's no reason our API needs a plain dict[str, Any] rather than
         # a typed config object here.
-        quent_context: cudf_polars.quent.QuentContext = executor_options.get(
-            "quent_context", cudf_polars.quent.QuentContext()
-        )
-        executor_options.setdefault("quent_context", quent_context)
-        quent_context._emit_engine_init_events(self._quent_logger)
+        if quent_context is not None:
+            executor_options.setdefault("quent_context", quent_context)
+            assert self._quent_logger is not None
+            quent_context._emit_engine_init_events(self._quent_logger)
+            rapidsmpf_id = str(quent_context.engine.id)
+            engine_id = quent_context.engine.id
+        else:
+            rapidsmpf_id = str(uuid.uuid4())
+            engine_id = uuid.UUID(rapidsmpf_id)
 
         owned_cluster: Any = None
         owned_client: distributed.Client | None = None
@@ -794,11 +800,11 @@ class DaskEngine(StreamingEngine):
         root_result = dask_client.run(
             functools.partial(
                 _setup_root,
-                uid=str(quent_context.engine.id),
+                uid=rapidsmpf_id,
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
                 worker_id=worker_ids[0],
-                engine_id=quent_context.engine.id,
+                engine_id=engine_id,
             ),
             nranks,
             rapidsmpf_options_as_bytes,
@@ -813,11 +819,11 @@ class DaskEngine(StreamingEngine):
         dask_client.run(
             functools.partial(
                 _setup_worker,
-                uid=str(quent_context.engine.id),
+                uid=rapidsmpf_id,
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
                 worker_ids=worker_ids,
-                engine_id=quent_context.engine.id,
+                engine_id=engine_id,
             ),
             root_ucxx_address_as_bytes,
             nranks,
@@ -827,7 +833,7 @@ class DaskEngine(StreamingEngine):
 
         dask_ctx = DaskContext(
             client=dask_client,
-            rapidsmpf_id=str(quent_context.engine.id),
+            rapidsmpf_id=rapidsmpf_id,
             quent_logger=self._quent_logger,
             owned_client=owned_client,
             owned_cluster=owned_cluster,
@@ -997,9 +1003,9 @@ class DaskEngine(StreamingEngine):
         ctx = self._dask_context
         self._dask_context = None
         exceptions: list[Exception] = []
-        quent_context: cudf_polars.quent.QuentContext = self.config["executor_options"][
-            "quent_context"
-        ]
+        quent_context: cudf_polars.quent.QuentContext | None = self.config[
+            "executor_options"
+        ].get("quent_context")
         try:
             # Teardown emits Worker.exit, then we drain all buffered events
             # (including the exit event) from workers.
@@ -1013,7 +1019,9 @@ class DaskEngine(StreamingEngine):
         except Exception as e:
             exceptions.append(e)
         finally:
-            quent_context._emit_engine_exit_events(self._quent_logger)
+            if quent_context is not None:
+                assert self._quent_logger is not None
+                quent_context._emit_engine_exit_events(self._quent_logger)
             if ctx.owned_client is not None:
                 ctx.owned_client.close()
             if ctx.owned_cluster is not None:
@@ -1021,7 +1029,8 @@ class DaskEngine(StreamingEngine):
             super().shutdown()
 
         # gather the client-side events.
-        self._quent_events_raw.extend(self._quent_logger.drain())
+        if self._quent_logger is not None:
+            self._quent_events_raw.extend(self._quent_logger.drain())
         # final inplace sort of the events.
         self._quent_events_raw.sort(key=lambda x: x["timestamp"])
 

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from typing import Self
 
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.quent._logging import Logger
+    from cudf_polars.quent._logging import QuentLogger
     from cudf_polars.quent._types import (
         Operator,
         Plan,
@@ -128,15 +128,15 @@ class QuentContext:
     def _query_group_cache(self) -> set[uuid.UUID]:
         return self._query_group_cache_  # type: ignore[attr-defined]
 
-    def _emit_engine_init_events(self, logger: Logger) -> None:
+    def _emit_engine_init_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine init event."""
         logger.emit(self.engine._init())
 
-    def _emit_engine_exit_events(self, logger: Logger) -> None:
+    def _emit_engine_exit_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Engine exit event."""
         logger.emit(self.engine._exit())
 
-    def _emit_query_group_events(self, logger: Logger) -> None:
+    def _emit_query_group_events(self, logger: QuentLogger) -> None:
         """
         Emit a Quent QueryGroup declaration event.
 
@@ -148,7 +148,7 @@ class QuentContext:
         self._query_group_cache.add(self.query_group.id)
         logger.emit(self.query_group._declare(engine=self.engine))
 
-    def _emit_query_events(self, logger: Logger) -> None:
+    def _emit_query_events(self, logger: QuentLogger) -> None:
         """
         Emit Quent Query events.
 
@@ -158,13 +158,13 @@ class QuentContext:
         logger.emit(self.query._planning())
         logger.emit(self.query._executing())
 
-    def _emit_query_exit_events(self, logger: Logger) -> None:
+    def _emit_query_exit_events(self, logger: QuentLogger) -> None:
         """Emit a Quent Query exit event."""
         logger.emit(self.query._exit())
 
     def _emit_plan_declarations(
         self,
-        logger: Logger,
+        logger: QuentLogger,
         plan: Plan,
         operators: list[Operator],
         ports: list[Port],
@@ -178,7 +178,7 @@ class QuentContext:
 
     def _emit_plan_events(
         self,
-        logger: Logger,
+        logger: QuentLogger,
         ir: IR,
         config_options: ConfigOptions[StreamingExecutor],
         plan_id: uuid.UUID,
@@ -197,7 +197,7 @@ class QuentContext:
 
         Parameters
         ----------
-        logger: Logger
+        logger: QuentLogger
             The quent logger, which buffers the events in memory.
         ir
             Root of the IR graph for this plan.
@@ -238,7 +238,7 @@ class QuentContext:
 
     def _emit_physical_plan_events(
         self,
-        logger: Logger,
+        logger: QuentLogger,
         ir: IR,
         config_options: ConfigOptions[StreamingExecutor],
         plan_id: uuid.UUID,
@@ -256,7 +256,7 @@ class QuentContext:
 
         Parameters
         ----------
-        logger: Logger
+        logger: QuentLogger
             The quent logger, which buffers the events in memory.
         ir
             Root of the **lowered** IR graph.
@@ -301,10 +301,10 @@ class LocalQuentContext:
     """
     A Quent Context that is only ever used on the local worker rank.
 
-    This can contain non-serializable objects (like a Logger)
+    This can contain non-serializable objects (like a :class:`~cudf_polars.quent._logging.QuentLogger`)
     and entities that are only valid on the local rank.
     """
 
     context: QuentContext
     worker: Worker
-    logger: Logger
+    logger: QuentLogger

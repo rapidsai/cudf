@@ -22,10 +22,8 @@ def engine_with_quent_context(
     quent_context: QuentContext,
 ) -> StreamingEngine:
     """
-    A streaming engine configured with
-
-    - quent enabled
-    - a quent context from the 'quent_context' fixture.
+    A streaming engine configured with a quent context from the 'quent_context'
+    fixture.
     """
     backend = request.param
     if backend == "ray":
@@ -33,14 +31,14 @@ def engine_with_quent_context(
         import cudf_polars.engine.ray
 
         return cudf_polars.engine.ray.RayEngine(
-            executor_options={"quent_context": quent_context, "enable_quent": True}
+            executor_options={"quent_context": quent_context}
         )
     elif backend == "dask":
         pytest.importorskip("distributed")
         import cudf_polars.engine.dask
 
         return cudf_polars.engine.dask.DaskEngine(
-            executor_options={"quent_context": quent_context, "enable_quent": True}
+            executor_options={"quent_context": quent_context}
         )
     elif backend == "spmd":
         from rapidsmpf import bootstrap
@@ -63,7 +61,7 @@ def engine_with_quent_context(
             )
 
         return cudf_polars.engine.spmd.SPMDEngine(
-            executor_options={"quent_context": quent_context, "enable_quent": True},
+            executor_options={"quent_context": quent_context},
             comm=comm,
         )
     else:

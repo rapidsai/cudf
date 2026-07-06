@@ -256,10 +256,9 @@ class StreamingOptions:
         Default: ``True`` (forced by the streaming engines).
         Category: executor.
     quent_context
-        Quent context, dict or
-        :class:`~cudf_polars.quent.QuentContext`.
-        Default: ``QuentContext()``.
-        Category: executor.
+        Quent tracing context, or ``None`` to disable tracing.
+        Env: ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` (``true``/``false``).
+        Default: ``None`` (disabled).
     raise_on_fail
         Raise instead of falling back to CPU.
         Default: ``False``.
@@ -350,7 +349,7 @@ class StreamingOptions:
     sink_to_directory: bool | Unspecified = _opt(
         "executor", "CUDF_POLARS__EXECUTOR__SINK_TO_DIRECTORY", parse_boolean
     )
-    quent_context: QuentContext | Unspecified = _opt(
+    quent_context: QuentContext | None | Unspecified = _opt(
         "executor",
     )
 

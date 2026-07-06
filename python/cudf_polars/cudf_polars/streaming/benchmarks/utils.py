@@ -1089,16 +1089,17 @@ def run_polars_query(
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
             if isinstance(engine, StreamingEngine):
-                quent_context = engine.config["executor_options"]["quent_context"]
-                engine.config["executor_options"]["quent_context"] = (
-                    dataclasses.replace(
-                        quent_context,
-                        query=cudf_polars.quent.Query(
-                            instance_name=f"Iteration {i + 1}",
-                        ),
+                quent_context = engine.config["executor_options"].get("quent_context")
+                if quent_context is not None:
+                    engine.config["executor_options"]["quent_context"] = (
+                        dataclasses.replace(
+                            quent_context,
+                            query=cudf_polars.quent.Query(
+                                instance_name=f"Iteration {i + 1}",
+                            ),
+                        )
                     )
-                )
-                engine._run(setup_logging, q_id, i)
+                    engine._run(setup_logging, q_id, i)
 
         try:
             record = run_polars_query_iteration(
@@ -1173,13 +1174,16 @@ def _run_query_loop(
 
     for q_id in run_config.queries:
         if engine is not None:
-            quent_context = engine.config["executor_options"]["quent_context"]
-            engine.config["executor_options"]["quent_context"] = dataclasses.replace(
-                quent_context,
-                query_group=cudf_polars.quent.QueryGroup(
-                    instance_name=f"PDSH Query {q_id}",
-                ),
-            )
+            quent_context = engine.config["executor_options"].get("quent_context")
+            if quent_context is not None:
+                engine.config["executor_options"]["quent_context"] = (
+                    dataclasses.replace(
+                        quent_context,
+                        query_group=cudf_polars.quent.QueryGroup(
+                            instance_name=f"PDSH Query {q_id}",
+                        ),
+                    )
+                )
 
         try:
             result = run_polars_query(

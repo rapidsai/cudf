@@ -164,9 +164,7 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
-    _quent_logger: (
-        cudf_polars.quent._logging.QuentLogger | cudf_polars.quent._logging.NoOpLogger
-    )
+    _quent_logger: cudf_polars.quent._logging.QuentLogger | None
     rapidsmpf_options: rapidsmpf.config.Options
     # Process-wide registry of every live :class:`StreamingEngine`. Used by
     # :class:`DefaultSingletonEngine` to enforce that no other engine is
@@ -665,7 +663,7 @@ def evaluate_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     *,
     collect_metadata: bool = False,
-    local_quent_context: LocalQuentContext,
+    local_quent_context: LocalQuentContext | None = None,
     query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
@@ -694,7 +692,8 @@ def evaluate_on_rank(
     collect_metadata
         Whether to collect channel metadata during execution.
     local_quent_context
-        The local Quent context for this rank.
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
     query_id
         A unique identifier for the query.
 
@@ -708,6 +707,7 @@ def evaluate_on_rank(
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
 
     if config_options.executor.quent_context is not None:
+        assert local_quent_context is not None
         logical_plan_id = ir.get_stable_plan_id()
         plan, ops, ports, logical_op_by_id = build_plan(
             ir,
@@ -729,6 +729,7 @@ def evaluate_on_rank(
     )
 
     if config_options.executor.quent_context is not None:
+        assert local_quent_context is not None
         physical_plan_id = uuid.uuid4()
         if comm.rank == 0:
             log_query_plan(ir, config_options)
