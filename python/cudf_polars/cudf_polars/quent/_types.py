@@ -12,7 +12,7 @@ import enum
 import sys
 import time
 import uuid
-from typing import Any
+from typing import Any, TypeAlias
 
 from cudf_polars import __version__
 
@@ -419,7 +419,7 @@ class QueryGroup:
 
 ScalarValue = int | float | str | bool
 HomogeneousListValue = list[int] | list[float] | list[str] | list[bool]
-Value = ScalarValue | HomogeneousListValue | dict[str, "Value"]
+Value: TypeAlias = ScalarValue | HomogeneousListValue | dict[str, "Value"]
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
