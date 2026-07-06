@@ -34,21 +34,35 @@
 #include <cudf/detail/operation_udf.cuh>
 // clang-format on
 
+#ifndef CUDF_LTO_MODE
+#define CUDF_UDF_TYPE int()
+#endif
+
+// Use LTO-dispatch for transform operators if we're in LTO mode. This allows the operator to be
+// defined in a separate translation unit and compiled with LTO, which can result in better
+// performance due to more optimization opportunities
+#ifdef CUDF_LTO_MODE
+#define GENERIC_TRANSFORM_OP(...) ::cudf::jit::lto::transform(__VA_ARGS__)
+#endif
+
 namespace cudf {
 namespace jit {
+namespace lto {
+
+using transform_type = CUDF_UDF_TYPE;
+
+extern "C" __device__ transform_type transform;
+
+}  // namespace lto
 
 /// @brief The generic transform kernel. Supports all types and nullability combinations.
-template <bool is_null_aware,
-          bool discard_errors,
-          bool has_user_data,
-          typename InputAccessors,
-          typename OutputAccessors>
-CUDF_KERNEL void transform_kernel(size_type row_size,
-                                  bitmask_type const* __restrict__ stencil,
-                                  void* __restrict__ user_data,
-                                  column_device_view_core const* __restrict__ input_cols,
-                                  mutable_column_device_view_core const* __restrict__ output_cols,
-                                  int32_t* __restrict__ max_error)
+template <bool is_null_aware, bool has_user_data, typename InputAccessors, typename OutputAccessors>
+__device__ void transform_kernel(size_type row_size,
+                                 bitmask_type const* __restrict__ stencil,
+                                 void* __restrict__ user_data,
+                                 column_device_view_core const* __restrict__ input_cols,
+                                 mutable_column_device_view_core const* __restrict__ output_cols,
+                                 int32_t* __restrict__ max_error)
 {
   auto start        = detail::grid_1d::global_thread_id();
   auto stride       = detail::grid_1d::grid_stride();
@@ -58,8 +72,8 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
     auto operation = [&]<typename Args>(Args args) {
       // TODO: static assert invocable
       auto func = [&](auto... a) {
-        if constexpr (!discard_errors) {
-          return GENERIC_TRANSFORM_OP(a...);
+        if constexpr (!cuda::std::is_void_v<decltype(GENERIC_TRANSFORM_OP(a...))>) {
+          return static_cast<cudf::errc>(GENERIC_TRANSFORM_OP(a...));
         } else {
           (void)GENERIC_TRANSFORM_OP(a...);
           return errc::SUCCESS;
@@ -91,7 +105,7 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
         (A::assign(output_cols, row, cuda::std::get<A::index>(outs)), ...);
       });
 
-      if constexpr (!discard_errors) { thread_error = cuda::std::max(thread_error, row_error); }
+      thread_error = cuda::std::max(thread_error, row_error);
 
     } else {
       auto active_mask = __ballot_sync(__activemask(), row < row_size);
@@ -114,14 +128,15 @@ CUDF_KERNEL void transform_kernel(size_type row_size,
          ...);
       });
 
-      if constexpr (!discard_errors) { thread_error = cuda::std::max(thread_error, row_error); }
+      thread_error = cuda::std::max(thread_error, row_error);
     }
   }
 
-  if constexpr (!discard_errors) {
-    cuda::atomic_ref ref(*max_error);
-    ref.fetch_max(static_cast<int32_t>(thread_error), cuda::std::memory_order_relaxed);
-  }
+  // early exit if no error occurred
+  if (thread_error == errc::SUCCESS) { return; }
+
+  cuda::atomic_ref ref(*max_error);
+  ref.fetch_max(static_cast<int32_t>(thread_error), cuda::std::memory_order_relaxed);
 }
 
 }  // namespace jit

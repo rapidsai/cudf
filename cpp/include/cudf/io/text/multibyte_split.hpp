@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,6 +21,7 @@ namespace text {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief APIs for splitting text data on multibyte delimiters.
  */
 
 /**
