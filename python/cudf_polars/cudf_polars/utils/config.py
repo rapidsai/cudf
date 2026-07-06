@@ -160,11 +160,15 @@ def _make_default_factory(
     return default_factory
 
 
+_TRUE_VALUES = {"true", "yes", "y", "1"}
+_FALSE_VALUES = {"false", "no", "n", "0"}
+
+
 def _bool_converter(v: str) -> bool:
     lowered = v.lower()
-    if lowered in {"1", "true", "yes", "y"}:
+    if lowered in _TRUE_VALUES:
         return True
-    elif lowered in {"0", "false", "no", "n"}:
+    elif lowered in _FALSE_VALUES:
         return False
     else:
         raise ValueError(f"Invalid boolean value: '{v}'")
@@ -178,6 +182,20 @@ def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
 
 def _optional_int_converter(v: str) -> int | None:
     return _optional_converter(v, int)
+
+
+def _quent_context_converter(v: str) -> QuentContext | None:
+    from cudf_polars.quent._context import QuentContext
+
+    try:
+        enabled = _bool_converter(v)
+    except ValueError as e:
+        raise ValueError(f"Invalid value for quent_context: '{v}'") from e
+    else:
+        if enabled:
+            return QuentContext()
+        else:
+            return None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -733,19 +751,20 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
-    enable_quent: bool = dataclasses.field(
-        default_factory=_make_default_factory(
-            f"{_env_prefix}__ENABLE_QUENT", bool, default=False
-        )
-    )
 
     min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
-    quent_context: QuentContext = dataclasses.field(
-        default_factory=default_quent_context
-    )
+    quent_context: QuentContext | None = None
+    # dataclasses.field(
+    #     default_factory=default_quent_context
+    # )
+    # enable_quent: bool = dataclasses.field(
+    #     default_factory=_make_default_factory(
+    #         f"{_env_prefix}__ENABLE_QUENT", bool, default=False
+    #     )
+    # )
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.cluster is None:

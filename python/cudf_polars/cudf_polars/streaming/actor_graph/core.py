@@ -79,6 +79,10 @@ def evaluate_logical_plan(
         )
 
         engine = DefaultSingletonEngine.get_or_create()
+        if config_options.executor.quent_context is not None:
+            engine_id = config_options.executor.quent_context.engine.id
+        else:
+            engine_id = uuid.uuid4()
         config_options = dataclasses.replace(
             config_options,
             executor=dataclasses.replace(
@@ -87,7 +91,7 @@ def evaluate_logical_plan(
                     comm=engine.comm,
                     context=engine.context,
                     py_executor=engine.py_executor,
-                    engine_id=config_options.executor.quent_context.engine.id,
+                    engine_id=engine_id,
                     worker_id=engine._quent_worker.id,
                     quent_logger=engine._quent_logger,
                 ),

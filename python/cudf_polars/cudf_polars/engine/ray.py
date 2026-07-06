@@ -112,12 +112,14 @@ def evaluate_pipeline_ray_mode(
         executor=dataclasses.replace(config_options.executor, ray_context=None),
     )
 
-    config_options.executor.quent_context._emit_query_group_events(
-        config_options.executor.ray_context.quent_logger
-    )
-    config_options.executor.quent_context._emit_query_events(
-        config_options.executor.ray_context.quent_logger
-    )
+    quent_context = config_options.executor.quent_context
+    if quent_context is not None:
+        quent_context._emit_query_group_events(
+            config_options.executor.ray_context.quent_logger
+        )
+        quent_context._emit_query_events(
+            config_options.executor.ray_context.quent_logger
+        )
 
     # Serialize the IR into the Ray object store so actors fetch by reference
     # instead of receiving N copies.
@@ -143,9 +145,10 @@ def evaluate_pipeline_ray_mode(
         if md is not None:
             metadata_collector.extend(md)
 
-    config_options.executor.quent_context._emit_query_exit_events(
-        config_options.executor.ray_context.quent_logger
-    )
+    if quent_context is not None:
+        quent_context._emit_query_exit_events(
+            config_options.executor.ray_context.quent_logger
+        )
     return pl.concat(dfs), metadata_collector or None
 
 

@@ -21,6 +21,12 @@ def engine_with_quent_context(
     request: pytest.FixtureRequest,
     quent_context: QuentContext,
 ) -> StreamingEngine:
+    """
+    A streaming engine configured with
+
+    - quent enabled
+    - a quent context from the 'quent_context' fixture.
+    """
     backend = request.param
     if backend == "ray":
         pytest.importorskip("ray")

@@ -361,7 +361,6 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100
         assert config.executor.broadcast_limit == 44
-        assert config.executor.enable_quent is True
 
 
 def test_target_partition_from_env(

@@ -707,7 +707,7 @@ def evaluate_on_rank(
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
 
-    if config_options.executor.enable_quent:
+    if config_options.executor.quent_context is not None:
         logical_plan_id = ir.get_stable_plan_id()
         plan, ops, ports, logical_op_by_id = build_plan(
             ir,
@@ -728,7 +728,7 @@ def evaluate_on_rank(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
 
-    if config_options.executor.enable_quent:
+    if config_options.executor.quent_context is not None:
         physical_plan_id = uuid.uuid4()
         if comm.rank == 0:
             log_query_plan(ir, config_options)
