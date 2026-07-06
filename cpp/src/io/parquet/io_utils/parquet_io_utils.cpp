@@ -457,6 +457,10 @@ fetch_bloom_filters_to_device_impl(
     task.bitset_size                       = bitset_size;
     task.covered                           = bytes_read >= task.header_size + bitset_size;
     task.present                           = true;
+    // Arrow bloom filter bitsets should be a whole number of 32-byte blocks
+    auto constexpr bloom_filter_block_bytes = std::size_t{32};
+    CUDF_EXPECTS(bitset_size % bloom_filter_block_bytes == 0,
+                 "Bloom filter bitset size must be a multiple of 32 bytes");
     return task;
   };
   bloom_filter_tasks = dispatch_tasks(bloom_filter_tasks.size(), read_speculative);
@@ -518,6 +522,8 @@ fetch_bloom_filters_to_device_impl(
           static_cast<std::size_t>(task.bloom_range.offset()) + task.header_size;
         bounce_buffers.emplace_back(
           datasources[task.source_idx].get().host_read(bitset_offset, task.bitset_size));
+        CUDF_EXPECTS(bounce_buffers.back()->size() == task.bitset_size,
+                     "Failed to read complete bloom filter bitset");
         copy_srcs.push_back(bounce_buffers.back()->data());
       }
       copy_dsts.push_back(dst.data());
