@@ -61,10 +61,11 @@ Start with scoping an implementation for the single partition path for cudf_pola
 2. Review the `pylibcudf` API to find the appropriate function or functions needed for the implementation.
     1. Additionally review the `libcudf` public API as a function may be appropriate but not exposed through `pylibcudf`. If needed, expose this API through `pylibcudf` as part of the implementation. `pylibcudf` will need to be rebuilt from source in order to test the implementation.
     2. Minimize the amount of kernel launches by using specific `pylibcudf` functions where possible. Evaluate using `pylibcudf.expressions` where sensible for combining several operations.
-    3. Implement any short-circuiting opportunities by checking Column properties like the `null_count` or `size` that minimizes `pylibcudf` calls.
-    4. Do not use APIs that convert the data CPU objects like `to_arrow` or `to_pylist` unless absolutely necessary.
-    5. Ensure `pylibcudf` APIs calls are passed a stream object so they do not use their default stream argument.
-    6. Follow any additional guidance in `python/REVIEW_GUIDELINES.md`
+    3. Do not use any `pylibcudf` that are deprecated.
+    4. Implement any short-circuiting opportunities by checking Column properties like the `null_count` or `size` that minimizes `pylibcudf` calls.
+    5. Do not use APIs that convert the data CPU objects like `to_arrow` or `to_pylist` unless absolutely necessary.
+    6. Ensure `pylibcudf` APIs calls are passed a stream object so they do not use their default stream argument.
+    7. Follow any additional guidance in `python/REVIEW_GUIDELINES.md`
 3. When raising an exception to match Polars or to note that some functionality is not supported, prefer raising these exceptions in the `__init__` method instead of the `do_evaluate` methods of the `Expr` subclasses.
 4. Ensure the `is_pointwise` on the `Expr` subclass correctly reflects if the expression is a pointwise operation.
 
