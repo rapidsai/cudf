@@ -5,7 +5,7 @@
 
 /**
  * @file parquet_metadata.hpp
- * @brief cuDF-IO freeform API
+ * @brief Freeform APIs for Parquet metadata
  */
 
 #pragma once
