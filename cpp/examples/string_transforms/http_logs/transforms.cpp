@@ -36,6 +36,14 @@ namespace {
 enum class variant { PRECOMPILED, JIT, LTO };
 enum class operation { REQUEST_LINE, COMBINED_LOG };
 
+constexpr auto request_line_output_count = std::size_t{3};
+constexpr auto combined_log_output_count = std::size_t{7};
+
+constexpr std::string_view request_line_pattern =
+  R"(^([A-Z]+) ([^ ?]+)[^ ]* HTTP/([0-9]+[.][0-9]+)$)";
+constexpr std::string_view combined_log_pattern =
+  R"regex(^([^ ]+) - [^ ]+ \[([^]]+)\] "([A-Z]+) ([^ ?]+)[^ ]* HTTP/[0-9.]+" ([0-9]{3}) [0-9]+ "([^"]*)" "([^"]*)"$)regex";
+
 struct options {
   std::string input_path;
   std::string output_path;
@@ -45,38 +53,54 @@ struct options {
   int iterations;
 };
 
+// Runtime JIT compilation consumes CUDA source strings. Each operation has one UDF that computes
+// exact output sizes and another that writes into the resulting character buffers.
 constexpr char request_line_sizes_udf[] = R"***(
-__device__ void size_http_request(int32_t* method_size, int32_t* path_size,
-                                  int32_t* version_size, cudf::string_view input) {
-  auto find_char = [&](char needle, int32_t begin) {
-    for (auto i = begin; i < input.size_bytes(); ++i) if (input.data()[i] == needle) return i;
+__device__ void compute_request_line_sizes(int32_t* method_size,
+                                           int32_t* path_size,
+                                           int32_t* version_size,
+                                           cudf::string_view input) {
+  auto find_character = [&](char needle, int32_t begin) {
+    for (auto index = begin; index < input.size_bytes(); ++index) {
+      if (input.data()[index] == needle) { return index; }
+    }
     return input.size_bytes();
   };
-  auto method_end = find_char(' ', 0);
-  auto target_end = find_char(' ', method_end + 1);
-  auto query_begin = find_char('?', method_end + 1);
-  auto path_end = query_begin < target_end ? query_begin : target_end;
-  *method_size = method_end;
-  *path_size = path_end - method_end - 1;
+
+  auto const method_end  = find_character(' ', 0);
+  auto const target_end  = find_character(' ', method_end + 1);
+  auto const query_begin = find_character('?', method_end + 1);
+  auto const path_end    = query_begin < target_end ? query_begin : target_end;
+
+  *method_size  = method_end;
+  *path_size    = path_end - method_end - 1;
   *version_size = input.size_bytes() - target_end - 6;
 }
 )***";
 
 constexpr char request_line_output_udf[] = R"***(
-__device__ void extract_http_request(cuda::std::span<char>* method, cuda::std::span<char>* path,
-                                     cuda::std::span<char>* version,
-                                     cudf::string_view input) {
-  auto find_char = [&](char needle, int32_t begin) {
-    for (auto i = begin; i < input.size_bytes(); ++i) if (input.data()[i] == needle) return i;
+__device__ void write_request_line(cuda::std::span<char>* method,
+                                   cuda::std::span<char>* path,
+                                   cuda::std::span<char>* version,
+                                   cudf::string_view input) {
+  auto find_character = [&](char needle, int32_t begin) {
+    for (auto index = begin; index < input.size_bytes(); ++index) {
+      if (input.data()[index] == needle) { return index; }
+    }
     return input.size_bytes();
   };
+
   auto copy_field = [&](cuda::std::span<char> out, int32_t begin, int32_t end) {
-    for (int32_t i = begin; i < end; ++i) out[i - begin] = input.data()[i];
+    for (auto index = begin; index < end; ++index) {
+      out[index - begin] = input.data()[index];
+    }
   };
-  auto method_end = find_char(' ', 0);
-  auto target_end = find_char(' ', method_end + 1);
-  auto query_begin = find_char('?', method_end + 1);
-  auto path_end = query_begin < target_end ? query_begin : target_end;
+
+  auto const method_end  = find_character(' ', 0);
+  auto const target_end  = find_character(' ', method_end + 1);
+  auto const query_begin = find_character('?', method_end + 1);
+  auto const path_end    = query_begin < target_end ? query_begin : target_end;
+
   copy_field(*method, 0, method_end);
   copy_field(*path, method_end + 1, path_end);
   copy_field(*version, target_end + 6, input.size_bytes());
@@ -84,93 +108,129 @@ __device__ void extract_http_request(cuda::std::span<char>* method, cuda::std::s
 )***";
 
 constexpr char combined_log_sizes_udf[] = R"***(
-__device__ void size_combined_log(int32_t* ip, int32_t* timestamp, int32_t* method,
-                                  int32_t* path, int32_t* status, int32_t* referer,
-                                  int32_t* user_agent, cudf::string_view input) {
-  auto find_char = [&](char needle, int32_t begin) {
-    for (auto i = begin; i < input.size_bytes(); ++i) if (input.data()[i] == needle) return i;
+__device__ void compute_combined_log_sizes(int32_t* client_ip_size,
+                                           int32_t* timestamp_size,
+                                           int32_t* method_size,
+                                           int32_t* path_size,
+                                           int32_t* status_size,
+                                           int32_t* referer_size,
+                                           int32_t* user_agent_size,
+                                           cudf::string_view input) {
+  auto find_character = [&](char needle, int32_t begin) {
+    for (auto index = begin; index < input.size_bytes(); ++index) {
+      if (input.data()[index] == needle) { return index; }
+    }
     return input.size_bytes();
   };
-  auto ip_end = find_char(' ', 0);
-  auto timestamp_begin = find_char('[', ip_end) + 1;
-  auto timestamp_end = find_char(']', timestamp_begin);
-  auto request_begin = find_char('\"', timestamp_end) + 1;
-  auto method_end = find_char(' ', request_begin);
-  auto target_end = find_char(' ', method_end + 1);
-  auto query_begin = find_char('?', method_end + 1);
-  auto path_end = query_begin < target_end ? query_begin : target_end;
-  auto request_end = find_char('\"', target_end);
-  auto status_begin = request_end + 2;
-  auto status_end = find_char(' ', status_begin);
-  auto bytes_end = find_char(' ', status_end + 1);
-  auto referer_begin = find_char('\"', bytes_end) + 1;
-  auto referer_end = find_char('\"', referer_begin);
-  auto user_agent_begin = find_char('\"', referer_end + 1) + 1;
-  auto user_agent_end = find_char('\"', user_agent_begin);
-  *ip = ip_end; *timestamp = timestamp_end - timestamp_begin;
-  *method = method_end - request_begin; *path = path_end - method_end - 1;
-  *status = status_end - status_begin; *referer = referer_end - referer_begin;
-  *user_agent = user_agent_end - user_agent_begin;
+
+  auto const client_ip_end    = find_character(' ', 0);
+  auto const timestamp_begin  = find_character('[', client_ip_end) + 1;
+  auto const timestamp_end    = find_character(']', timestamp_begin);
+  auto const request_begin    = find_character('\"', timestamp_end) + 1;
+  auto const method_end       = find_character(' ', request_begin);
+  auto const target_end       = find_character(' ', method_end + 1);
+  auto const query_begin      = find_character('?', method_end + 1);
+  auto const path_end         = query_begin < target_end ? query_begin : target_end;
+  auto const request_end      = find_character('\"', target_end);
+  auto const status_begin     = request_end + 2;
+  auto const status_end       = find_character(' ', status_begin);
+  auto const bytes_end        = find_character(' ', status_end + 1);
+  auto const referer_begin    = find_character('\"', bytes_end) + 1;
+  auto const referer_end      = find_character('\"', referer_begin);
+  auto const user_agent_begin = find_character('\"', referer_end + 1) + 1;
+  auto const user_agent_end   = find_character('\"', user_agent_begin);
+
+  *client_ip_size  = client_ip_end;
+  *timestamp_size  = timestamp_end - timestamp_begin;
+  *method_size     = method_end - request_begin;
+  *path_size       = path_end - method_end - 1;
+  *status_size     = status_end - status_begin;
+  *referer_size    = referer_end - referer_begin;
+  *user_agent_size = user_agent_end - user_agent_begin;
 }
 )***";
 
 constexpr char combined_log_output_udf[] = R"***(
-__device__ void extract_combined_log(cuda::std::span<char>* ip,
-                                     cuda::std::span<char>* timestamp,
-                                     cuda::std::span<char>* method,
-                                     cuda::std::span<char>* path,
-                                     cuda::std::span<char>* status,
-                                     cuda::std::span<char>* referer,
-                                     cuda::std::span<char>* user_agent,
-                                     cudf::string_view input) {
-  auto find_char = [&](char needle, int32_t begin) {
-    for (auto i = begin; i < input.size_bytes(); ++i) if (input.data()[i] == needle) return i;
+__device__ void write_combined_log(cuda::std::span<char>* client_ip,
+                                   cuda::std::span<char>* timestamp,
+                                   cuda::std::span<char>* method,
+                                   cuda::std::span<char>* path,
+                                   cuda::std::span<char>* status,
+                                   cuda::std::span<char>* referer,
+                                   cuda::std::span<char>* user_agent,
+                                   cudf::string_view input) {
+  auto find_character = [&](char needle, int32_t begin) {
+    for (auto index = begin; index < input.size_bytes(); ++index) {
+      if (input.data()[index] == needle) { return index; }
+    }
     return input.size_bytes();
   };
+
   auto copy_field = [&](cuda::std::span<char> out, int32_t begin, int32_t end) {
-    for (int32_t i = begin; i < end; ++i) out[i - begin] = input.data()[i];
+    for (auto index = begin; index < end; ++index) {
+      out[index - begin] = input.data()[index];
+    }
   };
-  auto ip_end = find_char(' ', 0);
-  auto timestamp_begin = find_char('[', ip_end) + 1;
-  auto timestamp_end = find_char(']', timestamp_begin);
-  auto request_begin = find_char('\"', timestamp_end) + 1;
-  auto method_end = find_char(' ', request_begin);
-  auto target_end = find_char(' ', method_end + 1);
-  auto query_begin = find_char('?', method_end + 1);
-  auto path_end = query_begin < target_end ? query_begin : target_end;
-  auto request_end = find_char('\"', target_end);
-  auto status_begin = request_end + 2;
-  auto status_end = find_char(' ', status_begin);
-  auto bytes_end = find_char(' ', status_end + 1);
-  auto referer_begin = find_char('\"', bytes_end) + 1;
-  auto referer_end = find_char('\"', referer_begin);
-  auto user_agent_begin = find_char('\"', referer_end + 1) + 1;
-  auto user_agent_end = find_char('\"', user_agent_begin);
-  copy_field(*ip, 0, ip_end); copy_field(*timestamp, timestamp_begin, timestamp_end);
-  copy_field(*method, request_begin, method_end); copy_field(*path, method_end + 1, path_end);
-  copy_field(*status, status_begin, status_end); copy_field(*referer, referer_begin, referer_end);
+
+  auto const client_ip_end    = find_character(' ', 0);
+  auto const timestamp_begin  = find_character('[', client_ip_end) + 1;
+  auto const timestamp_end    = find_character(']', timestamp_begin);
+  auto const request_begin    = find_character('\"', timestamp_end) + 1;
+  auto const method_end       = find_character(' ', request_begin);
+  auto const target_end       = find_character(' ', method_end + 1);
+  auto const query_begin      = find_character('?', method_end + 1);
+  auto const path_end         = query_begin < target_end ? query_begin : target_end;
+  auto const request_end      = find_character('\"', target_end);
+  auto const status_begin     = request_end + 2;
+  auto const status_end       = find_character(' ', status_begin);
+  auto const bytes_end        = find_character(' ', status_end + 1);
+  auto const referer_begin    = find_character('\"', bytes_end) + 1;
+  auto const referer_end      = find_character('\"', referer_begin);
+  auto const user_agent_begin = find_character('\"', referer_end + 1) + 1;
+  auto const user_agent_end   = find_character('\"', user_agent_begin);
+
+  copy_field(*client_ip, 0, client_ip_end);
+  copy_field(*timestamp, timestamp_begin, timestamp_end);
+  copy_field(*method, request_begin, method_end);
+  copy_field(*path, method_end + 1, path_end);
+  copy_field(*status, status_begin, status_end);
+  copy_field(*referer, referer_begin, referer_end);
   copy_field(*user_agent, user_agent_begin, user_agent_end);
 }
 )***";
 
-[[nodiscard]] std::string const& to_string(variant value)
+[[nodiscard]] constexpr std::string_view to_string(variant value)
 {
-  static std::string const precompiled{"precompiled"};
-  static std::string const jit{"jit"};
-  static std::string const lto{"lto"};
   switch (value) {
-    case variant::PRECOMPILED: return precompiled;
-    case variant::JIT: return jit;
-    case variant::LTO: return lto;
+    case variant::PRECOMPILED: return "precompiled";
+    case variant::JIT: return "jit";
+    case variant::LTO: return "lto";
   }
   throw std::logic_error("Unknown variant");
 }
 
-[[nodiscard]] std::string const& to_string(operation value)
+[[nodiscard]] constexpr std::string_view to_string(operation value)
 {
-  static std::string const request_line{"request-line"};
-  static std::string const combined_log{"combined-log"};
-  return value == operation::REQUEST_LINE ? request_line : combined_log;
+  switch (value) {
+    case operation::REQUEST_LINE: return "request-line";
+    case operation::COMBINED_LOG: return "combined-log";
+  }
+  throw std::logic_error("Unknown operation");
+}
+
+[[nodiscard]] variant parse_variant(std::string_view name)
+{
+  if (name == "precompiled") { return variant::PRECOMPILED; }
+  if (name == "jit") { return variant::JIT; }
+  if (name == "lto") { return variant::LTO; }
+  throw std::invalid_argument("variant must be precompiled, jit, or lto");
+}
+
+[[nodiscard]] operation parse_operation(std::string_view name)
+{
+  if (name == "request-line") { return operation::REQUEST_LINE; }
+  if (name == "combined-log") { return operation::COMBINED_LOG; }
+  throw std::invalid_argument("operation must be request-line or combined-log");
 }
 
 constexpr std::string_view usage =
@@ -184,19 +244,8 @@ constexpr std::string_view usage =
     throw std::invalid_argument("invalid arguments; run http_log_transforms --help for usage");
   }
 
-  auto const implementation = std::string_view{argv[3]} == "precompiled" ? variant::PRECOMPILED
-                              : std::string_view{argv[3]} == "jit"       ? variant::JIT
-                                                                         : variant::LTO;
-  if (std::string_view{argv[3]} != "precompiled" && std::string_view{argv[3]} != "jit" &&
-      std::string_view{argv[3]} != "lto") {
-    throw std::invalid_argument("variant must be precompiled, jit, or lto");
-  }
-
-  auto const selected_operation =
-    std::string_view{argv[4]} == "request-line" ? operation::REQUEST_LINE : operation::COMBINED_LOG;
-  if (std::string_view{argv[4]} != "request-line" && std::string_view{argv[4]} != "combined-log") {
-    throw std::invalid_argument("operation must be request-line or combined-log");
-  }
+  auto const implementation     = parse_variant(argv[3]);
+  auto const selected_operation = parse_operation(argv[4]);
 
   auto const rows       = std::stoll(argv[5]);
   auto const iterations = std::stoi(argv[6]);
@@ -212,33 +261,72 @@ constexpr std::string_view usage =
           iterations};
 }
 
-[[nodiscard]] std::unique_ptr<cudf::column> make_offsets(cudf::column_view const sizes,
-                                                         rmm::cuda_stream_view stream,
-                                                         rmm::device_async_resource_ref mr)
+[[nodiscard]] constexpr std::size_t output_count(operation selected_operation)
 {
-  auto inclusive  = cudf::scan(sizes,
-                              *cudf::make_sum_aggregation<cudf::scan_aggregation>(),
-                              cudf::scan_type::INCLUSIVE,
-                              cudf::null_policy::EXCLUDE,
-                              stream,
-                              mr);
-  auto const zero = cudf::numeric_scalar<int32_t>{0, true, stream, mr};
-  auto first      = cudf::make_column_from_scalar(zero, 1, stream, mr);
-  return cudf::concatenate(
-    std::vector<cudf::column_view>{first->view(), inclusive->view()}, stream, mr);
+  return selected_operation == operation::REQUEST_LINE ? request_line_output_count
+                                                       : combined_log_output_count;
 }
 
-[[nodiscard]] std::vector<cudf::transform_output> output_specs(std::size_t count,
-                                                               cudf::type_id type)
+[[nodiscard]] constexpr cudf::size_type input_column_index(operation selected_operation)
 {
-  return std::vector<cudf::transform_output>(
-    count, cudf::transform_output{cudf::data_type{type}, cudf::output_nullability::ALL_VALID});
+  return selected_operation == operation::REQUEST_LINE ? 0 : 1;
 }
 
-[[nodiscard]] std::span<uint8_t const> fragment(std::size_t id)
+[[nodiscard]] char const* sizing_udf(operation selected_operation)
+{
+  return selected_operation == operation::REQUEST_LINE ? request_line_sizes_udf
+                                                       : combined_log_sizes_udf;
+}
+
+[[nodiscard]] char const* output_udf(operation selected_operation)
+{
+  return selected_operation == operation::REQUEST_LINE ? request_line_output_udf
+                                                       : combined_log_output_udf;
+}
+
+[[nodiscard]] std::size_t sizing_fragment(operation selected_operation)
+{
+  return selected_operation == operation::REQUEST_LINE ? http_log_fragments::request_line_sizes
+                                                       : http_log_fragments::combined_log_sizes;
+}
+
+[[nodiscard]] std::size_t output_fragment(operation selected_operation)
+{
+  return selected_operation == operation::REQUEST_LINE ? http_log_fragments::request_line_output
+                                                       : http_log_fragments::combined_log_output;
+}
+
+[[nodiscard]] std::vector<cudf::transform_output> make_output_specs(std::size_t count,
+                                                                    cudf::type_id type)
+{
+  auto const spec =
+    cudf::transform_output{cudf::data_type{type}, cudf::output_nullability::ALL_VALID};
+  return std::vector<cudf::transform_output>(count, spec);
+}
+
+[[nodiscard]] std::span<uint8_t const> get_fragment(std::size_t id)
 {
   auto const range = http_log_fragments::file_ranges[id];
   return http_log_fragments::files.subspan(range[0], range[1]);
+}
+
+[[nodiscard]] std::unique_ptr<cudf::column> make_string_offsets(
+  cudf::column_view const string_sizes,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // A strings column uses N+1 offsets. Scanning the N string sizes produces every run end; adding
+  // a leading zero supplies the first offset.
+  auto run_ends          = cudf::scan(string_sizes,
+                             *cudf::make_sum_aggregation<cudf::scan_aggregation>(),
+                             cudf::scan_type::INCLUSIVE,
+                             cudf::null_policy::EXCLUDE,
+                             stream,
+                             mr);
+  auto const zero_offset = cudf::numeric_scalar<int32_t>{0, true, stream, mr};
+  auto first_offset      = cudf::make_column_from_scalar(zero_offset, 1, stream, mr);
+  return cudf::concatenate(
+    std::vector<cudf::column_view>{first_offset->view(), run_ends->view()}, stream, mr);
 }
 
 [[nodiscard]] std::unique_ptr<cudf::table> run_regex(cudf::column_view input,
@@ -246,14 +334,98 @@ constexpr std::string_view usage =
                                                      rmm::cuda_stream_view stream,
                                                      rmm::device_async_resource_ref mr)
 {
+  // This public cuDF regex implementation is the non-JIT comparison baseline.
   if (selected_operation == operation::REQUEST_LINE) {
-    static auto const program =
-      cudf::strings::regex_program::create(R"(^([A-Z]+) ([^ ?]+)[^ ]* HTTP/([0-9]+[.][0-9]+)$)");
+    static auto const program = cudf::strings::regex_program::create(request_line_pattern);
     return cudf::strings::extract(cudf::strings_column_view{input}, *program, stream, mr);
   }
-  static auto const program = cudf::strings::regex_program::create(
-    R"regex(^([^ ]+) - [^ ]+ \[([^]]+)\] "([A-Z]+) ([^ ?]+)[^ ]* HTTP/[0-9.]+" ([0-9]{3}) [0-9]+ "([^"]*)" "([^"]*)"$)regex");
+  static auto const program = cudf::strings::regex_program::create(combined_log_pattern);
   return cudf::strings::extract(cudf::strings_column_view{input}, *program, stream, mr);
+}
+
+[[nodiscard]] std::unique_ptr<cudf::table> compute_string_sizes(cudf::column_view input,
+                                                                operation selected_operation,
+                                                                variant implementation,
+                                                                rmm::cuda_stream_view stream,
+                                                                rmm::device_async_resource_ref mr)
+{
+  // Pass 1: produce one INT32 byte-count column for each eventual string output.
+  auto const outputs = make_output_specs(output_count(selected_operation), cudf::type_id::INT32);
+  cudf::transform_input inputs[] = {input};
+
+  if (implementation == variant::JIT) {
+    return cudf::multi_transform(sizing_udf(selected_operation),
+                                 cudf::udf_source_type::CUDA,
+                                 cudf::null_aware::NO,
+                                 std::nullopt,
+                                 inputs,
+                                 outputs,
+                                 {},
+                                 std::nullopt,
+                                 stream,
+                                 mr);
+  }
+
+  return cudf::transform_lto(get_fragment(sizing_fragment(selected_operation)),
+                             cudf::lto_binary_type::FATBIN,
+                             cudf::null_aware::NO,
+                             std::nullopt,
+                             inputs,
+                             outputs,
+                             {},
+                             std::nullopt,
+                             stream,
+                             mr);
+}
+
+[[nodiscard]] std::vector<std::unique_ptr<cudf::column>> make_all_string_offsets(
+  cudf::table_view const size_columns,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  std::vector<std::unique_ptr<cudf::column>> offsets;
+  offsets.reserve(size_columns.num_columns());
+  for (auto const& string_sizes : size_columns) {
+    offsets.push_back(make_string_offsets(string_sizes, stream, mr));
+  }
+  return offsets;
+}
+
+[[nodiscard]] std::unique_ptr<cudf::table> write_strings(
+  cudf::column_view input,
+  operation selected_operation,
+  variant implementation,
+  std::vector<std::unique_ptr<cudf::column>>&& string_offsets,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
+{
+  // Pass 2: use the precomputed offsets to write directly into final strings columns.
+  auto const outputs = make_output_specs(output_count(selected_operation), cudf::type_id::STRING);
+  cudf::transform_input inputs[] = {input};
+
+  if (implementation == variant::JIT) {
+    return cudf::multi_transform(output_udf(selected_operation),
+                                 cudf::udf_source_type::CUDA,
+                                 cudf::null_aware::NO,
+                                 std::nullopt,
+                                 inputs,
+                                 outputs,
+                                 std::move(string_offsets),
+                                 std::nullopt,
+                                 stream,
+                                 mr);
+  }
+
+  return cudf::transform_lto(get_fragment(output_fragment(selected_operation)),
+                             cudf::lto_binary_type::FATBIN,
+                             cudf::null_aware::NO,
+                             std::nullopt,
+                             inputs,
+                             outputs,
+                             std::move(string_offsets),
+                             std::nullopt,
+                             stream,
+                             mr);
 }
 
 [[nodiscard]] std::unique_ptr<cudf::table> run_two_pass(cudf::column_view input,
@@ -262,105 +434,50 @@ constexpr std::string_view usage =
                                                         rmm::cuda_stream_view stream,
                                                         rmm::device_async_resource_ref mr)
 {
-  // Pass 1 emits the exact byte count for every output string and row. Scanning each size column
-  // produces run-end offsets, so multi_transform can allocate each chars child once. Pass 2 then
-  // receives a cuda::std::span<char> for every row/output and writes directly into final storage.
-  auto const count =
-    selected_operation == operation::REQUEST_LINE ? std::size_t{3} : std::size_t{7};
-  auto sizes_out                 = output_specs(count, cudf::type_id::INT32);
-  cudf::transform_input inputs[] = {input};
-
-  std::unique_ptr<cudf::table> sizes;
-  if (implementation == variant::JIT) {
-    auto const source = selected_operation == operation::REQUEST_LINE ? request_line_sizes_udf
-                                                                      : combined_log_sizes_udf;
-    sizes             = cudf::multi_transform(source,
-                                  cudf::udf_source_type::CUDA,
-                                  cudf::null_aware::NO,
-                                  std::nullopt,
-                                  inputs,
-                                  sizes_out,
-                                  std::vector<std::unique_ptr<cudf::column>>{},
-                                  std::nullopt,
-                                  stream,
-                                  mr);
-  } else {
-    auto const id = selected_operation == operation::REQUEST_LINE
-                      ? http_log_fragments::request_line_sizes
-                      : http_log_fragments::combined_log_sizes;
-    sizes         = cudf::transform_lto(fragment(id),
-                                cudf::lto_binary_type::FATBIN,
-                                cudf::null_aware::NO,
-                                std::nullopt,
-                                inputs,
-                                sizes_out,
-                                std::vector<std::unique_ptr<cudf::column>>{},
-                                std::nullopt,
-                                stream,
-                                mr);
-  }
-
-  std::vector<std::unique_ptr<cudf::column>> offsets;
-  offsets.reserve(count);
-  for (auto const& size_column : sizes->view()) {
-    offsets.push_back(make_offsets(size_column, stream, mr));
-  }
-
-  auto strings_out = output_specs(count, cudf::type_id::STRING);
-  if (implementation == variant::JIT) {
-    auto const source = selected_operation == operation::REQUEST_LINE ? request_line_output_udf
-                                                                      : combined_log_output_udf;
-    return cudf::multi_transform(source,
-                                 cudf::udf_source_type::CUDA,
-                                 cudf::null_aware::NO,
-                                 std::nullopt,
-                                 inputs,
-                                 strings_out,
-                                 std::move(offsets),
-                                 std::nullopt,
-                                 stream,
-                                 mr);
-  }
-
-  auto const id = selected_operation == operation::REQUEST_LINE
-                    ? http_log_fragments::request_line_output
-                    : http_log_fragments::combined_log_output;
-  return cudf::transform_lto(fragment(id),
-                             cudf::lto_binary_type::FATBIN,
-                             cudf::null_aware::NO,
-                             std::nullopt,
-                             inputs,
-                             strings_out,
-                             std::move(offsets),
-                             std::nullopt,
-                             stream,
-                             mr);
+  // Pass 1 computes the exact byte count of every output string. Inclusive scans turn those sizes
+  // into run-end offsets, allowing pass 2 to write directly into the final character buffers.
+  auto sizes   = compute_string_sizes(input, selected_operation, implementation, stream, mr);
+  auto offsets = make_all_string_offsets(sizes->view(), stream, mr);
+  return write_strings(input, selected_operation, implementation, std::move(offsets), stream, mr);
 }
 
-[[nodiscard]] std::unique_ptr<cudf::table> run(cudf::column_view input,
-                                               operation selected_operation,
-                                               variant implementation,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::device_async_resource_ref mr)
+[[nodiscard]] std::unique_ptr<cudf::table> run_transform(cudf::column_view input,
+                                                         operation selected_operation,
+                                                         variant implementation,
+                                                         rmm::cuda_stream_view stream,
+                                                         rmm::device_async_resource_ref mr)
 {
-  return implementation == variant::PRECOMPILED
-           ? run_regex(input, selected_operation, stream, mr)
-           : run_two_pass(input, selected_operation, implementation, stream, mr);
+  if (implementation == variant::PRECOMPILED) {
+    return run_regex(input, selected_operation, stream, mr);
+  }
+  return run_two_pass(input, selected_operation, implementation, stream, mr);
+}
+
+[[nodiscard]] std::vector<std::string> output_column_names(operation selected_operation)
+{
+  if (selected_operation == operation::REQUEST_LINE) { return {"method", "path", "http_version"}; }
+  return {"client_ip", "timestamp", "method", "path", "status", "referer", "user_agent"};
 }
 
 void write_output(cudf::table_view const result,
                   operation selected_operation,
                   std::string const& output_path)
 {
-  auto names   = selected_operation == operation::REQUEST_LINE
-                   ? std::vector<std::string>{"method", "path", "http_version"}
-                   : std::vector<std::string>{
-                     "client_ip", "timestamp", "method", "path", "status", "referer", "user_agent"};
   auto options = cudf::io::csv_writer_options::builder(cudf::io::sink_info{output_path}, result)
                    .include_header(true)
-                   .names(names)
+                   .names(output_column_names(selected_operation))
                    .build();
   cudf::io::write_csv(options);
+}
+
+[[nodiscard]] std::unique_ptr<cudf::table> read_input(options const& opts)
+{
+  auto read_options =
+    cudf::io::csv_reader_options::builder(cudf::io::source_info{opts.input_path}).header(0).build();
+  auto input = cudf::io::read_csv(read_options).tbl;
+
+  if (opts.rows == input->num_rows()) { return input; }
+  return cudf::sample(input->view(), opts.rows, cudf::sample_with_replacement::TRUE);
 }
 
 }  // namespace
@@ -378,18 +495,10 @@ int main(int argc, char const** argv)
     auto const stream = cudf::get_default_stream();
     auto const mr     = cudf::get_current_device_resource_ref();
 
-    auto read_options =
-      cudf::io::csv_reader_options::builder(cudf::io::source_info{opts.input_path})
-        .header(0)
-        .build();
-    auto input_data = cudf::io::read_csv(read_options);
-    auto input =
-      opts.rows == input_data.tbl->num_rows()
-        ? std::move(input_data.tbl)
-        : cudf::sample(input_data.tbl->view(), opts.rows, cudf::sample_with_replacement::TRUE);
-    auto const input_index  = opts.selected_operation == operation::REQUEST_LINE ? 0 : 1;
-    auto const input_bytes  = input->get_column(input_index).alloc_size();
-    auto const input_column = input->get_column(input_index).view();
+    auto input             = read_input(opts);
+    auto const input_index = input_column_index(opts.selected_operation);
+    auto const input_bytes = input->get_column(input_index).alloc_size();
+    auto const input_view  = input->get_column(input_index).view();
 
     rmm::mr::statistics_resource_adaptor stats{mr};
     auto const stats_mr = rmm::device_async_resource_ref{stats};
@@ -398,7 +507,7 @@ int main(int argc, char const** argv)
     auto const cold_start = std::chrono::steady_clock::now();
     nvtxRangePush("http_log_cold");
     auto cold_result =
-      run(input_column, opts.selected_operation, opts.implementation, stream, stats_mr);
+      run_transform(input_view, opts.selected_operation, opts.implementation, stream, stats_mr);
     stream.synchronize();
     nvtxRangePop();
     auto const cold_seconds =
@@ -410,7 +519,8 @@ int main(int argc, char const** argv)
     nvtxRangePush("http_log_warm");
     for (auto i = 0; i < opts.iterations; ++i) {
       result.reset();
-      result = run(input_column, opts.selected_operation, opts.implementation, stream, stats_mr);
+      result =
+        run_transform(input_view, opts.selected_operation, opts.implementation, stream, stats_mr);
     }
     stream.synchronize();
     nvtxRangePop();

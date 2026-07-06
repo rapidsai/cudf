@@ -12,7 +12,7 @@
 
 namespace http_log_udf {
 
-struct range {
+struct field_range {
   int32_t begin{};
   int32_t end{};
 
@@ -20,24 +20,24 @@ struct range {
 };
 
 struct request_line_fields {
-  range method;
-  range path;
-  range version;
+  field_range method;
+  field_range path;
+  field_range version;
 };
 
 struct combined_log_fields {
-  range client_ip;
-  range timestamp;
-  range method;
-  range path;
-  range status;
-  range referer;
-  range user_agent;
+  field_range client_ip;
+  field_range timestamp;
+  field_range method;
+  field_range path;
+  field_range status;
+  field_range referer;
+  field_range user_agent;
 };
 
-[[nodiscard]] __device__ int32_t find(cudf::string_view const input,
-                                      char const needle,
-                                      int32_t begin)
+[[nodiscard]] __device__ int32_t find_character(cudf::string_view const input,
+                                                char const needle,
+                                                int32_t begin)
 {
   for (auto i = begin; i < input.size_bytes(); ++i) {
     if (input.data()[i] == needle) { return i; }
@@ -47,9 +47,9 @@ struct combined_log_fields {
 
 [[nodiscard]] __device__ request_line_fields parse_request_line(cudf::string_view const input)
 {
-  auto const method_end              = find(input, ' ', 0);
-  auto const target_end              = find(input, ' ', method_end + 1);
-  auto const query_begin             = find(input, '?', method_end + 1);
+  auto const method_end              = find_character(input, ' ', 0);
+  auto const target_end              = find_character(input, ' ', method_end + 1);
+  auto const query_begin             = find_character(input, '?', method_end + 1);
   auto const path_end                = query_begin < target_end ? query_begin : target_end;
   constexpr int32_t http_prefix_size = 6;  // " HTTP/"
 
@@ -60,22 +60,22 @@ struct combined_log_fields {
 
 [[nodiscard]] __device__ combined_log_fields parse_combined_log(cudf::string_view const input)
 {
-  auto const ip_end           = find(input, ' ', 0);
-  auto const timestamp_begin  = find(input, '[', ip_end) + 1;
-  auto const timestamp_end    = find(input, ']', timestamp_begin);
-  auto const request_begin    = find(input, '"', timestamp_end) + 1;
-  auto const method_end       = find(input, ' ', request_begin);
-  auto const target_end       = find(input, ' ', method_end + 1);
-  auto const query_begin      = find(input, '?', method_end + 1);
+  auto const ip_end           = find_character(input, ' ', 0);
+  auto const timestamp_begin  = find_character(input, '[', ip_end) + 1;
+  auto const timestamp_end    = find_character(input, ']', timestamp_begin);
+  auto const request_begin    = find_character(input, '"', timestamp_end) + 1;
+  auto const method_end       = find_character(input, ' ', request_begin);
+  auto const target_end       = find_character(input, ' ', method_end + 1);
+  auto const query_begin      = find_character(input, '?', method_end + 1);
   auto const path_end         = query_begin < target_end ? query_begin : target_end;
-  auto const request_end      = find(input, '"', target_end);
+  auto const request_end      = find_character(input, '"', target_end);
   auto const status_begin     = request_end + 2;
-  auto const status_end       = find(input, ' ', status_begin);
-  auto const bytes_end        = find(input, ' ', status_end + 1);
-  auto const referer_begin    = find(input, '"', bytes_end) + 1;
-  auto const referer_end      = find(input, '"', referer_begin);
-  auto const user_agent_begin = find(input, '"', referer_end + 1) + 1;
-  auto const user_agent_end   = find(input, '"', user_agent_begin);
+  auto const status_end       = find_character(input, ' ', status_begin);
+  auto const bytes_end        = find_character(input, ' ', status_end + 1);
+  auto const referer_begin    = find_character(input, '"', bytes_end) + 1;
+  auto const referer_end      = find_character(input, '"', referer_begin);
+  auto const user_agent_begin = find_character(input, '"', referer_end + 1) + 1;
+  auto const user_agent_end   = find_character(input, '"', user_agent_begin);
 
   return {{0, ip_end},
           {timestamp_begin, timestamp_end},
@@ -86,9 +86,9 @@ struct combined_log_fields {
           {user_agent_begin, user_agent_end}};
 }
 
-__device__ void copy_range(cuda::std::span<char> output,
+__device__ void copy_field(cuda::std::span<char> output,
                            cudf::string_view const input,
-                           range const field)
+                           field_range const field)
 {
   for (auto i = int32_t{0}; i < field.size(); ++i) {
     output[i] = input.data()[field.begin + i];

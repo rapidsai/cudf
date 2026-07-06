@@ -15,12 +15,12 @@ extern "C" __device__ int transform(cuda::std::span<char>* client_ip,
                                     cudf::string_view input)
 {
   auto const fields = http_log_udf::parse_combined_log(input);
-  http_log_udf::copy_range(*client_ip, input, fields.client_ip);
-  http_log_udf::copy_range(*timestamp, input, fields.timestamp);
-  http_log_udf::copy_range(*method, input, fields.method);
-  http_log_udf::copy_range(*path, input, fields.path);
-  http_log_udf::copy_range(*status, input, fields.status);
-  http_log_udf::copy_range(*referer, input, fields.referer);
-  http_log_udf::copy_range(*user_agent, input, fields.user_agent);
+  http_log_udf::copy_field(*client_ip, input, fields.client_ip);
+  http_log_udf::copy_field(*timestamp, input, fields.timestamp);
+  http_log_udf::copy_field(*method, input, fields.method);
+  http_log_udf::copy_field(*path, input, fields.path);
+  http_log_udf::copy_field(*status, input, fields.status);
+  http_log_udf::copy_field(*referer, input, fields.referer);
+  http_log_udf::copy_field(*user_agent, input, fields.user_agent);
   return 0;
 }
