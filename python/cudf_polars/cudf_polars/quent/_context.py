@@ -301,7 +301,7 @@ class LocalQuentContext:
     """
     A Quent Context that is only ever used on the local worker rank.
 
-    This can contain non-serializable objects (like a :class:`~cudf_polars.quent._logging.QuentLogger`)
+    This can contain non-serializable objects (like a ``QuentLogger``)
     and entities that are only valid on the local rank.
     """
 
