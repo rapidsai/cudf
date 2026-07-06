@@ -593,6 +593,7 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
             target_partition_size=1,
             max_rows_per_partition=4,
             broadcast_limit=1,  # Disable broadcast joins
+            fallback_mode="warn",
         ),
     )
     if engine.nranks < 2:
@@ -639,4 +640,9 @@ def test_join_computed_expr_right_key(streaming_engine_factory) -> None:
         left_on="zip_prefix",
         right_on=pl.col("full_zip").str.slice(0, 2),
     )
-    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+    with warns_on_spmd(
+        engine,
+        UserWarning,
+        match=r"Multi-partition Join not supported for keys with expressions\.",
+    ):
+        assert_gpu_result_equal(q, engine=engine, check_row_order=False)
