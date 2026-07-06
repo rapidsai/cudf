@@ -905,7 +905,7 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
                              reduce_aggregation const& agg,
                              cudf::data_type output_dtype)
   {
-    const cudf::column_view underlying_column = col;
+    cudf::column_view const underlying_column = col;
     auto statement = [&]() { cudf::reduce(underlying_column, agg, output_dtype); };
 
     if (succeeded_condition) {
