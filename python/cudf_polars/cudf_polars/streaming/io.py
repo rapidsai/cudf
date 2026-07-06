@@ -263,7 +263,6 @@ class SplitScan(IR):
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
-        # cached_parquet_info is deliberately not included in the hash data.
         return (
             type(self),
             tuple(self.schema.items()),
@@ -434,7 +433,6 @@ class FusedScan(IR):
 
     def get_hashable(self) -> Hashable:
         """Hashable representation of the node."""
-        # cached_parquet_info is deliberately not included in the hash data.
         return (
             type(self),
             tuple(self.schema.items()),

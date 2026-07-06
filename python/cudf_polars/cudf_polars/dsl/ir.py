@@ -845,7 +845,6 @@ class Scan(IR):
         The options dictionaries are serialised for hashing purposes
         as json strings.
         """
-        # cached_parquet_info is deliberately not included in the hash data.
         schema_hash = tuple(self.schema.items())
         return (
             type(self),
