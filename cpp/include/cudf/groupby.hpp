@@ -35,6 +35,7 @@ struct sort_groupby_helper;
  * @addtogroup aggregation_groupby
  * @{
  * @file
+ * @brief Class definitions for grouping and aggregating values within groups of rows.
  */
 
 /**

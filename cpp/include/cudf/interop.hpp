@@ -43,6 +43,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup interop_dlpack
  * @{
  * @file
+ * @brief APIs for converting between cudf tables and DLPack tensors.
  */
 
 /**
@@ -98,6 +99,7 @@ DLManagedTensor* to_dlpack(
  * @addtogroup interop_arrow
  * @{
  * @file
+ * @brief APIs for converting between cudf tables/columns and Apache Arrow arrays.
  */
 
 /**
