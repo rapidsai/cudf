@@ -23,13 +23,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 import nvtx
+import pandas as pd
 
-import cudf.pandas
-from cudf.pandas.module_accelerator import disable_module_accelerator
-
-cudf.pandas.install()
-
-import pandas as pd  # noqa: E402
+# Whether cudf.pandas Pandas Accelerator Mode is on in this process. The entry point
+# (pdsh.py) installs cudf.pandas before importing pandas when the in-memory executor is
+# selected; run_pandas sets this flag from the executor, and it gates the cudf.pandas-only
+# code paths below so that `--executor cpu` never imports cudf.
+CUDF_PANDAS_ENABLED = False
 
 try:
     import pynvml
@@ -422,13 +422,16 @@ def execute_query(
         domain="cudf.pandas",
         color="green",
     ):
-        if run_config.executor == "cpu":
+        if run_config.executor == "cpu" and CUDF_PANDAS_ENABLED:
+            # Accelerated process computing the CPU baseline: turn cudf.pandas off for
+            # this query so it runs on real pandas.
+            from cudf.pandas.module_accelerator import disable_module_accelerator
+
             with disable_module_accelerator():
                 start_time = time.monotonic()
                 result = q(run_config)
                 end_time = time.monotonic()
         else:
-            assert cudf.pandas.LOADED
             start_time = time.monotonic()
             result = q(run_config)
             end_time = time.monotonic()
@@ -647,7 +650,12 @@ def run_pandas_query(
         cpu_run_config = dataclasses.replace(run_config, executor="cpu")
         expected, _ = execute_query(q_id, 0, q, cpu_run_config)
     elif validation_files is not None:
-        expected = pd._fsproxy_slow.read_parquet(validation_files[q_id])
+        # With cudf.pandas on, pd is the proxy; use the slow (real pandas) reader so the
+        # golden file is read on the CPU. Without it, pd is already real pandas.
+        read_parquet = (
+            pd._fsproxy_slow.read_parquet if CUDF_PANDAS_ENABLED else pd.read_parquet
+        )
+        expected = read_parquet(validation_files[q_id])
     else:
         expected = None
 
@@ -700,7 +708,10 @@ def run_pandas(
     num_queries: int = 22,
 ) -> None:
     """Run the queries using the given benchmark and executor options."""
+    global CUDF_PANDAS_ENABLED
     args = parse_args(options, num_queries=num_queries)
+    # cudf.pandas is on iff the entry point installed it for the in-memory executor.
+    CUDF_PANDAS_ENABLED = args.executor == "in-memory"
     vars(args).update({"query_set": benchmark.name})
     run_config = RunConfig.from_args(args)
     validation_failures: list[int] = []

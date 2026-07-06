@@ -136,6 +136,21 @@ cd cudf
 pip install -e python/cudf_benchmarks[pandas]
 ```
 
+#### CPU-only machines
+
+The `--executor cpu` benchmark runs on plain pandas and imports no CUDA libraries, so it runs on
+a machine with no GPU. On such a machine, skip the `cudf` install above and install only the CPU
+dependencies:
+
+```bash
+git clone https://github.com/rapidsai/cudf.git
+cd cudf
+pip install -e python/cudf_benchmarks[cpu]
+```
+
+Then generate data and run as below with `--executor cpu`. Only `--executor in-memory` needs
+`cudf`.
+
 ### Generate data
 
 Set the scale factor once and reuse it across all steps. The following generates SF50
@@ -187,10 +202,11 @@ python -m cudf_benchmarks.pandas.pdsh all \
     --path "${DATA_PATH}"
 ```
 
-Unlike the polars benchmarks, the pandas benchmarks currently require `cudf` even for
-`--executor cpu`: the CPU baseline runs pandas with `cudf.pandas` acceleration disabled, so it
-still imports `cudf` and needs a GPU. Running the pandas benchmarks on a CPU-only machine is not
-yet supported.
+`--executor cpu` runs on plain pandas and imports no CUDA libraries, so it works on a CPU-only
+machine (install with the `cpu` extra instead of `cudf`, see below). Do not enable `cudf.pandas`
+for a CPU run: if `cudf.pandas` is active in the process (for example when launched with
+`python -m cudf.pandas`), `--executor cpu` fails with an error rather than reporting accelerated
+timings as if they were a CPU baseline.
 
 **GPU** (`--executor in-memory`, cudf.pandas):
 

@@ -13,14 +13,38 @@ and may be modified or removed at any time.
 
 from __future__ import annotations
 
+import argparse
+import sys
 from typing import TYPE_CHECKING
 
-from numpy import datetime64
+# cudf.pandas.install() must run before `import pandas`, and only for the GPU (in-memory)
+# executor, so peek at --executor before importing pandas. This keeps `--executor cpu` free
+# of any cudf/CUDA import so the pandas benchmarks run on a CPU-only machine.
+_pre = argparse.ArgumentParser(add_help=False)
+_pre.add_argument("-e", "--executor", default="in-memory")
+if _pre.parse_known_args()[0].executor == "in-memory":
+    try:
+        import cudf.pandas
+    except ImportError as e:  # pragma: no cover
+        raise ImportError(
+            "The 'in-memory' executor uses cudf.pandas, which requires cudf. "
+            "Install cudf (https://docs.rapids.ai/install), or run with "
+            "'--executor cpu' to benchmark pandas without a GPU."
+        ) from e
+    cudf.pandas.install()
+else:
+    # The CPU benchmark must run on real pandas. If cudf.pandas was activated for this
+    # process (e.g. launched via `python -m cudf.pandas`), an '--executor cpu' run would
+    # be silently accelerated and not a real CPU baseline, so fail loudly.
+    _cudf_pandas = sys.modules.get("cudf.pandas")
+    if _cudf_pandas is not None and getattr(_cudf_pandas, "LOADED", False):
+        raise RuntimeError(
+            "cudf.pandas is active, but '--executor cpu' was requested. CPU benchmarks "
+            "must run on real pandas. Do not enable cudf.pandas (for example, do not "
+            "launch with `python -m cudf.pandas`) when using '--executor cpu'."
+        )
 
-import cudf.pandas
-
-cudf.pandas.install()
-
+from numpy import datetime64  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from cudf_benchmarks.pandas.utils import (  # noqa: E402

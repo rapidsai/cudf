@@ -540,7 +540,14 @@ class RunConfig:
         if args.frontend in _CPU_ENGINES:
             streaming_options = None
         else:
-            from cudf_polars.engine.options import StreamingOptions
+            try:
+                from cudf_polars.engine.options import StreamingOptions
+            except ImportError as e:
+                raise ImportError(
+                    f"The '{args.frontend}' frontend requires cudf-polars. "
+                    "Install cudf-polars (https://docs.rapids.ai/install), or run with "
+                    "'--frontend polars-cpu' or '--frontend duckdb' to benchmark on CPU."
+                ) from e
 
             streaming_options = StreamingOptions._from_argparse(args)
 
