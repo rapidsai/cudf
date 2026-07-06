@@ -8,17 +8,19 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /**
- * Arithmetic compliance mode for JIT AST operations.
- * NOTE: This must be kept in sync with `jni_to_jit_compliance_mode` in CompiledExpression.cpp!
+ * Error handling policy for fallible JIT AST operations.
+ *
+ * NOTE: This must be kept in sync with `jni_to_jit_error_policy` in CompiledExpression.cpp!
  */
-public enum JitComplianceMode {
-  DEFAULT(0),
-  ANSI(1),
-  ANSI_TRY(2);
+public enum JitErrorPolicy {
+  /** Propagate an evaluation error to the caller. */
+  PROPAGATE(0),
+  /** Produce null for a row where evaluation fails. */
+  NULLIFY(1);
 
   private final byte nativeId;
 
-  JitComplianceMode(int nativeId) {
+  JitErrorPolicy(int nativeId) {
     this.nativeId = (byte) nativeId;
     assert this.nativeId == nativeId;
   }

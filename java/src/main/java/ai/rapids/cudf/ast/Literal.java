@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -124,7 +124,19 @@ public final class Literal extends AstExpression {
     return ofDouble(value.doubleValue());
   }
 
-  /** Construct a decimal literal with the specified type and unscaled value. */
+  /**
+   * Construct a decimal literal with the specified type and unscaled value.
+   * A null {@code unscaledValue} produces a null literal of the requested type.
+   * A {@code DECIMAL128} literal used as the root expression must be evaluated with
+   * {@link CompiledExpression#computeColumnJit}; the legacy executor cannot materialize it
+   * directly.
+   *
+   * @param type decimal storage type and scale
+   * @param unscaledValue unscaled decimal value, or null
+   * @return decimal literal
+   * @throws IllegalArgumentException if {@code type} is not a decimal type
+   * @throws ArithmeticException if {@code unscaledValue} does not fit in {@code type}
+   */
   public static Literal ofDecimal(DType type, BigInteger unscaledValue) {
     if (!type.isDecimalType()) {
       throw new IllegalArgumentException("type is not a decimal: " + type);
@@ -137,6 +149,9 @@ public final class Literal extends AstExpression {
     } else if (type.getTypeId() == DType.DTypeEnum.DECIMAL64) {
       return ofLongBasedType(type, unscaledValue.longValueExact());
     } else {
+      if (unscaledValue.bitLength() > type.getSizeInBytes() * Byte.SIZE - 1) {
+        throw new ArithmeticException("BigInteger out of range for " + type);
+      }
       return new Literal(type, convertDecimal128FromJavaToCudf(unscaledValue.toByteArray(), type));
     }
   }

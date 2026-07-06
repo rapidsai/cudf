@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,7 +12,8 @@ import java.nio.ByteOrder;
 public abstract class AstExpression {
   /**
    * Enumeration for the types of AST nodes that can appear in a serialized AST.
-   * NOTE: This must be kept in sync with the `jni_serialized_node_type` in CompiledExpression.cpp!
+   * NOTE: This must be kept in sync with `jni_serialized_expression_type` in
+   * CompiledExpression.cpp!
    */
   protected enum ExpressionType {
     VALID_LITERAL(0),

@@ -6,9 +6,11 @@
 package ai.rapids.cudf.ast;
 
 import ai.rapids.cudf.ColumnVector;
+import ai.rapids.cudf.Cudf;
 import ai.rapids.cudf.CudfException;
 import ai.rapids.cudf.CudfTestBase;
 import ai.rapids.cudf.DType;
+import ai.rapids.cudf.Scalar;
 import ai.rapids.cudf.Table;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -27,9 +29,14 @@ import java.util.function.Function;
 import java.util.stream.Stream;
 
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class CompiledExpressionTest extends CudfTestBase {
+  @Test
+  public void testInitializeJitRuntime() {
+    Assertions.assertDoesNotThrow(Cudf::initializeJitRuntime);
+    Assertions.assertDoesNotThrow(Cudf::initializeJitRuntime);
+  }
+
   @Test
   public void testColumnReferenceTransform() {
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build()) {
@@ -56,6 +63,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build();
          CompiledExpression compiledExpr = expr.compile()) {
       Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
+      Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumnJit(t).close());
     }
   }
 
@@ -297,17 +305,55 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  @Test
-  public void testDecimal128LiteralTransform() {
-    int scale = -4;
-    BigInteger value = new BigInteger("-123456789012345678901234567890");
-    Literal expr = Literal.ofDecimal(DType.create(DType.DTypeEnum.DECIMAL128, scale), value);
+  private static Stream<Arguments> createDecimalLiteralParams() {
+    return Stream.of(
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL32, -2),
+            new BigInteger("1234567")),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL32, 0), (BigInteger) null),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL64, -4),
+            new BigInteger("-123456789012345678")),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL64, -18), (BigInteger) null),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, -4),
+            new BigInteger("-123456789012345678901234567890")),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, -38), BigInteger.ONE),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, 0),
+            BigInteger.ONE.shiftLeft(127).subtract(BigInteger.ONE)),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, 0),
+            BigInteger.ONE.shiftLeft(127).negate()),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, -10), (BigInteger) null));
+  }
+
+  @ParameterizedTest
+  @MethodSource("createDecimalLiteralParams")
+  public void testJitDecimalLiteralTransform(DType type, BigInteger value) {
+    Literal expr = Literal.ofDecimal(type, value);
     try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
          CompiledExpression compiledExpr = expr.compile();
-         ColumnVector actual = compiledExpr.computeColumn(t);
-         ColumnVector expected = ColumnVector.decimalFromBigInt(scale, value, value, value)) {
+         ColumnVector actual = compiledExpr.computeColumnJit(t);
+         Scalar expectedScalar = value == null ?
+             Scalar.fromNull(type) : Scalar.fromDecimal(value, type);
+         ColumnVector expected = ColumnVector.fromScalar(expectedScalar, 3)) {
       assertColumnsAreEqual(expected, actual);
     }
+  }
+
+  @Test
+  public void testDecimalLiteralValidation() {
+    Assertions.assertThrows(IllegalArgumentException.class,
+        () -> Literal.ofDecimal(DType.INT32, BigInteger.ONE));
+    Assertions.assertThrows(ArithmeticException.class,
+        () -> Literal.ofDecimal(DType.create(DType.DTypeEnum.DECIMAL32, 0),
+            BigInteger.ONE.shiftLeft(31)));
+    Assertions.assertThrows(ArithmeticException.class,
+        () -> Literal.ofDecimal(DType.create(DType.DTypeEnum.DECIMAL64, 0),
+            BigInteger.ONE.shiftLeft(63)));
+
+    DType decimal128 = DType.create(DType.DTypeEnum.DECIMAL128, 0);
+    Assertions.assertThrows(ArithmeticException.class,
+        () -> Literal.ofDecimal(decimal128, BigInteger.ONE.shiftLeft(127)));
+    Assertions.assertThrows(ArithmeticException.class,
+        () -> Literal.ofDecimal(decimal128,
+            BigInteger.ONE.shiftLeft(127).negate().subtract(BigInteger.ONE)));
   }
 
   @Test
@@ -318,14 +364,21 @@ public class CompiledExpressionTest extends CudfTestBase {
         new ColumnReference(2)
     };
     for (JitOperator op : JitOperator.values()) {
+      AstExpression[] opInputs = Arrays.copyOf(inputs, op.getArity());
+      JitOperation expr;
       if (op == JitOperator.RESCALE) {
-        Assertions.assertDoesNotThrow(
-            () -> new JitOperation(op, -2, Arrays.copyOf(inputs, op.getArity())));
+        expr = new JitOperation(op, -2, opInputs);
       } else {
-        JitComplianceMode mode = op == JitOperator.PRECISION_CHECK
-            ? JitComplianceMode.ANSI : JitComplianceMode.DEFAULT;
-        Assertions.assertDoesNotThrow(
-            () -> new JitOperation(op, mode, Arrays.copyOf(inputs, op.getArity())));
+        expr = new JitOperation(op, opInputs);
+      }
+      try (CompiledExpression ignored = expr.compile()) {
+        // The native decoder is part of the serialized operator contract.
+      }
+      if (op.isFallible()) {
+        JitOperation nullifyingExpr = new JitOperation(op, JitErrorPolicy.NULLIFY, opInputs);
+        try (CompiledExpression ignored = nullifyingExpr.compile()) {
+          // The native decoder is part of the serialized error-policy contract.
+        }
       }
       if (op.getArity() > 0) {
         Assertions.assertThrows(
@@ -336,36 +389,160 @@ public class CompiledExpressionTest extends CudfTestBase {
 
     Assertions.assertThrows(
         IllegalArgumentException.class,
-        () -> new JitOperation(JitOperator.PRECISION_CHECK,
+        () -> new JitOperation(JitOperator.ADD, JitErrorPolicy.NULLIFY,
             new ColumnReference(0), new ColumnReference(1)));
     Assertions.assertThrows(
         IllegalArgumentException.class,
-        () -> new JitOperation(JitOperator.IF_ELSE, JitComplianceMode.ANSI,
-            new ColumnReference(0), new ColumnReference(1), new ColumnReference(2)));
+        () -> new JitOperation(JitOperator.ADD, -2,
+            new ColumnReference(0), new ColumnReference(1)));
     Assertions.assertThrows(
         IllegalArgumentException.class,
         () -> new JitOperation(JitOperator.RESCALE, new ColumnReference(0)));
+    Assertions.assertThrows(
+        IllegalArgumentException.class,
+        () -> new JitOperation(JitOperator.ADD,
+            new ColumnReference(0), new ColumnReference(1), new ColumnReference(2)));
+    Assertions.assertThrows(
+        NullPointerException.class,
+        () -> new JitOperation(null, new ColumnReference(0)));
+    Assertions.assertThrows(
+        NullPointerException.class,
+        () -> new JitOperation(JitOperator.ADD, (JitErrorPolicy) null,
+            new ColumnReference(0), new ColumnReference(1)));
+    Assertions.assertThrows(
+        NullPointerException.class,
+        () -> new JitOperation(JitOperator.ADD,
+            new ColumnReference(0), (AstExpression) null));
+    Assertions.assertThrows(
+        NullPointerException.class,
+        () -> new JitOperation(JitOperator.ADD, (AstExpression[]) null));
+  }
+
+  @Test
+  void testJitNestedArithmeticTransform() {
+    AstExpression expr = new JitOperation(JitOperator.ADD, new ColumnReference(0), Literal.ofInt(2));
+    expr = new JitOperation(JitOperator.SUB, expr, Literal.ofInt(1));
+    expr = new JitOperation(JitOperator.MUL, expr, Literal.ofInt(3));
+    expr = new JitOperation(JitOperator.DIV, expr, Literal.ofInt(2));
+    expr = new JitOperation(JitOperator.MOD, expr, Literal.ofInt(5));
+    expr = new JitOperation(JitOperator.NEG, expr);
+    expr = new JitOperation(JitOperator.ABS, expr);
+    expr = new JitOperation(JitOperator.BITWISE_SHIFT_LEFT, expr, Literal.ofInt(2));
+    expr = new JitOperation(JitOperator.BITWISE_SHIFT_RIGHT, expr, Literal.ofInt(1));
+
+    try (Table t = new Table.TestBuilder().column(1, 2, 3, 4).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumnJit(t);
+         ColumnVector expected = ColumnVector.fromInts(6, 8, 2, 4)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testJitOverflowPolicies() {
+    try (Table t = new Table.TestBuilder()
+        .column(1, 3)
+        .column(10, 7)
+        .column(10, Integer.MAX_VALUE)
+        .build()) {
+      JitOperation successExpr = new JitOperation(JitOperator.ADD_OVERFLOW,
+          new ColumnReference(0), new ColumnReference(1));
+      try (CompiledExpression compiledExpr = successExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.fromInts(11, 10)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+
+      JitOperation propagateExpr = new JitOperation(JitOperator.ADD_OVERFLOW,
+          new ColumnReference(0), new ColumnReference(2));
+      try (CompiledExpression compiledExpr = propagateExpr.compile()) {
+        Assertions.assertThrows(CudfException.class,
+            () -> compiledExpr.computeColumnJit(t).close());
+      }
+
+      JitOperation nullifyExpr = new JitOperation(JitOperator.ADD_OVERFLOW,
+          JitErrorPolicy.NULLIFY,
+          new ColumnReference(0), new ColumnReference(2));
+      try (CompiledExpression compiledExpr = nullifyExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(11, null)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+    }
+  }
+
+  @Test
+  void testJitFusedNullifyingOverflowTransform() {
+    try (Table t = new Table.TestBuilder()
+        .column(1, 3, 20, 1, 50, 10)
+        .column(1, 10, 7, 20, Integer.MAX_VALUE, 2)
+        .column(1, 5, 4, Integer.MAX_VALUE, 2, 5)
+        .column(0, 1, 0, 0, 1, 5)
+        .build()) {
+      AstExpression expr = new JitOperation(JitOperator.ADD_OVERFLOW, JitErrorPolicy.NULLIFY,
+          new ColumnReference(0), new ColumnReference(1));
+      expr = new JitOperation(JitOperator.MUL_OVERFLOW, JitErrorPolicy.NULLIFY,
+          expr, new ColumnReference(2));
+      expr = new JitOperation(JitOperator.DIV_OVERFLOW, JitErrorPolicy.NULLIFY,
+          expr, new ColumnReference(3));
+      try (CompiledExpression compiledExpr = expr.compile();
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(null, 65, null, null, null, 12)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+    }
+  }
+
+  @Test
+  void testJitUnaryAndSubtractOverflowTransform() {
+    try (Table t = new Table.TestBuilder()
+        .column(10, Integer.MIN_VALUE, 1)
+        .column(3, 1, 0)
+        .build()) {
+      JitOperation subExpr = new JitOperation(JitOperator.SUB_OVERFLOW,
+          JitErrorPolicy.NULLIFY, new ColumnReference(0), new ColumnReference(1));
+      try (CompiledExpression compiledExpr = subExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(7, null, 1)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+
+      JitOperation negExpr = new JitOperation(JitOperator.NEG_OVERFLOW,
+          JitErrorPolicy.NULLIFY, new ColumnReference(0));
+      try (CompiledExpression compiledExpr = negExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(-10, null, -1)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+
+      JitOperation absExpr = new JitOperation(JitOperator.ABS_OVERFLOW,
+          JitErrorPolicy.NULLIFY, new ColumnReference(0));
+      try (CompiledExpression compiledExpr = absExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(10, null, 1)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+    }
   }
 
   @Test
   void testJitTryDivModTransform() {
-    assumeTrue("1".equals(System.getenv("LIBCUDF_JIT_ENABLED")));
     try (Table t = new Table.TestBuilder()
         .column(10, 7, null, 6)
         .column(2, 0, 3, null)
         .build()) {
-      JitOperation divExpr = new JitOperation(JitOperator.DIV, JitComplianceMode.ANSI_TRY,
-          new ColumnReference(0), new ColumnReference(1));
+      JitOperation divExpr = new JitOperation(JitOperator.DIV_OVERFLOW,
+          JitErrorPolicy.NULLIFY, new ColumnReference(0), new ColumnReference(1));
       try (CompiledExpression compiledExpr = divExpr.compile();
-           ColumnVector actual = compiledExpr.computeColumn(t);
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
            ColumnVector expected = ColumnVector.fromBoxedInts(5, null, null, null)) {
         assertColumnsAreEqual(expected, actual);
       }
 
-      JitOperation modExpr = new JitOperation(JitOperator.MOD, JitComplianceMode.ANSI_TRY,
-          new ColumnReference(0), new ColumnReference(1));
+      JitOperation modExpr = new JitOperation(JitOperator.MOD_OVERFLOW,
+          JitErrorPolicy.NULLIFY, new ColumnReference(0), new ColumnReference(1));
       try (CompiledExpression compiledExpr = modExpr.compile();
-           ColumnVector actual = compiledExpr.computeColumn(t);
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
            ColumnVector expected = ColumnVector.fromBoxedInts(0, null, null, null)) {
         assertColumnsAreEqual(expected, actual);
       }
@@ -373,18 +550,144 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @Test
-  void testJitIfElseTransform() {
-    assumeTrue("1".equals(System.getenv("LIBCUDF_JIT_ENABLED")));
+  void testJitMixedConditionalTransform() {
     try (Table t = new Table.TestBuilder()
-        .column(1, 2, 3, 4)
+        .column(1, null, 3, null)
         .column(10, 20, 30, 40)
-        .column(true, false, true, false)
         .build()) {
+      AstExpression condition = new BinaryOperation(BinaryOperator.GREATER,
+          new ColumnReference(0), Literal.ofInt(2));
+      AstExpression predicate = new JitOperation(JitOperator.PREDICATE, condition);
+      AstExpression coalesced = new JitOperation(JitOperator.COALESCE,
+          new ColumnReference(0), Literal.ofInt(99));
       JitOperation expr = new JitOperation(JitOperator.IF_ELSE,
-          new ColumnReference(0), new ColumnReference(1), new ColumnReference(2));
+          coalesced, new ColumnReference(1), predicate);
       try (CompiledExpression compiledExpr = expr.compile();
-           ColumnVector actual = compiledExpr.computeColumn(t);
-           ColumnVector expected = ColumnVector.fromBoxedInts(1, 20, 3, 40)) {
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.fromBoxedInts(10, 20, 3, 40)) {
+        assertColumnsAreEqual(expected, actual);
+      }
+    }
+  }
+
+  private static Stream<JitOperator> createJitNumericCastParams() {
+    return Stream.of(
+        JitOperator.CAST_TO_BOOL8,
+        JitOperator.CAST_TO_INT8,
+        JitOperator.CAST_TO_INT16,
+        JitOperator.CAST_TO_INT32,
+        JitOperator.CAST_TO_INT64,
+        JitOperator.CAST_TO_UINT8,
+        JitOperator.CAST_TO_UINT16,
+        JitOperator.CAST_TO_UINT32,
+        JitOperator.CAST_TO_UINT64,
+        JitOperator.CAST_TO_FLOAT32,
+        JitOperator.CAST_TO_FLOAT64);
+  }
+
+  private static ColumnVector makeJitNumericCastExpected(JitOperator op) {
+    switch (op) {
+      case CAST_TO_BOOL8:
+        return ColumnVector.fromBooleans(false, true, true, true);
+      case CAST_TO_INT8:
+        return ColumnVector.fromBytes((byte) 0, (byte) 1, (byte) 2, (byte) 3);
+      case CAST_TO_INT16:
+        return ColumnVector.fromShorts((short) 0, (short) 1, (short) 2, (short) 3);
+      case CAST_TO_INT32:
+        return ColumnVector.fromInts(0, 1, 2, 3);
+      case CAST_TO_INT64:
+        return ColumnVector.fromLongs(0L, 1L, 2L, 3L);
+      case CAST_TO_UINT8:
+        return ColumnVector.fromUnsignedBytes((byte) 0, (byte) 1, (byte) 2, (byte) 3);
+      case CAST_TO_UINT16:
+        return ColumnVector.fromUnsignedShorts((short) 0, (short) 1, (short) 2, (short) 3);
+      case CAST_TO_UINT32:
+        return ColumnVector.fromUnsignedInts(0, 1, 2, 3);
+      case CAST_TO_UINT64:
+        return ColumnVector.fromUnsignedLongs(0L, 1L, 2L, 3L);
+      case CAST_TO_FLOAT32:
+        return ColumnVector.fromFloats(0.0f, 1.0f, 2.0f, 3.0f);
+      case CAST_TO_FLOAT64:
+        return ColumnVector.fromDoubles(0.0, 1.0, 2.0, 3.0);
+      default:
+        throw new IllegalArgumentException("Unexpected numeric cast operator " + op);
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("createJitNumericCastParams")
+  void testJitNumericCastTransform(JitOperator op) {
+    JitOperation expr = new JitOperation(op, new ColumnReference(0));
+    try (Table t = new Table.TestBuilder().column(0, 1, 2, 3).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumnJit(t);
+         ColumnVector expected = makeJitNumericCastExpected(op)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  private static Stream<JitOperator> createJitDecimalCastParams() {
+    return Stream.of(
+        JitOperator.CAST_TO_DECIMAL32,
+        JitOperator.CAST_TO_DECIMAL64,
+        JitOperator.CAST_TO_DECIMAL128);
+  }
+
+  private static ColumnVector makeJitDecimalCastExpected(JitOperator op) {
+    switch (op) {
+      case CAST_TO_DECIMAL32:
+        return ColumnVector.decimalFromInts(0, 0, 1, -2, 3);
+      case CAST_TO_DECIMAL64:
+        return ColumnVector.decimalFromLongs(0, 0L, 1L, -2L, 3L);
+      case CAST_TO_DECIMAL128:
+        return ColumnVector.decimalFromBigInt(0,
+            BigInteger.ZERO, BigInteger.ONE, BigInteger.valueOf(-2), BigInteger.valueOf(3));
+      default:
+        throw new IllegalArgumentException("Unexpected decimal cast operator " + op);
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("createJitDecimalCastParams")
+  void testJitDecimalCastTransform(JitOperator op) {
+    JitOperation expr = new JitOperation(op, new ColumnReference(0));
+    try (Table t = new Table.TestBuilder().decimal64Column(0, 0L, 1L, -2L, 3L).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumnJit(t);
+         ColumnVector expected = makeJitDecimalCastExpected(op)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testJitDecimalRescaleTransform() {
+    JitOperation expr = new JitOperation(JitOperator.RESCALE, -2, new ColumnReference(0));
+    try (Table t = new Table.TestBuilder()
+        .decimal32Column(0, 123, 1234, 12345, 123456, 1234567)
+        .build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumnJit(t);
+         ColumnVector expected = ColumnVector.decimalFromInts(
+             -2, 12300, 123400, 1234500, 12345600, 123456700)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testJitDecimalPrecisionPolicies() {
+    try (Table t = new Table.TestBuilder().decimal32Column(0, 3, 200, 250, 20000).build()) {
+      JitOperation propagateExpr = new JitOperation(JitOperator.CHECK_PRECISION,
+          new ColumnReference(0), Literal.ofInt(3));
+      try (CompiledExpression compiledExpr = propagateExpr.compile()) {
+        Assertions.assertThrows(CudfException.class,
+            () -> compiledExpr.computeColumnJit(t).close());
+      }
+
+      JitOperation nullifyExpr = new JitOperation(JitOperator.CHECK_PRECISION,
+          JitErrorPolicy.NULLIFY, new ColumnReference(0), Literal.ofInt(3));
+      try (CompiledExpression compiledExpr = nullifyExpr.compile();
+           ColumnVector actual = compiledExpr.computeColumnJit(t);
+           ColumnVector expected = ColumnVector.decimalFromBoxedInts(0, 3, 200, 250, null)) {
         assertColumnsAreEqual(expected, actual);
       }
     }

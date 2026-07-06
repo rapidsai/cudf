@@ -8,43 +8,71 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-/** A JIT operation consisting of a row IR opcode and operands. */
+/**
+ * A libcudf row-IR operation. Expressions containing a JIT operation must be evaluated with
+ * {@link CompiledExpression#computeColumnJit}.
+ */
 public final class JitOperation extends AstExpression {
   private final JitOperator op;
-  private final JitComplianceMode complianceMode;
+  private final JitErrorPolicy errorPolicy;
   private final AstExpression[] inputs;
   private final Integer targetScale;
 
+  /**
+   * Construct an operation that propagates evaluation errors.
+   *
+   * @param op operator to apply
+   * @param inputs operator inputs
+   * @throws NullPointerException if {@code op}, {@code inputs}, or an input is null
+   * @throws IllegalArgumentException if the operator arity or target-scale usage is invalid
+   */
   public JitOperation(JitOperator op, AstExpression... inputs) {
-    this(op, JitComplianceMode.DEFAULT, null, inputs);
+    this(op, JitErrorPolicy.PROPAGATE, null, inputs);
   }
 
-  public JitOperation(JitOperator op, JitComplianceMode complianceMode, AstExpression... inputs) {
-    this(op, complianceMode, null, inputs);
+  /**
+   * Construct an operation with an explicit error policy.
+   *
+   * @param op operator to apply
+   * @param errorPolicy error handling policy
+   * @param inputs operator inputs
+   * @throws NullPointerException if any argument or input is null
+   * @throws IllegalArgumentException if the arity, policy, or target-scale usage is invalid
+   */
+  public JitOperation(JitOperator op, JitErrorPolicy errorPolicy, AstExpression... inputs) {
+    this(op, errorPolicy, null, inputs);
   }
 
+  /**
+   * Construct a target-scale operation that propagates evaluation errors.
+   * The target scale is valid only for {@link JitOperator#RESCALE}.
+   *
+   * @param op operator to apply
+   * @param targetScale target fixed-point scale
+   * @param inputs operator inputs
+   * @throws NullPointerException if {@code op}, {@code inputs}, or an input is null
+   * @throws IllegalArgumentException if the operator is not {@link JitOperator#RESCALE} or its
+   *         arity is invalid
+   */
   public JitOperation(JitOperator op, int targetScale, AstExpression... inputs) {
-    this(op, JitComplianceMode.DEFAULT, Integer.valueOf(targetScale), inputs);
+    this(op, JitErrorPolicy.PROPAGATE, Integer.valueOf(targetScale), inputs);
   }
 
   private JitOperation(
       JitOperator op,
-      JitComplianceMode complianceMode,
+      JitErrorPolicy errorPolicy,
       Integer targetScale,
       AstExpression... inputs) {
     this.op = Objects.requireNonNull(op, "op is null");
-    this.complianceMode = Objects.requireNonNull(complianceMode, "complianceMode is null");
+    this.errorPolicy = Objects.requireNonNull(errorPolicy, "errorPolicy is null");
     this.inputs = Objects.requireNonNull(inputs, "inputs is null").clone();
     this.targetScale = targetScale;
     if (this.inputs.length != op.getArity()) {
       throw new IllegalArgumentException(
           op + " requires " + op.getArity() + " inputs, found " + this.inputs.length);
     }
-    if (!op.supportsComplianceMode() && complianceMode != JitComplianceMode.DEFAULT) {
-      throw new IllegalArgumentException(op + " does not support compliance mode " + complianceMode);
-    }
-    if (op == JitOperator.PRECISION_CHECK && complianceMode == JitComplianceMode.DEFAULT) {
-      throw new IllegalArgumentException("PRECISION_CHECK requires ANSI or ANSI_TRY compliance mode");
+    if (!op.isFallible() && errorPolicy == JitErrorPolicy.NULLIFY) {
+      throw new IllegalArgumentException(op + " cannot nullify errors");
     }
     if (op.requiresTargetScale() != (targetScale != null)) {
       throw new IllegalArgumentException(op + " target scale usage is invalid");
@@ -58,7 +86,7 @@ public final class JitOperation extends AstExpression {
   int getSerializedSize() {
     int size = ExpressionType.JIT_EXPRESSION.getSerializedSize() +
         op.getSerializedSize() +
-        complianceMode.getSerializedSize() +
+        errorPolicy.getSerializedSize() +
         Byte.BYTES +
         Byte.BYTES;
     if (targetScale != null) {
@@ -74,7 +102,7 @@ public final class JitOperation extends AstExpression {
   void serialize(ByteBuffer bb) {
     ExpressionType.JIT_EXPRESSION.serialize(bb);
     op.serialize(bb);
-    complianceMode.serialize(bb);
+    errorPolicy.serialize(bb);
     bb.put((byte) inputs.length);
     bb.put((byte) (targetScale == null ? 0 : 1));
     if (targetScale != null) {
@@ -88,8 +116,8 @@ public final class JitOperation extends AstExpression {
   @Override
   public String toString() {
     StringBuilder ret = new StringBuilder(op.toString());
-    if (complianceMode != JitComplianceMode.DEFAULT) {
-      ret.append("[").append(complianceMode).append("]");
+    if (errorPolicy != JitErrorPolicy.PROPAGATE) {
+      ret.append("[").append(errorPolicy).append("]");
     }
     ret.append("(");
     for (int i = 0; i < inputs.length; i++) {
