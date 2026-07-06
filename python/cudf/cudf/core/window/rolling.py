@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from cudf.api.types import (
     is_scalar,
 )
 from cudf.core._internals import aggregation
+from cudf.core.column.categorical import CategoricalColumn
 from cudf.core.column.column import ColumnBase, as_column
 from cudf.core.copy_types import GatherMap
 from cudf.core.mixins import GetAttrGetItemMixin, Reducible
@@ -357,6 +358,10 @@ class Rolling(GetAttrGetItemMixin, _RollingBase, Reducible):
     def _apply_agg_column(
         self, source_column: ColumnBase, agg_name: str | Callable, **agg_kwargs
     ) -> ColumnBase:
+        if isinstance(source_column, CategoricalColumn):
+            # pandas window aggregations operate on the category values,
+            # not the codes
+            source_column = source_column._get_decategorized_column()
         pre, fwd = self._plc_windows
 
         rolling_agg = aggregation.make_aggregation(
