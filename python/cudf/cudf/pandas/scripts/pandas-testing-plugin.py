@@ -3668,8 +3668,6 @@ NODEIDS_THAT_FAIL = {
     "tests/reshape/test_melt.py::TestMelt::test_melt_mixed_int_str_id_vars": "AssertionError: Attributes of DataFrame.iloc[:, 2] (column name='variable') are different",
     "tests/reshape/test_melt.py::TestMelt::test_multiindex": "TODO: Add a reason for failure",
     "tests/reshape/test_melt.py::TestMelt::test_vars_work_with_multiindex": "TODO: Add a reason for failure",
-    "tests/reshape/test_melt.py::TestWideToLong::test_invalid_separator": "TODO: Add a reason for failure",
-    "tests/reshape/test_melt.py::TestWideToLong::test_invalid_suffixtype": "TODO: Add a reason for failure",
     "tests/reshape/test_melt.py::TestWideToLong::test_raise_of_column_name_value": "TODO: Add a reason for failure",
     "tests/reshape/test_pivot.py::TestPivot::test_pivot_index_is_none": "AssertionError: DataFrame.index are different",
     "tests/reshape/test_pivot.py::TestPivotTable::test_categorical_pivot_index_ordering[False]": "TODO: Add a reason for failure",
