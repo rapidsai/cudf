@@ -20,8 +20,42 @@
 
 namespace cudf {
 
+namespace {
+
+int32_t get_driver_version()
+{
+  int32_t driver_version;
+  CUDF_CUDA_TRY(cudaDriverGetVersion(&driver_version));
+  return driver_version;
+}
+
+int32_t get_runtime_version()
+{
+  int32_t runtime_version;
+  CUDF_CUDA_TRY(cudaRuntimeGetVersion(&runtime_version));
+  return runtime_version;
+}
+
+int32_t get_current_device_compute_capability()
+{
+  int32_t device;
+  CUDF_CUDA_TRY(cudaGetDevice(&device));
+
+  cudaDeviceProp props;
+  CUDF_CUDA_TRY(cudaGetDeviceProperties(&props, device));
+
+  return props.major * 10 + props.minor;
+}
+
+}  // namespace
+
 context::context(context_config cfg, init_flags flags)
-  : _config{std::move(cfg)}, _jit_cache_init_flag{}
+  : _config{std::move(cfg)},
+    _jit_cache_init_flag{},
+    _device_properties{
+      get_driver_version(), get_runtime_version(), get_current_device_compute_capability()},
+    _nvrtc_version{0},
+    _nvjitlink_version{0}
 {
   initialize_components(flags);
 }
@@ -38,6 +72,9 @@ void context::ensure_jit_cache_initialized()
     std::filesystem::create_directories(_config.jit_tmp_dir);
 
     rtcx::initialize();
+
+    _nvrtc_version     = rtcx::nvrtc_version();
+    _nvjitlink_version = rtcx::nvjitlink_version();
 
     auto limits = rtcx::cache_limits{.num_mem_blobs     = _config.kernel_cache_limit_process,
                                      .num_mem_libraries = _config.kernel_cache_limit_process};
@@ -81,7 +118,18 @@ bool context::dump_codegen() const { return _config.dump_codegen; }
 
 bool context::use_jit() const { return _config.use_jit; }
 
+context_config const& context::config() const { return _config; }
+
 std::string const& context::get_jit_pch_dir() const { return _config.jit_pch_dir; }
+
+context::device_properties const& context::get_device_properties() const
+{
+  return _device_properties;
+}
+
+std::optional<int32_t> context::nvrtc_version() const { return _nvrtc_version; }
+
+std::optional<int32_t> context::nvjitlink_version() const { return _nvjitlink_version; }
 
 void context::initialize_components(init_flags flags)
 {
