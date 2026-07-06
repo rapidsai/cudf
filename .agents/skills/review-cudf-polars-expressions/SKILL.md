@@ -9,7 +9,7 @@ This rule describes guidelines and implementation patterns for supporting Polars
 
 1. Runs entirely on the GPU through cudf_polars and does not fall back to Polars on the CPU.
 2. If an expression cannot be supported or only partially supported (e.g. a parameter is unsupported), an error is raised during IR translation and not during runtime.
-3. The expression is supported for all Polars versions that cudf_polars supports specified in python/cudf_polars/pyproject.toml
+3. The expression is supported for all Polars versions that cudf_polars supports specified in `python/cudf_polars/pyproject.toml`
 4. Passes all `pre-commit` checks.
 
 ## Prerequisites
@@ -59,7 +59,7 @@ Start with scoping an implementation for the single partition path for cudf_pola
 
 1. An expression implementation should belong in the `python/cudf_polars/cudf_polars/dsl/expressions` directory.
 2. Review the `pylibcudf` API to find the appropriate function or functions needed for the implementation.
-    1. Additionally review the `libcudf` public API as a function may be appropriate but not exposed through `pylibcudf`. If needed, expose this API through ``pylibcudf` as part of the implementation. `pylibcudf` will need to be rebuilt from source in order to test the implementation.
+    1. Additionally review the `libcudf` public API as a function may be appropriate but not exposed through `pylibcudf`. If needed, expose this API through `pylibcudf` as part of the implementation. `pylibcudf` will need to be rebuilt from source in order to test the implementation.
     2. Minimize the amount of kernel launches by using specific `pylibcudf` functions where possible. Evaluate using `pylibcudf.expressions` where sensible for combining several operations.
     3. Implement any short-circuiting opportunities by checking Column properties like the `null_count` or `size` that minimizes `pylibcudf` calls.
     4. Do not use APIs that convert the data CPU objects like `to_arrow` or `to_pylist` unless absolutely necessary.
@@ -81,6 +81,7 @@ Finally, add a unit test to an existing or new file in the `python/cudf_polars/t
 1. The added unit tests should cover all the lines added in the implementation. A CI job validates that there is 100% code coverage.
 2. The unit tests should use the `engine` fixture from `python/cudf_polars/tests/conftest.py` to test all applicable cudf_polars engine types including single and multiple partition execution.
 3. Review the existing unit tests in `python/cudf_polars/tests` to check if existing tests used this expressions. Unit tests may have existed that asserted that this expression was not supported.
-4. When using `assert_gpu_result_equal` for expressions that return floats, consider specifying `check_exact=False` if necessary.
+4. The unit test should use `pytest.mark.skipif` with a boolean variable from `python/cudf_polars/cudf_polars/utils/versions.py` if a unit test exercises a Polars expression or an argument that doesn't exist since a particular Polars version within the cudf_polars support window defined in `python/cudf_polars/pyproject.toml`.
+5. When using `assert_gpu_result_equal` for expressions that return floats, consider specifying `check_exact=False` if necessary.
 
 TODO: Add more guidance on a multiple partition implementation.
