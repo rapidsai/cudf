@@ -39,7 +39,7 @@ def _replace(
     # in translate.py, which also skips code coverage
     # See the TODO there for more details.
     try:
-        r = fn.state["replacements"][node]
+        return fn.state["replacements"][node]
     except KeyError:
         # replacement must propagate when children are rebuilt,
         # even if child __eq__ intentionally ignores children (e.g. Cache).
@@ -50,8 +50,6 @@ def _replace(
         ):
             return node
         return node.reconstruct(new_children)
-    else:
-        return r
 
 
 def replace(
