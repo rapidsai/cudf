@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -8,6 +8,9 @@ set -euo pipefail
 
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
+
+# TODO: Remove before merging. Use rapidsmpf conda packages from rapidsai/rapidsmpf#1081.
+source ./ci/use_conda_packages_from_prs.sh
 
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
@@ -24,6 +27,7 @@ rapids-dependency-file-generator \
   --prepend-channel "${CPP_CHANNEL}" \
   --prepend-channel "${PYTHON_CHANNEL}" \
   --prepend-channel "${PYTHON_NOARCH_CHANNEL}" \
+  "${RAPIDS_PREPENDED_CHANNEL_ARGS[@]}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test

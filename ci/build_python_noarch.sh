@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -20,6 +20,9 @@ PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_pytho
 
 RAPIDS_PACKAGE_VERSION=$(head -1 ./VERSION)
 export RAPIDS_PACKAGE_VERSION
+
+# TODO: Remove before merging. Use rapidsmpf conda packages from rapidsai/rapidsmpf#1081.
+source ./ci/use_conda_packages_from_prs.sh
 
 # populates `RATTLER_CHANNELS` array and `RATTLER_ARGS` array
 source rapids-rattler-channel-string
