@@ -641,6 +641,8 @@ nitpick_ignore = [
     ("py:class", "polars.LazyFrame"),
     ("py:class", "polars.DataFrame"),
     ("py:class", "polars.dataframe.frame.DataFrame"),
+    # Sphinx isn't able to resolve this cudf-polars.quent type alias
+    ("py:class", "Value"),
 ]
 # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
 nitpick_ignore_regex = [
