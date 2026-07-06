@@ -1582,8 +1582,11 @@ input column will produce equivalent dictionary columns but the keys may be in a
 and therefore the indices will not match as well. Using `cudf::dictionary::decode()` on both dictionary
 columns should produce the same result.
 
-Although `cudf::make_dictionary_column()` expects distinct keys, the API does not enforce this constraint.
-Using a dictionary column with non-distinct keys in libcudf APIs may result in undefined behavior.
+The libcudf APIs also accept dictionary columns with non-unique keys.
+However, output dictionary columns will generally contain unique keys in an unspecified order.
+The exceptions are `cudf::make_dictionary_column()`, which accepts keys and indices without
+changing them, and `cudf::dictionary::set_keys()`, which strictly honors the given keys
+(both order and duplicates).
 
 ## Nested column challenges
 
