@@ -10,7 +10,7 @@ import logging
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 
 import distributed
 import distributed.system
@@ -213,13 +213,13 @@ def _setup_worker(
     root_ucxx_address_as_bytes: bytes,
     nranks: int,
     rapidsmpf_options_as_bytes: bytes,
-    executor_options: dict[str, object],
     *,
     uid: str,
     hardware_binding: HardwareBindingPolicy,
     memory_resource_config: MemoryResourceConfig | None,
     worker_ids: list[uuid.UUID],
     engine_id: uuid.UUID,
+    num_py_executors: int,
     quent_context: cudf_polars.quent.QuentContext | None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
@@ -237,8 +237,6 @@ def _setup_worker(
         Total number of workers.
     rapidsmpf_options_as_bytes
         Serialized RapidsMPF options.
-    executor_options
-        Executor options (e.g. ``num_py_executors``).
     uid
         Unique identifier for this cluster instance, used to namespace the
         per-worker attribute so multiple contexts can coexist on a worker.
@@ -255,6 +253,8 @@ def _setup_worker(
         :meth:`cudf_polars.utils.config.MemoryResourceConfig.default`.
     dask_worker
         Injected by ``distributed`` when called via :meth:`distributed.Client.run`.
+    num_py_executors
+        Number of Python executors to use for this worker.
     quent_context
         Quent context to use for this worker, if quent is enabled.
 
@@ -300,10 +300,7 @@ def _setup_worker(
     mr = ctx.br().device_mr_adaptor()
     rmm.mr.set_current_device_resource(mr)
     py_executor = ThreadPoolExecutor(
-        max_workers=cast(
-            "int",
-            executor_options.get("num_py_executors", 8),
-        ),
+        max_workers=num_py_executors,
         thread_name_prefix="dask-executor",
     )
 
@@ -811,7 +808,7 @@ class DaskEngine(StreamingEngine):
             ),
             nranks,
             rapidsmpf_options_as_bytes,
-            quent_context,
+            quent_context=quent_context,
             workers=[root_worker],
         )
         root_ucxx_address_as_bytes: bytes = root_result[root_worker]
@@ -831,7 +828,8 @@ class DaskEngine(StreamingEngine):
             root_ucxx_address_as_bytes,
             nranks,
             rapidsmpf_options_as_bytes,
-            quent_context,
+            quent_context=quent_context,
+            num_py_executors=executor_options.get("num_py_executors", 8),
         )
 
         dask_ctx = DaskContext(
