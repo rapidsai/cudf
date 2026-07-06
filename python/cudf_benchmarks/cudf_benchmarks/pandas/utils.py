@@ -26,7 +26,7 @@ import nvtx
 import pandas as pd
 
 # Whether cudf.pandas is on in this process. Set from the executor in run_pandas; gates the
-# cudf.pandas-only paths below so that --executor cpu never touches cudf.
+# cudf.pandas-only paths below.
 CUDF_PANDAS_ENABLED = False
 
 try:

@@ -14,28 +14,30 @@ and may be modified or removed at any time.
 from __future__ import annotations
 
 import argparse
-import sys
 from typing import TYPE_CHECKING
 
-# cudf.pandas.install() must run before `import pandas`, so peek at --executor first and
-# install only for the in-memory executor. This keeps --executor cpu free of any cudf import.
-_pre = argparse.ArgumentParser(add_help=False)
-_pre.add_argument("-e", "--executor", default="in-memory")
-if _pre.parse_known_args()[0].executor == "in-memory":
-    try:
-        import cudf.pandas
-    except ImportError as e:  # pragma: no cover
+# cudf.pandas.install() must run before `import pandas`, so decide up front, from the
+# executor, whether to enable it.
+executor_parser = argparse.ArgumentParser(add_help=False)
+executor_parser.add_argument("-e", "--executor", default="in-memory")
+executor = executor_parser.parse_known_args()[0].executor
+
+try:
+    import cudf.pandas
+except ImportError as e:
+    if executor == "in-memory":
         raise ImportError(
             "The 'in-memory' executor uses cudf.pandas, which requires cudf. "
             "Install cudf (https://docs.rapids.ai/install), or run with "
             "'--executor cpu' to benchmark pandas without a GPU."
         ) from e
-    cudf.pandas.install()
+    # --executor cpu without cudf installed: run on plain pandas.
 else:
-    # Fail loudly if cudf.pandas is already active (e.g. `python -m cudf.pandas`), otherwise
-    # a cpu run would be silently accelerated instead of a real pandas baseline.
-    _cudf_pandas = sys.modules.get("cudf.pandas")
-    if _cudf_pandas is not None and getattr(_cudf_pandas, "LOADED", False):
+    if executor == "in-memory":
+        cudf.pandas.install()
+    elif cudf.pandas.LOADED:
+        # cpu benchmark, but cudf.pandas is already active (e.g. `python -m cudf.pandas`).
+        # It would be silently accelerated, not a real CPU baseline, so fail loudly.
         raise RuntimeError(
             "cudf.pandas is active, but '--executor cpu' was requested. CPU benchmarks "
             "must run on real pandas. Do not enable cudf.pandas (for example, do not "
