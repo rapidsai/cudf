@@ -52,9 +52,10 @@ class MPIEnvironment : public Environment {
     RAPIDSMPF_MPI(MPI_Comm_rank(mpi_comm_, &rank));
     MPI_Comm split_comm = MPI_COMM_NULL;
     RAPIDSMPF_MPI(MPI_Comm_split(mpi_comm_, rank, 0, &split_comm));
-    auto logger = rapidsmpf::Logger::from_options(options_);
+    auto new_logger = rapidsmpf::Logger::from_options(options_);
+    new_logger->set_name(std::to_string(rank));
     return std::shared_ptr<rapidsmpf::MPI>(
-      new rapidsmpf::MPI(split_comm, comm_->progress_thread(), std::move(logger)),
+      new rapidsmpf::MPI(split_comm, comm_->progress_thread(), std::move(new_logger)),
       // Don't leak the split handle.
       [comm = split_comm](rapidsmpf::MPI* x) mutable {
         delete x;
