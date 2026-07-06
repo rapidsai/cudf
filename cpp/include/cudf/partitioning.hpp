@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,12 +15,15 @@
 #include <memory>
 #include <vector>
 
+/**
+ * @file
+ * @brief Column partitioning APIs
+ */
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reorder_partition
  * @{
- * @file
- * @brief Column partitioning APIs
  */
 
 /**

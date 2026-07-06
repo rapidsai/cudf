@@ -26,7 +26,6 @@ namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup aggregation_factories
  * @{
- * @file
  */
 
 /**

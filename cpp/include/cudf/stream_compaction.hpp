@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,12 +17,15 @@
 #include <variant>
 #include <vector>
 
+/**
+ * @file
+ * @brief Column APIs for filtering rows
+ */
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup reorder_compact
  * @{
- * @file
- * @brief Column APIs for filtering rows
  */
 
 namespace ast {

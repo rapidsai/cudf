@@ -11,13 +11,16 @@
 
 #include <cuda/memory_resource>
 
+/**
+ * @file
+ * @brief APIs for getting and setting the current device memory resource.
+ */
+
 namespace cudf {
 
 /**
  * @addtogroup memory_resource
  * @{
- * @file
- * @brief APIs for getting and setting the current device memory resource.
  */
 
 /**

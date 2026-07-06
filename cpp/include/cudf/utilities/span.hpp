@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -24,12 +24,15 @@
 #include <type_traits>
 #include <utility>
 
+/**
+ * @file
+ * @brief APIs for spans
+ */
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup utility_span
  * @{
- * @file
- * @brief APIs for spans
  */
 
 /// A constant used to differentiate std::span of static and dynamic extent
@@ -155,8 +158,6 @@ class span_base {
 /**
  * @addtogroup utility_span
  * @{
- * @file
- * @brief APIs for spans
  */
 
 // ===== host_span =================================================================================
