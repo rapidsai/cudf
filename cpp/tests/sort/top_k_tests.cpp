@@ -123,8 +123,6 @@ TYPED_TEST(TopKTypes, TopKSegmented)
 }
 
 // Empty segments (leading, trailing, interior, or consecutive) must produce empty result lists.
-// A per-segment size slot that is never written by the resolve kernel would otherwise be read
-// uninitialized, corrupting the empty segment's list size and every segment that follows it.
 TYPED_TEST(TopKTypes, TopKSegmentedEmpty)
 {
   using T    = TypeParam;
