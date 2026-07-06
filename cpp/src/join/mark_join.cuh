@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -165,8 +165,7 @@ using storage_ref_type =
   cuco::bucket_storage_ref<mark_key_type, mark_join_bucket_size, cuco::extent<std::size_t>>;
 using right_key_type = cuco::pair<hash_value_type, rhs_index_type>;
 
-using bloom_filter_policy_type =
-  cuco::default_filter_policy<cuco::detail::identity_hash<hash_value_type>, hash_value_type, 2U>;
+using bloom_filter_policy_type    = cuco::default_filter_policy<hash_value_type>;
 using bloom_filter_allocator_type = rmm::mr::polymorphic_allocator<cuda::std::byte>;
 using bloom_filter_type           = cuco::bloom_filter<hash_value_type,
                                                        cuco::extent<std::size_t>,
