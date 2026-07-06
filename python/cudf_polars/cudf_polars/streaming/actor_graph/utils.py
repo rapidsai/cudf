@@ -310,36 +310,61 @@ def _update_ordering_indices(
     )
 
 
+def _select_column_targets(select: Select) -> dict[str, list[str]]:
+    old_to_new_names: dict[str, list[str]] = {}
+    for ne in select.exprs:
+        if isinstance(ne.value, Col):
+            old_to_new_names.setdefault(ne.value.name, []).append(ne.name)
+    return old_to_new_names
+
+
+def _preferred_target_name(old_name: str, targets: list[str]) -> str:
+    return old_name if old_name in targets else targets[0]
+
+
 def _remap_scheme_select(
     select: Select, scheme: PartitioningScheme
 ) -> PartitioningScheme:
     if isinstance(scheme, HashScheme):
-        old_to_new_names = {
-            ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
-        }
+        old_to_new_names = _select_column_targets(select)
         old_key_names = indices_to_names(
             scheme.column_indices, select.children[0].schema
         )
         if set(old_key_names).issubset(set(old_to_new_names)):
             new_indices = names_to_indices(
-                tuple(old_to_new_names[n] for n in old_key_names), select.schema
+                tuple(
+                    _preferred_target_name(n, old_to_new_names[n])
+                    for n in old_key_names
+                ),
+                select.schema,
             )
             return HashScheme(new_indices, scheme.modulus)
         return None
     if isinstance(scheme, OrderScheme):
-        old_to_new_names = {
-            ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
-        }
+        old_to_new_names = _select_column_targets(select)
         new_orderings: list[Ordering] = []
         for ordering in scheme.orderings:
             old_key_names = indices_to_names(
                 ordering.column_indices, select.children[0].schema
             )
             if set(old_key_names).issubset(set(old_to_new_names)):
+                target_key_names = tuple(
+                    _preferred_target_name(n, old_to_new_names[n])
+                    for n in old_key_names
+                )
                 new_indices = names_to_indices(
-                    tuple(old_to_new_names[n] for n in old_key_names), select.schema
+                    target_key_names, select.schema
                 )
                 new_orderings.append(_update_ordering_indices(ordering, new_indices))
+                if len(old_key_names) == 1:
+                    for alias in old_to_new_names[old_key_names[0]]:
+                        if alias == target_key_names[0]:
+                            continue
+                        new_orderings.append(
+                            _update_ordering_indices(
+                                ordering, names_to_indices((alias,), select.schema)
+                            )
+                        )
         if new_orderings:
             return OrderScheme(new_orderings)
         return None

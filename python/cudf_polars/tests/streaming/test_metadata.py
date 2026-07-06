@@ -699,6 +699,32 @@ def test_remap_partitioning_order_scheme_drops_key(spmd_engine):
     assert result.inter_rank is None
 
 
+def test_remap_partitioning_order_scheme_adds_alias_ordering(spmd_engine):
+    q = pl.LazyFrame({"a": [1], "b": [2], "c": [3]})
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    child = Translator(q._ldf.visit(), engine).translate_ir()
+    alias = expr.NamedExpr("a_alias", expr.Col(child.schema["a"], "a"))
+    hstack = HStack(
+        {**child.schema, "a_alias": child.schema["a"]},
+        (alias,),
+        should_broadcast=True,
+        df=child,
+    )
+    part = Partitioning(
+        inter_rank=_make_order_scheme(
+            spmd_engine.context, key_indices=(0,), strict=True
+        ),
+        local="inherit",
+    )
+
+    result = maybe_remap_partitioning(hstack, part)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    assert [o.keys[0].column_index for o in result.inter_rank.orderings] == [0, 3]
+    assert [o.strict_boundaries for o in result.inter_rank.orderings] == [True, True]
+
+
 @pytest.mark.parametrize(
     "by,descending,nulls_last",
     [
