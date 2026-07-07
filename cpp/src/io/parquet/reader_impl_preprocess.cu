@@ -1228,6 +1228,7 @@ std::unique_ptr<column> reader_impl::synthesize_source_index_column(
       host_row_offsets, _stream, cudf::get_current_device_resource_ref());
     cudf::detail::label_segments(
       row_offsets.begin(), row_offsets.end(), col_data.begin(), col_data.end(), _stream);
+    _stream.synchronize();
   }
 
   return std::make_unique<cudf::column>(std::move(col_data), rmm::device_buffer{}, 0);
