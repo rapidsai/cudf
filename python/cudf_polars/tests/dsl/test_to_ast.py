@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -118,3 +118,16 @@ def test_to_parquet_filter_with_colref_raises():
 
     with pytest.raises(TypeError):
         to_parquet_filter(colref, stream=get_cuda_stream())
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        expr_nodes.BooleanFunction.Name.IsNull,
+        expr_nodes.BooleanFunction.Name.IsNotNull,
+    ],
+)
+def test_to_parquet_filter_null_checks_on_column(name):
+    col = expr_nodes.Col(DataType(pl.datatypes.Int64()), "a")
+    fn = expr_nodes.BooleanFunction(DataType(pl.datatypes.Boolean()), name, (), col)
+    assert to_parquet_filter(fn, stream=get_cuda_stream()) is not None

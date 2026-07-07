@@ -231,7 +231,15 @@ def _(node: expr.BooleanFunction, self: Transformer) -> plc_expr.Expression:
                     for value in values
                 ),
             )
-    if self.state["for_parquet"] and isinstance(node.children[0], expr.Col):
+    if (
+        self.state["for_parquet"]
+        and isinstance(node.children[0], expr.Col)
+        and node.name
+        not in (
+            expr.BooleanFunction.Name.IsNull,
+            expr.BooleanFunction.Name.IsNotNull,
+        )
+    ):
         raise NotImplementedError(
             f"Parquet filters don't support {node.name} on columns"
         )
