@@ -39,10 +39,18 @@ using parquet::detail::PageNestingDecodeInfo;
 using text::byte_range_info;
 
 namespace {
-// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
-// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
-// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
-// for now would also be treated as a string).
+
+/**
+ * @brief Tests the logical type for a fixed length byte array column to see if it should be
+ * treated as a string.
+ *
+ * Currently the only logical type that has special handling is DECIMAL. Other valid types in the
+ * future would be UUID (still treated as string) and FLOAT16 (which for now would also be treated
+ * as a string).
+ *
+ * @param logical_type The logical type to test
+ * @return Boolean indicating if the logical type should be treated as a string
+ */
 [[maybe_unused]] inline bool is_treat_fixed_length_as_string(
   cuda::std::optional<LogicalType> const& logical_type)
 {
@@ -50,6 +58,12 @@ namespace {
   return logical_type->type != LogicalType::DECIMAL;
 }
 
+/**
+ * @brief Get the output types from the output buffer template
+ *
+ * @param output_buffer_template Output buffer template
+ * @return Output types
+ */
 [[nodiscard]] std::vector<cudf::data_type> get_output_types(
   std::span<inline_column_buffer const> output_buffer_template)
 {
@@ -60,6 +74,22 @@ namespace {
                  std::back_inserter(output_dtypes),
                  [](auto const& col) { return col.type; });
   return output_dtypes;
+}
+
+/**
+ * @brief Count the number of row groups in the input
+ *
+ * @param row_group_indices Row group indices
+ * @return Number of row groups
+ */
+[[nodiscard]] inline size_type count_row_groups(
+  std::span<std::vector<size_type> const> row_group_indices)
+{
+  return std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    size_type{0},
+    [](auto sum, auto const& rgs) { return sum + static_cast<size_type>(rgs.size()); });
 }
 
 }  // namespace
@@ -511,6 +541,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::FILTER_COLUMNS, row_mask);
   }
 
@@ -547,6 +579,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
   }
 
@@ -616,6 +650,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return;
   }
 
@@ -674,6 +710,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return;
   }
 

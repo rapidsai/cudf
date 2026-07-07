@@ -25,6 +25,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup aggregation_rolling
  * @{
  * @file
+ * @brief APIs for computing rolling window aggregations over columns.
  */
 
 /**
