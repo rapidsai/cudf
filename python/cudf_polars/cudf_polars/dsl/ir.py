@@ -886,8 +886,6 @@ class Scan(IR):
             return table, list(names)
         names = list(names)
         with_columns = list(with_columns)
-        if names == with_columns:
-            return table, names
         columns = dict(zip(names, table.columns(), strict=True))
         return plc.Table([columns[name] for name in with_columns]), with_columns
 
