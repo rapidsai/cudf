@@ -12,6 +12,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -127,8 +128,16 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    # Horizontal folds elementwise across the child columns. All are pointwise.
+    _horizontal_fold_ops: ClassVar[dict[str, plc.binaryop.BinaryOperator]] = {
+        "max_horizontal": plc.binaryop.BinaryOperator.NULL_MAX,
+    }
+    _supported_horizontal_fns = frozenset({"max_horizontal"})
     _supported_fns = frozenset().union(
-        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+        _supported_misc_fns,
+        _supported_cum_aggs,
+        _supported_horizontal_fns,
+        _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
@@ -138,7 +147,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
         }
-    ).union(_OP_MAPPING.keys())
+    ).union(_supported_horizontal_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -166,6 +175,17 @@ class UnaryFunction(Expr):
             if method not in {"average", "min", "max", "dense", "ordinal"}:
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
+                )
+        if self.name == "max_horizontal":
+            op = UnaryFunction._horizontal_fold_ops[self.name]
+            if not plc.binaryop.is_supported_operation(
+                self.dtype.plc_type,
+                self.dtype.plc_type,
+                self.dtype.plc_type,
+                op,
+            ):
+                raise NotImplementedError(
+                    f"{self.name} is not supported for dtype {self.dtype.id().name}"
                 )
 
     def do_evaluate(
@@ -538,6 +558,27 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "max_horizontal":
+            op = UnaryFunction._horizontal_fold_ops[self.name]
+            columns = [
+                col.obj
+                for col in broadcast(
+                    *(
+                        child.evaluate(df, context=context).astype(
+                            self.dtype, stream=df.stream
+                        )
+                        for child in self.children
+                    ),
+                    target_length=df.num_rows,
+                    stream=df.stream,
+                )
+            ]
+            result = columns[0]
+            for other in columns[1:]:
+                result = plc.binaryop.binary_operation(
+                    result, other, op, self.dtype.plc_type, stream=df.stream
+                )
+            return Column(result, dtype=self.dtype)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
