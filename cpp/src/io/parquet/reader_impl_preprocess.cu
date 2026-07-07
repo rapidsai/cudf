@@ -1131,11 +1131,11 @@ cudf::detail::host_vector<size_t> reader_impl::calculate_page_string_offsets()
 namespace {
 
 /**
- * @brief Maps each (global) row index in the row range to the source-local row index
+ * @brief Maps each global row index to its corresponding file-local row index
  */
 struct map_global_to_local_row_index {
   std::size_t const* global_row_offsets;  ///< Global row offsets for each row group
-  std::size_t const* local_row_offsets;   ///< Sources-local row offsets for each row group
+  std::size_t const* local_row_offsets;   ///< Source-local start row for each row group
   std::size_t num_row_groups;
 
   __device__ std::size_t operator()(std::size_t row_idx) const noexcept
@@ -1144,7 +1144,7 @@ struct map_global_to_local_row_index {
       thrust::upper_bound(
         thrust::seq, global_row_offsets, global_row_offsets + num_row_groups, row_idx) -
       global_row_offsets - 1;  // Subtract 1 to get the index of the selected row group
-    return row_idx + local_row_offsets[row_group_idx];
+    return row_idx - global_row_offsets[row_group_idx] + local_row_offsets[row_group_idx];
   }
 };
 
@@ -1163,7 +1163,7 @@ std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const
 
   // Map global row indices in the current row-range to corresponding source-local row indices
   {
-    // Collect global and file-local row offsets for each selected row group
+    // Collect global and file-local start rows for each selected row group
     auto const& row_groups = _file_itm_data.row_groups;
     auto host_rg_global_offsets =
       cudf::detail::make_empty_pinned_vector<std::size_t>(row_groups.size(), _stream);
@@ -1171,7 +1171,7 @@ std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const
       cudf::detail::make_empty_pinned_vector<size_t>(row_groups.size(), _stream);
     for (auto const& rg : row_groups) {
       host_rg_global_offsets.push_back(rg.start_row);
-      host_rg_local_offsets.push_back(rg.source_start_row - rg.start_row);
+      host_rg_local_offsets.push_back(rg.source_start_row);
     }
 
     // Copy to device
