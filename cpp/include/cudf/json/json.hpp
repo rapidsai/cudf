@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -15,6 +15,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup json_object
  * @{
  * @file
+ * @brief APIs for querying JSON values from a strings column using `get_json_object()`
  */
 
 /**
