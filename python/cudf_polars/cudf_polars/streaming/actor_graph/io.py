@@ -706,15 +706,18 @@ def make_rapidsmpf_read_parquet_node(
         # Build predicate filter if present (passed separately to read_parquet)
         filter_obj = None
         if ir.predicate is not None:
-            filter_expr = to_parquet_filter(
+            filter_expr, filters_exact = to_parquet_filter(
                 _prepare_parquet_predicate(
                     ir.predicate.value, ir.paths, ir.schema, ir.with_columns
                 ),
                 stream=stream,
             )
-            if filter_expr is None:
-                # Predicate cannot be converted to parquet filter
-                # Return None to signal fallback to scan_node
+            if not filters_exact:
+                # Predicate is not fully convertible to a parquet filter and this
+                # path applies no post-read mask, so fall back to scan_node.
+                # TODO: support partial pushdown here by pushing the convertible
+                # conjuncts into read_parquet and applying the full predicate as
+                # a mask node on the output channel.
                 return None
             filter_obj = Filter(stream, filter_expr)
     except Exception as e:

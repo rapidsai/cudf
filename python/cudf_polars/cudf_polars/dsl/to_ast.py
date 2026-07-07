@@ -266,7 +266,37 @@ def _(node: expr.UnaryFunction, self: Transformer) -> plc_expr.Expression:
     )
 
 
-def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:
+def _extract_conjuncts(node: expr.Expr) -> list[expr.Expr]:
+    if (
+        isinstance(node, expr.BinOp)
+        and node.op == plc.binaryop.BinaryOperator.NULL_LOGICAL_AND
+    ):
+        return [c for child in node.children for c in _extract_conjuncts(child)]
+    return [node]
+
+
+def _to_parquet_filter(
+    node: expr.Expr, mapper: Transformer
+) -> plc_expr.Expression | None:
+    # Converts a boolean column reference (e.g., filter(pl.col("foo")))
+    # to an explicit comparison for parquet filters (e.g., filter(pl.col("foo") == True)).
+    # TODO: Have polars pass us the comparison instead
+    if isinstance(node, expr.Col) and node.dtype.id() == plc.TypeId.BOOL8:
+        node = expr.BinOp(
+            node.dtype,
+            plc.binaryop.BinaryOperator.EQUAL,
+            node,
+            expr.Literal(node.dtype, value=True),
+        )
+    try:
+        return mapper(node)
+    except (KeyError, NotImplementedError):
+        return None
+
+
+def to_parquet_filter(
+    node: expr.Expr, stream: Stream
+) -> tuple[plc_expr.Expression | None, bool]:
     """
     Convert an expression to libcudf AST nodes suitable for parquet filtering.
 
@@ -279,26 +309,32 @@ def to_parquet_filter(node: expr.Expr, stream: Stream) -> plc_expr.Expression | 
 
     Returns
     -------
-    pylibcudf Expression if conversion is possible, otherwise None.
+    filter
+        pylibcudf Expression suitable for parquet filtering, or None if no part
+        of the predicate can be converted.
+    exact
+        Whether ``filter`` is equivalent to ``node``. If only some conjuncts of
+        a top-level ``AND`` convert, ``filter`` keeps a superset of the rows
+        ``node`` selects and ``exact`` is False, so the full predicate must
+        still be applied as a post-read mask.
     """
-    # Converts a boolean column reference (e.g., filter(pl.col("foo")))
-    # to an explicit comparison for parquet filters (e.g., filter(pl.col("foo") == True)).
-    # TODO: Have polars pass us the comparison instead
-    if isinstance(node, expr.Col) and node.dtype.id() == plc.TypeId.BOOL8:
-        node = expr.BinOp(
-            node.dtype,
-            plc.binaryop.BinaryOperator.EQUAL,
-            node,
-            expr.Literal(node.dtype, value=True),
-        )
-
     mapper: Transformer = CachingVisitor(
         _to_ast, state={"for_parquet": True, "stream": stream}
     )
-    try:
-        return mapper(node)
-    except (KeyError, NotImplementedError):
-        return None
+    whole = _to_parquet_filter(node, mapper)
+    if whole is not None:
+        return whole, True
+    filter_exprs = [
+        filter_expr
+        for conjunct in _extract_conjuncts(node)
+        if (filter_expr := _to_parquet_filter(conjunct, mapper)) is not None
+    ]
+    if not filter_exprs:
+        return None, False
+    combined = reduce(
+        partial(plc_expr.Operation, plc_expr.ASTOperator.LOGICAL_AND), filter_exprs
+    )
+    return combined, False
 
 
 def to_ast(node: expr.Expr, stream: Stream) -> plc_expr.Expression | None:

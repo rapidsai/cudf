@@ -1008,9 +1008,10 @@ class Scan(IR):
                 )
         elif typ == "parquet":
             filters = None
+            filters_exact = False
             if predicate is not None and row_index is None:
                 # Can't apply filters during read if we have a row index.
-                filters = to_parquet_filter(
+                filters, filters_exact = to_parquet_filter(
                     _prepare_parquet_predicate(
                         predicate.value, paths, schema, with_columns
                     ),
@@ -1090,7 +1091,7 @@ class Scan(IR):
                     df = Scan.add_file_paths(
                         include_file_paths, paths, tbl_w_meta.num_rows_per_source, df
                     )
-            if filters is not None:
+            if filters_exact:
                 # Mask must have been applied.
                 return df
         elif typ == "ndjson":

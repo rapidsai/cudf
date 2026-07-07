@@ -17,6 +17,7 @@ from cudf_polars.containers import DataType
 from cudf_polars.containers.dataframe import DataFrame, NamedColumn
 from cudf_polars.dsl.ir import IRExecutionContext
 from cudf_polars.dsl.to_ast import insert_colrefs, to_ast, to_parquet_filter
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 
@@ -130,4 +131,23 @@ def test_to_parquet_filter_with_colref_raises():
 def test_to_parquet_filter_null_checks_on_column(name):
     col = expr_nodes.Col(DataType(pl.datatypes.Int64()), "a")
     fn = expr_nodes.BooleanFunction(DataType(pl.datatypes.Boolean()), name, (), col)
-    assert to_parquet_filter(fn, stream=get_cuda_stream()) is not None
+    filter_expr, exact = to_parquet_filter(fn, stream=get_cuda_stream())
+    assert filter_expr is not None
+    assert exact
+
+
+@pytest.mark.parametrize(
+    "predicate, pushed, exact",
+    [
+        (pl.col("a") >= 2, True, True),
+        ((pl.col("a") >= 2) & pl.col("s").str.contains("b"), True, False),
+        ((pl.col("a") >= 2) | pl.col("s").str.contains("b"), False, False),
+    ],
+)
+def test_to_parquet_filter_conjunction_splitting(predicate, pushed, exact):
+    lf = pl.LazyFrame({"a": [1, 2, 3], "s": ["x", "y", "z"]})
+    ir = Translator(lf.filter(predicate)._ldf.visit(), pl.GPUEngine()).translate_ir()
+    mask = next(n.mask.value for n in traversal([ir]) if isinstance(n, ir_nodes.Filter))
+    filter_expr, is_exact = to_parquet_filter(mask, stream=get_cuda_stream())
+    assert (filter_expr is not None) == pushed
+    assert is_exact == exact
