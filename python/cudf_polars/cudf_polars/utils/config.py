@@ -215,6 +215,9 @@ class ParquetOptions:
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
         Default is False.
+    prefetch_file_metadata
+        Whether to prefetch parquet file metadata and pass it through
+        `parquet_metadatas` to avoid rereading file footers.
     use_jit_filter
         Whether to use JIT compilation for post-read filtering in Parquet scans.
         When enabled, filter predicates are JIT-compiled to CUDA kernels for
@@ -261,6 +264,13 @@ class ParquetOptions:
             default=False,
         )
     )
+    prefetch_file_metadata: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PREFETCH_FILE_METADATA",
+            _bool_converter,
+            default=False,
+        )
+    )
     use_jit_filter: bool = dataclasses.field(
         default_factory=_make_default_factory(
             f"{_env_prefix}__USE_JIT_FILTER",
@@ -284,6 +294,13 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.prefetch_file_metadata, bool):
+            raise TypeError("prefetch_file_metadata must be a bool")
+
+        if self.use_rapidsmpf_native and self.prefetch_file_metadata:
+            raise NotImplementedError(
+                "'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'"
+            )
         if not isinstance(self.use_jit_filter, bool):
             raise TypeError("use_jit_filter must be a bool")
 
@@ -880,6 +897,11 @@ class ConfigOptions(Generic[ExecutorType]):
         user_parquet_options = engine.config.get("parquet_options", {})
         if user_parquet_options is None:
             user_parquet_options = {}
+
+        if isinstance(user_parquet_options, dict):
+            parquet_options = ParquetOptions(**user_parquet_options)
+        else:
+            parquet_options = user_parquet_options
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
         user_memory_resource_config = engine.config.get("memory_resource_config", None)
@@ -907,6 +929,10 @@ class ConfigOptions(Generic[ExecutorType]):
         match user_executor:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
+                if parquet_options.prefetch_file_metadata:
+                    raise NotImplementedError(
+                        "Prefetching is not supported for the in-memory executor."
+                    )
             case "streaming":
                 user_executor_options = user_executor_options.copy()
                 if "min_device_size" not in user_executor_options:
@@ -929,7 +955,7 @@ class ConfigOptions(Generic[ExecutorType]):
 
         kwargs = {
             "raise_on_fail": user_raise_on_fail,
-            "parquet_options": ParquetOptions(**user_parquet_options),
+            "parquet_options": parquet_options,
             "executor": executor,
             "device": engine.device,
             "memory_resource_config": user_memory_resource_config,
