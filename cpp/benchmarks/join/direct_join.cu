@@ -10,53 +10,45 @@
 #include <cudf/join/distinct_hash_join.hpp>
 #include <cudf/join/join.hpp>
 
-#include <cuda/functional>
 #include <thrust/execution_policy.h>
+#include <thrust/functional.h>
 #include <thrust/random.h>
+#include <thrust/sequence.h>
 #include <thrust/shuffle.h>
 #include <thrust/tabulate.h>
 
 // Apples-to-apples comparison of inner join implementations on input that satisfies
 // `direct_inner_join`'s preconditions: a single UINT32 key column per side, distinct right keys,
-// and all key values in [0, capacity) with capacity = 2 * right_size. Right keys are the shuffled
-// even values; matching left keys draw from the even values and non-matching ones from the odd
-// values, so `selectivity` is exact and identical for all algorithms.
+// and all key values in [0, capacity) with capacity = right_size. The right keys are the shuffled
+// dense values [0, right_size), the key_remapping/dense-primary-key case, so every left key
+// matches and the input is identical for all algorithms.
 void nvbench_direct_inner_join(nvbench::state& state)
 {
   if (should_skip_large_sizes(state)) { return; }
 
-  auto const right_size    = static_cast<cudf::size_type>(state.get_int64("right_size"));
-  auto const left_size     = static_cast<cudf::size_type>(state.get_int64("left_size"));
-  auto const algorithm     = state.get_string("algorithm");
-  auto const capacity      = static_cast<std::size_t>(right_size) * 2;
-  double const selectivity = 0.3;
+  auto const right_size = static_cast<cudf::size_type>(state.get_int64("right_size"));
+  auto const left_size  = static_cast<cudf::size_type>(state.get_int64("left_size"));
+  auto const algorithm  = state.get_string("algorithm");
+  auto const capacity   = static_cast<std::size_t>(right_size);
 
+  // Dense distinct right keys: a shuffled sequence of [0, capacity)
   auto right = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::UINT32}, right_size, cudf::mask_state::UNALLOCATED);
-  thrust::tabulate(thrust::device,
+  thrust::sequence(thrust::device,
                    right->mutable_view().begin<std::uint32_t>(),
-                   right->mutable_view().end<std::uint32_t>(),
-                   cuda::proclaim_return_type<std::uint32_t>([] __device__(cudf::size_type idx) {
-                     return static_cast<std::uint32_t>(idx) * 2;  // distinct evens in [0, capacity)
-                   }));
+                   right->mutable_view().end<std::uint32_t>());
   thrust::shuffle(thrust::device,
                   right->mutable_view().begin<std::uint32_t>(),
                   right->mutable_view().end<std::uint32_t>(),
                   thrust::default_random_engine{12345});
 
-  auto const num_matching = static_cast<cudf::size_type>(selectivity * left_size);
-  auto left               = cudf::make_numeric_column(
+  // Left keys cycle through [0, capacity), then shuffled
+  auto left = cudf::make_numeric_column(
     cudf::data_type{cudf::type_id::UINT32}, left_size, cudf::mask_state::UNALLOCATED);
   thrust::tabulate(thrust::device,
                    left->mutable_view().begin<std::uint32_t>(),
                    left->mutable_view().end<std::uint32_t>(),
-                   cuda::proclaim_return_type<std::uint32_t>(
-                     [num_matching, right_size] __device__(cudf::size_type idx) {
-                       thrust::default_random_engine rng(idx);
-                       thrust::uniform_int_distribution<std::uint32_t> dist(0, right_size - 1);
-                       auto const even = dist(rng) * 2;
-                       return (idx < num_matching) ? even : even + 1;  // odd keys never match
-                     }));
+                   thrust::placeholders::_1 % static_cast<std::uint32_t>(right_size));
   thrust::shuffle(thrust::device,
                   left->mutable_view().begin<std::uint32_t>(),
                   left->mutable_view().end<std::uint32_t>(),
@@ -67,10 +59,10 @@ void nvbench_direct_inner_join(nvbench::state& state)
   auto const left_keys  = cudf::table_view{{left_view}};
   auto const right_keys = cudf::table_view{{right_view}};
 
-  auto const join_input_size = estimate_size(left_keys) + estimate_size(right_keys);
+  auto const input_bytes = estimate_size(left_keys) + estimate_size(right_keys);
   state.set_cuda_stream(nvbench::make_cuda_stream_view(cudf::get_default_stream().value()));
-  state.add_element_count(join_input_size, "join_input_size");  // number of bytes
-  state.add_global_memory_reads<nvbench::int8_t>(join_input_size);
+  state.add_element_count(input_bytes, "input_bytes");
+  state.add_global_memory_reads<nvbench::int8_t>(input_bytes);
 
   if (algorithm == "hash") {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch&) {
