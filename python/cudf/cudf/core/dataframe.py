@@ -2223,7 +2223,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
 
         if isinstance(out.index, DatetimeIndex):
             try:
-                out.index._freq = out.index._inferred_freq
+                out.index._freq = out.index.inferred_freq
             except NotImplementedError:
                 out.index._freq = None
         return out
