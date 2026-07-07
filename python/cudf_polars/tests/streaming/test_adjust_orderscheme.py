@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -12,12 +12,13 @@ import pytest
 import polars as pl
 
 import pylibcudf as plc
-from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.channel_metadata import (
+from cudf_streaming.channel_metadata import (
     OrderKey,
     OrderScheme,
+    Ordering,
 )
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
+from rapidsmpf.streaming.core.message import Message
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.ir import Empty, IRExecutionContext
@@ -71,16 +72,24 @@ def _make_scheme(
     )
     return OrderScheme(
         [
-            OrderKey(index, plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE)
-            for index in key_indices
-        ],
-        TableChunk.from_pylibcudf_table(
-            boundary_df.table,
-            stream,
-            exclusive_view=True,
-            br=context.br(),
-        ),
-        strict_boundaries=strict,
+            Ordering(
+                [
+                    OrderKey(
+                        index,
+                        plc.types.Order.ASCENDING,
+                        plc.types.NullOrder.BEFORE,
+                    )
+                    for index in key_indices
+                ],
+                TableChunk.from_pylibcudf_table(
+                    boundary_df.table,
+                    stream,
+                    exclusive_view=True,
+                    br=context.br(),
+                ),
+                strict_boundaries=strict,
+            )
+        ]
     )
 
 
@@ -118,7 +127,7 @@ async def _adjust_and_collect(
     """Run adjustment and collect output chunks by partition ID."""
     ch_in = context.create_channel()
     ch_out = context.create_channel()
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     output: dict[int, pl.DataFrame] = {}
 
     async def _produce() -> None:
@@ -147,7 +156,7 @@ async def _adjust_and_collect(
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         ir_context = IRExecutionContext(
-            executor, get_cuda_stream=context.get_stream_from_pool
+            executor, get_cuda_stream=context.br().stream_pool.get_stream
         )
         await gather_in_task_group(
             _produce(),
@@ -190,7 +199,7 @@ async def _adjust_direct(
     ch_out = context.create_channel()
     with ThreadPoolExecutor(max_workers=1) as executor:
         ir_context = IRExecutionContext(
-            executor, get_cuda_stream=context.get_stream_from_pool
+            executor, get_cuda_stream=context.br().stream_pool.get_stream
         )
         await adjust_orderscheme(
             context,
@@ -222,7 +231,7 @@ def test_adjust_orderscheme_rejects_invalid_schemes(
     match: str,
 ) -> None:
     context = spmd_engine.context
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     input_scheme = _make_scheme(context, 4, key_indices=input_keys, stream=stream)
     output_scheme = _make_scheme(
         context,
@@ -247,7 +256,7 @@ def test_adjust_orderscheme_requires_collective_id(
     if comm.nranks == 1:
         pytest.skip("collective_id is only required for multi-rank runs.")
 
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     input_scheme = _make_scheme(context, 4, stream=stream)
     output_scheme = _make_scheme(context, 4, stream=stream)
 
@@ -274,7 +283,7 @@ def test_adjust_orderscheme_sparse_boundary_shift(
         pytest.skip("This test expects exactly two ranks.")
 
     keys = list(range(4)) if comm.rank == 0 else list(range(4, 8))
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     # Input sorted on (key, val) is also sorted on the target key prefix.
     input_scheme = _make_scheme(context, (4, 4), key_indices=(0, 1), stream=stream)
     output_scheme = _make_scheme(context, target_boundary, stream=stream)
@@ -304,7 +313,7 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(
         pytest.skip("This test expects exactly two ranks.")
 
     keys = [0, 1, 2] if comm.rank == 0 else [5, 8]
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     input_scheme = _make_scheme(context, 5, stream=stream)
     output_scheme = _make_scheme(context, [3, 5, 7], stream=stream)
 
@@ -331,13 +340,14 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(
 def test_adjust_orderscheme_all_empty_input(spmd_engine: SPMDEngine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     input_scheme = _make_scheme(context, 5, stream=stream)
     output_scheme = _make_scheme(context, [3, 5, 7], stream=stream)
+    output_npartitions = output_scheme.orderings[0].num_boundaries + 1
     expected: _ExpectedPartitions = {
         pid: []
-        for pid in range(output_scheme.num_boundaries + 1)
-        if pid * comm.nranks // (output_scheme.num_boundaries + 1) == comm.rank
+        for pid in range(output_npartitions)
+        if pid * comm.nranks // output_npartitions == comm.rank
     }
 
     if comm.nranks == 1:
@@ -384,7 +394,7 @@ def test_adjust_orderscheme_single_rank_no_collective(
     if comm.nranks != 1:
         pytest.skip("This test covers the single-rank path.")
 
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     input_scheme = _make_scheme(context, 4, stream=stream)
     output_scheme = _make_scheme(context, target_boundary, stream=stream)
     output_by_pid = asyncio.run(
@@ -407,7 +417,7 @@ def test_adjust_orderscheme_multi_chunk_input(spmd_engine: SPMDEngine) -> None:
     if comm.nranks != 1:
         pytest.skip("This test covers local chunk accumulation.")
 
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     input_scheme = _make_scheme(context, 4, stream=stream)
     output_scheme = _make_scheme(context, 4, stream=stream)
     output = asyncio.run(

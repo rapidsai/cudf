@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """OrderScheme adjustment utilities for the RapidsMPF streaming runtime."""
 
@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING
 import polars as pl
 
 import pylibcudf as plc
+from cudf_streaming.partition_utils import unpack_and_concat
+from cudf_streaming.table_chunk import TableChunk
 from pylibcudf.contiguous_split import pack
-from rapidsmpf.integrations.cudf.partition import unpack_and_concat
 from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.streaming.core.message import Message
-from rapidsmpf.streaming.cudf.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.streaming.actor_graph.utils import (
@@ -27,11 +27,11 @@ from cudf_polars.streaming.actor_graph.utils import (
 from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
+    from cudf_streaming.channel_metadata import OrderScheme, Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
-    from rapidsmpf.streaming.cudf.channel_metadata import OrderScheme
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
@@ -39,6 +39,12 @@ if TYPE_CHECKING:
 
 _PID_DTYPE = DataType(pl.Int32())
 _PID_PLC_DTYPE = plc.DataType(plc.TypeId.INT32)
+
+
+def _primary_ordering(scheme: OrderScheme) -> Ordering:
+    """Return the single ordering supported by adjust_orderscheme for now."""
+    (ordering,) = scheme.orderings
+    return ordering
 
 
 def _contiguous_owner(pid: int, nranks: int, npartitions: int) -> int:
@@ -81,10 +87,12 @@ def _contiguous_owners(
 
 def _validate_schemes(input_scheme: OrderScheme, output_scheme: OrderScheme) -> None:
     """Validate the first-pass flat OrderScheme adjustment contract."""
-    if not output_scheme.strict_boundaries:
+    input_ordering = _primary_ordering(input_scheme)
+    output_ordering = _primary_ordering(output_scheme)
+    if not output_ordering.strict_boundaries:
         raise ValueError("adjust_orderscheme requires a strict output OrderScheme.")
-    prefix_len = len(output_scheme.keys)
-    if input_scheme.keys[:prefix_len] != output_scheme.keys:
+    prefix_len = len(output_ordering.keys)
+    if input_ordering.keys[:prefix_len] != output_ordering.keys:
         raise NotImplementedError(
             "adjust_orderscheme currently requires the output OrderScheme keys "
             "to be a prefix of the input OrderScheme keys."
@@ -94,18 +102,18 @@ def _validate_schemes(input_scheme: OrderScheme, output_scheme: OrderScheme) -> 
 def _split_points(
     table: plc.Table,
     boundary_table: plc.Table,
-    scheme: OrderScheme,
+    ordering: Ordering,
     stream: Stream,
 ) -> list[int]:
     """Return row split points that partition *table* by *scheme* boundaries."""
     if boundary_table.num_rows() == 0:
         return []
-    key_table = plc.Table([table.columns()[key.column_index] for key in scheme.keys])
+    key_table = plc.Table([table.columns()[key.column_index] for key in ordering.keys])
     split_col = plc.search.lower_bound(
         key_table,
         boundary_table,
-        [key.order for key in scheme.keys],
-        [key.null_order for key in scheme.keys],
+        [key.order for key in ordering.keys],
+        [key.null_order for key in ordering.keys],
         stream=stream,
     )
     return (
@@ -133,16 +141,16 @@ def _append_partition_id(table: plc.Table, pid: int, stream: Stream) -> plc.Tabl
 def _boundary_search_positions(
     input_boundary_table: plc.Table,
     output_boundary_table: plc.Table,
-    output_scheme: OrderScheme,
+    output_ordering: Ordering,
     stream: Stream,
 ) -> tuple[list[int], list[int]]:
     """Search output boundary positions for projected input boundary rows."""
     if input_boundary_table.num_rows() == 0:
         return [], []
-    prefix_len = len(output_scheme.keys)
+    prefix_len = len(output_ordering.keys)
     input_prefix_boundaries = plc.Table(input_boundary_table.columns()[:prefix_len])
-    orders = [key.order for key in output_scheme.keys]
-    null_orders = [key.null_order for key in output_scheme.keys]
+    orders = [key.order for key in output_ordering.keys]
+    null_orders = [key.null_order for key in output_ordering.keys]
     lower_col = plc.search.lower_bound(
         output_boundary_table,
         input_prefix_boundaries,
@@ -169,16 +177,16 @@ def _boundary_search_positions(
 def _peer_ranks(
     rank: int,
     nranks: int,
-    input_scheme: OrderScheme,
-    output_scheme: OrderScheme,
+    input_ordering: Ordering,
+    output_ordering: Ordering,
     lower_positions: list[int],
     upper_positions: list[int],
 ) -> tuple[list[int], list[int]]:
     """Return source and destination ranks needed for OrderScheme adjustment."""
-    input_npartitions = input_scheme.num_boundaries + 1
-    output_npartitions = output_scheme.num_boundaries + 1
-    output_prefix_only = len(output_scheme.keys) < len(input_scheme.keys)
-    include_upper_boundary = output_prefix_only or not input_scheme.strict_boundaries
+    input_npartitions = input_ordering.num_boundaries + 1
+    output_npartitions = output_ordering.num_boundaries + 1
+    output_prefix_only = len(output_ordering.keys) < len(input_ordering.keys)
+    include_upper_boundary = output_prefix_only or not input_ordering.strict_boundaries
 
     def dsts_for_source(source_rank: int) -> list[int]:
         input_start, input_stop = _partition_range(
@@ -265,10 +273,10 @@ async def _adjust_orderscheme_local(
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    output_scheme: OrderScheme,
+    output_ordering: Ordering,
 ) -> None:
-    npartitions = output_scheme.num_boundaries + 1
-    boundary_chunk = output_scheme.get_boundaries(context.br())
+    npartitions = output_ordering.num_boundaries + 1
+    boundary_chunk = output_ordering.get_boundaries(context.br())
     boundary_table = boundary_chunk.table_view()
     pending_pid: int | None = None
     pending_chunks: ChunkStore | None = None
@@ -294,11 +302,11 @@ async def _adjust_orderscheme_local(
         if chunk.table_view().num_rows() == 0:
             continue
         with stream_ordered_after(
-            context.get_stream_from_pool,
+            context.br().stream_pool.get_stream,
             upstreams=(chunk.stream, boundary_chunk.stream),
         ) as stream:
             table = chunk.table_view()
-            splits = _split_points(table, boundary_table, output_scheme, stream)
+            splits = _split_points(table, boundary_table, output_ordering, stream)
             for pid, piece in enumerate(
                 plc.copying.split(table, splits, stream=stream)
             ):
@@ -372,7 +380,9 @@ async def adjust_orderscheme(
     sortedness is not checked here.
     """
     _validate_schemes(input_scheme, output_scheme)
-    npartitions = output_scheme.num_boundaries + 1
+    input_ordering = _primary_ordering(input_scheme)
+    output_ordering = _primary_ordering(output_scheme)
+    npartitions = output_ordering.num_boundaries + 1
     local_pids = _local_partitions(comm.rank, comm.nranks, npartitions)
 
     if comm.nranks > 1 and collective_id is None:
@@ -386,31 +396,31 @@ async def adjust_orderscheme(
                 ir_context,
                 ch_out,
                 ch_in,
-                output_scheme,
+                output_ordering,
             )
             return
 
-        input_boundary_chunk = input_scheme.get_boundaries(context.br())
-        boundary_chunk = output_scheme.get_boundaries(context.br())
+        input_boundary_chunk = input_ordering.get_boundaries(context.br())
+        boundary_chunk = output_ordering.get_boundaries(context.br())
         boundary_table = boundary_chunk.table_view()
         srcs: list[int] = []
         dsts: list[int] = []
         if comm.nranks > 1:
             with stream_ordered_after(
-                context.get_stream_from_pool,
+                context.br().stream_pool.get_stream,
                 upstreams=(input_boundary_chunk.stream, boundary_chunk.stream),
             ) as stream:
                 lower_positions, upper_positions = _boundary_search_positions(
                     input_boundary_chunk.table_view(),
                     boundary_table,
-                    output_scheme,
+                    output_ordering,
                     stream,
                 )
             srcs, dsts = _peer_ranks(
                 comm.rank,
                 comm.nranks,
-                input_scheme,
-                output_scheme,
+                input_ordering,
+                output_ordering,
                 lower_positions,
                 upper_positions,
             )
@@ -429,11 +439,13 @@ async def adjust_orderscheme(
                 if chunk.table_view().num_rows() == 0:
                     continue
                 with stream_ordered_after(
-                    context.get_stream_from_pool,
+                    context.br().stream_pool.get_stream,
                     upstreams=(chunk.stream, boundary_chunk.stream),
                 ) as stream:
                     table = chunk.table_view()
-                    splits = _split_points(table, boundary_table, output_scheme, stream)
+                    splits = _split_points(
+                        table, boundary_table, output_ordering, stream
+                    )
                     for pid, piece in enumerate(
                         plc.copying.split(table, splits, stream=stream)
                     ):
@@ -473,7 +485,7 @@ async def adjust_orderscheme(
                     output_chunks[pid].extend(chunks)
             else:
                 assert exchange is not None
-                stream = context.get_stream_from_pool()
+                stream = context.br().stream_pool.get_stream()
                 for packed in exchange.extract(source_rank):
                     remote_piece = _unpack_remote_piece(packed, stream, context.br())
                     if remote_piece is None:
