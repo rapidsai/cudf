@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
@@ -107,6 +108,7 @@ class UnaryFunction(Expr):
             "drop_nulls",
             "fill_null",
             "fill_null_with_strategy",
+            "index_of",
             "mask_nans",
             "null_count",
             "rank",
@@ -167,6 +169,8 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "index_of" and plc.traits.is_nested(children[0].dtype.plc_type):
+            raise NotImplementedError("index_of on nested types is not supported")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -329,6 +333,54 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "index_of":
+            column = self.children[0].evaluate(df, context=context)
+            value_expr = self.children[1]
+            if isinstance(value_expr, Literal):
+                py_value = value_expr.value
+                value = plc.Scalar.from_py(
+                    py_value, column.dtype.plc_type, stream=df.stream
+                )
+            else:
+                value = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+                py_value = value.to_py(stream=df.stream)
+            if (
+                plc.traits.is_floating_point(column.obj.type())
+                and isinstance(py_value, float)
+                and math.isnan(py_value)
+            ):
+                mask = plc.unary.is_nan(column.obj, stream=df.stream)
+            else:
+                mask = plc.binaryop.binary_operation(
+                    column.obj,
+                    value,
+                    plc.binaryop.BinaryOperator.NULL_EQUALS,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
+            indices = plc.filling.sequence(
+                column.obj.size(),
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            matched = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([indices]), mask, stream=df.stream
+            ).columns()[0]
+            if matched.size() == 0:
+                result = plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                    1,
+                    stream=df.stream,
+                )
+            else:
+                (first,) = plc.copying.slice(
+                    plc.Table([matched]), [0, 1], stream=df.stream
+                )[0].columns()
+                result = plc.unary.cast(first, self.dtype.plc_type, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
