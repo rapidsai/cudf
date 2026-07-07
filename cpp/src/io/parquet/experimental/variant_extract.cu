@@ -388,22 +388,23 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
 __device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t const> val,
                                                            size_type index)
 {
+  if (index < 0) { return {}; }
+
   auto const val_len = static_cast<size_type>(val.size());
   if (val_len < 1) { return {}; }
   uint8_t const value_metadata = val[0];
   if (variant_basic_type(value_metadata) != basic_type::array) { return {}; }
 
   int const value_header = variant_value_header(value_metadata);
-  [[maybe_unused]] auto const [offset_size, id_size, num_elements_size] =
+  [[maybe_unused]] auto const [offset_size, _, num_elements_size] =
     decode_object_array_header(value_header, false);
 
   size_type pos           = 1;
   auto const num_elements = narrow_cast(read_uint64(val, pos, num_elements_size));
   if (!num_elements.has_value()) { return {}; }
   auto const n = num_elements.value();
+  if (index >= n) { return {}; }
   pos += num_elements_size;
-
-  if (index < 0 || index >= n) { return {}; }
 
   size_type const offsets_start = pos;
   auto const offsets_bytes      = (static_cast<uint64_t>(n) + 1) * offset_size;
@@ -462,7 +463,7 @@ __device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view ste
 {
   auto const slen = step.size_bytes();
   auto const* sd  = step.data();
-  if (slen < 2 || sd[0] != '[' || sd[slen - 1] != ']') { return cuda::std::nullopt; }
+  if (slen < 3 || sd[0] != '[' || sd[slen - 1] != ']') { return cuda::std::nullopt; }
 
   uint64_t index = 0;
   for (size_type k = 1; k < slen - 1; ++k) {
