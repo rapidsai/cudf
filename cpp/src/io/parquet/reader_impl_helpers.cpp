@@ -1773,7 +1773,7 @@ aggregate_reader_metadata::select_columns(
                                         has_list_parent || col_type == type_id::LIST);
         }
       } else {
-        for (const auto& idx : col_name_info->children) {
+        for (auto const& idx : col_name_info->children) {
           path_is_valid |= build_column(&idx,
                                         find_schema_child(schema_elem, idx.name),
                                         output_col.children,

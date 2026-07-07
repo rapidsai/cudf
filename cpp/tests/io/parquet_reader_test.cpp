@@ -1421,7 +1421,7 @@ auto create_parquet_with_stats(std::string const& filename)
   expected_metadata.column_metadata[2].set_name("col_double");
 
   auto const filepath = temp_env->get_temp_filepath(filename);
-  const cudf::io::parquet_writer_options out_opts =
+  cudf::io::parquet_writer_options const out_opts =
     cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, expected)
       .metadata(std::move(expected_metadata))
       .row_group_size_rows(8000)
@@ -1981,7 +1981,7 @@ TEST_F(ParquetReaderTest, FilterSupported2)
   auto const written_table = table_view{{col0, col1, col2}};
   auto const filepath      = temp_env->get_temp_filepath("FilterSupported2.parquet");
   {
-    const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options const out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
         .row_group_size_rows(1000);
     cudf::io::write_parquet(out_opts);
@@ -2129,7 +2129,7 @@ TEST_F(ParquetReaderTest, FilterNoStats)
   auto const written_table = table_view{{col0}};
   auto const filepath      = temp_env->get_temp_filepath("FilterNoStats.parquet");
   {
-    const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options const out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
         .row_group_size_rows(8000)
         .stats_level(cudf::io::statistics_freq::STATISTICS_NONE);
@@ -2169,7 +2169,7 @@ TEST_F(ParquetReaderTest, FilterFloatNAN)
   auto const written_table = table_view{{col0, col1}};
   auto const filepath      = temp_env->get_temp_filepath("FilterFloatNAN.parquet");
   {
-    const cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options const out_opts =
       cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
         .row_group_size_rows(8000);
     cudf::io::write_parquet(out_opts);
@@ -3378,7 +3378,7 @@ void filter_unary_operation_typed_test()
       expected_metadata.column_metadata[1].set_name("col1");
       expected_metadata.column_metadata[2].set_name("col2");
 
-      const cudf::io::parquet_writer_options out_opts =
+      cudf::io::parquet_writer_options const out_opts =
         cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, written_table)
           .metadata(std::move(expected_metadata))
           .stats_level(cudf::io::statistics_freq::STATISTICS_COLUMN)
@@ -4098,9 +4098,9 @@ TEST_F(ParquetReaderTest, DeviceReadAsyncThrows)
   try {
     cudf::io::read_parquet(read_args);
     // Test passes if no exception is thrown
-  } catch (const cudf::test::AsyncException&) {
+  } catch (cudf::test::AsyncException const&) {
     // Test passes if AsyncException is thrown (expected test exception)
-  } catch (const std::exception& e) {
+  } catch (std::exception const& e) {
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }
@@ -4121,9 +4121,9 @@ TEST_F(ParquetReaderTest, DeviceWriteAsyncThrows)
   try {
     cudf::io::write_parquet(write_args);
     // Test passes if no exception is thrown
-  } catch (const cudf::test::AsyncException&) {
+  } catch (cudf::test::AsyncException const&) {
     // Test passes if AsyncException is thrown (expected test exception)
-  } catch (const std::exception& e) {
+  } catch (std::exception const& e) {
     // Test fails if any other exception is thrown
     FAIL() << "Unexpected exception thrown: " << e.what();
   }

@@ -935,7 +935,7 @@ void reader_impl::allocate_columns(read_mode mode, size_t skip_rows, size_t num_
   // Validity Buffer is a uint32_t pointer
   std::vector<cudf::device_span<cudf::bitmask_type>> nullmask_bufs;
 
-  for (const auto& input_col : _input_columns) {
+  for (auto const& input_col : _input_columns) {
     size_t const max_depth = input_col.nesting_depth();
 
     auto* cols = &_output_buffers;
