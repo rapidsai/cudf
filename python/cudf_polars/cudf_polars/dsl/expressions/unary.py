@@ -12,6 +12,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.utils.reshape import broadcast
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -127,8 +128,13 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    # Horizontal folds elementwise across the child columns. All are pointwise.
+    _supported_horizontal_fns = frozenset({"mean_horizontal"})
     _supported_fns = frozenset().union(
-        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+        _supported_misc_fns,
+        _supported_cum_aggs,
+        _supported_horizontal_fns,
+        _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
@@ -138,7 +144,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
         }
-    ).union(_OP_MAPPING.keys())
+    ).union(_supported_horizontal_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -167,6 +173,20 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "mean_horizontal":
+            for op in (
+                plc.binaryop.BinaryOperator.ADD,
+                plc.binaryop.BinaryOperator.DIV,
+            ):
+                if not plc.binaryop.is_supported_operation(
+                    self.dtype.plc_type,
+                    self.dtype.plc_type,
+                    self.dtype.plc_type,
+                    op,
+                ):
+                    raise NotImplementedError(
+                        f"{self.name} is not supported for dtype {self.dtype.id().name}"
+                    )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -536,6 +556,82 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "mean_horizontal":
+            (ignore_nulls,) = self.options
+            add = plc.binaryop.BinaryOperator.ADD
+            denominator: plc.Column | plc.Scalar
+            columns = [
+                col.obj
+                for col in broadcast(
+                    *(
+                        child.evaluate(df, context=context).astype(
+                            self.dtype, stream=df.stream
+                        )
+                        for child in self.children
+                    ),
+                    target_length=df.num_rows,
+                    stream=df.stream,
+                )
+            ]
+            if ignore_nulls:
+                zero = plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream)
+                filled = [
+                    plc.replace.replace_nulls(col, zero, stream=df.stream)
+                    for col in columns
+                ]
+                numerator = filled[0]
+                for col in filled[1:]:
+                    numerator = plc.binaryop.binary_operation(
+                        numerator, col, add, self.dtype.plc_type, stream=df.stream
+                    )
+                counts = [
+                    plc.unary.cast(
+                        plc.unary.is_valid(col, stream=df.stream),
+                        self.dtype.plc_type,
+                        stream=df.stream,
+                    )
+                    for col in columns
+                ]
+                denominator = counts[0]
+                for col in counts[1:]:
+                    denominator = plc.binaryop.binary_operation(
+                        denominator, col, add, self.dtype.plc_type, stream=df.stream
+                    )
+                # Rows where every value was null have a zero non-null count and
+                # must produce null (matching Polars) rather than 0 / 0 == NaN.
+                denominator = plc.replace.find_and_replace_all(
+                    denominator,
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    stream=df.stream,
+                )
+            else:
+                numerator = columns[0]
+                for col in columns[1:]:
+                    numerator = plc.binaryop.binary_operation(
+                        numerator, col, add, self.dtype.plc_type, stream=df.stream
+                    )
+                denominator = plc.Scalar.from_py(
+                    float(len(columns)), self.dtype.plc_type, stream=df.stream
+                )
+            return Column(
+                plc.binaryop.binary_operation(
+                    numerator,
+                    denominator,
+                    plc.binaryop.BinaryOperator.DIV,
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
