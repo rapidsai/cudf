@@ -558,6 +558,32 @@ TEST_F(StringsContainsTests, NestedQuantifier)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
+TEST_F(StringsContainsTests, DeeplyNestedNoStackOverflow)
+{
+  // A pattern with very deep group nesting but only a single character-consuming
+  // position.  It passes the Glushkov state cap (1 position) yet forces the
+  // compiler's ε-closure traversal to walk a very long ε-chain.
+  int32_t const depth = 100000;
+  std::string pattern;
+  pattern.reserve(static_cast<size_t>(depth) * 3 + 1 + static_cast<size_t>(depth));
+  for (int32_t i = 0; i < depth; ++i) {
+    pattern += "(?:";
+  }
+  pattern += "a";
+  for (int32_t i = 0; i < depth; ++i) {
+    pattern += ")";
+  }
+
+  auto input = cudf::test::strings_column_wrapper({"a", "b", "aaa", ""});
+  auto sv    = cudf::strings_column_view(input);
+
+  // The pattern matches any row containing 'a'.
+  cudf::test::fixed_width_column_wrapper<bool> expected({true, false, true, false});
+  auto prog    = cudf::strings::regex_program::create(pattern);
+  auto results = cudf::strings::contains_re(sv, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsContainsTests, QuantifierErrors)
 {
   EXPECT_THROW(cudf::strings::regex_program::create("^+"), cudf::logic_error);

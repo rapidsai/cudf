@@ -100,53 +100,59 @@ bool is_assertion(int32_t const type)
 // ---------------------------------------------------------------------------
 
 /**
- * @brief Depth-first ε-closure from @p inst_id.
+ * @brief Iterative (explicit-stack) depth-first ε-closure from @p start.
+ *
+ * Traversal order does not matter here: results are OR'd into
+ * bitmasks / boolean flags by the caller.
  *
  * Fills:
  *   @p char_positions  – IDs of reachable character-consuming instructions.
  *   @p is_accept       – set to true if END is reachable.
  *   @p has_assert      – set to true if an assertion instruction is encountered.
  */
-void eps_closure(int32_t const inst_id,
+void eps_closure(int32_t const start,
                  reprog const& prog,
                  std::unordered_set<int32_t>& seen,
                  std::vector<int32_t>& char_positions,
                  bool& is_accept,
                  bool& has_assert)
 {
-  if (inst_id < 0 || inst_id >= prog.insts_count()) return;
-  if (!seen.insert(inst_id).second) return;  // already visited
+  std::vector<int32_t> stack{start};
+  while (!stack.empty()) {
+    int32_t const inst_id = stack.back();
+    stack.pop_back();
+    if (inst_id < 0 || inst_id >= prog.insts_count()) continue;
+    if (!seen.insert(inst_id).second) continue;  // already visited
 
-  auto const& inst = prog.insts_data()[inst_id];
-  switch (inst.type) {
-    // Character-consuming: record position, do NOT follow further
-    case CHAR:
-    case ANY:
-    case ANYNL:
-    case CCLASS:
-    case NCCLASS: char_positions.push_back(inst_id); break;
+    auto const& inst = prog.insts_data()[inst_id];
+    switch (inst.type) {
+      // Character-consuming: record position, do NOT follow further
+      case CHAR:
+      case ANY:
+      case ANYNL:
+      case CCLASS:
+      case NCCLASS: char_positions.push_back(inst_id); break;
 
-    // Accept
-    case END: is_accept = true; break;
+      // Accept
+      case END: is_accept = true; break;
 
-    // ε-transitions: follow without consuming
-    case LBRA:
-    case RBRA:
-      eps_closure(inst.u2.next_id, prog, seen, char_positions, is_accept, has_assert);
-      break;
+      // ε-transitions: follow without consuming
+      case LBRA:
+      case RBRA: stack.push_back(inst.u2.next_id); break;
 
-    case OR:
-      eps_closure(inst.u2.left_id, prog, seen, char_positions, is_accept, has_assert);
-      eps_closure(inst.u1.right_id, prog, seen, char_positions, is_accept, has_assert);
-      break;
+      case OR:
+        stack.push_back(inst.u2.left_id);
+        stack.push_back(inst.u1.right_id);
+        break;
 
-    // Zero-width assertions: Glushkov path does not support these
-    case BOL:
-    case EOL:
-    case BOW:
-    case NBOW: has_assert = true; break;
+      // Zero-width assertions: Glushkov path does not support these
+      case BOL:
+      case EOL:
+      case BOW:
+      case NBOW: has_assert = true; break;
 
-    default: break;
+      default: break;
+    }
   }
 }
 
@@ -174,41 +180,47 @@ struct frontier_item {
 };
 
 /**
- * @brief ε-closure in Thompson priority order (right_id before left_id for OR).
+ * @brief Iterative ε-closure in Thompson priority order (right_id before left_id for OR).
  *
- * Visits OR branches in the order Thompson's NFA executor would: right_id
- * (first alternative, higher priority) before left_id (second alternative).
- * Records each distinct char-consuming position or END in first-visit order.
+ * Uses an explicit work-stack instead of recursion so deeply nested patterns
+ * cannot overflow the host call stack. Records each distinct char-consuming
+ * position or END in first-visit order.
  */
-void ordered_eps_frontier(int32_t const inst_id,
+void ordered_eps_frontier(int32_t const start,
                           reprog const& prog,
                           std::vector<int32_t> const& inst_to_pos,
                           std::unordered_set<int32_t>& seen,
                           std::vector<frontier_item>& items)
 {
-  if (inst_id < 0 || inst_id >= prog.insts_count()) return;
-  if (!seen.insert(inst_id).second) return;
+  std::vector<int32_t> stack{start};
+  while (!stack.empty()) {
+    int32_t const inst_id = stack.back();
+    stack.pop_back();
+    if (inst_id < 0 || inst_id >= prog.insts_count()) continue;
+    if (!seen.insert(inst_id).second) continue;
 
-  auto const& inst = prog.insts_data()[inst_id];
-  switch (inst.type) {
-    case CHAR:
-    case ANY:
-    case ANYNL:
-    case CCLASS:
-    case NCCLASS: items.push_back({frontier_item::CHAR_POS, inst_to_pos[inst_id]}); break;
+    auto const& inst = prog.insts_data()[inst_id];
+    switch (inst.type) {
+      case CHAR:
+      case ANY:
+      case ANYNL:
+      case CCLASS:
+      case NCCLASS: items.push_back({frontier_item::CHAR_POS, inst_to_pos[inst_id]}); break;
 
-    case END: items.push_back({frontier_item::ACCEPT, -1}); break;
+      case END: items.push_back({frontier_item::ACCEPT, -1}); break;
 
-    case LBRA:
-    case RBRA: ordered_eps_frontier(inst.u2.next_id, prog, inst_to_pos, seen, items); break;
+      case LBRA:
+      case RBRA: stack.push_back(inst.u2.next_id); break;
 
-    case OR:
-      // Thompson priority: right_id (first alternative) before left_id (second)
-      ordered_eps_frontier(inst.u1.right_id, prog, inst_to_pos, seen, items);
-      ordered_eps_frontier(inst.u2.left_id, prog, inst_to_pos, seen, items);
-      break;
+      case OR:
+        // Thompson priority: right_id (first alternative) before left_id (second).
+        // Push left first so right is popped/visited first.
+        stack.push_back(inst.u2.left_id);
+        stack.push_back(inst.u1.right_id);
+        break;
 
-    default: break;
+      default: break;
+    }
   }
 }
 
