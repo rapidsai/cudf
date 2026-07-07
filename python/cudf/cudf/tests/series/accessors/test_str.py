@@ -2530,17 +2530,17 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         assert_eq(expect, got)
 
 
-def test_string_extract_nonparticipating_group():
+@pytest.mark.parametrize("pat", [r"(\D)(\d)?", r"(\D)(\d*)"])
+def test_string_extract_nonparticipating_group(pat):
     # An optional group that does not participate in the match results in
     # null, while a group that participates with an empty match remains "".
     s = ["A1", "B2", "C"]
     gs = cudf.Series(s)
     ps = pd.Series(s)
 
-    for pat in [r"(\D)(\d)?", r"(\D)(\d*)"]:
-        expect = ps.str.extract(pat, expand=True)
-        got = gs.str.extract(pat, expand=True)
-        assert_eq(expect, got)
+    expect = ps.str.extract(pat, expand=True)
+    got = gs.str.extract(pat, expand=True)
+    assert_eq(expect, got)
 
 
 def test_string_extract_named_groups():
