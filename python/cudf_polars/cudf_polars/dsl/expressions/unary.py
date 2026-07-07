@@ -110,6 +110,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "rechunk",
             "round",
             "set_sorted",
             "shift",
@@ -135,6 +136,7 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "rechunk",
             "round",
             "set_sorted",
         }
@@ -329,6 +331,9 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "rechunk":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            return column
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
