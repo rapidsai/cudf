@@ -425,13 +425,13 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // dependent global loads. Staging the bytes into shared memory once removes
   // that latency from fill_run_batch(). Streams larger than the per-stream
   // budget fall back to parsing from global with no behavior change.
-  constexpr int level_stage_bytes = 8 * 1024;
-  __shared__ __align__(16) uint8_t def_stage[level_stage_bytes];
-  __shared__ __align__(16) uint8_t rep_stage[level_stage_bytes];
+  using rle_stream_t = rle_stream<level_t, level_decode_block_size, max_output_values>;
+  __shared__ __align__(16) uint8_t def_stage[rle_stream_t::smem_stage_size];
+  __shared__ __align__(16) uint8_t rep_stage[rle_stream_t::smem_stage_size];
   using barrier_t = cuda::barrier<cuda::thread_scope_block>;
   __shared__ alignas(barrier_t) char copy_barrier_storage[sizeof(barrier_t)];
   auto* copy_barrier = reinterpret_cast<barrier_t*>(copy_barrier_storage);
-  if (t == 0) { init(copy_barrier, block.size()); }
+  cg::invoke_one(block, [&]() { init(copy_barrier, block.size()); });
   block.sync();
 
   // Get the level decode buffers for this page
@@ -446,23 +446,23 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // Initialize the stream decoders
   bool const process_nulls = should_process_nulls(s);
   if (process_nulls) {
-    decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
+    decoders[level_type::DEFINITION].init(block,
+                                          s->col.level_bits[level_type::DEFINITION],
                                           s->abs_lvl_start[level_type::DEFINITION],
                                           s->abs_lvl_end[level_type::DEFINITION],
                                           def,
                                           num_to_decode,
                                           def_stage,
-                                          level_stage_bytes,
                                           copy_barrier);
   }
   if (has_repetition) {
-    decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
+    decoders[level_type::REPETITION].init(block,
+                                          s->col.level_bits[level_type::REPETITION],
                                           s->abs_lvl_start[level_type::REPETITION],
                                           s->abs_lvl_end[level_type::REPETITION],
                                           rep,
                                           num_to_decode,
                                           rep_stage,
-                                          level_stage_bytes,
                                           copy_barrier);
   }
   copy_barrier->arrive_and_wait();

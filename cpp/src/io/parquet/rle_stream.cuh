@@ -13,6 +13,7 @@
 #include <cooperative_groups.h>
 #include <cuda/barrier>
 #include <cuda/std/iterator>
+#include <cuda/std/memory>
 
 namespace cudf::io::parquet::detail {
 
@@ -192,22 +193,23 @@ struct rle_stream {
   // boolean streams all benefit with identical code. Streams that do not fit
   // the budget transparently fall back to parsing from global.
   uint8_t const* smem_stage;
-  int smem_stage_size;
+  static constexpr int smem_stage_size = 8 * 1024;
 
-  __device__ rle_stream(rle_run* _runs) : runs(_runs), smem_stage(nullptr), smem_stage_size(0) {}
+  __device__ rle_stream(rle_run* _runs) : runs(_runs), smem_stage(nullptr) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
     return warp_id == num_rle_stream_decode_warps;
   }
 
-  __device__ void init(int _level_bits,
+  template <typename Group>
+  __device__ void init(Group const& group,
+                       int _level_bits,
                        uint8_t const* _start,
                        uint8_t const* _end,
                        level_t* _output,
                        int _total_values,
                        uint8_t* _smem_stage                                   = nullptr,
-                       int _smem_stage_size                                   = 0,
                        cuda::barrier<cuda::thread_scope_block>* _copy_barrier = nullptr)
   {
     level_bits = _level_bits;
@@ -229,12 +231,12 @@ struct rle_stream {
     // hardware. Callers must provide a copy_barrier when using smem staging,
     // and must issue copy_barrier->arrive_and_wait() after init() to complete
     // the async copy.
-    smem_stage      = _smem_stage;
-    smem_stage_size = _smem_stage_size;
+    smem_stage = _smem_stage != nullptr
+                   ? static_cast<uint8_t const*>(cuda::std::assume_aligned<16>(_smem_stage))
+                   : nullptr;
     if (smem_stage != nullptr) {
       auto const len = static_cast<int>(cuda::std::distance(_start, _end));
       if (len > 0 && len <= smem_stage_size) {
-        auto group = cooperative_groups::this_thread_block();
         cuda::memcpy_async(group, _smem_stage, _start, static_cast<size_t>(len), *_copy_barrier);
         // Rebase the parse cursor and end onto the shared copy. All downstream
         // reads (get_rle_run_info, decode, skip_runs) follow cur/end and now hit
