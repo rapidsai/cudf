@@ -151,12 +151,6 @@ class UnaryFunction(Expr):
 
         if self.name not in UnaryFunction._supported_fns:
             raise NotImplementedError(f"Unary function {name=}")  # pragma: no cover
-        if self.name in UnaryFunction._supported_cum_aggs:
-            (reverse,) = self.options
-            if reverse:
-                raise NotImplementedError(
-                    "reverse=True is not supported for cumulative aggregations"
-                )
         if self.name == "fill_null_with_strategy" and self.options[1] not in {0, None}:
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
@@ -552,7 +546,12 @@ class UnaryFunction(Expr):
             )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
+            (reverse,) = self.options
             plc_col = column.obj
+            if reverse:
+                # A reverse cumulative aggregation is a forward one over the
+                # reversed column, reversed back into place.
+                plc_col = plc.copying.reverse(plc_col, stream=df.stream)
             col_type = column.dtype.plc_type
             # cum_sum casts
             # Int8, UInt8, Int16, UInt16 -> Int64 for overflow prevention
@@ -593,12 +592,12 @@ class UnaryFunction(Expr):
             elif self.name == "cum_max":
                 agg = plc.aggregation.max()
 
-            return Column(
-                plc.reduce.scan(
-                    plc_col, agg, plc.reduce.ScanType.INCLUSIVE, stream=df.stream
-                ),
-                dtype=self.dtype,
+            result = plc.reduce.scan(
+                plc_col, agg, plc.reduce.ScanType.INCLUSIVE, stream=df.stream
             )
+            if reverse:
+                result = plc.copying.reverse(result, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         raise NotImplementedError(
             f"Unimplemented unary function {self.name=}"
         )  # pragma: no cover; init trips first
