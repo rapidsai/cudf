@@ -145,6 +145,7 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        Name.Quarter,
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
@@ -221,6 +222,16 @@ class TemporalFunction(Expr):
                 plc.datetime.floor_datetimes(
                     column.obj,
                     self.options[0],
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is TemporalFunction.Name.Quarter:
+            (column,) = columns
+            return Column(
+                plc.unary.cast(
+                    plc.datetime.extract_quarter(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
                     stream=df.stream,
                 ),
                 dtype=self.dtype,
