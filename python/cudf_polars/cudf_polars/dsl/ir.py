@@ -879,11 +879,13 @@ class Scan(IR):
     @staticmethod
     def _apply_parquet_projection(
         table: plc.Table, names: Sequence[str], with_columns: Sequence[str] | None
-    ) -> tuple[plc.Table, Sequence[str]]:
+    ) -> tuple[plc.Table, list[str]]:
+        # `set_column_names` may leave pandas-indices in the table.
+        # Here we ensure that the table only contains the projection.
         if with_columns is None:
-            return table, names
+            return table, list(names)
         columns = dict(zip(names, table.columns(), strict=True))
-        return plc.Table([columns[name] for name in with_columns]), with_columns
+        return plc.Table([columns[name] for name in with_columns]), list(with_columns)
 
     @classmethod
     @log_do_evaluate
