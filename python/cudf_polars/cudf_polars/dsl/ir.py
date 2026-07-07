@@ -876,6 +876,15 @@ class Scan(IR):
             num_rows = min(num_rows, n_rows)
         return max(num_rows, 0)
 
+    @staticmethod
+    def _apply_parquet_projection(
+        table: plc.Table, names: Sequence[str], with_columns: Sequence[str] | None
+    ) -> tuple[plc.Table, Sequence[str]]:
+        if with_columns is None:
+            return table, names
+        columns = dict(zip(names, table.columns(), strict=True))
+        return plc.Table([columns[name] for name in with_columns]), with_columns
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
@@ -1052,13 +1061,16 @@ class Scan(IR):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
+                table, names = cls._apply_parquet_projection(
+                    plc.Table(concatenated_columns), names, with_columns
+                )
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
                     if not names
                     else None
                 )
                 df = DataFrame.from_table(
-                    plc.Table(concatenated_columns),
+                    table,
                     names=names,
                     dtypes=[schema[name] for name in names],
                     stream=stream,
@@ -1074,13 +1086,16 @@ class Scan(IR):
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
+                table, col_names = cls._apply_parquet_projection(
+                    tbl_w_meta.tbl, col_names, with_columns
+                )
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(paths, skip_rows, n_rows)
                     if not col_names
                     else None
                 )
                 df = DataFrame.from_table(
-                    tbl_w_meta.tbl,
+                    table,
                     col_names,
                     [schema[name] for name in col_names],
                     stream=stream,

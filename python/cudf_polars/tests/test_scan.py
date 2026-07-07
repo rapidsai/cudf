@@ -195,6 +195,23 @@ def test_scan_row_index_projected_out(tmp_path):
     assert_gpu_result_equal(q, engine=NO_CHUNK_ENGINE)
 
 
+@pytest.mark.parametrize("chunked", [False, True])
+def test_scan_parquet_pandas_index_projected_out(tmp_path, chunked):
+    pd = pytest.importorskip("pandas")
+
+    pd.DataFrame({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]}).to_parquet(
+        tmp_path / "pdf.pq", index=True
+    )
+    q = pl.scan_parquet(tmp_path / "pdf.pq").select("b")
+
+    engine = pl.GPUEngine(
+        executor="in-memory",
+        raise_on_fail=True,
+        parquet_options={"chunked": chunked},
+    )
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_scan_csv_column_renames_projection_schema(engine: pl.GPUEngine, tmp_path):
     with (tmp_path / "test.csv").open("w") as f:
         f.write("""foo,bar,baz\n1,2\n3,4,5""")
