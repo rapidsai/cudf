@@ -29,6 +29,7 @@ from cudf_polars.utils.config import (
     Cluster,
     ConfigOptions,
     DynamicPlanningOptions,
+    JoinDomainPrefilterOptions,
     MemoryResourceConfig,
     StreamingExecutor,
 )
@@ -584,6 +585,9 @@ def test_dynamic_planning_defaults() -> None:
     assert config.executor.dynamic_planning.join_prefilter_threshold == 0.5
     assert config.executor.dynamic_planning.join_prefilter_max_key_columns == 1
     assert not config.executor.dynamic_planning.join_prefilter_trace
+    assert config.executor.join_domain_prefilter is not None
+    assert config.executor.join_domain_prefilter.threshold == 0.5
+    assert not config.executor.join_domain_prefilter.trace
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -623,6 +627,31 @@ def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> Non
     assert config.executor.dynamic_planning.join_prefilter_threshold == 0.25
     assert config.executor.dynamic_planning.join_prefilter_max_key_columns is None
     assert config.executor.dynamic_planning.join_prefilter_trace
+    assert config.executor.join_domain_prefilter is not None
+    assert config.executor.join_domain_prefilter.threshold == 0.5
+    assert not config.executor.join_domain_prefilter.trace
+
+
+def test_join_domain_prefilter_options_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER__THRESHOLD", "0.125"
+    )
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER__TRACE", "1")
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.join_domain_prefilter is not None
+    assert config.executor.join_domain_prefilter.threshold == 0.125
+    assert config.executor.join_domain_prefilter.trace
+
+
+def test_join_domain_prefilter_disabled_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER", "0")
+    monkeypatch.setenv("CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER__TRACE", "1")
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.join_domain_prefilter is None
 
 
 @pytest.mark.parametrize("value, expected", [("none", None), ("null", None), ("2", 2)])
@@ -715,6 +744,65 @@ def test_validate_join_prefilter_trace() -> None:
                 executor_options={"dynamic_planning": {"join_prefilter_trace": "bad"}},
             )
         )
+
+
+def test_validate_join_domain_prefilter_options() -> None:
+    with pytest.raises(TypeError, match="threshold must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_domain_prefilter": {"threshold": "bad"}},
+            )
+        )
+    with pytest.raises(ValueError, match="threshold must be between"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_domain_prefilter": {"threshold": 1.5}},
+            )
+        )
+    with pytest.raises(TypeError, match="trace must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_domain_prefilter": {"trace": "bad"}},
+            )
+        )
+
+
+def test_validate_join_domain_prefilter_type() -> None:
+    with pytest.raises(
+        TypeError,
+        match="join_domain_prefilter must be a JoinDomainPrefilterOptions instance",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"join_domain_prefilter": object()},
+            )
+        )
+
+
+def test_join_domain_prefilter_from_instance() -> None:
+    options = JoinDomainPrefilterOptions(threshold=0.25, trace=True)
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"join_domain_prefilter": options},
+        )
+    )
+    assert config.executor.join_domain_prefilter is options
+
+
+def test_join_domain_prefilter_disabled_from_options() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"join_domain_prefilter": None},
+        )
+    )
+    assert config.executor.join_domain_prefilter is None
+    assert hash(config) == hash(config)
 
 
 def test_dynamic_planning_from_instance() -> None:
