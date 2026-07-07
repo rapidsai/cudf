@@ -4,7 +4,6 @@
  */
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
-#include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
@@ -439,39 +438,25 @@ std::unique_ptr<table> boolean_mask_scatter(table_view const& input,
                "Type mismatch in input column and target column",
                cudf::data_type_error);
 
-  if (target.num_rows() != 0) {
-    if (input.num_columns() == 0) {
-      // With no columns the per-column scatter below never runs, so the
-      // precondition that the number of `true` values in the mask does not
-      // exceed input.num_rows() is never reached. That check normally lives
-      // in detail::scatter (see cudf/detail/scatter.cuh), enforce it here.
-      auto const d_mask   = cudf::column_device_view::create(boolean_mask, stream);
-      auto const num_true = cudf::detail::count_if(
-        cuda::counting_iterator<size_type>{0},
-        cuda::counting_iterator<size_type>{boolean_mask.size()},
-        [mask = *d_mask] __device__(size_type i) {
-          return mask.is_valid(i) && mask.element<bool>(i);
-        },
-        stream);
-      CUDF_EXPECTS(num_true <= static_cast<std::size_t>(input.num_rows()),
-                   "scatter map size should be <= to number of rows in source");
-      return std::make_unique<table>(std::vector<std::unique_ptr<column>>{}, target.num_rows());
-    }
+  // Build a scatter map of the target row indices selected by the boolean mask, then delegate to
+  // detail::scatter.
+  auto indices         = cudf::make_numeric_column(data_type{type_id::INT32},
+                                           target.num_rows(),
+                                           mask_state::UNALLOCATED,
+                                           stream,
+                                           cudf::get_current_device_resource_ref());
+  auto mutable_indices = indices->mutable_view();
+  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                   mutable_indices.begin<size_type>(),
+                   mutable_indices.end<size_type>(),
+                   0);
 
-    std::vector<std::unique_ptr<column>> out_columns(target.num_columns());
-    std::transform(
-      input.begin(),
-      input.end(),
-      target.begin(),
-      out_columns.begin(),
-      [&boolean_mask, mr, stream](auto const& input_column, auto const& target_column) {
-        return boolean_mask_scatter(input_column, target_column, boolean_mask, stream, mr);
-      });
-
-    return std::make_unique<table>(std::move(out_columns), target.num_rows());
-  } else {
-    return empty_like(target);
-  }
+  auto scatter_map = detail::apply_mask(table_view{{indices->view()}},
+                                        boolean_mask,
+                                        mask_type::RETENTION,
+                                        stream,
+                                        cudf::get_current_device_resource_ref());
+  return detail::scatter(input, scatter_map->get_column(0).view(), target, stream, mr);
 }
 
 std::unique_ptr<table> boolean_mask_scatter(

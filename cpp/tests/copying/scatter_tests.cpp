@@ -531,7 +531,7 @@ TEST_F(BooleanMaskScatterZeroColumn, TooManyTrueValuesThrows)
   cudf::table_view target{std::vector<cudf::column_view>{}, 3};
   // 2 true values but only 1 input row.
   cudf::test::fixed_width_column_wrapper<bool> mask{{true, true, false}};
-  EXPECT_THROW(cudf::boolean_mask_scatter(input, target, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::boolean_mask_scatter(input, target, mask), std::invalid_argument);
 }
 
 TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
