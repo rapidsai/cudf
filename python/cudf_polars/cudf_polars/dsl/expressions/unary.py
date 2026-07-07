@@ -104,6 +104,7 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "diff",
             "drop_nulls",
             "fill_null",
             "fill_null_with_strategy",
@@ -167,6 +168,20 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+
+    @staticmethod
+    def _evaluate_n(n_expr: Expr, df: DataFrame, context: ExecutionContext) -> int:
+        """Evaluate the integer ``n`` offset for ``diff`` and ``pct_change``."""
+        if isinstance(n_expr, Literal):
+            value = n_expr.value
+        else:
+            value = (
+                n_expr.evaluate(df, context=context)
+                .obj_scalar(stream=df.stream)
+                .to_py(stream=df.stream)
+            )
+        assert isinstance(value, int)
+        return value
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -538,6 +553,34 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "diff":
+            column = self.children[0].evaluate(df, context=context)
+            (null_behavior,) = self.options
+            offset = self._evaluate_n(self.children[1], df, context)
+            shifted = plc.copying.shift(
+                column.obj,
+                offset,
+                plc.Scalar.from_py(None, column.dtype.plc_type, stream=df.stream),
+                stream=df.stream,
+            )
+            diffed = Column(
+                plc.binaryop.binary_operation(
+                    column.obj,
+                    shifted,
+                    plc.binaryop.BinaryOperator.SUB,
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+            if null_behavior == "drop":
+                if offset >= 0:
+                    diffed = diffed.slice((offset, None), stream=df.stream)
+                else:
+                    diffed = diffed.slice(
+                        (0, column.obj.size() + offset), stream=df.stream
+                    )
+            return diffed
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
