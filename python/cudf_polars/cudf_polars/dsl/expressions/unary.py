@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
@@ -110,6 +111,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "round_sig_figs",
             "round",
             "set_sorted",
             "shift",
@@ -136,6 +138,7 @@ class UnaryFunction(Expr):
             "fill_null_with_strategy",
             "mask_nans",
             "round",
+            "round_sig_figs",
             "set_sorted",
         }
     ).union(_OP_MAPPING.keys())
@@ -538,6 +541,77 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "round_sig_figs":
+            column = self.children[0].evaluate(df, context=context)
+            (digits,) = self.options
+            out_type = self.dtype.plc_type
+            is_float = plc.traits.is_floating_point(out_type)
+            work_type = out_type if is_float else plc.DataType(plc.TypeId.FLOAT64)
+            operand = column.obj
+            if operand.type().id() != work_type.id():
+                operand = plc.unary.cast(operand, work_type, stream=df.stream)
+            zero = plc.Scalar.from_py(0.0, work_type, stream=df.stream)
+            column_ref = plc.expressions.ColumnReference(0)
+            log10 = plc.expressions.Operation(
+                plc.expressions.ASTOperator.MUL,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.LOG,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.ABS, column_ref
+                    ),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(
+                        1.0 / math.log(10.0), work_type, stream=df.stream
+                    )
+                ),
+            )
+            scale_expr = plc.expressions.Operation(
+                plc.expressions.ASTOperator.POW,
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(10.0, work_type, stream=df.stream)
+                ),
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB,
+                    plc.expressions.Literal(
+                        plc.Scalar.from_py(
+                            float(digits - 1), work_type, stream=df.stream
+                        )
+                    ),
+                    plc.expressions.Operation(plc.expressions.ASTOperator.FLOOR, log10),
+                ),
+            )
+            scale = plc.transform.compute_column(
+                plc.Table([operand]), scale_expr, stream=df.stream
+            )
+            scaled = plc.binaryop.binary_operation(
+                operand,
+                scale,
+                plc.binaryop.BinaryOperator.MUL,
+                work_type,
+                stream=df.stream,
+            )
+            rounded = plc.round.round(
+                scaled, 0, plc.round.RoundingMethod.HALF_UP, stream=df.stream
+            )
+            unscaled = plc.binaryop.binary_operation(
+                rounded,
+                scale,
+                plc.binaryop.BinaryOperator.DIV,
+                work_type,
+                stream=df.stream,
+            )
+            is_zero = plc.binaryop.binary_operation(
+                operand,
+                zero,
+                plc.binaryop.BinaryOperator.EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            result = plc.copying.copy_if_else(zero, unscaled, is_zero, stream=df.stream)
+            if not is_float:
+                result = plc.unary.cast(result, out_type, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
