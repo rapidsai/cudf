@@ -420,6 +420,29 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @Test
+  void testJitMismatchedOperandTypes() {
+    JitOperation expr = new JitOperation(JitOperator.ADD,
+        new ColumnReference(0), new ColumnReference(1));
+    try (Table t = new Table.TestBuilder().column(1).column(2L).build();
+         CompiledExpression compiledExpr = expr.compile()) {
+      Assertions.assertThrows(CudfException.class,
+          () -> compiledExpr.computeColumnJit(t).close());
+    }
+  }
+
+  @Test
+  void testJitEmptyInputTransform() {
+    JitOperation expr = new JitOperation(JitOperator.ADD,
+        new ColumnReference(0), Literal.ofInt(1));
+    try (Table t = new Table.TestBuilder().column(new Integer[0]).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumnJit(t);
+         ColumnVector expected = ColumnVector.fromInts()) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testJitNestedArithmeticTransform() {
     AstExpression expr = new JitOperation(JitOperator.ADD, new ColumnReference(0), Literal.ofInt(2));
     expr = new JitOperation(JitOperator.SUB, expr, Literal.ofInt(1));
@@ -435,6 +458,17 @@ public class CompiledExpressionTest extends CudfTestBase {
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumnJit(t);
          ColumnVector expected = ColumnVector.fromInts(6, 8, 2, 4)) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testJitNegTransform() {
+    JitOperation expr = new JitOperation(JitOperator.NEG, new ColumnReference(0));
+    try (Table t = new Table.TestBuilder().column(-5, 0, 7).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumnJit(t);
+         ColumnVector expected = ColumnVector.fromInts(5, 0, -7)) {
       assertColumnsAreEqual(expected, actual);
     }
   }
@@ -529,14 +563,14 @@ public class CompiledExpressionTest extends CudfTestBase {
   @Test
   void testJitTryDivModTransform() {
     try (Table t = new Table.TestBuilder()
-        .column(10, 7, null, 6)
-        .column(2, 0, 3, null)
+        .column(10, 7, null, 6, Integer.MIN_VALUE)
+        .column(2, 0, 3, null, -1)
         .build()) {
       JitOperation divExpr = new JitOperation(JitOperator.DIV_OVERFLOW,
           JitErrorPolicy.NULLIFY, new ColumnReference(0), new ColumnReference(1));
       try (CompiledExpression compiledExpr = divExpr.compile();
            ColumnVector actual = compiledExpr.computeColumnJit(t);
-           ColumnVector expected = ColumnVector.fromBoxedInts(5, null, null, null)) {
+           ColumnVector expected = ColumnVector.fromBoxedInts(5, null, null, null, null)) {
         assertColumnsAreEqual(expected, actual);
       }
 
@@ -544,7 +578,7 @@ public class CompiledExpressionTest extends CudfTestBase {
           JitErrorPolicy.NULLIFY, new ColumnReference(0), new ColumnReference(1));
       try (CompiledExpression compiledExpr = modExpr.compile();
            ColumnVector actual = compiledExpr.computeColumnJit(t);
-           ColumnVector expected = ColumnVector.fromBoxedInts(0, null, null, null)) {
+           ColumnVector expected = ColumnVector.fromBoxedInts(0, null, null, null, 0)) {
         assertColumnsAreEqual(expected, actual);
       }
     }
