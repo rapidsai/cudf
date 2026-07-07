@@ -32,10 +32,12 @@ First, review the Polars implementation of the expression and understand its beh
 * The Python APIs for expressions are mostly defined in the `py-polars/src/polars/expr` directory in a Polars repository.
 * Expressions are eventually exposed to cudf-polars in Rust in the `crates/polars-python/src/lazyframe/visitor/expr_nodes.rs` file in a Polars repository
 
-Next, generate examples locally with the expression(s) to implement or review to further understand the behavior.
+Next, further understand the runtime behavior of the expressions by:
 
-1. Ensure examples demonstrate a wide variety of behaviors given differing input data, including all applicable data types, missing values, and values that may introduce edge cases like 0 for numeric data.
-2. Ensure examples demonstrate when exceptions are raised given invalid input arguments. Understand if the exceptions are raised before expressions are evaluated and therefore might not reach cudf-polars versus exceptions that are raised during expression evaluation runtime.
+* Reviewing relevant tests in the `py-polars/tests` directory that use the expression.
+* Generating examples locally with the expression(s)
+    1. Ensure examples demonstrate a wide variety of behaviors given differing input data, including all applicable data types, missing values, and values that may introduce edge cases like 0 for numeric data.
+    2. Ensure examples demonstrate when exceptions are raised given invalid input arguments. Understand if the exceptions are raised before expressions are evaluated and therefore might not reach cudf-polars versus exceptions that are raised during expression evaluation runtime.
 
 ## Step 2: Understand the current Polars expression behavior with cudf-polars.
 
