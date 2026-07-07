@@ -14,7 +14,7 @@ The source test files carry the following notice:
 > SPDX-License-Identifier: Apache-2.0
 
 cuDF is distributed under the Apache License 2.0, the same license included in
-this repository's `LICENSE` file.
+this component's `LICENSE` file.
 
 ## RE2 test and benchmark data
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Render complete-corpus Regex IR/cuDF case charts and README tables."""
 
 from __future__ import annotations
@@ -6,6 +9,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import re
 import textwrap
 from dataclasses import dataclass
@@ -14,7 +18,6 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib import ticker
 from matplotlib.patches import Patch
-
 from plot_cudf_benchmarks import (
     CUDF_GRAY,
     GRID,
@@ -25,7 +28,6 @@ from plot_cudf_benchmarks import (
     save_figure,
     summary_value,
 )
-
 
 SUITE_ORDER = ("openresty", "leipzig", "boost", "mariomka")
 SUITE_LABELS = {
@@ -225,7 +227,9 @@ def load_measurements(paths: list[Path]) -> list[CorpusMeasurement]:
         regex_name = f"regex_ir/{suite}"
         cudf_name = f"cudf/{suite}"
         if regex_name not in benchmarks or cudf_name not in benchmarks:
-            raise ValueError(f"input is missing {regex_name!r} or {cudf_name!r}")
+            raise ValueError(
+                f"input is missing {regex_name!r} or {cudf_name!r}"
+            )
 
         for case, case_name in enumerate(SUITE_CASE_NAMES[suite], start=1):
             rows, columns, max_string_bytes = selected_geometry(suite, case)
@@ -249,10 +253,16 @@ def load_measurements(paths: list[Path]) -> list[CorpusMeasurement]:
 
             regex_state = find_state(regex_name)
             cudf_state = find_state(cudf_name)
-            regex_bytes = int(summary_value(regex_state, "nv/gmem/reads/InputBytes"))
-            cudf_bytes = int(summary_value(cudf_state, "nv/gmem/reads/InputBytes"))
+            regex_bytes = int(
+                summary_value(regex_state, "nv/gmem/reads/InputBytes")
+            )
+            cudf_bytes = int(
+                summary_value(cudf_state, "nv/gmem/reads/InputBytes")
+            )
             if regex_bytes != cudf_bytes:
-                raise ValueError(f"input byte counts differ for {suite} case {case}")
+                raise ValueError(
+                    f"input byte counts differ for {suite} case {case}"
+                )
             measurements.append(
                 CorpusMeasurement(
                     suite=suite,
@@ -265,7 +275,9 @@ def load_measurements(paths: list[Path]) -> list[CorpusMeasurement]:
                     regex_ir_seconds=summary_value(
                         regex_state, "nv/cold/time/gpu/mean"
                     ),
-                    cudf_seconds=summary_value(cudf_state, "nv/cold/time/gpu/mean"),
+                    cudf_seconds=summary_value(
+                        cudf_state, "nv/cold/time/gpu/mean"
+                    ),
                     regex_ir_jit_ready_seconds=optional_summary_value(
                         regex_state,
                         "regex_ir/jit_ready_time",
@@ -338,7 +350,9 @@ def corpus_case_bar_chart(
     )
 
     log_panel_count = 0
-    for axis, (panel_name, first_case, last_case) in zip(axes, panel_specs):
+    for axis, (panel_name, first_case, last_case) in zip(
+        axes, panel_specs, strict=True
+    ):
         panel = [
             item for item in values if first_case <= item.case <= last_case
         ]
@@ -372,7 +386,7 @@ def corpus_case_bar_chart(
             zorder=3,
         )
         speedup_x = panel_max * (1.28 if use_log_scale else 1.11)
-        for y_value, item in zip(y_values, panel):
+        for y_value, item in zip(y_values, panel, strict=True):
             axis.text(
                 speedup_x,
                 y_value,
@@ -400,11 +414,15 @@ def corpus_case_bar_chart(
             )
         else:
             axis.set_xlim(0.0, panel_max * 1.24)
-            candidate_ticks = ticker.MaxNLocator(nbins=4, min_n_ticks=3).tick_values(
-                0.0, panel_max
-            )
+            candidate_ticks = ticker.MaxNLocator(
+                nbins=4, min_n_ticks=3
+            ).tick_values(0.0, panel_max)
             axis.set_xticks(
-                [value for value in candidate_ticks if 0.0 <= value <= panel_max]
+                [
+                    value
+                    for value in candidate_ticks
+                    if 0.0 <= value <= panel_max
+                ]
             )
         axis.set_yticks(
             y_values,
@@ -442,7 +460,9 @@ def corpus_case_bar_chart(
     if log_panel_count == panel_count:
         scale_note = "log scales"
     elif log_panel_count == 0:
-        scale_note = "linear scale" if panel_count == 1 else "independent linear scales"
+        scale_note = (
+            "linear scale" if panel_count == 1 else "independent linear scales"
+        )
     else:
         scale_note = "mixed scales  •  LOG panels marked"
     add_branding(figure, scale_note)
@@ -500,14 +520,18 @@ def display_case_name(name: str) -> str:
     return name.split("_", 1)[1].replace("_", " ")
 
 
-def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> None:
+def write_readme_results(
+    measurements: list[CorpusMeasurement], path: Path
+) -> None:
     """Replace the generated complete-corpus README result block."""
 
     all_wins = sum(item.speedup > 1.0 for item in measurements)
     all_regex = geometric_mean(
         item.regex_ir_gib_per_second for item in measurements
     )
-    all_cudf = geometric_mean(item.cudf_gib_per_second for item in measurements)
+    all_cudf = geometric_mean(
+        item.cudf_gib_per_second for item in measurements
+    )
     lines = [
         README_RESULTS_BEGIN,
         "",
@@ -541,12 +565,12 @@ def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> N
             item.cudf_gib_per_second for item in values
         )
         wins = sum(item.speedup > 1.0 for item in values)
-        regex_compile = sum(item.regex_ir_jit_ready_seconds for item in values) / len(
-            values
-        )
-        cudf_compile = sum(item.cudf_program_create_seconds for item in values) / len(
-            values
-        )
+        regex_compile = sum(
+            item.regex_ir_jit_ready_seconds for item in values
+        ) / len(values)
+        cudf_compile = sum(
+            item.cudf_program_create_seconds for item in values
+        ) / len(values)
         lines.append(
             f"| {SUITE_LABELS[suite]} | {len(values)} | {regex_throughput:.3f} | "
             f"{cudf_throughput:.3f} | {regex_throughput / cudf_throughput:.3f}x | "
@@ -575,7 +599,7 @@ def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> N
         f"{SUITE_LABELS[largest.suite]} case {largest.case} "
         f"({largest.speedup:.3f}x)."
     )
-    lines.extend(textwrap.wrap(summary, width=88) + [""])
+    lines.extend([*textwrap.wrap(summary, width=88), ""])
 
     for suite in SUITE_ORDER:
         values = sorted(
@@ -652,9 +676,7 @@ def main() -> None:
     measurements = load_measurements(arguments.nvbench_json)
     configure_style()
     for suite in SUITE_ORDER:
-        corpus_case_bar_chart(
-            measurements, suite, arguments.output_directory
-        )
+        corpus_case_bar_chart(measurements, suite, arguments.output_directory)
         export_csv(
             [item for item in measurements if item.suite == suite],
             arguments.output_directory / f"corpus-{suite}-throughput-data.csv",

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Stream string patterns from Lingua Franca production-regex NDJSON.
 
 Usage:
@@ -17,9 +20,10 @@ def main() -> None:
     parser.add_argument("output")
     args = parser.parse_args()
 
-    with open(args.input, "r", encoding="utf-8") as source, open(
-        args.output, "w", encoding="utf-8"
-    ) as destination:
+    with (
+        open(args.input, "r", encoding="utf-8") as source,
+        open(args.output, "w", encoding="utf-8") as destination,
+    ):
         for line_number, line in enumerate(source, 1):
             try:
                 record = json.loads(line)
@@ -29,7 +33,9 @@ def main() -> None:
                 if not isinstance(pattern, str):
                     continue
                 destination.write(
-                    "-" + pattern.encode("utf-8", errors="surrogatepass").hex() + "\n"
+                    "-"
+                    + pattern.encode("utf-8", errors="surrogatepass").hex()
+                    + "\n"
                 )
             except (json.JSONDecodeError, UnicodeError) as error:
                 raise SystemExit(f"line {line_number}: {error}") from error

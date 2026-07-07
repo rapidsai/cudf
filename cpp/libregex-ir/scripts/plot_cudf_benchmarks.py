@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
 
 # Copyright (c) 2026, Regex IR contributors.
 # SPDX-License-Identifier: Apache-2.0
@@ -15,11 +17,13 @@ import re
 import textwrap
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 import matplotlib.pyplot as plt
 from matplotlib import ticker
-
 
 BACKGROUND = "#0B0B0B"
 PANEL = "#151515"
@@ -133,11 +137,16 @@ def load_measurements(
         regex_name = f"regex_ir/{family}"
         cudf_name = f"cudf/{family}"
         if regex_name not in benchmarks or cudf_name not in benchmarks:
-            raise ValueError(f"input is missing {regex_name!r} or {cudf_name!r}")
+            raise ValueError(
+                f"input is missing {regex_name!r} or {cudf_name!r}"
+            )
 
         def selected(state: dict) -> bool:
             fields = state_fields(state["name"])
-            if int(fields["Rows"]) not in rows or int(fields["StringBytes"]) not in string_bytes:
+            if (
+                int(fields["Rows"]) not in rows
+                or int(fields["StringBytes"]) not in string_bytes
+            ):
                 return False
             return family != "contains" or int(fields["HitRate"]) == hit_rate
 
@@ -153,13 +162,17 @@ def load_measurements(
         }
         common_keys = regex_states.keys() & cudf_states.keys()
         if not common_keys:
-            raise ValueError(f"Regex IR and cuDF have no common states for {family}")
+            raise ValueError(
+                f"Regex IR and cuDF have no common states for {family}"
+            )
 
         for key, regex_state in regex_states.items():
             if key not in common_keys:
                 continue
             cudf_state = cudf_states[key]
-            regex_rows = int(summary_value(regex_state, "nv/element_count/Rows"))
+            regex_rows = int(
+                summary_value(regex_state, "nv/element_count/Rows")
+            )
             cudf_rows = int(summary_value(cudf_state, "nv/element_count/Rows"))
             if regex_rows != cudf_rows:
                 raise ValueError(f"row counts differ for {family} {key}")
@@ -172,13 +185,17 @@ def load_measurements(
                     regex_ir_seconds=summary_value(
                         regex_state, "nv/cold/time/gpu/mean"
                     ),
-                    cudf_seconds=summary_value(cudf_state, "nv/cold/time/gpu/mean"),
+                    cudf_seconds=summary_value(
+                        cudf_state, "nv/cold/time/gpu/mean"
+                    ),
                     regex_ir_jit_ready_seconds=summary_value(
                         regex_state, "regex_ir/jit_ready_time"
                     ),
                 )
             )
-        family_measurements = [item for item in measurements if item.family == family]
+        family_measurements = [
+            item for item in measurements if item.family == family
+        ]
         expected_geometries = {
             (row_count, width) for row_count in rows for width in string_bytes
         }
@@ -187,7 +204,9 @@ def load_measurements(
         }
         if actual_geometries != expected_geometries:
             missing = sorted(expected_geometries - actual_geometries)
-            raise ValueError(f"{family} is missing requested geometries: {missing}")
+            raise ValueError(
+                f"{family} is missing requested geometries: {missing}"
+            )
         expected_cases = {item.case for item in family_measurements}
         for geometry in sorted(actual_geometries):
             geometry_cases = {
@@ -196,7 +215,9 @@ def load_measurements(
                 if (item.rows, item.string_bytes) == geometry
             }
             if geometry_cases != expected_cases:
-                raise ValueError(f"{family} has an incomplete case set at {geometry}")
+                raise ValueError(
+                    f"{family} has an incomplete case set at {geometry}"
+                )
     return measurements
 
 
@@ -204,7 +225,9 @@ def geometric_mean(values: Iterable[float]) -> float:
     """Return the geometric mean of positive values."""
 
     materialized = list(values)
-    return math.exp(sum(math.log(value) for value in materialized) / len(materialized))
+    return math.exp(
+        sum(math.log(value) for value in materialized) / len(materialized)
+    )
 
 
 def configure_style() -> None:
@@ -359,7 +382,9 @@ def api_sweep_chart(
     fig, axes = plt.subplots(1, len(widths), figsize=(16, 9), sharey=True)
     if len(widths) == 1:
         axes = [axes]
-    fig.subplots_adjust(left=0.08, right=0.96, top=0.75, bottom=0.16, wspace=0.12)
+    fig.subplots_adjust(
+        left=0.08, right=0.96, top=0.75, bottom=0.16, wspace=0.12
+    )
     all_throughputs = [
         value
         for summary in summaries
@@ -368,8 +393,10 @@ def api_sweep_chart(
     y_min = min(all_throughputs) / 1.7
     y_max = max(all_throughputs) * 1.8
 
-    for axis, width in zip(axes, widths):
-        values = [summary for summary in summaries if summary.string_bytes == width]
+    for axis, width in zip(axes, widths, strict=True):
+        values = [
+            summary for summary in summaries if summary.string_bytes == width
+        ]
         values.sort(key=lambda item: item.rows)
         x_values = [summary.rows for summary in values]
         regex_values = [summary.regex_ir_mrows for summary in values]
@@ -415,7 +442,9 @@ def api_sweep_chart(
             round(index * (len(x_values) - 1) / 4) for index in range(5)
         }
         tick_values = [
-            value for index, value in enumerate(x_values) if index in tick_indices
+            value
+            for index, value in enumerate(x_values)
+            if index in tick_indices
         ]
         axis.set_xticks(
             tick_values, [compact_number(value) for value in tick_values]
@@ -507,7 +536,9 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
         values = [item for item in measurements if item.family == family]
         cases = len({item.case for item in values})
         geometries = len({(item.rows, item.string_bytes) for item in values})
-        regex_throughput = geometric_mean(item.regex_ir_mrows for item in values)
+        regex_throughput = geometric_mean(
+            item.regex_ir_mrows for item in values
+        )
         cudf_throughput = geometric_mean(item.cudf_mrows for item in values)
         wins = sum(item.speedup > 1.0 for item in values)
         jit_ready_ms = (
@@ -522,7 +553,9 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
             f"{wins}–{len(values) - wins} | {jit_ready_ms:.3f} |"
         )
 
-    regex_throughput = geometric_mean(item.regex_ir_mrows for item in measurements)
+    regex_throughput = geometric_mean(
+        item.regex_ir_mrows for item in measurements
+    )
     cudf_throughput = geometric_mean(item.cudf_mrows for item in measurements)
     wins = sum(item.speedup > 1.0 for item in measurements)
     jit_ready_ms = (
@@ -534,7 +567,9 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
         len({item.case for item in measurements if item.family == family})
         for family in FAMILY_ORDER
     )
-    geometry_count = len({(item.rows, item.string_bytes) for item in measurements})
+    geometry_count = len(
+        {(item.rows, item.string_bytes) for item in measurements}
+    )
     lines.extend(
         [
             f"| **All APIs** | **{case_count}** | **{geometry_count}** | "
@@ -549,9 +584,15 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
     perfect_families = [
         family
         for family in FAMILY_ORDER
-        if all(item.speedup > 1.0 for item in measurements if item.family == family)
+        if all(
+            item.speedup > 1.0
+            for item in measurements
+            if item.family == family
+        )
     ]
-    loss_families = [family for family in FAMILY_ORDER if family not in perfect_families]
+    loss_families = [
+        family for family in FAMILY_ORDER if family not in perfect_families
+    ]
     narrowest = min(measurements, key=lambda item: item.speedup)
     largest = max(measurements, key=lambda item: item.speedup)
     if loss_families:
@@ -560,7 +601,9 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
             f"to {joined_names(loss_families)} states and remain visible below."
         )
     else:
-        win_summary = f"{joined_names(perfect_families).capitalize()} won every state."
+        win_summary = (
+            f"{joined_names(perfect_families).capitalize()} won every state."
+        )
     result_summary = (
         f"Regex IR won {wins} of {len(measurements)} paired measurements. "
         f"{win_summary} The narrowest "
@@ -572,8 +615,8 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
         "the commands above to reproduce the matrix."
     )
     lines.extend(
-        textwrap.wrap(result_summary, width=88)
-        + [
+        [
+            *textwrap.wrap(result_summary, width=88),
             "",
             "The tables below report geometric mean throughput across each API's expression",
             "cases independently at every row-count/`StringBytes` geometry. JIT-ready is the",
@@ -616,7 +659,9 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
     readme = path.read_text(encoding="utf-8")
     begin = readme.index(README_RESULTS_BEGIN)
     end = readme.index(README_RESULTS_END, begin) + len(README_RESULTS_END)
-    path.write_text(readme[:begin] + "\n".join(lines) + readme[end:], encoding="utf-8")
+    path.write_text(
+        readme[:begin] + "\n".join(lines) + readme[end:], encoding="utf-8"
+    )
 
 
 def parse_int_list(value: str) -> list[int]:
@@ -625,7 +670,9 @@ def parse_int_list(value: str) -> list[int]:
     try:
         values = [int(item) for item in value.split(",")]
     except ValueError as error:
-        raise argparse.ArgumentTypeError("axis values must be integers") from error
+        raise argparse.ArgumentTypeError(
+            "axis values must be integers"
+        ) from error
     if not values or any(item <= 0 for item in values):
         raise argparse.ArgumentTypeError("axis values must be positive")
     return sorted(set(values))
@@ -667,7 +714,10 @@ def parse_arguments() -> argparse.Namespace:
         help="comma-separated StringBytes axes to plot",
     )
     parser.add_argument(
-        "--hit-rate", type=int, default=50, help="contains HitRate axis to plot"
+        "--hit-rate",
+        type=int,
+        default=50,
+        help="contains HitRate axis to plot",
     )
     return parser.parse_args()
 
@@ -695,9 +745,13 @@ def main() -> None:
         )
         export_csv(
             [item for item in measurements if item.family == family],
-            arguments.output_directory / f"cudf-api-{family}-throughput-data.csv",
+            arguments.output_directory
+            / f"cudf-api-{family}-throughput-data.csv",
         )
-    export_csv(measurements, arguments.output_directory / "cudf-api-throughput-data.csv")
+    export_csv(
+        measurements,
+        arguments.output_directory / "cudf-api-throughput-data.csv",
+    )
     if arguments.readme is not None:
         write_readme_results(measurements, arguments.readme)
 

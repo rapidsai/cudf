@@ -2,7 +2,7 @@
 
 ## What this project is about
 
-Regex IR is a small, independent C++20 compiler for turning regular expressions
+Regex IR is a small, self-contained C++20 compiler for turning regular expressions
 into inspectable intermediate representations and NVVM IR.
 It is aimed at GPU systems that want to specialize a matcher for one pattern,
 link that matcher into an existing CUDA kernel, and avoid interpreting generic
@@ -28,6 +28,11 @@ See [optimization.md](optimization.md) for the current executor-selection
 rules, IR and NVVM optimizations, profiling conclusions, and remaining
 performance opportunities.
 
+Regex IR is maintained in the cuDF monorepo under `cpp/libregex-ir`; it is not
+an independently versioned source repository. It inherits cuDF's formatting,
+pre-commit, review, and CI policies while retaining a focused CMake project so
+the compiler can be built and tested in isolation.
+
     regex string
       -> ordered Thompson Automata IR
       -> typed Instruction IR
@@ -42,6 +47,8 @@ performance opportunities.
 
 libfmt is required by the core library, and GoogleTest is required when tests are
 enabled. C++20 is the minimum language version.
+
+Run these commands from `cpp/libregex-ir` in a cuDF checkout:
 
     cmake --preset default
     cmake --build --preset default
@@ -234,8 +241,8 @@ target_link_libraries(my_target PRIVATE regex_ir::regex_ir)
 ```
 
 For direct vendoring, the complete core library is `regex_ir.hpp` plus
-`regex_ir.cpp` in the repository root. Compile the latter as C++20, link libfmt,
-and expose the root as an include directory.
+`regex_ir.cpp` in the component root. Compile the latter as C++20, link libfmt,
+and expose the component root as an include directory.
 
 ## CPU and GPU comparison benchmarks
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate compressed Regex IR character-class ranges from cuDF's Unicode table."""
 
 from __future__ import annotations
@@ -12,10 +15,18 @@ import unicodedata
 def parse_flags(path: pathlib.Path) -> list[int]:
     """Read the 65,536 character flags from cuDF's generated header."""
     text = path.read_text(encoding="utf-8")
-    match = re.search(r"g_character_codepoint_flags\[\] = \{(.*?)\};", text, re.DOTALL)
+    match = re.search(
+        r"g_character_codepoint_flags\[\] = \{(.*?)\};", text, re.DOTALL
+    )
     if match is None:
-        raise ValueError(f"could not find g_character_codepoint_flags in {path}")
-    values = [int(value) for value in match.group(1).replace("\n", " ").split(",") if value.strip()]
+        raise ValueError(
+            f"could not find g_character_codepoint_flags in {path}"
+        )
+    values = [
+        int(value)
+        for value in match.group(1).replace("\n", " ").split(",")
+        if value.strip()
+    ]
     if len(values) != 65_536:
         raise ValueError(f"expected 65,536 flags, found {len(values)}")
     return values
@@ -37,8 +48,12 @@ def compress(values: list[int], mask: int) -> list[tuple[int, int]]:
 
 def render_array(name: str, ranges: list[tuple[int, int]]) -> str:
     """Render one C++ range array."""
-    entries = "\n".join(f"  {{{first:#08x}U, {last:#08x}U}}," for first, last in ranges)
-    return f"inline constexpr unicode_data_range {name}[] = {{\n{entries}\n}};\n"
+    entries = "\n".join(
+        f"  {{{first:#08x}U, {last:#08x}U}}," for first, last in ranges
+    )
+    return (
+        f"inline constexpr unicode_data_range {name}[] = {{\n{entries}\n}};\n"
+    )
 
 
 def category_ranges(category: str) -> list[tuple[int, int]]:
@@ -46,7 +61,10 @@ def category_ranges(category: str) -> list[tuple[int, int]]:
     ranges: list[tuple[int, int]] = []
     begin: int | None = None
     for codepoint in range(0x110001):
-        selected = codepoint < 0x110000 and unicodedata.category(chr(codepoint)) == category
+        selected = (
+            codepoint < 0x110000
+            and unicodedata.category(chr(codepoint)) == category
+        )
         if selected and begin is None:
             begin = codepoint
         elif not selected and begin is not None:

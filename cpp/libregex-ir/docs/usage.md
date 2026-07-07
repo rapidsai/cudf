@@ -27,7 +27,7 @@ target_link_libraries(regex_codegen PRIVATE regex_ir::regex_ir)
 target_compile_features(regex_codegen PRIVATE cxx_std_20)
 ```
 
-The library can also be vendored as the two files in the repository root:
+The library can also be vendored as the two files in the component root:
 
 ```cmake
 find_package(fmt CONFIG REQUIRED)

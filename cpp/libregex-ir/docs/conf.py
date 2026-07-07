@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 from pathlib import Path
 
 project = "Regex IR"
@@ -11,7 +14,9 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 master_doc = "index"
 exclude_patterns = ["build", "_build", "README.md"]
 
-breathe_projects = {"regex_ir": str(Path(__file__).parent / "build" / "doxygen" / "xml")}
+breathe_projects = {
+    "regex_ir": str(Path(__file__).parent / "build" / "doxygen" / "xml")
+}
 breathe_default_project = "regex_ir"
 breathe_default_members = ("members",)
 breathe_show_include = False
