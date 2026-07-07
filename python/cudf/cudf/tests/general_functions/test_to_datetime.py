@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 
@@ -407,3 +407,24 @@ def test_to_datetime_dataframe_with_ns_field_widens_to_ns():
     actual = cudf.to_datetime(cudf.from_pandas(df))
     assert actual.dtype == expected.dtype
     assert_eq(actual, expected)
+
+
+def test_to_datetime_nanosecond_precision_strings():
+    # pandas infers nanosecond precision from strings with more than 6
+    # fractional-second digits.
+    data = ["2015-01-03T00:00:00.000000000", "2015-01-01T00:00:00.000000000"]
+    assert_eq(pd.to_datetime(data), cudf.to_datetime(data))
+    data_us = ["2015-01-03T00:00:00.000000", "2015-01-01T00:00:00.000000"]
+    assert_eq(pd.to_datetime(data_us), cudf.to_datetime(data_us))
+
+
+def test_datetime_index_tz_dtype_wall_time():
+    # Timezone-naive data with a tz-aware dtype is interpreted as wall
+    # time in the target timezone, matching pandas.
+    result = cudf.DatetimeIndex(
+        ["2016-01-01 00:00:00"], dtype=pd.DatetimeTZDtype("s", "US/Eastern")
+    )
+    expected = pd.DatetimeIndex(
+        ["2016-01-01 00:00:00"], dtype="datetime64[s, US/Eastern]"
+    )
+    assert_eq(result, expected)
