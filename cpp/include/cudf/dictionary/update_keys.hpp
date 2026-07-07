@@ -17,6 +17,7 @@ namespace dictionary {
  * @addtogroup dictionary_update
  * @{
  * @file
+ * @brief APIs for adding, removing, and matching the keys of dictionary columns.
  */
 
 /**

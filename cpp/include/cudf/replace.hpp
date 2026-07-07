@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup transformation_replace
  * @{
  * @file
+ * @brief APIs for replacing null and specified values within columns.
  */
 
 /**

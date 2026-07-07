@@ -8,6 +8,7 @@
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/spill.hpp>
 #include <rapidsmpf/nvtx.hpp>
@@ -303,7 +304,7 @@ rapidsmpf::Duration do_run(rapidsmpf::shuffler::PartID const total_num_partition
   // Check the shuffle result (this test only works for non-empty partitions
   // thus we only check large shuffles).
   if (args.num_local_rows >= 1000000) {
-    for (const auto& output_partition : output_partitions) {
+    for (auto const& output_partition : output_partitions) {
       auto [parts, owner] =
         cudf_streaming::partition_and_split(output_partition->view(),
                                             {0},
@@ -516,6 +517,8 @@ int main(int argc, char** argv)
   auto& stat_enabled_mr = br->device_mr_adaptor();
   rmm::mr::set_current_device_resource(stat_enabled_mr);
 
+  auto log = rapidsmpf::Logger::from_options(options);
+
   std::shared_ptr<rapidsmpf::Communicator> comm;
   auto progress_thread = std::make_shared<rapidsmpf::ProgressThread>(stats);
   if (args.comm_type == "mpi") {
@@ -527,7 +530,7 @@ int main(int argc, char** argv)
       return 1;
     }
     rapidsmpf::mpi::init(&argc, &argv);
-    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, options, progress_thread);
+    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, progress_thread, log);
 #else
     std::cerr << "Error: MPI communicator is not available in this build." << std::endl;
     return 1;
@@ -537,11 +540,11 @@ int main(int argc, char** argv)
     if (use_bootstrap) {
       // Launched with rrun - use bootstrap backend
       comm = rapidsmpf::bootstrap::create_ucxx_comm(
-        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options);
+        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options, log);
     } else {
 #ifdef CUDF_STREAMING_HAVE_MPI
       // Launched with mpirun - use MPI bootstrap
-      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread);
+      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread, log);
 #else
       std::cerr << "Error: UCXX without MPI support requires bootstrap mode." << std::endl;
       return 1;
@@ -558,7 +561,6 @@ int main(int argc, char** argv)
 
   args.pprint(*comm);
 
-  auto& log                    = comm->logger();
   rmm::cuda_stream_view stream = cudf::get_default_stream();
 
   // Print benchmark/hardware info.
