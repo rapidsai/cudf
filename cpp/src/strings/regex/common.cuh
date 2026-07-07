@@ -13,6 +13,8 @@
 #include <cuda/std/optional>
 #include <cuda/std/utility>
 #include <cuda_runtime.h>
+#include <thrust/execution_policy.h>
+#include <thrust/logical.h>
 
 namespace cudf::strings::detail {
 
@@ -41,28 +43,26 @@ struct alignas(16) reclass_device {
 
   __device__ inline bool is_match(char32_t const ch, uint8_t const* codepoint_flags) const
   {
-    for (int i = 0; i < count; ++i) {
-      auto const literal = literals[i];
-      if ((ch >= literal.first) && (ch <= literal.last)) { return true; }
+    if (thrust::any_of(thrust::seq, literals, literals + count, [ch](auto literal) {
+          return ((ch >= literal.first) && (ch <= literal.last));
+        })) {
+      return true;
     }
 
-    if (!builtins) return false;
-    uint32_t codept = utf8_to_codepoint(ch);
-    if (codept > 0x00'FFFF) return false;
-    int8_t fl = codepoint_flags[codept];
-    if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl)))  // \w
+    if (!builtins) { return false; }
+    auto const codept                = utf8_to_codepoint(ch);
+    constexpr uint32_t MAX_CODEPOINT = 0x00'FFFF;
+    if (codept > MAX_CODEPOINT) { return false; }
+    auto const fl = codepoint_flags[codept];
+    if ((builtins & CCLASS_W) && ((ch == '_') || IS_ALPHANUM(fl))) { return true; }     // \w
+    if ((builtins & CCLASS_S) && IS_SPACE(fl)) { return true; }                         // \s
+    if ((builtins & CCLASS_D) && IS_DIGIT(fl)) { return true; }                         // \d
+    if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl))) {  // \W
       return true;
-    if ((builtins & CCLASS_S) && IS_SPACE(fl))  // \s
-      return true;
-    if ((builtins & CCLASS_D) && IS_DIGIT(fl))  // \d
-      return true;
-    if ((builtins & NCCLASS_W) && ((ch != '\n') && (ch != '_') && !IS_ALPHANUM(fl)))  // \W
-      return true;
-    if ((builtins & NCCLASS_S) && !IS_SPACE(fl))  // \S
-      return true;
-    if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl)))  // \D
-      return true;
-    //
+    }
+    if ((builtins & NCCLASS_S) && !IS_SPACE(fl)) { return true; }                    // \S
+    if ((builtins & NCCLASS_D) && ((ch != '\n') && !IS_DIGIT(fl))) { return true; }  // \D
+
     return false;
   }
 };

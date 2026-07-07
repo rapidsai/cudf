@@ -367,8 +367,8 @@ __device__ __forceinline__ match_result gkprog_device::find(int32_t const,
   match_result cur_match{};
 
   // Earliest position where seeds were injected since state was last 0.
-  int32_t inject_start_pos                     = start_pos;
-  string_view::const_iterator inject_start_itr = begin;
+  int32_t inject_start_pos = start_pos;
+  auto inject_start_itr    = begin;
 
   auto itr = begin;
   for (int32_t pos = start_pos; itr.byte_offset() < size_bytes; ++pos, ++itr) {

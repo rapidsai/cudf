@@ -17,6 +17,7 @@
 
 #include <cstring>
 #include <functional>
+#include <memory>
 #include <numeric>
 
 namespace cudf {
@@ -64,11 +65,13 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   // allocate memory to store all the prog data in a flat contiguous buffer
   auto h_buffer = cudf::detail::make_host_vector<u_char>(memsize, stream);
   auto h_ptr    = h_buffer.data();
-  auto d_buffer = new rmm::device_uvector<u_char>(memsize, stream);
+  auto d_buffer = std::make_unique<rmm::device_uvector<u_char>>(memsize, stream);
   auto d_ptr    = d_buffer->data();
 
-  // create our device object; this is managed separately and returned to the caller
-  auto* d_prog             = new gkprog_device{};
+  // create our device object; this is managed separately and returned to the caller.
+  // both allocations are held by unique_ptrs so they are freed if anything below throws;
+  // ownership is transferred to the returned unique_ptr's deleter only once we cannot throw.
+  auto d_prog              = std::make_unique<gkprog_device>();
   d_prog->num_states       = num_states;
   d_prog->shift_count      = h_gp.shift_count;
   d_prog->first_set        = h_gp.first_set;
@@ -79,7 +82,7 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   d_prog->_prog_size       = memsize;
 
   // copy the positions array (fixed-sized structs)
-  memcpy(h_ptr, h_gp.pos_insts.data(), pos_size);
+  std::memcpy(h_ptr, h_gp.pos_insts.data(), pos_size);
   d_prog->_positions = reinterpret_cast<reinst const*>(d_ptr);
 
   // advance to next section; align for glushkov_state_t
@@ -88,13 +91,13 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   d_ptr += pos_size;
 
   // copy shift_masks
-  memcpy(h_ptr, h_gp.shift_masks.data(), smasks_size);
+  std::memcpy(h_ptr, h_gp.shift_masks.data(), smasks_size);
   d_prog->_shift_masks = reinterpret_cast<glushkov_state_t const*>(d_ptr);
   h_ptr += smasks_size;
   d_ptr += smasks_size;
 
   // copy shift_amounts (uint8_t; no alignment padding needed after glushkov_state_t[])
-  memcpy(h_ptr, h_gp.shift_amounts.data(), samts_size);
+  std::memcpy(h_ptr, h_gp.shift_amounts.data(), samts_size);
   d_prog->_shift_amounts = reinterpret_cast<uint8_t const*>(d_ptr);
 
   // advance to next section; align for glushkov_state_t
@@ -103,13 +106,13 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   d_ptr += samts_size;
 
   // copy reach_ascii table (GLUSHKOV_ASCII_TABLE_SIZE × glushkov_state_t = 1 KB)
-  memcpy(h_ptr, h_gp.reach_ascii.data(), reach_ascii_size);
+  std::memcpy(h_ptr, h_gp.reach_ascii.data(), reach_ascii_size);
   d_prog->_reach_ascii = reinterpret_cast<glushkov_state_t const*>(d_ptr);
   h_ptr += reach_ascii_size;
   d_ptr += reach_ascii_size;
 
   // copy exception_successors
-  memcpy(h_ptr, h_gp.exception_successors.data(), exc_size);
+  std::memcpy(h_ptr, h_gp.exception_successors.data(), exc_size);
   d_prog->_exception_successors = reinterpret_cast<glushkov_state_t const*>(d_ptr);
 
   // advance to next section; align for reclass_device (alignas(16))
@@ -128,7 +131,7 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
                                 static_cast<int32_t>(src.literals.size()),
                                 reinterpret_cast<reclass_range const*>(d_end)};
     auto const lit_bytes = src.literals.size() * sizeof(reclass_range);
-    memcpy(h_end, src.literals.data(), lit_bytes);
+    std::memcpy(h_end, src.literals.data(), lit_bytes);
     h_end += lit_bytes;
     d_end += lit_bytes;
   }
@@ -137,13 +140,19 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   cudf::detail::cuda_memcpy_async<u_char>(*d_buffer, h_buffer, stream);
 
   // create a deleter to free both device buffers
-  auto deleter = [d_buffer](gkprog_device* t) {
+  auto deleter = [d_buffer = d_buffer.get()](gkprog_device* t) {
     t->destroy();
     delete d_buffer;
   };
 
   stream.synchronize();  // wait for h_buffer to finish copying
-  return std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>>(d_prog, deleter);
+
+  auto result =
+    std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>>(d_prog.get(), deleter);
+  // ownership now belongs to result's deleter; release from the guarding unique_ptrs
+  d_prog.release();
+  d_buffer.release();
+  return result;
 }
 
 void gkprog_device::destroy() { delete this; }
