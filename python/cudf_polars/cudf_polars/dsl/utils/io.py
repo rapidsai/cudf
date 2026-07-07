@@ -13,7 +13,7 @@ import pylibcudf as plc
 
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
 from cudf_polars.dsl.traversal import traversal
-from cudf_polars.streaming.io import Scan, StreamingScan
+from cudf_polars.streaming.io import Scan
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
@@ -105,6 +105,62 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
     ]
 
 
+def _cached_parquet_info_from_stats(
+    stats: StatsCollector | None,
+) -> dict[str, CachedParquetInfo]:
+    """Return path -> cached parquet info seeded from statistics collection."""
+    from cudf_polars.streaming.io import ParquetSourceInfo, Scan
+
+    cached_parquet_info: dict[str, CachedParquetInfo] = {}
+    if stats is None:
+        return cached_parquet_info
+
+    for node, datasource_info in stats.scan_stats.items():
+        if (
+            isinstance(node, Scan)
+            and node.typ == "parquet"
+            and isinstance(datasource_info, ParquetSourceInfo)
+            and datasource_info.cached_parquet_info is not None
+        ):
+            for info in datasource_info.cached_parquet_info:
+                cached_parquet_info[info.path] = info
+    return cached_parquet_info
+
+
+@nvtx_annotate_cudf_polars(message="prefetch_cached_parquet_info_for_paths")
+def prefetch_cached_parquet_info_for_paths(
+    paths: list[str],
+    *,
+    stats: StatsCollector | None = None,
+) -> list[CachedParquetInfo]:
+    """
+    Prefetch parquet metadata for a path group.
+
+    Reuses footers already collected during statistics gathering when
+    available and fetches any remaining paths.
+
+    Parameters
+    ----------
+    paths
+        Ordered list of parquet file paths for one scan task group.
+    stats
+        Optional statistics collector with already-cached footers.
+
+    Returns
+    -------
+    Cached parquet metadata ordered to match ``paths``.
+    """
+    cached_by_path = _cached_parquet_info_from_stats(stats)
+    missing_paths = [path for path in paths if path not in cached_by_path]
+
+    if missing_paths:
+        fetched = _prefetch_parquet_footers_for_paths(missing_paths)
+        for info in fetched:
+            cached_by_path[info.path] = info
+
+    return [cached_by_path[path] for path in paths]
+
+
 @nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")
 def prefetch_parquet_file_metadata_for_ir(
     root: IR,
@@ -130,7 +186,7 @@ def prefetch_parquet_file_metadata_for_ir(
     -------
     A dictionary mapping each individual path to its cached parquet metadata.
     """
-    from cudf_polars.streaming.io import ParquetSourceInfo, StreamingScan
+    from cudf_polars.streaming.io import StreamingScan
 
     all_paths: set[str] = set()
 
@@ -142,18 +198,7 @@ def prefetch_parquet_file_metadata_for_ir(
         elif isinstance(node, Scan) and node.typ == "parquet":  # pragma: no cover
             raise RuntimeError("Unexpected parquet 'Scan' node in lowered IR graph.")
 
-    cached_parquet_info: dict[str, CachedParquetInfo] = {}
-    if stats is not None:
-        for node, datasource_info in stats.scan_stats.items():
-            if (
-                isinstance(node, Scan)
-                and node.typ == "parquet"
-                and isinstance(datasource_info, ParquetSourceInfo)
-                and datasource_info.cached_parquet_info is not None
-            ):
-                for info in datasource_info.cached_parquet_info:
-                    cached_parquet_info[info.path] = info
-
+    cached_parquet_info = _cached_parquet_info_from_stats(stats)
     missing_paths = all_paths - set(cached_parquet_info.keys())
     cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
 
@@ -173,28 +218,3 @@ def prefetch_parquet_file_metadata_for_ir(
             for info in future.result():
                 cached_parquet_info[info.path] = info
     return cached_parquet_info
-
-
-def attach_cached_parquet_metadata(
-    root: IR,
-    cached_parquet_info_map: dict[str, CachedParquetInfo],
-) -> None:
-    """
-    Attach prefetched metadata to scan nodes.
-
-    This is an optimization only and does not affect IR identity.
-
-    Parameters
-    ----------
-    root
-        Root of the IR graph to update.
-    cached_parquet_info_map
-        Mapping from file paths to cached parquet metadata.
-    """
-    for node in traversal([root]):
-        if isinstance(node, StreamingScan):
-            for scan in node.scans:
-                cached = [cached_parquet_info_map[path] for path in scan.paths]
-                Scan._validate_cached_parquet_info(scan.paths, cached)
-                scan.cached_parquet_info = cached
-                scan._non_child_args = (*scan._non_child_args[:-1], cached)

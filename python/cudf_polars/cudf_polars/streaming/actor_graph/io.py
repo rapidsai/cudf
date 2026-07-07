@@ -8,6 +8,8 @@ import asyncio
 import functools
 import io
 import math
+import reprlib
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
 import polars as pl
@@ -16,6 +18,7 @@ import pylibcudf as plc
 from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
+from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
@@ -30,6 +33,7 @@ from cudf_polars.dsl.ir import (
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
+from cudf_polars.dsl.utils.io import prefetch_cached_parquet_info_for_paths
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
 )
@@ -58,13 +62,14 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext, Scan
+    from cudf_polars.dsl.utils.io import CachedParquetInfo
     from cudf_polars.streaming.actor_graph.core import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
     from cudf_polars.streaming.base import (
@@ -74,6 +79,14 @@ if TYPE_CHECKING:
     )
     from cudf_polars.streaming.io import FusedScan, SplitScan
     from cudf_polars.utils.config import ParquetOptions
+
+
+@dataclass(frozen=True)
+class MetadataMessagePayload:
+    """Parquet metadata payload sent to scan actors."""
+
+    group_key: tuple[str, ...]
+    cached_parquet_info: list[CachedParquetInfo]
 
 
 class Lineariser:
@@ -507,6 +520,7 @@ async def read_chunk(
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
+    cached_parquet_info: list[CachedParquetInfo] | None = None,
     tracer: ActorTracer | None = None,
 ) -> None:
     """
@@ -527,9 +541,14 @@ async def read_chunk(
     estimated_chunk_bytes
         Estimated size of the chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
+    cached_parquet_info
+        Optional prefetched parquet metadata for parquet scans.
     tracer
         The actor tracer for collecting runtime statistics.
     """
+    args = scan._non_child_args
+    if cached_parquet_info is not None:
+        args = (*args[:-1], cached_parquet_info)
     with opaque_memory_usage(
         await reserve_memory(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
@@ -537,7 +556,7 @@ async def read_chunk(
     ):
         df = await ir_context.to_thread(
             scan.do_evaluate,
-            *scan._non_child_args,
+            *args,
             context=ir_context,
         )
     chunk = TableChunk.from_pylibcudf_table(
@@ -550,11 +569,71 @@ async def read_chunk(
 
 
 @define_actor()
+async def parquet_metadata_prefetch_node(
+    context: Context,
+    ir_context: IRExecutionContext,
+    group_key: tuple[str, ...],
+    channels: tuple[Channel[ArbitraryChunk[MetadataMessagePayload]], ...],
+    stats: StatsCollector,
+    trace_ir: IR,
+) -> None:
+    """Fetch parquet metadata once and fan it out to dependent scans."""
+    async with shutdown_on_error(
+        context, *channels, trace_ir=trace_ir, ir_context=ir_context
+    ):
+        cached_parquet_info = await ir_context.to_thread(
+            prefetch_cached_parquet_info_for_paths,
+            list(group_key),
+            stats=stats,
+        )
+        payload = MetadataMessagePayload(
+            group_key=group_key,
+            cached_parquet_info=cached_parquet_info,
+        )
+        for ch in channels:
+            await ch.send(
+                context,
+                Message(0, ArbitraryChunk(payload)),
+            )
+            await ch.drain(context)
+
+
+async def recv_prefetched_parquet_metadata(
+    context: Context,
+    ch: Channel[ArbitraryChunk[MetadataMessagePayload]],
+) -> Message[ArbitraryChunk[MetadataMessagePayload]] | None:
+    """Receive and validate one prefetched parquet metadata message."""
+    return await ch.recv(context)
+
+
+def recv_prefetched_parquet_metadata_handler(
+    msg: Message[ArbitraryChunk[MetadataMessagePayload]] | None,
+    group_key: tuple[str, ...],
+) -> list[CachedParquetInfo]:
+    """Synchronous handler for prefetched parquet metadata messages."""
+    if msg is None:  # pragma: no cover; unreachable
+        raise AssertionError(
+            f"Missing parquet metadata message for paths: {reprlib.repr(group_key)}"
+        )
+    payload = ArbitraryChunk[MetadataMessagePayload].from_message(msg).release()
+    if payload.group_key != group_key:  # pragma: no cover; unreachable
+        difference = set(group_key) ^ set(payload.group_key)
+        raise AssertionError(
+            "Unexpected parquet metadata key on scan input channel. "
+            f"{reprlib.repr(difference)}"
+        )
+    return payload.cached_parquet_info
+
+
+@define_actor()
 async def scan_node(
     context: Context,
     ir: StreamingScan,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
+    metadata_channels_by_key: dict[
+        tuple[str, ...], Channel[ArbitraryChunk[MetadataMessagePayload]]
+    ],
     *,
     num_producers: int,
     estimated_chunk_bytes: int,
@@ -572,17 +651,31 @@ async def scan_node(
         The execution context for the IR node.
     ch_out
         The output Channel[TableChunk].
+    metadata_channels_by_key
+        Mapping from parquet path tuple to the corresponding metadata channel.
     num_producers
         The number of producers to use for the scan node.
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
+    scans = ir.scans
+
+    prefetched_parquet_metadata: dict[tuple[str, ...], list[CachedParquetInfo]] = {}
 
     async with shutdown_on_error(
-        context, ch_out, trace_ir=ir, ir_context=ir_context
+        context,
+        ch_out,
+        *metadata_channels_by_key.values(),
+        trace_ir=ir,
+        ir_context=ir_context,
     ) as tracer:
+        for key, ch_metadata in metadata_channels_by_key.items():
+            msg = await ch_metadata.recv(context)
+            prefetched_parquet_metadata[key] = recv_prefetched_parquet_metadata_handler(
+                msg, key
+            )
+
         # Send basic metadata
         await send_metadata(
             ch_out,
@@ -599,6 +692,8 @@ async def scan_node(
         # skip the lineariser and read the chunks directly
         if len(scans) == 1 or num_producers == 1:
             for seq_num, scan in enumerate(scans):
+                # mypy believes that `scan` is an `IR`, but we know that it's
+                # actually a `FusedScan | SplitScan` because it's `ir.scans`.
                 await read_chunk(
                     context,
                     scan,
@@ -606,6 +701,9 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    prefetched_parquet_metadata.get(
+                        tuple(cast("FusedScan | SplitScan", scan).paths)
+                    ),
                     tracer=tracer,
                 )
             await ch_out.drain(context)
@@ -633,6 +731,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
+                    prefetched_parquet_metadata.get(tuple(scan.paths)),
                     tracer=tracer,
                 )
             await ch_out.drain(context)
@@ -815,12 +914,17 @@ def _(
         )
         nodes[ir] = [native_node, metadata_node]
     else:
+        if ir.base_scan.typ == "parquet" and parquet_options.prefetch_file_metadata:
+            metadata_channels_by_key = rec.state["metadata_channels_by_scan"][ir]
+        else:
+            metadata_channels_by_key = {}
         nodes[ir] = [
             scan_node(
                 rec.state["context"],
                 ir,
                 rec.state["ir_context"],
                 ch_out,
+                metadata_channels_by_key,
                 num_producers=num_producers,
                 estimated_chunk_bytes=(
                     plan.estimated_chunk_bytes or executor.target_partition_size

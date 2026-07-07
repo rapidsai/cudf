@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Dispatching for the RapidsMPF streaming runtime."""
 
@@ -13,14 +13,15 @@ if TYPE_CHECKING:
     from collections.abc import MutableMapping
 
     from rapidsmpf.communicator.communicator import Communicator
+    from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.streaming.actor_graph.io import MetadataMessagePayload
     from cudf_polars.streaming.actor_graph.utils import ChannelManager
-    from cudf_polars.streaming.base import (
-        PartitionInfo,
-        StatsCollector,
-    )
+    from cudf_polars.streaming.base import PartitionInfo, StatsCollector
+    from cudf_polars.streaming.io import StreamingScan
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -58,6 +59,14 @@ class GenState(TypedDict):
         Statistics collector.
     collective_id_map
         The mapping of IR nodes to lists of collective IDs.
+    metadata_scan_groups
+        Mapping from parquet metadata group key to dependent StreamingScan nodes.
+    metadata_group_channels
+        Mapping from parquet metadata group key to output channels for each
+        dependent StreamingScan node.
+    metadata_channels_by_scan
+        Mapping from each StreamingScan node to its parquet metadata input
+        channels, keyed by parquet metadata group key.
     """
 
     context: Context
@@ -69,6 +78,14 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
+    metadata_scan_groups: dict[tuple[str, ...], set[StreamingScan]]
+    metadata_group_channels: dict[
+        tuple[str, ...], tuple[Channel[ArbitraryChunk[MetadataMessagePayload]], ...]
+    ]
+    metadata_channels_by_scan: dict[
+        StreamingScan,
+        dict[tuple[str, ...], Channel[ArbitraryChunk[MetadataMessagePayload]]],
+    ]
 
 
 SubNetGenerator: TypeAlias = GenericTransformer[
