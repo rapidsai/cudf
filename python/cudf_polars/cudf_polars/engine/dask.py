@@ -743,20 +743,17 @@ class DaskEngine(StreamingEngine):
         self.rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
         rapidsmpf_options_as_bytes = self.rapidsmpf_options.serialize()
 
-        # Unique identifier for this cluster instance; namespaces the per-worker
-        # attribute so multiple DaskEngine contexts can coexist on the same workers.
-        uid = str(uuid.uuid4())
-
         # TODO: there's no reason our API needs a plain dict[str, Any] rather than
         # a typed config object here.
         if quent_context is not None:
             executor_options.setdefault("quent_context", quent_context)
             assert self._quent_logger is not None
             quent_context._emit_engine_init_events(self._quent_logger)
-            # rapidsmpf_id = str(quent_context.engine.id)
+            rapidsmpf_id = str(quent_context.engine.id)
             engine_id = quent_context.engine.id
         else:
-            engine_id = uuid.uuid4()
+            rapidsmpf_id = str(uuid.uuid4())
+            engine_id = uuid.UUID(rapidsmpf_id)
 
         owned_cluster: Any = None
         owned_client: distributed.Client | None = None
@@ -803,7 +800,7 @@ class DaskEngine(StreamingEngine):
         root_result = dask_client.run(
             functools.partial(
                 _setup_root,
-                uid=uid,
+                uid=rapidsmpf_id,
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
                 worker_id=worker_ids[0],
@@ -822,7 +819,7 @@ class DaskEngine(StreamingEngine):
         dask_client.run(
             functools.partial(
                 _setup_worker,
-                uid=uid,
+                uid=rapidsmpf_id,
                 hardware_binding=hw_binding,
                 memory_resource_config=mr_config,
                 worker_ids=worker_ids,
@@ -837,7 +834,7 @@ class DaskEngine(StreamingEngine):
 
         dask_ctx = DaskContext(
             client=dask_client,
-            rapidsmpf_id=uid,
+            rapidsmpf_id=rapidsmpf_id,
             quent_logger=self._quent_logger,
             owned_client=owned_client,
             owned_cluster=owned_cluster,
