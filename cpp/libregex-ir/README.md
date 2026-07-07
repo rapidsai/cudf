@@ -487,7 +487,10 @@ results table, an editable SVG, and case-level CSV data.
 The line-chart panels select `StringBytes`; their x-axis is row count and their
 two lines compare Regex IR with cuDF.
 
-The complete cuDF-derived matrix was rerun on 2026-07-05 with the current code.
+The complete Regex IR matrix was rerun on 2026-07-07 with the current code.
+Because cuDF was unchanged, its comparison states come from the immediately
+preceding full run on the same GPU and software stack; every candidate Regex IR
+state was replayed and validated against cuDF before timing.
 It uses 14 doubling row counts from 1,024 through 8,388,607 and `StringBytes`
 settings 64, 128, and 256: 42 input geometries for every expression. The upper
 bound is the largest common row count that keeps a 256-byte input within cuDF's
@@ -520,17 +523,17 @@ expression/geometry pair equally.
 
 | API | Expressions | Geometries | Paired measurements | Regex IR geometric throughput (M rows/s) | cuDF geometric throughput (M rows/s) | Geometric speedup | Pair wins | Regex IR JIT-ready mean (ms) |
 |:---|---:|---:|---:|---:|---:|---:|:---:|---:|
-| contains | 11 | 42 | 462 | 528.200 | 66.241 | 7.974x | 462–0 | 23.919 |
-| count | 7 | 42 | 294 | 217.995 | 24.817 | 8.784x | 294–0 | 29.333 |
+| contains | 11 | 42 | 462 | 526.870 | 66.241 | 7.954x | 462–0 | 23.387 |
+| count | 7 | 42 | 294 | 223.884 | 24.817 | 9.021x | 294–0 | 28.734 |
 | extract | 3 | 42 | 126 | 94.160 | 32.747 | 2.875x | 126–0 | 43.277 |
 | replace | 14 | 42 | 588 | 71.328 | 7.086 | 10.066x | 588–0 | 62.984 |
 | split | 7 | 42 | 294 | 41.944 | 9.341 | 4.490x | 294–0 | 59.428 |
-| **All APIs** | **42** | **42** | **1764** | **135.533** | **18.317** | **7.399x** | **1764–0** | **45.144** |
+| **All APIs** | **42** | **42** | **1764** | **136.046** | **18.317** | **7.427x** | **1764–0** | **44.905** |
 
 Regex IR won 1764 of 1764 paired measurements. Contains, count, extract, replace, and
 split won every state. The narrowest result was contains pattern 3 at 131,072 rows/256
-bytes (1.052x), while the largest was contains pattern 10 at 8,388,607 rows/256 bytes
-(35.996x). The results describe this hardware, corpus, and allocation contract—not every
+bytes (1.056x), while the largest was contains pattern 10 at 8,388,607 rows/256 bytes
+(35.975x). The results describe this hardware, corpus, and allocation contract—not every
 regex or deployment. Use the commands above to reproduce the matrix.
 
 The tables below report geometric mean throughput across each API's expression
@@ -546,48 +549,48 @@ it excludes input construction and the first launch.
 
 | Rows | StringBytes | Cases | Regex IR (M rows/s) | cuDF (M rows/s) | Speedup | Regex IR–cuDF wins | Regex IR JIT-ready mean (ms) |
 |---:|---:|---:|---:|---:|---:|:---:|---:|
-| 1,024 | 64 | 11 | 38.223 | 8.388 | 4.557x | 11–0 | 26.505 |
-| 1,024 | 128 | 11 | 27.321 | 5.338 | 5.119x | 11–0 | 23.430 |
-| 1,024 | 256 | 11 | 19.370 | 3.370 | 5.749x | 11–0 | 25.810 |
-| 2,048 | 64 | 11 | 74.895 | 14.056 | 5.329x | 11–0 | 24.651 |
-| 2,048 | 128 | 11 | 54.467 | 9.067 | 6.007x | 11–0 | 23.649 |
-| 2,048 | 256 | 11 | 38.265 | 6.119 | 6.254x | 11–0 | 24.404 |
-| 4,096 | 64 | 11 | 153.216 | 29.478 | 5.198x | 11–0 | 23.232 |
-| 4,096 | 128 | 11 | 107.015 | 19.966 | 5.360x | 11–0 | 22.956 |
-| 4,096 | 256 | 11 | 76.187 | 13.071 | 5.829x | 11–0 | 23.266 |
-| 8,192 | 64 | 11 | 301.401 | 48.685 | 6.191x | 11–0 | 22.668 |
-| 8,192 | 128 | 11 | 208.262 | 27.821 | 7.486x | 11–0 | 22.772 |
-| 8,192 | 256 | 11 | 148.621 | 18.875 | 7.874x | 11–0 | 22.983 |
-| 16,384 | 64 | 11 | 575.022 | 66.694 | 8.622x | 11–0 | 22.617 |
-| 16,384 | 128 | 11 | 399.127 | 48.220 | 8.277x | 11–0 | 22.994 |
-| 16,384 | 256 | 11 | 286.627 | 36.429 | 7.868x | 11–0 | 23.040 |
-| 32,768 | 64 | 11 | 936.090 | 91.614 | 10.218x | 11–0 | 22.788 |
-| 32,768 | 128 | 11 | 646.124 | 70.286 | 9.193x | 11–0 | 23.324 |
-| 32,768 | 256 | 11 | 456.197 | 47.543 | 9.595x | 11–0 | 23.451 |
-| 65,536 | 64 | 11 | 1,595.426 | 114.912 | 13.884x | 11–0 | 23.148 |
-| 65,536 | 128 | 11 | 1,076.468 | 87.868 | 12.251x | 11–0 | 23.245 |
-| 65,536 | 256 | 11 | 736.434 | 67.379 | 10.930x | 11–0 | 23.230 |
-| 131,072 | 64 | 11 | 1,926.682 | 132.459 | 14.545x | 11–0 | 24.105 |
-| 131,072 | 128 | 11 | 716.483 | 97.046 | 7.383x | 11–0 | 23.864 |
-| 131,072 | 256 | 11 | 375.564 | 73.779 | 5.090x | 11–0 | 29.044 |
-| 262,144 | 64 | 11 | 2,548.193 | 159.843 | 15.942x | 11–0 | 23.852 |
-| 262,144 | 128 | 11 | 1,047.575 | 114.034 | 9.187x | 11–0 | 23.233 |
-| 262,144 | 256 | 11 | 553.469 | 82.815 | 6.683x | 11–0 | 24.055 |
-| 524,288 | 64 | 11 | 2,971.612 | 253.854 | 11.706x | 11–0 | 23.269 |
-| 524,288 | 128 | 11 | 1,385.003 | 169.300 | 8.181x | 11–0 | 24.789 |
-| 524,288 | 256 | 11 | 745.476 | 125.404 | 5.945x | 11–0 | 24.545 |
-| 1,048,576 | 64 | 11 | 3,185.291 | 252.712 | 12.604x | 11–0 | 23.711 |
-| 1,048,576 | 128 | 11 | 1,677.610 | 179.776 | 9.332x | 11–0 | 23.209 |
-| 1,048,576 | 256 | 11 | 924.787 | 126.638 | 7.303x | 11–0 | 23.894 |
-| 2,097,152 | 64 | 11 | 3,021.066 | 277.505 | 10.887x | 11–0 | 22.994 |
-| 2,097,152 | 128 | 11 | 1,746.698 | 190.122 | 9.187x | 11–0 | 23.202 |
-| 2,097,152 | 256 | 11 | 1,014.693 | 138.727 | 7.314x | 11–0 | 23.660 |
-| 4,194,304 | 64 | 11 | 3,081.631 | 370.373 | 8.320x | 11–0 | 23.337 |
-| 4,194,304 | 128 | 11 | 1,858.879 | 247.866 | 7.500x | 11–0 | 23.067 |
-| 4,194,304 | 256 | 11 | 1,102.478 | 137.790 | 8.001x | 11–0 | 22.905 |
-| 8,388,607 | 64 | 11 | 3,112.457 | 312.627 | 9.956x | 11–0 | 23.284 |
-| 8,388,607 | 128 | 11 | 1,914.590 | 240.144 | 7.973x | 11–0 | 33.181 |
-| 8,388,607 | 256 | 11 | 1,152.256 | 176.341 | 6.534x | 11–0 | 23.222 |
+| 1,024 | 64 | 11 | 37.874 | 8.388 | 4.515x | 11–0 | 27.787 |
+| 1,024 | 128 | 11 | 27.315 | 5.338 | 5.118x | 11–0 | 22.940 |
+| 1,024 | 256 | 11 | 19.209 | 3.370 | 5.701x | 11–0 | 23.125 |
+| 2,048 | 64 | 11 | 76.075 | 14.056 | 5.412x | 11–0 | 22.538 |
+| 2,048 | 128 | 11 | 54.294 | 9.067 | 5.988x | 11–0 | 22.497 |
+| 2,048 | 256 | 11 | 38.209 | 6.119 | 6.245x | 11–0 | 22.576 |
+| 4,096 | 64 | 11 | 151.144 | 29.478 | 5.127x | 11–0 | 22.610 |
+| 4,096 | 128 | 11 | 107.362 | 19.966 | 5.377x | 11–0 | 22.730 |
+| 4,096 | 256 | 11 | 75.870 | 13.071 | 5.804x | 11–0 | 22.995 |
+| 8,192 | 64 | 11 | 297.210 | 48.685 | 6.105x | 11–0 | 22.581 |
+| 8,192 | 128 | 11 | 207.582 | 27.821 | 7.461x | 11–0 | 22.845 |
+| 8,192 | 256 | 11 | 148.330 | 18.875 | 7.859x | 11–0 | 22.739 |
+| 16,384 | 64 | 11 | 575.413 | 66.694 | 8.628x | 11–0 | 22.280 |
+| 16,384 | 128 | 11 | 398.669 | 48.220 | 8.268x | 11–0 | 22.499 |
+| 16,384 | 256 | 11 | 285.623 | 36.429 | 7.840x | 11–0 | 23.215 |
+| 32,768 | 64 | 11 | 932.014 | 91.614 | 10.173x | 11–0 | 22.550 |
+| 32,768 | 128 | 11 | 640.123 | 70.286 | 9.107x | 11–0 | 22.956 |
+| 32,768 | 256 | 11 | 454.406 | 47.543 | 9.558x | 11–0 | 25.490 |
+| 65,536 | 64 | 11 | 1,580.342 | 114.912 | 13.753x | 11–0 | 22.881 |
+| 65,536 | 128 | 11 | 1,073.828 | 87.868 | 12.221x | 11–0 | 22.955 |
+| 65,536 | 256 | 11 | 729.495 | 67.379 | 10.827x | 11–0 | 22.598 |
+| 131,072 | 64 | 11 | 1,923.757 | 132.459 | 14.523x | 11–0 | 26.187 |
+| 131,072 | 128 | 11 | 712.034 | 97.046 | 7.337x | 11–0 | 22.549 |
+| 131,072 | 256 | 11 | 376.653 | 73.779 | 5.105x | 11–0 | 22.985 |
+| 262,144 | 64 | 11 | 2,516.678 | 159.843 | 15.745x | 11–0 | 24.025 |
+| 262,144 | 128 | 11 | 1,046.445 | 114.034 | 9.177x | 11–0 | 22.991 |
+| 262,144 | 256 | 11 | 553.152 | 82.815 | 6.679x | 11–0 | 23.246 |
+| 524,288 | 64 | 11 | 2,971.406 | 253.854 | 11.705x | 11–0 | 22.882 |
+| 524,288 | 128 | 11 | 1,384.080 | 169.300 | 8.175x | 11–0 | 23.781 |
+| 524,288 | 256 | 11 | 743.417 | 125.404 | 5.928x | 11–0 | 24.381 |
+| 1,048,576 | 64 | 11 | 3,186.652 | 252.712 | 12.610x | 11–0 | 24.695 |
+| 1,048,576 | 128 | 11 | 1,681.616 | 179.776 | 9.354x | 11–0 | 23.450 |
+| 1,048,576 | 256 | 11 | 921.907 | 126.638 | 7.280x | 11–0 | 24.065 |
+| 2,097,152 | 64 | 11 | 3,008.387 | 277.505 | 10.841x | 11–0 | 22.925 |
+| 2,097,152 | 128 | 11 | 1,751.644 | 190.122 | 9.213x | 11–0 | 22.944 |
+| 2,097,152 | 256 | 11 | 1,017.252 | 138.727 | 7.333x | 11–0 | 23.741 |
+| 4,194,304 | 64 | 11 | 3,085.694 | 370.373 | 8.331x | 11–0 | 23.159 |
+| 4,194,304 | 128 | 11 | 1,858.304 | 247.866 | 7.497x | 11–0 | 22.745 |
+| 4,194,304 | 256 | 11 | 1,100.921 | 137.790 | 7.990x | 11–0 | 23.080 |
+| 8,388,607 | 64 | 11 | 3,119.089 | 312.627 | 9.977x | 11–0 | 22.562 |
+| 8,388,607 | 128 | 11 | 1,913.936 | 240.144 | 7.970x | 11–0 | 22.782 |
+| 8,388,607 | 256 | 11 | 1,149.864 | 176.341 | 6.521x | 11–0 | 27.673 |
 
 #### Count
 
@@ -597,48 +600,48 @@ it excludes input construction and the first launch.
 
 | Rows | StringBytes | Cases | Regex IR (M rows/s) | cuDF (M rows/s) | Speedup | Regex IR–cuDF wins | Regex IR JIT-ready mean (ms) |
 |---:|---:|---:|---:|---:|---:|:---:|---:|
-| 1,024 | 64 | 7 | 18.214 | 2.632 | 6.921x | 7–0 | 28.975 |
-| 1,024 | 128 | 7 | 10.203 | 1.408 | 7.245x | 7–0 | 28.603 |
-| 1,024 | 256 | 7 | 5.880 | 0.730 | 8.058x | 7–0 | 29.169 |
-| 2,048 | 64 | 7 | 34.633 | 5.147 | 6.728x | 7–0 | 28.904 |
-| 2,048 | 128 | 7 | 20.258 | 2.767 | 7.322x | 7–0 | 29.754 |
-| 2,048 | 256 | 7 | 11.164 | 1.382 | 8.078x | 7–0 | 31.830 |
-| 4,096 | 64 | 7 | 69.693 | 10.091 | 6.907x | 7–0 | 29.980 |
-| 4,096 | 128 | 7 | 39.359 | 5.414 | 7.270x | 7–0 | 28.878 |
-| 4,096 | 256 | 7 | 21.716 | 2.770 | 7.841x | 7–0 | 29.571 |
-| 8,192 | 64 | 7 | 130.554 | 19.716 | 6.622x | 7–0 | 30.797 |
-| 8,192 | 128 | 7 | 76.301 | 10.682 | 7.143x | 7–0 | 29.257 |
-| 8,192 | 256 | 7 | 42.834 | 5.488 | 7.805x | 7–0 | 29.922 |
-| 16,384 | 64 | 7 | 258.921 | 37.080 | 6.983x | 7–0 | 28.699 |
-| 16,384 | 128 | 7 | 144.997 | 20.091 | 7.217x | 7–0 | 31.917 |
-| 16,384 | 256 | 7 | 83.355 | 10.849 | 7.683x | 7–0 | 28.470 |
-| 32,768 | 64 | 7 | 464.965 | 58.295 | 7.976x | 7–0 | 28.347 |
-| 32,768 | 128 | 7 | 275.279 | 34.575 | 7.962x | 7–0 | 29.320 |
-| 32,768 | 256 | 7 | 151.113 | 18.014 | 8.388x | 7–0 | 28.535 |
-| 65,536 | 64 | 7 | 715.920 | 86.834 | 8.245x | 7–0 | 28.517 |
-| 65,536 | 128 | 7 | 428.637 | 48.549 | 8.829x | 7–0 | 28.043 |
-| 65,536 | 256 | 7 | 229.878 | 25.310 | 9.082x | 7–0 | 29.241 |
-| 131,072 | 64 | 7 | 785.136 | 100.306 | 7.827x | 7–0 | 29.024 |
-| 131,072 | 128 | 7 | 475.315 | 56.350 | 8.435x | 7–0 | 28.872 |
-| 131,072 | 256 | 7 | 189.534 | 27.739 | 6.833x | 7–0 | 29.089 |
-| 262,144 | 64 | 7 | 1,138.370 | 102.252 | 11.133x | 7–0 | 29.152 |
-| 262,144 | 128 | 7 | 654.965 | 58.838 | 11.132x | 7–0 | 29.737 |
-| 262,144 | 256 | 7 | 259.902 | 29.862 | 8.703x | 7–0 | 33.237 |
-| 524,288 | 64 | 7 | 1,262.805 | 115.864 | 10.899x | 7–0 | 30.313 |
-| 524,288 | 128 | 7 | 736.039 | 64.608 | 11.392x | 7–0 | 28.601 |
-| 524,288 | 256 | 7 | 311.158 | 32.676 | 9.523x | 7–0 | 28.272 |
-| 1,048,576 | 64 | 7 | 1,383.744 | 123.942 | 11.164x | 7–0 | 27.942 |
-| 1,048,576 | 128 | 7 | 797.218 | 68.171 | 11.694x | 7–0 | 28.184 |
-| 1,048,576 | 256 | 7 | 347.430 | 34.046 | 10.205x | 7–0 | 29.973 |
-| 2,097,152 | 64 | 7 | 1,435.544 | 134.724 | 10.655x | 7–0 | 29.107 |
-| 2,097,152 | 128 | 7 | 826.398 | 71.609 | 11.540x | 7–0 | 28.378 |
-| 2,097,152 | 256 | 7 | 380.342 | 35.626 | 10.676x | 7–0 | 28.882 |
-| 4,194,304 | 64 | 7 | 1,468.586 | 148.293 | 9.903x | 7–0 | 28.568 |
-| 4,194,304 | 128 | 7 | 842.630 | 76.701 | 10.986x | 7–0 | 29.559 |
-| 4,194,304 | 256 | 7 | 400.110 | 36.959 | 10.826x | 7–0 | 29.475 |
-| 8,388,607 | 64 | 7 | 1,481.435 | 156.457 | 9.469x | 7–0 | 29.636 |
-| 8,388,607 | 128 | 7 | 857.511 | 78.222 | 10.962x | 7–0 | 30.407 |
-| 8,388,607 | 256 | 7 | 409.364 | 37.171 | 11.013x | 7–0 | 28.839 |
+| 1,024 | 64 | 7 | 18.641 | 2.632 | 7.083x | 7–0 | 28.992 |
+| 1,024 | 128 | 7 | 10.591 | 1.408 | 7.521x | 7–0 | 28.782 |
+| 1,024 | 256 | 7 | 6.145 | 0.730 | 8.421x | 7–0 | 28.541 |
+| 2,048 | 64 | 7 | 35.665 | 5.147 | 6.929x | 7–0 | 28.498 |
+| 2,048 | 128 | 7 | 20.673 | 2.767 | 7.473x | 7–0 | 28.783 |
+| 2,048 | 256 | 7 | 11.549 | 1.382 | 8.356x | 7–0 | 29.185 |
+| 4,096 | 64 | 7 | 70.814 | 10.091 | 7.018x | 7–0 | 28.549 |
+| 4,096 | 128 | 7 | 40.034 | 5.414 | 7.395x | 7–0 | 28.110 |
+| 4,096 | 256 | 7 | 22.464 | 2.770 | 8.111x | 7–0 | 28.338 |
+| 8,192 | 64 | 7 | 135.015 | 19.716 | 6.848x | 7–0 | 28.987 |
+| 8,192 | 128 | 7 | 78.073 | 10.682 | 7.309x | 7–0 | 28.693 |
+| 8,192 | 256 | 7 | 44.562 | 5.488 | 8.120x | 7–0 | 29.329 |
+| 16,384 | 64 | 7 | 267.402 | 37.080 | 7.211x | 7–0 | 28.669 |
+| 16,384 | 128 | 7 | 149.150 | 20.091 | 7.424x | 7–0 | 28.626 |
+| 16,384 | 256 | 7 | 86.259 | 10.849 | 7.951x | 7–0 | 29.363 |
+| 32,768 | 64 | 7 | 472.435 | 58.295 | 8.104x | 7–0 | 28.621 |
+| 32,768 | 128 | 7 | 283.303 | 34.575 | 8.194x | 7–0 | 28.244 |
+| 32,768 | 256 | 7 | 156.576 | 18.014 | 8.692x | 7–0 | 28.236 |
+| 65,536 | 64 | 7 | 729.841 | 86.834 | 8.405x | 7–0 | 27.962 |
+| 65,536 | 128 | 7 | 439.338 | 48.549 | 9.049x | 7–0 | 28.137 |
+| 65,536 | 256 | 7 | 235.979 | 25.310 | 9.324x | 7–0 | 30.164 |
+| 131,072 | 64 | 7 | 803.235 | 100.306 | 8.008x | 7–0 | 28.318 |
+| 131,072 | 128 | 7 | 485.609 | 56.350 | 8.618x | 7–0 | 28.690 |
+| 131,072 | 256 | 7 | 195.855 | 27.739 | 7.061x | 7–0 | 28.303 |
+| 262,144 | 64 | 7 | 1,163.340 | 102.252 | 11.377x | 7–0 | 28.668 |
+| 262,144 | 128 | 7 | 673.106 | 58.838 | 11.440x | 7–0 | 29.603 |
+| 262,144 | 256 | 7 | 266.875 | 29.862 | 8.937x | 7–0 | 28.920 |
+| 524,288 | 64 | 7 | 1,296.778 | 115.864 | 11.192x | 7–0 | 32.335 |
+| 524,288 | 128 | 7 | 754.906 | 64.608 | 11.684x | 7–0 | 28.180 |
+| 524,288 | 256 | 7 | 320.335 | 32.676 | 9.803x | 7–0 | 27.972 |
+| 1,048,576 | 64 | 7 | 1,412.302 | 123.942 | 11.395x | 7–0 | 27.885 |
+| 1,048,576 | 128 | 7 | 812.459 | 68.171 | 11.918x | 7–0 | 28.537 |
+| 1,048,576 | 256 | 7 | 359.756 | 34.046 | 10.567x | 7–0 | 28.303 |
+| 2,097,152 | 64 | 7 | 1,474.066 | 134.724 | 10.941x | 7–0 | 29.129 |
+| 2,097,152 | 128 | 7 | 841.831 | 71.609 | 11.756x | 7–0 | 28.069 |
+| 2,097,152 | 256 | 7 | 389.546 | 35.626 | 10.934x | 7–0 | 28.760 |
+| 4,194,304 | 64 | 7 | 1,491.953 | 148.293 | 10.061x | 7–0 | 28.104 |
+| 4,194,304 | 128 | 7 | 861.462 | 76.701 | 11.231x | 7–0 | 29.058 |
+| 4,194,304 | 256 | 7 | 411.714 | 36.959 | 11.140x | 7–0 | 28.844 |
+| 8,388,607 | 64 | 7 | 1,519.902 | 156.457 | 9.714x | 7–0 | 28.907 |
+| 8,388,607 | 128 | 7 | 880.071 | 78.222 | 11.251x | 7–0 | 29.194 |
+| 8,388,607 | 256 | 7 | 421.378 | 37.171 | 11.336x | 7–0 | 28.243 |
 
 #### Extract
 
@@ -807,10 +810,10 @@ At one million 128-byte rows, the current warm and cold measurements are:
 
 | Pattern | Regex IR warm (ms) | cuDF warm (ms) | Warm speedup | Regex IR JIT-ready (ms) | Regex IR cold JIT + first launch (ms) | cuDF program + first call (ms) |
 |:---|---:|---:|---:|---:|---:|---:|
-| log | 1.372 | 2.090 | 1.524x | 23.832 | 25.727 | 2.088 |
-| email | 1.445 | 9.396 | 6.504x | 23.142 | 24.401 | 9.466 |
-| URI | 1.436 | 10.802 | 7.524x | 24.052 | 24.940 | 10.942 |
-| IPv4 | 1.512 | 28.391 | 18.775x | 24.100 | 25.709 | 28.471 |
+| log | 1.370 | 2.090 | 1.525x | 26.847 | 25.255 | 2.088 |
+| email | 1.452 | 9.396 | 6.469x | 23.694 | 25.009 | 9.466 |
+| URI | 1.455 | 10.802 | 7.426x | 23.937 | 24.986 | 10.942 |
+| IPv4 | 1.518 | 28.391 | 18.698x | 24.335 | 25.562 | 28.471 |
 
 The log, email, and URI cold paths do not repay roughly 23–24 ms of device
 compilation on the first call. IPv4 repays that cost narrowly at one million
@@ -825,7 +828,7 @@ exact-row controls rather than corpus scans, so they are summarized separately:
 
 | Workload | Cases | Regex IR mean (ms) | cuDF mean (ms) | Geometric speedup | Pair wins | Regex IR JIT-ready mean (ms) | cuDF program-create mean (ms) |
 |:---|---:|---:|---:|---:|:---:|---:|---:|
-| Boost repeated scalar records | 14 | 0.073 | 3.465 | 47.031x | 14–0 | 24.026 | 0.0104 |
+| Boost repeated scalar records | 14 | 0.071 | 3.465 | 48.672x | 14–0 | 22.977 | 0.0104 |
 
 All 28 scalar engine states completed and passed the same pre-timing output
 comparison. Regex IR JIT-ready includes parse/lower, NVVM rendering, libNVVM
@@ -854,14 +857,14 @@ resolved kernel function; corpus setup and the first launch are excluded.
 
 | Source suite | Corpus expressions | Regex IR geometric throughput (GiB/s) | cuDF geometric throughput (GiB/s) | Geometric speedup | Pair wins | Regex IR JIT-ready mean (ms) | cuDF program-create mean (ms) |
 |:---|---:|---:|---:|---:|:---:|---:|---:|
-| OpenResty | 31 | 54.134 | 2.791 | 19.399x | 31–0 | 24.527 | 0.0151 |
-| Rust Leipzig | 18 | 41.855 | 2.031 | 20.611x | 18–0 | 29.749 | 0.0219 |
-| Boost/GCC | 22 | 2.844 | 0.267 | 10.655x | 22–0 | 39.480 | 0.0567 |
-| mariomka | 3 | 23.925 | 1.014 | 23.588x | 3–0 | 21.970 | 0.0094 |
-| **All complete-corpus suites** | **74** | **20.489** | **1.234** | **16.606x** | **74–0** | **30.139** | **0.0289** |
+| OpenResty | 31 | 54.831 | 2.791 | 19.649x | 31–0 | 24.201 | 0.0151 |
+| Rust Leipzig | 18 | 42.712 | 2.031 | 21.033x | 18–0 | 30.074 | 0.0219 |
+| Boost/GCC | 22 | 2.890 | 0.267 | 10.827x | 22–0 | 39.243 | 0.0567 |
+| mariomka | 3 | 24.306 | 1.014 | 23.964x | 3–0 | 24.655 | 0.0094 |
+| **All complete-corpus suites** | **74** | **20.813** | **1.234** | **16.868x** | **74–0** | **30.120** | **0.0289** |
 
 Regex IR won 74 of 74 paired full-corpus cases. The narrowest result was Boost/GCC case
-8 (2.420x); the largest was Boost/GCC case 14 (665.197x).
+8 (2.392x); the largest was Boost/GCC case 14 (690.046x).
 
 #### OpenResty full-corpus cases
 
@@ -871,37 +874,37 @@ Regex IR won 74 of 74 paired full-corpus cases. The narrowest result was Boost/G
 
 | Case | Expression role | Input (MiB) | Regex IR (ms) | cuDF (ms) | Speedup | Regex IR JIT-ready (ms) |
 |---:|:---|---:|---:|---:|---:|---:|
-| 1 | literal miss | 25.000 | 0.283 | 1.107 | 3.914x | 11.545 |
-| 2 | short alt miss | 10.000 | 0.139 | 2.527 | 18.163x | 22.836 |
-| 3 | suffix alt miss | 25.000 | 0.389 | 7.930 | 20.361x | 24.137 |
-| 4 | suffix alt prose | 19.117 | 0.420 | 8.110 | 19.302x | 26.085 |
-| 5 | wide class miss | 25.000 | 0.336 | 3.520 | 10.477x | 22.130 |
-| 6 | split class miss | 25.000 | 0.341 | 3.602 | 10.550x | 25.007 |
-| 7 | split class prose | 19.117 | 0.203 | 2.365 | 11.660x | 24.752 |
-| 8 | large alt prose | 19.117 | 0.461 | 34.395 | 74.664x | 24.760 |
-| 9 | large alt miss | 25.000 | 0.386 | 32.908 | 85.320x | 22.634 |
-| 10 | nested alt | 25.000 | 0.382 | 7.430 | 19.430x | 21.499 |
-| 11 | long nested alt miss | 10.000 | 0.183 | 8.494 | 46.490x | 21.408 |
-| 12 | capture chain miss | 25.000 | 0.380 | 8.245 | 21.696x | 22.374 |
-| 13 | capture chain random miss | 10.000 | 0.184 | 8.408 | 45.760x | 22.444 |
-| 14 | lazy class repeat | 10.000 | 0.137 | 1.366 | 9.973x | 22.697 |
-| 15 | lazy dot repeat | 10.000 | 0.136 | 1.375 | 10.074x | 24.406 |
-| 16 | greedy dot repeat | 10.000 | 0.137 | 1.375 | 10.053x | 24.063 |
-| 17 | anchored literal | 19.117 | 0.420 | 3.853 | 9.183x | 31.651 |
-| 18 | literal prose | 19.117 | 0.273 | 1.779 | 6.521x | 26.115 |
-| 19 | folded literal | 19.117 | 0.396 | 4.202 | 10.609x | 25.446 |
-| 20 | class suffix | 19.117 | 0.424 | 5.557 | 13.095x | 25.582 |
-| 21 | name alternation | 19.117 | 0.407 | 5.657 | 13.909x | 23.333 |
-| 22 | word boundary | 19.117 | 0.458 | 8.250 | 18.003x | 26.668 |
-| 23 | negated bounded | 19.117 | 0.361 | 13.938 | 38.573x | 48.854 |
-| 24 | name literals | 19.117 | 0.441 | 8.759 | 19.842x | 23.515 |
-| 25 | folded names | 19.117 | 0.500 | 10.457 | 20.913x | 23.683 |
-| 26 | short prefix names | 19.117 | 0.441 | 25.383 | 57.568x | 23.955 |
-| 27 | required prefix names | 19.117 | 0.444 | 28.554 | 64.308x | 23.622 |
-| 28 | word suffix | 19.117 | 0.380 | 6.856 | 18.023x | 23.415 |
-| 29 | bounded word suffix | 19.117 | 0.481 | 11.238 | 23.371x | 24.502 |
-| 30 | captured name suffix | 19.117 | 0.451 | 9.610 | 21.294x | 23.570 |
-| 31 | quoted sentence | 19.117 | 0.406 | 14.705 | 36.245x | 23.658 |
+| 1 | literal miss | 25.000 | 0.282 | 1.107 | 3.917x | 10.117 |
+| 2 | short alt miss | 10.000 | 0.139 | 2.527 | 18.151x | 22.720 |
+| 3 | suffix alt miss | 25.000 | 0.389 | 7.930 | 20.386x | 22.174 |
+| 4 | suffix alt prose | 19.117 | 0.410 | 8.110 | 19.800x | 23.142 |
+| 5 | wide class miss | 25.000 | 0.335 | 3.520 | 10.511x | 22.346 |
+| 6 | split class miss | 25.000 | 0.340 | 3.602 | 10.579x | 22.028 |
+| 7 | split class prose | 19.117 | 0.202 | 2.365 | 11.709x | 23.255 |
+| 8 | large alt prose | 19.117 | 0.452 | 34.395 | 76.099x | 23.789 |
+| 9 | large alt miss | 25.000 | 0.384 | 32.908 | 85.785x | 22.851 |
+| 10 | nested alt | 25.000 | 0.380 | 7.430 | 19.539x | 21.699 |
+| 11 | long nested alt miss | 10.000 | 0.181 | 8.494 | 46.870x | 21.508 |
+| 12 | capture chain miss | 25.000 | 0.379 | 8.245 | 21.783x | 21.950 |
+| 13 | capture chain random miss | 10.000 | 0.182 | 8.408 | 46.174x | 21.531 |
+| 14 | lazy class repeat | 10.000 | 0.138 | 1.366 | 9.871x | 22.294 |
+| 15 | lazy dot repeat | 10.000 | 0.135 | 1.375 | 10.185x | 22.156 |
+| 16 | greedy dot repeat | 10.000 | 0.137 | 1.375 | 10.044x | 22.268 |
+| 17 | anchored literal | 19.117 | 0.403 | 3.853 | 9.565x | 24.285 |
+| 18 | literal prose | 19.117 | 0.273 | 1.779 | 6.508x | 25.504 |
+| 19 | folded literal | 19.117 | 0.387 | 4.202 | 10.861x | 24.360 |
+| 20 | class suffix | 19.117 | 0.411 | 5.557 | 13.535x | 23.757 |
+| 21 | name alternation | 19.117 | 0.397 | 5.657 | 14.232x | 28.984 |
+| 22 | word boundary | 19.117 | 0.446 | 8.250 | 18.513x | 24.933 |
+| 23 | negated bounded | 19.117 | 0.356 | 13.938 | 39.109x | 47.288 |
+| 24 | name literals | 19.117 | 0.431 | 8.759 | 20.326x | 23.666 |
+| 25 | folded names | 19.117 | 0.487 | 10.457 | 21.467x | 23.245 |
+| 26 | short prefix names | 19.117 | 0.434 | 25.383 | 58.522x | 23.464 |
+| 27 | required prefix names | 19.117 | 0.439 | 28.554 | 65.103x | 28.663 |
+| 28 | word suffix | 19.117 | 0.368 | 6.856 | 18.624x | 24.367 |
+| 29 | bounded word suffix | 19.117 | 0.473 | 11.238 | 23.746x | 27.906 |
+| 30 | captured name suffix | 19.117 | 0.445 | 9.610 | 21.603x | 27.422 |
+| 31 | quoted sentence | 19.117 | 0.403 | 14.705 | 36.492x | 26.546 |
 
 #### Rust Leipzig full-corpus cases
 
@@ -911,24 +914,24 @@ Regex IR won 74 of 74 paired full-corpus cases. The narrowest result was Boost/G
 
 | Case | Expression role | Input (MiB) | Regex IR (ms) | cuDF (ms) | Speedup | Regex IR JIT-ready (ms) |
 |---:|:---|---:|---:|---:|---:|---:|
-| 1 | twain | 15.272 | 0.221 | 1.636 | 7.406x | 23.304 |
-| 2 | twain ignore case | 15.272 | 0.321 | 3.680 | 11.457x | 21.945 |
-| 3 | shing | 15.272 | 0.346 | 4.755 | 13.756x | 21.485 |
-| 4 | huck saw | 15.272 | 0.328 | 4.669 | 14.254x | 28.234 |
-| 5 | word nn | 15.272 | 0.367 | 7.000 | 19.096x | 24.179 |
-| 6 | negated bounded | 15.272 | 0.288 | 11.408 | 39.571x | 46.490 |
-| 7 | names | 15.272 | 0.361 | 7.670 | 21.264x | 21.897 |
-| 8 | names ignore case | 15.272 | 0.411 | 9.005 | 21.929x | 21.938 |
-| 9 | optional prefix | 15.272 | 0.363 | 21.776 | 60.022x | 25.075 |
-| 10 | required prefix | 15.272 | 0.367 | 21.678 | 59.122x | 22.719 |
-| 11 | tom river | 15.272 | 1.365 | 13.404 | 9.818x | 110.879 |
-| 12 | word ing | 15.272 | 0.312 | 5.515 | 17.671x | 22.556 |
-| 13 | bounded ing | 15.272 | 0.398 | 10.445 | 26.226x | 22.258 |
-| 14 | name suffix | 15.272 | 0.371 | 7.667 | 20.652x | 22.765 |
-| 15 | quoted sentence | 15.272 | 0.334 | 13.176 | 39.425x | 23.494 |
-| 16 | unicode symbols | 15.272 | 0.278 | 3.601 | 12.952x | 22.878 |
-| 17 | math symbol property | 15.272 | 0.283 | 2.781 | 9.813x | 31.169 |
-| 18 | csv field | 15.272 | 0.309 | 14.210 | 45.983x | 22.213 |
+| 1 | twain | 15.272 | 0.215 | 1.636 | 7.623x | 30.220 |
+| 2 | twain ignore case | 15.272 | 0.313 | 3.680 | 11.765x | 22.076 |
+| 3 | shing | 15.272 | 0.336 | 4.755 | 14.141x | 21.712 |
+| 4 | huck saw | 15.272 | 0.322 | 4.669 | 14.515x | 21.759 |
+| 5 | word nn | 15.272 | 0.361 | 7.000 | 19.373x | 23.839 |
+| 6 | negated bounded | 15.272 | 0.285 | 11.408 | 39.990x | 47.790 |
+| 7 | names | 15.272 | 0.353 | 7.670 | 21.729x | 22.160 |
+| 8 | names ignore case | 15.272 | 0.401 | 9.005 | 22.449x | 21.976 |
+| 9 | optional prefix | 15.272 | 0.356 | 21.776 | 61.239x | 25.013 |
+| 10 | required prefix | 15.272 | 0.357 | 21.678 | 60.727x | 22.575 |
+| 11 | tom river | 15.272 | 1.365 | 13.404 | 9.819x | 115.623 |
+| 12 | word ing | 15.272 | 0.305 | 5.515 | 18.101x | 22.428 |
+| 13 | bounded ing | 15.272 | 0.389 | 10.445 | 26.873x | 24.205 |
+| 14 | name suffix | 15.272 | 0.363 | 7.667 | 21.149x | 22.626 |
+| 15 | quoted sentence | 15.272 | 0.328 | 13.176 | 40.227x | 22.344 |
+| 16 | unicode symbols | 15.272 | 0.274 | 3.601 | 13.153x | 22.061 |
+| 17 | math symbol property | 15.272 | 0.278 | 2.781 | 9.997x | 30.076 |
+| 18 | csv field | 15.272 | 0.303 | 14.210 | 46.937x | 22.849 |
 
 #### Boost/GCC full-corpus cases
 
@@ -938,28 +941,28 @@ Regex IR won 74 of 74 paired full-corpus cases. The narrowest result was Boost/G
 
 | Case | Expression role | Input (MiB) | Regex IR (ms) | cuDF (ms) | Speedup | Regex IR JIT-ready (ms) |
 |---:|:---|---:|---:|---:|---:|---:|
-| 1 | long twain | 19.117 | 0.270 | 1.801 | 6.675x | 23.002 |
-| 2 | long huck | 19.117 | 0.266 | 2.052 | 7.702x | 22.448 |
-| 3 | long ing | 19.117 | 0.382 | 6.909 | 18.105x | 22.049 |
-| 4 | long line twain | 19.117 | 0.417 | 7.097 | 17.002x | 24.857 |
-| 5 | long names | 19.117 | 0.444 | 8.574 | 19.301x | 23.071 |
-| 6 | long names near river | 19.117 | 2.020 | 27.750 | 13.737x | 82.083 |
-| 7 | medium twain | 0.048 | 0.033 | 0.088 | 2.716x | 25.035 |
-| 8 | medium huck | 0.048 | 0.032 | 0.078 | 2.420x | 24.327 |
-| 9 | medium ing | 0.048 | 0.033 | 0.348 | 10.679x | 21.150 |
-| 10 | medium line twain | 0.048 | 0.039 | 0.346 | 8.793x | 24.612 |
-| 11 | medium names | 0.048 | 0.035 | 0.290 | 8.187x | 32.852 |
-| 12 | medium names near river | 0.048 | 0.127 | 0.629 | 4.945x | 82.668 |
-| 13 | cpp declaration | 0.033 | 0.035 | 0.342 | 9.783x | 83.544 |
-| 14 | cpp tokens | 0.033 | 0.125 | 82.822 | 665.197x | 182.727 |
-| 15 | cpp include | 0.033 | 0.033 | 0.234 | 7.059x | 26.913 |
-| 16 | boost include | 0.033 | 0.035 | 0.239 | 6.857x | 25.200 |
-| 17 | html names | 0.049 | 0.039 | 0.288 | 7.308x | 22.325 |
-| 18 | html paragraph | 0.049 | 0.032 | 0.284 | 8.743x | 22.550 |
-| 19 | html anchor | 0.049 | 0.037 | 0.789 | 21.282x | 23.029 |
-| 20 | html heading | 0.049 | 0.033 | 0.306 | 9.408x | 22.530 |
-| 21 | html image | 0.049 | 0.034 | 0.426 | 12.644x | 23.418 |
-| 22 | html font | 0.049 | 0.037 | 0.278 | 7.561x | 28.177 |
+| 1 | long twain | 19.117 | 0.271 | 1.801 | 6.642x | 24.325 |
+| 2 | long huck | 19.117 | 0.270 | 2.052 | 7.612x | 28.768 |
+| 3 | long ing | 19.117 | 0.369 | 6.909 | 18.723x | 23.456 |
+| 4 | long line twain | 19.117 | 0.406 | 7.097 | 17.482x | 26.068 |
+| 5 | long names | 19.117 | 0.434 | 8.574 | 19.760x | 24.695 |
+| 6 | long names near river | 19.117 | 2.007 | 27.750 | 13.825x | 83.401 |
+| 7 | medium twain | 0.048 | 0.032 | 0.088 | 2.743x | 25.022 |
+| 8 | medium huck | 0.048 | 0.032 | 0.078 | 2.392x | 22.532 |
+| 9 | medium ing | 0.048 | 0.033 | 0.348 | 10.529x | 21.682 |
+| 10 | medium line twain | 0.048 | 0.034 | 0.346 | 10.043x | 22.652 |
+| 11 | medium names | 0.048 | 0.036 | 0.290 | 8.169x | 21.864 |
+| 12 | medium names near river | 0.048 | 0.127 | 0.629 | 4.945x | 79.703 |
+| 13 | cpp declaration | 0.033 | 0.034 | 0.342 | 10.096x | 82.483 |
+| 14 | cpp tokens | 0.033 | 0.120 | 82.822 | 690.046x | 178.944 |
+| 15 | cpp include | 0.033 | 0.033 | 0.234 | 7.146x | 26.939 |
+| 16 | boost include | 0.033 | 0.034 | 0.239 | 7.023x | 28.825 |
+| 17 | html names | 0.049 | 0.039 | 0.288 | 7.419x | 22.745 |
+| 18 | html paragraph | 0.049 | 0.032 | 0.284 | 8.871x | 22.560 |
+| 19 | html anchor | 0.049 | 0.037 | 0.789 | 21.264x | 23.603 |
+| 20 | html heading | 0.049 | 0.032 | 0.306 | 9.480x | 23.551 |
+| 21 | html image | 0.049 | 0.033 | 0.426 | 12.780x | 23.016 |
+| 22 | html font | 0.049 | 0.036 | 0.278 | 7.643x | 26.511 |
 
 #### mariomka full-corpus cases
 
@@ -969,9 +972,9 @@ Regex IR won 74 of 74 paired full-corpus cases. The narrowest result was Boost/G
 
 | Case | Expression role | Input (MiB) | Regex IR (ms) | cuDF (ms) | Speedup | Regex IR JIT-ready (ms) |
 |---:|:---|---:|---:|---:|---:|---:|
-| 1 | email | 6.523 | 0.261 | 3.585 | 13.709x | 21.804 |
-| 2 | uri | 6.523 | 0.272 | 6.907 | 25.393x | 22.006 |
-| 3 | ipv4 | 6.523 | 0.265 | 10.003 | 37.703x | 22.100 |
+| 1 | email | 6.523 | 0.258 | 3.585 | 13.904x | 27.900 |
+| 2 | uri | 6.523 | 0.267 | 6.907 | 25.904x | 23.323 |
+| 3 | ipv4 | 6.523 | 0.262 | 10.003 | 38.211x | 22.743 |
 
 [All complete-corpus measurements](docs/_static/benchmarks/corpus-throughput-data.csv)
 
@@ -1035,9 +1038,9 @@ Global beginning/end anchors are folded into deterministic control flow, while
 the generated assertion helper validates end-line semantics. A replacement
 capture proven to cover the complete match reuses the match span instead of
 materializing a capture array. Ordinary loads retain compiler-selected cache
-policy. The benchmark wrappers use 256-thread blocks, selected from the
-register/occupancy profile, and write extract captures directly to final device
-storage.
+policy. The large API benchmark wrappers use 256-thread blocks; the smaller
+imported-corpus grids use a profile-selected 128-thread launch. Extract writes
+captures directly to final device storage.
 
 Nsight Compute used the same 262,144-row, 128-byte-axis workloads:
 
@@ -1103,6 +1106,23 @@ improved by 7.0% geometrically. The largest API case, `[a-z]+Z`, improved from
 6.828 to 3.689 ms for count, 20.493 to 11.121 ms for plain replacement, and
 19.895 to 12.930 ms for split.
 
+The 2026-07-07 all-benchmark PGO pass then replayed all 1,764 Regex IR API
+states, all 88 imported-corpus states, and all warm/cold states from a frozen
+branch-point baseline. A sparse ASCII start-filter miss in count now advances
+by the already-known one-byte width instead of loading that byte again. The
+complete count matrix improved 2.7%; a controlled large-state ABBA gate
+measured 12.6% for `\d+` and 9.3% for `[a-f]+|[0-5]+`. NCU measured 12.8%
+fewer executed instructions and 31.5% fewer global-load instructions for the
+profiled `\d+` kernel, with unchanged registers and occupancy. The direct edge
+is count-only: applying it to the larger replacement CFG slowed large rows by
+5–8%, so replace, split, find, and extract retain their prior lowering.
+
+The corpus-only 128-thread launch improved every imported family in ABBA
+measurements and raised the complete-corpus geometric speedup from 16.606x to
+16.868x. Broader `alwaysinline`, 32-byte start-filter, unfiltered-dead-edge,
+and universal 128-thread experiments were rejected after neutral or regressive
+profiles.
+
 [optimization.md](optimization.md) records the full experiment matrix,
 including rejected staged materialization, selectivity sweeps, cached
 length-ordering and pivot upper bounds, the temporary multi-pattern workload,
@@ -1127,7 +1147,7 @@ spills.
 
 Profiler replay perturbs absolute latency, so the benchmark table uses normal
 NVBench timings. Set `REGEX_IR_BENCHMARK_DUMP_DIR` to retain generated
-`.nvvm.ll`, libNVVM `.ptx`, and linked `.cubin` files for `cuobjdump` or
+`.nvvm.ll`, libNVVM `.ltoir`, and linked `.cubin` files for `cuobjdump` or
 `nvdisasm` inspection.
 
 ### Why specialized code still has branches

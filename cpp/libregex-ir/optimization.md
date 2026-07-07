@@ -199,6 +199,11 @@ inside the skipped run reaches the identical state at the failure position.
 Machines that accept the prefix, have stop-before transitions, multiple prefix
 states, or another incoming edge do not use the acceleration.
 
+For count, an ASCII start-filter miss advances the start by the already-known
+one-byte width instead of decoding that byte again. Find, extract, replace, and
+split retain the shared advance path because profiling found that the extra
+control-flow edge worsened libNVVM lowering inside their larger executors.
+
 ### Tagged DFA
 
 Capture extraction uses deterministic transitions only when analysis proves:
@@ -351,9 +356,11 @@ not expected to beat a precompiled interpreter's setup latency.
 ## Current launch and column policy
 
 The GPU benchmark adapters consume cuDF STRING columns and produce owning cuDF
-columns. They map one CUDA thread to one input row and use 256-thread blocks,
-chosen from register/occupancy profiling. Consecutive rows remain in their
-original order and are addressed through the cuDF offsets column.
+columns. They map one CUDA thread to one input row. The large cuDF API matrix
+uses 256-thread blocks, while the smaller imported-corpus grids use 128-thread
+blocks; both choices come from register/occupancy profiling. Consecutive rows
+remain in their original order and are addressed through the cuDF offsets
+column.
 
 The current integration does not:
 
@@ -583,6 +590,71 @@ and DFA-state counts was removed after the gate was chosen. Baseline
 executables, normal NVBench JSON, and full `.ncu-rep` files were kept outside
 the source tree during the campaign; no profiler-replay duration is used in
 presentation tables.
+
+## 2026-07-07 all-benchmark PGO campaign
+
+This campaign began from commit `9bcd4fc` on an isolated branch and froze the
+branch-point benchmark executables and JSON before changing source. Normal
+timings used GPU 1 of the two RTX A6000 devices because GPU 0 had unrelated
+activity. The final gate replayed all 1,764 Regex IR cuDF-API states, all 88
+imported-corpus states, and all eight warm/cold states. Unchanged cuDF states
+from the immediately preceding same-machine run were retained as the
+comparison baseline. Nsight Compute full-set replay and an Nsight Systems CUDA
+timeline were used only for diagnosis.
+
+The profiles covered contains, count, extract, both replacement kernels, both
+split kernels, and representative OpenResty, Leipzig, Boost, and mariomka
+cases. They confirmed that no one launch or executor policy fits every result
+shape: count is instruction/divergence limited, extract and emission phases
+move substantially more data, and the small-grid corpus runs expose different
+launch-geometry tradeoffs from the multi-million-row API matrix.
+
+### Accepted changes
+
+An ordered DFA with a sparse ASCII start filter used to load a rejected ASCII
+byte in the filter and then load it again in `advance` solely to move the start
+by one byte. Count now takes a direct filter-miss edge using the already-known
+ASCII width. The direct edge is deliberately limited to `MATCH_COUNT`.
+Controlled ABBA measurements found that placing the same edge inside the
+larger replace/split control-flow graph changed libNVVM's lowering and slowed
+large replacement states, even though it removed source-level work.
+
+The full count matrix improved by 1.027x. A higher-precision large-state ABBA
+gate measured 1.126x for `\d+` and 1.093x for `[a-f]+|[0-5]+`; replacement
+returned to 0.999x after the operation gate. The profile explains the count
+gain:
+
+| Metric, 2,097,152 rows × 128 bytes, `\d+` | Before | After |
+|:---|---:|---:|
+| profiled kernel duration | 2.544 ms | 2.252 ms |
+| executed SASS instructions | 1.241 billion | 1.083 billion |
+| global-load instructions | 57.31 million | 39.26 million |
+| registers per thread | 39 | 39 |
+| achieved occupancy | 90.27% | 90.46% |
+
+The corpus adapter now uses 128-thread blocks while the large API wrappers
+retain 256. The corpus-only ABBA gate improved OpenResty by 1.020x, Leipzig by
+1.005x, Boost by 1.009x, and mariomka by 1.004x. The exhaustive corpus replay
+improved the large families by 1.013–1.021x, compact Boost by 1.018x, and
+scalar Boost by 1.035x. This is integration policy rather than a public codegen
+option.
+
+### Rejected changes
+
+| Experiment | Measured result | Decision |
+|:---|:---|:---|
+| force `alwaysinline` on boolean and extract entrypoints | linked SASS retained the same 72/80-byte backend-outlined call frames; API and corpus timings were neutral | removed |
+| widen the sparse start filter from 16 to 32 candidate bytes | transform geomeans fell to 0.711x for count, 0.753x for replace, and 0.800x for split because passing candidates paid a duplicate load | removed |
+| jump directly from an unfiltered first dead transition back to search | the additional inner-loop backedge produced a less favorable libNVVM CFG; geomeans fell to 0.640x, 0.699x, and 0.792x | removed |
+| use 128-thread blocks for every wrapper | representative contains fell to 0.398x and count/extract/replace/split lost 1–5%, despite the small-grid corpus wins | retained only for corpus integration |
+| use the direct filtered edge for all span/materializing APIs | large replacement regressed 5–8% in ABBA measurements | gated to count |
+
+The rejected 32-byte-filter and direct-dead-edge experiments used every
+transform expression at 2,097,152 rows and 128 bytes. The launch experiment
+used one representative from each API and all four corpus families. The final
+replacement gate used patterns 0 and 3, plain and backreference replacement,
+1,048,576–8,388,607 rows, and 256-byte rows. These temporary matrices are
+documented here but are not additional shipped benchmark registrations.
 
 ## Prioritized opportunities
 

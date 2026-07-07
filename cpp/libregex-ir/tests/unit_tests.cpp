@@ -5884,6 +5884,19 @@ TEST_F(Nvvm, PrioritizedRuntimeRegressions)
   expect_replace(R"REGEX((?:\w{1,3}|.+?))REGEX", "1 b2", "<1>< ><b2>", byte_dot_all);
   expect_split(
     R"REGEX((?:.?a*\d?|(b)?\d+?))REGEX", "02b_a1ca", {"", "", "", "", "", ""}, byte_dot_all);
+
+  auto filtered        = expect_count("[0-5]+", "éa012z5", 2);
+  auto filtered_source = regex_ir::generate_nvvm_ir(filtered);
+  EXPECT_NE(filtered_source.find("start_filter_advance:"), std::string::npos);
+  EXPECT_NE(filtered_source.find("%start_filter_next = add nuw i64 %start, 1"), std::string::npos);
+  auto replacement_source =
+    regex_ir::generate_nvvm_ir(compile_ok("[0-5]+", regex_ir::operation::replace("<$0>")));
+  auto split_source =
+    regex_ir::generate_nvvm_ir(compile_ok("[0-5]+", regex_ir::operation::split()));
+  EXPECT_EQ(replacement_source.find("start_filter_advance:"), std::string::npos);
+  EXPECT_EQ(split_source.find("start_filter_advance:"), std::string::npos);
+  expect_replace("[0-5]+", "éa012z5", "éa<012>z<5>");
+  expect_split("[0-5]+", "éa012z5", {"éa", "z", ""});
 }
 
 TEST_F(Nvvm, ToolchainCompilation)

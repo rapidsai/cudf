@@ -332,7 +332,7 @@ class loaded_kernel {
               cudaStream_t stream) const
   {
     void* arguments[]             = {&chars, &offsets, &rows, &output};
-    constexpr unsigned block_size = 256;
+    constexpr unsigned block_size = 128;
     auto grid_size =
       static_cast<unsigned>((static_cast<std::uint32_t>(rows) + block_size - 1U) / block_size);
     check_driver(cuLaunchKernel(function_,

@@ -5363,7 +5363,8 @@ no:
   }
 
   std::string render_start_byte_filter(deterministic_machine const& machine,
-                                       std::string_view candidate_target)
+                                       std::string_view candidate_target,
+                                       bool direct_advance)
   {
     if (!machine.start_byte_filter) return {};
 
@@ -5415,6 +5416,12 @@ no:
       }
     }
 
+    auto miss_target  = direct_advance ? "start_filter_advance" : "advance_start";
+    auto direct_block = direct_advance ? std::string{R"NVVM(start_filter_advance:
+  %start_filter_next = add nuw i64 %start, 1
+  br label %search
+)NVVM"}
+                                       : std::string{};
     return fmt::format(
       R"NVVM(start_filter:
   %filter_at_end = icmp eq i64 %start, %size
@@ -5425,12 +5432,15 @@ start_filter_load:
   %start_filter_ascii = icmp ult i32 %start_filter_byte, 128
   br i1 %start_filter_ascii, label %start_filter_ascii_byte, label %{candidate_target}
 start_filter_ascii_byte:
-{checks}  br i1 {predicate}, label %{candidate_target}, label %advance_start
+{checks}  br i1 {predicate}, label %{candidate_target}, label %{miss_target}
+{direct_block}
 )NVVM",
       fmt::arg("candidate_target", candidate_target),
       fmt::arg("load_byte", name("load_byte")),
       fmt::arg("checks", checks),
-      fmt::arg("predicate", predicate));
+      fmt::arg("predicate", predicate),
+      fmt::arg("miss_target", miss_target),
+      fmt::arg("direct_block", direct_block));
   }
 
   /**
@@ -5441,7 +5451,7 @@ start_filter_ascii_byte:
   void emit_tagged_deterministic_find_from(deterministic_machine const& machine)
   {
     auto search_target = machine.start_byte_filter ? "start_filter" : "initialize";
-    auto start_filter  = render_start_byte_filter(machine, "initialize");
+    auto start_filter  = render_start_byte_filter(machine, "initialize", false);
     auto restart       = machine.restart_state <= machine.state_mask
                            ? fmt::format(
                          R"NVVM(  %restart_state_match = icmp eq i32 %state, {restart_state}
@@ -5878,10 +5888,15 @@ no:
   void emit_deterministic_find_from(deterministic_machine const& machine)
   {
     auto initial_accept = (machine.initial_state & 0x8000U) != 0 ? "%start" : "-1";
-    auto search_target  = machine.start_byte_filter ? "start_filter" : "candidate";
-    auto start_filter   = render_start_byte_filter(machine, "candidate");
-    auto restart        = machine.restart_state <= machine.state_mask
-                            ? fmt::format(
+    // the direct edge wins for count but disrupts larger materializing control-flow graphs.
+    auto direct_filter_advance = ir_.control.result == result_shape::MATCH_COUNT;
+    auto search_target         = machine.start_byte_filter ? "start_filter" : "candidate";
+    auto start_filter      = render_start_byte_filter(machine, "candidate", direct_filter_advance);
+    auto filter_search_phi = machine.start_byte_filter && direct_filter_advance
+                               ? ", [ %start_filter_next, %start_filter_advance ]"
+                               : "";
+    auto restart           = machine.restart_state <= machine.state_mask
+                               ? fmt::format(
                          R"NVVM(  %restart_state_match = icmp eq i32 %state, {restart_state}
   %restart_consumed = icmp ugt i64 %position, %start
   %restart_before_end = icmp ult i64 %position, %size
@@ -5890,16 +5905,19 @@ no:
   %restart_base = select i1 %restart_prefix, i64 %position, i64 %start
 )NVVM",
                          fmt::arg("restart_state", machine.restart_state))
-                            : std::string{};
+                               : std::string{};
     auto advance_phi =
-      machine.restart_state <= machine.state_mask && machine.start_byte_filter
+      machine.restart_state <= machine.state_mask && machine.start_byte_filter &&
+          !direct_filter_advance
         ? std::
             string{R"NVVM(  %restart_advance_base = phi i64 [ %restart_base, %candidate_fail ], [ %start, %start_filter_ascii_byte ]
 )NVVM"}
         : std::string{};
-    auto advance_base = machine.restart_state <= machine.state_mask
-                          ? (machine.start_byte_filter ? "%restart_advance_base" : "%restart_base")
-                          : "%start";
+    auto advance_base =
+      machine.restart_state <= machine.state_mask
+        ? (machine.start_byte_filter && !direct_filter_advance ? "%restart_advance_base"
+                                                               : "%restart_base")
+        : "%start";
     output_.emit(
       "{}",
       fmt::format(
@@ -5907,7 +5925,7 @@ no:
 entry:
   br label %search
 search:
-  %start = phi i64 [ %search_start, %entry ], [ %next_start, %advance_start ]
+  %start = phi i64 [ %search_start, %entry ], [ %next_start, %advance_start ]{filter_search_phi}
   %in_range = icmp ule i64 %start, %size
   br i1 %in_range, label %{search_target}, label %no
 {start_filter}
@@ -5977,6 +5995,7 @@ no:
         fmt::arg("function", name("find_from")),
         fmt::arg("search_target", search_target),
         fmt::arg("start_filter", start_filter),
+        fmt::arg("filter_search_phi", filter_search_phi),
         fmt::arg("initial_state", machine.initial_state),
         fmt::arg("initial_accept", initial_accept),
         fmt::arg("load_byte", name("load_byte")),
