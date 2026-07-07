@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.typing import Schema
@@ -310,13 +311,13 @@ def _update_ordering_indices(
     )
 
 
-def _unwrap_casts(expr: Any) -> Any:
+def _unwrap_casts(expr: Expr) -> Expr:
     while isinstance(expr, Cast):
         (expr,) = expr.children
     return expr
 
 
-def _truncate_source_name(expr: Any) -> str | None:
+def _truncate_source_name(expr: Expr) -> str | None:
     expr = _unwrap_casts(expr)
     if (
         isinstance(expr, TemporalFunction)
@@ -346,7 +347,8 @@ def _derived_ordering(
     if old_key_names != (source_name,):
         return None
 
-    boundary_chunk = ordering.get_boundaries(context.br())
+    br = context.br()
+    boundary_chunk = ordering.get_boundaries(br)
     stream = boundary_chunk.stream
     boundary_df = DataFrame.from_table(
         boundary_chunk.table_view(),
@@ -359,13 +361,14 @@ def _derived_ordering(
         plc.Table([column.obj]),
         stream,
         exclusive_view=True,
-        br=context.br(),
+        br=br,
     )
     key = ordering.keys[0]
+    target_index = names_to_indices((ne.name,), output_schema)[0]
     return Ordering(
         (
             OrderKey(
-                names_to_indices((ne.name,), output_schema)[0],
+                target_index,
                 key.order,
                 key.null_order,
             ),
