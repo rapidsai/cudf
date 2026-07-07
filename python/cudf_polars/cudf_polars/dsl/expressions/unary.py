@@ -103,6 +103,7 @@ class UnaryFunction(Expr):
     }
     _supported_misc_fns = frozenset(
         {
+            "approx_n_unique",
             "as_struct",
             "drop_nulls",
             "fill_null",
@@ -329,6 +330,22 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "approx_n_unique":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            count = plc.reduce.distinct_count(
+                column.obj,
+                plc.types.NullPolicy.INCLUDE,
+                plc.types.NanPolicy.NAN_IS_VALID,
+                stream=df.stream,
+            )
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(count, self.dtype.plc_type, stream=df.stream),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
