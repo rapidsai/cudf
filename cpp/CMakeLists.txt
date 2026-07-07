@@ -1207,7 +1207,6 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
-          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
           "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
           "$<BUILD_INTERFACE:${cudf_fragments_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
@@ -1259,7 +1258,7 @@ target_link_libraries(
           ${CUDF_nanoarrow_TARGET}
           zstd
           $<BUILD_LOCAL_INTERFACE:xxhash>
-          rtcx::rtcx
+          $<BUILD_LOCAL_INTERFACE:rtcx::rtcx>
 )
 
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
