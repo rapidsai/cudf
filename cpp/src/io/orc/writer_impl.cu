@@ -388,7 +388,7 @@ intermediate_statistics::intermediate_statistics(orc_table_view const& table,
     });
 }
 
-void persisted_statistics::persist(int num_table_rows,
+void persisted_statistics::persist(uint64_t num_table_rows,
                                    single_write_mode write_mode,
                                    intermediate_statistics&& intermediate_stats,
                                    rmm::cuda_stream_view stream)
