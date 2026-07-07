@@ -153,6 +153,7 @@ ConfigureNVBench(
   join/conditional_join.cu
   join/join.cu
   join/mixed_join.cu
+  join/direct_join.cu
   join/distinct_join.cu
   join/filter_join_indices.cu
   join/generate_input_tables.cu
