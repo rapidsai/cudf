@@ -17,6 +17,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup aggregation_reduction
  * @{
  * @file
+ * @brief APIs for computing reductions and scans over columns.
  */
 
 /**
