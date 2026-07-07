@@ -16,10 +16,14 @@
 
 #include <nvbench/nvbench.cuh>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <map>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <vector>
 
 // Benchmark for the parquet-dictionary -> cudf DICTIONARY32 transcode fast path enabled by
@@ -50,6 +54,90 @@ enum class bench_mode { plain_string, decode_encode, transcode };
   if (mode == "transcode") { return bench_mode::transcode; }
   CUDF_FAIL("Unknown benchmark mode: " + mode);
 }
+
+// nvbench invokes the benchmark once per axis combination and prints its own results table; there is
+// no cross-state hook, so a single invocation cannot compare `transcode` against `decode_encode`.
+// This collector accumulates each run's CPU/GPU mean time, keyed by every setting except `mode`, and
+// prints a relative comparison table from its destructor -- i.e. at program exit, after nvbench's
+// own output. `decode_encode` is the 100% reference and `transcode` is shown as a percentage of it.
+struct run_settings {
+  std::int64_t cardinality;
+  std::int64_t num_cols;
+  std::int64_t data_size;
+  std::int64_t avg_string_length;
+  std::int64_t row_group_size_rows;
+
+  bool operator<(run_settings const& o) const
+  {
+    return std::tie(cardinality, num_cols, data_size, avg_string_length, row_group_size_rows) <
+           std::tie(
+             o.cardinality, o.num_cols, o.data_size, o.avg_string_length, o.row_group_size_rows);
+  }
+};
+
+struct mode_timing {
+  double cpu_ms = 0.0;
+  double gpu_ms = 0.0;
+  bool present  = false;
+};
+
+class comparison_collector {
+ public:
+  void record(run_settings const& key, bench_mode mode, double cpu_ms, double gpu_ms)
+  {
+    auto& row = _rows[key];
+    auto& slot =
+      (mode == bench_mode::decode_encode)
+        ? row.decode_encode
+        : ((mode == bench_mode::transcode) ? row.transcode : row.plain_string);
+    slot = mode_timing{cpu_ms, gpu_ms, true};
+  }
+
+  ~comparison_collector() { print(); }
+
+ private:
+  struct row {
+    mode_timing plain_string;
+    mode_timing decode_encode;
+    mode_timing transcode;
+  };
+
+  void print() const
+  {
+    auto const has_pair = [](row const& r) { return r.decode_encode.present and r.transcode.present; };
+    if (std::none_of(_rows.begin(), _rows.end(), [&](auto const& kv) { return has_pair(kv.second); })) {
+      return;
+    }
+
+    std::printf("\n# transcode vs decode_encode (decode_encode = 100%% reference)\n\n");
+    std::printf(
+      "| cardinality | num_cols | data_size (MiB) | row_group_size_rows | decode_encode CPU (ms) | "
+      "transcode CPU (ms) | transcode CPU %% | decode_encode GPU (ms) | transcode GPU (ms) | "
+      "transcode GPU %% |\n");
+    std::printf("|---|---|---|---|---|---|---|---|---|---|\n");
+    for (auto const& [key, r] : _rows) {
+      if (not has_pair(r)) { continue; }
+      auto const cpu_pct = 100.0 * r.transcode.cpu_ms / r.decode_encode.cpu_ms;
+      auto const gpu_pct = 100.0 * r.transcode.gpu_ms / r.decode_encode.gpu_ms;
+      std::printf("| %lld | %lld | %lld | %lld | %.3f | %.3f | %.1f%% | %.3f | %.3f | %.1f%% |\n",
+                  static_cast<long long>(key.cardinality),
+                  static_cast<long long>(key.num_cols),
+                  static_cast<long long>(key.data_size >> 20),
+                  static_cast<long long>(key.row_group_size_rows),
+                  r.decode_encode.cpu_ms,
+                  r.transcode.cpu_ms,
+                  cpu_pct,
+                  r.decode_encode.gpu_ms,
+                  r.transcode.gpu_ms,
+                  gpu_pct);
+    }
+    std::printf("\n");
+  }
+
+  std::map<run_settings, row> _rows;
+};
+
+comparison_collector g_comparison_collector;
 
 // The transcode fast path requires every data page of an eligible column to be dictionary-encoded.
 // Forcing `dictionary_policy::ALWAYS` together with low cardinality guarantees this for the
@@ -157,12 +245,24 @@ void BM_parquet_read_dict_transcode(nvbench::state& state)
                CUDF_EXPECTS(result->num_columns() == num_cols, "Unexpected number of columns");
              });
 
-  auto const time = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  auto const time     = state.get_summary("nv/cold/time/gpu/mean").get_float64("value");
+  auto const cpu_time = state.get_summary("nv/cold/time/cpu/mean").get_float64("value");
   state.add_element_count(static_cast<double>(data_size) / time, "bytes_per_second");
   state.add_element_count(static_cast<double>(view.num_rows()) / time, "rows_per_sec");
   state.add_buffer_size(
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
   state.add_buffer_size(source_sink.size(), "encoded_file_size", "encoded_file_size");
+
+  // Record this run for the end-of-program transcode-vs-decode_encode comparison table. Times are
+  // reported by nvbench in seconds; store as milliseconds.
+  g_comparison_collector.record(run_settings{cardinality,
+                                             num_cols,
+                                             static_cast<std::int64_t>(data_size),
+                                             avg_string_length,
+                                             rg_size_rows},
+                                mode,
+                                cpu_time * 1e3,
+                                time * 1e3);
 }
 
 NVBENCH_BENCH(BM_parquet_read_dict_transcode)
