@@ -137,7 +137,7 @@ INSTANTIATE_TEST_SUITE_P(ReadParquetCombinations,
                            ::testing::Values(false, true),
                            // truncate file list
                            ::testing::Values(false, true)),
-                         [](const ::testing::TestParamInfo<ReadParquetParams>& info) {
+                         [](::testing::TestParamInfo<ReadParquetParams> const& info) {
                            auto const& skip_rows          = std::get<0>(info.param);
                            auto const& num_rows           = std::get<1>(info.param);
                            auto const& use_filter         = std::get<2>(info.param);

@@ -589,7 +589,7 @@ files:
   test_cudf_polars_compat:
     output: none
     matrix:
-      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41"]
+      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41", "1.42"]
     includes:
       - test_cudf_polars_compat
 channels:
@@ -967,7 +967,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.35,<1.42
+          - polars>=1.35,<1.43
           - typing_extensions>=4.0.0
   run_cudf_polars_dask:
     common:
@@ -1196,6 +1196,10 @@ dependencies:
           - {matrix: null, packages: [*libcudf_unsuffixed]}
   depends_on_numba_cuda:
     common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+        # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
+        - numba>=0.60.0,<0.65.0
       - output_types: [conda]
         packages:
         - &numba_cuda numba-cuda>=0.22.2
@@ -1737,5 +1741,9 @@ dependencies:
               polars_compat_version: "1.41"
             packages:
               - polars==1.41.*
+          - matrix:
+              polars_compat_version: "1.42"
+            packages:
+              - polars==1.42.*
           - matrix:
             packages:

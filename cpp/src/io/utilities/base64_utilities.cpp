@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (C) 2004-2017, 2020-2022 René Nyffenegger
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0 AND Zlib
  */
 
@@ -59,7 +59,7 @@
 // altered: use cudf namespaces
 namespace cudf::io::detail {
 
-static const std::string base64_chars =
+static std::string const base64_chars =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
   "abcdefghijklmnopqrstuvwxyz"
   "0123456789+/";
