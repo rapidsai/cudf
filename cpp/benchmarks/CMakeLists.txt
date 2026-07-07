@@ -149,20 +149,20 @@ ConfigureNVBench(
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   JOIN_NVBENCH
-  join/left_join.cu
   join/conditional_join.cu
-  join/join.cu
-  join/mixed_join.cu
   join/direct_join.cu
   join/distinct_join.cu
   join/filter_join_indices.cu
-  join/generate_input_tables.cu
   join/filter_join_indices_jit.cu
+  join/generate_input_tables.cu
+  join/join.cu
+  join/join_heuristics.cu
+  join/join_on_int32.cu
+  join/key_remap_build.cu
+  join/left_join.cu
+  join/mixed_join.cu
   join/multiplicity_join.cu
   join/sort_merge_join.cu
-  join/join_heuristics.cu
-  join/key_remap_build.cu
-  join/join_on_int32.cu
 )
 
 # ##################################################################################################
