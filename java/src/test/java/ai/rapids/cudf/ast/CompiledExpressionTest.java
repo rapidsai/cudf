@@ -309,6 +309,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     return Stream.of(
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL32, -2),
             new BigInteger("1234567")),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL32, 128), BigInteger.ONE),
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL32, 0), (BigInteger) null),
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL64, -4),
             new BigInteger("-123456789012345678")),

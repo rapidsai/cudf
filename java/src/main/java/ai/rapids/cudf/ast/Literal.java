@@ -278,10 +278,9 @@ public final class Literal extends AstExpression {
     int nativeTypeId = type.getTypeId().getNativeId();
     assert nativeTypeId == (byte) nativeTypeId : "Type ID does not fit in a byte";
     if (type.isDecimalType()) {
-      assert type.getScale() == (byte) type.getScale() : "Decimal scale does not fit in a byte";
-      return 2;
+      return Byte.BYTES + Integer.BYTES;
     }
-    return 1;
+    return Byte.BYTES;
   }
 
   private void serializeDataType(ByteBuffer bb) {
@@ -289,9 +288,7 @@ public final class Literal extends AstExpression {
     assert nativeTypeId == type.getTypeId().getNativeId() : "DType ID does not fit in a byte";
     bb.put(nativeTypeId);
     if (type.isDecimalType()) {
-      byte scale = (byte) type.getScale();
-      assert scale == (byte) type.getScale() : "Decimal scale does not fit in a byte";
-      bb.put(scale);
+      bb.putInt(type.getScale());
     }
   }
 

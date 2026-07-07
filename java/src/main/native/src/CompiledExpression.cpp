@@ -103,7 +103,7 @@ class jni_serialized_ast {
       case cudf::type_id::DECIMAL32:
       case cudf::type_id::DECIMAL64:
       case cudf::type_id::DECIMAL128: {
-        int32_t const scale = read_byte();
+        int32_t const scale = read<int32_t>();
         return cudf::data_type(dtype_id, scale);
       }
       default: throw new std::invalid_argument("unrecognized cudf data type");
