@@ -405,6 +405,70 @@ files:
       key: trace
     includes:
       - cudf_polars_trace
+  py_build_cudf_benchmarks:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_setuptools
+  py_run_cudf_benchmarks:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks
+    extras:
+      table: project
+    includes:
+      - run_cudf_benchmarks
+  py_run_cudf_benchmarks_polars:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks
+    extras:
+      table: project.optional-dependencies
+      key: polars
+    includes:
+      - run_cudf_benchmarks_polars
+      - depends_on_cudf_polars
+      - depends_on_rapidsmpf
+      - depends_on_kvikio
+  py_run_cudf_benchmarks_pandas:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks
+    extras:
+      table: project.optional-dependencies
+      key: pandas
+    includes:
+      - run_cudf_benchmarks_pandas
+      - depends_on_cudf
+  py_run_cudf_benchmarks_dask:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks
+    extras:
+      table: project.optional-dependencies
+      key: dask
+    includes:
+      - run_cudf_benchmarks_dask
+  py_run_cudf_benchmarks_ray:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks
+    extras:
+      table: project.optional-dependencies
+      key: ray
+    includes:
+      - depends_on_ray
+  py_build_cudf_benchmarks_cpu:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks_cpu
+    extras:
+      table: build-system
+    includes:
+      - rapids_build_setuptools
+  py_run_cudf_benchmarks_cpu:
+    output: pyproject
+    pyproject_dir: python/cudf_benchmarks_cpu
+    extras:
+      table: project
+    includes:
+      - run_cudf_benchmarks_cpu
   py_build_dask_cudf:
     output: pyproject
     pyproject_dir: python/dask_cudf
@@ -592,6 +656,10 @@ files:
       polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41", "1.42"]
     includes:
       - test_cudf_polars_compat
+  test_cudf_polars_tpch:
+    output: none
+    includes:
+      - test_cudf_polars_tpch
 channels:
   - rapidsai-nightly
   - rapidsai
@@ -974,6 +1042,38 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - rapids-dask-dependency==26.8.*,>=0.0.0a0
+  run_cudf_benchmarks:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          # 'nvtx' is imported at module scope by both the polars and pandas benchmarks.
+          - &nvtx nvtx
+  run_cudf_benchmarks_polars:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - duckdb
+          - tpchgen-cli
+  run_cudf_benchmarks_pandas:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - pandas
+          - tpchgen-cli
+  run_cudf_benchmarks_dask:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - rapids-dask-dependency==26.8.*,>=0.0.0a0
+  run_cudf_benchmarks_cpu:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - *nvtx
+          - polars>=1.35,<1.43
+          - duckdb
+          - pandas
+          - tpchgen-cli
   run_dask_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1165,6 +1265,12 @@ dependencies:
           # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
           # (https://github.com/pandas-dev/pandas/issues/66086).
           - *pandas
+  test_cudf_polars_tpch:
+    common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+          - duckdb
+          - tpchgen-cli
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1357,6 +1463,29 @@ dependencies:
           - matrix:
             packages:
               - cupy-cuda13x[ctk]>=14.0.1,!=14.1.0
+  depends_on_kvikio:
+    common:
+      - output_types: conda
+        packages:
+          - &kvikio_unsuffixed kvikio==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - kvikio-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - kvikio-cu13==26.8.*,>=0.0.0a0
+          - {matrix: null, packages: [*kvikio_unsuffixed]}
   depends_on_libkvikio:
     common:
       - output_types: conda
@@ -1687,7 +1816,25 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cudf-polars==26.8.*,>=0.0.0a0
+          - &cudf_polars_unsuffixed cudf-polars==26.8.*,>=0.0.0a0
+      - output_types: requirements
+        packages:
+          # pip recognizes the index as a global option for the requirements.txt file
+          - --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
+    specific:
+      - output_types: [requirements, pyproject]
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              cuda_suffixed: "true"
+            packages:
+              - cudf-polars-cu12==26.8.*,>=0.0.0a0
+          - matrix:
+              cuda: "13.*"
+              cuda_suffixed: "true"
+            packages:
+              - cudf-polars-cu13==26.8.*,>=0.0.0a0
+          - {matrix: null, packages: [*cudf_polars_unsuffixed]}
   depends_on_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]

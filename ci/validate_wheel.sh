@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -38,6 +38,8 @@ elif [[ "${package_dir}" == "python/cudf_streaming" ]]; then
     )
 elif [[ "${package_dir}" != "python/cudf" ]] && \
      [[ "${package_dir}" != "python/cudf_polars" ]] && \
+     [[ "${package_dir}" != "python/cudf_benchmarks" ]] && \
+     [[ "${package_dir}" != "python/cudf_benchmarks_cpu" ]] && \
      [[ "${package_dir}" != "python/dask_cudf" ]] && \
      [[ "${package_dir}" != "python/pylibcudf" ]]; then
     rapids-echo-stderr "unrecognized package_dir: '${package_dir}'"
