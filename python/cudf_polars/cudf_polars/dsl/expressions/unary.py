@@ -121,6 +121,7 @@ class UnaryFunction(Expr):
     )
     _supported_cum_aggs = frozenset(
         {
+            "cum_count",
             "cum_min",
             "cum_max",
             "cum_prod",
@@ -552,6 +553,22 @@ class UnaryFunction(Expr):
             )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
+            if self.name == "cum_count":
+                # cum_count is the cumulative count of non-null values.
+                counts = plc.unary.cast(
+                    plc.unary.is_valid(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                )
+                return Column(
+                    plc.reduce.scan(
+                        counts,
+                        plc.aggregation.sum(),
+                        plc.reduce.ScanType.INCLUSIVE,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             plc_col = column.obj
             col_type = column.dtype.plc_type
             # cum_sum casts
