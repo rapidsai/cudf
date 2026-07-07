@@ -7,6 +7,7 @@ import itertools
 import warnings
 from typing import TYPE_CHECKING, Any, TypeVar
 
+import cupy
 import numpy as np
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
@@ -677,8 +678,38 @@ class RollingGroupby(Rolling):
     """
 
     def __init__(self, groupby, window, min_periods=None, center=False):
+        if isinstance(window, BaseIndexer):
+            raise NotImplementedError(
+                "BaseIndexer subclasses are not yet supported with "
+                "groupby.rolling: the window bounds would not be computed "
+                "per group"
+            )
+        self._as_index = groupby._as_index
+        sort_inds = groupby.grouping.keys._get_sorted_inds()
+        if not groupby._sort:
+            # With sort=False pandas keeps groups in order of first
+            # appearance; reorder the key-sorted blocks accordingly while
+            # keeping the original row order within each block.
+            offsets, _, (positions,) = groupby._groups(
+                [groupby._range_column_from_obj]
+            )
+            pos = cupy.asarray(positions.values)
+            off = cupy.asarray(offsets)
+            # broadcast each group's first-appearance position to its rows
+            # (searchsorted maps each row to its group block; older cupy
+            # does not support an ndarray ``repeats`` in ``cupy.repeat``)
+            row_group = (
+                cupy.searchsorted(off, cupy.arange(len(pos)), side="right") - 1
+            )
+            row_first_pos = pos[off[:-1]][row_group]
+            # lexsort: primary key is each row's group-first-appearance
+            # position, ties broken by the current (key-sorted) order
+            order = cupy.lexsort(
+                cupy.stack([cupy.arange(len(pos)), row_first_pos])
+            )
+            sort_inds = as_column(pos[order])
         sort_order = GatherMap.from_column_unchecked(
-            groupby.grouping.keys._get_sorted_inds(),
+            sort_inds,
             len(groupby.obj),
             nullify=False,
         )
@@ -709,9 +740,33 @@ class RollingGroupby(Rolling):
             center=self.center,
         )
         new._group_keys = self._group_keys
+        new._as_index = self._as_index
         return new
 
     def _apply_agg(self, agg_name: str, **agg_kwargs) -> DataFrame | Series:
+        from cudf.core.dataframe import DataFrame
+
+        result = super()._apply_agg(agg_name, **agg_kwargs)
+
+        if self._as_index is False and isinstance(result, DataFrame):
+            # pandas returns the group keys as leading columns with the
+            # original (group-ordered) index when as_index=False.
+            data = dict(
+                zip(
+                    self._group_keys._column_names,  # type: ignore[union-attr]
+                    self._group_keys._columns,  # type: ignore[union-attr]
+                    strict=True,
+                )
+            )
+            for name, col in result._data.items():
+                if name in data:
+                    raise NotImplementedError(
+                        "as_index=False with a group key sharing a column "
+                        "name with the result is not supported"
+                    )
+                data[name] = col
+            return DataFrame._from_data(data, index=self.obj.index)
+
         index = MultiIndex._from_data(
             dict(
                 enumerate(
@@ -728,6 +783,5 @@ class RollingGroupby(Rolling):
                 self.obj.index._column_names,
             )
         )
-        result = super()._apply_agg(agg_name, **agg_kwargs)
         result.index = index
         return result
