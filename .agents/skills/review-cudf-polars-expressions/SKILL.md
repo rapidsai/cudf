@@ -1,20 +1,20 @@
 ---
 name: review-cudf-polars-expressions
-description: Use when implementing or reviewing support for Polars Expressions in cudf_polars
+description: Use when implementing or reviewing support for Polars Expressions in cudf-polars
 ---
 
-# Polars Expression implementation in cudf_polars
+# Polars Expression implementation in cudf-polars
 
-This rule describes guidelines and implementation patterns for supporting Polars' Expression Python APIs in cudf_polars. A successful implementation:
+This rule describes guidelines and implementation patterns for supporting Polars' Expression Python APIs in cudf-polars. A successful implementation:
 
-1. Runs entirely on the GPU through cudf_polars and does not fall back to Polars on the CPU.
+1. Runs entirely on the GPU through cudf-polars and does not fall back to Polars on the CPU.
 2. If an expression cannot be supported or only partially supported (e.g. a parameter is unsupported), an error is raised during IR translation and not during runtime.
-3. The expression is supported for all Polars versions that cudf_polars supports specified in `python/cudf_polars/pyproject.toml`
+3. The expression is supported for all Polars versions that cudf-polars supports specified in `python/cudf_polars/pyproject.toml`
 4. Passes all `pre-commit` checks.
 
 ## Prerequisites
 
-1. Identify a suitable cudf-polars development environment, if not provided by the user, and ensure the Polars version is the latest supported version by cudf_polars.
+1. Identify a suitable cudf-polars development environment, if not provided by the user, and ensure the Polars version is the latest supported version by cudf-polars.
 2. Identify a directory that contains the Polars source code to use as a reference for implementations. If it is not provided by the user or one cannot be identified, clone it to a temporary location. Ensure the Polars Git source tree is checked-out to the same Polars version installed in the development environment.
 
 For example, to clone Polars matching the Polars version in a fictional, conda development environment named "cudf-dev"
@@ -43,21 +43,21 @@ Next, further understand the runtime behavior of the expressions by:
 
 Now, review if the Polars expression is currently supported and correct with cudf-polars.
 
-Run the same examples generated in Step 1 with `pl.GPUEngine(executor="streaming", raise_on_fail=True)` passed to the `engine` argument of `collect` so failures do not fall back to CPU Polars. If the example data was relatively small, this should test the single partition path of cudf_polars.
+Run the same examples generated in Step 1 with `pl.GPUEngine(executor="streaming", raise_on_fail=True)` passed to the `engine` argument of `collect` so failures do not fall back to CPU Polars. If the example data was relatively small, this should test the single partition path of cudf-polars.
 
-Additionally run another variation of the Step 1 examples with `pl.GPUEngine(executor="streaming", raise_on_fail=True, executor_options={"max_rows_per_partition": 2})` passed to the `engine` argument of `collect`. With a large enough input data for the examples, this configuration would test the multiple partition path of cudf_polars.
+Additionally run another variation of the Step 1 examples with `pl.GPUEngine(executor="streaming", raise_on_fail=True, executor_options={"max_rows_per_partition": 2})` passed to the `engine` argument of `collect`. With a large enough input data for the examples, this configuration would test the multiple partition path of cudf-polars.
 
 Note the following failure and fallback cases:
 
 1. A failure might occur because an expression isn't exposed in Polars through `crates/polars-python/src/lazyframe/visitor/expr_nodes.rs`. A fix therefore would be needed upstream in Polars in order to proceed with the next steps.
 2. A failure might occur because an expression isn't supported in cudf-polars.
-3. An expression might not be implemented when run in the multiple partition path of cudf_polars and might fall back to the single partition path.
+3. An expression might not be implemented when run in the multiple partition path of cudf-polars and might fall back to the single partition path.
 
 ## Step 3: Implement the Polars expression in cudf-polars.
 
 ### Step 3a. Single Partition Implementation
 
-Start with scoping an implementation for the single partition path for cudf_polars. This ensures that the multiple partition path can fall back to this implementation.
+Start with scoping an implementation for the single partition path for cudf-polars. This ensures that the multiple partition path can fall back to this implementation.
 
 1. An expression implementation should belong in the `python/cudf_polars/cudf_polars/dsl/expressions` directory.
 2. Review the `pylibcudf` API to find the appropriate function or functions needed for the implementation.
@@ -82,9 +82,9 @@ TODO: Add more guidance on a multiple partition implementation.
 Finally, add a unit test to an existing or new file in the `python/cudf_polars/tests/expressions` directory to test the implementation.
 
 1. The added unit tests should cover all the lines added in the implementation. A CI job validates that there is 100% code coverage.
-2. The unit tests should use the `engine` fixture from `python/cudf_polars/tests/conftest.py` to test all applicable cudf_polars engine types including single and multiple partition execution.
+2. The unit tests should use the `engine` fixture from `python/cudf_polars/tests/conftest.py` to test all applicable cudf-polars engine types including single and multiple partition execution.
 3. Review the existing unit tests in `python/cudf_polars/tests` to check if existing tests used this expressions. Unit tests may have existed that asserted that this expression was not supported.
-4. The unit test should use `pytest.mark.skipif` with a boolean variable from `python/cudf_polars/cudf_polars/utils/versions.py` if a unit test exercises a Polars expression or an argument that doesn't exist since a particular Polars version within the cudf_polars support window defined in `python/cudf_polars/pyproject.toml`.
+4. The unit test should use `pytest.mark.skipif` with a boolean variable from `python/cudf_polars/cudf_polars/utils/versions.py` if a unit test exercises a Polars expression or an argument that doesn't exist since a particular Polars version within the cudf-polars support window defined in `python/cudf_polars/pyproject.toml`.
 5. When using `assert_gpu_result_equal` for expressions that return floats, consider specifying `check_exact=False` if necessary.
 
 TODO: Add more guidance on a multiple partition implementation.
