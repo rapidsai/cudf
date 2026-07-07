@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf_test/cudf_gtest.hpp>
@@ -48,6 +48,11 @@ TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsNullBoundaries)
   EXPECT_THROW(static_cast<void>(
                  order_scheme({{0, cudf::order::ASCENDING, cudf::null_order::BEFORE}}, nullptr)),
                std::invalid_argument);
+}
+
+TEST_F(StreamingChannelMetadata, OrderSchemeCtorRejectsEmptyOrderings)
+{
+  EXPECT_THROW(static_cast<void>(order_scheme(std::vector<ordering>{})), std::invalid_argument);
 }
 
 TEST_F(StreamingChannelMetadata, PartitioningSpec)
@@ -173,14 +178,14 @@ class StreamingChannelMetadataGPU : public ::testing::Test {
   }
 };
 
-TEST_F(StreamingChannelMetadataGPU, OrderSchemeReplaceKeys)
+TEST_F(StreamingChannelMetadataGPU, OrderingReplaceKeys)
 {
   order_key k0{0, cudf::order::ASCENDING, cudf::null_order::BEFORE};
   order_key k5{5, cudf::order::DESCENDING, cudf::null_order::AFTER};
 
-  auto b = make_chunk({100, 200});
-  order_scheme o1({k0}, b);
-  auto o2 = o1.with_keys({k5});
+  auto b      = make_chunk({100, 200});
+  ordering o1 = ordering({k0}, b);
+  auto o2     = o1.with_keys({k5});
 
   EXPECT_EQ(o2.keys[0].column_index, 5);
   EXPECT_EQ(o2.keys[0].order, cudf::order::DESCENDING);
@@ -192,22 +197,40 @@ TEST_F(StreamingChannelMetadataGPU, OrderSchemeReplaceKeys)
   EXPECT_THROW(static_cast<void>(o1.with_keys({k0, k5})), std::invalid_argument);
 }
 
-TEST_F(StreamingChannelMetadataGPU, OrderSchemeBoundariesAlignedWith)
+TEST_F(StreamingChannelMetadataGPU, OrderSchemeMultipleOrderings)
+{
+  order_key k0{0, cudf::order::ASCENDING, cudf::null_order::BEFORE};
+  order_key k2{2, cudf::order::DESCENDING, cudf::null_order::AFTER};
+
+  auto b0 = make_chunk({100, 200});
+  auto b1 = make_chunk({300, 400});
+  order_scheme o({ordering{{k0}, b0, true}, ordering{{k2}, b1, false}});
+
+  ASSERT_EQ(o.orderings.size(), 2);
+  EXPECT_EQ(o.orderings[0].keys[0], k0);
+  EXPECT_EQ(o.orderings[0].boundaries.get(), b0.get());
+  EXPECT_TRUE(o.orderings[0].strict_boundaries);
+  EXPECT_EQ(o.orderings[1].keys[0], k2);
+  EXPECT_EQ(o.orderings[1].boundaries.get(), b1.get());
+  EXPECT_FALSE(o.orderings[1].strict_boundaries);
+}
+
+TEST_F(StreamingChannelMetadataGPU, OrderingBoundariesAlignedWith)
 {
   order_key k0{0, cudf::order::ASCENDING, cudf::null_order::BEFORE};
   order_key k3{3, cudf::order::ASCENDING, cudf::null_order::BEFORE};
 
-  order_scheme o1({k0}, make_chunk({100, 200}));
-  order_scheme o2({k0}, make_chunk({100, 200}));
+  ordering o1({k0}, make_chunk({100, 200}));
+  ordering o2({k0}, make_chunk({100, 200}));
   EXPECT_TRUE(o1.boundaries_aligned_with(o2, *br));
 
-  order_scheme o_shifted({k3}, make_chunk({100, 200}));
+  ordering o_shifted({k3}, make_chunk({100, 200}));
   EXPECT_TRUE(o1.boundaries_aligned_with(o_shifted, *br));
 
-  order_scheme o_strict({k0}, make_chunk({100, 200}), /*strict=*/true);
+  ordering o_strict({k0}, make_chunk({100, 200}), /*strict_boundaries=*/true);
   EXPECT_FALSE(o1.boundaries_aligned_with(o_strict, *br));
 
-  order_scheme o_diff({k0}, make_chunk({100, 300}));
+  ordering o_diff({k0}, make_chunk({100, 300}));
   EXPECT_FALSE(o1.boundaries_aligned_with(o_diff, *br));
 }
 
@@ -219,10 +242,10 @@ TEST_F(StreamingChannelMetadataGPU, PartitioningSpecOrder)
   auto spec = partitioning_spec::from_order(o);
   EXPECT_EQ(spec.type, partitioning_spec::type::ORDER);
   EXPECT_TRUE(spec.order.has_value());
-  EXPECT_EQ(spec.order->keys[0].column_index, 0);
+  EXPECT_EQ(spec.order->orderings[0].keys[0].column_index, 0);
 
   // Type checks only (partitioning_spec::operator== removed; ORDER value comparison
-  // requires boundaries_aligned_with on the order_scheme directly)
+  // requires boundaries_aligned_with on the ordering directly)
   EXPECT_EQ(spec.type, partitioning_spec::type::ORDER);
   EXPECT_NE(spec.type, partitioning_spec::from_hash(hash_scheme{{0}, 16}).type);
   EXPECT_NE(spec.type, partitioning_spec::none().type);

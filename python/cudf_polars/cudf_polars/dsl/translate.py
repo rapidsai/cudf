@@ -967,6 +967,26 @@ def _(
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
+        if name == "fused":
+            # TODO: fuse into a single kernel via JIT transform, see
+            # https://github.com/rapidsai/cudf/issues/21456. We don't use
+            # libcudf AST here because it widens the dtype for integer types
+            # narrower than int32 (e.g. int8*int8 to int32), then fails
+            # with a type mismatch when doing the add/sub with the third operand.
+            (flavor,) = options
+            a, b, c = children
+            mul = plc.binaryop.BinaryOperator.MUL
+            add = plc.binaryop.BinaryOperator.ADD
+            sub = plc.binaryop.BinaryOperator.SUB
+            match flavor:
+                case "fma":
+                    return expr.BinOp(dtype, add, expr.BinOp(dtype, mul, a, b), c)
+                case "fsm":
+                    return expr.BinOp(dtype, sub, a, expr.BinOp(dtype, mul, b, c))
+                case "fms":
+                    return expr.BinOp(dtype, sub, expr.BinOp(dtype, mul, a, b), c)
+                case _:  # pragma: no cover
+                    raise NotImplementedError(f"Unsupported fused expression {flavor=}")
         if name == "log" or (
             name == "l"
             and isinstance(options[0], str)
