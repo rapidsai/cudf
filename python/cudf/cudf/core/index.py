@@ -3399,7 +3399,18 @@ class DatetimeIndex(Index):
             if dtype.kind != "M":
                 raise TypeError("dtype must be a datetime type")
             elif not isinstance(data.dtype, pd.DatetimeTZDtype):
-                data = data.astype(dtype)
+                if (
+                    isinstance(dtype, pd.DatetimeTZDtype)
+                    and data.dtype.kind not in "iuf"
+                ):
+                    # pandas interprets timezone-naive strings/datetimes as
+                    # wall time in the target timezone (numeric data stays
+                    # interpreted as UTC epoch values)
+                    data = data.astype(
+                        np.dtype(f"datetime64[{dtype.unit}]")
+                    ).tz_localize(str(dtype.tz))
+                else:
+                    data = data.astype(dtype)
         elif data.dtype.kind != "M":
             if is_dtype_obj_string(data.dtype):
                 # Pandas's array_to_datetime falls back to [s] when no
