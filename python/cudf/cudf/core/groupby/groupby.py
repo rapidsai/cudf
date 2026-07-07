@@ -2308,8 +2308,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                     )
                 else:
                     index_data = group_keys._data.copy(deep=True)
+                    inner_name = grouped_values.index.name
                     index_data[None] = grouped_values.index._column
-                    result.index = MultiIndex._from_data(index_data)
+                    mi = MultiIndex._from_data(index_data)
+                    # ColumnAccessor keys must be unique, so the inner
+                    # level's name (which may duplicate a key name) is
+                    # restored after construction.
+                    mi.names = [*mi.names[:-1], inner_name]
+                    result.index = mi
             elif len(chunk_results) == len(group_names):
                 result = concat(chunk_results, axis=1).T
                 result.index = group_names
@@ -2329,8 +2335,14 @@ class GroupBy(Serializable, Reducible, Scannable):
                 # row positions of the grouped values. This matches pandas,
                 # e.g. a UDF returning ``DataFrame({"values": range(len(grp))})``
                 # contributes a fresh 0..len(grp)-1 range per group.
+                inner_name = result.index.name
                 index_data[None] = result.index._column
-                result.index = MultiIndex._from_data(index_data)
+                mi = MultiIndex._from_data(index_data)
+                # ColumnAccessor keys must be unique, so the inner level's
+                # name (which may duplicate a key name) is restored after
+                # construction.
+                mi.names = [*mi.names[:-1], inner_name]
+                result.index = mi
         return result
 
     @_performance_tracking
