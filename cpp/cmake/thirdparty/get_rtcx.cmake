@@ -16,7 +16,7 @@ function(find_and_configure_rtcx VERSION)
     GLOBAL_TARGETS rtcx::rtcx
     CPM_ARGS
     GIT_REPOSITORY https://github.com/vyasr/librtcx.git
-    GIT_TAG 31a72956cca60fa6039e6af746ed4e9771cca740
+    GIT_TAG 1087bdfecb48138bee3b8c73d86a284aa5ae827e
     GIT_SHALLOW FALSE
     EXCLUDE_FROM_ALL ${CUDF_EXCLUDE_DEPS_FROM_ALL}
   )
