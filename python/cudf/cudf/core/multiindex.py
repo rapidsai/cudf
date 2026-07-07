@@ -1809,7 +1809,7 @@ class MultiIndex(Index):
             dict(zip(level_labels, self._columns, strict=True))
         )
         pos_label = self.nlevels
-        df[pos_label] = as_column(range(len(df)))
+        df[pos_label] = range(len(df))
 
         # the uniques are the distinct rows in order of first appearance
         # (or sorted lexicographically when requested)
@@ -1822,7 +1822,7 @@ class MultiIndex(Index):
             by=level_labels if sort else pos_label, ignore_index=True
         )
         uid_label = self.nlevels + 1
-        uniques[uid_label] = as_column(range(len(uniques)))
+        uniques[uid_label] = range(len(uniques))
 
         # codes: map each row to its unique-row id, in the original order
         merged = df.merge(
