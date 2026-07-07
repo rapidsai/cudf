@@ -12,6 +12,7 @@
 
 #include <cooperative_groups.h>
 #include <cuda/barrier>
+#include <cuda/std/iterator>
 
 namespace cudf::io::parquet::detail {
 
@@ -231,7 +232,7 @@ struct rle_stream {
     smem_stage      = _smem_stage;
     smem_stage_size = _smem_stage_size;
     if (smem_stage != nullptr) {
-      auto const len = static_cast<int>(_end - _start);
+      auto const len = static_cast<int>(cuda::std::distance(_start, _end));
       if (len > 0 && len <= smem_stage_size) {
         auto group = cooperative_groups::this_thread_block();
         cuda::memcpy_async(group, _smem_stage, _start, static_cast<size_t>(len), *_copy_barrier);
