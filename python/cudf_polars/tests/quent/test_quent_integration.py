@@ -12,32 +12,49 @@ import pytest
 import polars as pl
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from cudf_polars.engine.core import StreamingEngine
     from cudf_polars.quent import QuentContext
+
+# Quent tracing requires structlog to emit events. Skip the whole module when
+# it is unavailable so the engine fixture below is never even constructed. This
+# matters because the fixture builds a real engine (owning a rapidsmpf
+# ``Context``); if the module were collected and a test skipped *after* the
+# fixture ran, the engine could be abandoned and its ``Context`` finalized by
+# the garbage collector on the wrong thread, which aborts the interpreter.
+pytest.importorskip("structlog")
 
 
 @pytest.fixture(params=["ray", "dask", "spmd"])
 def engine_with_quent_context(
     request: pytest.FixtureRequest,
     quent_context: QuentContext,
-) -> StreamingEngine:
+) -> Iterator[StreamingEngine]:
     """
     A streaming engine configured with a quent context from the 'quent_context'
     fixture.
+
+    The engine owns a rapidsmpf ``Context`` that must be shut down on the thread
+    that created it. This fixture guarantees that teardown even if the test body
+    skips or raises before shutting the engine down itself; otherwise the
+    ``Context`` would be finalized by the garbage collector on an arbitrary
+    thread and abort the interpreter.
     """
     backend = request.param
+    engine: StreamingEngine
     if backend == "ray":
         pytest.importorskip("ray")
         import cudf_polars.engine.ray
 
-        return cudf_polars.engine.ray.RayEngine(
+        engine = cudf_polars.engine.ray.RayEngine(
             executor_options={"quent_context": quent_context}
         )
     elif backend == "dask":
         pytest.importorskip("distributed")
         import cudf_polars.engine.dask
 
-        return cudf_polars.engine.dask.DaskEngine(
+        engine = cudf_polars.engine.dask.DaskEngine(
             executor_options={"quent_context": quent_context}
         )
     elif backend == "spmd":
@@ -60,19 +77,24 @@ def engine_with_quent_context(
                 Options(get_environment_variables()), ProgressThread()
             )
 
-        return cudf_polars.engine.spmd.SPMDEngine(
+        engine = cudf_polars.engine.spmd.SPMDEngine(
             executor_options={"quent_context": quent_context},
             comm=comm,
         )
     else:
         raise ValueError(f"Invalid backend: {backend}")
 
+    try:
+        yield engine
+    finally:
+        # Idempotent: a no-op if the test body already shut the engine down.
+        engine.shutdown()
+
 
 def test_quent_events(
     engine_with_quent_context: StreamingEngine, quent_context: QuentContext
 ) -> None:
     # We need to create the engine, to ensure the lifecycle events are emitted properly.
-    pytest.importorskip("structlog")
     q = pl.LazyFrame({"x": [1, 2]}).filter(pl.col("x") > 1)
 
     with engine_with_quent_context:
