@@ -18,11 +18,7 @@ if TYPE_CHECKING:
     from cudf_polars.quent import QuentContext
 
 # Quent tracing requires structlog to emit events. Skip the whole module when
-# it is unavailable so the engine fixture below is never even constructed. This
-# matters because the fixture builds a real engine (owning a rapidsmpf
-# ``Context``); if the module were collected and a test skipped *after* the
-# fixture ran, the engine could be abandoned and its ``Context`` finalized by
-# the garbage collector on the wrong thread, which aborts the interpreter.
+# it is unavailable so the engine fixture below is never even constructed.
 pytest.importorskip("structlog")
 
 
