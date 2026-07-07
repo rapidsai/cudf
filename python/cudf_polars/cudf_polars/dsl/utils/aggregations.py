@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Utilities for rewriting aggregations."""
@@ -126,14 +126,20 @@ def decompose_single_agg(
             (),
             child,
         )
-        u32 = DataType(pl.UInt32())
+        dtype = agg.dtype
         sum_name = next(name_generator)
         sum_agg = expr.NamedExpr(
             sum_name,
-            expr.Agg(u32, "sum", (), context, expr.Cast(u32, True, is_null_bool)),  # noqa: FBT003
+            expr.Agg(
+                dtype,
+                "sum",
+                (),
+                context,
+                expr.Cast(dtype, True, is_null_bool),  # noqa: FBT003
+            ),
         )
         return [(sum_agg, True)], named_expr.reconstruct(
-            expr.Cast(u32, True, expr.Col(u32, sum_name))  # noqa: FBT003
+            expr.Cast(dtype, True, expr.Col(dtype, sum_name))  # noqa: FBT003
         )
     if isinstance(agg, expr.Col):
         # TODO: collect_list produces null for empty group in libcudf, empty list in polars.
@@ -176,6 +182,87 @@ def decompose_single_agg(
             (child,) = child.children
             agg = expr.Agg(agg.dtype, "n_unique", (True,), agg.context, child)
             named_expr = named_expr.reconstruct(agg)
+        if agg.name == "item":
+            if context != ExecutionContext.GROUPBY:
+                raise NotImplementedError("item is only supported in groupby context")
+
+            count_dtype = DataType(pl.Int32())
+            allow_empty = agg.options
+            assert isinstance(allow_empty, bool)
+            count_name = next(name_generator)
+
+            if isinstance(child, expr.Filter):
+                value, predicate = child.children
+                predicate = expr.UnaryFunction(
+                    predicate.dtype,
+                    "fill_null",
+                    (),
+                    predicate,
+                    expr.Literal(predicate.dtype, value=False),
+                )
+                selected = expr.Ternary(
+                    value.dtype,
+                    predicate,
+                    value,
+                    expr.Literal(value.dtype, None),
+                )
+
+                # item() needs both the selected value and the number of
+                # matching rows. Mask non-matching rows to null so
+                # first_non_null extracts the selected value, and separately
+                # sum the predicate to validate item cardinality.
+                # TODO: Use libcudf predicated aggregations when available:
+                # https://github.com/rapidsai/cudf/issues/22947
+                aggs, _ = decompose_single_agg(
+                    expr.NamedExpr(next(name_generator), selected),
+                    name_generator,
+                    is_top=False,
+                    context=context,
+                )
+                if any(has_agg for _, has_agg in aggs):
+                    raise NotImplementedError("Nested aggs in groupby not supported")
+
+                item_agg = expr.NamedExpr(
+                    name,
+                    expr.Agg(
+                        agg.dtype,
+                        "first_non_null",
+                        None,
+                        context,
+                        selected,
+                    ),
+                )
+                count_agg = expr.NamedExpr(
+                    count_name,
+                    expr.Agg(
+                        count_dtype,
+                        "sum",
+                        None,
+                        context,
+                        expr.Cast(count_dtype, False, predicate),  # noqa: FBT003
+                    ),
+                )
+            else:
+                aggs, _ = decompose_single_agg(
+                    expr.NamedExpr(next(name_generator), child),
+                    name_generator,
+                    is_top=False,
+                    context=context,
+                )
+                if any(has_agg for _, has_agg in aggs):
+                    raise NotImplementedError("Nested aggs in groupby not supported")
+
+                item_agg = named_expr
+                count_agg = expr.NamedExpr(count_name, expr.Len(count_dtype))
+
+            return [(item_agg, True), (count_agg, True)], named_expr.reconstruct(
+                expr.Item(
+                    agg.dtype,
+                    allow_empty,
+                    expr.Col(agg.dtype, name),
+                    expr.Col(count_dtype, count_name),
+                )
+            )
         needs_masking = agg.name in {"min", "max"} and plc.traits.is_floating_point(
             child.dtype.plc_type
         )
