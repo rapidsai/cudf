@@ -23,6 +23,7 @@ from cudf_streaming.channel_metadata import (
     HashScheme,
     OrderKey,
     OrderScheme,
+    Ordering,
     Partitioning,
 )
 from cudf_streaming.table_chunk import (
@@ -36,7 +37,7 @@ from rapidsmpf.streaming.core.message import Message
 
 import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.naming import names_to_indices
@@ -55,7 +56,6 @@ if TYPE_CHECKING:
         Sequence,
     )
 
-    from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
@@ -310,6 +310,71 @@ def _update_ordering_indices(
     )
 
 
+def _unwrap_casts(expr: Any) -> Any:
+    while isinstance(expr, Cast):
+        (expr,) = expr.children
+    return expr
+
+
+def _truncate_source_name(expr: Any) -> str | None:
+    expr = _unwrap_casts(expr)
+    if (
+        isinstance(expr, TemporalFunction)
+        and expr.name is TemporalFunction.Name.Truncate
+    ):
+        source = _unwrap_casts(expr.children[0])
+        if isinstance(source, Col):
+            return source.name
+    return None
+
+
+def _derived_ordering(
+    ordering: Ordering,
+    ne: NamedExpr,
+    child_schema: Schema,
+    output_schema: Schema,
+    context: Context | None,
+) -> Ordering | None:
+    if context is None or len(ordering.keys) != 1:
+        return None
+
+    source_name = _truncate_source_name(ne.value)
+    if source_name is None:
+        return None
+
+    old_key_names = indices_to_names(ordering.column_indices, child_schema)
+    if old_key_names != (source_name,):
+        return None
+
+    boundary_chunk = ordering.get_boundaries(context.br())
+    stream = boundary_chunk.stream
+    boundary_df = DataFrame.from_table(
+        boundary_chunk.table_view(),
+        old_key_names,
+        [child_schema[source_name]],
+        stream,
+    )
+    column = ne.evaluate(boundary_df)
+    boundaries = TableChunk.from_pylibcudf_table(
+        plc.Table([column.obj]),
+        stream,
+        exclusive_view=True,
+        br=context.br(),
+    )
+    key = ordering.keys[0]
+    return Ordering(
+        (
+            OrderKey(
+                names_to_indices((ne.name,), output_schema)[0],
+                key.order,
+                key.null_order,
+            ),
+        ),
+        boundaries,
+        strict_boundaries=False,
+    )
+
+
 def _select_column_targets(select: Select) -> dict[str, list[str]]:
     old_to_new_names: dict[str, list[str]] = {}
     for ne in select.exprs:
@@ -323,7 +388,7 @@ def _preferred_target_name(old_name: str, targets: list[str]) -> str:
 
 
 def _remap_scheme_select(
-    select: Select, scheme: PartitioningScheme
+    select: Select, scheme: PartitioningScheme, context: Context | None
 ) -> PartitioningScheme:
     if isinstance(scheme, HashScheme):
         old_to_new_names = _select_column_targets(select)
@@ -352,9 +417,7 @@ def _remap_scheme_select(
                     _preferred_target_name(n, old_to_new_names[n])
                     for n in old_key_names
                 )
-                new_indices = names_to_indices(
-                    target_key_names, select.schema
-                )
+                new_indices = names_to_indices(target_key_names, select.schema)
                 new_orderings.append(_update_ordering_indices(ordering, new_indices))
                 if len(old_key_names) == 1:
                     for alias in old_to_new_names[old_key_names[0]]:
@@ -365,6 +428,16 @@ def _remap_scheme_select(
                                 ordering, names_to_indices((alias,), select.schema)
                             )
                         )
+            for ne in select.exprs:
+                derived = _derived_ordering(
+                    ordering,
+                    ne,
+                    select.children[0].schema,
+                    select.schema,
+                    context,
+                )
+                if derived is not None:
+                    new_orderings.append(derived)
         if new_orderings:
             return OrderScheme(new_orderings)
         return None
@@ -409,7 +482,11 @@ def _hstack_to_select(hstack: HStack) -> Select:
 
 
 def maybe_remap_partitioning(
-    ir: IR, partitioning: Partitioning | None, *, child_ir: IR | None = None
+    ir: IR,
+    partitioning: Partitioning | None,
+    *,
+    child_ir: IR | None = None,
+    context: Context | None = None,
 ) -> Partitioning | None:
     """
     Remap partitioning for simple IR nodes.
@@ -423,6 +500,9 @@ def maybe_remap_partitioning(
     child_ir
         The child IR whose schema the partitioning refers to. When None,
         the first child (ir.children[0]) is used.
+    context
+        Runtime context used to materialize transformed boundary tables for
+        derived orderings. When None, only metadata-only remapping is applied.
 
     Returns
     -------
@@ -443,8 +523,8 @@ def maybe_remap_partitioning(
             # HStack is a special case of Select
             ir = _hstack_to_select(ir)
         return Partitioning(
-            inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
-            local=_remap_scheme_select(ir, partitioning.local),
+            inter_rank=_remap_scheme_select(ir, partitioning.inter_rank, context),
+            local=_remap_scheme_select(ir, partitioning.local, context),
         )
     if isinstance(ir, GroupBy):
         return Partitioning(

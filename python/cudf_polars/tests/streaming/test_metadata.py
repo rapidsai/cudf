@@ -725,6 +725,50 @@ def test_remap_partitioning_order_scheme_adds_alias_ordering(spmd_engine):
     assert [o.strict_boundaries for o in result.inter_rank.orderings] == [True, True]
 
 
+def test_remap_partitioning_order_scheme_adds_truncated_ordering(spmd_engine):
+    engine = pl.GPUEngine(executor="in-memory", raise_on_fail=True)
+    hstack = Translator(
+        pl.LazyFrame({"DateTime": [1]})
+        .with_columns(
+            pl.col("DateTime")
+            .cast(pl.Datetime("ns"))
+            .dt.truncate("1ms")
+            .cast(pl.Int64)
+            .alias("ts_bucket")
+        )
+        ._ldf.visit(),
+        engine,
+    ).translate_ir()
+    child = hstack.children[0]
+    assert isinstance(hstack, HStack)
+    part = Partitioning(
+        inter_rank=_make_order_scheme(
+            spmd_engine.context,
+            key_indices=(0,),
+            values=(1_234_567, 2_345_678),
+            strict=True,
+        ),
+        local="inherit",
+    )
+
+    result = maybe_remap_partitioning(hstack, part, context=spmd_engine.context)
+
+    assert result is not None
+    assert isinstance(result.inter_rank, OrderScheme)
+    orderings = result.inter_rank.orderings
+    assert [o.keys[0].column_index for o in orderings] == [0, 1]
+    assert [o.strict_boundaries for o in orderings] == [True, False]
+
+    boundaries = orderings[1].get_boundaries(spmd_engine.context.br())
+    boundary_df = DataFrame.from_table(
+        boundaries.table_view(),
+        ["ts_bucket"],
+        [child.schema["DateTime"]],
+        boundaries.stream,
+    ).to_polars()
+    assert boundary_df["ts_bucket"].to_list() == [1_000_000, 2_000_000]
+
+
 @pytest.mark.parametrize(
     "by,descending,nulls_last",
     [
