@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -109,6 +109,26 @@ def test_bool_agg(engine: pl.GPUEngine, agg):
     expr = getattr(pl.col("a"), agg)()
     q = df.select(expr)
 
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "data,dtype",
+    [
+        ([1, 2, 3, 4], pl.Int32),
+        ([1, 2, None, 4], pl.Int32),
+        ([1, 0, 3], pl.Int32),
+        ([2, 3, 4], pl.Int8),
+        ([1.5, 2.0, 3.0], pl.Float64),
+        ([1.5, None, 3.0], pl.Float64),
+        ([True, False, True], pl.Boolean),
+        ([], pl.Int32),
+        ([None, None], pl.Int32),
+    ],
+)
+def test_product(engine: pl.GPUEngine, data, dtype):
+    df = pl.LazyFrame({"a": pl.Series(data, dtype=dtype)})
+    q = df.select(pl.col("a").product())
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
