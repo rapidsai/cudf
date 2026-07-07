@@ -127,8 +127,16 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    _supported_math_fns = frozenset(
+        {
+            "cot",
+        }
+    )
     _supported_fns = frozenset().union(
-        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+        _supported_misc_fns,
+        _supported_cum_aggs,
+        _supported_math_fns,
+        _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
@@ -138,7 +146,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
         }
-    ).union(_OP_MAPPING.keys())
+    ).union(_supported_math_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -536,6 +544,27 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            operand = column.obj
+            if operand.type().id() != out_type.id():
+                operand = plc.unary.cast(operand, out_type, stream=df.stream)
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+            )
+            column_ref = plc.expressions.ColumnReference(0)
+            expression = plc.expressions.Operation(
+                plc.expressions.ASTOperator.DIV,
+                one,
+                plc.expressions.Operation(plc.expressions.ASTOperator.TAN, column_ref),
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([operand]), expression, stream=df.stream
+                ),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
