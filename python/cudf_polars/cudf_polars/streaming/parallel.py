@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition evaluation."""
 
@@ -104,6 +104,12 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
+    from cudf_polars.streaming.join_domain_prefilter import (
+        optimize_join_domain_prefilters,
+    )
+
+    ir = optimize_join_domain_prefilters(ir, stats, config_options)
+
     state: State = {
         "config_options": config_options,
         "stats": stats,
