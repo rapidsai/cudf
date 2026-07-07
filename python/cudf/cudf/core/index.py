@@ -6,6 +6,7 @@ from __future__ import annotations
 import datetime
 import itertools
 import operator
+import re
 import warnings
 from collections import Counter
 from collections.abc import Hashable, MutableMapping
@@ -97,6 +98,119 @@ def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
     if not isinstance(index_like, Index):
         return Index(index_like, nan_as_null=nan_as_null)
     return index_like
+
+
+_DATETIME_RESOLUTION_ORDER = {
+    "year": 9,
+    "quarter": 8,
+    "month": 7,
+    "day": 6,
+    "hour": 5,
+    "minute": 4,
+    "second": 3,
+    "millisecond": 2,
+    "microsecond": 1,
+    "nanosecond": 0,
+}
+
+_DATETIME_STRING_RESOLUTION_PATTERNS = (
+    (re.compile(r"^\d{4}$"), "year"),
+    (re.compile(r"^\d{4}Q[1-4]$"), "quarter"),
+    (re.compile(r"^\d{4}-\d{1,2}$"), "month"),
+    (re.compile(r"^\d{4}-\d{1,2}-\d{1,2}$"), "day"),
+    (re.compile(r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}$"), "hour"),
+    (re.compile(r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}:\d{1,2}$"), "minute"),
+    (
+        re.compile(r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}:\d{1,2}:\d{1,2}$"),
+        "second",
+    ),
+)
+_DATETIME_FRACTIONAL_SECOND_PATTERN = re.compile(
+    r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}:\d{1,2}:\d{1,2}\.(\d{1,9})$"
+)
+
+
+def _parse_datetime_string_with_reso(
+    key: str,
+) -> tuple[pd.Timestamp, str]:
+    parsed = cast(pd.Timestamp, pd.Timestamp(key))
+
+    for pattern, resolution in _DATETIME_STRING_RESOLUTION_PATTERNS:
+        if pattern.match(key):
+            return parsed, resolution
+
+    if match := _DATETIME_FRACTIONAL_SECOND_PATTERN.match(key):
+        fraction_digits = len(match.group(1))
+        if fraction_digits <= 3:
+            return parsed, "millisecond"
+        if fraction_digits <= 6:
+            return parsed, "microsecond"
+        return parsed, "nanosecond"
+
+    return parsed, "nanosecond"
+
+
+def _datetime_index_resolution(index: DatetimeIndex) -> str:
+    if len(index) == 0:
+        return "day"
+
+    time_unit_to_ns = {
+        "s": 1_000_000_000,
+        "ms": 1_000_000,
+        "us": 1_000,
+        "ns": 1,
+    }
+    unit_ns = time_unit_to_ns[index._column.time_unit]
+    values = index._column.astype(np.dtype(np.int64))
+
+    # Uses a full column scan to detect the finest timestamp resolution,
+    # unlike checking only min/max which misses interior high-resolution
+    # values. Test divisibility by the next coarser unit with column-level
+    # modular arithmetic so the scan stays on the GPU.
+    for resolution, next_coarser_unit_ns in (
+        ("nanosecond", 1_000),
+        ("microsecond", 1_000_000),
+        ("millisecond", 1_000_000_000),
+        ("second", 60_000_000_000),
+        ("minute", 3_600_000_000_000),
+        ("hour", 86_400_000_000_000),
+    ):
+        divisor = next_coarser_unit_ns // unit_ns
+        if divisor > 1 and (values % divisor).any():
+            return resolution
+    return "day"
+
+
+def _datetime_slice_bounds(
+    parsed: datetime.datetime,
+    resolution: str,
+    unit: Literal["s", "ms", "us", "ns"],
+) -> tuple[pd.Timestamp, pd.Timestamp]:
+    start = cast(pd.Timestamp, pd.Timestamp(parsed).as_unit(unit))
+    if resolution == "year":
+        end = start + pd.DateOffset(years=1)
+    elif resolution == "quarter":
+        end = start + pd.DateOffset(months=3)
+    elif resolution == "month":
+        end = start + pd.DateOffset(months=1)
+    elif resolution == "day":
+        end = start + pd.Timedelta(days=1)
+    elif resolution == "hour":
+        end = start + pd.Timedelta(hours=1)
+    elif resolution == "minute":
+        end = start + pd.Timedelta(minutes=1)
+    elif resolution == "second":
+        end = start + pd.Timedelta(seconds=1)
+    elif resolution == "millisecond":
+        end = start + pd.Timedelta(milliseconds=1)
+    elif resolution == "microsecond":
+        end = start + pd.Timedelta(microseconds=1)
+    else:
+        end = start + pd.Timedelta(nanoseconds=1)
+    return start, cast(
+        pd.Timestamp,
+        (end.as_unit(unit) - pd.Timedelta(1, unit=unit)).as_unit(unit),
+    )
 
 
 def _get_result_name(
@@ -3484,6 +3598,44 @@ class DatetimeIndex(Index):
         if isinstance(value, np.datetime64):
             return pd.Timestamp(value)
         return value
+
+    def get_loc(self, key) -> int | slice | cupy.ndarray:
+        if isinstance(key, str):
+            try:
+                parsed, resolution = _parse_datetime_string_with_reso(key)
+            except ValueError:
+                return super().get_loc(key)
+            if (
+                _DATETIME_RESOLUTION_ORDER[resolution]
+                > _DATETIME_RESOLUTION_ORDER[_datetime_index_resolution(self)]
+            ):
+                start, end = _datetime_slice_bounds(
+                    parsed,
+                    resolution,
+                    cast(Literal["s", "ms", "us", "ns"], self.unit),
+                )
+                if (
+                    not self.is_monotonic_increasing
+                    and not self.is_monotonic_decreasing
+                ):
+                    mask = (self._column >= start) & (self._column <= end)
+                    positions = cupy.where(mask.values)[0]
+                    if len(positions) == 0:
+                        raise KeyError(key)
+                    return positions
+                if self.is_monotonic_decreasing:
+                    mask = (self._column >= start) & (self._column <= end)
+                    return cupy.where(mask.values)[0]
+                result = self.find_label_range(slice(start, end))
+                if result.start >= result.stop:
+                    raise KeyError(key)
+                return slice(result.start, result.stop, None)
+            elif (
+                _DATETIME_RESOLUTION_ORDER[resolution]
+                == _DATETIME_RESOLUTION_ORDER[_datetime_index_resolution(self)]
+            ):
+                return super().get_loc(pd.Timestamp(parsed))
+        return super().get_loc(key)
 
     def find_label_range(self, loc: slice) -> slice:
         # For indexing, try to interpret slice arguments as datetime-convertible
