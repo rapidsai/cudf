@@ -10,13 +10,11 @@
 #include <array>
 #include <cctype>
 #include <cstdint>
-#include <iomanip>
 #include <iterator>
 #include <locale>
 #include <map>
 #include <memory>
 #include <optional>
-#include <sstream>
 #include <stdexcept>
 #include <type_traits>
 #include <unordered_set>
@@ -100,9 +98,11 @@ bool contains_capture(node const& value)
 void normalize_ranges(character_predicate& predicate)
 {
   if (predicate.ranges.empty()) { return; }
+
   std::sort(predicate.ranges.begin(), predicate.ranges.end(), [](auto& lhs, auto& rhs) {
     return lhs.first < rhs.first || (lhs.first == rhs.first && lhs.last < rhs.last);
   });
+
   std::vector<codepoint_range> merged;
   for (auto range : predicate.ranges) {
     if (merged.empty() || static_cast<std::uint64_t>(range.first) >
@@ -112,6 +112,7 @@ void normalize_ranges(character_predicate& predicate)
       merged.back().last = range.last;
     }
   }
+
   predicate.ranges = std::move(merged);
 }
 
@@ -130,6 +131,7 @@ std::vector<codepoint_range> complement_ranges(std::vector<codepoint_range> rang
   character_predicate normalized;
   normalized.ranges = std::move(ranges);
   normalize_ranges(normalized);
+
   std::vector<codepoint_range> result;
   char32_t begin = U'\0';
   for (codepoint_range range : normalized.ranges) {
@@ -137,6 +139,7 @@ std::vector<codepoint_range> complement_ranges(std::vector<codepoint_range> rang
     if (range.last == static_cast<char32_t>(0x10FFFF)) return result;
     begin = static_cast<char32_t>(range.last + 1);
   }
+
   result.push_back({begin, static_cast<char32_t>(0x10FFFF)});
   return result;
 }
@@ -145,6 +148,7 @@ void remove_codepoint(std::vector<codepoint_range>& ranges, char32_t value)
 {
   std::vector<codepoint_range> result;
   result.reserve(ranges.size() + 1);
+
   for (codepoint_range range : ranges) {
     if (value < range.first || value > range.last) {
       result.push_back(range);
@@ -153,6 +157,7 @@ void remove_codepoint(std::vector<codepoint_range>& ranges, char32_t value)
     if (range.first < value) result.push_back({range.first, static_cast<char32_t>(value - 1)});
     if (value < range.last) result.push_back({static_cast<char32_t>(value + 1), range.last});
   }
+
   ranges = std::move(result);
 }
 
@@ -209,10 +214,12 @@ class parser {
       fail(
         diagnostic_code::RESOURCE_LIMIT, {0, pattern_.size()}, "pattern exceeds max_pattern_bytes");
     }
+
     auto expression = parse_alternation();
     if (position_ != pattern_.size()) {
       fail(diagnostic_code::UNEXPECTED_TOKEN, {position_, 1}, "unexpected token");
     }
+
     return expression;
   }
 
@@ -1005,14 +1012,18 @@ std::vector<diagnostic> verify(automata_ir const& ir)
   auto invalid = [&](source_span span, std::string message) {
     result.push_back({diagnostic_code::INVALID_AUTOMATA_IR, span, std::move(message)});
   };
+
   if (ir.entry >= ir.states.size()) invalid({}, "entry state is invalid");
   if (ir.accept >= ir.states.size()) invalid({}, "accept state is invalid");
+
   for (std::size_t index = 0; index < ir.states.size(); ++index) {
     auto& state = ir.states[index];
     if (state.id != index) invalid(state.source, "state ID does not match storage index");
+
     for (auto edge : state.edges) {
       if (edge.target >= ir.states.size()) invalid(state.source, "edge target is invalid");
     }
+
     if (state.kind == automata_state_kind::ACCEPT && !state.edges.empty()) {
       invalid(state.source, "accept state has outgoing edges");
     }
@@ -1032,36 +1043,45 @@ std::vector<diagnostic> verify(automata_ir const& ir)
       invalid(state.source, "capture index is out of range");
     }
   }
+
   return result;
 }
 
 std::string to_string(automata_ir const& ir)
 {
-  std::ostringstream out;
-  out << "automata pattern=" << std::quoted(ir.pattern) << " entry=" << ir.entry
-      << " accept=" << ir.accept << " captures=" << ir.capture_count << '\n';
+  auto result = fmt::format("automata pattern={:?} entry={} accept={} captures={}\n",
+                            ir.pattern,
+                            ir.entry,
+                            ir.accept,
+                            ir.capture_count);
+
   for (auto& state : ir.states) {
-    out << '%' << state.id << ' ' << state_name(state.kind);
+    fmt::format_to(std::back_inserter(result), "%{} {}", state.id, state_name(state.kind));
     if (state.kind == automata_state_kind::CONSUME) {
       if (state.predicate.is_singleton()) {
-        out << " U+" << std::hex << std::uppercase
-            << static_cast<std::uint32_t>(state.predicate.singleton()) << std::dec;
+        fmt::format_to(std::back_inserter(result),
+                       " U+{:X}",
+                       static_cast<std::uint32_t>(state.predicate.singleton()));
       } else {
-        out << " ranges=" << state.predicate.ranges.size();
-        if (state.predicate.negated) out << " negated";
+        fmt::format_to(std::back_inserter(result), " ranges={}", state.predicate.ranges.size());
+        if (state.predicate.negated) result += " negated";
       }
     } else if (state.kind == automata_state_kind::CAPTURE) {
-      out << ' ' << (state.capture == capture_action::BEGIN ? "begin" : "end") << '['
-          << state.capture_index << ']';
+      fmt::format_to(std::back_inserter(result),
+                     " {}[{}]",
+                     state.capture == capture_action::BEGIN ? "begin" : "end",
+                     state.capture_index);
     } else if (state.kind == automata_state_kind::ASSERTION) {
-      out << ' ' << assertion_name(state.assertion);
+      fmt::format_to(std::back_inserter(result), " {}", assertion_name(state.assertion));
     }
+
     for (auto edge : state.edges) {
-      out << " -> %" << edge.target << "(p" << edge.priority << ')';
+      fmt::format_to(std::back_inserter(result), " -> %{}(p{})", edge.target, edge.priority);
     }
-    out << '\n';
+    result += '\n';
   }
-  return out.str();
+
+  return result;
 }
 
 automata_result compile_automata(std::string_view pattern, compile_options const& options)
@@ -1553,32 +1573,31 @@ std::string instruction_name(instruction const& value)
   return std::visit(
     [](auto& item) {
       using type = std::decay_t<decltype(item)>;
-      std::ostringstream out;
       if constexpr (std::is_same_v<type, can_peek>) {
-        out << "can_peek " << item.characters;
+        return fmt::format("can_peek {}", item.characters);
       } else if constexpr (std::is_same_v<type, read_character>) {
-        out << "read_character";
+        return std::string{"read_character"};
       } else if constexpr (std::is_same_v<type, match_character>) {
         if (item.predicate.is_singleton()) {
-          out << "match U+" << std::hex << std::uppercase
-              << static_cast<std::uint32_t>(item.predicate.singleton());
-        } else {
-          out << "match_class ranges=" << item.predicate.ranges.size();
-          if (item.predicate.negated) out << " negated";
+          return fmt::format("match U+{:X}",
+                             static_cast<std::uint32_t>(item.predicate.singleton()));
         }
+        return fmt::format("match_class ranges={}{}",
+                           item.predicate.ranges.size(),
+                           item.predicate.negated ? " negated" : "");
       } else if constexpr (std::is_same_v<type, match_literal>) {
-        out << "match_literal length=" << item.value.size();
+        return fmt::format("match_literal length={}", item.value.size());
       } else if constexpr (std::is_same_v<type, advance_cursor>) {
-        out << "advance " << item.characters;
+        return fmt::format("advance {}", item.characters);
       } else if constexpr (std::is_same_v<type, test_assertion>) {
-        out << "assert " << assertion_name(item.kind);
+        return fmt::format("assert {}", assertion_name(item.kind));
       } else if constexpr (std::is_same_v<type, write_capture>) {
-        out << "capture " << (item.action == capture_action::BEGIN ? "begin " : "end ")
-            << item.capture_index;
+        return fmt::format("capture {} {}",
+                           item.action == capture_action::BEGIN ? "begin" : "end",
+                           item.capture_index);
       } else if constexpr (std::is_same_v<type, emit_accept>) {
-        out << "accept";
+        return std::string{"accept"};
       }
-      return out.str();
     },
     value);
 }
@@ -1610,6 +1629,7 @@ ir_metrics measure(instruction_ir const& ir)
         item);
     }
   }
+
   return result;
 }
 
@@ -1619,14 +1639,18 @@ std::vector<diagnostic> verify(instruction_ir const& ir)
   auto invalid = [&](source_span span, std::string message) {
     result.push_back({diagnostic_code::INVALID_INSTRUCTION_IR, span, std::move(message)});
   };
+
   if (ir.entry >= ir.blocks.size()) invalid({}, "entry block is invalid");
   if (ir.accept >= ir.blocks.size()) invalid({}, "accept block is invalid");
+
   for (std::size_t index = 0; index < ir.blocks.size(); ++index) {
     auto& block = ir.blocks[index];
     if (block.id != index) invalid(block.source, "block ID does not match storage index");
+
     for (auto edge : block.successors) {
       if (edge.target >= ir.blocks.size()) invalid(block.source, "successor target is invalid");
     }
+
     bool accepting{};
     std::size_t character_tests{};
     std::size_t advances{};
@@ -1649,36 +1673,53 @@ std::vector<diagnostic> verify(instruction_ir const& ir)
     if (character_tests > 1) invalid(block.source, "block has multiple character tests");
     if (advances > 1) invalid(block.source, "block advances more than once");
   }
+
   return result;
 }
 
 std::string to_string(instruction_ir const& ir)
 {
-  std::ostringstream out;
-  out << "instruction_ir operation=" << operation_name(ir.selected_operation.kind)
-      << " pattern=" << std::quoted(ir.pattern) << " entry=^" << ir.entry << " accept=^"
-      << ir.accept << " captures=" << ir.capture_count << " scan=" << ir.control.scan_input
-      << " require_end=" << ir.control.require_end << " first_only=" << ir.control.first_only
-      << '\n';
+  auto result = fmt::format(
+    R"IR(instruction_ir operation={operation} pattern={pattern:?} entry=^{entry} accept=^{accept} captures={captures} scan={scan} require_end={require_end} first_only={first_only}
+)IR",
+    fmt::arg("operation", operation_name(ir.selected_operation.kind)),
+    fmt::arg("pattern", ir.pattern),
+    fmt::arg("entry", ir.entry),
+    fmt::arg("accept", ir.accept),
+    fmt::arg("captures", ir.capture_count),
+    fmt::arg("scan", static_cast<int>(ir.control.scan_input)),
+    fmt::arg("require_end", static_cast<int>(ir.control.require_end)),
+    fmt::arg("first_only", static_cast<int>(ir.control.first_only)));
+
   for (auto& block : ir.blocks) {
-    out << '^' << block.id << ':';
-    if (block.instructions.empty()) out << " nop";
-    for (auto& item : block.instructions)
-      out << ' ' << instruction_name(item) << ';';
+    fmt::format_to(std::back_inserter(result), "^{}:", block.id);
+    if (block.instructions.empty()) result += " nop";
+    for (auto& item : block.instructions) {
+      fmt::format_to(std::back_inserter(result), " {};", instruction_name(item));
+    }
+
     auto edges = block.successors;
     std::stable_sort(
       edges.begin(), edges.end(), [](auto& lhs, auto& rhs) { return lhs.priority < rhs.priority; });
     for (auto edge : edges) {
-      out << " -> ^" << edge.target << "(p" << edge.priority << ')';
+      fmt::format_to(std::back_inserter(result), " -> ^{}(p{})", edge.target, edge.priority);
     }
-    out << '\n';
+    result += '\n';
   }
+
   auto metrics = measure(ir);
-  out << "metrics blocks=" << metrics.blocks << " branches=" << metrics.branches
-      << " predicates=" << metrics.predicates << " reads=" << metrics.stream_reads
-      << " captures=" << metrics.capture_writes
-      << " literal_codepoints=" << metrics.literal_codepoints << '\n';
-  return out.str();
+  fmt::format_to(
+    std::back_inserter(result),
+    R"IR(metrics blocks={blocks} branches={branches} predicates={predicates} reads={reads} captures={captures} literal_codepoints={literal_codepoints}
+)IR",
+    fmt::arg("blocks", metrics.blocks),
+    fmt::arg("branches", metrics.branches),
+    fmt::arg("predicates", metrics.predicates),
+    fmt::arg("reads", metrics.stream_reads),
+    fmt::arg("captures", metrics.capture_writes),
+    fmt::arg("literal_codepoints", metrics.literal_codepoints));
+
+  return result;
 }
 
 instruction_result lower(automata_ir const& automata, operation const& selected)
@@ -1938,15 +1979,9 @@ namespace {
 class source_buffer {
  public:
   template <typename... Args>
-  void append(fmt::format_string<Args...> format, Args&&... args)
-  {
-    value_ += fmt::format(format, std::forward<Args>(args)...);
-  }
-
-  template <typename... Args>
   void emit(fmt::format_string<Args...> format, Args&&... args)
   {
-    append(format, std::forward<Args>(args)...);
+    fmt::format_to(std::back_inserter(value_), format, std::forward<Args>(args)...);
     value_ += '\n';
   }
 
@@ -3421,8 +3456,8 @@ entry:)NVVM",
           output_.emit(R"NVVM(  %end_at_newline = and i1 %current_newline, %not_mid_crlf
   %end_line = or i1 %at_end, %end_at_newline)NVVM");
         } else {
-          output_.emit("  %next_position = add i64 %position, %current_width");
-          output_.emit("  %current_is_final = icmp eq i64 %next_position, %size");
+          output_.emit(R"NVVM(  %next_position = add i64 %position, %current_width
+  %current_is_final = icmp eq i64 %next_position, %size)NVVM");
           auto final_sequence = std::string{"%current_is_final"};
           if (ir_.options.extended_newline) {
             output_.emit(
@@ -3440,9 +3475,11 @@ entry:)NVVM",
                 fmt::arg("width", name("decode_width"))));
             final_sequence = "%final_sequence";
           }
-          output_.emit("  %end_final_newline_0 = and i1 %current_newline, %not_mid_crlf");
-          output_.emit("  %end_final_newline = and i1 %end_final_newline_0, {}", final_sequence);
-          output_.emit("  %end_line = or i1 %at_end, %end_final_newline");
+          output_.emit(
+            R"NVVM(  %end_final_newline_0 = and i1 %current_newline, %not_mid_crlf
+  %end_final_newline = and i1 %end_final_newline_0, {final_sequence}
+  %end_line = or i1 %at_end, %end_final_newline)NVVM",
+            fmt::arg("final_sequence", final_sequence));
         }
         append_bit("%end_line");
       }

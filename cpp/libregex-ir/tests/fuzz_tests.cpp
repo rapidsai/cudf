@@ -170,8 +170,14 @@ std::vector<std::string> exhaustive_patterns()
   std::vector<std::string> result      = atoms;
   std::vector<std::string> const unary = {"*", "+", "?", "*?", "+?", "??", "{0,2}", "{1,2}"};
   for (auto& atom : atoms) {
-    for (auto& suffix : unary)
-      result.push_back("(?:" + atom + ")" + suffix);
+    for (auto& suffix : unary) {
+      auto pattern = std::string{"(?:"};
+      pattern.reserve(pattern.size() + atom.size() + 1U + suffix.size());
+      pattern += atom;
+      pattern += ')';
+      pattern += suffix;
+      result.push_back(std::move(pattern));
+    }
   }
   for (std::size_t left = 0; left < 4; ++left) {
     for (std::size_t right = 0; right < 4; ++right) {

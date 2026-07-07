@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <fmt/format.h>
 #include <regex_ir.hpp>
 
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
-#include <format>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -96,10 +96,7 @@ char const* state_name(regex_ir::automata_state_kind kind)
 
 std::string codepoint(char32_t value)
 {
-  std::ostringstream out;
-  out << "U+" << std::uppercase << std::hex << std::setfill('0') << std::setw(4)
-      << static_cast<std::uint32_t>(value);
-  return out.str();
+  return fmt::format("U+{:04X}", static_cast<std::uint32_t>(value));
 }
 
 std::string predicate_description(regex_ir::character_predicate const& predicate)
@@ -107,6 +104,7 @@ std::string predicate_description(regex_ir::character_predicate const& predicate
   if (predicate.recognized == regex_ir::predicate_class::ANY) {
     return predicate.matches_newline ? "any character" : "any except CR/LF";
   }
+
   std::ostringstream out;
   if (predicate.negated) out << "not ";
   out << '[';
@@ -158,6 +156,7 @@ std::string render_thompson_ascii(regex_ir::automata_ir const& ir)
       }
     }
   }
+
   for (std::size_t state = 0; state < seen.size(); ++state) {
     if (!seen[state]) order.push_back(static_cast<regex_ir::state_id>(state));
   }
@@ -183,6 +182,7 @@ std::string render_thompson_ascii(regex_ir::automata_ir const& ir)
     }
     if (!state.edges.empty()) out << '\n';
   }
+
   return out.str();
 }
 
@@ -222,6 +222,7 @@ exploration_output generate(std::string const& pattern, explorer_options const& 
     output.diagnostics = diagnostics_text(pattern, lowered.diagnostics);
     return output;
   }
+
   auto instructions = regex_ir::optimize(std::move(*lowered.value));
   if (!instructions) {
     output.diagnostics = diagnostics_text(pattern, instructions.diagnostics);
@@ -240,8 +241,9 @@ exploration_output generate(std::string const& pattern, explorer_options const& 
   try {
     output.nvvm_ir = regex_ir::generate_nvvm_ir(*instructions.value, nvvm_options);
   } catch (std::invalid_argument const& error) {
-    output.nvvm_ir = std::format("; NVVM IR unavailable: {}\n", error.what());
+    output.nvvm_ir = fmt::format("; NVVM IR unavailable: {}\n", error.what());
   }
+
   output.executable = std::move(*instructions.value);
   return output;
 }
@@ -256,14 +258,17 @@ std::string render_selected(exploration_output const& output, view_options const
              << "\n=== Thompson automata ASCII =============================================\n"
              << output.automata_graph;
   }
+
   if (views.ir) {
     rendered << "=== Optimized Instruction IR printer ====================================\n"
              << output.instruction_ir;
   }
+
   if (views.nvvm) {
     rendered << "\n=== Generated NVVM IR ====================================================\n"
              << output.nvvm_ir;
   }
+
   if (!views.automata && !views.ir && !views.nvvm) { rendered << "No output views selected.\n"; }
   return rendered.str();
 }
@@ -275,6 +280,7 @@ std::string render_span(regex_ir::testing::match_span span, std::string_view inp
   if (span.begin <= span.end && span.end <= input.size()) {
     rendered << ' ' << std::quoted(std::string(input.substr(span.begin, span.end - span.begin)));
   }
+
   return rendered.str();
 }
 
@@ -354,7 +360,7 @@ bool explore(exploration_request const& request, explorer_options const& options
 
 void usage(char const* executable)
 {
-  std::cout << std::format(
+  std::cout << fmt::format(
     R"HELP(usage: {} [OPTIONS] [PATTERN]
 
 With no PATTERN, starts an interactive regex-to-IR console.
@@ -594,7 +600,7 @@ call_expression parse_call_expression(std::string_view line)
 
   auto expected_arguments = function == "replace" ? 3U : 2U;
   if (raw_arguments.size() != expected_arguments) {
-    parsed.error = std::format("{} expects {} arguments", function, expected_arguments);
+    parsed.error = fmt::format("{} expects {} arguments", function, expected_arguments);
     return parsed;
   }
 
