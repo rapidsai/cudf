@@ -1091,7 +1091,7 @@ struct broken_shape {
 // A VARIANT column must be a STRUCT whose first two children are each a list<uint8>. Enumerate the
 // distinct ways that column-shape contract can be broken; get_variant_field must reject every one
 // with std::invalid_argument.
-TEST_F(InvalidInputShapeTest, GetVariantFieldRejectsMalformedColumnShape)
+TEST_F(InvalidInputShapeTest, GetVariantFieldRejectsMalformedInput)
 {
   auto stream = cudf::test::get_default_stream();
 
@@ -1121,7 +1121,7 @@ TEST_F(InvalidInputShapeTest, GetVariantFieldRejectsMalformedColumnShape)
 
 // cast_variant requires a list<uint8> input; every other shape must be rejected with
 // std::invalid_argument.
-TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedColumnShape)
+TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedInput)
 {
   auto stream = cudf::test::get_default_stream();
 
