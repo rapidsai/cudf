@@ -344,6 +344,7 @@ aggregate_reader_metadata::read_bloom_filters(
     [&](auto const src_index) {
       auto const& rg_indices = row_group_indices[src_index];
       auto& source_ranges    = bloom_filter_byte_ranges_per_source[src_index];
+      auto const source_size = static_cast<int64_t>(sources[src_index]->size());
       source_ranges.reserve(rg_indices.size() * num_input_columns);
       // For all row groups in the source
       std::for_each(rg_indices.cbegin(), rg_indices.cend(), [&](auto const rg_index) {
@@ -352,12 +353,14 @@ aggregate_reader_metadata::read_bloom_filters(
           auto const& col_meta = get_column_metadata(rg_index, src_index, schema_idx);
           if (col_meta.bloom_filter_offset.has_value()) {
             have_bloom_filters = true;
-            // Length absent: read a speculative chunk to recover the bitset size.
+            auto const offset  = col_meta.bloom_filter_offset.value();
+            CUDF_EXPECTS(offset >= 0 and offset < source_size,
+                         "Bloom filter offset is out of datasource bounds");
+            // Length absent: speculatively read enough to recover the header, clamped at EOF
             auto const length = col_meta.bloom_filter_length.has_value()
                                   ? static_cast<int64_t>(col_meta.bloom_filter_length.value())
-                                  : speculative_read_size;
-            source_ranges.push_back(
-              cudf::io::text::byte_range_info{col_meta.bloom_filter_offset.value(), length});
+                                  : std::min(speculative_read_size, source_size - offset);
+            source_ranges.push_back(cudf::io::text::byte_range_info{offset, length});
           } else {
             source_ranges.push_back(cudf::io::text::byte_range_info{0, 0});
           }
