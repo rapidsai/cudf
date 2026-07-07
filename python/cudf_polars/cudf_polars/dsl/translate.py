@@ -984,10 +984,8 @@ def _(
                     return expr.BinOp(dtype, sub, a, expr.BinOp(dtype, mul, b, c))
                 case "fms":
                     return expr.BinOp(dtype, sub, expr.BinOp(dtype, mul, a, b), c)
-                case _:
-                    raise NotImplementedError(
-                        f"Unsupported fused expression {flavor=}"
-                    )  # pragma: no cover
+                case _:  # pragma: no cover
+                    raise NotImplementedError(f"Unsupported fused expression {flavor=}")
         if name == "log" or (
             name == "l"
             and isinstance(options[0], str)
