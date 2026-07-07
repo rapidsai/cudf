@@ -332,6 +332,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA", "1")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_JIT_FILTER", "1")
 
         # Test default
@@ -344,6 +345,7 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.parquet_options.max_footer_samples == 0
         assert config.parquet_options.max_row_group_samples == 0
         assert config.parquet_options.use_rapidsmpf_native is False
+        assert config.parquet_options.prefetch_file_metadata is True
         assert config.parquet_options.use_jit_filter is True
 
     with monkeypatch.context() as m:
@@ -449,6 +451,7 @@ def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
         "max_footer_samples",
         "max_row_group_samples",
         "use_rapidsmpf_native",
+        "prefetch_file_metadata",
         "use_jit_filter",
     ],
 )
@@ -458,6 +461,22 @@ def test_validate_parquet_options(option: str) -> None:
             pl.GPUEngine(
                 executor="streaming",
                 parquet_options={option: object()},
+            )
+        )
+
+
+def test_prefetch_and_use_rapidsmpf_native_raises() -> None:
+    with pytest.raises(
+        NotImplementedError,
+        match="'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                parquet_options={
+                    "use_rapidsmpf_native": True,
+                    "prefetch_file_metadata": True,
+                },
             )
         )
 
