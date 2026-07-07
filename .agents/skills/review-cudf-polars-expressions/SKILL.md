@@ -79,7 +79,7 @@ TODO: Add more guidance on a multiple partition implementation.
 
 ## Step 4: Test the Polars expression implementation in cudf-polars
 
-Finally, add a unit test to an existing or new file in the `python/cudf_polars/tests/expressions` directory to test the implementation.
+Finally, add unit tests to an existing or new file in the `python/cudf_polars/tests/expressions` directory to test the implementation.
 
 1. The added unit tests should cover all the lines added in the implementation. A CI job validates that there is 100% code coverage.
 2. The unit tests should use the `engine` fixture from `python/cudf_polars/tests/conftest.py` to test all applicable cudf-polars engine types including single and multiple partition execution.
@@ -87,4 +87,7 @@ Finally, add a unit test to an existing or new file in the `python/cudf_polars/t
 4. The unit test should use `pytest.mark.skipif` with a boolean variable from `python/cudf_polars/cudf_polars/utils/versions.py` if a unit test exercises a Polars expression or an argument that doesn't exist since a particular Polars version within the cudf-polars support window defined in `python/cudf_polars/pyproject.toml`.
 5. When using `assert_gpu_result_equal` for expressions that return floats, consider specifying `check_exact=False` if necessary.
 
-TODO: Add more guidance on a multiple partition implementation.
+When running the unit tests:
+
+1. First, `git stash` the new implementation (i.e. all changes not in `python/cudf_polars/tests`) and only run the newly added tests to validate they fail without the new implementation.
+2. Next, `git stash apply` the stashed files and run *all* unit tests in `python/cudf_polars/tests`. Address failures from the newly added tests or existing tests that fail because they use the Polars expressions being implemented.
