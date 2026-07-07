@@ -311,19 +311,30 @@ def _update_ordering_indices(
     )
 
 
-def _unwrap_casts(expr: Expr) -> Expr:
-    while isinstance(expr, Cast):
+def _is_order_transparent_cast(expr: Cast) -> bool:
+    src_id = expr.children[0].dtype.id()
+    dst_id = expr.dtype.id()
+    if src_id == dst_id:
+        return True
+    return {src_id, dst_id} == {
+        plc.TypeId.INT64,
+        plc.TypeId.TIMESTAMP_NANOSECONDS,
+    }
+
+
+def _unwrap_order_transparent_casts(expr: Expr) -> Expr:
+    while isinstance(expr, Cast) and _is_order_transparent_cast(expr):
         (expr,) = expr.children
     return expr
 
 
 def _truncate_source_name(expr: Expr) -> str | None:
-    expr = _unwrap_casts(expr)
+    expr = _unwrap_order_transparent_casts(expr)
     if (
         isinstance(expr, TemporalFunction)
         and expr.name is TemporalFunction.Name.Truncate
     ):
-        source = _unwrap_casts(expr.children[0])
+        source = _unwrap_order_transparent_casts(expr.children[0])
         if isinstance(source, Col):
             return source.name
     return None
@@ -336,6 +347,12 @@ def _derived_ordering(
     output_schema: Schema,
     context: Context | None,
 ) -> Ordering | None:
+    """
+    Create an ordering for a supported derivation of one key.
+
+    This is intentionally narrow for now: only temporal truncation of a single
+    ordered column is recognized.
+    """
     if context is None or len(ordering.keys) != 1:
         return None
 
@@ -365,6 +382,7 @@ def _derived_ordering(
     )
     key = ordering.keys[0]
     target_index = names_to_indices((ne.name,), output_schema)[0]
+    # Truncation can merge key values, so this derived ordering is non-strict.
     return Ordering(
         (
             OrderKey(
