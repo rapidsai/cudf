@@ -6,6 +6,11 @@
 # This function finds rtcx
 function(find_and_configure_rtcx VERSION)
 
+  # Ensure rtcx installs its targets unconditionally. In shared builds the static library is
+  # absorbed into libcudf.so, but CMake still requires the target to be in an export set for
+  # install(EXPORT) validation. In static builds consumers need to link librtcx.a directly.
+  set(RTCX_INSTALL ON)
+
   rapids_cpm_find(
     rtcx ${VERSION}
     GLOBAL_TARGETS rtcx::rtcx
@@ -21,7 +26,6 @@ function(find_and_configure_rtcx VERSION)
   if(rtcx_ADDED OR DEFINED CPM_rtcx_SOURCE)
     include("${rtcx_SOURCE_DIR}/embed.cmake")
   endif()
-
 endfunction()
 
 set(RTCX_MIN_VERSION_cudf "0.1")

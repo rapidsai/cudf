@@ -429,7 +429,7 @@ include(cmake/Modules/AddFragment.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd rtcx)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -1258,7 +1258,7 @@ target_link_libraries(
           ${CUDF_nanoarrow_TARGET}
           zstd
           $<BUILD_LOCAL_INTERFACE:xxhash>
-          $<BUILD_LOCAL_INTERFACE:rtcx::rtcx>
+          rtcx::rtcx
 )
 
 # When rmm is a static library being absorbed via whole-archive, strip nvtx3 from its public
