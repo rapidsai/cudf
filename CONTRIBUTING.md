@@ -54,7 +54,10 @@ documentation docs](https://docs.rapids.ai/api/cudf/stable/cudf/developer_guide/
 8. Verify that CI passes all [status checks](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks).
    Fix if needed.
 9. Wait for other developers to review your code and update code as needed.
-   Changes to any C++ files require at least 2 approvals from the cudf-cpp-codeowners before merging.
+   Changes to libcudf C++ files require at least 2 approvals from the cudf-cpp-codeowners before
+   merging.
+   Changes limited to libcudf_streaming C++ files require at least 1 approval from the
+   rapidsmpf-cpp-codeowners before merging.
 10. Once reviewed and approved, a RAPIDS developer will merge your pull request.
 
 If you are unsure about anything, don't hesitate to comment on issues and ask for clarification!
