@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
 import pylibcudf as plc
@@ -127,8 +128,16 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    _supported_math_fns = frozenset(
+        {
+            "radians",
+        }
+    )
     _supported_fns = frozenset().union(
-        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+        _supported_misc_fns,
+        _supported_cum_aggs,
+        _supported_math_fns,
+        _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
@@ -138,7 +147,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
         }
-    ).union(_OP_MAPPING.keys())
+    ).union(_supported_math_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -536,6 +545,23 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            operand = column.obj
+            if operand.type().id() != out_type.id():
+                operand = plc.unary.cast(operand, out_type, stream=df.stream)
+            factor = math.pi / 180.0
+            return Column(
+                plc.binaryop.binary_operation(
+                    operand,
+                    plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                    plc.binaryop.BinaryOperator.MUL,
+                    out_type,
+                    stream=df.stream,
+                ),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
