@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -524,6 +524,12 @@ TEST_F(ExtractVariantFieldTest, ApacheArrayPrimitiveIndexing)
                                  cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{5}});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[3]"),
                                  cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{9}});
+
+  // Leading zeros are allowed and interpreted in base 10: "[00]" == "[0]", "[01]" == "[1]".
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[00]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{2}});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*get("$[01]"),
+                                 cudf::test::fixed_width_column_wrapper<int8_t>{int8_t{1}});
 
   // Out-of-bounds index resolves to null.
   cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
