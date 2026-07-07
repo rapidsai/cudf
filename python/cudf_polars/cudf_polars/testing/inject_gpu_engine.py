@@ -151,7 +151,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_nested_column_cast_deletion_rename": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values_nested": "Iceberg partition column injection not yet implemented in cudf-polars",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count[native]": "Iceberg fast count from metadata not yet supported in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Iceberg support not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_iceberg_filter_bool_26474": "Iceberg support not yet implemented in cudf-polars",
     "tests/unit/io/test_io_plugin.py::test_defer_validate_false": "cudf-polars always validates the IO source schema, so validate_schema=False dtype mismatches are unsupported on GPU",
     "tests/unit/io/test_io_plugin.py::test_datetime_io_predicate_pushdown_21790": "cudf-polars validates the IO source schema exactly and does not coerce datetime time units (us vs ns)",
@@ -248,7 +248,6 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/lazyframe/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
-    "tests/unit/lazyframe/test_predicates.py::test_filter_contradiction_fallible_error_handling": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
     "tests/unit/lazyframe/test_cse.py::test_cse_predicate_self_join[False]": "Debug output on stderr doesn't match, see https://github.com/rapidsai/cudf/issues/22967",
     "tests/unit/lazyframe/test_cse.py::test_cse_predicate_self_join[True]": "Debug output on stderr doesn't match, see https://github.com/rapidsai/cudf/issues/22967",
@@ -345,12 +344,6 @@ TESTS_TO_SKIP: dict[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_metrics[False-parquet]": "Checks to IO metric logs specific to Polars CPU",
     "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Checks to IO metric logs specific to Polars CPU",
     "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Checks to IO metric logs specific to Polars CPU",
-    # polars 1.42 updated these tests to also assert deprecated_call and strict=True ShapeError
-    # in the same test function. The SPMD engine fails on the strict=True collect() inside a
-    # pytest.raises block because the DeprecationWarning from how='horizontal' propagates differently
-    # across engines. Skip both runs rather than xfail (which would XPASS on in-memory).
-    "tests/unit/lazyframe/test_predicates.py::test_hconcat_predicate": "polars 1.42: test uses deprecated how='horizontal' with strict=True in ways that behave differently across GPU engines",
-    "tests/unit/functions/test_union.py::test_union_lazyframe_horizontal": "polars 1.42: test uses deprecated how='horizontal' with strict=True in ways that behave differently across GPU engines",
 }
 
 
