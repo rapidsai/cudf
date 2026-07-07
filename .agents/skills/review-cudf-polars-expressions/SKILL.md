@@ -17,7 +17,7 @@ This rule describes guidelines and implementation patterns for supporting Polars
 1. Identify a suitable cudf-polars development environment, if not provided by the user, and ensure the Polars version is the latest supported version by cudf_polars.
 2. Identify a directory that contains the Polars source code to use as a reference for implementations. If it is not provided by the user or one cannot be identified, clone it to a temporary location. Ensure the Polars Git source tree is checked-out to the same Polars version installed in the development environment.
 
-For example, to clone Polars matching the Polars version in a fictional, conda development environment named "my-env"
+For example, to clone Polars matching the Polars version in a fictional, conda development environment named "cudf-dev"
 ```bash
 POLARS_VERSION=$(conda run -n cudf-dev python -c "import polars as pl; print(pl.__version__)")
 git clone https://github.com/pola-rs/polars.git --single-branch --branch py-$POLARS_VERSION /tmp/polars
