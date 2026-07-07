@@ -1143,7 +1143,7 @@ TEST_F(OrcWriterTest, SlicedValidMask)
 
 TEST_F(OrcReaderTest, ZeroColumnsPreservesRowCount)
 {
-  GTEST_SKIP() << "Zero-column / N-row parquet reads are not yet supported. See "
+  GTEST_SKIP() << "Zero-column / N-row ORC reads are not yet supported. See "
                   "https://github.com/rapidsai/cudf/issues/22935).";
 
   constexpr cudf::size_type num_rows = 8;
