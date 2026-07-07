@@ -105,6 +105,7 @@ class UnaryFunction(Expr):
         {
             "as_struct",
             "drop_nulls",
+            "extend_constant",
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
@@ -536,6 +537,33 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "extend_constant":
+            column = self.children[0].evaluate(df, context=context)
+            value_expr = self.children[1]
+            n_expr = self.children[2]
+            if isinstance(n_expr, Literal):
+                count = n_expr.value
+            else:
+                count = (
+                    n_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            if count == 0:
+                return column
+            if isinstance(value_expr, Literal):
+                fill = plc.Scalar.from_py(
+                    value_expr.value, self.dtype.plc_type, stream=df.stream
+                )
+            else:
+                fill = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+            extension = plc.Column.from_scalar(fill, count, stream=df.stream)
+            return Column(
+                plc.concatenate.concatenate([column.obj, extension], stream=df.stream),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
