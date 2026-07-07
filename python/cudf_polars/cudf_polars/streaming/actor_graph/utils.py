@@ -403,10 +403,15 @@ def _derived_ordering(
         *boundary_chunk.table_view().columns()[:source_position],
         column.obj,
     ]
+    boundary_table = plc.concatenate.concatenate(
+        [plc.Table(boundary_columns)],
+        stream=stream,
+        mr=br.device_mr,
+    )
     boundaries = TableChunk.from_pylibcudf_table(
-        plc.Table(boundary_columns),
+        boundary_table,
         stream,
-        exclusive_view=False,
+        exclusive_view=True,
         br=br,
     )
     keys = tuple(
