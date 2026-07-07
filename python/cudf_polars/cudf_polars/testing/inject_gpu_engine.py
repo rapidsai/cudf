@@ -447,6 +447,7 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
 
 # xfail for tests that produce different results than CPU Polars
 STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
+    "tests/unit/datatypes/test_decimal.py::test_decimal_horizontal_20482": "pylibcudf.Scalar.from_py doesn't support int to decimal type",
     "tests/unit/functions/range/test_linear_space.py::test_linear_space_num_samples_expr": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/functions/test_concat.py::test_concat_horizontal_zero_width_height_mismatch_26876": "https://github.com/rapidsai/cudf/issues/21644",
     "tests/unit/functions/test_concat.py::test_concat_horizontally_strict": "Correct polars.exceptions.ShapeError raised but it's in a ExceptionGroup",
