@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -16,6 +16,7 @@ namespace strings {
  * @addtogroup strings_types
  * @{
  * @file
+ * @brief APIs for identifying and filtering strings by character type
  */
 
 /**

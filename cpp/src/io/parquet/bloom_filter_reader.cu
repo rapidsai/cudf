@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "arrow_filter_policy.cuh"
 #include "compact_protocol_reader.hpp"
 #include "expression_transform_helpers.hpp"
 #include "io/utilities/time_utils.hpp"
@@ -26,6 +25,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cuco/bloom_filter_policies.cuh>
 #include <cuco/bloom_filter_ref.cuh>
 #include <cuda/iterator>
 #include <thrust/tabulate.h>
@@ -38,6 +38,30 @@
 
 namespace cudf::io::parquet::detail {
 namespace {
+
+/**
+ * @brief Policy describing the Apache Arrow Block-Split Bloom Filter, hashing keys with cudf's
+ * `XXHash_64` (so that `cudf::string_view` and other cudf types are hashed by content, matching the
+ * Apache Parquet/Arrow bloom filter specification).
+ *
+ * Uses cuco's `parametric_filter_policy` with the Apache Arrow layout: 256-bit blocks (8 x
+ * `uint32_t`), 8 fingerprint bits per key, fully horizontal add (Theta=8) and fully vertical
+ * contains (Phi=8). This layout is bit-compatible with Apache Arrow, as verified by cuCollections
+ * `tests/bloom_filter/arrow_compat_test.cu`.
+ *
+ * @tparam Key The type of the values to generate a fingerprint for.
+ */
+template <class Key>
+using arrow_filter_policy = cuco::parametric_filter_policy<cudf::hashing::detail::XXHash_64<Key>,
+                                                           std::uint32_t,
+                                                           8,
+                                                           8,
+                                                           8,
+                                                           1,
+                                                           1,
+                                                           8,
+                                                           false,
+                                                           false>;
 
 /**
  * @brief Converts bloom filter membership results (for each column chunk) to a device column.
