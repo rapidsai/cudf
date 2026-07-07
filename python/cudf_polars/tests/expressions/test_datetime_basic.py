@@ -213,6 +213,45 @@ def test_duration_total_component_extract(engine: pl.GPUEngine, field, dtype):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("method", ["millennium"])
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_century_millennium(engine: pl.GPUEngine, method, dtype):
+    data = pl.Series(
+        [
+            datetime.date(1897, 5, 7),
+            datetime.date(1900, 12, 31),
+            datetime.date(1901, 1, 1),
+            datetime.date(2000, 1, 1),
+            datetime.date(2001, 7, 5),
+            None,
+        ],
+        dtype=pl.Date(),
+    ).cast(dtype)
+    ldf = pl.LazyFrame({"dates": data})
+    q = ldf.select(getattr(pl.col("dates").dt, method)())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("method", ["millennium"])
+@pytest.mark.parametrize(
+    "days",
+    [
+        # ``Date`` supports a much wider year range than ``Datetime``; include
+        # pre-year-1 offsets to exercise the floor-division branch of the
+        # century/millennium formula.
+        [-1_000_000, -800_000, -365, 0],
+        [364_000, 376_000],  # years ~2966 and ~3000
+    ],
+)
+def test_century_millennium_date_extreme_years(engine: pl.GPUEngine, method, days):
+    dates = pl.Series(days, dtype=pl.Int32).cast(pl.Date())
+    ldf = pl.LazyFrame({"dates": dates})
+    q = ldf.select(getattr(pl.col("dates").dt, method)())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
 )
