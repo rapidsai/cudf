@@ -198,9 +198,10 @@ def test_scan_row_index_projected_out(tmp_path):
 @pytest.mark.parametrize("chunked", [False, True])
 def test_scan_parquet_pandas_index_projected_out(tmp_path, chunked):
     pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
 
     pd.DataFrame({"a": [1, 2, 3], "b": [4.0, 5.0, 6.0]}).to_parquet(
-        tmp_path / "pdf.pq", index=True
+        tmp_path / "pdf.pq", engine="pyarrow", index=True
     )
     q = pl.scan_parquet(tmp_path / "pdf.pq").select("b")
 
