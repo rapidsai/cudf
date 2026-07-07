@@ -418,13 +418,19 @@ def test_to_datetime_nanosecond_precision_strings():
     assert_eq(pd.to_datetime(data_us), cudf.to_datetime(data_us))
 
 
-def test_datetime_index_tz_dtype_wall_time():
-    # Timezone-naive data with a tz-aware dtype is interpreted as wall
-    # time in the target timezone, matching pandas.
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["2016-01-01 00:00:00"],
+        [1451606400, 1451610000],
+    ],
+)
+def test_datetime_index_tz_dtype_wall_time(data):
+    # Timezone-naive string data with a tz-aware dtype is interpreted as
+    # wall time in the target timezone, while integers are interpreted as
+    # epoch time (UTC), matching pandas.
     result = cudf.DatetimeIndex(
-        ["2016-01-01 00:00:00"], dtype=pd.DatetimeTZDtype("s", "US/Eastern")
+        data, dtype=pd.DatetimeTZDtype("s", "US/Eastern")
     )
-    expected = pd.DatetimeIndex(
-        ["2016-01-01 00:00:00"], dtype="datetime64[s, US/Eastern]"
-    )
+    expected = pd.DatetimeIndex(data, dtype="datetime64[s, US/Eastern]")
     assert_eq(result, expected)
