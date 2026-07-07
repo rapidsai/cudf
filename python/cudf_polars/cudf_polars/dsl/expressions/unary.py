@@ -110,6 +110,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "reinterpret",
             "round",
             "set_sorted",
             "shift",
@@ -135,6 +136,7 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "reinterpret",
             "round",
             "set_sorted",
         }
@@ -166,6 +168,16 @@ class UnaryFunction(Expr):
             if method not in {"average", "min", "max", "dense", "ordinal"}:
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
+                )
+        if self.name == "reinterpret":
+            source = children[0].dtype.plc_type
+            target = self.dtype.plc_type
+            if plc.traits.is_floating_point(source) != plc.traits.is_floating_point(
+                target
+            ):
+                raise NotImplementedError(
+                    "reinterpret between integer and floating-point types is not "
+                    "supported"
                 )
 
     def do_evaluate(
@@ -538,6 +550,9 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "reinterpret":
+            column = self.children[0].evaluate(df, context=context)
+            return column.astype(self.dtype, stream=df.stream)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
