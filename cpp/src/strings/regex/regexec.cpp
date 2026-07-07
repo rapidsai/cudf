@@ -15,7 +15,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
-#include <cstring>
 #include <functional>
 #include <numeric>
 
@@ -37,6 +36,7 @@ reprog_device::reprog_device(reprog const& prog)
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   reprog const& h_prog, rmm::cuda_stream_view stream)
 {
+  // compute size to hold all the member data
   auto const insts_count   = h_prog.insts_count();
   auto const classes_count = h_prog.classes_count();
   auto const starts_count  = h_prog.starts_count();
