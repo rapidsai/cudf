@@ -18,6 +18,7 @@
 
 #include <array>
 #include <cstdio>
+#include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
@@ -430,6 +431,57 @@ inline std::vector<uint8_t> enc_short_string(std::string_view s)
   return out;
 }
 
+// Append `width` little-endian bytes of `bits` to `out`.
+inline void append_le(std::vector<uint8_t>& out, uint64_t bits, int width)
+{
+  for (int i = 0; i < width; ++i) {
+    out.push_back(static_cast<uint8_t>((bits >> (8 * i)) & 0xff));
+  }
+}
+
+// Primitive value blobs (header + fixed payload) for every physical type the cast matrix exercises.
+inline std::vector<uint8_t> enc_null()
+{
+  return {make_variant_primitive(variant_primitive_type::null)};
+}
+inline std::vector<uint8_t> enc_bool(bool b)
+{
+  return {make_variant_primitive(b ? variant_primitive_type::boolean_true
+                                   : variant_primitive_type::boolean_false)};
+}
+inline std::vector<uint8_t> enc_int8(int8_t v)
+{
+  return {make_variant_primitive(variant_primitive_type::int8), static_cast<uint8_t>(v)};
+}
+inline std::vector<uint8_t> enc_int16(int16_t v)
+{
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::int16)};
+  append_le(out, static_cast<uint16_t>(v), 2);
+  return out;
+}
+inline std::vector<uint8_t> enc_int64(int64_t v)
+{
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::int64)};
+  append_le(out, static_cast<uint64_t>(v), 8);
+  return out;
+}
+inline std::vector<uint8_t> enc_float64(double v)
+{
+  std::uint64_t bits = 0;
+  std::memcpy(&bits, &v, sizeof(bits));
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::float64)};
+  append_le(out, bits, 8);
+  return out;
+}
+// Long-string primitive blob: header + 4-byte LE length + payload.
+inline std::vector<uint8_t> enc_long_string(std::string_view s)
+{
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::long_string)};
+  append_le(out, s.size(), 4);
+  out.insert(out.end(), s.begin(), s.end());
+  return out;
+}
+
 // Build a single-field object value wrapping `inner` under field id `fid`.
 // field_off_size=1, field_id_size=1, is_large=false.
 inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
@@ -595,6 +647,40 @@ TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*first, cudf::test::fixed_width_column_wrapper<int32_t>{0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*mid, cudf::test::fixed_width_column_wrapper<int32_t>{24});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*last, cudf::test::fixed_width_column_wrapper<int32_t>{49});
+}
+
+TEST_F(ExtractVariantFieldTest, MalformedVariantDataYieldsNull)
+{
+  // The column shape is a valid STRUCT<list<uint8>, list<uint8>>, but the VARIANT bytes are
+  // internally inconsistent. Each such row must resolve to a null result rather than throwing or
+  // reading out of bounds.
+  auto stream    = cudf::test::get_default_stream();
+  auto const i32 = cudf::data_type{cudf::type_id::INT32};
+
+  struct data_case {
+    std::string label;
+    std::vector<uint8_t> meta;
+    std::vector<uint8_t> val;
+  };
+  auto const valid_object = build_single_field_object(/*fid=*/0, enc_int32(1));
+  std::vector<data_case> const cases{
+    // Metadata claims 5 dictionary entries but carries no offset/string bytes for them.
+    {"metadata dictionary size overruns the buffer", {0x01, 0x05}, valid_object},
+    // Single-key dict whose trailing offset (0xFF) points far past the string payload.
+    {"metadata offset points past the string payload", {0x01, 0x01, 0x00, 0xFF, 'x'}, valid_object},
+    // Object header declares 255 fields but carries no field-id/offset bytes.
+    {"object declares more fields than the value buffer holds",
+     build_metadata({"x"}),
+     {make_variant_object_header(), 0xFF}},
+  };
+
+  for (auto const& c : cases) {
+    SCOPED_TRACE(c.label);
+    auto col = wrap_single_variant(c.meta, c.val);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(col, "x", i32, stream);
+    ASSERT_EQ(got->size(), 1);
+    EXPECT_EQ(got->null_count(), 1);
+  }
 }
 
 TEST_F(ExtractVariantFieldTest, NullsAtDifferentDepths)
@@ -796,20 +882,104 @@ TEST_F(CastVariantTest, EmptyInput)
   }
 }
 
-TEST_F(CastVariantTest, UnsupportedCastTypeThrows)
+TEST_F(CastVariantTest, CastToUnsupportedTargetThrows)
 {
-  // The byte content is a well-formed variant "null" primitive; it is only a placeholder here.
-  // cast_variant rejects FLOAT64/BOOL8 at compile-time dispatch on the requested output type,
-  // independent of the input bytes, so any valid list<uint8> row triggers the same throw.
+  // cast_variant only supports INT8/16/32/64 and STRING targets. Every other target is rejected at
+  // compile-time dispatch on the requested output type, independent of the input bytes, so a single
+  // well-formed placeholder row triggers the same throw for all of them.
   auto stream = cudf::test::get_default_stream();
   std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::null)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
-  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
-                 values, cudf::data_type{cudf::type_id::FLOAT64}, stream)),
-               std::invalid_argument);
-  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
-                 values, cudf::data_type{cudf::type_id::BOOL8}, stream)),
-               std::invalid_argument);
+
+  for (auto const id : {cudf::type_id::BOOL8,
+                        cudf::type_id::UINT8,
+                        cudf::type_id::UINT16,
+                        cudf::type_id::UINT32,
+                        cudf::type_id::UINT64,
+                        cudf::type_id::FLOAT32,
+                        cudf::type_id::FLOAT64,
+                        cudf::type_id::TIMESTAMP_DAYS,
+                        cudf::type_id::TIMESTAMP_SECONDS,
+                        cudf::type_id::TIMESTAMP_MICROSECONDS,
+                        cudf::type_id::DURATION_SECONDS,
+                        cudf::type_id::DECIMAL32,
+                        cudf::type_id::DECIMAL64,
+                        cudf::type_id::DECIMAL128}) {
+    SCOPED_TRACE(std::string{"target type_id: "} + std::to_string(static_cast<int32_t>(id)));
+    EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+                   values, cudf::data_type{id}, stream)),
+                 std::invalid_argument);
+  }
+}
+
+TEST_F(CastVariantTest, CastSourceTargetMatrix)
+{
+  // Exhaustively covers (source physical type) x (supported target) casts. The supported targets
+  // are INT8/16/32/64 and STRING. Expected behaviour:
+  //   - integer targets: only a source whose physical type has the *exact* same width decodes;
+  //   every
+  //     other source (including narrower/wider ints) yields null — cast_variant does not widen.
+  //   - STRING target: short_string and long_string sources decode; every other source yields null.
+  auto const stream = cudf::test::get_default_stream();
+
+  struct source_blob {
+    char const* label;
+    std::vector<uint8_t> bytes;
+  };
+  std::vector<source_blob> const sources{
+    {"null", enc_null()},
+    {"bool_true", enc_bool(true)},
+    {"bool_false", enc_bool(false)},
+    {"int8", enc_int8(42)},
+    {"int16", enc_int16(1234)},
+    {"int32", enc_int32(123456)},
+    {"int64", enc_int64(1234567890123456789LL)},
+    {"float64", enc_float64(2.5)},
+    {"short_string", enc_short_string("hi")},
+    {"long_string", enc_long_string(std::string(70, 'a'))},
+  };
+
+  auto values_of = [](std::vector<uint8_t> const& b) {
+    return cudf::test::lists_column_wrapper<uint8_t>(b.begin(), b.end());
+  };
+
+  // Integer targets: exactly one source label decodes to `match_value`; the rest are null.
+  auto check_int_target = [&]<typename T>(char const* match_label, T match_value) {
+    auto const target = cudf::data_type{cudf::type_to_id<T>()};
+    for (auto const& src : sources) {
+      SCOPED_TRACE(std::string{"int target "} + match_label + ", source " + src.label);
+      auto values = values_of(src.bytes);
+      auto got    = cudf::io::parquet::experimental::cast_variant(values, target, stream);
+      if (std::string_view{src.label} == match_label) {
+        cudf::test::fixed_width_column_wrapper<T> const expected{match_value};
+        CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+      } else {
+        ASSERT_EQ(got->size(), 1);
+        EXPECT_EQ(got->null_count(), 1);
+      }
+    }
+  };
+  check_int_target.template operator()<int8_t>("int8", int8_t{42});
+  check_int_target.template operator()<int16_t>("int16", int16_t{1234});
+  check_int_target.template operator()<int32_t>("int32", int32_t{123456});
+  check_int_target.template operator()<int64_t>("int64", int64_t{1234567890123456789LL});
+
+  // STRING target: short_string and long_string decode; every other source is null.
+  auto const string_type = cudf::data_type{cudf::type_id::STRING};
+  for (auto const& src : sources) {
+    SCOPED_TRACE(std::string{"string target, source "} + src.label);
+    auto values = values_of(src.bytes);
+    auto got    = cudf::io::parquet::experimental::cast_variant(values, string_type, stream);
+    std::string_view const label{src.label};
+    if (label == "short_string" || label == "long_string") {
+      std::string const expected_str = (label == "short_string") ? "hi" : std::string(70, 'a');
+      cudf::test::strings_column_wrapper const expected({expected_str});
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
+    } else {
+      ASSERT_EQ(got->size(), 1);
+      EXPECT_EQ(got->null_count(), 1);
+    }
+  }
 }
 
 TEST_F(CastVariantTest, ShortStringLengthZero)
@@ -824,7 +994,7 @@ TEST_F(CastVariantTest, ShortStringLengthZero)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(CastVariantTest, ShortStringLengthSixtyThree)
+TEST_F(CastVariantTest, ShortStringMaxLength)
 {
   // Short string with length 63, the max value a 6-bit length field can hold, then 63 bytes.
   auto stream = cudf::test::get_default_stream();
@@ -852,98 +1022,117 @@ TEST_F(CastVariantTest, LongStringLengthZero)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
-TEST_F(CastVariantTest, LongStringTruncatedPayloadYieldsNull)
+TEST_F(CastVariantTest, LongStringDeclaredLengthExceedsPayloadYieldsNull)
 {
-  // Long string header declaring LE length=10 but only 3 payload bytes follow — decode_string
-  // returns nullopt (truncation guard).
-  auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::long_string),
-                                 0x0A,
-                                 0x00,
-                                 0x00,
-                                 0x00,
-                                 'a',
-                                 'b',
-                                 'c'};
-  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
-  auto got = cudf::io::parquet::experimental::cast_variant(
-    values, cudf::data_type{cudf::type_id::STRING}, stream);
-  ASSERT_EQ(got->size(), 1);
-  EXPECT_EQ(got->null_count(), 1);
+  // decode_string rejects any long string whose declared LE length exceeds the payload bytes
+  // actually present, whether the payload is partially present or entirely absent. Both shapes
+  // below declare length=10 (0x0000000A).
+  auto stream    = cudf::test::get_default_stream();
+  auto const hdr = make_variant_primitive(variant_primitive_type::long_string);
+  std::vector<std::vector<uint8_t>> const cases{
+    {hdr, 0x0A, 0x00, 0x00, 0x00, 'a', 'b', 'c'},  // 3 of 10 payload bytes present
+    {hdr, 0x0A, 0x00, 0x00, 0x00},                 // 0 of 10 payload bytes present
+  };
+  for (auto const& val : cases) {
+    SCOPED_TRACE(std::string{"payload bytes present: "} + std::to_string(val.size() - 5));
+    cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+    auto got = cudf::io::parquet::experimental::cast_variant(
+      values, cudf::data_type{cudf::type_id::STRING}, stream);
+    ASSERT_EQ(got->size(), 1);
+    EXPECT_EQ(got->null_count(), 1);
+  }
 }
 
 struct InvalidInputShapeTest : public cudf::test::BaseFixture {};
 
-TEST_F(InvalidInputShapeTest, GetVariantFieldNonStructInput)
+namespace {
+
+// A well-formed VARIANT child: a single-row list<uint8> holding `bytes`.
+inline std::unique_ptr<cudf::column> list_u8(std::vector<uint8_t> const& bytes)
 {
-  auto stream = cudf::test::get_default_stream();
-  cudf::test::fixed_width_column_wrapper<int32_t> not_struct{1, 2, 3};
-  EXPECT_THROW(
-    static_cast<void>(cudf::io::parquet::experimental::get_variant_field(not_struct, "x", stream)),
-    std::invalid_argument);
+  return cudf::test::lists_column_wrapper<uint8_t>(bytes.begin(), bytes.end()).release();
 }
 
-TEST_F(InvalidInputShapeTest, GetVariantFieldFewerThanTwoChildren)
+// A single-row list<int32> (wrong element type for a VARIANT child).
+inline std::unique_ptr<cudf::column> list_i32(std::vector<int32_t> const& values)
 {
-  auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const bytes{0x01, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> only_child(bytes.begin(), bytes.end());
-  cudf::column_view const one_child_struct{
-    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {only_child}};
-  EXPECT_THROW(static_cast<void>(
-                 cudf::io::parquet::experimental::get_variant_field(one_child_struct, "x", stream)),
-               std::invalid_argument);
+  return cudf::test::lists_column_wrapper<int32_t>(values.begin(), values.end()).release();
 }
 
-TEST_F(InvalidInputShapeTest, GetVariantFieldMetadataChildNotList)
+// A single-row fixed-width int32 column (a non-list child).
+inline std::unique_ptr<cudf::column> scalar_i32()
 {
-  // child(0) is INT32, not LIST.
-  auto stream = cudf::test::get_default_stream();
-  cudf::test::fixed_width_column_wrapper<int32_t> meta_not_list{42};
-  std::vector<uint8_t> const val_bytes{0x00};
-  cudf::test::lists_column_wrapper<uint8_t> good_val(val_bytes.begin(), val_bytes.end());
-  cudf::column_view const bad_meta_col{
-    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {meta_not_list, good_val}};
-  EXPECT_THROW(static_cast<void>(
-                 cudf::io::parquet::experimental::get_variant_field(bad_meta_col, "x", stream)),
-               std::invalid_argument);
+  return cudf::test::fixed_width_column_wrapper<int32_t>{42}.release();
 }
 
-TEST_F(InvalidInputShapeTest, GetVariantFieldMetadataChildListInt32)
+// A single-row STRUCT column adopting `children`.
+inline std::unique_ptr<cudf::column> struct_of(std::vector<std::unique_ptr<cudf::column>> children)
 {
-  // child(0) is list<int32> instead of list<uint8>.
-  auto stream = cudf::test::get_default_stream();
-  std::vector<int32_t> const meta_int_data{1, 2, 3};
-  cudf::test::lists_column_wrapper<int32_t> meta_list_int(meta_int_data.begin(),
-                                                          meta_int_data.end());
-  std::vector<uint8_t> const val_bytes{0x00};
-  cudf::test::lists_column_wrapper<uint8_t> good_val(val_bytes.begin(), val_bytes.end());
-  cudf::column_view const bad_meta_col{
-    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {meta_list_int, good_val}};
-  EXPECT_THROW(static_cast<void>(
-                 cudf::io::parquet::experimental::get_variant_field(bad_meta_col, "x", stream)),
-               std::invalid_argument);
+  return cudf::make_structs_column(1, std::move(children), 0, rmm::device_buffer{});
 }
 
-TEST_F(InvalidInputShapeTest, GetVariantFieldValueChildNotList)
+inline std::vector<std::unique_ptr<cudf::column>> two_children(std::unique_ptr<cudf::column> a,
+                                                               std::unique_ptr<cudf::column> b)
 {
-  // child(1) is INT32, not LIST.
-  auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const meta_bytes{0x01, 0x00, 0x00};
-  cudf::test::lists_column_wrapper<uint8_t> good_meta(meta_bytes.begin(), meta_bytes.end());
-  cudf::test::fixed_width_column_wrapper<int32_t> val_not_list{42};
-  cudf::column_view const bad_val_col{
-    cudf::data_type{cudf::type_id::STRUCT}, 1, nullptr, nullptr, 0, 0, {good_meta, val_not_list}};
-  EXPECT_THROW(
-    static_cast<void>(cudf::io::parquet::experimental::get_variant_field(bad_val_col, "x", stream)),
-    std::invalid_argument);
+  std::vector<std::unique_ptr<cudf::column>> v;
+  v.push_back(std::move(a));
+  v.push_back(std::move(b));
+  return v;
 }
 
-TEST_F(InvalidInputShapeTest, CastVariantNonListInput)
+// A malformed-shape case: a human-readable label plus the offending column.
+struct broken_shape {
+  std::string label;
+  std::unique_ptr<cudf::column> column;
+};
+
+}  // namespace
+
+// A VARIANT column must be a STRUCT whose first two children are each a list<uint8>. Enumerate the
+// distinct ways that column-shape contract can be broken; get_variant_field must reject every one
+// with std::invalid_argument.
+TEST_F(InvalidInputShapeTest, GetVariantFieldRejectsMalformedColumnShape)
 {
   auto stream = cudf::test::get_default_stream();
-  cudf::test::fixed_width_column_wrapper<int32_t> not_a_list{1, 2, 3};
-  EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
-                 not_a_list, cudf::data_type{cudf::type_id::INT32}, stream)),
-               std::invalid_argument);
+
+  std::vector<broken_shape> cases;
+  cases.push_back({"input column is not a struct", scalar_i32()});
+  {
+    std::vector<std::unique_ptr<cudf::column>> one;
+    one.push_back(list_u8({0x01, 0x00, 0x00}));
+    cases.push_back({"struct has fewer than two children", struct_of(std::move(one))});
+  }
+  cases.push_back({"metadata child has wrong column type (not a list)",
+                   struct_of(two_children(scalar_i32(), list_u8({0x00})))});
+  cases.push_back({"metadata child has wrong list element type (not uint8)",
+                   struct_of(two_children(list_i32({1, 2, 3}), list_u8({0x00})))});
+  cases.push_back({"value child has wrong column type (not a list)",
+                   struct_of(two_children(list_u8({0x01, 0x00, 0x00}), scalar_i32()))});
+  cases.push_back({"value child has wrong list element type (not uint8)",
+                   struct_of(two_children(list_u8({0x01, 0x00, 0x00}), list_i32({1, 2, 3})))});
+
+  for (auto const& c : cases) {
+    SCOPED_TRACE(c.label);
+    EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::get_variant_field(
+                   c.column->view(), "x", stream)),
+                 std::invalid_argument);
+  }
+}
+
+// cast_variant requires a list<uint8> input; every other shape must be rejected with
+// std::invalid_argument.
+TEST_F(InvalidInputShapeTest, CastVariantRejectsMalformedColumnShape)
+{
+  auto stream = cudf::test::get_default_stream();
+
+  std::vector<broken_shape> cases;
+  cases.push_back({"input is not a list", scalar_i32()});
+  cases.push_back({"input list has wrong element type (not uint8)", list_i32({1, 2, 3})});
+
+  for (auto const& c : cases) {
+    SCOPED_TRACE(c.label);
+    EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
+                   c.column->view(), cudf::data_type{cudf::type_id::INT32}, stream)),
+                 std::invalid_argument);
+  }
 }
