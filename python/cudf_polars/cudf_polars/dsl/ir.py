@@ -884,8 +884,12 @@ class Scan(IR):
         # Here we ensure that the table only contains the projection.
         if with_columns is None:
             return table, list(names)
+        names = list(names)
+        with_columns = list(with_columns)
+        if names == with_columns:
+            return table, names
         columns = dict(zip(names, table.columns(), strict=True))
-        return plc.Table([columns[name] for name in with_columns]), list(with_columns)
+        return plc.Table([columns[name] for name in with_columns]), with_columns
 
     @classmethod
     @log_do_evaluate
