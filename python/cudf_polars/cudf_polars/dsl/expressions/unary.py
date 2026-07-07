@@ -109,6 +109,7 @@ class UnaryFunction(Expr):
             "fill_null_with_strategy",
             "mask_nans",
             "null_count",
+            "pct_change",
             "rank",
             "round",
             "set_sorted",
@@ -167,6 +168,20 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+
+    @staticmethod
+    def _evaluate_n(n_expr: Expr, df: DataFrame, context: ExecutionContext) -> int:
+        """Evaluate the integer ``n`` offset for ``diff`` and ``pct_change``."""
+        if isinstance(n_expr, Literal):
+            value = n_expr.value
+        else:
+            value = (
+                n_expr.evaluate(df, context=context)
+                .obj_scalar(stream=df.stream)
+                .to_py(stream=df.stream)
+            )
+        assert isinstance(value, int)
+        return value
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -536,6 +551,34 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "pct_change":
+            column = self.children[0].evaluate(df, context=context)
+            offset = self._evaluate_n(self.children[1], df, context)
+            out_type = self.dtype.plc_type
+            operand = plc.unary.cast(column.obj, out_type, stream=df.stream)
+            shifted = plc.copying.shift(
+                operand,
+                offset,
+                plc.Scalar.from_py(None, out_type, stream=df.stream),
+                stream=df.stream,
+            )
+            expression = plc.expressions.Operation(
+                plc.expressions.ASTOperator.SUB,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV,
+                    plc.expressions.ColumnReference(0),
+                    plc.expressions.ColumnReference(1),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+                ),
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([operand, shifted]), expression, stream=df.stream
+                ),
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
