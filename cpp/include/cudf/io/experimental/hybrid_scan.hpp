@@ -37,6 +37,7 @@ namespace io::parquet::experimental {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief Experimental Hybrid Scan Parquet reader optimized for highly selective filters.
  */
 
 /**

@@ -9,7 +9,6 @@ import inspect
 import os
 import pickle
 
-import numpy as np
 import pandas as pd
 
 # cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
@@ -386,12 +385,6 @@ _SeriesiAtIndexer = make_intermediate_proxy_type(
 )
 
 
-def _argsort(self, *args, **kwargs):
-    return _maybe_wrap_result(
-        self._fsproxy_wrapped.argsort(*args, **kwargs).astype(np.intp), self
-    )
-
-
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -418,7 +411,6 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        "argsort": _argsort,
         "to_xarray": _to_xarray,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
@@ -511,9 +503,6 @@ Index = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
-        # TODO: Handle special cases like mergesort being unsupported
-        # and raising for certain types like Categorical and RangeIndex
-        "argsort": _argsort,
         "values": property(_Index_values),
     },
 )

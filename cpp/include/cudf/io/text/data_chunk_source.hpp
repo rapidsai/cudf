@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2024, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,7 @@ namespace text {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief Interfaces for providing stream-ordered chunks of device data to text-based readers.
  */
 
 /**
