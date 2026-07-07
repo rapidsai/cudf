@@ -9,7 +9,9 @@ import contextlib
 import enum
 import functools
 import os
+import threading
 import time
+import uuid
 from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
@@ -49,6 +51,89 @@ if TYPE_CHECKING:
 
     import cudf_polars.containers
     from cudf_polars.dsl import ir
+    from cudf_polars.dsl.ir import IRExecutionContext
+
+
+def _dataframe_size_bytes(frame: cudf_polars.containers.DataFrame) -> int:
+    return sum(col.device_buffer_size() for col in frame.table.columns())
+
+
+def _begin_quent_do_evaluate_events(
+    cls: type[ir.IR],
+    ir_execution_context: IRExecutionContext,
+) -> tuple[Any, Any, bool] | None:
+    import cudf_polars.quent
+    from cudf_polars.dsl.ir import DataFrameScan, Scan
+
+    quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
+    if quent_ir_execution_context is None:
+        return None
+
+    token = uuid.uuid4()
+    quent_task = cudf_polars.quent.Task(
+        instance_name=(
+            f"{cls.__name__}-{quent_ir_execution_context.quent_operator.id.hex[:8]}-"
+            f"{token.hex[:8]}"
+        ),
+        operator_id=quent_ir_execution_context.quent_operator.id,
+    )
+    quent_processor = quent_ir_execution_context.context.get_or_declare_processor(
+        quent_ir_execution_context.logger,
+        thread_ident=threading.get_ident(),
+        pool_id=quent_ir_execution_context.thread_pool_id,
+    )
+    is_io_node = issubclass(cls, (Scan, DataFrameScan))
+    quent_ir_execution_context.logger.emit(quent_task.queueing())
+    if not is_io_node:
+        quent_ir_execution_context.logger.emit(
+            quent_task.allocating(resource_id=quent_processor.id)
+        )
+    return quent_task, quent_processor, is_io_node
+
+
+def _end_quent_do_evaluate_events(
+    cls: type[ir.IR],
+    frames: Sequence[cudf_polars.containers.DataFrame],
+    result: cudf_polars.containers.DataFrame,
+    ir_execution_context: IRExecutionContext,
+    quent_state: tuple[Any, Any, bool],
+) -> None:
+    import cudf_polars.quent
+
+    quent_task, quent_processor, is_io_node = quent_state
+    quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
+    if quent_ir_execution_context is None:
+        return
+
+    output_capacity_bytes = _dataframe_size_bytes(result)
+    if is_io_node:
+        quent_ir_execution_context.logger.emit(
+            quent_task.loading(
+                use_thread=quent_processor,
+                use_channel=quent_ir_execution_context.disk_to_device_channel,
+                channel_capacity_bytes=output_capacity_bytes,
+                use_memory=quent_ir_execution_context.device_memory,
+                memory_capacity_bytes=output_capacity_bytes,
+            )
+        )
+    else:
+        quent_ir_execution_context.logger.emit(
+            quent_task.computing(
+                use_thread=quent_processor,
+                use_memory=quent_ir_execution_context.device_memory,
+                memory_capacity_bytes=output_capacity_bytes,
+            )
+        )
+    quent_ir_execution_context.logger.emit(
+        quent_ir_execution_context.quent_operator.statistics(
+            statistics=cudf_polars.quent.Statistics(
+                input_bytes=sum(_dataframe_size_bytes(frame) for frame in frames),
+                output_bytes=output_capacity_bytes,
+                output_rows=result.num_rows,
+            )
+        )
+    )
+    quent_ir_execution_context.logger.emit(quent_task.exit())
 
 
 class Scope(enum.StrEnum):
@@ -158,42 +243,37 @@ def log_do_evaluate(
     func
         The ``IR.do_evaluate`` method to wrap.
     """
-    if not LOG_TRACES:
-        return func
-    else:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
 
-        @functools.wraps(func)
-        def wrapper(
-            cls: type[ir.IR],
-            *args: P.args,
-            **kwargs: P.kwargs,
-        ) -> cudf_polars.containers.DataFrame:
-            # do this just once
+    @functools.wraps(func)
+    def wrapper(
+        cls: type[ir.IR],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> cudf_polars.containers.DataFrame:
+        ir_execution_context: IRExecutionContext | None = kwargs.get("context")  # type: ignore[assignment]
+
+        frames: list[cudf_polars.containers.DataFrame] = (
+            list(args) + [v for k, v in kwargs.items() if k != "context"]
+        )[cls._n_non_child_args :]  # type: ignore[assignment]
+
+        quent_state = None
+        if ir_execution_context is not None:
+            quent_state = _begin_quent_do_evaluate_events(cls, ir_execution_context)
+
+        if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
             pynvml.nvmlInit()
             maybe_handle = get_device_handle()
             pid = _getpid()
             log = structlog.get_logger()
-
-            # By convention, all non-dataframe arguments (non-child) come first.
-            # Anything remaining is a dataframe, except for 'context' kwarg.
-            frames: list[cudf_polars.containers.DataFrame] = (
-                list(args) + [v for k, v in kwargs.items() if k != "context"]
-            )[cls._n_non_child_args :]  # type: ignore[assignment]
 
             before_start = time.monotonic_ns()
             before = make_snapshot(
                 cls, frames, phase="input", device_handle=maybe_handle, pid=pid
             )
             before_end = time.monotonic_ns()
-
-            # The decorator preserves the exact signature of the original do_evaluate method.
-            # Each IR.do_evaluate method is a classmethod that takes the IR class as first
-            # argument, followed by the method-specific arguments, and returns a DataFrame.
-
             start = time.monotonic_ns()
             result = func(cls, *args, **kwargs)
             stop = time.monotonic_ns()
-
             after_start = time.monotonic_ns()
             after = make_snapshot(
                 cls,
@@ -214,10 +294,17 @@ def log_do_evaluate(
                 }
             )
             log.info("Execute IR", **record)
+        else:
+            result = func(cls, *args, **kwargs)
 
-            return result
+        if ir_execution_context is not None and quent_state is not None:
+            _end_quent_do_evaluate_events(
+                cls, frames, result, ir_execution_context, quent_state
+            )
 
-        return wrapper
+        return result
+
+    return wrapper
 
 
 @contextlib.contextmanager

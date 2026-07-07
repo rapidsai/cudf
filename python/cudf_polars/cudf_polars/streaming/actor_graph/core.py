@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 
 import cudf_polars.dsl.tracing
+import cudf_polars.quent
 from cudf_polars.dsl.ir import (
     DataFrameScan,
     Join,
@@ -218,6 +219,8 @@ def generate_network(
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, list[int]],
     metadata_collector: list[ChannelMetadata] | None,
+    quent_operator_map: dict[IR, cudf_polars.quent.Operator] | None = None,
+    local_quent_context: cudf_polars.quent.LocalQuentContext | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.
@@ -244,6 +247,12 @@ def generate_network(
         The list to collect the final metadata.
         This list will be mutated when the network is executed.
         If None, metadata will not be collected.
+    quent_operator_map
+        Mapping from IR nodes to their Quent operators, or ``None`` when tracing
+        is disabled.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
 
     Returns
     -------
@@ -276,6 +285,8 @@ def generate_network(
         "max_io_threads": max_io_threads_local,
         "stats": stats,
         "collective_id_map": collective_id_map,
+        "quent_operator_map": quent_operator_map,
+        "quent_execution_context": local_quent_context,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state

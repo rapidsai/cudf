@@ -27,9 +27,11 @@ from rapidsmpf.streaming.core.actor import define_actor
 from rapidsmpf.streaming.core.context import Context
 from rapidsmpf.streaming.core.message import Message
 
+import cudf_polars.quent
 from cudf_polars.dsl.expr import Col
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
+    ir_context_for_node,
 )
 from cudf_polars.streaming.actor_graph.nodes import shutdown_on_error
 from cudf_polars.streaming.actor_graph.utils import (
@@ -398,15 +400,32 @@ async def _global_shuffle(
     skip_insert = metadata_in.duplicated and comm.rank != 0
 
     shuffle = ShuffleManager(context, comm, num_partitions, collective_id)
+    total_bytes_inserted: int = 0
     async with shuffle.inserting() as inserter:
         while (msg := await ch_in.recv(context)) is not None:
             if not skip_insert:
-                inserter.insert_hash(
-                    TableChunk.from_message(
-                        msg, br=context.br()
-                    ).make_available_and_spill(context.br(), allow_overbooking=True),
-                    columns_to_hash,
-                )
+                chunk = TableChunk.from_message(
+                    msg, br=context.br()
+                ).make_available_and_spill(context.br(), allow_overbooking=True)
+                total_bytes_inserted += chunk.data_alloc_size()
+                inserter.insert_hash(chunk, columns_to_hash)
+
+    if (
+        (quent_ctx := ir_context.quent_ir_execution_context) is not None
+        and quent_ctx.link_channels
+        and total_bytes_inserted > 0
+    ):
+        quent_task = cudf_polars.quent.Task(
+            instance_name=f"Shuffle-send-{quent_ctx.quent_operator.id.hex[:8]}",
+            operator_id=quent_ctx.quent_operator.id,
+        )
+        quent_ctx.logger.emit(quent_task.queueing())
+        bytes_per_rank = total_bytes_inserted // comm.nranks
+        for link in quent_ctx.link_channels.values():
+            quent_ctx.logger.emit(
+                quent_task.sending(use_link=link, link_capacity_bytes=bytes_per_rank)
+            )
+        quent_ctx.logger.emit(quent_task.exit())
 
     for partition_id in shuffle.local_partitions():
         stream = ir_context.get_cuda_stream()
@@ -505,6 +524,7 @@ def _(
 
     # Create output ChannelManager
     channels[ir] = ChannelManager(rec.state["context"])
+    ir_context = ir_context_for_node(rec, ir)
 
     # Complete shuffle node
     nodes[ir] = [
@@ -512,7 +532,7 @@ def _(
             context,
             rec.state["comm"],
             ir,
-            rec.state["ir_context"],
+            ir_context,
             ch_in=channels[child].reserve_output_slot(),
             ch_out=channels[ir].reserve_input_slot(),
             columns_to_hash=columns_to_hash,

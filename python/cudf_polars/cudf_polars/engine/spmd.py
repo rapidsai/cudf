@@ -43,7 +43,11 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    declare_worker_resources,
+    finalize_worker_resources,
+)
 from cudf_polars.quent._types import Worker
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.utils import set_memory_resource
@@ -121,14 +125,24 @@ def evaluate_pipeline_spmd_mode(
         assert quent_logger is not None
         quent_context._emit_query_group_events(quent_logger)
         quent_context._emit_query_events(quent_logger)
+        worker_id = config_options.executor.spmd_context.worker_id
+        device_memory, disk_to_device_channel, thread_pool = declare_worker_resources(
+            quent_logger,
+            instance_suffix=f"rank-{comm.rank}",
+            engine_id=quent_context.engine.id,
+            worker_id=worker_id,
+        )
         local_quent_context = LocalQuentContext(
             context=quent_context,
             worker=Worker(
-                id=config_options.executor.spmd_context.worker_id,
+                id=worker_id,
                 engine=quent_context.engine,
                 instance_name=f"rank-{comm.rank}",
             ),
             logger=quent_logger,
+            thread_pool_id=thread_pool.id,
+            device_memory=device_memory,
+            disk_to_device_channel=disk_to_device_channel,
         )
 
     df, metadata = evaluate_on_rank(
@@ -142,6 +156,12 @@ def evaluate_pipeline_spmd_mode(
     )
     if quent_context is not None:
         assert config_options.executor.spmd_context.quent_logger is not None
+        assert local_quent_context is not None
+        finalize_worker_resources(
+            config_options.executor.spmd_context.quent_logger,
+            device_memory=local_quent_context.device_memory,
+            disk_to_device_channel=local_quent_context.disk_to_device_channel,
+        )
         quent_context._emit_query_exit_events(
             config_options.executor.spmd_context.quent_logger
         )
@@ -782,6 +802,7 @@ class SPMDEngine(StreamingEngine):
         if quent_context is not None:
             assert self._quent_logger is not None
             quent_context._emit_engine_exit_events(self._quent_logger)
+            quent_context.emit_resource_exit_events(self._quent_logger)
 
         super().shutdown()
 

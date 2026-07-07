@@ -41,7 +41,11 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    declare_worker_resources,
+    finalize_worker_resources,
+)
 from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
 
 if TYPE_CHECKING:
@@ -119,7 +123,10 @@ class _WorkerContext:
     base_mr: rmm.mr.DeviceMemoryResource | None
     quent_logger: cudf_polars.quent._logging.QuentLogger | None
     quent_worker: cudf_polars.quent._types.Worker
-    mr: RmmResourceAdaptor | None = None  # set after `Context` is built (below).
+    mr: RmmResourceAdaptor | None = None
+    device_memory: cudf_polars.quent._types.Memory | None = None
+    disk_to_device_channel: cudf_polars.quent._types.Channel | None = None
+    thread_pool: cudf_polars.quent._types.ThreadPool | None = None
 
 
 def _setup_root(
@@ -305,11 +312,20 @@ def _setup_worker(
     )
 
     if quent_context is not None:
-        quent_logger: cudf_polars.quent._logging.QuentLogger | None = (
-            cudf_polars.quent._logging.QuentLogger()
-        )
+        quent_logger = cudf_polars.quent._logging.QuentLogger()
     else:
         quent_logger = None
+
+    device_memory = None
+    disk_to_device_channel = None
+    thread_pool = None
+    if quent_logger is not None:
+        device_memory, disk_to_device_channel, thread_pool = declare_worker_resources(
+            quent_logger,
+            instance_suffix=f"rank-{comm.rank}",
+            engine_id=engine_id,
+            worker_id=worker_id,
+        )
 
     mp_ctx = _WorkerContext(
         comm=comm,
@@ -319,6 +335,9 @@ def _setup_worker(
         mr=mr,
         quent_worker=quent_worker,
         quent_logger=quent_logger,
+        device_memory=device_memory,
+        disk_to_device_channel=disk_to_device_channel,
+        thread_pool=thread_pool,
     )
     setattr(dask_worker, attr, mp_ctx)
     if mp_ctx.quent_logger is not None:
@@ -347,6 +366,12 @@ def _teardown_worker(
     traces = []
     if mp_ctx is not None:
         if mp_ctx.quent_worker is not None and mp_ctx.quent_logger is not None:
+            if mp_ctx.device_memory is not None:
+                finalize_worker_resources(
+                    mp_ctx.quent_logger,
+                    device_memory=mp_ctx.device_memory,
+                    disk_to_device_channel=mp_ctx.disk_to_device_channel,
+                )
             mp_ctx.quent_logger.emit(mp_ctx.quent_worker._exit())
             traces = mp_ctx.quent_logger.drain()
 
@@ -497,10 +522,15 @@ def _worker_evaluate(
     local_quent_context: LocalQuentContext | None = None
     if quent_context is not None:
         assert mp_ctx.quent_logger is not None
+        assert mp_ctx.device_memory is not None
+        assert mp_ctx.thread_pool is not None
         local_quent_context = LocalQuentContext(
             context=quent_context,
             worker=mp_ctx.quent_worker,
             logger=mp_ctx.quent_logger,
+            thread_pool_id=mp_ctx.thread_pool.id,
+            device_memory=mp_ctx.device_memory,
+            disk_to_device_channel=mp_ctx.disk_to_device_channel,
         )
     # evaluate_on_rank always collects metadata internally so we can read
     # metadata[-1].duplicated to decide whether to suppress this rank's output.
@@ -1023,6 +1053,7 @@ class DaskEngine(StreamingEngine):
             if quent_context is not None:
                 assert self._quent_logger is not None
                 quent_context._emit_engine_exit_events(self._quent_logger)
+                quent_context.emit_resource_exit_events(self._quent_logger)
             if ctx.owned_client is not None:
                 ctx.owned_client.close()
             if ctx.owned_cluster is not None:

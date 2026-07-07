@@ -21,10 +21,13 @@ from cudf_polars.quent._types import (
     Attribute,
     Engine,
     Implementation,
+    Memory,
     Operator,
     Plan,
     Port,
     Query,
+    Statistics,
+    Task,
     Worker,
     _deserialize_value,
 )
@@ -235,6 +238,49 @@ def test_operator_declare_serialization(
         decl = d["data"]["Operator"]["Declaration"]
         assert decl["plan_id"] == str(op.plan_id)
         assert decl["type_name"] == op.type_name
+
+
+def test_operator_statistics_serialization(
+    ir_and_config: tuple[IR, ConfigOptions[StreamingExecutor]],
+) -> None:
+    ir, config_options = ir_and_config
+    _, operators, _, _ = build_plan(
+        ir, config_options, Query(), uuid.uuid4(), _make_worker()
+    )
+    op = operators[0]
+    stats = Statistics(input_bytes=123, output_bytes=456, output_rows=7)
+
+    event = op.statistics(stats, timestamp=101)
+    d = event.to_dict()
+
+    assert d["id"] == str(op.id)
+    payload = d["data"]["Operator"]["Statistics"]["custom_attributes"]
+    assert payload == [
+        {"key": "input_bytes", "value": {"U64": 123}},
+        {"key": "output_bytes", "value": {"U64": 456}},
+        {"key": "output_rows", "value": {"U64": 7}},
+    ]
+
+
+def test_memory_lifecycle_events() -> None:
+    memory = Memory(
+        instance_name="device",
+        resource_type_name="memory",
+        parent_group_id=uuid.uuid4(),
+    )
+    assert memory.initializing().to_dict()["data"]["Memory"]["seq"] == 0
+    assert memory.operating(1024).to_dict()["data"]["Memory"]["seq"] == 1
+    assert memory.finalizing().to_dict()["data"]["Memory"]["seq"] == 2
+    assert memory.exit().to_dict()["data"]["Memory"]["seq"] == 3
+
+
+def test_task_lifecycle_events() -> None:
+    operator_id = uuid.uuid4()
+    task = Task(operator_id=operator_id, instance_name="task-0")
+    queue = task.queueing().to_dict()
+    assert queue["data"]["Task"]["state"]["Queueing"]["operator_id"] == str(operator_id)
+    assert task.allocating(uuid.uuid4()).to_dict()["data"]["Task"]["seq"] == 1
+    assert task.exit().to_dict()["data"]["Task"]["seq"] == 5
 
 
 def test_port_declare_serialization(

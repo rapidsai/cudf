@@ -31,7 +31,7 @@ from cudf_polars.dsl.utils.io import (
     attach_cached_parquet_metadata,
     prefetch_parquet_file_metadata_for_ir,
 )
-from cudf_polars.quent._plan import build_plan
+from cudf_polars.quent._plan import build_plan, build_quent_operator_map
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
@@ -421,6 +421,43 @@ def _find_memory_error(exc: BaseException) -> MemoryError | None:
     return None
 
 
+def _declare_network_channels(
+    comm: Communicator,
+    local_quent_context: LocalQuentContext,
+) -> None:
+    """
+    Declare network link channels for inter-rank communication.
+
+    Creates a Network resource group and one Channel per remote rank,
+    emitting their lifecycle events to the quent logger.
+    """
+    if comm.nranks <= 1:
+        return
+
+    from cudf_polars.quent._types import Channel, Network
+
+    network = Network(engine_id=local_quent_context.context.engine.id)
+    local_quent_context.logger.emit(network.declare())
+    local_quent_context.network = network
+
+    link_channels: dict[int, Channel] = {}
+    for target_rank in range(comm.nranks):
+        if target_rank == comm.rank:
+            continue
+        link = Channel(
+            instance_name=f"rank-{comm.rank} -> rank-{target_rank}",
+            resource_type_name="Link",
+            parent_group_id=network.id,
+            source=local_quent_context.device_memory,
+            target=local_quent_context.device_memory,
+        )
+        local_quent_context.logger.emit(link.initializing())
+        local_quent_context.logger.emit(link.operating())
+        link_channels[target_rank] = link
+
+    local_quent_context.link_channels = link_channels
+
+
 def execute_ir_on_rank(
     ctx: Context,
     comm: Communicator,
@@ -430,6 +467,9 @@ def execute_ir_on_rank(
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
+    *,
+    quent_operator_map: dict[IR, cudf_polars.quent.Operator] | None = None,
+    local_quent_context: LocalQuentContext | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
@@ -456,6 +496,12 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
+    quent_operator_map
+        Mapping from IR nodes to their Quent operators, or ``None`` when tracing
+        is disabled.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
 
     Returns
     -------
@@ -476,6 +522,8 @@ def execute_ir_on_rank(
         ir_context=ir_context,
         collective_id_map=collective_id_map,
         metadata_collector=metadata_collector,
+        quent_operator_map=quent_operator_map,
+        local_quent_context=local_quent_context,
     )
 
     try:
@@ -703,8 +751,11 @@ def evaluate_on_rank(
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
 
+    physical_op_by_id: dict[str, cudf_polars.quent.Operator] | None = None
+    quent_operator_map: dict[IR, cudf_polars.quent.Operator] | None = None
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
+        _declare_network_channels(comm, local_quent_context)
         logical_plan_id = ir.get_stable_plan_id()
         plan, ops, ports, logical_op_by_id = build_plan(
             ir,
@@ -731,7 +782,7 @@ def evaluate_on_rank(
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
         physical_plan_id = uuid.uuid4()
-        local_quent_context.context._emit_physical_plan_events(
+        physical_op_by_id = local_quent_context.context._emit_physical_plan_events(
             local_quent_context.logger,
             ir,
             config_options,
@@ -741,6 +792,7 @@ def evaluate_on_rank(
             node_map=node_map,
             logical_op_by_id=logical_op_by_id,
         )
+        quent_operator_map = build_quent_operator_map(ir, physical_op_by_id)
     ir_context = IRExecutionContext(
         py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )
@@ -754,7 +806,7 @@ def evaluate_on_rank(
         attach_cached_parquet_metadata(ir, cached_parquet_info_map)
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
-        return execute_ir_on_rank(
+        result = execute_ir_on_rank(
             ctx,
             comm,
             ir,
@@ -763,4 +815,13 @@ def evaluate_on_rank(
             config_options,
             stats,
             collective_id_map,
+            quent_operator_map=quent_operator_map,
+            local_quent_context=local_quent_context,
         )
+
+    if local_quent_context is not None:
+        for link in local_quent_context.link_channels.values():
+            local_quent_context.logger.emit(link.finalizing())
+            local_quent_context.logger.emit(link.exit())
+
+    return result

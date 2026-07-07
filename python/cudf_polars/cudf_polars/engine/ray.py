@@ -39,7 +39,11 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
-from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    declare_worker_resources,
+    finalize_worker_resources,
+)
 from cudf_polars.quent._types import Worker
 from cudf_polars.utils.config import MemoryResourceConfig, RayContext
 
@@ -231,8 +235,21 @@ class RankActor:
             engine=engine,
             instance_name=f"RankActor-{worker_id.hex[:8]}",
         )
+        self._device_memory = None
+        self._disk_to_device_channel = None
+        self._quent_thread_pool = None
         if self._quent_logger is not None:
             self._quent_logger.emit(self._quent_worker._init())
+            (
+                self._device_memory,
+                self._disk_to_device_channel,
+                self._quent_thread_pool,
+            ) = declare_worker_resources(
+                self._quent_logger,
+                instance_suffix=f"RankActor-{worker_id.hex[:8]}",
+                engine_id=engine.id,
+                worker_id=worker_id,
+            )
 
     def setup_root(self) -> bytes:
         """
@@ -335,6 +352,15 @@ class RankActor:
         # Maybe generalize this to all application-level things,
         # followed by framework (ray) level things.
         if self._quent_worker is not None and self._quent_logger is not None:
+            if (
+                self._device_memory is not None
+                and self._disk_to_device_channel is not None
+            ):
+                finalize_worker_resources(
+                    self._quent_logger,
+                    device_memory=self._device_memory,
+                    disk_to_device_channel=self._disk_to_device_channel,
+                )
             self._quent_logger.emit(self._quent_worker._exit())
             return self._drain_quent_events()
         return []
@@ -446,10 +472,15 @@ class RankActor:
         local_quent_context: LocalQuentContext | None = None
         if quent_context is not None:
             assert self._quent_logger is not None
+            assert self._device_memory is not None
+            assert self._quent_thread_pool is not None
             local_quent_context = LocalQuentContext(
                 context=quent_context,
                 worker=self._quent_worker,
                 logger=self._quent_logger,
+                thread_pool_id=self._quent_thread_pool.id,
+                device_memory=self._device_memory,
+                disk_to_device_channel=self._disk_to_device_channel,
             )
         # evaluate_on_rank always collects metadata internally so we can read
         # metadata[-1].duplicated to decide whether to suppress this rank's
@@ -916,6 +947,7 @@ class RayEngine(StreamingEngine):
             if quent_context is not None:
                 assert self._quent_logger is not None
                 quent_context._emit_engine_exit_events(self._quent_logger)
+                quent_context.emit_resource_exit_events(self._quent_logger)
             self._rank_actors = None
             super().shutdown()
 

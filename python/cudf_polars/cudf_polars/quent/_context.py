@@ -16,10 +16,14 @@ from cudf_polars.quent._plan import (
 )
 from cudf_polars.quent._types import (
     Attribute,
+    Channel,
     Engine,
     Implementation,
+    Memory,
+    Processor,
     Query,
     QueryGroup,
+    ThreadPool,
 )
 
 if TYPE_CHECKING:
@@ -28,6 +32,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._logging import QuentLogger
     from cudf_polars.quent._types import (
+        Network,
         Operator,
         Plan,
         Port,
@@ -36,7 +41,9 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 __all__ = [
+    "LocalQuentContext",
     "QuentContext",
+    "QuentIRExecutionContext",
 ]
 
 
@@ -66,6 +73,11 @@ class QuentContext:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_query_group_cache_", set())
+        object.__setattr__(self, "_processor_map_", {})
+
+    @property
+    def _processor_map(self) -> dict[int, Processor]:
+        return self._processor_map_  # type: ignore[attr-defined]
 
     def serialize(self) -> bytes:
         """
@@ -304,8 +316,83 @@ class QuentContext:
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
 
+    def get_or_declare_processor(
+        self, quent_logger: QuentLogger, thread_ident: int, pool_id: uuid.UUID
+    ) -> Processor:
+        """Get (or declare a new) Quent Processor for a CPU thread."""
+        if thread_ident in self._processor_map:
+            return self._processor_map[thread_ident]
 
-@dataclasses.dataclass(frozen=True, kw_only=True)
+        processor = Processor(pool_id=pool_id)
+        self._processor_map[thread_ident] = processor
+        quent_logger.emit(processor.initializing())
+        quent_logger.emit(processor.operating())
+        return processor
+
+    def emit_resource_exit_events(self, quent_logger: QuentLogger) -> None:
+        """Emit finalizing/exit events for declared processors."""
+        for processor in self._processor_map.values():
+            quent_logger.emit(processor.finalizing())
+            quent_logger.emit(processor.exit())
+
+
+def declare_worker_resources(
+    logger: QuentLogger,
+    *,
+    instance_suffix: str,
+    engine_id: uuid.UUID,
+    worker_id: uuid.UUID,
+) -> tuple[Memory, Channel, ThreadPool]:
+    """
+    Declare per-worker Quent resources and emit their lifecycle events.
+
+    Returns device memory, disk-to-device channel, and thread pool handles.
+    """
+    device_memory = Memory(
+        instance_name=f"{instance_suffix} device memory",
+        resource_type_name="memory",
+        parent_group_id=engine_id,
+    )
+    filesystem = Memory(
+        instance_name=f"{instance_suffix} filesystem",
+        resource_type_name="filesystem",
+        parent_group_id=worker_id,
+    )
+    disk_to_device_channel = Channel(
+        instance_name=f"{instance_suffix} disk -> device",
+        resource_type_name="DiskToDevice",
+        parent_group_id=worker_id,
+        source=filesystem,
+        target=device_memory,
+    )
+    thread_pool = ThreadPool(worker_id=worker_id)
+    logger.emit(device_memory.initializing())
+    logger.emit(device_memory.operating(0))
+    logger.emit(filesystem.initializing())
+    logger.emit(filesystem.operating(0))
+    logger.emit(disk_to_device_channel.initializing())
+    logger.emit(disk_to_device_channel.operating())
+    logger.emit(thread_pool.declare())
+    return device_memory, disk_to_device_channel, thread_pool
+
+
+def finalize_worker_resources(
+    logger: QuentLogger,
+    *,
+    device_memory: Memory,
+    disk_to_device_channel: Channel | None,
+) -> None:
+    """Emit finalizing/exit events for per-worker Quent resources."""
+    if disk_to_device_channel is not None:
+        logger.emit(disk_to_device_channel.finalizing())
+        logger.emit(disk_to_device_channel.exit())
+        logger.emit(disk_to_device_channel.source.finalizing())
+        logger.emit(disk_to_device_channel.source.exit())
+    logger.emit(device_memory.finalizing())
+    logger.emit(device_memory.exit())
+
+
+@dataclasses.dataclass(kw_only=True)
 class LocalQuentContext:
     """
     A Quent Context that is only ever used on the local worker rank.
@@ -317,3 +404,32 @@ class LocalQuentContext:
     context: QuentContext
     worker: Worker
     logger: QuentLogger
+    thread_pool_id: uuid.UUID
+    device_memory: Memory
+    disk_to_device_channel: Channel | None = None
+    network: Network | None = None
+    link_channels: dict[int, Channel] = dataclasses.field(default_factory=dict)
+
+
+@dataclasses.dataclass(kw_only=True)
+class QuentIRExecutionContext(LocalQuentContext):
+    """Like ``LocalQuentContext``, but with a Quent Operator bound too."""
+
+    quent_operator: Operator
+
+    @classmethod
+    def from_execution_context(
+        cls, execution_context: LocalQuentContext, quent_operator: Operator
+    ) -> Self:
+        """Create a ``QuentIRExecutionContext`` from a ``LocalQuentContext``."""
+        return cls(
+            quent_operator=quent_operator,
+            context=execution_context.context,
+            worker=execution_context.worker,
+            logger=execution_context.logger,
+            thread_pool_id=execution_context.thread_pool_id,
+            device_memory=execution_context.device_memory,
+            disk_to_device_channel=execution_context.disk_to_device_channel,
+            network=execution_context.network,
+            link_channels=execution_context.link_channels,
+        )

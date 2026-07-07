@@ -84,6 +84,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.containers.dataframe import NamedColumn
     from cudf_polars.dsl.utils.io import CachedParquetInfo
+    from cudf_polars.quent._context import QuentIRExecutionContext
     from cudf_polars.streaming.rank_aware_source import RankAwareSource
     from cudf_polars.typing import CSECache, ClosedInterval, Schema, Slice as Zlice
     from cudf_polars.utils.config import ParquetOptions
@@ -138,11 +139,14 @@ class IRExecutionContext:
         A zero-argument callable that returns a CUDA stream.
     query_id
         Identifier for the query being executed.
+    quent_ir_execution_context
+        Optional Quent tracing context bound to a physical operator.
     """
 
     py_executor: concurrent.futures.ThreadPoolExecutor | None = field(default=None)
     get_cuda_stream: Callable[[], Stream] = field(default=get_cuda_stream)
     query_id: uuid.UUID = field(default_factory=uuid.uuid4)
+    quent_ir_execution_context: QuentIRExecutionContext | None = None
 
     async def to_thread(
         self, func: Callable[P, T], /, *args: P.args, **kwargs: P.kwargs

@@ -156,3 +156,17 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
     assert query_executing["data"]["Query"]["seq"] == 2
     assert query_exit["id"] == str(quent_context.query.id)
     assert query_exit["data"]["Query"]["seq"] == 3
+
+
+def test_quent_events_include_resources(
+    engine_with_quent_context: StreamingEngine, quent_context: QuentContext
+) -> None:
+    q = pl.LazyFrame({"x": [1, 2, 3, 4]}).filter(pl.col("x") > 1)
+    with engine_with_quent_context:
+        q.collect(engine=engine_with_quent_context)
+
+    quent_events = engine_with_quent_context._quent_events
+    memory_events = [x for x in quent_events if "Memory" in x["data"]]
+    task_events = [x for x in quent_events if "Task" in x["data"]]
+    assert len(memory_events) > 0
+    assert len(task_events) > 0
