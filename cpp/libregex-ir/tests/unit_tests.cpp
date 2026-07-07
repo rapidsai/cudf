@@ -4410,7 +4410,7 @@ void check_nvvm(nvvmResult result, nvvmProgram program, std::string_view operati
   }
 }
 
-std::string compile_nvvm(std::string const& source, std::string const& architecture)
+std::vector<char> compile_nvvm_lto_ir(std::string const& source, std::string const& architecture)
 {
   nvvmProgram program = nullptr;
   if (nvvmCreateProgram(&program) != NVVM_SUCCESS) {
@@ -4429,6 +4429,7 @@ std::string compile_nvvm(std::string const& source, std::string const& architect
       compile_options.push_back(architecture_option.c_str());
     }
     compile_options.push_back("-opt=3");
+    compile_options.push_back("-gen-lto");
     check_nvvm(
       nvvmVerifyProgram(program, static_cast<int>(verify_options.size()), verify_options.data()),
       program,
@@ -4439,10 +4440,10 @@ std::string compile_nvvm(std::string const& source, std::string const& architect
       "nvvmCompileProgram");
     std::size_t size = 0;
     check_nvvm(nvvmGetCompiledResultSize(program, &size), program, "nvvmGetCompiledResultSize");
-    std::string ptx(size, '\0');
-    check_nvvm(nvvmGetCompiledResult(program, ptx.data()), program, "nvvmGetCompiledResult");
+    std::vector<char> lto_ir(size);
+    check_nvvm(nvvmGetCompiledResult(program, lto_ir.data()), program, "nvvmGetCompiledResult");
     static_cast<void>(nvvmDestroyProgram(&program));
-    return ptx;
+    return lto_ir;
   } catch (...) {
     static_cast<void>(nvvmDestroyProgram(&program));
     throw;
@@ -4465,9 +4466,9 @@ void check_jitlink(nvJitLinkResult result, nvJitLinkHandle linker, std::string_v
   }
 }
 
-std::vector<char> link_ptx(std::string const& generated,
-                           std::span<unsigned char const> kernel_fatbin,
-                           std::string const& architecture)
+std::vector<char> link_lto_ir(std::span<char const> generated,
+                              std::span<unsigned char const> kernel_fatbin,
+                              std::string const& architecture)
 {
   std::string architecture_option = "-arch=" + architecture;
   std::array<char const*, 3> options{architecture_option.c_str(), "-lto", "-O3"};
@@ -4477,10 +4478,10 @@ std::vector<char> link_ptx(std::string const& generated,
   }
   try {
     check_jitlink(nvJitLinkAddData(linker,
-                                   NVJITLINK_INPUT_PTX,
+                                   NVJITLINK_INPUT_LTOIR,
                                    const_cast<char*>(generated.data()),
                                    generated.size(),
-                                   "generated_regex.ptx"),
+                                   "generated_regex.ltoir"),
                   linker,
                   "nvJitLinkAddData(generated)");
     check_jitlink(nvJitLinkAddData(linker,
@@ -4797,7 +4798,7 @@ class gpu_runtime {
                                                    jit_kernel_kind kind) const
   {
     std::string source = regex_ir::generate_nvvm_ir(ir, options);
-    std::string ptx    = compile_nvvm(source, compute_architecture_);
+    auto lto_ir        = compile_nvvm_lto_ir(source, compute_architecture_);
     std::span<unsigned char const> kernel_fatbin;
     switch (kind) {
       case jit_kernel_kind::Boolean:
@@ -4819,7 +4820,7 @@ class gpu_runtime {
         kernel_fatbin = {regex_ir_split_kernel_fatbin, regex_ir_split_kernel_fatbinLength};
         break;
     }
-    return link_ptx(ptx, kernel_fatbin, sm_architecture_);
+    return link_lto_ir(lto_ir, kernel_fatbin, sm_architecture_);
   }
 
   [[nodiscard]] std::vector<regex_ir::testing::execution_result> execute_capture(
@@ -5290,6 +5291,8 @@ TEST_F(Project, MatchingAndOptimization)
   expect_boolean("abc*", "zabccc", false, regex_ir::operation_kind::MATCHES);
   expect_boolean("abc[0-9]", "abc7", true, regex_ir::operation_kind::MATCHES);
   expect_boolean("abc[0-9]", "abcz", false, regex_ir::operation_kind::MATCHES);
+  expect_boolean("abcdefghijklmnop", "xxxxxxxabcdefghijklmnopy", true);
+  expect_boolean("abcdefghijklmnop", "aaaaaaaabcdefghijklmnox", false);
 
   auto ir = compile_ok("abc*", regex_ir::operation::matches());
   EXPECT_TRUE(regex_ir::verify(ir).empty());
@@ -5337,6 +5340,18 @@ TEST_F(Project, AllOperations)
 
   auto empty = expect_enumeration("a*", "b");
   EXPECT_EQ(empty.count, 2U);
+
+  auto restarted = expect_enumeration("[a-z]+Z", "aaaaYbbbbZ");
+  ASSERT_FALSE(restarted.matches.empty());
+  EXPECT_EQ(restarted.matches.front(), (regex_ir::testing::match_span{5, 10}));
+
+  auto restarted_classes = expect_enumeration("[a-z]+[A-Z]+", "aaaa1bbbXYZ");
+  ASSERT_FALSE(restarted_classes.matches.empty());
+  EXPECT_EQ(restarted_classes.matches.front(), (regex_ir::testing::match_span{5, 11}));
+
+  auto restarted_capture = expect_enumeration("([a-z]+Z)", "aaaaYbbbbZ");
+  ASSERT_EQ(restarted_capture.captures.size(), 2U);
+  EXPECT_EQ(restarted_capture.captures[1], (regex_ir::testing::match_span{5, 10}));
 }
 
 TEST_F(Project, OptionsAndUnicode)
@@ -5571,7 +5586,7 @@ TEST_F(Nvvm, AssertionDeterminization)
             std::string::npos);
   EXPECT_NE(boundary_source.find("_dfa_boundary_classify"), std::string::npos);
   EXPECT_EQ(boundary_source.find("@regex_ir_generated_run_block"), std::string::npos);
-  EXPECT_NE(compile_nvvm(boundary_source, {}).find(".target sm_"), std::string::npos);
+  EXPECT_FALSE(compile_nvvm_lto_ir(boundary_source, {}).empty());
   expect_boolean(R"REGEX(\bneedle\b)REGEX", "a needle!", true);
   expect_boolean(R"REGEX(\bneedle\b)REGEX", "needless", false);
 
@@ -5581,7 +5596,7 @@ TEST_F(Nvvm, AssertionDeterminization)
   EXPECT_NE(internal_source.find("; executor: assertion-aware deterministic table"),
             std::string::npos);
   EXPECT_EQ(internal_source.find("@regex_ir_generated_run_block"), std::string::npos);
-  EXPECT_NE(compile_nvvm(internal_source, {}).find(".target sm_"), std::string::npos);
+  EXPECT_FALSE(compile_nvvm_lto_ir(internal_source, {}).empty());
   expect_boolean(internal_end, "100- ftp response", true);
   expect_boolean(internal_end, "100", true);
 }
@@ -5595,7 +5610,7 @@ TEST_F(Nvvm, LargeBooleanAlternation)
   EXPECT_NE(source.find("@regex_ir_execute_alternative_0"), std::string::npos);
   EXPECT_NE(source.find("addrspace(1) constant"), std::string::npos);
   EXPECT_EQ(source.find("!nvvmir.version"), source.rfind("!nvvmir.version"));
-  EXPECT_NE(compile_nvvm(source, {}).find(".target sm_"), std::string::npos);
+  EXPECT_FALSE(compile_nvvm_lto_ir(source, {}).empty());
   expect_boolean(pattern, "A note about Tom walking beside the river today.", true);
 
   auto bounded_ir = compile_ok("[a-q][^u-z]{13}x", regex_ir::operation::contains());
@@ -5679,7 +5694,7 @@ TEST_F(Nvvm, SingleByteGlobalExecutor)
     EXPECT_NE(source.find("%matched = icmp eq i32 %value, 32"), std::string::npos);
     EXPECT_EQ(source.find("_dfa_transitions"), std::string::npos);
   }
-  EXPECT_NE(compile_nvvm(sources.front(), {}).find(".target sm_"), std::string::npos);
+  EXPECT_FALSE(compile_nvvm_lto_ir(sources.front(), {}).empty());
 }
 
 TEST_F(Nvvm, RuntimeAvailability)
@@ -5727,6 +5742,68 @@ TEST_F(Nvvm, SpecializedRuntimeOperations)
   EXPECT_EQ(tagged_results[0].count, 2U);
 }
 
+TEST_F(Nvvm, PrioritizedRuntimeRegressions)
+{
+  if (!gpu().available()) GTEST_SKIP() << gpu().unavailable_reason();
+
+  auto expect_count = [&](std::string_view pattern,
+                          std::string_view input,
+                          std::size_t expected,
+                          regex_ir::compile_options const& options = {}) {
+    SCOPED_TRACE(std::string{pattern} + " / " + std::string{input});
+    auto ir = compile_ok(pattern, regex_ir::operation::count(), options);
+    EXPECT_EQ(regex_ir::testing::execute(ir, input).count, expected);
+    EXPECT_EQ(gpu().count(ir, input).count, expected);
+    return ir;
+  };
+  auto expect_find = [&](std::string_view pattern,
+                         std::string_view input,
+                         std::vector<regex_ir::testing::match_span> const& expected,
+                         regex_ir::compile_options const& options = {}) {
+    SCOPED_TRACE(std::string{pattern} + " / " + std::string{input});
+    auto ir     = compile_ok(pattern, regex_ir::operation::find(), options);
+    auto cpu    = regex_ir::testing::execute(ir, input);
+    auto actual = gpu().find(ir, input);
+    EXPECT_EQ(cpu.matches, expected);
+    EXPECT_EQ(actual.matched, !expected.empty());
+    EXPECT_EQ(actual.matches, expected);
+  };
+  auto expect_replace = [&](std::string_view pattern,
+                            std::string_view input,
+                            std::string_view expected,
+                            regex_ir::compile_options const& options = {}) {
+    SCOPED_TRACE(std::string{pattern} + " / " + std::string{input});
+    auto ir = compile_ok(pattern, regex_ir::operation::replace("<$0>"), options);
+    EXPECT_EQ(regex_ir::testing::execute(ir, input).replaced, expected);
+    EXPECT_EQ(gpu().replace(ir, input), expected);
+  };
+  auto expect_split = [&](std::string_view pattern,
+                          std::string_view input,
+                          std::vector<std::string> const& expected,
+                          regex_ir::compile_options const& options = {}) {
+    SCOPED_TRACE(std::string{pattern} + " / " + std::string{input});
+    auto ir = compile_ok(pattern, regex_ir::operation::split(), options);
+    EXPECT_EQ(regex_ir::testing::execute(ir, input).pieces, expected);
+    EXPECT_EQ(gpu().split(ir, input), expected);
+  };
+
+  regex_ir::compile_options byte_dot_all;
+  byte_dot_all.case_insensitive = true;
+  byte_dot_all.dot_all          = true;
+  byte_dot_all.characters       = regex_ir::character_mode::BYTES;
+
+  expect_count(".+?", "abc", 3);
+  auto prioritized = expect_count(R"REGEX((?:[ab]{1,3}\w*|.{0,2}a{0,2}\s+))REGEX", "b2a2", 1);
+  EXPECT_NE(
+    regex_ir::generate_nvvm_ir(prioritized).find("; executor: prioritized deterministic table"),
+    std::string::npos);
+  expect_find(".+?", "abc", {{0, 1}});
+  expect_find(R"REGEX(\d*\w+?.*[^c]*)REGEX", "02", {{0, 2}}, byte_dot_all);
+  expect_replace(R"REGEX((?:\w{1,3}|.+?))REGEX", "1 b2", "<1>< ><b2>", byte_dot_all);
+  expect_split(
+    R"REGEX((?:.?a*\d?|(b)?\d+?))REGEX", "02b_a1ca", {"", "", "", "", "", ""}, byte_dot_all);
+}
+
 TEST_F(Nvvm, ToolchainCompilation)
 {
   std::array operations{regex_ir::operation::contains(),
@@ -5739,11 +5816,8 @@ TEST_F(Nvvm, ToolchainCompilation)
   for (auto& operation : operations) {
     auto ir            = compile_ok("(abc)[0-9]+", operation);
     std::string source = regex_ir::generate_nvvm_ir(ir);
-    std::string ptx    = compile_nvvm(source, {});
-    EXPECT_NE(ptx.find(".target sm_"), std::string::npos);
-    if (operation.kind == regex_ir::operation_kind::REPLACE) {
-      EXPECT_EQ(ptx.find("memcpy"), std::string::npos);
-    }
+    auto lto_ir        = compile_nvvm_lto_ir(source, {});
+    EXPECT_FALSE(lto_ir.empty());
   }
 }
 

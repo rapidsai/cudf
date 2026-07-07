@@ -146,8 +146,8 @@ class CorpusMeasurement:
     input_bytes: int
     regex_ir_seconds: float
     cudf_seconds: float
-    regex_ir_compile_seconds: float
-    cudf_compile_seconds: float
+    regex_ir_jit_ready_seconds: float
+    cudf_program_create_seconds: float
 
     @property
     def regex_ir_gib_per_second(self) -> float:
@@ -197,13 +197,15 @@ def completed(state: dict) -> bool:
     )
 
 
-def optional_summary_value(state: dict, tag: str) -> float:
-    """Return a summary value, or NaN when an older export omitted it."""
+def optional_summary_value(state: dict, *tags: str) -> float:
+    """Return the first available summary value, or NaN for an older export."""
 
-    try:
-        return summary_value(state, tag)
-    except ValueError:
-        return math.nan
+    for tag in tags:
+        try:
+            return summary_value(state, tag)
+        except ValueError:
+            continue
+    return math.nan
 
 
 def load_measurements(paths: list[Path]) -> list[CorpusMeasurement]:
@@ -264,11 +266,15 @@ def load_measurements(paths: list[Path]) -> list[CorpusMeasurement]:
                         regex_state, "nv/cold/time/gpu/mean"
                     ),
                     cudf_seconds=summary_value(cudf_state, "nv/cold/time/gpu/mean"),
-                    regex_ir_compile_seconds=optional_summary_value(
-                        regex_state, "regex_ir/corpus/compile_time"
+                    regex_ir_jit_ready_seconds=optional_summary_value(
+                        regex_state,
+                        "regex_ir/jit_ready_time",
+                        "regex_ir/corpus/compile_time",
                     ),
-                    cudf_compile_seconds=optional_summary_value(
-                        cudf_state, "regex_ir/corpus/compile_time"
+                    cudf_program_create_seconds=optional_summary_value(
+                        cudf_state,
+                        "cudf/program_create_time",
+                        "regex_ir/corpus/compile_time",
                     ),
                 )
             )
@@ -463,7 +469,7 @@ def export_csv(measurements: list[CorpusMeasurement], path: Path) -> None:
                 "regex_ir_gib_per_second",
                 "cudf_gib_per_second",
                 "speedup",
-                "regex_ir_cold_compile_ms",
+                "regex_ir_jit_ready_ms",
                 "cudf_program_create_ms",
             ]
         )
@@ -482,8 +488,8 @@ def export_csv(measurements: list[CorpusMeasurement], path: Path) -> None:
                     f"{item.regex_ir_gib_per_second:.6f}",
                     f"{item.cudf_gib_per_second:.6f}",
                     f"{item.speedup:.6f}",
-                    f"{item.regex_ir_compile_seconds * 1000:.6f}",
-                    f"{item.cudf_compile_seconds * 1000:.6f}",
+                    f"{item.regex_ir_jit_ready_seconds * 1000:.6f}",
+                    f"{item.cudf_program_create_seconds * 1000:.6f}",
                 ]
             )
 
@@ -516,12 +522,14 @@ def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> N
         "Panels spanning at least 50x use a marked logarithmic throughput axis; narrower",
         "panels retain a linear axis.",
         "",
-        "These cases were rerun on 2026-07-05 with at least five samples, 0.05 seconds of",
+        "These cases were rerun on 2026-07-07 with at least five samples, 0.05 seconds of",
         "measured GPU time, a 2% target-noise threshold, and a 10-second per-state timeout.",
         "All 148 engine states completed without warnings, skips, or timeouts, and every",
         "pre-timing Regex IR/cuDF output comparison passed.",
+        "JIT-ready time is uncached and spans the regex string through loaded module and",
+        "resolved kernel function; corpus setup and the first launch are excluded.",
         "",
-        "| Source suite | Corpus expressions | Regex IR geometric throughput (GiB/s) | cuDF geometric throughput (GiB/s) | Geometric speedup | Pair wins | Regex IR cold JIT mean (ms) | cuDF program-create mean (ms) |",
+        "| Source suite | Corpus expressions | Regex IR geometric throughput (GiB/s) | cuDF geometric throughput (GiB/s) | Geometric speedup | Pair wins | Regex IR JIT-ready mean (ms) | cuDF program-create mean (ms) |",
         "|:---|---:|---:|---:|---:|:---:|---:|---:|",
     ]
     for suite in SUITE_ORDER:
@@ -533,10 +541,10 @@ def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> N
             item.cudf_gib_per_second for item in values
         )
         wins = sum(item.speedup > 1.0 for item in values)
-        regex_compile = sum(item.regex_ir_compile_seconds for item in values) / len(
+        regex_compile = sum(item.regex_ir_jit_ready_seconds for item in values) / len(
             values
         )
-        cudf_compile = sum(item.cudf_compile_seconds for item in values) / len(
+        cudf_compile = sum(item.cudf_program_create_seconds for item in values) / len(
             values
         )
         lines.append(
@@ -546,10 +554,10 @@ def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> N
             f"{cudf_compile * 1000:.4f} |"
         )
     all_regex_compile = sum(
-        item.regex_ir_compile_seconds for item in measurements
+        item.regex_ir_jit_ready_seconds for item in measurements
     ) / len(measurements)
     all_cudf_compile = sum(
-        item.cudf_compile_seconds for item in measurements
+        item.cudf_program_create_seconds for item in measurements
     ) / len(measurements)
     lines.extend(
         [
@@ -582,8 +590,8 @@ def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> N
                 f"[SVG chart](docs/_static/benchmarks/corpus-{suite}-throughput-cases.svg) ·",
                 f"[case-level CSV](docs/_static/benchmarks/corpus-{suite}-throughput-data.csv)",
                 "",
-                "| Case | Expression role | Input (MiB) | Regex IR (ms) | cuDF (ms) | Speedup |",
-                "|---:|:---|---:|---:|---:|---:|",
+                "| Case | Expression role | Input (MiB) | Regex IR (ms) | cuDF (ms) | Speedup | Regex IR JIT-ready (ms) |",
+                "|---:|:---|---:|---:|---:|---:|---:|",
             ]
         )
         for item in values:
@@ -591,7 +599,8 @@ def write_readme_results(measurements: list[CorpusMeasurement], path: Path) -> N
                 f"| {item.case} | {display_case_name(item.case_name)} | "
                 f"{item.input_bytes / (1024**2):.3f} | "
                 f"{item.regex_ir_seconds * 1000:.3f} | "
-                f"{item.cudf_seconds * 1000:.3f} | {item.speedup:.3f}x |"
+                f"{item.cudf_seconds * 1000:.3f} | {item.speedup:.3f}x | "
+                f"{item.regex_ir_jit_ready_seconds * 1000:.3f} |"
             )
         lines.append("")
     lines.extend(

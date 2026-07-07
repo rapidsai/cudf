@@ -218,7 +218,7 @@ void check_nvvm(nvvmResult result, nvvmProgram program, std::string_view operati
   }
 }
 
-std::string compile_to_ptx(std::string const& nvvm_ir, std::string const& compute_arch)
+std::vector<char> compile_to_lto_ir(std::string const& nvvm_ir, std::string const& compute_arch)
 {
   nvvmProgram program = nullptr;
   if (nvvmCreateProgram(&program) != NVVM_SUCCESS) {
@@ -231,16 +231,16 @@ std::string compile_to_ptx(std::string const& nvvm_ir, std::string const& comput
       "nvvmAddModuleToProgram");
     auto architecture     = fmt::format("-arch={}", compute_arch);
     char const* verify[]  = {architecture.c_str()};
-    char const* compile[] = {architecture.c_str(), "-opt=3"};
+    char const* compile[] = {architecture.c_str(), "-opt=3", "-gen-lto"};
     check_nvvm(nvvmVerifyProgram(program, 1, verify), program, "nvvmVerifyProgram");
-    check_nvvm(nvvmCompileProgram(program, 2, compile), program, "nvvmCompileProgram");
+    check_nvvm(nvvmCompileProgram(program, 3, compile), program, "nvvmCompileProgram");
     std::size_t result_size = 0;
     check_nvvm(
       nvvmGetCompiledResultSize(program, &result_size), program, "nvvmGetCompiledResultSize");
-    std::string ptx(result_size, '\0');
-    check_nvvm(nvvmGetCompiledResult(program, ptx.data()), program, "nvvmGetCompiledResult");
+    std::vector<char> lto_ir(result_size);
+    check_nvvm(nvvmGetCompiledResult(program, lto_ir.data()), program, "nvvmGetCompiledResult");
     nvvmDestroyProgram(&program);
-    return ptx;
+    return lto_ir;
   } catch (...) {
     nvvmDestroyProgram(&program);
     throw;
@@ -263,14 +263,14 @@ void check_jitlink(nvJitLinkResult result, nvJitLinkHandle handle, std::string_v
   }
 }
 
-std::vector<char> link_cubin(std::string const& ptx,
+std::vector<char> link_cubin(std::span<char const> lto_ir,
                              std::span<unsigned char const> kernel_fatbin,
                              std::string const& sm_arch)
 {
   auto architecture      = fmt::format("-arch={}", sm_arch);
-  char const* options[]  = {architecture.c_str(), "-lto", "-O3"};
+  char const* options[]  = {architecture.c_str(), "-lto", "-O3", "-no-cache"};
   nvJitLinkHandle linker = nullptr;
-  if (nvJitLinkCreate(&linker, 3, options) != NVJITLINK_SUCCESS) {
+  if (nvJitLinkCreate(&linker, 4, options) != NVJITLINK_SUCCESS) {
     throw std::runtime_error("nvJitLinkCreate failed");
   }
   try {
@@ -281,10 +281,13 @@ std::vector<char> link_cubin(std::string const& ptx,
                                    "openresty_kernel.fatbin"),
                   linker,
                   "nvJitLinkAddData(kernel fatbin)");
-    check_jitlink(
-      nvJitLinkAddData(linker, NVJITLINK_INPUT_PTX, ptx.data(), ptx.size(), "openresty.ptx"),
-      linker,
-      "nvJitLinkAddData(PTX)");
+    check_jitlink(nvJitLinkAddData(linker,
+                                   NVJITLINK_INPUT_LTOIR,
+                                   const_cast<char*>(lto_ir.data()),
+                                   lto_ir.size(),
+                                   "openresty.ltoir"),
+                  linker,
+                  "nvJitLinkAddData(LTO IR)");
     check_jitlink(nvJitLinkComplete(linker), linker, "nvJitLinkComplete");
     std::size_t size = 0;
     check_jitlink(
@@ -645,7 +648,6 @@ target_architecture get_target_architecture(nvbench::state& state)
 std::unique_ptr<loaded_kernel> make_kernel(target_architecture const& architecture,
                                            corpus_case const& benchmark)
 {
-  check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
   regex_ir::compile_options compile_options;
   compile_options.case_insensitive = benchmark.case_insensitive;
   compile_options.multiline        = benchmark.multiline;
@@ -660,10 +662,10 @@ std::unique_ptr<loaded_kernel> make_kernel(target_architecture const& architectu
   options.symbol_prefix    = "regex_ir_benchmark";
   options.execute_function = "regex_ir_benchmark_execute";
   auto nvvm_ir             = regex_ir::generate_nvvm_ir(*compiled.value, options);
-  auto ptx                 = compile_to_ptx(nvvm_ir, architecture.compute);
+  auto lto_ir              = compile_to_lto_ir(nvvm_ir, architecture.compute);
   auto wrapper             = std::span<unsigned char const>{regex_ir_benchmark_contains_fatbin,
                                                             regex_ir_benchmark_contains_fatbinLength};
-  auto cubin               = link_cubin(ptx, wrapper, architecture.sm);
+  auto cubin               = link_cubin(lto_ir, wrapper, architecture.sm);
   return std::make_unique<loaded_kernel>(cubin);
 }
 
@@ -790,12 +792,28 @@ void add_counters(nvbench::state& state, table_workload const& workload, std::in
   state.add_global_memory_writes<std::uint8_t>(values, "OutputBytes");
 }
 
-void add_compile_time(nvbench::state& state, double seconds)
+void prepare_regex_ir_context()
 {
-  nvbench::summary& summary = state.add_summary("regex_ir/corpus/compile_time");
-  summary.set_string("name", "Cold Compile");
+  check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
+}
+
+void add_jit_ready_time(nvbench::state& state, double seconds)
+{
+  auto& summary = state.add_summary("regex_ir/jit_ready_time");
+  summary.set_string("name", "JIT Ready");
   summary.set_string("hint", "duration");
-  summary.set_string("description", "Uncached regex compilation and engine setup time");
+  summary.set_string(
+    "description",
+    "Uncached time from regex string through loaded module and resolved kernel function");
+  summary.set_float64("value", seconds);
+}
+
+void add_cudf_program_create_time(nvbench::state& state, double seconds)
+{
+  auto& summary = state.add_summary("cudf/program_create_time");
+  summary.set_string("name", "Program Create");
+  summary.set_string("hint", "duration");
+  summary.set_string("description", "Time to create the cuDF regex interpreter program");
   summary.set_float64("value", seconds);
 }
 
@@ -807,11 +825,12 @@ void run_regex_ir_case(nvbench::state& state, corpus_case const& benchmark)
   table_workload workload(state, benchmark);
   add_counters(state, workload, get_axis(state, "Columns"));
   auto architecture = get_target_architecture(state);
+  prepare_regex_ir_context();
   trace("compile Regex IR kernel");
   auto compile_start = std::chrono::steady_clock::now();
   auto kernel        = make_kernel(architecture, benchmark);
   auto compile_stop  = std::chrono::steady_clock::now();
-  add_compile_time(state, std::chrono::duration<double>(compile_stop - compile_start).count());
+  add_jit_ready_time(state, std::chrono::duration<double>(compile_stop - compile_start).count());
   trace("compile cuDF program");
   auto program = make_cudf_program(benchmark);
   validate(workload, *kernel, *program);
@@ -829,13 +848,15 @@ void run_cudf_case(nvbench::state& state, corpus_case const& benchmark)
   table_workload workload(state, benchmark);
   add_counters(state, workload, get_axis(state, "Columns"));
   auto architecture = get_target_architecture(state);
+  prepare_regex_ir_context();
   trace("compile Regex IR kernel");
   auto kernel = make_kernel(architecture, benchmark);
   trace("compile cuDF program");
   auto compile_start = std::chrono::steady_clock::now();
   auto program       = make_cudf_program(benchmark);
   auto compile_stop  = std::chrono::steady_clock::now();
-  add_compile_time(state, std::chrono::duration<double>(compile_stop - compile_start).count());
+  add_cudf_program_create_time(state,
+                               std::chrono::duration<double>(compile_stop - compile_start).count());
   validate(workload, *kernel, *program);
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
     std::vector<std::unique_ptr<cudf::column>> outputs;

@@ -31,7 +31,7 @@ pattern
   -> graph and capture simplification
   -> executor analysis and deterministic construction
   -> operation-specific textual NVVM IR
-  -> libNVVM PTX at -opt=3
+  -> libNVVM LTO IR at -opt=3 -gen-lto
   -> nvJitLink device LTO at -O3
   -> linked CUDA cubin
 ```
@@ -64,8 +64,8 @@ The NVVM renderer analyzes the optimized IR and selects the first safe path in
 the following conceptual order:
 
 ```text
-non-boolean exact one-byte ASCII expression?
-  yes -> direct byte finder
+exact ASCII expression?
+  yes -> direct compare, byte finder, packed finder, or long-literal scan
   no  -> deterministic construction succeeds?
            boolean -> existential or assertion-aware DFA
            span/global result without live captures -> ordered DFA
@@ -117,12 +117,36 @@ Each 16-bit transition stores 14 state bits, an acceptance bit, and a
 `stop-before-accept` bit used to retain ordered alternation and greedy/lazy
 priority. The state limit is 16,383.
 
-The current ordered finder retries from successive logical-character
-boundaries when a candidate fails. Unlike boolean `contains`, it does not fold
-all possible start positions into a single streaming state, because it must
-retain the winning start and path priority. Required-prefix filtering can
-reduce retries only on the recursive path today. Candidate retry is therefore
-an important remaining cost for some span-producing or global expressions.
+Acceptance is an ordered state marker, not an unordered property of the DFA
+subset. When an earlier Thompson thread can continue past a match from a later
+thread, the later acceptance remains deferred in the next state. A transition
+updates the accepted end position only when that transition discovers a new
+higher-priority acceptance; merely carrying a deferred acceptance must not
+overwrite it. If none of the earlier threads can consume the next character,
+`stop-before-accept` returns the deferred match without consuming that
+character. This distinction is required for lazy repetition, ambiguous
+alternation, and nullable branches in find, count, replacement, and split.
+
+The repair was checked by replaying all 43,358 span-producing cases from the
+fixed-seed 45-minute GPU differential campaign across two RTX A6000 devices;
+the replay produced zero CPU-oracle mismatches.
+
+The ordered finder normally retries from successive logical-character
+boundaries when a candidate fails. Unlike boolean `contains`, it cannot fold
+all possible start positions into an existential state because it must retain
+the winning start and path priority. Two compile-time proofs reduce that cost:
+
+- a non-nullable machine with at most 16 possible starting bytes in at most two
+  ASCII ranges receives an inline start-range predicate before initialization;
+  and
+- if every initial consuming class enters the same non-accepting self-loop
+  state, those classes loop in that state, and no other state can re-enter it,
+  a failed prefix run is skipped as one unit.
+
+The latter rule preserves leftmost-first behavior because every later start
+inside the skipped run reaches the identical state at the failure position.
+Machines that accept the prefix, have stop-before transitions, multiple prefix
+states, or another incoming edge do not use the acceleration.
 
 ### Tagged DFA
 
@@ -190,31 +214,39 @@ The generated representation has:
 Transition tables up to 32 KiB use NVVM constant address space. Larger tables
 use read-only global storage so multiple tables cannot exhaust the device's
 64-KiB constant segment. The renderer emits ordinary loads and does not force a
-cache operator; PTX generation and device linking choose the cache policy.
+cache operator; libNVVM and device linking choose the cache policy.
 
 ASCII input avoids full UTF-8 decoding. Non-ASCII input decodes a code point,
-computes its byte width, then classifies it. Even the ASCII loop still performs
-a class-table lookup and a state-table lookup per consumed byte. Profiles of
-complex deterministic expressions therefore point to classification and
-transition instruction count as a remaining optimization target.
+computes its byte width, then classifies it. When the 256-byte alphabet differs
+from its most frequent class in no more than two contiguous intervals, the
+renderer emits inline range comparisons and selects instead of a byte-class
+table load. More fragmented alphabets retain the constant table. Every DFA
+still performs a transition lookup per consumed character, so transition-loop
+instruction count remains a target for larger machines.
 
 ## Literal and anchor specialization
 
 Several local analyses avoid general regex machinery:
 
-- A complete, unanchored, capture-free, one-byte ASCII expression used by a
-  non-boolean operation receives a direct raw-byte finder. ASCII bytes cannot
-  occur inside a valid UTF-8 continuation sequence, so logical-boundary
-  semantics are preserved.
+- A complete linear exact-ASCII expression is recognized after IR
+  optimization. One-byte global operations receive a direct raw-byte finder;
+  multi-byte span/global operations use a first-byte guard and packed 8/4/2/1
+  byte comparisons. ASCII bytes cannot occur inside a valid UTF-8 continuation
+  sequence, so logical-boundary semantics are preserved.
+- Anchored boolean exact matches compare the fixed literal directly. Scanning
+  boolean literals of 2–15 bytes use the optimized DFA because PGO found it
+  superior on early high-selectivity matches. Literals of at least 16 bytes
+  scan eight possible first bytes per load with a byte-equality mask and invoke
+  the packed verifier only for candidates.
 - Beginning anchors on boolean expressions become non-scanning control flow.
 - Non-scanning deterministic machines stop at their dead state.
 - Fused literals reduce helper and cursor operations in the fallback.
 - A replacement reference to a capture proven to cover the whole match reuses
   the match span instead of allocating and maintaining a separate capture.
 
-There is not yet an exact multi-byte literal executor. A two-byte or longer
-literal normally uses a deterministic table or fallback helpers rather than a
-wide comparison, KMP, Two-Way, or Boyer-Moore-family search.
+The exact planner does not yet generate a failure-function KMP or Two-Way
+search, nor does it extract mandatory literals at variable offsets from a
+general expression.
 
 ## API specialization
 
@@ -248,10 +280,15 @@ The core API returns textual NVVM IR and does not invoke CUDA tools itself. The
 test and benchmark integrations use:
 
 - libNVVM verification for the selected compute architecture;
-- libNVVM compilation with `-opt=3`;
+- libNVVM compilation with `-opt=3 -gen-lto`;
 - an NVCC-built kernel-wrapper LTO fatbin;
 - nvJitLink with `-lto -O3`; and
 - module loading of the linked cubin.
+
+Every Regex IR benchmark state also reports an uncached JIT-ready interval.
+It starts at the source regex, disables nvJitLink's cache, and stops after the
+linked module is loaded and every required kernel function is resolved. Input
+construction, output allocation, and the first launch are excluded.
 
 Symbol prefixes isolate generated internals, and the public execute-function
 name lets the stable wrapper call the specialized matcher. Production
@@ -353,33 +390,114 @@ subset-state explosion; an Aho-Corasick implementation more commonly suffers
 from a large alphabet-by-state transition representation. The two concerns
 should not be conflated.
 
+## 2026-07-05 highest-value-opportunity campaign
+
+All eight opportunities below were exercised on an RTX A6000 with CUDA 13.2,
+cuDF 26.08, Release compilation, libNVVM `-opt=3`, and nvJitLink `-lto -O3`.
+Normal timings came from NVBench; Nsight Compute full-set replay was used only
+for diagnosis. The primary gate was the existing 2,097,152-row,
+`StringBytes=128` API matrix. Output allocation and owning cuDF-column
+construction remained inside the timed region.
+
+The final accepted code changed the geometric-mean latency of that gate as
+follows. Small sub-millisecond contains differences have higher relative noise;
+count and materializing wins are substantially larger than the measured noise.
+
+| API | Cases | Before (ms) | After (ms) | Speedup |
+|:---|---:|---:|---:|---:|
+| contains | 22 | 0.747 | 0.708 | 1.056x |
+| count | 7 | 4.347 | 3.381 | 1.286x |
+| extract | 3 | 7.914 | 7.922 | 0.999x |
+| replace | 14 | 16.818 | 12.089 | 1.391x |
+| split | 7 | 22.800 | 17.030 | 1.339x |
+
+The largest individual accepted improvement was `[a-z]+Z`: count fell from
+6.828 to 3.689 ms, plain replacement from 20.493 to 11.121 ms, backreference
+replacement from 19.797 to 11.189 ms, and split from 19.895 to 12.930 ms.
+
+### Opportunity outcomes
+
+| Opportunity | Experiment | Outcome |
+|:---|:---|:---|
+| literal planner | exact-ASCII graph recognition, packed comparisons, 8-byte first-byte masks, and short-literal DFA A/B | accepted; short scanning literals use the DFA, fixed/non-boolean and long literals retain direct paths |
+| selectivity-aware filtering | contains sweep at 1%, 5%, 10%, 50%, and 100% hits | fused plan retained; it already sustained about 156–253 GB/s on low-to-moderate selectivity, leaving no one-shot margin for a second scan plus compaction/scatter |
+| ordered restart removal | sparse start ranges and a proved self-loop prefix-run skip | accepted; count improved 16–46% across the seven transform expressions |
+| materialization reuse | temporary one-pass staged-row replacement versus current exact-size rematch | rejected; staged allocation and compaction increased latency 26–157% |
+| deterministic-loop reduction | inline byte-class ranges for alphabets with at most two exceptional intervals | accepted; several ordered count cases improved another 4–27%, with boolean cases neutral within noise |
+| length scheduling | temporary physically length-sorted copy of the existing normal-width corpus | matcher-only upper bound was 7–16% faster, but sorting/gather/scatter was excluded; not enabled for one-shot APIs |
+| pivoted representation | temporary fixed-width 2,097,152×128 literal probe | cached scan was 4.45x faster, but the 21.05 ms pivot plus 0.68 ms scan was 7.1x slower than the 3.03 ms row-major one-shot scan; keep as a cached-column design only |
+| multi-pattern filter | temporary four-literal corpus producing four predicate arrays | one fused scan took 2.91 ms versus 10.30 ms for four scans, a 3.54x win; no single-pattern ABI change until a real multi-pattern consumer exists |
+
+The complete 58-case large-corpus Regex IR gate also improved: geometric mean
+latency fell from 0.366 to 0.340 ms, a 1.076x speedup. Boost cases 1, 2, and 6,
+Leipzig cases 1 and 11, and OpenResty cases 1 and 18 improved by 23–36%.
+The only apparent slower state in the first sweep was a 0.169 ms OpenResty
+case; a longer 0.5-second rerun measured 0.170 ms, within 0.6% of its baseline.
+
+### Temporary workload definitions
+
+The temporary probes were removed after measurement. They are described here
+so the conclusions are reproducible without mistaking them for shipped
+benchmarks:
+
+- **staged replacement:** 262,144 variable-length rows capped at 128 bytes,
+  the existing transform patterns 0, 2, 5, and 6, and a per-row temporary
+  stride of `2 * StringBytes`. The generated replacement ran once into the
+  temporary, sizes were scanned, then a second kernel compacted bytes into the
+  owning cuDF STRING child. Existing rematch times were 2.17–3.00 ms; staged
+  times were 2.74–5.73 ms.
+- **length ordering:** the existing seeded normal row-length distribution at
+  2,097,152 rows, widths 128 and 256, and count patterns 2, 5, and 6. Rows were
+  physically reordered by length before upload. This deliberately measured a
+  cached-layout upper bound; permutation construction and output restoration
+  were not timed.
+- **pivot:** fixed 128-byte rows, 50% containing `0987 5W43` at byte 59,
+  15 median event-timed samples after two warm-ups. Both layouts produced the
+  same boolean output. The one-shot result includes the row-major-to-pivot
+  transpose.
+- **multi-pattern:** fixed 128-byte rows with `error:`, `https://`, `@host.`,
+  `192.168.`, or no literal in a five-row cycle. Four separate specialized
+  kernels and one fused kernel both wrote four boolean arrays; 15 median
+  samples followed two warm-ups.
+
+Two Nsight Systems CUDA traces completed the benchmark process but exceeded
+120- and 180-second limits while finalizing their reports in this environment,
+so no partial `.nsys-rep` is treated as evidence. Nsight Compute full profiles
+completed normally. The optimized `[a-z]+Z` count kernel used 78 registers per
+thread, achieved 43.37% warp occupancy, executed 1.287 billion SASS
+instructions, and had 89.69% uniform branch targets. Its low 6.29 active-thread
+ratio explains the cached length-ordering headroom, but the end-to-end
+reordering cost still prevents enabling it unconditionally.
+
 ## Prioritized opportunities
 
 The following work is ordered by likely value for the current implementation.
 Each item needs end-to-end benchmarks over API, row count, row width, length
 variance, hit rate, regex complexity, and reuse count.
 
-### 1. Add a literal planner
+### 1. Extend the literal planner
 
-Recognize exact literal expressions and mandatory literals during IR analysis.
-Useful specializations include:
+Exact ASCII expressions and sparse first-byte ranges are implemented. The
+remaining work is mandatory-literal extraction from general expressions and a
+regular long-literal algorithm for adversarial repeated prefixes. Useful
+specializations still include:
 
 - anchored exact compare for `matches`;
-- wide fixed-length compares for short ASCII literals;
 - KMP or another regular linear search for longer literal-only expressions;
-- direct occurrence enumeration for count, replace, and split; and
-- a required first-byte, first-byte-set, prefix, or longer-literal filter before
-  an expensive fallback or ordered candidate attempt.
+- a longer mandatory-literal filter before an expensive fallback; and
+- selectivity estimates that can choose the long-literal path without a fixed
+  size threshold.
 
 For a mandatory literal at a variable regex offset, a row-level filter can
 reject misses but cannot always infer the match start. For a fixed prefix it
 can identify candidate starts directly. That distinction belongs in the
 compile-time analysis.
 
-### 2. Make filtering selectivity-aware
+### 2. Make cross-row filtering selectivity-aware
 
 A cheap filter is not automatically cheap: a separate pass doubles input
-traffic on rows that survive. Provide at least two plans:
+traffic on rows that survive. The fused plan is implemented and won the
+existing benchmarks. A future multi-kernel plan would need:
 
 - a fused per-row filter that immediately verifies a hit; and
 - for very selective filters and expensive verifiers, a bitmap/row-ID pass
@@ -389,28 +507,26 @@ Choose between them using sampled literal frequency, row widths, regex cost,
 and expected cubin reuse. Measure preprocessing, compaction, and result scatter
 inside the end-to-end path.
 
-### 3. Remove ordered candidate restarts where safe
+### 3. Generalize ordered restart removal
 
-Boolean contains already carries the start closure through one streaming DFA.
-Span/global operations still retry candidates. Investigate a prioritized
-streaming or tagged-search automaton that carries the earliest live start and
-only the capture state required by the selected API. This can improve the
-algorithmic shape of long near-misses, but it must reproduce leftmost-first and
-greedy/lazy results exactly.
+Sparse starts and self-looping prefix runs now avoid many retries. Other
+span/global machines still retry candidates. A prioritized streaming or
+tagged-search automaton could carry the earliest live start and only the
+capture state required by the selected API, but it must reproduce
+leftmost-first and greedy/lazy results exactly.
 
 ### 4. Reuse match work in materializing APIs
 
-Replacement and split currently match during both sizing and emission. For
-selective or complex expressions, store compact spans during sizing and consume
-them during emission. Select between rematching and span scratch based on match
-density and scratch size; the direct one-byte path may still be faster when it
-rematches than when it writes and rereads a large span array.
+Replacement and split currently match during both sizing and emission. Full
+staged rows lost badly in the measured experiment. Any retry should store
+bounded compact spans during sizing, include an overflow/rematch path, and
+select it only when sampled match density and verifier cost repay scratch
+traffic. The direct paths may remain faster when they rematch.
 
 ### 5. Reduce deterministic-loop instruction count
 
-Profile and compare:
+Inline byte-class ranges are implemented. Remaining comparisons include:
 
-- inline class comparisons or bitmaps for very small ASCII alphabets;
 - specialized all-ASCII loops when column metadata or sampling justifies it;
 - processing 4, 8, or 16 input bytes per load for literal scans;
 - loop unrolling only when it does not worsen register pressure;

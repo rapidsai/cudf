@@ -11,8 +11,8 @@ The production path is:
     host regex compilation
       -> optimized Instruction IR
       -> textual NVVM IR
-      -> libNVVM PTX
-      -> nvJitLink with kernel LTO IR
+      -> libNVVM LTO IR
+      -> nvJitLink with kernel LTO IR under whole-program device LTO
       -> load and launch cubin
 
 ## 1. Link or vendor the compiler
@@ -297,13 +297,14 @@ std::string architecture_option = "-arch=" + compute_architecture;
 char const* verify_options[] = {architecture_option.c_str()};
 nvvmVerifyProgram(program, 1, verify_options);
 
-char const* compile_options[] = {architecture_option.c_str(), "-opt=3"};
-nvvmCompileProgram(program, 2, compile_options);
+char const* compile_options[] = {
+  architecture_option.c_str(), "-opt=3", "-gen-lto"};
+nvvmCompileProgram(program, 3, compile_options);
 
-std::size_t ptx_size{};
-nvvmGetCompiledResultSize(program, &ptx_size);
-std::string ptx(ptx_size, '\0');
-nvvmGetCompiledResult(program, ptx.data());
+std::size_t lto_ir_size{};
+nvvmGetCompiledResultSize(program, &lto_ir_size);
+std::vector<char> lto_ir(lto_ir_size);
+nvvmGetCompiledResult(program, lto_ir.data());
 nvvmDestroyProgram(&program);
 ```
 
@@ -313,7 +314,9 @@ architecture supported by the installed toolkit and compatible with the final
 link target. Derive `compute_architecture` from the selected device's compute
 capability instead of baking a device generation into the application. `-opt=3`
 is libNVVM's documented default, but passing it explicitly makes the intended
-optimization level visible and testable.
+optimization level visible and testable. `-gen-lto` makes the compiled result
+a binary LTO-IR buffer rather than PTX text, so retain its explicit byte size
+and do not use C-string operations on it.
 
 ## 6. Provide and precompile the CUDA kernel
 
@@ -408,7 +411,7 @@ bin2c --const --length --name contains_kernel_fatbin \
 The declaration name and function signature must exactly match
 `execute_function` and the generated ABI.
 
-## 7. Link PTX and kernel LTO IR with nvJitLink
+## 7. Link generated and kernel LTO IR with nvJitLink
 
 Create a linker for the real device architecture and enable LTO:
 
@@ -424,10 +427,10 @@ nvJitLinkAddData(linker,
                  contains_kernel_fatbinLength,
                  "contains_kernel.fatbin");
 nvJitLinkAddData(linker,
-                 NVJITLINK_INPUT_PTX,
-                 ptx.data(),
-                 ptx.size(),
-                 "generated_regex.ptx");
+                 NVJITLINK_INPUT_LTOIR,
+                 lto_ir.data(),
+                 lto_ir.size(),
+                 "generated_regex.ltoir");
 nvJitLinkComplete(linker);
 
 std::size_t cubin_size{};
@@ -438,7 +441,9 @@ nvJitLinkDestroy(&linker);
 ```
 
 `sm_architecture` must be derived from the CUDA device selected for execution.
-`-lto` enables device link-time optimization and `-O3` requests the highest
+`-lto` enables whole-program device link-time optimization across both the
+generated regex and stable kernel wrapper. This lets nvJitLink inline and
+simplify across their device-function boundary. `-O3` requests the highest
 documented nvJitLink optimization level explicitly. Retrieve the nvJitLink
 error log whenever an operation fails. The most common integration failures
 are an execute-name mismatch, an ABI mismatch, or incompatible architecture
@@ -475,6 +480,55 @@ Cache compiled artifacts by pattern, operation, compile options, optimization
 options, NVVM code-generation options, Regex IR version, CUDA toolkit version,
 and target architecture. Excluding any of these can reuse incompatible code.
 
+### Oracle correctness protocol for benchmarks
+
+An implementation under comparison is a useful differential check, but it is
+not by itself a semantic oracle. Both implementations can share a bug, and a
+pattern translated for another engine's dialect can change what is being
+tested. Validate new benchmark cases and unusually large speedups with an
+independent engine whose semantics match the source expression, in addition to
+the normal Regex IR/cuDF comparison.
+
+Use this protocol:
+
+1. Freeze the exact pattern, compile flags, corpus bytes and checksum, and the
+   row-partition parameters. Run the oracle on the same row slices passed to
+   the GPU; row boundaries affect anchors, word boundaries, and matches that
+   would otherwise cross a boundary.
+2. Evaluate the source spelling of the expression with the independent oracle.
+   Do not use a compatibility spelling intended only for the baseline engine
+   as the oracle expression.
+3. Run the optimized host interpreter and generated NVVM kernel on those same
+   rows. Compare the complete result shape before starting the timer:
+
+   | API | Exact oracle comparison |
+   | --- | --- |
+   | `contains`, `matches` | Every boolean row value |
+   | `find` | Match presence and the first half-open byte span |
+   | `count` | Every non-overlapping match count |
+   | `extract` | Match presence and every capture's presence and byte span |
+   | `replace` | Null mask, offsets, and all output bytes |
+   | `split` | Null mask, list/string offsets, and all field bytes |
+
+4. Keep oracle execution, result copies, and comparisons outside the timed
+   region. Fail the benchmark state on the first mismatch rather than
+   publishing its timing.
+5. When the oracle and GPU run in different processes, record the result count
+   and a stable hash of the complete result vector to make the comparison
+   reproducible. A hash is an audit aid, not a substitute for element-wise or
+   recursive comparison inside tests.
+
+For example, the Boost/GCC `14_cpp_tokens` outlier was checked using
+Boost.Regex as the independent oracle over the exact 34,483-byte `crc.hpp`
+corpus. At `Rows=1024`, `Columns=1`, `MaxStringBytes=64`, and multiline mode,
+the expected `contains` column has 668 true rows and the complete 1,024-byte
+boolean vector hashes to `0xe1e373de1acecc37` with 64-bit FNV-1a. The source
+expression contains 899 non-overlapping row-local matches. The host
+interpreter agreed on every boolean and count and on every first-match span;
+the generated NVVM kernel and cuDF comparison column matched the complete
+boolean vector. This validates the reported `contains` workload—it does not
+claim that the benchmark returns a token list.
+
 The complete compile/link and launch sequence is tested in
 `tests/unit_tests.cpp`; its stable boolean, find, count, capture, replace, and
 split CUDA entry points are separate named sources under `tests/fragments/`.
@@ -489,6 +543,14 @@ the complete contains, count, extract, replace, and split tables plus a linked
 line chart per API. `StringBytes` controls each ported workload's input-width
 distribution; it is not an assertion that every variable-length row has
 exactly that many bytes.
+
+Every Regex IR GPU benchmark state also exports `regex_ir/jit_ready_time`.
+This cache-disabled wall-clock interval begins with the source regex and
+includes parsing, lowering, optimization, NVVM rendering, libNVVM LTO-IR
+generation, nvJitLink, cubin extraction, module loading, and all kernel-function
+lookups. It stops before input construction, output allocation, or the first
+kernel launch. This boundary makes the number independent of row count while
+still measuring everything a pattern cache must do before execution.
 
 The imported OpenResty, Rust Leipzig, Boost/GCC, and mariomka reports use one
 linked NVIDIA-style grouped horizontal bar chart per suite. Each named case has

@@ -60,6 +60,7 @@ class Measurement:
     string_bytes: int
     regex_ir_seconds: float
     cudf_seconds: float
+    regex_ir_jit_ready_seconds: float
 
     @property
     def regex_ir_mrows(self) -> float:
@@ -172,6 +173,9 @@ def load_measurements(
                         regex_state, "nv/cold/time/gpu/mean"
                     ),
                     cudf_seconds=summary_value(cudf_state, "nv/cold/time/gpu/mean"),
+                    regex_ir_jit_ready_seconds=summary_value(
+                        regex_state, "regex_ir/jit_ready_time"
+                    ),
                 )
             )
         family_measurements = [item for item in measurements if item.family == family]
@@ -302,6 +306,7 @@ class GeometrySummary:
     cudf_mrows: float
     speedup: float
     wins: int
+    jit_ready_ms: float
 
 
 def summarize_family(
@@ -329,6 +334,11 @@ def summarize_family(
                 cudf_mrows=cudf_mrows,
                 speedup=regex_ir_mrows / cudf_mrows,
                 wins=sum(item.speedup > 1.0 for item in values),
+                jit_ready_ms=(
+                    sum(item.regex_ir_jit_ready_seconds for item in values)
+                    / len(values)
+                    * 1000.0
+                ),
             )
         )
     return summaries
@@ -454,6 +464,7 @@ def export_csv(measurements: list[Measurement], path: Path) -> None:
                 "regex_ir_mrows_per_second",
                 "cudf_mrows_per_second",
                 "speedup",
+                "regex_ir_jit_ready_ms",
             ]
         )
         for measurement in measurements:
@@ -468,6 +479,7 @@ def export_csv(measurements: list[Measurement], path: Path) -> None:
                     f"{measurement.regex_ir_mrows:.6f}",
                     f"{measurement.cudf_mrows:.6f}",
                     f"{measurement.speedup:.6f}",
+                    f"{measurement.regex_ir_jit_ready_seconds * 1000:.6f}",
                 ]
             )
 
@@ -488,8 +500,8 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
     lines = [
         README_RESULTS_BEGIN,
         "",
-        "| API | Expressions | Geometries | Paired measurements | Regex IR geometric throughput (M rows/s) | cuDF geometric throughput (M rows/s) | Geometric speedup | Pair wins |",
-        "|:---|---:|---:|---:|---:|---:|---:|:---:|",
+        "| API | Expressions | Geometries | Paired measurements | Regex IR geometric throughput (M rows/s) | cuDF geometric throughput (M rows/s) | Geometric speedup | Pair wins | Regex IR JIT-ready mean (ms) |",
+        "|:---|---:|---:|---:|---:|---:|---:|:---:|---:|",
     ]
     for family in FAMILY_ORDER:
         values = [item for item in measurements if item.family == family]
@@ -498,16 +510,26 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
         regex_throughput = geometric_mean(item.regex_ir_mrows for item in values)
         cudf_throughput = geometric_mean(item.cudf_mrows for item in values)
         wins = sum(item.speedup > 1.0 for item in values)
+        jit_ready_ms = (
+            sum(item.regex_ir_jit_ready_seconds for item in values)
+            / len(values)
+            * 1000.0
+        )
         lines.append(
             f"| {family} | {cases} | {geometries} | {len(values)} | "
             f"{regex_throughput:,.3f} | {cudf_throughput:,.3f} | "
             f"{regex_throughput / cudf_throughput:.3f}x | "
-            f"{wins}–{len(values) - wins} |"
+            f"{wins}–{len(values) - wins} | {jit_ready_ms:.3f} |"
         )
 
     regex_throughput = geometric_mean(item.regex_ir_mrows for item in measurements)
     cudf_throughput = geometric_mean(item.cudf_mrows for item in measurements)
     wins = sum(item.speedup > 1.0 for item in measurements)
+    jit_ready_ms = (
+        sum(item.regex_ir_jit_ready_seconds for item in measurements)
+        / len(measurements)
+        * 1000.0
+    )
     case_count = sum(
         len({item.case for item in measurements if item.family == family})
         for family in FAMILY_ORDER
@@ -519,7 +541,7 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
             f"**{len(measurements)}** | **{regex_throughput:,.3f}** | "
             f"**{cudf_throughput:,.3f}** | "
             f"**{regex_throughput / cudf_throughput:.3f}x** | "
-            f"**{wins}–{len(measurements) - wins}** |",
+            f"**{wins}–{len(measurements) - wins}** | **{jit_ready_ms:.3f}** |",
             "",
         ]
     )
@@ -554,7 +576,9 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
         + [
             "",
             "The tables below report geometric mean throughput across each API's expression",
-            "cases independently at every row-count/`StringBytes` geometry.",
+            "cases independently at every row-count/`StringBytes` geometry. JIT-ready is the",
+            "arithmetic mean from regex string through module load and kernel-function lookup;",
+            "it excludes input construction and the first launch.",
             "",
         ]
     )
@@ -568,8 +592,8 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
                 f"[SVG chart](docs/_static/benchmarks/cudf-api-{family}-throughput-sweep.svg) ·",
                 f"[case-level CSV](docs/_static/benchmarks/cudf-api-{family}-throughput-data.csv)",
                 "",
-                "| Rows | StringBytes | Cases | Regex IR (M rows/s) | cuDF (M rows/s) | Speedup | Regex IR–cuDF wins |",
-                "|---:|---:|---:|---:|---:|---:|:---:|",
+                "| Rows | StringBytes | Cases | Regex IR (M rows/s) | cuDF (M rows/s) | Speedup | Regex IR–cuDF wins | Regex IR JIT-ready mean (ms) |",
+                "|---:|---:|---:|---:|---:|---:|:---:|---:|",
             ]
         )
         for summary in summarize_family(measurements, family):
@@ -577,7 +601,8 @@ def write_readme_results(measurements: list[Measurement], path: Path) -> None:
                 f"| {summary.rows:,} | {summary.string_bytes} | {summary.cases} | "
                 f"{summary.regex_ir_mrows:,.3f} | {summary.cudf_mrows:,.3f} | "
                 f"{summary.speedup:.3f}x | "
-                f"{summary.wins}–{summary.cases - summary.wins} |"
+                f"{summary.wins}–{summary.cases - summary.wins} | "
+                f"{summary.jit_ready_ms:.3f} |"
             )
         lines.append("")
     lines.extend(

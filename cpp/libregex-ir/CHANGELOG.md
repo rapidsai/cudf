@@ -56,6 +56,10 @@
   overhead for exact single-byte global operations and dead-state scanning in
   begin-anchored boolean machines; add direct byte search and early rejection,
   reducing the profiled split path by 3.0x–5.0x per kernel.
+- Add exact multi-byte ASCII planning, sparse ordered-start filtering,
+  self-loop prefix-run skipping, and inline small-alphabet classification;
+  improve the 2M-row gate geometrically by 22.2% for count, 28.1% for replace,
+  and 25.3% for split, and improve the complete corpus gate by 7.0%.
 - Add separate reproducible 16:9 NVIDIA-themed contains, count, extract,
   replace, and split throughput slides, editable SVG assets, inline README
   tables, and case-level CSV data for every row-count/width geometry; use line
@@ -89,6 +93,14 @@
   storage, inline predicate helpers, and avoid touching inactive capture slots.
 - Fix escaped ASCII literals being case-folded when case-insensitive mode was
   disabled, and remove a dead executor search-state assignment.
+- Preserve deferred lower-priority accepts in ordered DFA states so lazy,
+  nullable, and ambiguous expressions return the correct spans in GPU find,
+  count, replacement, and split kernels.
+- Compile generated NVVM modules to binary LTO-IR with libNVVM `-gen-lto` and
+  pass them to nvJitLink as `NVJITLINK_INPUT_LTOIR`, enabling device LTO across
+  the generated regex and precompiled CUDA wrapper.
+- Report uncached regex-string-to-loaded-kernel JIT-ready time in every GPU
+  benchmark state and publish it alongside all README benchmark tables.
 
 ## 0.1.0 — 2026-07-04
 

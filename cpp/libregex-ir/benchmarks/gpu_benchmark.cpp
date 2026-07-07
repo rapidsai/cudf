@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -165,7 +166,7 @@ void check_nvvm(nvvmResult result, nvvmProgram program, std::string_view operati
   }
 }
 
-std::string compile_to_ptx(std::string const& nvvm_ir, std::string const& compute_arch)
+std::vector<char> compile_to_lto_ir(std::string const& nvvm_ir, std::string const& compute_arch)
 {
   nvvmProgram program = nullptr;
   if (nvvmCreateProgram(&program) != NVVM_SUCCESS) {
@@ -178,15 +179,15 @@ std::string compile_to_ptx(std::string const& nvvm_ir, std::string const& comput
                "nvvmAddModuleToProgram");
     auto arch_option      = fmt::format("-arch={}", compute_arch);
     char const* verify[]  = {arch_option.c_str()};
-    char const* compile[] = {arch_option.c_str(), "-opt=3"};
+    char const* compile[] = {arch_option.c_str(), "-opt=3", "-gen-lto"};
     check_nvvm(nvvmVerifyProgram(program, 1, verify), program, "nvvmVerifyProgram");
-    check_nvvm(nvvmCompileProgram(program, 2, compile), program, "nvvmCompileProgram");
+    check_nvvm(nvvmCompileProgram(program, 3, compile), program, "nvvmCompileProgram");
     std::size_t size = 0;
     check_nvvm(nvvmGetCompiledResultSize(program, &size), program, "nvvmGetCompiledResultSize");
-    std::string ptx(size, '\0');
-    check_nvvm(nvvmGetCompiledResult(program, ptx.data()), program, "nvvmGetCompiledResult");
+    std::vector<char> lto_ir(size);
+    check_nvvm(nvvmGetCompiledResult(program, lto_ir.data()), program, "nvvmGetCompiledResult");
     nvvmDestroyProgram(&program);
-    return ptx;
+    return lto_ir;
   } catch (...) {
     nvvmDestroyProgram(&program);
     throw;
@@ -209,14 +210,14 @@ void check_jitlink(nvJitLinkResult result, nvJitLinkHandle handle, std::string_v
   }
 }
 
-std::vector<char> link_cubin(std::string const& ptx,
+std::vector<char> link_cubin(std::span<char const> lto_ir,
                              std::span<unsigned char const> kernel_fatbin,
                              std::string const& sm_arch)
 {
   auto arch_option       = fmt::format("-arch={}", sm_arch);
-  char const* options[]  = {arch_option.c_str(), "-lto", "-O3"};
+  char const* options[]  = {arch_option.c_str(), "-lto", "-O3", "-no-cache"};
   nvJitLinkHandle linker = nullptr;
-  if (nvJitLinkCreate(&linker, 3, options) != NVJITLINK_SUCCESS) {
+  if (nvJitLinkCreate(&linker, 4, options) != NVJITLINK_SUCCESS) {
     throw std::runtime_error("nvJitLinkCreate failed");
   }
   try {
@@ -227,10 +228,13 @@ std::vector<char> link_cubin(std::string const& ptx,
                                    "benchmark_kernel.fatbin"),
                   linker,
                   "nvJitLinkAddData(kernel fatbin)");
-    check_jitlink(
-      nvJitLinkAddData(linker, NVJITLINK_INPUT_PTX, ptx.data(), ptx.size(), "generated_regex.ptx"),
-      linker,
-      "nvJitLinkAddData(PTX)");
+    check_jitlink(nvJitLinkAddData(linker,
+                                   NVJITLINK_INPUT_LTOIR,
+                                   const_cast<char*>(lto_ir.data()),
+                                   lto_ir.size(),
+                                   "generated_regex.ltoir"),
+                  linker,
+                  "nvJitLinkAddData(LTO IR)");
     check_jitlink(nvJitLinkComplete(linker), linker, "nvJitLinkComplete");
     std::size_t size = 0;
     check_jitlink(
@@ -882,21 +886,20 @@ target_architecture get_target_architecture(nvbench::state& state)
 std::unique_ptr<loaded_kernel> make_regex_ir_kernel(target_architecture const& architecture,
                                                     std::string_view pattern)
 {
-  check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
   auto compiled = regex_ir::compile(pattern, regex_ir::operation::contains());
   if (!compiled) throw std::runtime_error("Regex IR compilation failed");
   regex_ir::nvvm_ir_codegen_options options;
   options.symbol_prefix    = "regex_ir_benchmark";
   options.execute_function = "regex_ir_benchmark_execute";
   auto nvvm_ir             = regex_ir::generate_nvvm_ir(*compiled.value, options);
-  auto ptx                 = compile_to_ptx(nvvm_ir, architecture.compute);
+  auto lto_ir              = compile_to_lto_ir(nvvm_ir, architecture.compute);
   auto wrapper             = std::span<unsigned char const>{regex_ir_benchmark_contains_fatbin,
                                                             regex_ir_benchmark_contains_fatbinLength};
-  auto cubin               = link_cubin(ptx, wrapper, architecture.sm);
+  auto cubin               = link_cubin(lto_ir, wrapper, architecture.sm);
   auto artifact_id         = next_artifact_id();
   dump_artifact(
     artifact_id, "contains.nvvm.ll", std::span<char const>{nvvm_ir.data(), nvvm_ir.size()});
-  dump_artifact(artifact_id, "contains.ptx", std::span<char const>{ptx.data(), ptx.size()});
+  dump_artifact(artifact_id, "contains.ltoir", std::span<char const>{lto_ir.data(), lto_ir.size()});
   dump_artifact(artifact_id, "contains.cubin", std::span<char const>{cubin.data(), cubin.size()});
   return std::make_unique<loaded_kernel>(cubin);
 }
@@ -904,7 +907,6 @@ std::unique_ptr<loaded_kernel> make_regex_ir_kernel(target_architecture const& a
 std::unique_ptr<loaded_extract_kernel> make_regex_ir_extract_kernel(
   target_architecture const& architecture, std::string_view pattern)
 {
-  check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
   auto compiled = regex_ir::compile(pattern, regex_ir::operation::extract());
   if (!compiled) throw std::runtime_error("Regex IR compilation failed");
   if (compiled.value->capture_count > 4U) {
@@ -914,14 +916,14 @@ std::unique_ptr<loaded_extract_kernel> make_regex_ir_extract_kernel(
   options.symbol_prefix    = "regex_ir_benchmark_extract_ir";
   options.execute_function = "regex_ir_benchmark_extract";
   auto nvvm_ir             = regex_ir::generate_nvvm_ir(*compiled.value, options);
-  auto ptx                 = compile_to_ptx(nvvm_ir, architecture.compute);
+  auto lto_ir              = compile_to_lto_ir(nvvm_ir, architecture.compute);
   auto wrapper             = std::span<unsigned char const>{regex_ir_benchmark_extract_fatbin,
                                                             regex_ir_benchmark_extract_fatbinLength};
-  auto cubin               = link_cubin(ptx, wrapper, architecture.sm);
+  auto cubin               = link_cubin(lto_ir, wrapper, architecture.sm);
   auto artifact_id         = next_artifact_id();
   dump_artifact(
     artifact_id, "extract.nvvm.ll", std::span<char const>{nvvm_ir.data(), nvvm_ir.size()});
-  dump_artifact(artifact_id, "extract.ptx", std::span<char const>{ptx.data(), ptx.size()});
+  dump_artifact(artifact_id, "extract.ltoir", std::span<char const>{lto_ir.data(), lto_ir.size()});
   dump_artifact(artifact_id, "extract.cubin", std::span<char const>{cubin.data(), cubin.size()});
   return std::make_unique<loaded_extract_kernel>(cubin);
 }
@@ -934,22 +936,21 @@ std::vector<char> compile_operation_cubin(target_architecture const& architectur
                                           std::span<unsigned char const> wrapper,
                                           std::string_view artifact_name)
 {
-  check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
   auto compiled = regex_ir::compile(pattern, selected);
   if (!compiled) throw std::runtime_error("Regex IR compilation failed");
   regex_ir::nvvm_ir_codegen_options options;
   options.symbol_prefix    = symbol_prefix;
   options.execute_function = execute_function;
   auto nvvm_ir             = regex_ir::generate_nvvm_ir(*compiled.value, options);
-  auto ptx                 = compile_to_ptx(nvvm_ir, architecture.compute);
-  auto cubin               = link_cubin(ptx, wrapper, architecture.sm);
+  auto lto_ir              = compile_to_lto_ir(nvvm_ir, architecture.compute);
+  auto cubin               = link_cubin(lto_ir, wrapper, architecture.sm);
   auto artifact_id         = next_artifact_id();
   dump_artifact(artifact_id,
                 fmt::format("{}.nvvm.ll", artifact_name),
                 std::span<char const>{nvvm_ir.data(), nvvm_ir.size()});
   dump_artifact(artifact_id,
-                fmt::format("{}.ptx", artifact_name),
-                std::span<char const>{ptx.data(), ptx.size()});
+                fmt::format("{}.ltoir", artifact_name),
+                std::span<char const>{lto_ir.data(), lto_ir.size()});
   dump_artifact(artifact_id,
                 fmt::format("{}.cubin", artifact_name),
                 std::span<char const>{cubin.data(), cubin.size()});
@@ -1009,6 +1010,32 @@ void add_throughput_counters(nvbench::state& state, benchmark_workload const& wo
   state.add_global_memory_reads<std::uint8_t>(workload.bytes(), "InputBytes");
   state.add_global_memory_writes<std::uint8_t>(static_cast<std::size_t>(workload.rows()),
                                                "OutputBytes");
+}
+
+void prepare_regex_ir_context()
+{
+  check_driver(cuCtxSetLimit(CU_LIMIT_STACK_SIZE, 64U * 1024U), "cuCtxSetLimit");
+}
+
+void add_jit_ready_time(nvbench::state& state, double seconds)
+{
+  auto& summary = state.add_summary("regex_ir/jit_ready_time");
+  summary.set_string("name", "JIT Ready");
+  summary.set_string("hint", "duration");
+  summary.set_string(
+    "description",
+    "Uncached time from regex string through loaded module and resolved kernel functions");
+  summary.set_float64("value", seconds);
+}
+
+template <typename Factory>
+auto measure_jit_ready(nvbench::state& state, Factory&& factory)
+{
+  auto start  = std::chrono::steady_clock::now();
+  auto kernel = std::forward<Factory>(factory)();
+  auto stop   = std::chrono::steady_clock::now();
+  add_jit_ready_time(state, std::chrono::duration<double>(stop - start).count());
+  return kernel;
 }
 
 void validate_boolean_output(benchmark_workload& workload, cudf::column const& output)
@@ -1080,8 +1107,10 @@ void regex_ir_warm(nvbench::state& state)
   benchmark_workload workload(state, pattern);
   add_throughput_counters(state, workload);
   auto architecture = get_target_architecture(state);
-  auto kernel       = make_regex_ir_kernel(architecture, pattern.expression);
-  auto output       = make_regex_ir_boolean_column(workload, *kernel, workload.stream());
+  prepare_regex_ir_context();
+  auto kernel = measure_jit_ready(
+    state, [&] { return make_regex_ir_kernel(architecture, pattern.expression); });
+  auto output = make_regex_ir_boolean_column(workload, *kernel, workload.stream());
   validate_boolean_output(workload, *output);
 
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -1114,8 +1143,10 @@ void regex_ir_cold(nvbench::state& state)
   benchmark_workload workload(state, pattern);
   add_throughput_counters(state, workload);
   auto architecture = get_target_architecture(state);
+  prepare_regex_ir_context();
 
-  auto validation_kernel = make_regex_ir_kernel(architecture, pattern.expression);
+  auto validation_kernel = measure_jit_ready(
+    state, [&] { return make_regex_ir_kernel(architecture, pattern.expression); });
   auto validation_output =
     make_regex_ir_boolean_column(workload, *validation_kernel, workload.stream());
   validate_boolean_output(workload, *validation_output);
@@ -1171,7 +1202,9 @@ void regex_ir_cudf_contains(nvbench::state& state)
     make_cudf_contains_input(get_axis(state, "Rows"), get_axis(state, "StringBytes"), hit_rate));
   add_throughput_counters(state, workload);
   target_architecture architecture = get_target_architecture(state);
-  auto kernel                      = make_regex_ir_kernel(architecture, pattern.expression);
+  prepare_regex_ir_context();
+  auto kernel = measure_jit_ready(
+    state, [&] { return make_regex_ir_kernel(architecture, pattern.expression); });
   auto output = make_regex_ir_boolean_column(workload, *kernel, workload.stream());
   validate_boolean_output(workload, *output);
   state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
@@ -1233,8 +1266,10 @@ void regex_ir_operation(nvbench::state& state, cudf_benchmark_operation operatio
   state.add_element_count(static_cast<std::size_t>(workload.rows()), "Rows");
   state.add_global_memory_reads<std::uint8_t>(workload.bytes(), "InputBytes");
   target_architecture architecture = get_target_architecture(state);
+  prepare_regex_ir_context();
   if (operation == cudf_benchmark_operation::COUNT) {
-    auto kernel             = make_regex_ir_count_kernel(architecture, expression);
+    auto kernel = measure_jit_ready(
+      state, [&] { return make_regex_ir_count_kernel(architecture, expression); });
     auto output             = make_regex_ir_count_column(workload, *kernel, workload.stream());
     auto validation_program = cudf::strings::regex_program::create(expression);
     auto expected           = cudf::strings::count_re(workload.strings_view(), *validation_program);
@@ -1247,7 +1282,8 @@ void regex_ir_operation(nvbench::state& state, cudf_benchmark_operation operatio
   }
 
   if (operation == cudf_benchmark_operation::EXTRACT) {
-    auto kernel   = make_regex_ir_extract_kernel(architecture, expression);
+    auto kernel = measure_jit_ready(
+      state, [&] { return make_regex_ir_extract_kernel(architecture, expression); });
     auto captures = static_cast<std::uint32_t>(get_axis(state, "Groups"));
     auto output   = make_regex_ir_extract_table(workload, *kernel, captures, workload.stream());
     auto validation_program = cudf::strings::regex_program::create(expression);
@@ -1264,7 +1300,8 @@ void regex_ir_operation(nvbench::state& state, cudf_benchmark_operation operatio
   if (operation == cudf_benchmark_operation::REPLACE) {
     auto replacement =
       state.get_string("Type") == "backref" ? std::string{"#$1X"} : std::string{"77"};
-    auto kernel             = make_regex_ir_replace_kernel(architecture, expression, replacement);
+    auto kernel = measure_jit_ready(
+      state, [&] { return make_regex_ir_replace_kernel(architecture, expression, replacement); });
     auto output             = make_regex_ir_replace_column(workload, *kernel, workload.stream());
     auto validation_program = cudf::strings::regex_program::create(expression);
     std::unique_ptr<cudf::column> expected;
@@ -1284,7 +1321,8 @@ void regex_ir_operation(nvbench::state& state, cudf_benchmark_operation operatio
     return;
   }
 
-  auto kernel             = make_regex_ir_split_kernel(architecture, expression);
+  auto kernel =
+    measure_jit_ready(state, [&] { return make_regex_ir_split_kernel(architecture, expression); });
   auto output             = make_regex_ir_split_column(workload, *kernel, workload.stream());
   auto validation_program = cudf::strings::regex_program::create(expression);
   auto expected = cudf::strings::split_record_re(workload.strings_view(), *validation_program);
