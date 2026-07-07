@@ -4802,7 +4802,7 @@ TEST_F(ParquetReaderTest, SourceIndexColumn)
                        .build();
     auto const read = cudf::io::read_parquet(read_opts);
     EXPECT_EQ(read.tbl->num_columns(), table.num_columns() + 1);
-    EXPECT_EQ(read.metadata.schema_info.front().name, "src_idx");
+    EXPECT_EQ(read.metadata.schema_info.front().name, "source_index");
 
     auto const src_index = cudf::detail::make_counting_transform_iterator(
       0, [](cudf::size_type i) { return i / num_rows; });
@@ -4998,7 +4998,7 @@ TEST_F(ParquetReaderTest, RowIndexColumn)
                        .build();
     auto const read = cudf::io::read_parquet(read_opts);
     EXPECT_EQ(read.tbl->num_columns(), table.num_columns() + 1);
-    EXPECT_EQ(read.metadata.schema_info.front().name, "row_idx");
+    EXPECT_EQ(read.metadata.schema_info.front().name, "row_index");
 
     // The row index restarts at zero for each source
     auto const row_index = cudf::detail::make_counting_transform_iterator(
@@ -5028,31 +5028,42 @@ TEST_F(ParquetReaderTest, RowIndexColumn)
 
   test_row_index_column(1);
   test_row_index_column(5);
+}
 
-  // With both source and row index columns enabled, the column order is: src_idx, row_idx, data
-  {
-    auto constexpr num_sources = 3;
-    auto const sources         = std::vector<std::string>(num_sources, filepath);
-    auto const read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info(sources))
-                             .prepend_source_index_column(true)
-                             .prepend_row_index_column(true)
-                             .build();
-    auto const read = cudf::io::read_parquet(read_opts);
-    EXPECT_EQ(read.tbl->num_columns(), table.num_columns() + 2);
-    EXPECT_EQ(read.metadata.schema_info[0].name, "src_idx");
-    EXPECT_EQ(read.metadata.schema_info[1].name, "row_idx");
+TEST_F(ParquetReaderTest, SourceAndRowIndexColumns)
+{
+  auto constexpr num_rows    = 3;
+  auto constexpr num_sources = 3;
+  auto col0                  = cudf::test::fixed_width_column_wrapper<int32_t>(
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{num_rows});
+  auto col1 = cudf::test::fixed_width_column_wrapper<int64_t>(
+    cuda::counting_iterator<int64_t>{0}, cuda::counting_iterator<int64_t>{num_rows});
+  auto table = cudf::table_view{{col0, col1}};
 
-    auto const src_index = cudf::detail::make_counting_transform_iterator(
-      0, [](cudf::size_type i) { return i / num_rows; });
-    auto const expected_src_index = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
-      src_index, src_index + num_sources * num_rows);
-    auto const row_index = cudf::detail::make_counting_transform_iterator(
-      0, [](cudf::size_type i) -> size_t { return i % num_rows; });
-    auto const expected_row_index =
-      cudf::test::fixed_width_column_wrapper<size_t>(row_index, row_index + num_sources * num_rows);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(read.tbl->view().column(0), expected_src_index);
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(read.tbl->view().column(1), expected_row_index);
-  }
+  auto filepath = temp_env->get_temp_filepath("RowIndexAndSourceIndexColumns.parquet");
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table).build());
+
+  auto const sources   = std::vector<std::string>(num_sources, filepath);
+  auto const read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info(sources))
+                           .prepend_source_index_column(true)
+                           .prepend_row_index_column(true)
+                           .build();
+  auto const read = cudf::io::read_parquet(read_opts);
+  EXPECT_EQ(read.tbl->num_columns(), table.num_columns() + 2);
+  EXPECT_EQ(read.metadata.schema_info[0].name, "source_index");
+  EXPECT_EQ(read.metadata.schema_info[1].name, "row_index");
+
+  auto const src_index = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return i / num_rows; });
+  auto const expected_src_index = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    src_index, src_index + num_sources * num_rows);
+  auto const row_index = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) -> size_t { return i % num_rows; });
+  auto const expected_row_index =
+    cudf::test::fixed_width_column_wrapper<size_t>(row_index, row_index + num_sources * num_rows);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(read.tbl->view().column(0), expected_src_index);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(read.tbl->view().column(1), expected_row_index);
 }
 
 TEST_F(ParquetReaderTest, RowIndexSelectedRead)
@@ -5112,16 +5123,14 @@ TEST_F(ParquetReaderTest, RowIndexSelectedRead)
                              .row_groups({{1, 0}})
                              .prepend_row_index_column(true)
                              .build();
-    auto const expected_ooo_values    = cudf::test::fixed_width_column_wrapper<int32_t>{2, 3, 0, 1};
-    auto const expected_ooo_row_index = cudf::test::fixed_width_column_wrapper<size_t>{2, 3, 0, 1};
-    auto const expected_ooo = cudf::table_view{{expected_ooo_row_index, expected_ooo_values}};
-    CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::io::read_parquet(read_opts).tbl->view(), expected_ooo);
+    auto const expected_values    = cudf::test::fixed_width_column_wrapper<int32_t>{2, 3, 0, 1};
+    auto const expected_row_index = cudf::test::fixed_width_column_wrapper<size_t>{2, 3, 0, 1};
+    auto const expected           = cudf::table_view{{expected_row_index, expected_values}};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::io::read_parquet(read_opts).tbl->view(), expected);
   }
 
   // Test with a filter: `col >= 2` prunes leading rows of source 0 (values {0, 1, 2, 3}) while
-  // keeping all of source 1 (values {10, 11, 12, 13}). The surviving rows of source 0 have
-  // file-local indices {2, 3}, verifying the row index reflects the original file position rather
-  // than the compacted output position.
+  // keeping all of source 1 (values {10, 11, 12, 13}).
   {
     auto scalar  = cudf::numeric_scalar<int32_t>(2);
     auto literal = cudf::ast::literal(scalar);

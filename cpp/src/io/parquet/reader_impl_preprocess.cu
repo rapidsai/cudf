@@ -1153,6 +1153,7 @@ struct map_global_to_local_row_index {
 std::unique_ptr<column> reader_impl::synthesize_row_index_column(row_range const& read_info)
 {
   using column_type = size_t;
+
   if (read_info.num_rows == 0) {
     return cudf::make_empty_column(cudf::data_type{cudf::type_to_id<column_type>()});
   }

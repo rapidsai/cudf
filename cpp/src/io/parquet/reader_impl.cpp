@@ -899,13 +899,14 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
     if (_options.prepend_row_index_column) {
       out_columns.emplace(out_columns.begin(), synthesize_row_index_column(read_info));
       out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
-                                       column_name_info{.name = "row_idx", .is_nullable = false});
+                                       column_name_info{.name = "row_index", .is_nullable = false});
     }
     if (_options.prepend_source_index_column) {
       out_columns.emplace(out_columns.begin(),
                           synthesize_source_index_column(out_metadata.num_rows_per_source));
-      out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
-                                       column_name_info{.name = "src_idx", .is_nullable = false});
+      out_metadata.schema_info.emplace(
+        out_metadata.schema_info.begin(),
+        column_name_info{.name = "source_index", .is_nullable = false});
     }
   }
 
