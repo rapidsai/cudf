@@ -466,6 +466,7 @@ def _(node: plrs._ir_nodes.Scan, translator: Translator, schema: Schema) -> ir.I
             )
         ),
         parquet_options,
+        cached_parquet_info=None,
     )
 
 
