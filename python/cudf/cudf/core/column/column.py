@@ -3064,6 +3064,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
 
             if is_na_like(other):
+                is_nat = other is pd.NaT or (
+                    isinstance(other, (np.datetime64, np.timedelta64))
+                    and np.isnat(other)
+                )
+                if (
+                    is_nat
+                    and is_pandas_nullable_extension_dtype(self.dtype)
+                    and self.dtype.kind not in {"m", "M"}
+                ):
+                    # pandas only accepts NaT as a missing value for
+                    # datetime/timedelta dtypes, not for masked dtypes
+                    raise TypeError(
+                        f"Invalid value '{other}' for dtype '{self.dtype}'"
+                    )
                 if (
                     cudf.get_option("mode.pandas_compatible")
                     and not is_pandas_nullable_extension_dtype(self.dtype)
