@@ -257,17 +257,17 @@ struct build_tree_result {
   NodeIndexT named_level;
 };
 
-build_tree_result build_tree(device_json_column& root,
-                             host_span<uint8_t const> is_str_column_all_nulls,
-                             tree_meta_t& d_column_tree,
-                             device_span<NodeIndexT const> d_unique_col_ids,
-                             device_span<size_type const> d_max_row_offsets,
-                             std::vector<std::string> const& column_names,
-                             NodeIndexT row_array_parent_col_id,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr);
+[[nodiscard]] build_tree_result build_tree(device_json_column& root,
+                                           host_span<uint8_t const> is_str_column_all_nulls,
+                                           tree_meta_t& d_column_tree,
+                                           device_span<NodeIndexT const> d_unique_col_ids,
+                                           device_span<size_type const> d_max_row_offsets,
+                                           std::vector<std::string> const& column_names,
+                                           NodeIndexT row_array_parent_col_id,
+                                           bool is_array_of_arrays,
+                                           cudf::io::json_reader_options const& options,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr);
 
 void scatter_offsets(tree_meta_t const& tree,
                      device_span<NodeIndexT const> col_ids,
@@ -464,11 +464,9 @@ void make_device_json_column(device_span<SymbolT const> input,
     }
 
     root.rows_with_schema_mismatch.reserve(rows_by_top_level_column.size());
-    for (auto const& col_name : column_names) {
-      if (auto it = rows_by_top_level_column.find(col_name); it != rows_by_top_level_column.end()) {
-        root.rows_with_schema_mismatch.push_back(schema_mismatch_rows{
-          it->first, std::vector<size_type>{it->second.begin(), it->second.end()}});
-      }
+    for (auto const& [col_name, rows] : rows_by_top_level_column) {
+      root.rows_with_schema_mismatch.push_back(
+        schema_mismatch_rows{col_name, std::vector<size_type>{rows.begin(), rows.end()}});
     }
   }
 
@@ -484,17 +482,17 @@ void make_device_json_column(device_span<SymbolT const> input,
                   stream);
 }
 
-build_tree_result build_tree(device_json_column& root,
-                             host_span<uint8_t const> is_str_column_all_nulls,
-                             tree_meta_t& d_column_tree,
-                             device_span<NodeIndexT const> d_unique_col_ids,
-                             device_span<size_type const> d_max_row_offsets,
-                             std::vector<std::string> const& column_names,
-                             NodeIndexT row_array_parent_col_id,
-                             bool is_array_of_arrays,
-                             cudf::io::json_reader_options const& options,
-                             rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+[[nodiscard]] build_tree_result build_tree(device_json_column& root,
+                                           host_span<uint8_t const> is_str_column_all_nulls,
+                                           tree_meta_t& d_column_tree,
+                                           device_span<NodeIndexT const> d_unique_col_ids,
+                                           device_span<size_type const> d_max_row_offsets,
+                                           std::vector<std::string> const& column_names,
+                                           NodeIndexT row_array_parent_col_id,
+                                           bool is_array_of_arrays,
+                                           cudf::io::json_reader_options const& options,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::device_async_resource_ref mr)
 {
   bool const is_enabled_lines                 = options.is_enabled_lines();
   bool const is_enabled_mixed_types_as_string = options.is_enabled_mixed_types_as_string();

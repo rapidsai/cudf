@@ -110,8 +110,9 @@ std::vector<json_reader_row_diagnostics::schema_mismatch_rows> deduplicate_schem
     auto it = rows_by_column.find(column_name);
     if (it == rows_by_column.end()) { continue; }
     auto& rows = it->second;
-    std::sort(rows.begin(), rows.end());
-    rows.erase(std::unique(rows.begin(), rows.end()), rows.end());
+    std::ranges::sort(rows);
+    auto const to_erase = std::ranges::unique(rows);
+    rows.erase(to_erase.begin(), to_erase.end());
     deduped_rows.push_back({column_name, std::move(rows)});
   }
   return deduped_rows;
