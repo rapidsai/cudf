@@ -283,12 +283,10 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
 std::vector<cudf::size_type> filter_row_groups_with_dictionaries(
   cudf::io::datasource& datasource,
   cudf::io::parquet::experimental::hybrid_scan_reader const& reader,
-  cudf::ast::operation const& filter_expression,
+  cudf::io::parquet_reader_options const& options,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
-  auto const options =
-    cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
   return filter_row_groups_with_dictionaries_impl(datasource, reader, options, stream, mr);
 }
 

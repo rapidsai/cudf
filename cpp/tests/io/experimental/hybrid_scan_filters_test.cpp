@@ -964,9 +964,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, uint_literal);
     constexpr size_t expected_row_groups = 4;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -977,9 +978,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     auto filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, uint_literal, col0_ref);
     constexpr size_t expected_row_groups = 0;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -991,9 +993,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col2_ref, str_literal);
 
     constexpr size_t expected_row_groups = 0;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1005,9 +1008,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col2_ref, str_literal);
 
     constexpr size_t expected_row_groups = 4;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1026,9 +1030,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, str_filter_expression);
 
     constexpr size_t expected_row_groups = 4;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1046,9 +1051,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, uint_filter_expression2);
 
     constexpr size_t expected_row_groups = 4;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1066,9 +1072,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, uint_filter_expression2);
 
     constexpr size_t expected_row_groups = 1;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1086,9 +1093,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_OR, str_filter_expression, str_filter_expression2);
 
     constexpr size_t expected_row_groups = 4;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1107,9 +1115,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_OR, uint_filter_expression, str_filter_expression);
 
     constexpr size_t expected_row_groups = 4;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1128,9 +1137,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_AND, uint_filter_expression, str_filter_expression);
 
     constexpr size_t expected_row_groups = 0;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1154,9 +1164,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_OR, composed_filter_expression, uint_filter_expression3);
 
     constexpr size_t expected_row_groups = 3;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1180,9 +1191,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_OR, composed_filter_expression, uint_filter_expression3);
 
     constexpr size_t expected_row_groups = 4;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1206,9 +1218,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::ast_operator::LOGICAL_AND, composed_filter_expression, str_filter_expression3);
 
     constexpr size_t expected_row_groups = 0;
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
     EXPECT_EQ(
-      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, filter_expression, stream, mr)
-        .size(),
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr).size(),
       expected_row_groups);
   }
 
@@ -1220,8 +1233,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     auto rhs = cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col0_ref, col2_ref);
     auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, lhs, rhs);
-    auto const result = filter_row_groups_with_dictionaries(
-      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    auto const result =
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr);
     auto const expected = std::vector<cudf::size_type>{1};
     EXPECT_EQ(result, expected);
   }
@@ -1232,8 +1247,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     auto uint_literal       = cudf::ast::literal(uint_literal_value);
     auto inner = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col0_ref, uint_literal);
     auto const filter_expression = cudf::ast::operation(cudf::ast::ast_operator::NOT, inner);
-    auto const result            = filter_row_groups_with_dictionaries(
-      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    auto const result =
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr);
     auto const expected = std::vector<cudf::size_type>{0, 2, 3};
     EXPECT_EQ(result, expected);
   }
@@ -1250,8 +1267,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
       cudf::ast::operation(cudf::ast::ast_operator::NULL_EQUAL, col0_ref, literal_100);
     auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, not_eq_50, null_eq_100);
-    auto const result = filter_row_groups_with_dictionaries(
-      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    auto const result =
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr);
     auto const expected = std::vector<cudf::size_type>{0, 2, 3};
     EXPECT_EQ(result, expected);
   }
@@ -1268,8 +1287,10 @@ TEST_F(HybridScanFiltersTest, FilterRowGroupsWithDictionary)
     auto not_eq_str = cudf::ast::operation(cudf::ast::ast_operator::NOT, eq_str);
     auto const filter_expression =
       cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_OR, not_eq_50, not_eq_str);
-    auto const result = filter_row_groups_with_dictionaries(
-      datasource_ref, reader_ref, filter_expression, stream, mr);
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    auto const result =
+      filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr);
     auto const expected = std::vector<cudf::size_type>{0, 2, 3};
     EXPECT_EQ(result, expected);
   }
@@ -1326,9 +1347,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Input datasource
-  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+  auto const datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
-  auto datasource_ref   = std::ref(*datasource);
+  auto const datasource_ref = std::ref(*datasource);
 
   // Hybrid scan reader
   auto options             = cudf::io::parquet_reader_options::builder().build();
@@ -1381,8 +1402,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
       cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref, literal);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(
-                datasource_ref, reader_ref, filter_expression, stream, mr),
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr),
               expected_row_groups);
   }
 
@@ -1403,8 +1425,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterFewLiteralsTyped)
       cudf::ast::operation(cudf::ast::ast_operator::NOT_EQUAL, col_name, literal);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(
-                datasource_ref, reader_ref, filter_expression, stream, mr),
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr),
               expected_row_groups);
   }
 }
@@ -1451,9 +1474,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
   auto mr     = cudf::get_current_device_resource_ref();
 
   // Input datasource
-  auto const datasource = cudf::io::datasource::create(cudf::host_span<std::byte const>(
+  auto const datasource     = cudf::io::datasource::create(cudf::host_span<std::byte const>(
     reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()));
-  auto datasource_ref   = std::ref(*datasource);
+  auto const datasource_ref = std::ref(*datasource);
 
   // Hybrid scan reader
   auto options             = cudf::io::parquet_reader_options::builder().build();
@@ -1557,8 +1580,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
       cudf::ast::ast_operator::LOGICAL_OR, filter_expression12, filter_expression3);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(
-                datasource_ref, reader_ref, filter_expression, stream, mr),
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr),
               expected_row_groups);
   }
 
@@ -1590,8 +1614,9 @@ TYPED_TEST(RowGroupFilteringWithDictTest, FilterManyLiteralsTyped)
       cudf::ast::ast_operator::LOGICAL_AND, filter_expression12, filter_expression3);
 
     // Check the results
-    EXPECT_EQ(filter_row_groups_with_dictionaries(
-                datasource_ref, reader_ref, filter_expression, stream, mr),
+    auto const options =
+      cudf::io::parquet_reader_options::builder().filter(filter_expression).build();
+    EXPECT_EQ(filter_row_groups_with_dictionaries(datasource_ref, reader_ref, options, stream, mr),
               expected_row_groups);
   }
 }
