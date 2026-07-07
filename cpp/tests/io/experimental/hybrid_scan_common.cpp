@@ -312,20 +312,9 @@ std::pair<std::unique_ptr<cudf::table>, std::vector<char>> create_parquet_with_s
 {
   static_assert(NumTableConcats >= 1, "Concatenated table must contain at least one table");
 
-  // Common default-layout callers skip these checks.
-  if (column_names != default_test_column_names or column_order != default_test_column_order) {
-    CUDF_EXPECTS(column_names.size() == column_order.size(),
-                 "Column names and column order must have the same size");
-    CUDF_EXPECTS(column_order.size() == default_test_column_order.size(),
-                 "Column order must include all three test columns");
-    CUDF_EXPECTS(std::all_of(default_test_column_order.begin(),
-                             default_test_column_order.end(),
-                             [&](auto const col_idx) {
-                               return std::count(
-                                        column_order.begin(), column_order.end(), col_idx) == 1;
-                             }),
-                 "Column order must be a permutation of the three test columns");
-  }
+  CUDF_EXPECTS(column_names.size() == column_order.size(),
+               "Column names and column order must have the same size");
+  CUDF_EXPECTS(column_order.size() == 3, "Column order must include all three test columns");
 
   auto col0 = testdata::ascending<T>();
   auto col1 = []() {
