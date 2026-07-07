@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-GPU frontend core."""
 
@@ -17,7 +17,7 @@ import cuda.core
 
 import polars as pl
 
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.coll import AllGather
 from rapidsmpf.config import Options, get_environment_variables
 from rapidsmpf.memory.packed_data import PackedData
@@ -26,6 +26,10 @@ from rapidsmpf.streaming.core.actor import run_actor_network
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.dsl.utils.io import (
+    attach_cached_parquet_metadata,
+    prefetch_parquet_file_metadata_for_ir,
+)
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
@@ -43,7 +47,7 @@ if TYPE_CHECKING:
     from concurrent.futures import Executor, ThreadPoolExecutor
 
     import rapidsmpf.config
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
@@ -193,7 +197,7 @@ class StreamingEngine(pl.GPUEngine):
         executor_options["min_device_size"] = (
             None
             if any(dm is None for dm in device_memories)
-            else min(device_memories, default=None)
+            else min(device_memories, default=None)  # type: ignore[type-var]  # (None entries excluded by prior check)
         )
 
         # allow_gpu_sharing is consumed here since polars' GPUEngine doesn't
@@ -408,14 +412,12 @@ def _find_memory_error(exc: BaseException) -> MemoryError | None:
 def execute_ir_on_rank(
     ctx: Context,
     comm: Communicator,
-    py_executor: ThreadPoolExecutor,
     ir: IR,
+    ir_context: IRExecutionContext,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions[StreamingExecutor],
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
-    *,
-    query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
     Execute a Polars IR query on a single rank's GPU.
@@ -430,10 +432,10 @@ def execute_ir_on_rank(
         The active RapidsMPF streaming context for this rank.
     comm
         The active RapidsMPF communicator for this rank.
-    py_executor
-        Thread-pool executor used to drive the actor network.
     ir
         Root IR node describing the query.
+    ir_context
+        Execution context reused across scan-task execution.
     partition_info
         Per-node partition metadata.
     config_options
@@ -442,8 +444,6 @@ def execute_ir_on_rank(
         Statistics collector.
     collective_id_map
         Mapping from IR nodes to their pre-allocated collective operation IDs.
-    query_id
-        Unique identifier for the query, propagated into actor traces.
 
     Returns
     -------
@@ -452,9 +452,6 @@ def execute_ir_on_rank(
     metadata
         Collected channel metadata.
     """
-    ir_context = IRExecutionContext(
-        py_executor, get_cuda_stream=ctx.get_stream_from_pool, query_id=query_id
-    )
     metadata_collector: list[ChannelMetadata] = []
 
     nodes, output = generate_network(
@@ -695,15 +692,26 @@ def evaluate_on_rank(
         # so we only log it once.
         log_query_plan(ir, config_options)
 
+    ir_context = IRExecutionContext(
+        py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
+    )
+
+    if config_options.parquet_options.prefetch_file_metadata:
+        cached_parquet_info_map = prefetch_parquet_file_metadata_for_ir(
+            ir,
+            ir_context.py_executor,
+            stats=stats,
+        )
+        attach_cached_parquet_metadata(ir, cached_parquet_info_map)
+
     with ReserveOpIDs(ir, config_options) as collective_id_map:
         return execute_ir_on_rank(
             ctx,
             comm,
-            py_executor,
             ir,
+            ir_context,
             partition_info,
             config_options,
             stats,
             collective_id_map,
-            query_id=query_id,
         )

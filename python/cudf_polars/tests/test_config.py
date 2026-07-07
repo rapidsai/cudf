@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from polars.testing.asserts import assert_frame_equal
 
 import rmm
 from rmm._cuda import gpu
-from rmm.pylibrmm import CudaStreamFlags
 
 import cudf_polars.callback
 import cudf_polars.utils.config
@@ -27,12 +26,11 @@ from cudf_polars.testing.asserts import (
     assert_ir_translation_raises,
 )
 from cudf_polars.utils.config import (
-    CUDAStreamPoolConfig,
     Cluster,
     ConfigOptions,
+    DynamicPlanningOptions,
     MemoryResourceConfig,
     StreamingExecutor,
-    _default_cuda_stream_policy,
 )
 from cudf_polars.utils.cuda_stream import get_cuda_stream
 
@@ -214,15 +212,21 @@ def test_parquet_options(executor: str) -> None:
     )
     assert config.parquet_options.chunked is True
     assert config.parquet_options.n_output_chunks == 1
+    assert config.parquet_options.use_jit_filter is False
 
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor=executor,
-            parquet_options={"chunked": False, "n_output_chunks": 16},
+            parquet_options={
+                "chunked": False,
+                "n_output_chunks": 16,
+                "use_jit_filter": True,
+            },
         )
     )
     assert config.parquet_options.chunked is False
     assert config.parquet_options.n_output_chunks == 16
+    assert config.parquet_options.use_jit_filter is True
 
 
 def test_parquet_options_from_none() -> None:
@@ -327,6 +331,8 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_FOOTER_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__MAX_ROW_GROUP_SAMPLES", "0")
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_RAPIDSMPF_NATIVE", "0")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__PREFETCH_FILE_METADATA", "1")
+        m.setenv("CUDF_POLARS__PARQUET_OPTIONS__USE_JIT_FILTER", "1")
 
         # Test default
         engine = pl.GPUEngine()
@@ -338,6 +344,8 @@ def test_parquet_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.parquet_options.max_footer_samples == 0
         assert config.parquet_options.max_row_group_samples == 0
         assert config.parquet_options.use_rapidsmpf_native is False
+        assert config.parquet_options.prefetch_file_metadata is True
+        assert config.parquet_options.use_jit_filter is True
 
     with monkeypatch.context() as m:
         m.setenv("CUDF_POLARS__PARQUET_OPTIONS__CHUNKED", "foo")
@@ -353,7 +361,6 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", "44")
-        m.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
 
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
@@ -363,7 +370,6 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100
         assert config.executor.broadcast_limit == 44
-        assert config.cuda_stream_policy is None
 
 
 def test_target_partition_from_env(
@@ -416,6 +422,8 @@ def test_fallback_mode_default(monkeypatch: pytest.MonkeyPatch) -> None:
         "max_footer_samples",
         "max_row_group_samples",
         "use_rapidsmpf_native",
+        "prefetch_file_metadata",
+        "use_jit_filter",
     ],
 )
 def test_validate_parquet_options(option: str) -> None:
@@ -428,10 +436,26 @@ def test_validate_parquet_options(option: str) -> None:
         )
 
 
+def test_prefetch_and_use_rapidsmpf_native_raises() -> None:
+    with pytest.raises(
+        NotImplementedError,
+        match="'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'",
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                parquet_options={
+                    "use_rapidsmpf_native": True,
+                    "prefetch_file_metadata": True,
+                },
+            )
+        )
+
+
 def test_validate_raise_on_fail() -> None:
     with pytest.raises(TypeError, match="'raise_on_fail' must be"):
         ConfigOptions.from_polars_engine(
-            pl.GPUEngine(executor="streaming", raise_on_fail=cast(bool, object()))
+            pl.GPUEngine(executor="streaming", raise_on_fail=cast("bool", object()))
         )
 
 
@@ -531,121 +555,6 @@ def test_ir_execution_context() -> None:
     context.get_cuda_stream()  # no exception
 
 
-def test_cuda_stream_pool():
-    pool_config = CUDAStreamPoolConfig()
-    pool = pool_config.build()
-
-    assert pool.get_pool_size() == 16
-
-    # override the defaults
-    pool_config = CUDAStreamPoolConfig(pool_size=32, flags=CudaStreamFlags.NON_BLOCKING)
-    pool = pool_config.build()
-    assert pool.get_pool_size() == 32
-
-
-def test_cuda_stream_policy_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Default from engine
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
-    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-
-    # Default from env
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.cuda_stream_policy is None
-
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
-    assert config.cuda_stream_policy is None
-
-
-def test_default_cuda_stream_policy(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CUDF_POLARS__CUDA_STREAM_POLICY", raising=False)
-    assert _default_cuda_stream_policy() is None
-
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "pool")
-    result = _default_cuda_stream_policy()
-    assert isinstance(result, CUDAStreamPoolConfig)
-
-
-def test_cuda_stream_policy_from_config() -> None:
-    engine = pl.GPUEngine(
-        executor="streaming",
-        cuda_stream_policy={
-            "pool_size": 32,
-            "flags": rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING,
-        },
-    )
-    config = ConfigOptions.from_polars_engine(engine)
-    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-    assert config.cuda_stream_policy.pool_size == 32
-    assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
-    config.cuda_stream_policy.build().get_stream()  # no exception
-
-
-@pytest.mark.parametrize(
-    "env",
-    [
-        "default",
-        "pool",
-        '{"pool_size": 32, "flags": "SYNC_DEFAULT"}',
-        '{"pool_size": 32, "flags": 0}',
-        '{"pool_size": 32}',
-    ],
-)
-def test_cuda_stream_policy_from_env(monkeypatch: pytest.MonkeyPatch, env: str) -> None:
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", env)
-    engine = pl.GPUEngine(executor="streaming")
-    config = ConfigOptions.from_polars_engine(engine)
-    if env == "default":
-        assert config.cuda_stream_policy is None
-    else:
-        assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-        if env == "pool":
-            assert config.cuda_stream_policy.pool_size == 16
-            assert config.cuda_stream_policy.flags == CudaStreamFlags.NON_BLOCKING
-        else:
-            assert config.cuda_stream_policy.pool_size == 32
-
-
-def test_cuda_stream_policy_from_env_invalid(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", '{"foo": "bar"}')
-    with pytest.raises(ValueError, match="Invalid CUDA stream policy"):
-        ConfigOptions.from_polars_engine(pl.GPUEngine())
-
-
-def test_cuda_stream_policy_default_rapidsmpf(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Default from engine
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
-    assert isinstance(config.cuda_stream_policy, CUDAStreamPoolConfig)
-    assert config.cuda_stream_policy.pool_size == 16
-    assert config.cuda_stream_policy.flags == rmm.pylibrmm.CudaStreamFlags.NON_BLOCKING
-
-    # "default" user argument overrides pool default
-    monkeypatch.setenv("CUDF_POLARS__CUDA_STREAM_POLICY", "default")
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine(executor="streaming"))
-    assert config.cuda_stream_policy is None
-
-
-def test_cuda_stream_policy_pool_in_memory_unsupported() -> None:
-    with pytest.raises(
-        ValueError,
-        match="A stream pool is only supported by the streaming executor.",
-    ):
-        ConfigOptions.from_polars_engine(
-            pl.GPUEngine(
-                executor="in-memory",
-                cuda_stream_policy={"pool_size": 32, "flags": "NON_BLOCKING"},
-            )
-        )
-
-
-def test_validate_cuda_stream_policy() -> None:
-    with pytest.raises(ValueError, match="Invalid CUDA stream policy: 'foo'"):
-        ConfigOptions.from_polars_engine(pl.GPUEngine(cuda_stream_policy="foo"))
-
-
 def test_validate_dynamic_planning() -> None:
     with pytest.raises(TypeError, match="sample_chunk_count must be"):
         ConfigOptions.from_polars_engine(
@@ -672,7 +581,9 @@ def test_dynamic_planning_defaults() -> None:
     # Dynamic planning is enabled by default
     assert config.executor.dynamic_planning is not None
     assert config.executor.dynamic_planning.sample_chunk_count == 2
-    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.5
+    assert config.executor.dynamic_planning.join_prefilter_threshold == 0.5
+    assert config.executor.dynamic_planning.join_prefilter_max_key_columns == 1
+    assert not config.executor.dynamic_planning.join_prefilter_trace
 
 
 def test_dynamic_planning_disabled_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -696,40 +607,117 @@ def test_dynamic_planning_sample_chunk_count_from_env(
     assert config.executor.dynamic_planning.sample_chunk_count == 3
 
 
-def test_validate_bloom_filter_threshold_type() -> None:
-    with pytest.raises(TypeError, match="bloom_filter_threshold must be a float"):
+def test_join_prefilter_options_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_THRESHOLD", "0.25"
+    )
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_MAX_KEY_COLUMNS",
+        "none",
+    )
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_TRACE", "1"
+    )
+    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.join_prefilter_threshold == 0.25
+    assert config.executor.dynamic_planning.join_prefilter_max_key_columns is None
+    assert config.executor.dynamic_planning.join_prefilter_trace
+
+
+@pytest.mark.parametrize("value, expected", [("none", None), ("null", None), ("2", 2)])
+def test_join_prefilter_max_key_columns_from_env(
+    monkeypatch: pytest.MonkeyPatch, value: str, expected: int | None
+) -> None:
+    monkeypatch.setenv(
+        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__JOIN_PREFILTER_MAX_KEY_COLUMNS",
+        value,
+    )
+    assert DynamicPlanningOptions().join_prefilter_max_key_columns == expected
+
+
+def test_validate_join_prefilter_threshold() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"dynamic_planning": {"join_prefilter_threshold": 0}},
+        )
+    )
+    assert config.executor.dynamic_planning is not None
+    assert config.executor.dynamic_planning.join_prefilter_threshold == 0.0
+
+    with pytest.raises(TypeError, match="join_prefilter_threshold must be"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
                 executor="streaming",
                 executor_options={
-                    "dynamic_planning": {"bloom_filter_threshold": "bad"}
+                    "dynamic_planning": {"join_prefilter_threshold": "bad"}
+                },
+            )
+        )
+    with pytest.raises(TypeError, match="join_prefilter_threshold must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_prefilter_threshold": True}
+                },
+            )
+        )
+    with pytest.raises(ValueError, match="join_prefilter_threshold must be between"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_prefilter_threshold": 1.5}
                 },
             )
         )
 
 
-def test_validate_bloom_filter_threshold_range() -> None:
-    with pytest.raises(ValueError, match="bloom_filter_threshold must be between"):
+def test_validate_join_prefilter_max_key_columns() -> None:
+    with pytest.raises(TypeError, match="join_prefilter_max_key_columns must be"):
         ConfigOptions.from_polars_engine(
             pl.GPUEngine(
                 executor="streaming",
-                executor_options={"dynamic_planning": {"bloom_filter_threshold": 1.5}},
+                executor_options={
+                    "dynamic_planning": {"join_prefilter_max_key_columns": "bad"}
+                },
+            )
+        )
+    with pytest.raises(TypeError, match="join_prefilter_max_key_columns must be"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_prefilter_max_key_columns": True}
+                },
+            )
+        )
+    with pytest.raises(
+        ValueError, match="join_prefilter_max_key_columns must be at least 1"
+    ):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={
+                    "dynamic_planning": {"join_prefilter_max_key_columns": 0}
+                },
             )
         )
 
 
-def test_bloom_filter_threshold_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(
-        "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING__BLOOM_FILTER_THRESHOLD", "0.3"
-    )
-    config = ConfigOptions.from_polars_engine(pl.GPUEngine())
-    assert config.executor.dynamic_planning is not None
-    assert config.executor.dynamic_planning.bloom_filter_threshold == 0.3
+def test_validate_join_prefilter_trace() -> None:
+    with pytest.raises(TypeError, match="join_prefilter_trace must be a bool"):
+        ConfigOptions.from_polars_engine(
+            pl.GPUEngine(
+                executor="streaming",
+                executor_options={"dynamic_planning": {"join_prefilter_trace": "bad"}},
+            )
+        )
 
 
 def test_dynamic_planning_from_instance() -> None:
-    from cudf_polars.utils.config import DynamicPlanningOptions
-
     config = ConfigOptions.from_polars_engine(
         pl.GPUEngine(
             executor="streaming",
@@ -760,7 +748,7 @@ def test_parse_memory_resource_config() -> None:
 def test_memory_resource_config_raises() -> None:
     with pytest.raises(
         ValueError,
-        match="MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
+        match=r"MemoryResourceConfig.qualname 'foo' must be a fully qualified name to a class",
     ):
         MemoryResourceConfig(qualname="foo")
 

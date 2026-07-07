@@ -1,25 +1,31 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """IO logic for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
 import asyncio
+import functools
+import io
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
+
+import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.streaming.channel_metadata import ChannelMetadata
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.channel_metadata import ChannelMetadata
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
 from rapidsmpf.streaming.core.message import Message
 
+from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.ir import (
     IR,
     DataFrameScan,
+    PythonScan,
     Sink,
     _prepare_parquet_predicate,
 )
@@ -49,8 +55,11 @@ from cudf_polars.streaming.io import (
     _sink_to_file,
     can_use_native_parquet_node,
 )
+from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
@@ -63,7 +72,8 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.streaming.io import SplitScan
+    from cudf_polars.streaming.io import FusedScan, SplitScan
+    from cudf_polars.utils.config import ParquetOptions
 
 
 class Lineariser:
@@ -191,14 +201,34 @@ async def dataframescan_node(
 
         # Build list of IR slices to read
         ir_slices = []
+        # Partial workaround for
+        # https://github.com/pola-rs/polars/issues/23214 If a struct column
+        # has nulls and is sliced then polars exports invalid validity
+        # buffers. We can't detect this exact state because we can't know
+        # when the column is sliced.
+        copy_slice = any(
+            isinstance(dt, pl.Struct)
+            for dt in pl.datatypes.unpack_dtypes(ir.df.dtypes(), include_compound=True)
+        )
+
         for seq_num in range(local_count):
             offset = local_offset * rows_per_partition + seq_num * rows_per_partition
             if offset >= nrows:
                 break
+            sliced = ir.df.slice(offset, rows_per_partition)
+            if copy_slice:
+                # OK, we have structs that might have nulls, and we're
+                # slicing. So let's copy to contiguous storage. This is
+                # hacky and doesn't handle the case where we didn't slice
+                # but the user sliced the input.
+                f = io.BytesIO()
+                sliced.serialize_binary(f)
+                f.seek(0)
+                sliced = pl._plr.PyDataFrame.deserialize_binary(f)
             ir_slices.append(
                 DataFrameScan(
                     ir.schema,
-                    ir.df.slice(offset, rows_per_partition),
+                    sliced,
                     ir.projection,
                 )
             )
@@ -292,6 +322,184 @@ def _(
     return nodes, channels
 
 
+def _find_rank_aware_source(scan_fn: Callable[..., Any]) -> RankAwareSource | None:
+    """
+    Return the :class:`RankAwareSource` captured by a registered IO source function.
+
+    Parameters
+    ----------
+    scan_fn
+        Python scan function exported by Polars for a ``PythonScan`` node. For
+        sources created with :func:`polars.io.plugins.register_io_source`, this
+        is the wrapper function that captures the original user-provided source.
+
+    Returns
+    -------
+    The captured `RankAwareSource`, or ``None`` if the IO source function does not
+    capture one directly (a plain or wrapped source, treated as rank-unaware).
+
+    Notes
+    -----
+    This reaches into Polars' ``register_io_source`` closure layout (the captured
+    source object). It is the only available hook today. When Polars exposes a
+    supported way to thread state into a source this should move to it. See
+    https://github.com/rapidsai/cudf/issues/22917.
+    """
+    for cell in getattr(scan_fn, "__closure__", ()):
+        source = cell.cell_contents
+        if isinstance(source, RankAwareSource):
+            return source
+    return None
+
+
+async def _process_and_send_chunk(
+    context: Context,
+    ch_out: Channel[TableChunk],
+    ir: PythonScan,
+    ir_context: IRExecutionContext,
+    tracer: ActorTracer | None,
+    chunk: pl.DataFrame | DataFrame,
+    seq_num: int,
+) -> None:
+    """Move a raw chunk to the device, validate and filter it, then send it."""
+    process = functools.partial(
+        ir.process_chunk, chunk, ir.schema, ir.predicate, context=ir_context
+    )
+
+    # Reserve memory for allocations introduced by this step:
+    #
+    #   host input, no predicate  -> 1x input size (host->device)
+    #   host input, predicate     -> 2x input size (host->device + filter output)
+    #   GPU input,  no predicate  -> 0
+    #   GPU input,  predicate     -> 1x input size (filter output)
+    #
+    # The net memory increase is the retained host->device copy for host inputs,
+    # and 0 for GPU-resident inputs.
+    if isinstance(chunk, DataFrame):
+        input_bytes = sum(col.device_buffer_size() for col in chunk.table.columns())
+        net_memory_delta = 0
+        reservation = input_bytes * (ir.predicate is not None)
+    else:  # pl.DataFrame
+        input_bytes = int(chunk.estimated_size())
+        net_memory_delta = input_bytes
+        reservation = input_bytes * (1 + (ir.predicate is not None))
+    with opaque_memory_usage(
+        await reserve_memory(
+            context, size=reservation, net_memory_delta=net_memory_delta
+        )
+    ):
+        df = await ir_context.to_thread(process)
+    chunk_out = TableChunk.from_pylibcudf_table(
+        df.table, df.stream, exclusive_view=True, br=context.br()
+    )
+    await send_chunk(context, ch_out, chunk_out, seq_num, tracer=tracer)
+
+
+@define_actor()
+async def python_scan_node(
+    context: Context,
+    comm: Communicator,
+    ir: PythonScan,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+) -> None:
+    """
+    PythonScan node for rapidsmpf.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    comm
+        The communicator.
+    ir
+        The PythonScan node.
+    ir_context
+        The execution context for the IR node.
+    ch_out
+        The output Channel[TableChunk].
+    """
+    async with shutdown_on_error(
+        context, ch_out, trace_ir=ir, ir_context=ir_context
+    ) as tracer:
+        rank_aware_source = _find_rank_aware_source(ir.options[0])
+        if rank_aware_source is None and comm.nranks > 1 and comm.rank != 0:
+            # A plain (rank-unaware) source runs on rank 0 only; other ranks
+            # contribute nothing to avoid duplicating the data.
+            await send_metadata(ch_out, context, ChannelMetadata(local_count=0))
+            await ch_out.drain(context)
+            return
+
+        count, raw_chunks = await ir_context.to_thread(
+            lambda: ir.run_source_function(
+                ir.options,
+                ir.schema,
+                rank_aware_source=rank_aware_source,
+                rank=comm.rank,
+                nranks=comm.nranks,
+                context=ir_context,
+            )
+        )
+        if count is not None:
+            # The chunk count is available so we can stream one chunk at a time.
+            announced = max(count, 1)
+            await send_metadata(ch_out, context, ChannelMetadata(local_count=announced))
+            sentinel = object()
+            seq_num = 0
+            while True:
+                chunk = await ir_context.to_thread(next, raw_chunks, sentinel)
+                if chunk is sentinel:
+                    break
+                await _process_and_send_chunk(
+                    context,
+                    ch_out,
+                    ir,
+                    ir_context,
+                    tracer,
+                    cast("pl.DataFrame | DataFrame", chunk),
+                    seq_num,
+                )
+                seq_num += 1
+            if seq_num != announced:
+                raise RuntimeError(
+                    f"PythonScan source reported {announced} chunk(s) but "
+                    f"produced {seq_num}"
+                )
+        else:
+            # A plain generator hides its count, so we must drain it to learn the
+            # count before announcing it.
+            chunks = await ir_context.to_thread(lambda: list(raw_chunks))
+            await send_metadata(
+                ch_out, context, ChannelMetadata(local_count=len(chunks))
+            )
+            for seq_num, chunk in enumerate(chunks):
+                await _process_and_send_chunk(
+                    context, ch_out, ir, ir_context, tracer, chunk, seq_num
+                )
+        await ch_out.drain(context)
+
+
+@generate_ir_sub_network.register(PythonScan)
+def _(
+    ir: PythonScan, rec: SubNetGenerator
+) -> tuple[dict[IR, list[Any]], dict[IR, ChannelManager]]:
+    context = rec.state["context"]
+    ir_context = rec.state["ir_context"]
+    channels: dict[IR, ChannelManager] = {ir: ChannelManager(context)}
+    nodes: dict[IR, list[Any]] = {
+        ir: [
+            python_scan_node(
+                context,
+                rec.state["comm"],
+                ir,
+                ir_context,
+                channels[ir].reserve_input_slot(),
+            )
+        ]
+    }
+    return nodes, channels
+
+
 async def read_chunk(
     context: Context,
     scan: IR,
@@ -370,7 +578,7 @@ async def scan_node(
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    scans = ir.scans
+    scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
 
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
@@ -408,12 +616,13 @@ async def scan_node(
         lineariser = Lineariser(context, ch_out, num_producers)
 
         # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, Scan | SplitScan]]] = [
+        producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
             [] for _ in range(num_producers)
         ]
         for task_idx, scan in enumerate(scans):
             producer_id = task_idx % num_producers
-            producer_tasks[producer_id].append((task_idx, scan))
+            # mypy resolves __iter__ on union-of-sequences to the common base (IR)
+            producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
 
         async def _producer(producer_id: int, ch_out: Channel) -> None:
             for task_idx, scan in producer_tasks[producer_id]:
@@ -448,6 +657,7 @@ def make_rapidsmpf_read_parquet_node(
     ch_out: Channel[TableChunk],
     stats: StatsCollector,
     partition_info: PartitionInfo,
+    parquet_options: ParquetOptions,
 ) -> Any | None:
     """
     Make a RapidsMPF read parquet node.
@@ -468,22 +678,27 @@ def make_rapidsmpf_read_parquet_node(
         The statistics collector.
     partition_info
         The partition information.
+    parquet_options
+        The Parquet options.
 
     Returns
     -------
     The RapidsMPF read parquet node, or None if the predicate cannot be
     converted to a parquet filter (caller should fall back to scan_node).
     """
-    from cudf_streaming.streaming.parquet import Filter, read_parquet
+    from cudf_streaming.parquet import Filter, read_parquet
 
     # Build ParquetReaderOptions
     try:
-        stream = context.get_stream_from_pool()
-        parquet_reader_options = (
-            plc.io.parquet.ParquetReaderOptions.builder(plc.io.SourceInfo(ir.paths))
-            .decimal_width(plc.TypeId.DECIMAL128)
-            .build()
+        stream = context.br().stream_pool.get_stream()
+        builder = plc.io.parquet.ParquetReaderOptions.builder(
+            plc.io.SourceInfo(ir.paths)
         )
+        if (
+            ir.predicate is not None and parquet_options.use_jit_filter
+        ):  # pragma: no cover; no test yet
+            builder.use_jit_filter(use_jit_filter=True)
+        parquet_reader_options = builder.decimal_width(plc.TypeId.DECIMAL128).build()
 
         if ir.with_columns is not None:
             parquet_reader_options.set_column_names(ir.with_columns)
@@ -581,6 +796,7 @@ def _(
             ch_in,
             rec.state["stats"],
             partition_info,
+            parquet_options,
         )
 
         # Need metadata node, because the native read_parquet
@@ -606,7 +822,9 @@ def _(
                 rec.state["ir_context"],
                 ch_out,
                 num_producers=num_producers,
-                estimated_chunk_bytes=executor.target_partition_size,
+                estimated_chunk_bytes=(
+                    plan.estimated_chunk_bytes or executor.target_partition_size
+                ),
             )
         ]
     return nodes, channels
@@ -700,7 +918,7 @@ async def sink_node(
                 # Multiple chunks - use chunked writer
                 df = chunk_to_frame(chunk, child_ir)
                 writer_state = await ir_context.to_thread(
-                    _sink_to_file,
+                    _sink_to_file,  # type: ignore[arg-type]  # (to_thread accepts this keyword-only sink helper)
                     ir.sink.kind,
                     ir.sink.path,
                     ir.sink.options,

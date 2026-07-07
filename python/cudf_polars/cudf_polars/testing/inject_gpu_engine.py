@@ -1,13 +1,15 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Plugin for running polars test suite using the GPU engine."""
 
 from __future__ import annotations
 
+import sqlite3
 from functools import partialmethod
 from typing import TYPE_CHECKING
 
+import packaging.version
 import pytest
 
 import polars
@@ -149,8 +151,10 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_nested_column_cast_deletion_rename": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_scan_iceberg_parquet_prefilter_with_column_mapping": "Iceberg column_mapping (schema evolution) not yet implemented in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_fill_missing_fields_with_identity_partition_values_nested": "Iceberg partition column injection not yet implemented in cudf-polars",
-    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count": "Iceberg support not yet implemented in cudf-polars",
+    "tests/unit/io/test_iceberg.py::test_scan_iceberg_fast_count[native]": "Iceberg fast count from metadata not yet supported in cudf-polars",
     "tests/unit/io/test_iceberg.py::test_iceberg_filter_bool_26474": "Iceberg support not yet implemented in cudf-polars",
+    "tests/unit/io/test_io_plugin.py::test_defer_validate_false": "cudf-polars always validates the IO source schema, so validate_schema=False dtype mismatches are unsupported on GPU",
+    "tests/unit/io/test_io_plugin.py::test_datetime_io_predicate_pushdown_21790": "cudf-polars validates the IO source schema exactly and does not coerce datetime time units (us vs ns)",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[small.parquet-4]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_count_star.py::test_count_parquet[foods*.parquet-54]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_is_in_statistics": "Debug output on stderr doesn't match",
@@ -244,8 +248,10 @@ EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_cast.py::test_cast_errors[values2-values::int1-conversion from `i64` to `i8` failed]": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_cast.py::test_cast_errors[values5-values::int4-conversion from `str` to `i32` failed]": "Cast raises, but error user receives is wrong",
     "tests/unit/lazyframe/test_predicates.py::test_predicate_pushdown_split_pushable": "Casting that raises not supported on GPU",
+    "tests/unit/lazyframe/test_predicates.py::test_filter_contradiction_fallible_error_handling": "Casting that raises not supported on GPU",
     "tests/unit/sql/test_miscellaneous.py::test_read_csv": "Incorrect handling of missing_is_null in read_csv",
-    "tests/unit/lazyframe/test_cse.py::test_cse_predicate_self_join[False]": "Debug output on stderr doesn't match",
+    "tests/unit/lazyframe/test_cse.py::test_cse_predicate_self_join[False]": "Debug output on stderr doesn't match, see https://github.com/rapidsai/cudf/issues/22967",
+    "tests/unit/lazyframe/test_cse.py::test_cse_predicate_self_join[True]": "Debug output on stderr doesn't match, see https://github.com/rapidsai/cudf/issues/22967",
     "tests/unit/io/test_scan_row_deletion.py::test_scan_row_deletion_skips_file_with_all_rows_deleted": "The test intentionally corrupts the parquet file, so we cannot read the row count from the header.",
     "tests/unit/io/test_multiscan.py::test_multiscan_row_index[scan_csv-write_csv-csv]": "Debug output on stderr doesn't match",
     "tests/unit/io/test_lazy_parquet.py::test_parquet_schema_arg[True-columns]": "allow_missing_columns argument in read_parquet not translated in IR",
@@ -290,7 +296,7 @@ EXPECTED_FAILURES: Mapping[str, str] = {
 }
 
 
-TESTS_TO_SKIP: Mapping[str, str] = {
+TESTS_TO_SKIP: dict[str, str] = {
     "tests/unit/operations/test_profile.py::test_profile_with_cse": "Shape assertion won't match",
     # value_counts / struct-expansion row ordering is not guaranteed, so the GPU
     # result may or may not match CPU. Skip rather than xfail to avoid a flaky
@@ -339,7 +345,38 @@ TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/io/test_scan.py::test_scan_metrics[False-parquet]": "Checks to IO metric logs specific to Polars CPU",
     "tests/unit/io/test_scan.py::test_scan_metrics[False-csv]": "Checks to IO metric logs specific to Polars CPU",
     "tests/unit/io/test_scan.py::test_scan_metrics[False-ndjson]": "Checks to IO metric logs specific to Polars CPU",
+    # polars 1.42 updated these tests to also assert deprecated_call and strict=True ShapeError
+    # in the same test function. The SPMD engine fails on the strict=True collect() inside a
+    # pytest.raises block because the DeprecationWarning from how='horizontal' propagates differently
+    # across engines. Skip both runs rather than xfail (which would XPASS on in-memory).
+    "tests/unit/lazyframe/test_predicates.py::test_hconcat_predicate": "polars 1.42: test uses deprecated how='horizontal' with strict=True in ways that behave differently across GPU engines",
+    "tests/unit/functions/test_union.py::test_union_lazyframe_horizontal": "polars 1.42: test uses deprecated how='horizontal' with strict=True in ways that behave differently across GPU engines",
 }
+
+
+if packaging.version.parse(sqlite3.sqlite_version) <= packaging.version.parse("3.44.0"):
+    # These tests rely on features not available in older versions of sqlite.
+    TESTS_TO_SKIP.update(
+        {
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[SUM(x) FILTER (WHERE y > 20)-values0]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[AVG(x) FILTER (WHERE y > 20)-values1]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[MIN(x) FILTER (WHERE grp = 'a')-values2]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[MAX(x) FILTER (WHERE grp = 'a')-values3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(*) FILTER (WHERE grp = 'a')-values4]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(1) FILTER (WHERE grp = 'a')-values5]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(x) FILTER (WHERE grp = 'a')-values6]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(x) FILTER (WHERE y > 20)-values7]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_grouped[COUNT(DISTINCT x) FILTER (WHERE y > 20)-values8]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[SUM(x) FILTER (WHERE y > 20)-13]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[AVG(x) FILTER (WHERE y > 20)-4.333333333333333]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(*) FILTER (WHERE grp = 'a')-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(x) FILTER (WHERE y > 20)-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_no_group_by[COUNT(DISTINCT x) FILTER (WHERE grp = 'b')-3]": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_filter_clause.py::test_filter_clause_multiple_aggs": 'sqlite3.OperationalError: near "AS": syntax error',
+            "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[STRING_AGG]": 'sqlite3.OperationalError: near "ORDER": syntax error',
+            "tests/unit/sql/test_string_agg.py::test_string_agg_aliases[GROUP_CONCAT]": 'sqlite3.OperationalError: near "ORDER": syntax error',
+        }
+    )
 
 
 # Generally skip for:
@@ -420,52 +457,9 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_group_by.py::test_partitioned_group_by_chunked": "https://github.com/rapidsai/cudf/issues/22072",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[1]": "https://github.com/rapidsai/cudf/issues/22075",
     "tests/unit/operations/test_group_by.py::test_unique_head_tail_26429[4]": "https://github.com/rapidsai/cudf/issues/22075",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_item_too_many": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
+    "tests/unit/operations/aggregation/test_aggregations.py::test_single_empty": "Correct polars.exceptions.ComputeError raised but it's in an ExceptionGroup",
     "tests/unit/operations/test_join.py::test_empty_outer_join_22206": "https://github.com/rapidsai/cudf/issues/22084",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes12]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes13]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes14]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes15]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes17]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes18]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes19]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes20]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes21]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes22]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes23]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes25]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes26]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes27]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes28]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes38]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes39]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes40]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes41]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes42]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes43]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[True-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes12]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes13]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes14]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes15]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes17]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes18]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes19]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes20]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes21]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes22]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes23]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes25]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes26]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes27]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes28]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes38]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes39]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes40]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes41]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes42]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes43]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_15338[False-dtypes44]": "https://github.com/rapidsai/cudf/issues/22085",
-    "tests/unit/operations/test_join.py::test_join_numeric_key_upcast_order": "https://github.com/rapidsai/cudf/issues/22085",
     "tests/unit/operations/test_window.py::test_over_literal_cum_sum_26800": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_joins.py::test_cross_join_unnest_from_cte": "https://github.com/rapidsai/cudf/issues/22073",
     "tests/unit/sql/test_window_functions.py::test_over_with_cumulative_window_funcs": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
@@ -475,6 +469,7 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/sql/test_window_functions.py::test_window_frame_validation": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/sql/test_window_functions.py::test_window_multiple_named_window": "TODO: https://github.com/rapidsai/cudf/pull/22048#discussion_r3238041970",
     "tests/unit/functions/test_concat.py::test_concat_horizontal_lazy_strict_raises_shape_error_27415": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
+    "tests/unit/io/test_io_plugin.py::test_defer_validate_true": "correct SchemaError raised but wrapped in an ExceptionGroup under the streaming engine",
     "tests/unit/io/test_scan_lines.py::test_scan_lines[False-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/io/test_scan_lines.py::test_scan_lines[False-True-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/io/test_scan_lines.py::test_scan_lines[True-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
@@ -484,8 +479,6 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/operations/test_scalar.py::test_scalar_len_20046": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
     "tests/unit/sql/test_group_by.py::test_group_by_empty_or_scalar_key_exprs_23397": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df10-df20-LOWER(TRIM(df1.text)) = df2.text-expected0]": "streaming Sort resolves ORDER BY keys by alias not column (https://github.com/rapidsai/cudf/pull/22781)",
-    "tests/unit/sql/test_joins.py::test_join_on_nested_function_expressions[df11-df21-LOWER(SUBSTR(df1.code,1,6)) = df2.code-expected1]": "streaming Sort resolves ORDER BY keys by alias not column (https://github.com/rapidsai/cudf/pull/22781)",
     "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-WHERE 1 = 1]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[-]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/sql/test_miscellaneous.py::test_select_output_heights_20058_21084[ORDER BY 1-WHERE 1 = 1]": "row count lost in zero-column streaming chunk; RapidsMPF cannot pack the empty table (https://github.com/rapidsai/cudf/issues/21428)",
@@ -504,7 +497,7 @@ def pytest_collection_modifyitems(
         return
     with_streaming_engine = config.getoption("--inject-gpu-engine") == "spmd"
     for item in items:
-        if (reason := TESTS_TO_SKIP.get(item.nodeid, None)) is not None or (
+        if (reason := TESTS_TO_SKIP.get(item.nodeid)) is not None or (
             with_streaming_engine
             and (reason := STREAMING_ENGINE_TESTS_TO_SKIP.get(item.nodeid, None))
             is not None

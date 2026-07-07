@@ -1,9 +1,10 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "deletion_vectors_helpers.hpp"
+#include "io/parquet/reader_impl_helpers.hpp"
 
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/stream_compaction.hpp>
@@ -257,8 +258,12 @@ chunked_parquet_reader::chunked_parquet_reader(std::size_t chunk_read_limit,
                                                deletion_vector_info const& deletion_vector_info,
                                                rmm::cuda_stream_view stream,
                                                rmm::device_async_resource_ref mr)
-  : chunked_parquet_reader(
-      chunk_read_limit, std::size_t{0}, options, deletion_vector_info, stream, mr)
+  : chunked_parquet_reader(chunk_read_limit,
+                           parquet::detail::derive_pass_read_limit(chunk_read_limit),
+                           options,
+                           deletion_vector_info,
+                           stream,
+                           mr)
 {
 }
 

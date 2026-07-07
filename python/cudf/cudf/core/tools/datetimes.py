@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -494,9 +494,16 @@ def _process_col(
                         element=col.element_indexing(0),
                         dayfirst=dayfirst,
                     )
+                target_unit = unit
+                if unit is None:
+                    # pandas infers nanosecond precision from strings with
+                    # more than 6 fractional-second digits
+                    subsecond = re.search(r"%(\d)f", format)
+                    if subsecond is not None and int(subsecond.group(1)) > 6:
+                        target_unit = "ns"
                 col = col.strptime(
                     dtype=np.dtype(
-                        _unit_dtype_map.get(unit, _unit_dtype_map["us"])  # type: ignore[arg-type]
+                        _unit_dtype_map.get(target_unit, _unit_dtype_map["us"])  # type: ignore[arg-type]
                     ),
                     format=format,
                 )
@@ -647,13 +654,11 @@ class DateOffset:
     _FREQSTR_REGEX = re.compile("([-+]?[0-9]*)([a-zA-Z]+)")
 
     def __eq__(self, other):
-        if isinstance(other, str):
-            return self._maybe_as_fast_pandas_offset() == other
-        if isinstance(other, (pd.DateOffset, pd.offsets.Tick)):
-            return self._maybe_as_fast_pandas_offset() == other
-        if not isinstance(other, DateOffset):
-            return NotImplemented
-        return self.kwds == other.kwds
+        if isinstance(other, DateOffset):
+            return self.kwds == other.kwds
+        # Compare via the equivalent fast pandas offset so freq strings and
+        # pandas offsets (including cudf.pandas-proxied ones) compare equal.
+        return self._maybe_as_fast_pandas_offset() == other
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:

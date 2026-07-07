@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import contextlib
@@ -9,7 +9,6 @@ import inspect
 import os
 import pickle
 
-import numpy as np
 import pandas as pd
 
 # cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
@@ -386,12 +385,6 @@ _SeriesiAtIndexer = make_intermediate_proxy_type(
 )
 
 
-def _argsort(self, *args, **kwargs):
-    return _maybe_wrap_result(
-        self._fsproxy_wrapped.argsort(*args, **kwargs).astype(np.intp), self
-    )
-
-
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -418,7 +411,6 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        "argsort": _argsort,
         "to_xarray": _to_xarray,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
@@ -511,9 +503,6 @@ Index = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
-        # TODO: Handle special cases like mergesort being unsupported
-        # and raising for certain types like Categorical and RangeIndex
-        "argsort": _argsort,
         "values": property(_Index_values),
     },
 )
@@ -933,6 +922,12 @@ BooleanDtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        # Expose the slow type as ``__class__`` so that
+        # ``real_dtype == proxy_dtype`` is True: pandas' ExtensionDtype.__eq__
+        # checks ``isinstance(other, type(self))``, which otherwise fails for a
+        # proxy that only subclasses the abstract ExtensionDtype. These masked
+        # dtypes have empty ``_metadata`` so equality reduces to this check.
+        "__class__": pd.BooleanDtype,
     },
 )
 
@@ -961,6 +956,7 @@ Int8Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int8Dtype,
     },
 )
 
@@ -975,6 +971,7 @@ Int16Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int16Dtype,
     },
 )
 
@@ -988,6 +985,7 @@ Int32Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int32Dtype,
     },
 )
 
@@ -1001,6 +999,7 @@ Int64Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Int64Dtype,
     },
 )
 
@@ -1014,6 +1013,7 @@ UInt8Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt8Dtype,
     },
 )
 
@@ -1027,6 +1027,7 @@ UInt16Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt16Dtype,
     },
 )
 
@@ -1040,6 +1041,7 @@ UInt32Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt32Dtype,
     },
 )
 
@@ -1053,6 +1055,7 @@ UInt64Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.UInt64Dtype,
     },
 )
 
@@ -1142,6 +1145,7 @@ Float32Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Float32Dtype,
     },
 )
 
@@ -1155,6 +1159,7 @@ Float64Dtype = make_final_proxy_type(
     additional_attributes={
         "__from_arrow__": _FastSlowAttribute("__from_arrow__"),
         "__hash__": _FastSlowAttribute("__hash__"),
+        "__class__": pd.Float64Dtype,
     },
 )
 

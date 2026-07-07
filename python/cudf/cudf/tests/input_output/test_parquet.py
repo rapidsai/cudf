@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import datetime
@@ -548,7 +548,7 @@ def test_parquet_read_row_groups(tmp_path, pdf, row_group_size):
     fname = tmp_path / "row_group.parquet"
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names, _, _ = cudf.io.read_parquet_metadata(
+    _num_rows, row_groups, _col_names, _, _ = cudf.io.read_parquet_metadata(
         fname
     )
 
@@ -572,7 +572,7 @@ def test_parquet_read_row_groups_non_contiguous(tmp_path, pdf, row_group_size):
     fname = tmp_path / "row_group.parquet"
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
-    num_rows, row_groups, col_names, _, _ = cudf.io.read_parquet_metadata(
+    _num_rows, row_groups, _col_names, _, _ = cudf.io.read_parquet_metadata(
         fname
     )
 
@@ -2189,6 +2189,29 @@ def test_parquet_writer_chunked_max_file_size_error():
         ParquetDatasetWriter("sample", partition_cols=["a"], max_file_size=100)
 
 
+@pytest.mark.parametrize(
+    "path_names,partition_offsets,match",
+    [
+        (
+            ["a.parquet", "b.parquet"],
+            None,
+            "partition info is required",
+        ),
+        (
+            ["a.parquet", "b.parquet"],
+            [0, 1],
+            "same size",
+        ),
+    ],
+)
+def test_write_parquet_partitions_info_validation(
+    simple_gdf, tmp_path, path_names, partition_offsets, match
+):
+    paths = [str(tmp_path / path_name) for path_name in path_names]
+    with pytest.raises(ValueError, match=match):
+        simple_gdf.to_parquet(paths, partition_offsets=partition_offsets)
+
+
 def test_parquet_writer_chunked_partitioned_context(tmpdir_factory):
     pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
@@ -3245,7 +3268,7 @@ def test_to_parquet_row_group_size(
         fname, row_group_size_bytes=size_bytes, row_group_size_rows=size_rows
     )
 
-    num_rows, row_groups, col_names, _, _ = cudf.io.read_parquet_metadata(
+    num_rows, row_groups, _col_names, _, _ = cudf.io.read_parquet_metadata(
         fname
     )
     # 8 bytes per row, as the column is int64

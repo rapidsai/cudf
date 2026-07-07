@@ -71,8 +71,8 @@ void nvbench_sort_merge_inner_join(nvbench::state& state,
         build_keys, NullEquality, cudf::compute_metrics::NO, cudf::get_default_stream());
 
       // Step 2: Remap build and probe keys to integers
-      auto remapped_build = remap.remap_build_keys();
-      auto remapped_probe = remap.remap_probe_keys(probe_keys);
+      auto remapped_build = remap.remap_right_keys();
+      auto remapped_probe = remap.remap_left_keys(probe_keys);
 
       // Step 3: Create table views from remapped columns
       cudf::table_view remapped_build_view({remapped_build->view()});

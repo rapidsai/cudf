@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -428,6 +428,7 @@ void persisted_statistics::persist(int num_table_rows,
         offsets.data(),
         intermediate_stats.stripe_stat_chunks.data(),
         intermediate_stats.stripe_stat_merge.device_ptr());
+      CUDF_CUDA_TRY(cudaGetLastError());
       string_pools.emplace_back(std::move(string_pool));
     }
   }
@@ -592,7 +593,7 @@ orc_streams create_streams(host_span<orc_column_view> columns,
     auto add_stream =
       [&](stream_index_type index_type, StreamKind kind, TypeKind type_kind, size_t size) {
         auto const max_alignment_padding = compress_required_chunk_alignment(compression) - 1;
-        const auto base                  = column.index() * CI_NUM_STREAMS;
+        auto const base                  = column.index() * CI_NUM_STREAMS;
         ids[base + index_type]           = streams.size();
         streams.push_back(
           Stream{kind,

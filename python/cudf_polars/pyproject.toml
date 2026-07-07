@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 [build-system]
@@ -21,11 +21,11 @@ license = "Apache-2.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
-    "cuda-python>=13.0.1,<14.0",
+    "cuda-bindings>=13.0.1,<14.0",
     "cudf-streaming==26.8.*,>=0.0.0a0",
     "nvidia-ml-py>=12",
     "packaging",
-    "polars>=1.35,<1.42",
+    "polars>=1.35,<1.43",
     "pylibcudf==26.8.*,>=0.0.0a0",
     "rapidsmpf==26.8.*,>=0.0.0a0",
     "typing_extensions>=4.0.0",
@@ -44,11 +44,12 @@ classifiers = [
 [project.optional-dependencies]
 test = [
     "dask-cuda==26.8.*,>=0.0.0a0",
-    "pytest",
+    "pandas>=3.0.0,<3.0.4a0",
     "pytest-cov",
     "pytest-httpserver",
     "pytest-timeout",
     "pytest-xdist",
+    "pytest<9.1.0",
     "rich",
     "structlog",
     "zstandard",
@@ -127,7 +128,7 @@ select = [
   "ISC", # flake8-implicit-str-concat
   "INP", # flake8-no-pep420 (namespace packages)
   "SIM", # flake8-simplify
-  "TCH", # flake8-type-checking
+  "TC", # flake8-type-checking
   "TID", # flake8-tidy-imports
   "PLC", # pylint-convention
   "PLE", # pylint-error
@@ -164,7 +165,6 @@ ignore = [
   # tryceratops
   "TRY003", # Avoid specifying long messages outside the exception class
   # pyupgrade
-  "UP038",  # Use `X | Y` in `isinstance` call instead of `(X, Y)`
   # Lints below are turned off because of conflicts with the ruff
   # formatter
   # See https://docs.astral.sh/ruff/formatter/#conflicting-lint-rules
@@ -182,6 +182,7 @@ ignore = [
   "COM819", # prohibited-trailing-comma
   "ISC001", # single-line-implicit-string-concatenation
   "ISC002", # multi-line-implicit-string-concatenation
+  "PLC0415", # import not at top of file (deferred/conditional imports are intentional)
 ]
 fixable = ["ALL"]
 typing-modules = ["cudf_polars.typing"]

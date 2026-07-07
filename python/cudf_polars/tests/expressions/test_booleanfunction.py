@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.utils.versions import POLARS_VERSION_LT_142
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -292,3 +293,48 @@ def test_boolean_not_with_integers(engine: pl.GPUEngine, dtype, col):
     ldf = pl.LazyFrame({"a": pl.Series(col, dtype=dtype)})
     q = ldf.select(~pl.col("a"))
     assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_142, reason="IsSorted BooleanFunction was added in polars 1.42"
+)
+@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("nulls_last", [False, True])
+def test_boolean_is_sorted(
+    engine: pl.GPUEngine, *, descending: bool, nulls_last: bool, has_nulls: bool
+) -> None:
+    values: list[int | None] = [1, 2, 3, 4, 5]
+    if has_nulls:
+        values[2] = None
+
+    ldf = pl.LazyFrame(
+        {
+            "asc": pl.Series(values, dtype=pl.Int64()),
+            "desc": pl.Series(list(reversed(values)), dtype=pl.Int64()),
+            "unsorted": pl.Series([3, 1, None, 4, 2], dtype=pl.Int64()),
+        }
+    )
+
+    q = ldf.select(
+        pl.col("asc").is_sorted(descending=descending, nulls_last=nulls_last),
+        pl.col("desc").is_sorted(descending=descending, nulls_last=nulls_last),
+        pl.col("unsorted").is_sorted(descending=descending, nulls_last=nulls_last),
+    )
+
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        pl.sum_horizontal("a", "b"),
+        pl.mean_horizontal("a", "b"),
+        pl.min_horizontal("a", "b"),
+        pl.max_horizontal("a", "b"),
+    ],
+    ids=["sum_horizontal", "mean_horizontal", "min_horizontal", "max_horizontal"],
+)
+def test_numeric_horizontal_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+    q = df.select(expr)
+    assert_ir_translation_raises(q, engine, NotImplementedError)

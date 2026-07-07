@@ -1,6 +1,6 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
@@ -11,6 +11,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   include(cmake/rapids_config.cmake)
   include(rapids-cmake)
   include(rapids-cpm)
+  include(rapids-export)
+  include(rapids-find)
   rapids_cpm_init()
 endif()
 
@@ -23,7 +25,11 @@ project(
 option(RTCX_STATIC_LINK_NVRTC "Use static linking for NVRTC" OFF)
 option(RTCX_STATIC_LINK_NVJITLINK "Use static linking for nvJitLink" OFF)
 
-find_package(CUDAToolkit REQUIRED)
+rapids_find_package(
+  CUDAToolkit REQUIRED
+  BUILD_EXPORT_SET rtcx-exports
+  INSTALL_EXPORT_SET rtcx-exports
+)
 
 if(NOT TARGET zstd)
   set(CPM_DOWNLOAD_zstd ON)
@@ -54,7 +60,7 @@ if(NOT TARGET nvtx3::nvtx3-cpp)
   rapids_cpm_nvtx3()
 endif()
 
-add_library(rtcx STATIC rtcx.cpp)
+add_library(rtcx STATIC hash.cpp rtcx.cpp)
 add_library(rtcx::rtcx ALIAS rtcx)
 
 set_target_properties(
@@ -87,3 +93,74 @@ if(RTCX_STATIC_LINK_NVJITLINK)
 else()
   target_compile_definitions(rtcx PRIVATE RTCX_STATIC_LINK_LIBNVJITLINK=0)
 endif()
+
+# =============================================================================
+# Install / Export
+# =============================================================================
+include(GNUInstallDirs)
+include(${rapids-cmake-dir}/cmake/install_lib_dir.cmake)
+rapids_cmake_install_lib_dir(lib_dir)
+
+# Option to control install (default ON when built standalone, OFF when used as subdirectory)
+option(RTCX_INSTALL "Enable installation of rtcx targets" ${PROJECT_IS_TOP_LEVEL})
+
+set(rtcx_install_code_string
+    [=[
+# Embed functions (add_embed, embed_includes, embed_blob, embed)
+# are included automatically so consumers don't need explicit include().
+include("${CMAKE_CURRENT_LIST_DIR}/embed.cmake")
+
+# Set rtcx_LIBCXX_DIR for consumers using embed_includes with libcxx headers.
+set(rtcx_LIBCXX_DIR "${PACKAGE_PREFIX_DIR}/share/rtcx/libcxx")
+]=]
+)
+
+string(
+  CONFIGURE
+    [=[
+# Embed functions (add_embed, embed_includes, embed_blob, embed)
+# are included automatically so consumers don't need explicit include().
+include("@CMAKE_CURRENT_SOURCE_DIR@/embed.cmake")
+
+# Set rtcx_LIBCXX_DIR for consumers using embed_includes with libcxx headers.
+set(rtcx_LIBCXX_DIR "@CMAKE_CURRENT_SOURCE_DIR@/libcxx")
+]=]
+    rtcx_build_code_string
+  @ONLY
+)
+
+if(NOT RTCX_INSTALL)
+  set(rtcx_exclude_from_install EXCLUDE_FROM_ALL)
+endif()
+
+install(
+  TARGETS rtcx
+  EXPORT rtcx-exports
+  ARCHIVE DESTINATION ${lib_dir}
+  INCLUDES
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  ${rtcx_exclude_from_install}
+)
+
+if(RTCX_INSTALL)
+  install(FILES rtcx.hpp sha256.hpp embed.hpp DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/rtcx)
+  install(FILES embed.cmake embed.in.cpp DESTINATION ${lib_dir}/cmake/rtcx)
+  install(DIRECTORY libcxx/ DESTINATION ${CMAKE_INSTALL_DATADIR}/rtcx/libcxx)
+
+  rapids_export(
+    INSTALL rtcx
+    EXPORT_SET rtcx-exports
+    GLOBAL_TARGETS rtcx
+    NAMESPACE rtcx::
+    FINAL_CODE_BLOCK rtcx_install_code_string
+  )
+endif()
+
+# Build-tree export (always, so CPM consumers can find_package from the build tree)
+rapids_export(
+  BUILD rtcx
+  EXPORT_SET rtcx-exports
+  GLOBAL_TARGETS rtcx
+  NAMESPACE rtcx::
+  FINAL_CODE_BLOCK rtcx_build_code_string
+)

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ def test_fallback_on_concat_zlice(spmd_engine_factory) -> None:
     ).tail(1)
 
     with pytest.raises(
-        UserWarning, match="This slice not supported for multiple partitions."
+        UserWarning, match=r"This slice not supported for multiple partitions."
     ):
         assert_gpu_result_equal(q, engine=streaming_engine)
 
