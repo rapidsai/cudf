@@ -426,8 +426,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // that latency from fill_run_batch(). Streams larger than the per-stream
   // budget fall back to parsing from global with no behavior change.
   constexpr int level_stage_bytes = 8 * 1024;
-  __shared__ uint8_t def_stage[level_stage_bytes];
-  __shared__ uint8_t rep_stage[level_stage_bytes];
+  __shared__ __align__(16) uint8_t def_stage[level_stage_bytes];
+  __shared__ __align__(16) uint8_t rep_stage[level_stage_bytes];
   using barrier_t = cuda::barrier<cuda::thread_scope_block>;
   __shared__ alignas(barrier_t) char copy_barrier_storage[sizeof(barrier_t)];
   auto* copy_barrier = reinterpret_cast<barrier_t*>(copy_barrier_storage);
