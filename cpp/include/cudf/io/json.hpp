@@ -26,6 +26,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief APIs for reading and writing JSON files.
  */
 
 class json_reader_options_builder;
