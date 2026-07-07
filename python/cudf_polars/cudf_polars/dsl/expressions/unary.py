@@ -115,6 +115,7 @@ class UnaryFunction(Expr):
             "shift",
             "shift_and_fill",
             "top_k",
+            "truncate",
             "unique",
             "value_counts",
         }
@@ -137,6 +138,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "round",
             "set_sorted",
+            "truncate",
         }
     ).union(_OP_MAPPING.keys())
 
@@ -207,6 +209,49 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             ).sorted_like(values)  # pragma: no cover
+        elif self.name == "truncate":
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            if not plc.traits.is_floating_point(out_type):
+                return column
+            (decimals,) = self.options
+            operand = column.obj
+            scale: plc.Scalar | None = None
+            if decimals != 0:
+                scale = plc.Scalar.from_py(10.0**decimals, out_type, stream=df.stream)
+                operand = plc.binaryop.binary_operation(
+                    operand,
+                    scale,
+                    plc.binaryop.BinaryOperator.MUL,
+                    out_type,
+                    stream=df.stream,
+                )
+            nonneg = plc.binaryop.binary_operation(
+                operand,
+                plc.Scalar.from_py(0.0, out_type, stream=df.stream),
+                plc.binaryop.BinaryOperator.GREATER_EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            truncated = plc.copying.copy_if_else(
+                plc.unary.unary_operation(
+                    operand, plc.unary.UnaryOperator.FLOOR, stream=df.stream
+                ),
+                plc.unary.unary_operation(
+                    operand, plc.unary.UnaryOperator.CEIL, stream=df.stream
+                ),
+                nonneg,
+                stream=df.stream,
+            )
+            if scale is not None:
+                truncated = plc.binaryop.binary_operation(
+                    truncated,
+                    scale,
+                    plc.binaryop.BinaryOperator.DIV,
+                    out_type,
+                    stream=df.stream,
+                )
+            return Column(truncated, dtype=self.dtype)
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
