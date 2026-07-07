@@ -127,8 +127,12 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
+    _supported_horizontal_fns = frozenset({"coalesce"})
     _supported_fns = frozenset().union(
-        _supported_misc_fns, _supported_cum_aggs, _OP_MAPPING.keys()
+        _supported_misc_fns,
+        _supported_cum_aggs,
+        _supported_horizontal_fns,
+        _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
@@ -138,7 +142,7 @@ class UnaryFunction(Expr):
             "round",
             "set_sorted",
         }
-    ).union(_OP_MAPPING.keys())
+    ).union(_supported_horizontal_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -538,6 +542,22 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "coalesce":
+            child_columns = [
+                child.evaluate(df, context=context) for child in self.children
+            ]
+            result = child_columns[0].astype(self.dtype, stream=df.stream).obj
+            for candidate in child_columns[1:]:
+                if result.null_count() == 0:
+                    break
+                cast_candidate = candidate.astype(self.dtype, stream=df.stream)
+                fill = (
+                    cast_candidate.obj_scalar(stream=df.stream)
+                    if candidate.is_scalar
+                    else cast_candidate.obj
+                )
+                result = plc.replace.replace_nulls(result, fill, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
