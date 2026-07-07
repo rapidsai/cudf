@@ -691,6 +691,38 @@ ConfigureTest(ENCODE_TEST encode/encode_tests.cpp)
 ConfigureTest(AST_TEST ast/transform_tests.cpp ast/ast_tree_tests.cpp ast/jit_expressions_tests.cpp)
 
 # ##################################################################################################
+# * transform LTO tests
+# -------------------------------------------------------------------------------------
+rtcx_add_embed(cudf_test_fragments)
+
+add_fragment(
+  cudf_test_fragments FRAGMENT bankers_rounding SOURCE transform/fragments/bankers_rounding.cu
+)
+
+add_fragment(cudf_test_fragments FRAGMENT distance SOURCE transform/fragments/distance.cu)
+
+add_fragment(cudf_test_fragments FRAGMENT invsqrt SOURCE transform/fragments/invsqrt.cu)
+
+add_fragment(cudf_test_fragments FRAGMENT lehmer_mean SOURCE transform/fragments/lehmer_mean.cu)
+
+add_fragment(
+  cudf_test_fragments FRAGMENT sum_of_squares SOURCE transform/fragments/sum_of_squares.cu
+)
+
+add_fragment(cudf_test_fragments FRAGMENT to_upper SOURCE transform/fragments/to_upper.cu)
+
+rtcx_embed(
+  cudf_test_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
+
+ConfigureTest(
+  TRANSFORM_LTO_TEST transform/transform_lto_test.cpp
+  ${cudf_test_fragments_SOURCE_DIR}/cudf_test_fragments.s
+)
+add_dependencies(TRANSFORM_LTO_TEST cudf_test_fragments)
+target_include_directories(TRANSFORM_LTO_TEST PRIVATE ${cudf_test_fragments_SOURCE_DIR})
+
+# ##################################################################################################
 # * lists tests ----------------------------------------------------------------------------------
 ConfigureTest(
   LISTS_TEST
