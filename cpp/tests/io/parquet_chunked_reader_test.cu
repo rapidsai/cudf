@@ -2113,13 +2113,11 @@ TEST_F(ParquetChunkedReaderTest, TestRowIndexColumnMultipleSources)
       }
     }
 
-    auto const expected_src_index =
-      cudf::test::fixed_width_column_wrapper<cudf::size_type>(src_index_data.begin(),
-                                                             src_index_data.end());
+    auto const expected_src_index = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+      src_index_data.begin(), src_index_data.end());
     auto const expected_row_index =
       cudf::test::fixed_width_column_wrapper<size_t>(row_index_data.begin(), row_index_data.end());
-    auto const expected_values =
-      int64s_col(values_data.begin(), values_data.end());
+    auto const expected_values = int64s_col(values_data.begin(), values_data.end());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(0), expected_src_index);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(1), expected_row_index);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view().column(2), expected_values);
