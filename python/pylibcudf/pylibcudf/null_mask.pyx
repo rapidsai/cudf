@@ -192,15 +192,15 @@ cpdef DeviceBuffer create_null_mask(
     return buffer_to_python(move(db), _stream, mr)
 
 
-cpdef tuple bitmask_and(list columns, object stream=None, DeviceMemoryResource mr=None):
+cpdef tuple bitmask_and(columns, object stream=None, DeviceMemoryResource mr=None):
     """Performs bitwise AND of the bitmasks of a list of columns.
 
     For details, see :cpp:func:`bitmask_and`.
 
     Parameters
     ----------
-    columns : list
-        The list of columns
+    columns : Sequence[Column]
+        The columns
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
@@ -226,15 +226,15 @@ cpdef tuple bitmask_and(list columns, object stream=None, DeviceMemoryResource m
     return buffer_to_python(move(c_result.first), _stream, mr), c_result.second
 
 
-cpdef tuple bitmask_or(list columns, object stream=None, DeviceMemoryResource mr=None):
+cpdef tuple bitmask_or(columns, object stream=None, DeviceMemoryResource mr=None):
     """Performs bitwise OR of the bitmasks of a list of columns.
 
     For details, see :cpp:func:`bitmask_or`.
 
     Parameters
     ----------
-    columns : list
-        The list of columns
+    columns : Sequence[Column]
+        The columns
     stream : Stream | None
         CUDA stream on which to perform the operation.
     mr : DeviceMemoryResource | None
