@@ -104,6 +104,7 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "drop_nans",
             "drop_nulls",
             "fill_null",
             "fill_null_with_strategy",
@@ -329,6 +330,16 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "drop_nans":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            if not plc.traits.is_floating_point(column.obj.type()):
+                return column
+            return Column(
+                plc.stream_compaction.drop_nans(
+                    plc.Table([column.obj]), [0], 1, stream=df.stream
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
