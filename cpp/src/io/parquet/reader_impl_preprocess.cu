@@ -1141,9 +1141,11 @@ struct map_global_to_local_row_index {
   __device__ std::size_t operator()(std::size_t row_idx) const noexcept
   {
     auto const row_group_idx =
-      thrust::upper_bound(
-        thrust::seq, global_row_offsets, global_row_offsets + num_row_groups, row_idx) -
-      global_row_offsets - 1;  // Subtract 1 to get the index of the selected row group
+      cuda::std::distance(
+        global_row_offsets,
+        thrust::upper_bound(
+          thrust::seq, global_row_offsets, global_row_offsets + num_row_groups, row_idx)) -
+      1;  // Subtract 1 to get the index of the selected row group
     return row_idx - global_row_offsets[row_group_idx] + local_row_offsets[row_group_idx];
   }
 };
