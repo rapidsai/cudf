@@ -26,6 +26,84 @@ namespace avf = cudf::test::apache_variant_fixtures;
 
 namespace {
 
+// ---------------------------------------------------------------------------
+// VARIANT value-header factory helpers.
+//
+// Every VARIANT value begins with a one-byte "value metadata" header. Its bits
+// are (per the Apache Parquet variant spec [1]):
+//
+//   bit index:  7  6  5  4  3  2 | 1  0
+//   field:      <- value_header ->|basic
+//
+//   - basic_type (low 2 bits): 0=primitive, 1=short_string, 2=object, 3=array
+//   - value_header (high 6 bits): meaning depends on basic_type
+//       * primitive    -> physical type id (variant_primitive_type below)
+//       * short_string -> string length in bytes (0..63)
+//       * object/array -> field-id / field-offset size flags
+//
+// The enums below mirror the private `basic_type` / `primitive_type` definitions
+// in variant_extract.cu so tests can spell header bytes out by name (and avoid
+// endianness ambiguity in the bit layout) instead of using magic numbers.
+//
+// [1] https://github.com/apache/parquet-format/blob/master/VariantEncoding.md
+// ---------------------------------------------------------------------------
+enum class variant_basic_type : uint8_t {
+  primitive    = 0,
+  short_string = 1,
+  object       = 2,
+  array        = 3,
+};
+
+// Physical type id carried in the value_header of a primitive value.
+enum class variant_primitive_type : uint8_t {
+  null                 = 0,
+  boolean_true         = 1,
+  boolean_false        = 2,
+  int8                 = 3,
+  int16                = 4,
+  int32                = 5,
+  int64                = 6,
+  float64              = 7,
+  decimal4             = 8,
+  decimal8             = 9,
+  decimal16            = 10,
+  date                 = 11,
+  timestamp_micros     = 12,
+  timestamp_ntz_micros = 13,
+  float32              = 14,
+  binary               = 15,
+  long_string          = 16,
+  time_ntz_micros      = 17,
+  timestamp_nanos      = 18,
+  timestamp_ntz_nanos  = 19,
+  uuid                 = 20,
+};
+
+// Compose a value-metadata header byte from a basic type and its 6-bit value_header.
+constexpr uint8_t make_variant_header(variant_basic_type basic, uint8_t value_header)
+{
+  return static_cast<uint8_t>(static_cast<uint8_t>(basic) | (value_header << 2));
+}
+
+// Header byte for a primitive value of the given physical type.
+constexpr uint8_t make_variant_primitive(variant_primitive_type type)
+{
+  return make_variant_header(variant_basic_type::primitive, static_cast<uint8_t>(type));
+}
+
+// Header byte for a short string of the given length (must fit in 6 bits: 0..63).
+constexpr uint8_t make_variant_short_string_header(std::size_t length)
+{
+  return make_variant_header(variant_basic_type::short_string, static_cast<uint8_t>(length));
+}
+
+// Header byte for an object value with 1-byte field ids and 1-byte offsets
+// (is_large=false), i.e. value_header == 0.
+constexpr uint8_t make_variant_object_header()
+{
+  return make_variant_header(variant_basic_type::object, 0);
+}
+
 // Build a struct `column_view` over (metadata, value) without copying.
 inline cudf::column_view wrap_variant_view(cudf::column_view const& metadata,
                                            cudf::column_view const& value)
@@ -332,11 +410,11 @@ TEST_F(ExtractVariantFieldTest, BareNameEqualsDollarPath)
 
 namespace {
 
-// INT32 primitive blob: header 0x14, little-endian 4-byte payload.
+// INT32 primitive blob: primitive int32 header + little-endian 4-byte payload.
 inline std::vector<uint8_t> enc_int32(int32_t v)
 {
   auto const u = static_cast<uint32_t>(v);
-  return {0x14,
+  return {make_variant_primitive(variant_primitive_type::int32),
           static_cast<uint8_t>(u & 0xff),
           static_cast<uint8_t>((u >> 8) & 0xff),
           static_cast<uint8_t>((u >> 16) & 0xff),
@@ -347,7 +425,7 @@ inline std::vector<uint8_t> enc_int32(int32_t v)
 inline std::vector<uint8_t> enc_short_string(std::string_view s)
 {
   CUDF_EXPECTS(s.size() < 64, "short-string length must fit in 6 bits of the single-byte header");
-  std::vector<uint8_t> out{static_cast<uint8_t>(0x01 | (s.size() << 2))};
+  std::vector<uint8_t> out{make_variant_short_string_header(s.size())};
   out.insert(out.end(), s.begin(), s.end());
   return out;
 }
@@ -359,7 +437,8 @@ inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
 {
   CUDF_EXPECTS(inner.size() < 256, "inner blob too large for 1-byte offset header");
   // Header, num_elements, field_id, offset 0, sentinel = inner.size().
-  std::vector<uint8_t> out{0x02, 0x01, fid, 0x00, static_cast<uint8_t>(inner.size())};
+  std::vector<uint8_t> out{
+    make_variant_object_header(), 0x01, fid, 0x00, static_cast<uint8_t>(inner.size())};
   out.insert(out.end(), inner.begin(), inner.end());
   return out;
 }
@@ -370,7 +449,7 @@ inline std::vector<uint8_t> build_single_field_object(uint8_t fid,
 // <= 51 so the total value bytes (5 * n_fields) still fit in 1-byte offsets.
 inline std::vector<uint8_t> build_sequential_int32_object(int n_fields)
 {
-  std::vector<uint8_t> out{0x02, static_cast<uint8_t>(n_fields)};
+  std::vector<uint8_t> out{make_variant_object_header(), static_cast<uint8_t>(n_fields)};
   for (int fid = 0; fid < n_fields; ++fid) {
     out.push_back(static_cast<uint8_t>(fid));
   }
@@ -719,8 +798,11 @@ TEST_F(CastVariantTest, EmptyInput)
 
 TEST_F(CastVariantTest, UnsupportedCastTypeThrows)
 {
+  // The byte content is a well-formed variant "null" primitive; it is only a placeholder here.
+  // cast_variant rejects FLOAT64/BOOL8 at compile-time dispatch on the requested output type,
+  // independent of the input bytes, so any valid list<uint8> row triggers the same throw.
   auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const val{0x00};  // null primitive — valid list<uint8> input
+  std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::null)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
                  values, cudf::data_type{cudf::type_id::FLOAT64}, stream)),
@@ -732,9 +814,9 @@ TEST_F(CastVariantTest, UnsupportedCastTypeThrows)
 
 TEST_F(CastVariantTest, ShortStringLengthZero)
 {
-  // Short string with length 0: header = 0x01 | (0 << 2) = 0x01, no payload.
+  // Short string with length 0 (lower boundary of the 6-bit length field): header only, no payload.
   auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const val{0x01};
+  std::vector<uint8_t> const val{make_variant_short_string_header(0)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
     values, cudf::data_type{cudf::type_id::STRING}, stream);
@@ -744,10 +826,10 @@ TEST_F(CastVariantTest, ShortStringLengthZero)
 
 TEST_F(CastVariantTest, ShortStringLengthSixtyThree)
 {
-  // Short string with length 63 (max): header = 0x01 | (63 << 2) = 0xFD, then 63 bytes.
+  // Short string with length 63, the max value a 6-bit length field can hold, then 63 bytes.
   auto stream = cudf::test::get_default_stream();
   std::vector<uint8_t> val;
-  val.push_back(0xFD);
+  val.push_back(make_variant_short_string_header(63));
   std::string const payload(63, 'z');
   val.insert(val.end(), payload.begin(), payload.end());
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
@@ -759,9 +841,10 @@ TEST_F(CastVariantTest, ShortStringLengthSixtyThree)
 
 TEST_F(CastVariantTest, LongStringLengthZero)
 {
-  // Long string: header 0x40, 4-byte LE length = 0, no payload.
+  // Long string: primitive long_string header, 4-byte LE length = 0, no payload.
   auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const val{0x40, 0x00, 0x00, 0x00, 0x00};
+  std::vector<uint8_t> const val{
+    make_variant_primitive(variant_primitive_type::long_string), 0x00, 0x00, 0x00, 0x00};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
     values, cudf::data_type{cudf::type_id::STRING}, stream);
@@ -771,9 +854,17 @@ TEST_F(CastVariantTest, LongStringLengthZero)
 
 TEST_F(CastVariantTest, LongStringTruncatedPayloadYieldsNull)
 {
-  // Declares length=10 but only 3 payload bytes follow — decode_string returns nullopt.
+  // Long string header declaring LE length=10 but only 3 payload bytes follow — decode_string
+  // returns nullopt (truncation guard).
   auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const val{0x40, 0x0A, 0x00, 0x00, 0x00, 'a', 'b', 'c'};
+  std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::long_string),
+                                 0x0A,
+                                 0x00,
+                                 0x00,
+                                 0x00,
+                                 'a',
+                                 'b',
+                                 'c'};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
     values, cudf::data_type{cudf::type_id::STRING}, stream);
