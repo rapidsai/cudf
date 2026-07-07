@@ -16,16 +16,23 @@ benchmark owns those runtime pieces only for its cuDF comparison workload.
 4. Optimization specializes captures, bypasses empty jumps, fuses literal chains, and removes unreachable blocks.
 5. Both IR levels are verified before being returned.
 6. The NVVM generator partitions Unicode into predicate-equivalent alphabet
-   classes. Boolean programs use existential deterministic states because
-   match priority cannot change a boolean result. Span/global programs retain
-   ordered states, and capture graphs proven to have one consuming thread per
-   class and terminal acceptance receive tagged transitions. Other programs
-   retain ordered graph lowering.
+   classes. Eligible boolean programs compare an existential DFA with a
+   private 64-bit Glushkov position plan because match priority cannot change a
+   boolean result. Span/global programs retain ordered states, and capture
+   graphs proven to have one consuming thread per class and terminal acceptance
+   receive tagged transitions. Other programs retain ordered graph lowering.
 7. The selected executor is rendered directly to NVVM IR without a runtime
    regex opcode interpreter. Boolean, find, count, extract, replacement, and
    split each receive a distinct public device ABI and operation loop.
 
-The Automata representation is Thompson rather than the initially considered Glushkov position NFA. It has linear construction size and directly preserves capture tags, embedded assertions, empty paths, and greedy/lazy branch order. Instruction lowering and optimization remove unnecessary epsilon plumbing from the consumer-facing form.
+The public Automata representation remains Thompson. It has linear construction
+size and directly preserves capture tags, embedded assertions, empty paths, and
+greedy/lazy branch order. A bounded Glushkov NFA is an NVVM-only execution plan
+for assertion-free, non-nullable boolean graphs with at most 64 consuming
+positions. It is derived from the Thompson graph after optimization and is
+selected only by a profile-backed cost gate. Instruction lowering and
+optimization remove unnecessary epsilon plumbing from the consumer-facing
+form.
 
 ## Safety and determinism
 
@@ -44,20 +51,21 @@ Static metrics expose block, branch, predicate, read, capture-write, and literal
 sizes. An ordered subset construction retains alternation and greedy/lazy
 priority for result shapes that observe a match span, including a
 stop-before-accept transition flag. Boolean machines reclaim that unused flag
-bit for a 15-bit state index. Large boolean alternations can become independent
-DFA functions behind a short-circuit wrapper, and tables too large for the
-device constant segment use read-only global storage. Boolean zero-width
-assertions are determinized by indexing epsilon closures with the relevant
-begin/end, word-boundary, line-boundary, and CRLF predicate bits. Tagged
-transitions record capture boundaries when their histories are provably
-unambiguous. Non-boolean internal assertions and ambiguous capture histories
-use the recursive Thompson fallback, which retains required-prefix filtering,
-direct ASCII-literal lowering, optimizer attributes, and branch hints. All
-paths use ordinary input loads so the CUDA compiler selects cache behavior.
-Every module contains only
-its selected consumer: scalar counting, capture extraction, replacement
-sizing/emission, or split sizing/span emission. Capture writes survive only
-when the result observes them.
+bit for a 15-bit state index. For selected boolean graphs, one 64-bit Glushkov
+state replaces the DFA table: reach masks filter active positions and masked
+shifts compute follow transitions. Large boolean alternatives can otherwise
+become independent DFA functions behind a short-circuit wrapper, and tables
+too large for the device constant segment use read-only global storage.
+Boolean zero-width assertions are determinized by indexing epsilon closures
+with the relevant begin/end, word-boundary, line-boundary, and CRLF predicate
+bits. Tagged transitions record capture boundaries when their histories are
+provably unambiguous. Non-boolean internal assertions and ambiguous capture
+histories use the recursive Thompson fallback, which retains required-prefix
+filtering, direct ASCII-literal lowering, optimizer attributes, and branch
+hints. All paths use ordinary input loads so the CUDA compiler selects cache
+behavior. Every module contains only its selected consumer: scalar counting,
+capture extraction, replacement sizing/emission, or split sizing/span
+emission. Capture writes survive only when the result observes them.
 
 Actual occupancy, register pressure, divergence, and bandwidth require
 representative hardware. The optional `regex-ir-gpu-benchmark` reports

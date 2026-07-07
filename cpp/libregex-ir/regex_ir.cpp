@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cctype>
 #include <cstdint>
 #include <iterator>
@@ -2077,6 +2078,25 @@ struct deterministic_machine {
   bool start_byte_filter : 1                     = false;
 };
 
+struct glushkov_shift {
+  std::uint64_t sources = 0;
+  std::uint8_t amount   = 0;
+};
+
+struct glushkov_machine {
+  deterministic_machine alphabet                     = deterministic_machine{};
+  std::vector<std::uint64_t> reach_masks             = std::vector<std::uint64_t>{};
+  std::vector<glushkov_shift> shifts                 = std::vector<glushkov_shift>{};
+  std::array<std::uint64_t, 64> exception_successors = std::array<std::uint64_t, 64>{};
+  std::uint64_t first_set                            = 0;
+  std::uint64_t accept_mask                          = 0;
+  std::uint64_t exception_mask                       = 0;
+  std::optional<std::uint8_t> start_byte             = std::nullopt;
+  std::uint8_t position_count                        = 0;
+  bool scan_input    : 1                             = false;
+  bool accept_at_end : 1                             = false;
+};
+
 void build_start_byte_filter(deterministic_machine& machine)
 {
   if ((machine.initial_state & 0x8000U) != 0 || machine.dead_state > machine.state_mask ||
@@ -2332,6 +2352,150 @@ std::optional<std::vector<std::uint32_t>> make_deterministic_alphabet(
     }
   }
   return representatives;
+}
+
+std::optional<glushkov_machine> make_glushkov_machine(instruction_ir const& ir, bool scan_input)
+{
+  auto graph = make_deterministic_graph(ir);
+  if (!graph) return std::nullopt;
+
+  std::vector<std::size_t> positions;
+  std::vector<std::size_t> position_ids(graph->nodes.size(),
+                                        std::numeric_limits<std::size_t>::max());
+  for (std::size_t index = 0; index < graph->nodes.size(); ++index) {
+    auto& node = graph->nodes[index];
+    if (node.capture.has_value() || node.assertion.has_value()) return std::nullopt;
+    if (!node.consumes) continue;
+    if (positions.size() == 64U) return std::nullopt;
+    position_ids[index] = positions.size();
+    positions.push_back(index);
+  }
+  if (positions.empty()) return std::nullopt;
+
+  struct closure_result {
+    std::uint64_t positions = 0;
+    bool accepts : 1        = false;
+  };
+  // epsilon closure stops at consuming nodes because those nodes are the positions.
+  auto close = [&](std::vector<std::size_t> seeds) {
+    closure_result result;
+    std::vector<bool> visited(graph->nodes.size(), false);
+    while (!seeds.empty()) {
+      auto index = seeds.back();
+      seeds.pop_back();
+      if (index >= graph->nodes.size() || visited[index]) continue;
+      visited[index] = true;
+
+      auto& node = graph->nodes[index];
+      if (node.accepts) result.accepts = true;
+      if (node.consumes) {
+        result.positions |= std::uint64_t{1} << position_ids[index];
+        continue;
+      }
+      seeds.insert(seeds.end(), node.targets.begin(), node.targets.end());
+    }
+    return result;
+  };
+
+  glushkov_machine machine;
+  machine.position_count = static_cast<std::uint8_t>(positions.size());
+  machine.scan_input     = scan_input;
+  machine.accept_at_end  = ir.control.require_end;
+
+  auto initial = close({graph->entry});
+  if (initial.accepts || initial.positions == 0U) return std::nullopt;
+  machine.first_set = initial.positions;
+
+  std::array<std::uint64_t, 64> follow = std::array<std::uint64_t, 64>{};
+  for (std::size_t position = 0; position < positions.size(); ++position) {
+    auto& node       = graph->nodes[positions[position]];
+    auto successors  = close(node.targets);
+    follow[position] = successors.positions;
+    if (successors.accepts) machine.accept_mask |= std::uint64_t{1} << position;
+  }
+  if (machine.accept_mask == 0U) return std::nullopt;
+
+  auto representatives = make_deterministic_alphabet(graph->nodes, machine.alphabet);
+  if (!representatives) return std::nullopt;
+  machine.reach_masks.reserve(representatives->size());
+  for (auto representative : *representatives) {
+    std::uint64_t reach = 0;
+    for (std::size_t position = 0; position < positions.size(); ++position) {
+      if (graph->nodes[positions[position]].predicate.matches(
+            static_cast<char32_t>(representative))) {
+        reach |= std::uint64_t{1} << position;
+      }
+    }
+    machine.reach_masks.push_back(reach);
+  }
+
+  std::map<std::int32_t, std::uint64_t> span_sources;
+  for (std::size_t position = 0; position < positions.size(); ++position) {
+    for (std::size_t successor = 0; successor < positions.size(); ++successor) {
+      if ((follow[position] & (std::uint64_t{1} << successor)) == 0U) continue;
+      auto span = static_cast<std::int32_t>(successor) - static_cast<std::int32_t>(position);
+      if (span > 0) {
+        span_sources[span] |= std::uint64_t{1} << position;
+      } else {
+        machine.exception_mask |= std::uint64_t{1} << position;
+        machine.exception_successors[position] |= std::uint64_t{1} << successor;
+      }
+    }
+  }
+
+  std::vector<std::pair<std::int32_t, std::uint64_t>> spans(span_sources.begin(),
+                                                            span_sources.end());
+  // common forward spans become shifts; uncommon and backward edges stay explicit.
+  std::stable_sort(spans.begin(), spans.end(), [](auto& left, auto& right) {
+    return std::popcount(left.second) > std::popcount(right.second);
+  });
+  auto shift_count = std::min<std::size_t>(spans.size(), 8U);
+  machine.shifts.reserve(shift_count);
+  for (std::size_t index = 0; index < shift_count; ++index) {
+    machine.shifts.push_back({spans[index].second, static_cast<std::uint8_t>(spans[index].first)});
+  }
+  for (std::size_t index = shift_count; index < spans.size(); ++index) {
+    auto sources = spans[index].second;
+    while (sources != 0U) {
+      auto position = static_cast<std::size_t>(std::countr_zero(sources));
+      sources &= sources - 1U;
+      auto successor = position + static_cast<std::size_t>(spans[index].first);
+      machine.exception_mask |= std::uint64_t{1} << position;
+      machine.exception_successors[position] |= std::uint64_t{1} << successor;
+    }
+  }
+
+  auto first_positions = machine.first_set;
+  std::optional<std::uint8_t> start_byte;
+  while (first_positions != 0U) {
+    auto position = static_cast<std::size_t>(std::countr_zero(first_positions));
+    first_positions &= first_positions - 1U;
+    auto& predicate = graph->nodes[positions[position]].predicate;
+    if (!predicate.is_singleton() || predicate.singleton() > 0x7f) {
+      start_byte.reset();
+      break;
+    }
+    auto byte = static_cast<std::uint8_t>(predicate.singleton());
+    if (start_byte.has_value() && *start_byte != byte) {
+      start_byte.reset();
+      break;
+    }
+    start_byte = byte;
+  }
+  machine.start_byte = start_byte;
+  return machine;
+}
+
+bool prefer_glushkov(glushkov_machine const& machine,
+                     std::optional<deterministic_machine> const& deterministic)
+{
+  if (!deterministic.has_value()) return true;
+
+  auto exceptions = std::popcount(machine.exception_mask);
+  // use the position machine only when it removes a large table or is a long linear graph.
+  auto large_linear =
+    machine.position_count >= 32U && machine.shifts.size() == 1U && machine.exception_mask == 0U;
+  return (deterministic->transition_address_space == 1U && exceptions <= 5) || large_linear;
 }
 
 std::uint8_t assertion_bit(assertion_kind assertion)
@@ -2861,8 +3025,11 @@ class nvvm_ir_renderer {
       ascii_literal_.reset();
     }
     if (!ascii_literal_.has_value()) {
-      if (boolean_result && begins_at_input_start() &&
-          ir_.blocks[ir_.entry].successors.size() == 1) {
+      if (boolean_result && !begins_at_input_start()) {
+        glushkov_      = make_glushkov_machine(ir_, ir_.control.scan_input);
+        deterministic_ = make_deterministic_machine(ir_, ir_.control.scan_input, false);
+      } else if (boolean_result && begins_at_input_start() &&
+                 ir_.blocks[ir_.entry].successors.size() == 1) {
         // the selected successor is already constrained to byte zero by the removed assertion.
         auto anchored_ir               = ir_;
         anchored_ir.entry              = ir_.blocks[ir_.entry].successors.front().target;
@@ -2875,6 +3042,13 @@ class nvvm_ir_renderer {
           ir_, boolean_result && ir_.control.scan_input, !boolean_result);
       }
     }
+    if (glushkov_.has_value()) {
+      if (prefer_glushkov(*glushkov_, deterministic_)) {
+        deterministic_.reset();
+      } else {
+        glushkov_.reset();
+      }
+    }
     auto tagged_result = ir_.control.result == result_shape::CAPTURES &&
                          deterministic_.has_value() && deterministic_->capture_one_pass;
     if (!boolean_result &&
@@ -2885,6 +3059,8 @@ class nvvm_ir_renderer {
     if (ascii_literal_.has_value()) {
       executor =
         ascii_literal_->size() == 1U ? "single-byte literal scan" : "packed ASCII literal scan";
+    } else if (glushkov_.has_value()) {
+      executor = "bit-parallel Glushkov NFA";
     } else if (deterministic_.has_value()) {
       executor = deterministic_->assertion_aware ? "assertion-aware deterministic table"
                  : boolean_result                ? "deterministic table"
@@ -2899,7 +3075,13 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
 ; executor: {executor})NVVM",
                              fmt::arg("pattern", escaped_comment(ir_.pattern)),
                              fmt::arg("executor", executor)));
-    if (deterministic_.has_value()) {
+    if (glushkov_.has_value()) {
+      output_.emit("; glushkov positions: {}, alphabet classes: {}, shifts: {}, exceptions: {}",
+                   glushkov_->position_count,
+                   glushkov_->alphabet.class_count,
+                   glushkov_->shifts.size(),
+                   std::popcount(glushkov_->exception_mask));
+    } else if (deterministic_.has_value()) {
       output_.emit("; dfa states: {}, alphabet classes: {}",
                    deterministic_->state_count,
                    deterministic_->class_count);
@@ -2911,6 +3093,12 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     emit_decode_codepoint();
     if (ascii_literal_.has_value() && boolean_result) {
       emit_ascii_literal_execute(*ascii_literal_);
+    } else if (glushkov_.has_value() && boolean_result) {
+      emit_glushkov_globals(*glushkov_);
+      emit_deterministic_classifier(glushkov_->alphabet);
+      emit_glushkov_reach(*glushkov_);
+      emit_glushkov_follow(*glushkov_);
+      emit_glushkov_execute(*glushkov_);
     } else if (deterministic_.has_value() && boolean_result) {
       if (deterministic_->assertion_aware) {
         auto word_assertions =
@@ -3170,6 +3358,8 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
 
   static std::int32_t llvm_i16(std::uint16_t value) { return static_cast<std::int16_t>(value); }
 
+  static std::int64_t llvm_i64(std::uint64_t value) { return static_cast<std::int64_t>(value); }
+
   static std::string format_i16_array(std::vector<std::uint16_t> const& values)
   {
     std::string result;
@@ -3177,6 +3367,17 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     for (std::size_t index = 0; index < values.size(); ++index) {
       if (index != 0) result += ", ";
       fmt::format_to(std::back_inserter(result), "i16 {}", llvm_i16(values[index]));
+    }
+    return result;
+  }
+
+  static std::string format_i64_array(std::vector<std::uint64_t> const& values)
+  {
+    std::string result;
+    result.reserve(values.size() * 24U);
+    for (std::size_t index = 0; index < values.size(); ++index) {
+      if (index != 0) result += ", ";
+      fmt::format_to(std::back_inserter(result), "i64 {}", llvm_i64(values[index]));
     }
     return result;
   }
@@ -3202,6 +3403,146 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
       fmt::format_to(std::back_inserter(result), R"(\{:02X})", static_cast<unsigned char>(byte));
     }
     return result;
+  }
+
+  /**
+   * @brief emits constant alphabet and reach-mask tables for a Glushkov executor
+   *
+   * @param machine bit-parallel machine to render
+   */
+  void emit_glushkov_globals(glushkov_machine const& machine)
+  {
+    std::vector<std::uint16_t> byte_classes(machine.alphabet.byte_classes.begin(),
+                                            machine.alphabet.byte_classes.end());
+    auto globals = fmt::format("@{} = internal addrspace(4) constant [256 x i16] [{}], align 2",
+                               name("dfa_byte_classes"),
+                               format_i16_array(byte_classes));
+    if (machine.reach_masks.size() > 8U) {
+      fmt::format_to(std::back_inserter(globals),
+                     "\n@{} = internal addrspace(4) constant [{} x i64] [{}], align 8",
+                     name("glushkov_reach_masks"),
+                     machine.reach_masks.size(),
+                     format_i64_array(machine.reach_masks));
+    }
+    output_.emit("{}", globals);
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the alphabet-class to active-position reach-mask mapper
+   *
+   * @param machine bit-parallel machine whose reach masks are rendered
+   */
+  void emit_glushkov_reach(glushkov_machine const& machine)
+  {
+    auto function = name("glushkov_reach");
+    if (machine.reach_masks.size() == 1U) {
+      output_.emit(
+        R"NVVM(define internal i64 @{}(i32 %character_class) alwaysinline nounwind readnone {{
+entry:
+  ret i64 {}
+}})NVVM",
+        function,
+        llvm_i64(machine.reach_masks.front()));
+      output_.blank();
+      return;
+    }
+
+    if (machine.reach_masks.size() <= 8U) {
+      auto result = fmt::format("{}", llvm_i64(machine.reach_masks.front()));
+      std::string body;
+      for (std::size_t index = 1; index < machine.reach_masks.size(); ++index) {
+        fmt::format_to(std::back_inserter(body),
+                       R"NVVM(  %reach_is_{index} = icmp eq i32 %character_class, {index}
+  %reach_{index} = select i1 %reach_is_{index}, i64 {mask}, i64 {fallback}
+)NVVM",
+                       fmt::arg("index", index),
+                       fmt::arg("mask", llvm_i64(machine.reach_masks[index])),
+                       fmt::arg("fallback", result));
+        result = fmt::format("%reach_{}", index);
+      }
+      output_.emit(
+        R"NVVM(define internal i64 @{}(i32 %character_class) alwaysinline nounwind readnone {{
+entry:
+{}  ret i64 {}
+}})NVVM",
+        function,
+        body,
+        result);
+      output_.blank();
+      return;
+    }
+
+    output_.emit(
+      R"NVVM(define internal i64 @{function}(i32 %character_class) alwaysinline nounwind readonly {{
+entry:
+  %reach_index = zext i32 %character_class to i64
+  %reach_ptr = getelementptr [{count} x i64], [{count} x i64] addrspace(4)* @{table}, i64 0, i64 %reach_index
+  %reach = load i64, i64 addrspace(4)* %reach_ptr, align 8
+  ret i64 %reach
+}})NVVM",
+      fmt::arg("function", function),
+      fmt::arg("count", machine.reach_masks.size()),
+      fmt::arg("table", name("glushkov_reach_masks")));
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the bit-parallel Glushkov successor computation
+   *
+   * @param machine bit-parallel machine whose shift and exception transitions are rendered
+   */
+  void emit_glushkov_follow(glushkov_machine const& machine)
+  {
+    std::string body;
+    auto result                = std::string{"0"};
+    std::size_t combined_index = 0;
+    auto append                = [&](std::string_view value) {
+      if (result == "0") {
+        result = value;
+        return;
+      }
+      fmt::format_to(
+        std::back_inserter(body), "  %follow_{} = or i64 {}, {}\n", combined_index, result, value);
+      result = fmt::format("%follow_{}", combined_index++);
+    };
+
+    for (std::size_t index = 0; index < machine.shifts.size(); ++index) {
+      auto shift = machine.shifts[index];
+      fmt::format_to(std::back_inserter(body),
+                     R"NVVM(  %shift_source_{index} = and i64 %state, {sources}
+  %shift_value_{index} = shl i64 %shift_source_{index}, {amount}
+)NVVM",
+                     fmt::arg("index", index),
+                     fmt::arg("sources", llvm_i64(shift.sources)),
+                     fmt::arg("amount", shift.amount));
+      append(fmt::format("%shift_value_{}", index));
+    }
+
+    for (std::size_t position = 0; position < machine.exception_successors.size(); ++position) {
+      auto successors = machine.exception_successors[position];
+      if (successors == 0U) continue;
+      auto bit = std::uint64_t{1} << position;
+      fmt::format_to(std::back_inserter(body),
+                     R"NVVM(  %exception_bit_{position} = and i64 %state, {bit}
+  %exception_active_{position} = icmp ne i64 %exception_bit_{position}, 0
+  %exception_value_{position} = select i1 %exception_active_{position}, i64 {successors}, i64 0
+)NVVM",
+                     fmt::arg("position", position),
+                     fmt::arg("bit", llvm_i64(bit)),
+                     fmt::arg("successors", llvm_i64(successors)));
+      append(fmt::format("%exception_value_{}", position));
+    }
+
+    output_.emit(
+      R"NVVM(define internal i64 @{}(i64 %state) alwaysinline nounwind readnone {{
+entry:
+{}  ret i64 {}
+}})NVVM",
+      name("glushkov_follow"),
+      body,
+      result);
+    output_.blank();
   }
 
   /**
@@ -3486,6 +3827,128 @@ entry:)NVVM",
     }
 
     output_.emit("  ret i32 {}\n}}", mask_value);
+    output_.blank();
+  }
+
+  /**
+   * @brief emits the bit-parallel Glushkov contains or matches executor
+   *
+   * @param machine bit-parallel machine to execute
+   */
+  void emit_glushkov_execute(glushkov_machine const& machine)
+  {
+    auto classify    = name("dfa_classify");
+    auto decode      = name("decode_codepoint");
+    auto follow      = name("glushkov_follow");
+    auto load_byte   = name("load_byte");
+    auto reach       = name("glushkov_reach");
+    auto width       = name("decode_width");
+    auto ascii_block = fmt::format(
+      R"NVVM(ascii:
+  %ascii_class = call i32 @{classify}(i32 %first)
+  br label %transition)NVVM",
+      fmt::arg("classify", classify));
+    auto ascii_predecessor    = std::string{"%ascii"};
+    auto prefix_loop_position = std::string{};
+    auto prefix_loop_state    = std::string{};
+    if (machine.scan_input && machine.start_byte.has_value()) {
+      ascii_predecessor    = "%ascii_classify";
+      prefix_loop_position = ", [ %prefix_next_position, %prefix_skip ]";
+      prefix_loop_state    = ", [ 0, %prefix_skip ]";
+      ascii_block          = fmt::format(
+        R"NVVM(ascii:
+  %prefix_state_empty = icmp eq i64 %state, 0
+  %prefix_equal = icmp eq i32 %first, {prefix}
+  %prefix_mismatch = xor i1 %prefix_equal, true
+  %prefix_skip_candidate = and i1 %prefix_state_empty, %prefix_mismatch
+  br i1 %prefix_skip_candidate, label %prefix_skip, label %ascii_classify
+ascii_classify:
+  %ascii_class = call i32 @{classify}(i32 %first)
+  br label %transition
+prefix_skip:
+  %prefix_next_position = add nuw i64 %position, 1
+  br label %loop)NVVM",
+        fmt::arg("prefix", *machine.start_byte),
+        fmt::arg("classify", classify));
+    }
+
+    auto inject =
+      machine.scan_input
+        ? fmt::format("  %candidates = or i64 %follow, {}\n", llvm_i64(machine.first_set))
+        : fmt::format(R"NVVM(  %at_start = icmp eq i64 %position, 0
+  %initial_positions = select i1 %at_start, i64 {first_set}, i64 0
+  %candidates = or i64 %follow, %initial_positions
+)NVVM",
+                      fmt::arg("first_set", llvm_i64(machine.first_set)));
+
+    output_.emit(
+      R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+entry:
+  br label %loop
+loop:
+  %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]{prefix_loop_position}
+  %state = phi i64 [ 0, %entry ], [ %next_state, %continue ]{prefix_loop_state}
+  %at_end = icmp eq i64 %position, %size
+  br i1 %at_end, label %done, label %load
+load:
+  %input_ptr = getelementptr i8, i8* %data, i64 %position
+  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %is_ascii = icmp ult i32 %first, 128
+  br i1 %is_ascii, label %ascii, label %unicode
+{ascii_block}
+unicode:
+  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  br label %transition
+transition:
+  %character_class = phi i32 [ %ascii_class, {ascii_predecessor} ], [ %unicode_class, %unicode ]
+  %character_width = phi i64 [ 1, {ascii_predecessor} ], [ %unicode_width, %unicode ]
+  %reach = call i64 @{reach}(i32 %character_class)
+  %follow = call i64 @{follow}(i64 %state)
+{inject}  %next_state = and i64 %candidates, %reach
+  %next_position = add nuw i64 %position, %character_width)NVVM",
+      fmt::arg("execute", options_.execute_function),
+      fmt::arg("prefix_loop_position", prefix_loop_position),
+      fmt::arg("prefix_loop_state", prefix_loop_state),
+      fmt::arg("load_byte", load_byte),
+      fmt::arg("ascii_block", ascii_block),
+      fmt::arg("decode", decode),
+      fmt::arg("width", width),
+      fmt::arg("classify", classify),
+      fmt::arg("ascii_predecessor", ascii_predecessor),
+      fmt::arg("reach", reach),
+      fmt::arg("follow", follow),
+      fmt::arg("inject", inject));
+
+    if (machine.accept_at_end) {
+      output_.emit(
+        R"NVVM(  %dead = icmp eq i64 %next_state, 0
+  br i1 %dead, label %reject, label %continue
+continue:
+  br label %loop
+done:
+  %accept_bits = and i64 %state, {accept_mask}
+  %accepted = icmp ne i64 %accept_bits, 0
+  ret i1 %accepted
+reject:
+  ret i1 false
+}})NVVM",
+        fmt::arg("accept_mask", llvm_i64(machine.accept_mask)));
+    } else {
+      output_.emit(
+        R"NVVM(  %accept_bits = and i64 %next_state, {accept_mask}
+  %accepted = icmp ne i64 %accept_bits, 0
+  br i1 %accepted, label %yes, label %continue
+continue:
+  br label %loop
+done:
+  ret i1 false
+yes:
+  ret i1 true
+}})NVVM",
+        fmt::arg("accept_mask", llvm_i64(machine.accept_mask)));
+    }
     output_.blank();
   }
 
@@ -5931,6 +6394,7 @@ finish:
   instruction_ir const& ir_;
   nvvm_ir_codegen_options const& options_;
   std::optional<deterministic_machine> deterministic_ = std::nullopt;
+  std::optional<glushkov_machine> glushkov_           = std::nullopt;
   std::optional<std::string> ascii_literal_           = std::nullopt;
   std::vector<std::size_t> capture_slots_             = std::vector<std::size_t>{};
   source_buffer output_                               = source_buffer{};

@@ -42,6 +42,9 @@
   15-bit boolean state index, split large boolean alternations into
   short-circuit DFA functions, and place oversized transition tables in
   read-only global memory.
+- Add a profile-gated 64-bit Glushkov position executor for sparse
+  assertion-free boolean graphs, retaining DFA and Thompson paths when the
+  position plan is ineligible or slower.
 - Determinize boolean boundary and line assertions with context-indexed epsilon
   closures and end-boundary acceptance, removing the recursive assertion
   fallback from contains/match kernels.

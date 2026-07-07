@@ -198,6 +198,17 @@ single-pass state/class transition table removes retry state, recursion, and
 per-start scanning. The built-in NVVM renderer uses this form with bounded
 state and table growth, falling back to the ordered graph when it is unsafe.
 
+Also consider a Glushkov position plan for a non-nullable graph with at most 64
+consuming positions. Give each position one bit, precompute the first and
+accepting masks, group common positive follow deltas into masked shifts, and
+map alphabet classes to position reach masks. Then a scanning boolean step is
+`reach(character) & (first | follow(active))`. This processes every possible
+start in one pass with no per-thread state array. Do not apply that
+simplification to an API that observes the winning start, path priority, or
+captures without a separate correctness construction for those values. The
+built-in renderer uses a measured cost gate because exception-heavy follow
+graphs can be slower than a compact DFA.
+
 For the ordered fallback, analyze the block graph before printing:
 
 1. Compute predecessors and strongly connected components.

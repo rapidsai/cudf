@@ -248,18 +248,22 @@ backreferences contains no capture array.
 Capture-free graphs use subset construction over Unicode
 predicate-equivalence classes. Boolean contains/match results do not observe
 which accepting path won, so their states are canonical sets and use a 15-bit
-index. Assertions extend a state with only the boundary predicate bits used by
-the graph; generation precomputes a conditional epsilon closure for each truth
-assignment and a separate end-of-input acceptance table. Large boolean
-alternatives may be emitted as smaller deterministic functions behind a
-short-circuit wrapper. Other result shapes retain Thompson
-thread order and a stop-before-accept flag, preserving leftmost-first
-alternation and greedy/lazy behavior. Contains injects the initial closure
-after every character; matches starts only at byte zero and tests acceptance
-at end-of-input. Find, count, replacement, and split reuse an anchored
-prioritized table inside their operation-specific loops. Tables above 32 KiB
-use read-only global storage instead of exhausting NVPTX's 64 KiB constant
-segment when several machines share a module.
+index. Eligible assertion-free, non-nullable boolean graphs with at most 64
+consuming positions are also analyzed as a Glushkov NFA. Its complete runtime
+state is one 64-bit position mask; the renderer selects it only when sparse
+masked shifts avoid a large DFA table or represent a profiled long linear
+graph. Assertions extend a DFA state with only the boundary predicate bits
+used by the graph; generation precomputes a conditional epsilon closure for
+each truth assignment and a separate end-of-input acceptance table. Large
+boolean alternatives may be emitted as smaller deterministic functions behind
+a short-circuit wrapper. Other result shapes retain Thompson thread order and
+a stop-before-accept flag, preserving leftmost-first alternation and
+greedy/lazy behavior. Contains injects the initial closure after every
+character; matches starts only at byte zero and tests acceptance at
+end-of-input. Find, count, replacement, and split reuse an anchored prioritized
+table inside their operation-specific loops. Tables above 32 KiB use read-only
+global storage instead of exhausting NVPTX's 64 KiB constant segment when
+several machines share a module.
 
 Capture graphs use tagged deterministic transitions only when generation can
 prove one consuming thread per alphabet class, deterministic capture paths,
@@ -276,12 +280,13 @@ not consume the rest of a row after failure.
 
 Non-boolean internal assertions and ambiguous capture histories retain the
 recursive Thompson fallback. In that path, an ambiguous block saves its cursor,
-calls successors in priority order, and restores the cursor after a failed branch. A
-generated step budget bounds nullable cycles. The generated header identifies
-`single-byte literal scan`, `deterministic table`, `assertion-aware
-deterministic table`, `prioritized deterministic table`, `tagged prioritized
-deterministic table`, or `recursive Thompson` and reports state/alphabet-class
-counts for table executors.
+calls successors in priority order, and restores the cursor after a failed
+branch. A generated step budget bounds nullable cycles. The generated header
+identifies `single-byte literal scan`, `bit-parallel Glushkov NFA`,
+`deterministic table`, `assertion-aware deterministic table`, `prioritized
+deterministic table`, `tagged prioritized deterministic table`, or `recursive
+Thompson`. It reports position, shift, and exception counts for Glushkov plans
+and state/alphabet-class counts for table executors.
 
 ## 5. Compile generated IR with libNVVM
 

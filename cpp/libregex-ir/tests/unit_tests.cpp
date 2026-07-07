@@ -5613,11 +5613,93 @@ TEST_F(Nvvm, LargeBooleanAlternation)
   EXPECT_FALSE(compile_nvvm_lto_ir(source, {}).empty());
   expect_boolean(pattern, "A note about Tom walking beside the river today.", true);
 
-  auto bounded_ir = compile_ok("[a-q][^u-z]{13}x", regex_ir::operation::contains());
+  constexpr std::string_view bounded_pattern = "[a-q][^u-z]{13}x";
+  auto bounded_ir = compile_ok(bounded_pattern, regex_ir::operation::contains());
   auto bounded    = regex_ir::generate_nvvm_ir(bounded_ir);
-  EXPECT_NE(bounded.find("; dfa states: 16385"), std::string::npos);
-  EXPECT_NE(bounded.find("%state_index = and i32 %state, 32767"), std::string::npos);
-  EXPECT_NE(bounded.find("addrspace(1) constant"), std::string::npos);
+  EXPECT_NE(bounded.find("; executor: bit-parallel Glushkov NFA"), std::string::npos);
+  EXPECT_NE(bounded.find("; glushkov positions: 15, alphabet classes: 4, shifts: 1, exceptions: 0"),
+            std::string::npos);
+  EXPECT_NE(bounded.find("@regex_ir_generated_glushkov_follow"), std::string::npos);
+  EXPECT_EQ(bounded.find("@regex_ir_generated_dfa_transitions"), std::string::npos);
+  EXPECT_EQ(bounded.find("@regex_ir_generated_run_block"), std::string::npos);
+  EXPECT_FALSE(compile_nvvm_lto_ir(bounded, {}).empty());
+  expect_boolean(bounded_pattern, "xxpABCDEFGHIJKLMxzz", true);
+  expect_boolean(bounded_pattern, "xxrABCDEFGHIJKLMxzz", false);
+}
+
+TEST_F(Nvvm, GlushkovEligibilityFallbacks)
+{
+  auto compact =
+    regex_ir::generate_nvvm_ir(compile_ok("needle[0-9]+", regex_ir::operation::contains()));
+  EXPECT_NE(compact.find("; executor: deterministic table"), std::string::npos);
+  EXPECT_EQ(compact.find("Glushkov"), std::string::npos);
+
+  auto assertion = regex_ir::generate_nvvm_ir(
+    compile_ok(R"REGEX(\bneedle\b)REGEX", regex_ir::operation::contains()));
+  EXPECT_NE(assertion.find("; executor: assertion-aware deterministic table"), std::string::npos);
+  EXPECT_EQ(assertion.find("Glushkov"), std::string::npos);
+
+  auto nullable = regex_ir::generate_nvvm_ir(compile_ok("a*", regex_ir::operation::contains()));
+  EXPECT_NE(nullable.find("; executor: deterministic table"), std::string::npos);
+  EXPECT_EQ(nullable.find("Glushkov"), std::string::npos);
+
+  auto over_limit =
+    regex_ir::generate_nvvm_ir(compile_ok("[ab]{65}", regex_ir::operation::contains()));
+  EXPECT_NE(over_limit.find("; executor: deterministic table"), std::string::npos);
+  EXPECT_EQ(over_limit.find("Glushkov"), std::string::npos);
+
+  constexpr std::string_view flat_alternation =
+    R"REGEX(ddd|fff|eee|ggg|hhh|iii|jjj|kkk|[l-n]mm|ooo|ppp|qqq|rrr|sss|ttt|uuu|vvv|www|[x-z]yy)REGEX";
+  auto flat =
+    regex_ir::generate_nvvm_ir(compile_ok(flat_alternation, regex_ir::operation::contains()));
+  EXPECT_NE(flat.find("; executor: bit-parallel Glushkov NFA"), std::string::npos);
+
+  constexpr std::string_view ipv4 =
+    R"REGEX((?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]))REGEX";
+  auto branching = regex_ir::generate_nvvm_ir(compile_ok(ipv4, regex_ir::operation::contains()));
+  EXPECT_NE(branching.find("; executor: deterministic table"), std::string::npos);
+  EXPECT_EQ(branching.find("Glushkov"), std::string::npos);
+}
+
+TEST_F(Nvvm, GlushkovOverlappingStartsAndUtf8)
+{
+  constexpr std::string_view pattern = "[a-q].{13}x";
+  auto source = regex_ir::generate_nvvm_ir(compile_ok(pattern, regex_ir::operation::contains()));
+  EXPECT_NE(source.find("; executor: bit-parallel Glushkov NFA"), std::string::npos);
+
+  expect_boolean(pattern, std::string(15U, 'a') + "x", true);
+  expect_boolean(pattern, std::string(15U, 'a') + "y", false);
+
+  std::string unicode = "zzp";
+  for (std::size_t index = 0; index < 13U; ++index) {
+    unicode += "\xcf\x80";
+  }
+  unicode += 'x';
+  expect_boolean(pattern, unicode, true);
+
+  constexpr std::string_view filtered_pattern = "a[^u-z]{13}x";
+  auto filtered =
+    regex_ir::generate_nvvm_ir(compile_ok(filtered_pattern, regex_ir::operation::contains()));
+  EXPECT_NE(filtered.find("; executor: bit-parallel Glushkov NFA"), std::string::npos);
+  expect_boolean(filtered_pattern, "zzzaABCDEFGHIJKLMx", true);
+  expect_boolean(filtered_pattern, "zzzbABCDEFGHIJKLMx", false);
+
+  constexpr std::string_view full_pattern = "[ab]{32}x";
+  auto full = regex_ir::generate_nvvm_ir(compile_ok(full_pattern, regex_ir::operation::matches()));
+  EXPECT_NE(full.find("; executor: bit-parallel Glushkov NFA"), std::string::npos);
+  expect_boolean(
+    full_pattern, std::string(32U, 'a') + "x", true, regex_ir::operation_kind::MATCHES);
+  expect_boolean(full_pattern,
+                 std::string{"z"} + std::string(32U, 'a') + "x",
+                 false,
+                 regex_ir::operation_kind::MATCHES);
+
+  constexpr std::string_view boundary_pattern = "[ab]{63}x";
+  auto boundary =
+    regex_ir::generate_nvvm_ir(compile_ok(boundary_pattern, regex_ir::operation::matches()));
+  EXPECT_NE(boundary.find("; glushkov positions: 64"), std::string::npos);
+  expect_boolean(
+    boundary_pattern, std::string(63U, 'b') + "x", true, regex_ir::operation_kind::MATCHES);
 }
 
 TEST_F(Nvvm, CaptureEnumerationAbi)

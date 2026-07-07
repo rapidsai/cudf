@@ -29,7 +29,7 @@ pattern
   -> ordered Thompson Automata IR
   -> operation-specialized Instruction IR
   -> graph and capture simplification
-  -> executor analysis and deterministic construction
+  -> executor analysis and DFA/position construction
   -> operation-specific textual NVVM IR
   -> libNVVM LTO IR at -opt=3 -gen-lto
   -> nvJitLink device LTO at -O3
@@ -66,7 +66,10 @@ the following conceptual order:
 ```text
 exact ASCII expression?
   yes -> direct compare, byte finder, packed finder, or long-literal scan
-  no  -> deterministic construction succeeds?
+  no  -> assertion-free, non-nullable boolean graph with at most 64 positions?
+           yes -> compare a bit-parallel Glushkov plan with the existential DFA
+           no  -> continue to deterministic construction
+         deterministic construction succeeds?
            boolean -> existential or assertion-aware DFA
            span/global result without live captures -> ordered DFA
            extract with an unambiguous one-pass capture history -> tagged DFA
@@ -74,8 +77,56 @@ exact ASCII expression?
 ```
 
 The generated module comments identify the selected executor and, for a
-deterministic machine, its state and alphabet-class counts. This is useful when
-correlating a benchmark case with PTX, SASS, or an Nsight report.
+deterministic machine, its state and alphabet-class counts. Glushkov modules
+report position, alphabet-class, shift, and exception counts. This is useful
+when correlating a benchmark case with PTX, SASS, or an Nsight report.
+
+### Bit-parallel Glushkov NFA
+
+Boolean `contains` can use a Glushkov position automaton when the optimized
+graph has no assertions, is non-nullable, and has at most 64 consuming
+positions. The canonical public IR remains ordered Thompson IR; the Glushkov
+machine is a private NVVM code-generation plan derived with iterative epsilon
+closure. It therefore adds no public dialect and cannot introduce recursive
+compiler traversal.
+
+One `uint64_t` is the complete per-row regex state. Bit `i` means that position
+`i` matched the preceding logical character. For the next character `c`, the
+generated loop computes:
+
+```text
+next = reach(c) & (first | follow(active))
+```
+
+`contains` injects `first` on every character, so all possible starts are
+processed in one forward pass. `matches` injects it only at byte zero and tests
+acceptance at end of input. Accepting positions are another compile-time mask.
+Because these APIs expose only existence, no two-phase rescan, match-start
+tracking, alternative-priority kill, or capture history is needed. Those
+features would be required before a position automaton could implement find,
+extract, replace, or split semantics.
+
+Follow edges with the same positive position delta are combined into at most
+eight masked shifts. Back edges, zero-delta edges, and less frequent positive
+deltas become explicit exception masks. Alphabet-equivalent input characters
+map to precomputed reach masks. Small reach sets are emitted as immediate
+selects; larger sets use constant storage. The JIT embeds this read-only data
+in the generated module, so the cuDF proposal's cooperative shared-memory copy
+was not adopted: for the accepted plans there is no large generic program
+object to stage, and adding launch-time shared-memory policy would violate the
+core library's integration boundary.
+
+Glushkov is selected only when profiling predicts a material advantage:
+
+- the competing DFA transition table exceeds 32 KiB and the position graph has
+  at most five exception source positions; or
+- the graph has at least 32 positions, exactly one forward shift, and no
+  exceptions.
+
+Otherwise the existing specialized literal or DFA path remains selected.
+Assertions, nullability, more than 64 positions, and result shapes that expose
+spans, priority, or captures automatically use the established paths. This is
+a performance fallback, not a semantic restriction or a user-facing option.
 
 ### Boolean existential DFA
 
@@ -327,6 +378,9 @@ optimization section. The conclusions that currently guide the code are:
   repeated UTF-8 work, low active-lane efficiency, and register pressure;
 - ordered and tagged determinization removed that traffic and substantially
   improved occupancy and active lanes;
+- a bounded Glushkov position plan removes large boolean transition-table
+  loads when the follow graph is sparse, while exception-heavy graphs remain
+  faster as DFAs;
 - direct one-byte global operations were previously paying full ordered-DFA
   overhead; the byte finder reduced instruction count by roughly eightfold in
   the profiled split kernels;
@@ -376,6 +430,7 @@ automaton.
 | Proposal | Current status | Assessment |
 |:---|:---|:---|
 | JIT/operation specialization | implemented | core design; warm execution benefits, while linked cubins should be cached |
+| bit-parallel Glushkov NFA | implemented for gated boolean plans | valuable for sparse follow graphs and DFA state growth; the forced all-pattern experiment regressed exception-heavy cases, so it is not the canonical IR or a universal replacement |
 | profile occupancy, memory use, and divergence | implemented as a development practice | current complex DFA cases are more instruction/lane limited than DRAM limited; direct-byte cases are bandwidth limited |
 | Aho-Corasick | not implemented | useful for many exact literals or a bank of extracted literals, not a general regex replacement; dense transition storage, not automaton state count alone, is the main GPU memory risk |
 | cheap filter then full regex | partially implemented | one required entry ASCII byte exists only in the fallback; broader mandatory-literal and selectivity-aware filtering is a high-value gap |
@@ -468,6 +523,66 @@ thread, achieved 43.37% warp occupancy, executed 1.287 billion SASS
 instructions, and had 89.69% uniform branch targets. Its low 6.29 active-thread
 ratio explains the cached length-ordering headroom, but the end-to-end
 reordering cost still prevents enabling it unconditionally.
+
+## 2026-07-07 Glushkov experiment
+
+The experiment used the design and implementation discussion in
+[rapidsai/cudf#21936](https://github.com/rapidsai/cudf/pull/21936) as a reference,
+then adapted the idea to Regex IR's JIT boundary. The cuDF proposal stores a
+general position program and cooperatively caches it in shared memory. Regex IR
+instead specializes follow and reach masks into NVVM constants and immediate
+operations for one pattern. It also limits the position engine to boolean
+existence, where leftmost-first start and capture reconstruction are
+unobservable.
+
+The first forced-plan sweep ran all 74 complete-corpus Regex IR cases. It
+validated every result against the existing cuDF setup oracle and measured a
+1.021x geometric-mean speedup, but it also exposed 11 regressions above 2%.
+Exception-heavy bounded graphs were the wrong fit: Boost/GCC's names-near-river
+case fell to 0.647x, the quoted-string case to 0.754x, and IPv4 to 0.912x.
+Keeping a universally selected Glushkov path would therefore have failed the
+experiment despite the positive average.
+
+The retained cost gate was evaluated with baseline/branch ABBA ordering because
+the available account could not lock RTX A6000 clocks. Twenty-five or more
+NVBench samples and a 0.5-second minimum sampling interval were used per state.
+Representative accepted results were:
+
+| Corpus case | Existing DFA (ms) | Glushkov (ms) | Speedup | JIT-ready effect |
+|:---|---:|---:|---:|:---|
+| OpenResty 23, `[a-q][^u-z]{13}x` | 0.497 | 0.358 | 1.388x | about 92–103 ms to 48–50 ms |
+| Rust Leipzig 6, same expression | 0.394 | 0.288 | 1.367x | about 91–99 ms to 48–55 ms |
+| OpenResty 8, 57-position fixed alternatives | 0.564 | 0.457 | 1.234x | neutral, because its DFA was already small |
+| OpenResty 7, same expression on an early-result corpus | 0.197 | 0.198 | 0.999x | neutral |
+| mariomka IPv4 negative control | 0.266 | 0.266 | 1.000x | DFA retained |
+
+The bounded expression previously produced 16,385 DFA states and a read-only
+global transition table. Glushkov represents it with 15 position bits, one
+shift, no exception edges, and no transition table. A full Nsight Compute
+replay of OpenResty case 23 explained the normal-timing gain:
+
+| Metric | DFA | Glushkov |
+|:---|---:|---:|
+| profiled kernel duration | 65.92 us | 46.37 us |
+| global-load instructions | 274,118 | 138,083 |
+| long-scoreboard cycles per issued instruction | 11.40 | 5.10 |
+| eligible warps per scheduler | 0.157 | 0.258 |
+| registers per thread | 40 | 40 |
+| achieved occupancy | 24.07% | 24.48% |
+| branch efficiency | 96.73% | 96.73% |
+
+Executed instructions increased from 4.72 million to 4.99 million; the win is
+not fewer arithmetic instructions, but eliminating the large data-dependent
+transition-table load. The profile also found an LTO device-call frame in the
+benchmark wrapper. Marking the Glushkov public entry `alwaysinline` was tested
+and rejected: controlled normal timings were neutral, so the attribute was not
+retained without evidence that it changes linked code profitably.
+
+Temporary diagnostic output used to record position, class, shift, exception,
+and DFA-state counts was removed after the gate was chosen. Baseline
+executables, normal NVBench JSON, and full `.ncu-rep` files were kept outside
+the source tree during the campaign; no profiler-replay duration is used in
+presentation tables.
 
 ## Prioritized opportunities
 
