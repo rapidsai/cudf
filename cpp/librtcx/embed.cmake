@@ -171,6 +171,14 @@ function(rtcx_embed_blob TARGET)
       APPEND
       PROPERTY EMBED_TARGET_DEPS $<TARGET_OBJECTS:${CMAKE_MATCH_1}>
     )
+    # Also record the target name itself. Depending only on $<TARGET_OBJECTS:...> creates file-level
+    # dependencies without a target-level ordering, which breaks the Makefiles generator (Ninja
+    # resolves it via its global build graph).
+    set_property(
+      TARGET ${TARGET}__embed_props
+      APPEND
+      PROPERTY EMBED_TARGET_DEP_NAMES ${CMAKE_MATCH_1}
+    )
   else()
     if(NOT EXISTS "${ARG_FILE}")
       message(FATAL_ERROR "Source file '${ARG_FILE}' does not exist")
@@ -256,6 +264,11 @@ function(rtcx_embed TARGET)
     PROPERTY EMBED_TARGET_DEPS
   )
   get_property(
+    EMBED_TARGET_DEP_NAMES
+    TARGET ${TARGET}__embed_props
+    PROPERTY EMBED_TARGET_DEP_NAMES
+  )
+  get_property(
     EMBED_ARRAY_IDS
     TARGET ${TARGET}__embed_props
     PROPERTY EMBED_ARRAY_IDS
@@ -306,7 +319,7 @@ function(rtcx_embed TARGET)
   add_custom_command(
     OUTPUT ${OUTPUT_DIR}/${TARGET}.hpp ${OUTPUT_DIR}/${TARGET}.s ${OUTPUT_DIR}/${TARGET}.bin
     COMMAND "${CMAKE_COMMAND}" -E env $<TARGET_FILE:${RUNNER}>
-    DEPENDS "${EMBED_SCRIPT}" ${EMBED_SOURCE_FILES} ${EMBED_TARGET_DEPS}
+    DEPENDS "${EMBED_SCRIPT}" ${EMBED_SOURCE_FILES} ${EMBED_TARGET_DEPS} ${EMBED_TARGET_DEP_NAMES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     COMMENT "Generating JIT embed for ${TARGET} into ${OUTPUT_DIR}"
     VERBATIM
