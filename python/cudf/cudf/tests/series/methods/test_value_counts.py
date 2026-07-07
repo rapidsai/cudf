@@ -238,14 +238,13 @@ def test_value_counts_all_null_pandas_nullable(dtype, normalize, dropna):
     )
 
 
-def test_value_counts_first_appearance_order():
+def test_value_counts_first_appearance_order(sort):
     # pandas returns groups in order of first appearance with sort=False
     # and keeps that order for equal counts with sort=True (GH 63155).
     arr = np.random.default_rng(2).integers(0, 32, 64)
     psr = pd.Series(arr)
     gsr = cudf.Series(arr)
-    for sort in [False, True]:
-        assert_eq(
-            psr.value_counts(sort=sort),
-            gsr.value_counts(sort=sort),
-        )
+    assert_eq(
+        psr.value_counts(sort=sort),
+        gsr.value_counts(sort=sort),
+    )
