@@ -58,6 +58,8 @@ namespace {
     default: break;
   }
 
+  // Consume the maximal run of decimal digits. Leading zeros are allowed and carry no special
+  // meaning.
   std::size_t n = 1;
   while (n < tail.size() && tail[n] >= '0' && tail[n] <= '9') {
     ++n;

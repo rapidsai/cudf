@@ -43,7 +43,7 @@ namespace io::parquet::experimental {
  *   first := name | "." name | "[" index "]"
  *   step  := "." name | "[" index "]"
  *   name  := any sequence of bytes other than '.' or '['
- *   index := non-negative base-10 integer
+ *   index := non-negative base-10 integer (leading zeros are allowed, e.g. "[01]" == "[1]")
  *
  * Examples:
  *   "x"            -> top-level field "x" (leading $ optional)
