@@ -340,29 +340,54 @@ def _truncate_source_name(expr: Expr) -> str | None:
     return None
 
 
+def _ordering_derivation(ne: NamedExpr) -> tuple[str, bool] | None:
+    """
+    Return derivation metadata for supported one-column ordering derivations.
+
+    This is intentionally narrow for now: only temporal truncation is recognized.
+    """
+    source_name = _truncate_source_name(ne.value)
+    if source_name is None:
+        return None
+    # Truncated boundaries may be non-strict.
+    return source_name, False
+
+
 def _derived_ordering(
     ordering: Ordering,
     ne: NamedExpr,
+    old_to_new_names: dict[str, list[str]],
     child_schema: Schema,
     output_schema: Schema,
     context: Context | None,
 ) -> Ordering | None:
-    """
-    Create an ordering for a supported derivation of one key.
-
-    This is intentionally narrow for now: only temporal truncation of a single
-    ordered column is recognized.
-    """
-    if context is None or len(ordering.keys) != 1:
+    """Create an ordering for a supported derivation of one key."""
+    if context is None:
         return None
 
-    source_name = _truncate_source_name(ne.value)
-    if source_name is None:
+    derivation = _ordering_derivation(ne)
+    if derivation is None:
         return None
+    source_name, strict_boundaries = derivation
 
     old_key_names = indices_to_names(ordering.column_indices, child_schema)
-    if old_key_names != (source_name,):
+    try:
+        source_position = old_key_names.index(source_name)
+    except ValueError:
         return None
+
+    prefix_names = old_key_names[:source_position]
+    if not set(prefix_names).issubset(set(old_to_new_names)):
+        return None
+
+    target_key_names = (
+        *(
+            _preferred_target_name(name, old_to_new_names[name])
+            for name in prefix_names
+        ),
+        ne.name,
+    )
+    new_indices = names_to_indices(target_key_names, output_schema)
 
     br = context.br()
     boundary_chunk = ordering.get_boundaries(br)
@@ -370,29 +395,32 @@ def _derived_ordering(
     boundary_df = DataFrame.from_table(
         boundary_chunk.table_view(),
         old_key_names,
-        [child_schema[source_name]],
+        [child_schema[name] for name in old_key_names],
         stream,
     )
     column = ne.evaluate(boundary_df)
+    boundary_columns = [
+        *boundary_chunk.table_view().columns()[:source_position],
+        column.obj,
+    ]
     boundaries = TableChunk.from_pylibcudf_table(
-        plc.Table([column.obj]),
+        plc.Table(boundary_columns),
         stream,
-        exclusive_view=True,
+        exclusive_view=False,
         br=br,
     )
-    key = ordering.keys[0]
-    target_index = names_to_indices((ne.name,), output_schema)[0]
-    # Truncation can merge key values, so this derived ordering is non-strict.
+    keys = tuple(
+        OrderKey(idx, key.order, key.null_order)
+        for idx, key in zip(
+            new_indices,
+            (*ordering.keys[:source_position], ordering.keys[source_position]),
+            strict=True,
+        )
+    )
     return Ordering(
-        (
-            OrderKey(
-                target_index,
-                key.order,
-                key.null_order,
-            ),
-        ),
+        keys,
         boundaries,
-        strict_boundaries=False,
+        strict_boundaries=strict_boundaries,
     )
 
 
@@ -453,6 +481,7 @@ def _remap_scheme_select(
                 derived = _derived_ordering(
                     ordering,
                     ne,
+                    old_to_new_names,
                     select.children[0].schema,
                     select.schema,
                     context,
