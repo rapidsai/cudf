@@ -42,18 +42,19 @@ std::unique_ptr<gkprog_device, std::function<void(gkprog_device*)>> gkprog_devic
   auto const num_states  = h_gp.num_states;
   auto const classes_cnt = static_cast<int32_t>(h_gp.classes.size());
 
-  // compute size of each section
-  auto pos_size         = num_states * sizeof(reinst);
-  auto smasks_size      = GLUSHKOV_MAX_SHIFTS * sizeof(glushkov_state_t);
-  auto samts_size       = GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t);
-  auto reach_ascii_size = GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t);
-  auto exc_size         = num_states * sizeof(glushkov_state_t);
-  auto cls_size         = std::transform_reduce(
+  auto const smasks_size      = GLUSHKOV_MAX_SHIFTS * sizeof(glushkov_state_t);
+  auto const reach_ascii_size = GLUSHKOV_ASCII_TABLE_SIZE * sizeof(glushkov_state_t);
+  auto const cls_size         = std::transform_reduce(
     h_gp.classes.begin(),
     h_gp.classes.end(),
     static_cast<std::size_t>(classes_cnt) * sizeof(reclass_device),
     std::plus<std::size_t>{},
     [](auto const& cls) { return cls.literals.size() * sizeof(reclass_range); });
+
+  // compute size of each section
+  auto pos_size   = num_states * sizeof(reinst);
+  auto samts_size = GLUSHKOV_MAX_SHIFTS * sizeof(uint8_t);
+  auto exc_size   = num_states * sizeof(glushkov_state_t);
 
   // make sure each section is aligned for the subsequent section's data type
   auto const memsize =
