@@ -20,6 +20,8 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
@@ -325,16 +327,79 @@ namespace detail {
 namespace {
 
 /**
- * @brief Check if `d_target` appears in a row in `d_strings`.
+ * @brief Search short rows and collect long-row indices in a single pass.
  *
- * This executes as a warp per string/row and performs well for longer strings.
+ * Executes one thread per string/row, fusing the length-based partitioning with the thread-per-row
+ * search of the short rows:
+ *  - null rows: write `false` (the output null mask already marks these rows invalid)
+ *  - short rows (`size_bytes <= length_threshold`): run the thread-per-row contains scan and write
+ *    the result directly
+ *  - long rows (`size_bytes > length_threshold`): append the row index to `d_long_indices` for the
+ *    subsequent warp-parallel pass
+ *
+ * The long-index append uses a warp-aggregated atomic so each group of coalesced long-row threads
+ * performs a single `atomicAdd` on `d_long_count`, minimizing global-atomic contention.
+ *
+ * @param d_strings Column of input strings
+ * @param d_target String to search for in each row of `d_strings`
+ * @param d_results Indicates which rows contain `d_target`
+ * @param length_threshold Rows with more bytes than this are deferred to the warp-parallel pass
+ * @param d_long_indices Output list of deferred long-row indices (capacity == d_strings.size())
+ * @param d_long_count Output count of entries written to `d_long_indices`
+ */
+CUDF_KERNEL void contains_string_per_thread_heterogeneous(column_device_view const d_strings,
+                                                          string_view const d_target,
+                                                          bool* d_results,
+                                                          size_type const length_threshold,
+                                                          size_type* d_long_indices,
+                                                          size_type* d_long_count)
+{
+  auto const tidx = cudf::detail::grid_1d::global_thread_id();
+  if (tidx >= static_cast<cudf::thread_index_type>(d_strings.size())) { return; }
+  auto const str_idx = static_cast<size_type>(tidx);
+
+  if (d_strings.is_null(str_idx)) {
+    d_results[str_idx] = false;
+    return;
+  }
+
+  auto const d_str = d_strings.element<string_view>(str_idx);
+
+  if (d_str.size_bytes() <= length_threshold) {
+    auto const target_bytes = d_target.size_bytes();
+    auto found              = false;
+    for (size_type i = 0; !found && ((i + target_bytes) <= d_str.size_bytes()); ++i) {
+      found = d_target.compare(d_str.data() + i, target_bytes) == 0;
+    }
+    d_results[str_idx] = found;
+    return;
+  }
+
+  // Long row: defer to the warp-parallel pass. Coalesced long-row threads aggregate their appends
+  // into a single atomicAdd, then each writes its index at a distinct offset.
+  namespace cg      = cooperative_groups;
+  auto const active = cg::coalesced_threads();
+  size_type offset  = 0;
+  if (active.thread_rank() == 0) {
+    offset = atomicAdd(d_long_count, static_cast<size_type>(active.num_threads()));
+  }
+  offset                                                                = active.shfl(offset, 0);
+  d_long_indices[offset + static_cast<size_type>(active.thread_rank())] = str_idx;
+}
+
+/**
+ * @brief Check if `d_target` appears in each deferred long row of `d_strings`.
+ *
+ * This executes as a warp per string/row and performs well for longer strings. Only the (non-null)
+ * long-row indices collected by ::contains_string_per_thread_heterogeneous are processed.
  * @see AVG_CHAR_BYTES_THRESHOLD
  *
  * @param d_strings Column of input strings
  * @param d_target String to search for in each row of `d_strings`
  * @param d_results Indicates which rows contain `d_target`
+ * @param d_long_indices Indices of the long (non-null) rows to process
+ * @param long_count Number of entries in `d_long_indices`
  */
-
 CUDF_KERNEL void contains_warp_parallel_fn_heterogeneous(column_device_view const d_strings,
                                                          string_view const d_target,
                                                          bool* d_results,
@@ -344,20 +409,15 @@ CUDF_KERNEL void contains_warp_parallel_fn_heterogeneous(column_device_view cons
   auto const idx = cudf::detail::grid_1d::global_thread_id();
 
   auto const str_idx = idx / cudf::detail::warp_size;
-  if (str_idx >= long_count) { return; }
+  if (str_idx >= static_cast<cudf::thread_index_type>(long_count)) { return; }
 
   namespace cg        = cooperative_groups;
   auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   auto const lane_idx = warp.thread_rank();
 
+  // Long indices are guaranteed non-null by the partitioning kernel.
   auto const real_str_idx = d_long_indices[str_idx];
-
-  if (d_strings.is_null(real_str_idx)) {
-    if (lane_idx == 0) { d_results[real_str_idx] = false; }
-    return;
-  }
-
-  auto const d_str = d_strings.element<string_view>(real_str_idx);
+  auto const d_str        = d_strings.element<string_view>(real_str_idx);
 
   auto constexpr bytes_per_warp = 4;
   auto found                    = false;
@@ -411,57 +471,35 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
   auto strings_column = column_device_view::create(input.parent(), stream);
   auto d_strings      = *strings_column;
 
-  // Partition indices based on string length threshold (128 bytes)
+  constexpr int block_size = 256;
+
+  // First pass (thread-per-string): search the short rows in place and collect the indices of the
+  // long rows (> length_threshold bytes) for the warp-parallel pass. `long_indices` is sized for
+  // the worst case (all rows long); only the first `long_count` entries are populated.
   size_type const length_threshold = 128;
-  rmm::device_uvector<size_type> indices(strings_count, stream);
-  thrust::sequence(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                   indices.begin(),
-                   indices.end(),
-                   0);
+  rmm::device_uvector<size_type> long_indices(strings_count, stream);
+  rmm::device_scalar<size_type> d_long_count(0, stream);
 
-  auto partition_point =
-    thrust::partition(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                      indices.begin(),
-                      indices.end(),
-                      [d_strings, length_threshold] __device__(size_type idx) {
-                        return !d_strings.is_null(idx) &&
-                               d_strings.element<string_view>(idx).size_bytes() <= length_threshold;
-                      });
+  auto const grid = cudf::detail::grid_1d{strings_count, block_size};
+  contains_string_per_thread_heterogeneous<<<grid.num_blocks,
+                                             grid.num_threads_per_block,
+                                             0,
+                                             stream.value()>>>(
+    d_strings, d_target, d_results, length_threshold, long_indices.data(), d_long_count.data());
 
-  auto const short_count = thrust::distance(indices.begin(), partition_point);
-  auto const long_count  = thrust::distance(partition_point, indices.end());
+  // Read back how many long rows were deferred (synchronizes the stream).
+  auto const long_count = d_long_count.value(stream);
 
-  // Thread-per-string execution
-  if (short_count > 0) {
-    auto pfn = [] __device__(string_view d_string, string_view d_target) {
-      for (size_type i = 0; i <= (d_string.size_bytes() - d_target.size_bytes()); ++i) {
-        if (d_target.compare(d_string.data() + i, d_target.size_bytes()) == 0) { return true; }
-      }
-      return false;
-    };
-
-    thrust::transform(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                      indices.begin(),
-                      partition_point,
-                      thrust::make_permutation_iterator(d_results, indices.begin()),
-                      [d_strings, pfn, d_target] __device__(size_type idx) {
-                        return !d_strings.is_null(idx) &&
-                               bool{pfn(d_strings.element<string_view>(idx), d_target)};
-                      });
-  }
-
-  // Warp-per-string execution
+  // Second pass (warp-per-string): search the deferred long rows.
   if (long_count > 0) {
-    int const block_size = 256;
     int64_t const long_count_warps =
       static_cast<int64_t>(long_count) * static_cast<int64_t>(cudf::detail::warp_size);
-    cudf::detail::grid_1d grid{long_count_warps, block_size};
-    auto d_long_indices = indices.data() + short_count;
-    contains_warp_parallel_fn_heterogeneous<<<grid.num_blocks,
-                                              grid.num_threads_per_block,
+    auto const warp_grid = cudf::detail::grid_1d{long_count_warps, block_size};
+    contains_warp_parallel_fn_heterogeneous<<<warp_grid.num_blocks,
+                                              warp_grid.num_threads_per_block,
                                               0,
                                               stream.value()>>>(
-      d_strings, d_target, d_results, d_long_indices, long_count);
+      d_strings, d_target, d_results, long_indices.data(), long_count);
   }
 
   results->set_null_count(input.null_count());
