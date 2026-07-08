@@ -133,6 +133,12 @@ class TemporalFunction(Expr):
         Name.TotalMicroseconds: 1_000,
         Name.TotalNanoseconds: 1,
     }
+    # Divisor used to derive the century/millennium from the calendar year:
+    # ``(year - 1) // divisor + 1`` (floor division, matching polars).
+    _CENTURY_MILLENNIUM_DIVISOR: ClassVar[dict[Name, int]] = {
+        Name.Millennium: 1_000,
+        Name.Century: 100,
+    }
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
         Name.IsLeapYear,
@@ -145,6 +151,7 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
+        *_CENTURY_MILLENNIUM_DIVISOR.keys(),
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
@@ -222,6 +229,49 @@ class TemporalFunction(Expr):
                     column.obj,
                     self.options[0],
                     stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
+            (column,) = columns
+            int32 = plc.DataType(plc.TypeId.INT32)
+            # YEAR extraction yields INT16; cast up so the arithmetic (and the
+            # INT32 output polars produces) does not overflow or need promotion.
+            year = plc.unary.cast(
+                plc.datetime.extract_datetime_component(
+                    column.obj,
+                    plc.datetime.DatetimeComponent.YEAR,
+                    stream=df.stream,
+                ),
+                int32,
+                stream=df.stream,
+            )
+            # polars computes ``(year - 1) // divisor + 1`` using floor division;
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1, int32, stream=df.stream)
+            )
+            predicate = plc.expressions.Operation(
+                plc.expressions.ASTOperator.ADD,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.FLOOR_DIV,
+                    plc.expressions.Operation(
+                        plc.expressions.ASTOperator.SUB,
+                        plc.expressions.ColumnReference(0),
+                        one,
+                    ),
+                    plc.expressions.Literal(
+                        plc.Scalar.from_py(
+                            self._CENTURY_MILLENNIUM_DIVISOR[self.name],
+                            int32,
+                            stream=df.stream,
+                        )
+                    ),
+                ),
+                one,
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([year]), predicate, stream=df.stream
                 ),
                 dtype=self.dtype,
             )
