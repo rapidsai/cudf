@@ -10,7 +10,7 @@ import itertools
 import operator
 import struct
 import time
-from collections import deque
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
@@ -311,30 +311,29 @@ def _update_ordering_indices(
     )
 
 
-def _is_order_transparent_cast(expr: Cast) -> bool:
+def _is_truncate_transparent_cast(expr: Cast) -> bool:
     src_id = expr.children[0].dtype.id()
     dst_id = expr.dtype.id()
     if src_id == dst_id:
         return True
-    return {src_id, dst_id} == {
-        plc.TypeId.INT64,
-        plc.TypeId.TIMESTAMP_NANOSECONDS,
-    }
+    return (
+        src_id == plc.TypeId.INT64 and dst_id == plc.TypeId.TIMESTAMP_NANOSECONDS
+    ) or (src_id == plc.TypeId.TIMESTAMP_NANOSECONDS and dst_id == plc.TypeId.INT64)
 
 
-def _unwrap_order_transparent_casts(expr: Expr) -> Expr:
-    while isinstance(expr, Cast) and _is_order_transparent_cast(expr):
+def _unwrap_truncate_transparent_casts(expr: Expr) -> Expr:
+    while isinstance(expr, Cast) and _is_truncate_transparent_cast(expr):
         (expr,) = expr.children
     return expr
 
 
 def _truncate_source_name(expr: Expr) -> str | None:
-    expr = _unwrap_order_transparent_casts(expr)
+    expr = _unwrap_truncate_transparent_casts(expr)
     if (
         isinstance(expr, TemporalFunction)
         and expr.name is TemporalFunction.Name.Truncate
     ):
-        source = _unwrap_order_transparent_casts(expr.children[0])
+        source = _unwrap_truncate_transparent_casts(expr.children[0])
         if isinstance(source, Col):
             return source.name
     return None
@@ -430,11 +429,11 @@ def _derived_ordering(
 
 
 def _select_column_targets(select: Select) -> dict[str, list[str]]:
-    old_to_new_names: dict[str, list[str]] = {}
+    old_to_new_names: defaultdict[str, list[str]] = defaultdict(list)
     for ne in select.exprs:
         if isinstance(ne.value, Col):
-            old_to_new_names.setdefault(ne.value.name, []).append(ne.name)
-    return old_to_new_names
+            old_to_new_names[ne.value.name].append(ne.name)
+    return dict(old_to_new_names)
 
 
 def _preferred_target_name(old_name: str, targets: list[str]) -> str:
