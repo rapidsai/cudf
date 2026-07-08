@@ -2819,7 +2819,10 @@ class RangeIndex(Index):
             other = other.item()
         if isinstance(other, (int, np.integer)):
             return RangeIndex(
-                self.start * other, self.stop * other, self.step * other
+                self.start * other,
+                self.stop * other,
+                self.step * other,
+                name=self.name,
             )
         return self._as_int_index().__mul__(other)
 
@@ -3064,8 +3067,51 @@ class RangeIndex(Index):
         return self._as_int_index()._split(splits)
 
     def _binaryop(self, other, op: str):  # type: ignore[override]
-        # TODO: certain binops don't require materializing range index and
-        # could use some optimization.
+        # Ops with a raw int that shift or exactly rescale the range return
+        # a RangeIndex to match pandas (RangeIndex._arith_method and
+        # RangeIndex.__floordiv__); everything else materializes.
+        if (
+            isinstance(other, (np.ndarray, cupy.ndarray))
+            and other.ndim == 0
+            and other.dtype.kind in "iu"
+        ):
+            other = other.item()
+        if isinstance(other, (int, np.integer)) and not isinstance(
+            other, (bool, np.bool_)
+        ):
+            other = int(other)
+            if op in {"__add__", "__radd__"}:
+                return RangeIndex(
+                    self.start + other,
+                    self.stop + other,
+                    self.step,
+                    name=self.name,
+                )
+            elif op == "__sub__":
+                return RangeIndex(
+                    self.start - other,
+                    self.stop - other,
+                    self.step,
+                    name=self.name,
+                )
+            elif op == "__rsub__":
+                return RangeIndex(
+                    other - self.start,
+                    other - self.stop,
+                    -self.step,
+                    name=self.name,
+                )
+            elif op == "__floordiv__" and other != 0:
+                if len(self) == 0 or (
+                    self.start % other == 0 and self.step % other == 0
+                ):
+                    start = self.start // other
+                    step = self.step // other
+                    stop = start + len(self) * step
+                    return RangeIndex(start, stop, step or 1, name=self.name)
+                elif len(self) == 1:
+                    start = self.start // other
+                    return RangeIndex(start, start + 1, 1, name=self.name)
         return self._as_int_index()._binaryop(other, op=op)
 
     def join(

@@ -484,6 +484,9 @@ Index = make_final_proxy_type(
         "__array_function__": array_function_method,
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
+        # matches pd.Index (1000) so wrapped-ndarray proxies defer
+        # binops/ufuncs to the Index's reflected op
+        "__array_priority__": pd.Index.__array_priority__,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
