@@ -629,15 +629,19 @@ class UnaryFunction(Expr):
                     self.dtype.plc_type,
                     stream=df.stream,
                 )
-                return Column(
-                    plc.reduce.scan(
-                        counts,
-                        plc.aggregation.sum(),
-                        plc.reduce.ScanType.INCLUSIVE,
-                        stream=df.stream,
-                    ),
-                    dtype=self.dtype,
+                if reverse:
+                    # A reverse cumulative aggregation is a forward one over
+                    # the reversed column, reversed back into place.
+                    counts = plc.copying.reverse(counts, stream=df.stream)
+                result = plc.reduce.scan(
+                    counts,
+                    plc.aggregation.sum(),
+                    plc.reduce.ScanType.INCLUSIVE,
+                    stream=df.stream,
                 )
+                if reverse:
+                    result = plc.copying.reverse(result, stream=df.stream)
+                return Column(result, dtype=self.dtype)
             plc_col = column.obj
             if reverse:
                 # A reverse cumulative aggregation is a forward one over the

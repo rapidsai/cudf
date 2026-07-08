@@ -154,6 +154,7 @@ def test_cum_count(engine: pl.GPUEngine, data):
     [
         ([1, 2, 3, 4, 5], pl.Int32),
         ([1, None, 3, None, 5], pl.Int32),
+        ([None, None, None], pl.Int32),
         ([2, 3, 4], pl.Int8),
         ([1.5, 2.0, 0.5, 4.0], pl.Float64),
         ([], pl.Int32),
