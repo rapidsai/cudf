@@ -236,13 +236,9 @@ class TemporalFunction(Expr):
         elif self.name is TemporalFunction.Name.DaysInMonth:
             (column,) = columns
             return Column(
-                plc.unary.cast(
-                    plc.datetime.days_in_month(column.obj, stream=df.stream),
-                    self.dtype.plc_type,
-                    stream=df.stream,
-                ),
-                dtype=self.dtype,
-            )
+                plc.datetime.days_in_month(column.obj, stream=df.stream),
+                dtype=DataType(pl.Int16()),
+            ).astype(self.dtype, stream=df.stream)
         elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
             (column,) = columns
             int32 = plc.DataType(plc.TypeId.INT32)
