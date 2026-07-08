@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -34,6 +34,7 @@ from cudf_polars.utils.versions import (
         "std",
         "var",
         # scan aggs from UnaryFunction
+        "cum_count",
         "cum_min",
         "cum_max",
         "cum_prod",
@@ -110,6 +111,21 @@ def test_bool_agg(engine: pl.GPUEngine, agg):
     q = df.select(expr)
 
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, None, 3, None, 5],
+        [None, None, None],
+        [1, 2, 3],
+        [],
+    ],
+)
+def test_cum_count(engine: pl.GPUEngine, data):
+    df = pl.LazyFrame({"a": pl.Series(data, dtype=pl.Int64())})
+    q = df.select(pl.col("a").cum_count())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("cum_agg", sorted(expr.UnaryFunction._supported_cum_aggs))

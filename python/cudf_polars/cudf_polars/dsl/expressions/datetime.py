@@ -137,6 +137,7 @@ class TemporalFunction(Expr):
     # ``(year - 1) // divisor + 1`` (floor division, matching polars).
     _CENTURY_MILLENNIUM_DIVISOR: ClassVar[dict[Name, int]] = {
         Name.Millennium: 1_000,
+        Name.Century: 100,
     }
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
@@ -150,7 +151,7 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
-        Name.Millennium,
+        *_CENTURY_MILLENNIUM_DIVISOR.keys(),
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
 
@@ -246,8 +247,6 @@ class TemporalFunction(Expr):
                 stream=df.stream,
             )
             # polars computes ``(year - 1) // divisor + 1`` using floor division;
-            # evaluate the whole arithmetic as a single fused libcudf AST
-            # expression rather than three separate binaryop kernels.
             one = plc.expressions.Literal(
                 plc.Scalar.from_py(1, int32, stream=df.stream)
             )

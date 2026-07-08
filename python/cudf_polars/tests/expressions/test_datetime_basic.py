@@ -213,7 +213,7 @@ def test_duration_total_component_extract(engine: pl.GPUEngine, field, dtype):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize("method", ["millennium"])
+@pytest.mark.parametrize("method", ["century", "millennium"])
 @pytest.mark.parametrize(
     "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
 )
@@ -234,7 +234,7 @@ def test_century_millennium(engine: pl.GPUEngine, method, dtype):
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize("method", ["millennium"])
+@pytest.mark.parametrize("method", ["century", "millennium"])
 @pytest.mark.parametrize(
     "days",
     [
