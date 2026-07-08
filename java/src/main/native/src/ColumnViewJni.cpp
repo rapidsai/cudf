@@ -854,7 +854,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplit(
     auto const input          = reinterpret_cast<cudf::column_view const*>(input_handle);
     auto const strings_column = cudf::strings_column_view{*input};
     auto const delimiter_jstr = cudf::jni::native_jstring(env, delimiter_obj);
-    auto const delimiter      = std::string(delimiter_jstr.get(), delimiter_jstr.size_bytes());
+    auto const delimiter      = std::string(delimiter_jstr);
     auto const max_split      = limit > 1 ? limit - 1 : limit;
     auto result = cudf::strings::split(strings_column, cudf::string_scalar{delimiter}, max_split);
     return cudf::jni::convert_table_for_return(env, std::move(result));
@@ -889,7 +889,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRe(JNIEnv
     auto const input          = reinterpret_cast<cudf::column_view const*>(input_handle);
     auto const strings_column = cudf::strings_column_view{*input};
     auto const pattern_jstr   = cudf::jni::native_jstring(env, pattern_obj);
-    auto const pattern        = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
+    auto const pattern        = std::string(pattern_jstr);
     auto const max_split      = limit > 1 ? limit - 1 : limit;
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups         = static_cast<cudf::strings::capture_groups>(capture_groups);
@@ -922,7 +922,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecord(
     auto const input          = reinterpret_cast<cudf::column_view const*>(input_handle);
     auto const strings_column = cudf::strings_column_view{*input};
     auto const delimiter_jstr = cudf::jni::native_jstring(env, delimiter_obj);
-    auto const delimiter      = std::string(delimiter_jstr.get(), delimiter_jstr.size_bytes());
+    auto const delimiter      = std::string(delimiter_jstr);
     auto const max_split      = limit > 1 ? limit - 1 : limit;
     auto result =
       cudf::strings::split_record(strings_column, cudf::string_scalar{delimiter}, max_split);
@@ -958,7 +958,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringSplitRecordRe(JNIEn
     auto const input          = reinterpret_cast<cudf::column_view const*>(input_handle);
     auto const strings_column = cudf::strings_column_view{*input};
     auto const pattern_jstr   = cudf::jni::native_jstring(env, pattern_obj);
-    auto const pattern        = std::string(pattern_jstr.get(), pattern_jstr.size_bytes());
+    auto const pattern        = std::string(pattern_jstr);
     auto const max_split      = limit > 1 ? limit - 1 : limit;
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups         = static_cast<cudf::strings::capture_groups>(capture_groups);
@@ -1467,7 +1467,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_stringTimestampToTimestam
     cudf::strings_column_view strings_column(*column);
 
     return release_as_jlong(cudf::strings::to_timestamps(
-      strings_column, cudf::data_type(static_cast<cudf::type_id>(time_unit)), format.get()));
+      strings_column, cudf::data_type(static_cast<cudf::type_id>(time_unit)), format));
   }
   JNI_CATCH(env, 0);
 }
@@ -1486,7 +1486,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isTimestamp(JNIEnv* env,
     cudf::jni::native_jstring format(env, formatObj);
     cudf::column_view* column = reinterpret_cast<cudf::column_view*>(handle);
     cudf::strings_column_view strings_column(*column);
-    return release_as_jlong(cudf::strings::is_timestamp(strings_column, format.get()));
+    return release_as_jlong(cudf::strings::is_timestamp(strings_column, format));
   }
   JNI_CATCH(env, 0);
 }
@@ -1504,7 +1504,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_timestampToStringTimestam
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jstring format(env, j_format);
     cudf::column_view* column = reinterpret_cast<cudf::column_view*>(handle);
-    return release_as_jlong(cudf::strings::from_timestamps(*column, format.get()));
+    return release_as_jlong(cudf::strings::from_timestamps(*column, format));
   }
   JNI_CATCH(env, 0);
 }
@@ -1554,7 +1554,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_transform(
     cudf::jni::auto_set_device(env);
     cudf::column_view* column = reinterpret_cast<cudf::column_view*>(handle);
     cudf::jni::native_jstring n_j_udf(env, j_udf);
-    std::string n_udf(n_j_udf.get());
+    std::string n_udf              = n_j_udf;
     cudf::transform_input inputs[] = {*column};
     return release_as_jlong(cudf::transform_extended(
       inputs,
@@ -1660,7 +1660,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_matchesRe(JNIEnv* env,
     auto const pattern        = cudf::jni::native_jstring(env, pattern_obj);
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups         = static_cast<cudf::strings::capture_groups>(capture_groups);
-    auto const regex_prog     = cudf::strings::regex_program::create(pattern.get(), flags, groups);
+    auto const regex_prog     = cudf::strings::regex_program::create(pattern, flags, groups);
     return release_as_jlong(cudf::strings::matches_re(strings_column, *regex_prog));
   }
   JNI_CATCH(env, 0);
@@ -1684,7 +1684,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_containsRe(JNIEnv* env,
     auto const pattern        = cudf::jni::native_jstring(env, pattern_obj);
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const capture        = static_cast<cudf::strings::capture_groups>(capture_groups);
-    auto const regex_prog     = cudf::strings::regex_program::create(pattern.get(), flags, capture);
+    auto const regex_prog     = cudf::strings::regex_program::create(pattern, flags, capture);
     return release_as_jlong(cudf::strings::contains_re(strings_column, *regex_prog));
   }
   JNI_CATCH(env, 0);
@@ -1803,7 +1803,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substringS(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     auto const cv  = reinterpret_cast<cudf::column_view const*>(cv_handle);
     auto const scv = cudf::strings_column_view{*cv};
-    return release_as_jlong(cudf::strings::slice_strings(scv, start));
+    auto const st  = std::optional<cudf::size_type>(start);
+    return release_as_jlong(cudf::strings::slice_strings(scv, st));
   }
   JNI_CATCH(env, 0);
 }
@@ -1817,7 +1818,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_substring(
     cudf::jni::auto_set_device(env);
     cudf::column_view* cv = reinterpret_cast<cudf::column_view*>(column_view);
     cudf::strings_column_view scv(*cv);
-    return release_as_jlong(cudf::strings::slice_strings(scv, start, end));
+    auto const st = std::optional<cudf::size_type>(start);
+    auto const en = std::optional<cudf::size_type>(end);
+    return release_as_jlong(cudf::strings::slice_strings(scv, st, en));
   }
   JNI_CATCH(env, 0);
 }
@@ -2006,7 +2009,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_replaceRegex(JNIEnv* env,
     auto const pattern        = cudf::jni::native_jstring(env, j_pattern);
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups         = static_cast<cudf::strings::capture_groups>(capture_groups);
-    auto const regex_prog     = cudf::strings::regex_program::create(pattern.get(), flags, groups);
+    auto const regex_prog     = cudf::strings::regex_program::create(pattern, flags, groups);
     auto const repl           = reinterpret_cast<cudf::string_scalar const*>(j_repl);
     return release_as_jlong(
       cudf::strings::replace_re(strings_column, *regex_prog, *repl, j_maxrepl));
@@ -2034,10 +2037,10 @@ Java_ai_rapids_cudf_ColumnView_stringReplaceWithBackrefs(JNIEnv* env,
     auto const pattern        = cudf::jni::native_jstring(env, pattern_obj);
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups         = static_cast<cudf::strings::capture_groups>(capture_groups);
-    auto const regex_prog     = cudf::strings::regex_program::create(pattern.get(), flags, groups);
+    auto const regex_prog     = cudf::strings::regex_program::create(pattern, flags, groups);
     cudf::jni::native_jstring ss_replace(env, replace_obj);
     return release_as_jlong(
-      cudf::strings::replace_with_backrefs(strings_column, *regex_prog, ss_replace.get()));
+      cudf::strings::replace_with_backrefs(strings_column, *regex_prog, ss_replace));
   }
   JNI_CATCH(env, 0);
 }
@@ -2072,7 +2075,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_pad(
     cudf::size_type width         = reinterpret_cast<cudf::size_type>(j_width);
     cudf::strings::side_type side = static_cast<cudf::strings::side_type>(j_side);
     cudf::jni::native_jstring ss_fill(env, fill_char);
-    return release_as_jlong(cudf::strings::pad(scv, width, side, ss_fill.get()));
+    return release_as_jlong(cudf::strings::pad(scv, width, side, ss_fill));
   }
   JNI_CATCH(env, 0);
 }
@@ -2112,7 +2115,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_extractRe(JNIEnv* en
     auto const pattern        = cudf::jni::native_jstring(env, pattern_obj);
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const groups         = static_cast<cudf::strings::capture_groups>(capture_groups);
-    auto const regex_prog     = cudf::strings::regex_program::create(pattern.get(), flags, groups);
+    auto const regex_prog     = cudf::strings::regex_program::create(pattern, flags, groups);
     return cudf::jni::convert_table_for_return(env,
                                                cudf::strings::extract(strings_column, *regex_prog));
   }
@@ -2138,7 +2141,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractAllRecord(JNIEnv* 
     auto const pattern        = cudf::jni::native_jstring(env, pattern_obj);
     auto const flags          = static_cast<cudf::strings::regex_flags>(regex_flags);
     auto const regex_prog     = cudf::strings::regex_program::create(
-      pattern.get(),
+      pattern,
       flags,
       idx == 0 ? cudf::strings::capture_groups::NON_CAPTURE
                    : static_cast<cudf::strings::capture_groups>(capture_groups));

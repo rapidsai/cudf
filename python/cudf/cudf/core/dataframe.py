@@ -106,7 +106,6 @@ from cudf.utils import docutils, ioutils, queryutils
 from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
-    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
     dtype_from_pylibcudf_column,
     find_common_type,
@@ -581,8 +580,16 @@ def _listlike_to_column_accessor(
         if index is None:
             index = cudf.RangeIndex(0)
         if columns is not None:
+            # An empty (zero-row) column with no data has no inferable type;
+            # default it to ``object`` to match pandas (cudf otherwise uses
+            # the default string dtype). Scoped to zero-row columns so the
+            # padded case keeps the string dtype and does not surface the
+            # inherent None-vs-NaN difference.
+            empty_col_dtype = (
+                np.dtype("object") if len(index) == 0 else DEFAULT_STRING_DTYPE
+            )
             col_data = {
-                col_label: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
+                col_label: column_empty(len(index), dtype=empty_col_dtype)
                 for col_label in columns
             }
         else:
@@ -675,7 +682,7 @@ def _listlike_to_column_accessor(
                     ser = ser.reindex(temp_index)
                 temp_data[i] = ser._column
 
-            temp_frame = DataFrame._from_data(
+            combined = DataFrame._from_data(
                 ColumnAccessor(
                     temp_data,
                     verify=False,
@@ -683,9 +690,18 @@ def _listlike_to_column_accessor(
                 ),
                 index=temp_index,
             )
-            transpose = temp_frame.T
         else:
-            transpose = cudf.concat(data, axis=1).T
+            combined = cudf.concat(data, axis=1)
+        # Aligning rows above can upcast integer columns that gained nulls
+        # (e.g. int -> float64), leaving columns with differing dtypes;
+        # transpose requires a single dtype, so promote to a common one
+        # first (matching pandas, which upcasts the whole frame).
+        if combined._num_columns > 1:
+            common_dtype = find_common_type(
+                [dtype for _, dtype in combined._dtypes]
+            )
+            combined = combined.astype(common_dtype)
+        transpose = combined.T
 
         if columns is None:
             columns = pd.RangeIndex(transpose._num_columns)
@@ -1088,7 +1104,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     index = index[:0]
                     col_accessor = ColumnAccessor(
                         {
-                            col: column_empty(0, dtype=DEFAULT_STRING_DTYPE)
+                            # Zero-row no-data columns default to ``object``
+                            # to match pandas.
+                            col: column_empty(0, dtype=np.dtype("object"))
                             for col in columns
                         },
                         verify=False,
@@ -1106,9 +1124,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if index is None:
                 index = RangeIndex(0)
             if columns is not None:
+                # Zero-row no-data columns default to ``object`` to match
+                # pandas; padded columns keep the string dtype.
+                empty_col_dtype = (
+                    np.dtype("object")
+                    if len(index) == 0
+                    else DEFAULT_STRING_DTYPE
+                )
                 col_accessor = ColumnAccessor(
                     {
-                        k: column_empty(len(index), dtype=DEFAULT_STRING_DTYPE)
+                        k: column_empty(len(index), dtype=empty_col_dtype)
                         for k in columns
                     },
                     verify=False,
@@ -3213,6 +3238,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
     def reindex(
         self,
         labels=None,
+        *,
         index=None,
         columns=None,
         axis=None,
@@ -3275,20 +3301,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         >>> new_index = ['Safari', 'Iceweasel', 'Comodo Dragon', 'IE10',
         ...              'Chrome']
         >>> df.reindex(new_index)
-                    http_status response_time
-        Safari                404          0.07
-        Iceweasel            <NA>           NaN
-        Comodo Dragon        <NA>           NaN
-        IE10                  404          0.08
-        Chrome                200          0.02
-
-        .. pandas-compat::
-            :meth:`pandas.DataFrame.reindex`
-
-            Note: One difference from Pandas is that ``NA`` is used for rows
-            that do not match, rather than ``NaN``. One side effect of this is
-            that the column ``http_status`` retains an integer dtype in cuDF
-            where it is cast to float in Pandas.
+                      http_status response_time
+        Safari              404.0          0.07
+        Iceweasel             NaN           NaN
+        Comodo Dragon         NaN           NaN
+        IE10                404.0          0.08
+        Chrome              200.0          0.02
 
         We can fill in the missing values by
         passing a value to the keyword ``fill_value``.
@@ -3325,6 +3343,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if labels is None and index is None and columns is None:
             return self.copy(deep=copy)
 
+        if labels is not None and index is not None and columns is not None:
+            raise TypeError(
+                "Cannot specify all of 'labels', 'index', 'columns'."
+            )
+
         # pandas simply ignores the labels keyword if it is provided in
         # addition to index and columns, but it prohibits the axis arg.
         if (index is not None or columns is not None) and axis is not None:
@@ -3342,6 +3365,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if columns is None:
             df = self
         else:
+            if (
+                not isinstance(columns, (pd.Index, Index))
+                and len(columns) == 0
+            ):
+                # pandas' Index.reindex treats an empty non-Index target as
+                # ``columns[:0]``, preserving the columns' metadata.
+                columns = self._data.to_pandas_index[:0]
             columns = Index(columns)
             intersection = self._data.to_pandas_index.intersection(
                 columns.to_pandas()
@@ -3526,7 +3556,18 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             and not isinstance(keys[0], (cudf.MultiIndex, pd.MultiIndex))
         ):
             # Don't turn single level MultiIndex into an Index
-            idx = Index._from_column(data_to_add[0], name=names[0])
+            freq = (
+                getattr(keys[0], "freq", None)
+                if isinstance(keys[0], (cudf.Index, pd.Index))
+                else None
+            )
+            if freq is not None and data_to_add[0].dtype.kind == "M":
+                # Preserve the freq of a DatetimeIndex passed as the key.
+                idx = cudf.DatetimeIndex._from_column(
+                    data_to_add[0], name=names[0], freq=freq
+                )
+            else:
+                idx = Index._from_column(data_to_add[0], name=names[0])
         else:
             idx = MultiIndex._from_data(dict(enumerate(data_to_add)))
             idx.names = names
@@ -3909,7 +3950,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     self.index, how="right", sort=False
                 )
 
-        value = as_column(value, nan_as_null=nan_as_null)
+        if isinstance(value, (list, tuple)) and len(value) == 0:
+            # An empty list-like assigned as a DataFrame column has no
+            # inferable dtype and becomes float64, matching pandas (note
+            # pd.Series([]) is object, but DataFrame column assignment is
+            # float64).
+            value = as_column(
+                value, nan_as_null=nan_as_null, dtype=np.dtype(np.float64)
+            )
+        else:
+            value = as_column(value, nan_as_null=nan_as_null)
         self._data.insert(name, value, loc=loc)
 
     @property
@@ -4223,16 +4273,27 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
 
             if level is not None and isinstance(self.index, MultiIndex):
-                level = self.index._get_level_label(level)
+                # Resolve to the ColumnAccessor label (e.g. the positional key
+                # ``0`` for an unnamed level), NOT the level *name* (which is
+                # ``None`` for unnamed levels and would insert a spurious extra
+                # column rather than overwrite the level being renamed).
+                ca_label, _ = self.index._level_to_ca_label(level)
                 level_values = self.index.get_level_values(level)
                 ca = self.index._data.copy(deep=copy)
-                ca[level] = level_values._column.find_and_replace(
+                vals = list(index.values())
+                is_all_na = all(val is None for val in vals)
+                ca[ca_label] = level_values._column.find_and_replace(
                     to_replace=list(index.keys()),
-                    replacement=list(index.values()),
+                    replacement=vals,
+                    all_nan=is_all_na,
                 )
                 out_index = type(self.index)._from_data(
                     ca, name=self.index.name
                 )
+                # ``_from_data`` derives level names from the ColumnAccessor
+                # keys (positional ints for an unnamed MultiIndex); restore the
+                # original level names so renaming a level does not rename it.
+                out_index.names = self.index.names
             else:
                 to_replace = list(index.keys())
                 vals = list(index.values())
@@ -7055,13 +7116,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         3       bird     2   NaN
 
         By default, missing values are not considered, and the mode of wings
-        are both 0 and 2. The second row of species and legs contains ``NA``,
+        are both 0 and 2. The second row of species and legs contains ``NaN``,
         because they have only one mode, but the DataFrame has two rows.
 
         >>> df.mode()
-          species  legs  wings
-        0    bird     2    0.0
-        1     NaN  <NA>    2.0
+          species legs  wings
+        0    bird  2.0    0.0
+        1     NaN  NaN    2.0
 
         Setting ``dropna=False``, ``NA`` values are considered and they can be
         the mode (like for wings).
@@ -7074,9 +7135,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         computed, and columns of other types are ignored.
 
         >>> df.mode(numeric_only=True)
-           legs  wings
-        0     2    0.0
-        1  <NA>    2.0
+          legs  wings
+        0  2.0    0.0
+        1  NaN    2.0
 
         .. pandas-compat::
             :meth:`pandas.DataFrame.transpose`
@@ -7348,32 +7409,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         5  False  2.0
         """
 
-        # code modified from:
-        # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
+        # Mirrors pandas.DataFrame.select_dtypes:
+        # https://github.com/pandas-dev/pandas/blob/main/pandas/core/frame.py
 
         if not isinstance(include, (list, tuple)):
             include = (include,) if include is not None else ()
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        def cudf_dtype_from_pydata_dtype(dtype):
-            """Given a numpy or pandas dtype, converts it into the equivalent cuDF
-            Python dtype.
-            """
-            if _is_categorical_dtype(dtype):
-                return CategoricalDtype
-            elif is_decimal32_dtype(dtype):
-                return Decimal32Dtype
-            elif is_decimal64_dtype(dtype):
-                return Decimal64Dtype
-            elif is_decimal128_dtype(dtype):
-                return Decimal128Dtype
-            elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
-                return dtype.type
-            return pd.core.dtypes.common.infer_dtype_from_object(dtype)
-
-        # cudf_dtype_from_pydata_dtype can distinguish between
-        # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
 
         if not any(selection):
@@ -7381,10 +7424,42 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "at least one of include or exclude must be nonempty"
             )
 
-        include, exclude = map(
-            lambda x: frozenset(map(cudf_dtype_from_pydata_dtype, x)),
-            selection,
+        def convert_dtype_entry(entry):
+            """Convert an include/exclude entry to the generic type(s) used
+            for matching, like pandas' ``check_int_infer_dtype``.
+            """
+            if _is_categorical_dtype(entry):
+                return (pd.core.dtypes.dtypes.CategoricalDtypeType,)
+            elif is_decimal32_dtype(entry):
+                return (Decimal32Dtype,)
+            elif is_decimal64_dtype(entry):
+                return (Decimal64Dtype,)
+            elif is_decimal128_dtype(entry):
+                return (Decimal128Dtype,)
+            elif (isinstance(entry, str) and entry == "int") or entry is int:
+                # Numpy maps int to different types (int32, int64) on Windows
+                # and Linux
+                return (np.int32, np.int64)
+            elif (
+                isinstance(entry, str) and entry == "float"
+            ) or entry is float:
+                # np.dtype("float") coerces to np.float64 from Numpy 1.20
+                return (np.float64, np.float32)
+            return (pd.core.dtypes.common.infer_dtype_from_object(entry),)
+
+        include, exclude = (
+            frozenset(
+                itertools.chain.from_iterable(map(convert_dtype_entry, x))
+            )
+            for x in selection
         )
+
+        for dtypes_set in (include, exclude):
+            if dtypes_set & {np.dtype("S").type, np.dtype("<U").type}:
+                raise TypeError(
+                    "numpy string dtypes are not allowed, use 'str' or "
+                    "'object' instead"
+                )
 
         # can't both include AND exclude!
         if not include.isdisjoint(exclude):
@@ -7392,47 +7467,62 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 f"include and exclude overlap on {(include & exclude)}"
             )
 
-        # include all subtypes
-        include_subtypes = set()
-        for _, dtype in self._dtypes:
-            for i_dtype in include:
-                # category handling
-                if i_dtype == CategoricalDtype:
-                    # Matches cudf & pandas dtype objects
-                    include_subtypes.add(i_dtype)
-                elif inspect.isclass(dtype.type):
-                    if issubclass(dtype.type, i_dtype):
-                        include_subtypes.add(dtype.type)
+        def dtype_predicate(dtype, dtypes_set):
+            if _is_categorical_dtype(dtype):
+                # cudf's CategoricalDtype.type is the categories' scalar
+                # type, so it must not participate in the generic matching
+                return pd.core.dtypes.dtypes.CategoricalDtypeType in dtypes_set
+            if isinstance(
+                dtype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)
+            ):
+                return type(dtype) in dtypes_set
+            if isinstance(dtype, pd.ArrowDtype):
+                dtype = dtype.numpy_dtype
+            classes = tuple(t for t in dtypes_set if inspect.isclass(t))
+            return (
+                (
+                    inspect.isclass(dtype.type)
+                    and issubclass(dtype.type, classes)
+                )
+                # BooleanDtype._is_numeric == True but should be excluded
+                or (
+                    np.number in dtypes_set
+                    and getattr(dtype, "_is_numeric", False)
+                    and dtype.kind != "b"
+                )
+                # backwards compat for the default `str` dtype being
+                # selected by object
+                or (
+                    isinstance(dtype, pd.StringDtype)
+                    and dtype.na_value is np.nan
+                    and np.object_ in dtypes_set
+                )
+            )
 
-        # exclude all subtypes
-        exclude_subtypes = set()
-        for _, dtype in self._dtypes:
-            for e_dtype in exclude:
-                # category handling
-                if e_dtype == CategoricalDtype:
-                    # Matches cudf & pandas dtype objects
-                    exclude_subtypes.add(e_dtype)
-                elif inspect.isclass(dtype.type):
-                    if issubclass(dtype.type, e_dtype):
-                        exclude_subtypes.add(dtype.type)
-
-        include_all = {
-            cudf_dtype_from_pydata_dtype(dtype) for _, dtype in self._dtypes
-        }
-
-        if include:
-            inclusion = include_all & include_subtypes
-        elif exclude:
-            inclusion = include_all
-        else:
-            inclusion = set()
-        # remove all exclude types
-        inclusion = inclusion - exclude_subtypes
+        if (
+            np.object_ in include
+            and str not in include
+            and str not in exclude
+            and any(
+                isinstance(dtype, pd.StringDtype) and dtype.na_value is np.nan
+                for _, dtype in self._dtypes
+            )
+        ):
+            warnings.warn(
+                "For backward compatibility, 'str' dtypes are included by "
+                "select_dtypes when 'object' dtype is specified. "
+                "This behavior is deprecated and will be removed in a future "
+                "version. Explicitly pass 'str' to `include` to select them, "
+                "or to `exclude` to remove them and silence this warning.",
+                FutureWarning,
+                stacklevel=2,
+            )
 
         to_select = [
             label
             for label, dtype in self._dtypes
-            if cudf_dtype_from_pydata_dtype(dtype) in inclusion
+            if (not include or dtype_predicate(dtype, include))
+            and (not exclude or not dtype_predicate(dtype, exclude))
         ]
         result = self.loc[:, to_select]
         if not to_select and self._data.rangeindex:

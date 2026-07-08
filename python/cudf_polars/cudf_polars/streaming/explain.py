@@ -29,6 +29,7 @@ from cudf_polars.dsl.ir import (
     GroupBy,
     HStack,
     Join,
+    PythonScan,
     Scan,
     Select,
     Sort,
@@ -407,7 +408,11 @@ def _repr_ir_tree(
             f" projected={_fmt_partition_bytes(projected_size)}"
         )
         header = header.rstrip("\n") + f" [{plan_info}]\n"
-    if count is not None:
+    if isinstance(ir, PythonScan):
+        # The lowered partition count is a placeholder. under dynamic planning the
+        # runtime adapts to the real chunk count, so don't report a misleading value.
+        header = header.rstrip("\n") + " [unknown]\n"
+    elif count is not None:
         header = header.rstrip("\n") + f" [{count}]\n"
 
     children_strs = [
@@ -488,8 +493,11 @@ def _predicate_to_str(expr: Expr) -> str:
             sym = _BINOP_SYMBOLS.get(op, op.name)
             return f"({_predicate_to_str(left)} {sym} {_predicate_to_str(right)})"
         case UnaryFunction(name=name):
-            (child,) = expr.children
-            return f"{name}({_predicate_to_str(child)})"
+            # Unlike the other cases here, UnaryFunction doesn't have a fixed
+            # number of children. E.g. `pl.col("x").fill_null(0)` has two:
+            # the column expression ("x") and the fill value literal (0).
+            args = ", ".join(_predicate_to_str(child) for child in expr.children)
+            return f"{name}({args})"
         case Ternary():
             when, then, otherwise = expr.children
             return f"when({_predicate_to_str(when)}).then({_predicate_to_str(then)}).otherwise({_predicate_to_str(otherwise)})"
