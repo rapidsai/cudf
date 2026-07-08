@@ -457,6 +457,8 @@ _names_to_skip_in_cpp = {
     "orc::column_statistics",
     # Span subclasses access base class members
     "base::",
+    # host_span defines member typedefs via its underlying cuda::std::span alias
+    "span_type",
 }
 
 _domain_objects = None
