@@ -475,6 +475,7 @@ STREAMING_ENGINE_EXPECTED_FAILURES: Mapping[str, str] = {
     "tests/unit/io/test_scan_lines.py::test_scan_lines[True-False-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/io/test_scan_lines.py::test_scan_lines[True-True-True]": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/lazyframe/test_lazyframe.py::test_len": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
+    "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_horizontal_extend_select_len": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/lazyframe/test_projections.py::test_projection_pushdown_select_len": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/operations/test_scalar.py::test_scalar_len_20046": "len() row count lost in zero-column streaming chunks (https://github.com/rapidsai/cudf/issues/21428)",
     "tests/unit/operations/test_slice.py::test_hconcat_tail_unequal_heights_strict_raises_27552": "horizontal-concat strict height-mismatch raised inside an ExceptionGroup under the streaming engine",
