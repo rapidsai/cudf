@@ -355,7 +355,7 @@ def _ordering_derivation(ne: NamedExpr) -> tuple[str, bool] | None:
 def _derived_ordering(
     ordering: Ordering,
     ne: NamedExpr,
-    old_to_new_names: dict[str, list[str]],
+    old_to_new_names: dict[str, dict[str, None]],
     child_schema: Schema,
     output_schema: Schema,
     context: Context | None,
@@ -428,16 +428,16 @@ def _derived_ordering(
     )
 
 
-def _select_column_targets(select: Select) -> dict[str, list[str]]:
-    old_to_new_names: defaultdict[str, list[str]] = defaultdict(list)
+def _select_column_targets(select: Select) -> dict[str, dict[str, None]]:
+    old_to_new_names: defaultdict[str, dict[str, None]] = defaultdict(dict)
     for ne in select.exprs:
         if isinstance(ne.value, Col):
-            old_to_new_names[ne.value.name].append(ne.name)
+            old_to_new_names[ne.value.name][ne.name] = None
     return dict(old_to_new_names)
 
 
-def _preferred_target_name(old_name: str, targets: list[str]) -> str:
-    return old_name if old_name in targets else targets[0]
+def _preferred_target_name(old_name: str, targets: dict[str, None]) -> str:
+    return old_name if old_name in targets else next(iter(targets))
 
 
 def _remap_scheme_select(
