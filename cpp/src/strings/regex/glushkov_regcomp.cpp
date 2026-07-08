@@ -40,10 +40,12 @@
 #include <cudf/strings/detail/char_tables.hpp>
 
 #include <algorithm>
+#include <array>
 #include <bit>
-#include <map>
 #include <memory>
+#include <tuple>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -102,21 +104,22 @@ bool is_assertion(int32_t const type)
 /**
  * @brief Iterative (explicit-stack) depth-first ε-closure from @p start.
  *
- * Traversal order does not matter here: results are OR'd into
- * bitmasks / boolean flags by the caller.
+ * Traversal order does not matter here: results are OR'd into bitmasks /
+ * boolean flags by the caller.
  *
- * Fills:
- *   @p char_positions  – IDs of reachable character-consuming instructions.
- *   @p is_accept       – set to true if END is reachable.
- *   @p has_assert      – set to true if an assertion instruction is encountered.
+ * @return tuple of:
+ *   - char_positions : IDs of reachable character-consuming instructions.
+ *   - is_accept      : true if END is reachable.
+ *   - has_assert     : true if an assertion instruction is encountered.
  */
-void eps_closure(int32_t const start,
-                 reprog const& prog,
-                 std::unordered_set<int32_t>& seen,
-                 std::vector<int32_t>& char_positions,
-                 bool& is_accept,
-                 bool& has_assert)
+std::tuple<std::vector<int32_t>, bool, bool> eps_closure(int32_t const start,
+                                                         reprog const& prog,
+                                                         std::unordered_set<int32_t>& seen)
 {
+  std::vector<int32_t> char_positions;
+  bool is_accept  = false;
+  bool has_assert = false;
+
   std::vector<int32_t> stack{start};
   while (!stack.empty()) {
     int32_t const inst_id = stack.back();
@@ -154,18 +157,16 @@ void eps_closure(int32_t const start,
       default: break;
     }
   }
+  return {std::move(char_positions), is_accept, has_assert};
 }
 
-/// Wrapper that creates fresh local bookkeeping objects.
-std::vector<int32_t> eps_closure_from(int32_t const start,
-                                      reprog const& prog,
-                                      bool& is_accept,
-                                      bool& has_assert)
+/// Wrapper that supplies a fresh `seen` set for a standalone ε-closure.
+/// @return tuple of (char_positions, is_accept, has_assert); see eps_closure.
+std::tuple<std::vector<int32_t>, bool, bool> eps_closure_from(int32_t const start,
+                                                              reprog const& prog)
 {
   std::unordered_set<int32_t> seen;
-  std::vector<int32_t> positions;
-  eps_closure(start, prog, seen, positions, is_accept, has_assert);
-  return positions;
+  return eps_closure(start, prog, seen);
 }
 
 // ---------------------------------------------------------------------------
@@ -335,8 +336,10 @@ bool frontier_has_priority_conflict(std::vector<frontier_item> const& items, gkp
  */
 void build_shift_masks(gkprog& gp)
 {
-  // Collect per-span source-position bitmasks
-  std::map<int32_t, glushkov_state_t> span_to_mask;
+  // Collect per-span source-position bitmasks.  Spans are bounded to [1, 63]
+  // (see the shift-slot check below), so a fixed array indexed by span suffices;
+  // Index 0 is unused.
+  std::array<glushkov_state_t, 64> span_to_mask{};
 
   for (uint32_t p = 0; p < gp.num_states; ++p) {
     glushkov_state_t follow = gp.follow_table[p];
@@ -355,11 +358,19 @@ void build_shift_masks(gkprog& gp)
     }
   }
 
-  // Sort candidate spans by population (descending) to pick the best slots
-  std::vector<std::pair<int32_t, glushkov_state_t>> span_list(span_to_mask.begin(),
-                                                              span_to_mask.end());
+  // Gather populated spans in ascending span order (deterministic input).
+  std::vector<std::pair<int32_t, glushkov_state_t>> span_list;
+  for (int32_t span = 1; span <= 63; ++span) {
+    if (span_to_mask[span]) { span_list.emplace_back(span, span_to_mask[span]); }
+  }
+
+  // Sort candidate spans by population (descending) to pick the best slots.
+  // Break ties by smaller span so the selection is deterministic regardless of
+  // std::sort's (unspecified) ordering of equal elements.
   std::sort(span_list.begin(), span_list.end(), [](auto const& a, auto const& b) {
-    return std::popcount(a.second) > std::popcount(b.second);
+    auto const pa = std::popcount(a.second);
+    auto const pb = std::popcount(b.second);
+    return (pa != pb) ? (pa > pb) : (a.first < b.first);
   });
 
   // Use a local const for the loop bound so GCC's static analyzer can prove
@@ -439,9 +450,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
   // ---- Step 4: first_set = ε_closure(startinst) ∩ {char-consuming} ------
   bool empty_matchable = false;
   {
-    bool is_accept   = false;
-    bool has_assert  = false;
-    auto const plist = eps_closure_from(prog.get_start_inst(), prog, is_accept, has_assert);
+    auto const [plist, is_accept, has_assert] = eps_closure_from(prog.get_start_inst(), prog);
     if (has_assert) { return nullptr; }
     for (int32_t iid : plist) {
       int32_t const pos = inst_to_pos[iid];
@@ -461,9 +470,7 @@ std::unique_ptr<gkprog> build_glushkov_program(reprog const& prog)
     int32_t const inst_id = char_insts[idx];
     int32_t const next_id = prog.insts_data()[inst_id].u2.next_id;
 
-    bool is_accept          = false;
-    bool has_assert         = false;
-    auto const follow_insts = eps_closure_from(next_id, prog, is_accept, has_assert);
+    auto const [follow_insts, is_accept, has_assert] = eps_closure_from(next_id, prog);
     if (has_assert) { return nullptr; }
 
     for (int32_t fiid : follow_insts) {
