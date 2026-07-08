@@ -4,16 +4,17 @@
 
 from __future__ import annotations
 
-from collections import defaultdict
 from typing import TYPE_CHECKING
 
 import polars as pl
 
 import pylibcudf as plc
-from cudf_streaming.partition_utils import unpack_and_concat
+from cudf_streaming.partition_utils import (
+    packed_data_from_cudf_packed_columns,
+    unpack_and_concat,
+)
 from cudf_streaming.table_chunk import TableChunk
 from pylibcudf.contiguous_split import pack
-from rapidsmpf.memory.packed_data import PackedData
 from rapidsmpf.streaming.coll.sparse_alltoall import SparseAlltoall
 from rapidsmpf.streaming.core.message import Message
 
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from cudf_streaming.channel_metadata import OrderScheme, Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
+    from rapidsmpf.memory.packed_data import PackedData
     from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
     from rmm.pylibrmm.stream import Stream
@@ -58,31 +60,6 @@ def _partition_range(rank: int, nranks: int, npartitions: int) -> tuple[int, int
         (rank * npartitions + nranks - 1) // nranks,
         ((rank + 1) * npartitions + nranks - 1) // nranks,
     )
-
-
-def _local_partitions(rank: int, nranks: int, npartitions: int) -> list[int]:
-    """Return partition IDs owned by *rank* under contiguous assignment."""
-    start, stop = _partition_range(rank, nranks, npartitions)
-    return list(range(start, stop))
-
-
-def _contiguous_owners(
-    start: int,
-    stop: int,
-    nranks: int,
-    npartitions: int,
-) -> list[int]:
-    """Return ranks owning any partition in the half-open range [start, stop)."""
-    if start >= stop:
-        return []
-    first_rank = _contiguous_owner(start, nranks, npartitions)
-    last_rank = _contiguous_owner(stop - 1, nranks, npartitions)
-    owners = []
-    for rank in range(first_rank, last_rank + 1):
-        rank_start, rank_stop = _partition_range(rank, nranks, npartitions)
-        if max(start, rank_start) < min(stop, rank_stop):
-            owners.append(rank)
-    return owners
 
 
 def _validate_schemes(input_scheme: OrderScheme, output_scheme: OrderScheme) -> None:
@@ -174,51 +151,38 @@ def _boundary_search_positions(
     return positions["lower"].to_list(), positions["upper"].to_list()
 
 
-def _peer_ranks(
-    rank: int,
+def _source_output_range(
+    source_rank: int,
     nranks: int,
     input_ordering: Ordering,
     output_ordering: Ordering,
     lower_positions: list[int],
     upper_positions: list[int],
-) -> tuple[list[int], list[int]]:
-    """Return source and destination ranks needed for OrderScheme adjustment."""
+) -> tuple[int, int]:
+    """Return the half-open output partition range touched by a source rank."""
     input_npartitions = input_ordering.num_boundaries + 1
     output_npartitions = output_ordering.num_boundaries + 1
     output_prefix_only = len(output_ordering.keys) < len(input_ordering.keys)
     include_upper_boundary = output_prefix_only or not input_ordering.strict_boundaries
-
-    def dsts_for_source(source_rank: int) -> list[int]:
-        input_start, input_stop = _partition_range(
-            source_rank, nranks, input_npartitions
+    input_start, input_stop = _partition_range(source_rank, nranks, input_npartitions)
+    if input_start == input_stop:
+        return 0, 0
+    output_start = 0 if input_start == 0 else upper_positions[input_start - 1]
+    output_stop = (
+        output_npartitions
+        if input_stop == input_npartitions
+        else (
+            upper_positions[input_stop - 1] + 1
+            if include_upper_boundary
+            else lower_positions[input_stop - 1] + 1
         )
-        if input_start == input_stop:
-            return []
-        output_start = 0 if input_start == 0 else upper_positions[input_start - 1]
-        output_stop = (
-            output_npartitions
-            if input_stop == input_npartitions
-            else (
-                upper_positions[input_stop - 1] + 1
-                if include_upper_boundary
-                else lower_positions[input_stop - 1] + 1
-            )
-        )
-        return [
-            dst
-            for dst in _contiguous_owners(
-                output_start, output_stop, nranks, output_npartitions
-            )
-            if dst != source_rank
-        ]
+    )
+    return output_start, output_stop
 
-    dsts = dsts_for_source(rank)
-    srcs = [
-        source_rank
-        for source_rank in range(nranks)
-        if source_rank != rank and rank in dsts_for_source(source_rank)
-    ]
-    return srcs, dsts
+
+def _ranges_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
+    """Return whether two half-open integer ranges overlap."""
+    return max(left[0], right[0]) < min(left[1], right[1])
 
 
 def _unpack_remote_piece(
@@ -265,6 +229,69 @@ def _copy_to_owned_chunk(
         exclusive_view=True,
         br=br,
     )
+
+
+class _OutputPieceReader:
+    """Read input only far enough to materialize requested output windows."""
+
+    def __init__(
+        self,
+        context: Context,
+        ch_in: Channel[TableChunk],
+        boundary_chunk: TableChunk,
+        output_ordering: Ordering,
+    ) -> None:
+        self.context = context
+        self.ch_in = ch_in
+        self.boundary_chunk = boundary_chunk
+        self.boundary_table = boundary_chunk.table_view()
+        self.output_ordering = output_ordering
+        self.pending: dict[int, ChunkStore] = {}
+        self.input_done = False
+
+    def _store(self, pid: int, chunk: TableChunk) -> None:
+        if pid not in self.pending:
+            self.pending[pid] = ChunkStore(self.context)
+        self.pending[pid].insert(Message(pid, chunk))
+
+    def _has_reached(self, stop: int) -> bool:
+        return any(pid >= stop for pid in self.pending)
+
+    async def collect_window(self, start: int, stop: int) -> dict[int, ChunkStore]:
+        """Return all locally-read pieces for output pids in ``[start, stop)``."""
+        while not self.input_done and not self._has_reached(stop):
+            msg = await self.ch_in.recv(self.context)
+            if msg is None:
+                self.input_done = True
+                break
+            chunk = TableChunk.from_message(
+                msg, br=self.context.br()
+            ).make_available_and_spill(self.context.br(), allow_overbooking=True)
+            if chunk.table_view().num_rows() == 0:
+                continue
+            with stream_ordered_after(
+                self.context.br().stream_pool.get_stream,
+                upstreams=(chunk.stream, self.boundary_chunk.stream),
+            ) as stream:
+                table = chunk.table_view()
+                splits = _split_points(
+                    table, self.boundary_table, self.output_ordering, stream
+                )
+                for pid, piece in enumerate(
+                    plc.copying.split(table, splits, stream=stream)
+                ):
+                    if piece.num_rows() == 0:
+                        continue
+                    self._store(
+                        pid, _copy_to_owned_chunk(piece, stream, self.context.br())
+                    )
+
+        out = {
+            pid: self.pending.pop(pid)
+            for pid in list(self.pending)
+            if start <= pid < stop
+        }
+        return dict(sorted(out.items()))
 
 
 async def _adjust_orderscheme_local(
@@ -336,6 +363,223 @@ async def _adjust_orderscheme_local(
     await ch_out.drain(context)
 
 
+def _store_chunk(
+    context: Context,
+    stores: dict[int, ChunkStore],
+    pid: int,
+    chunk: TableChunk,
+) -> None:
+    if pid not in stores:
+        stores[pid] = ChunkStore(context)
+    stores[pid].insert(Message(pid, chunk))
+
+
+async def _adjust_orderscheme_rank_hybrid(
+    context: Context,
+    comm: Communicator,
+    ref_ir: IR,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    input_ordering: Ordering,
+    output_ordering: Ordering,
+    collective_id: int,
+    lower_positions: list[int],
+    upper_positions: list[int],
+) -> None:
+    npartitions = output_ordering.num_boundaries + 1
+    boundary_chunk = output_ordering.get_boundaries(context.br())
+    boundary_table = boundary_chunk.table_view()
+    local_window = _partition_range(comm.rank, comm.nranks, npartitions)
+    source_ranges = [
+        _source_output_range(
+            source_rank,
+            comm.nranks,
+            input_ordering,
+            output_ordering,
+            lower_positions,
+            upper_positions,
+        )
+        for source_rank in range(comm.nranks)
+    ]
+    local_source_range = source_ranges[comm.rank]
+    srcs = [
+        source_rank
+        for source_rank, source_range in enumerate(source_ranges)
+        if source_rank != comm.rank and _ranges_overlap(source_range, local_window)
+    ]
+    dsts = [
+        output_rank
+        for output_rank in range(comm.nranks)
+        if output_rank != comm.rank
+        and _ranges_overlap(
+            local_source_range, _partition_range(output_rank, comm.nranks, npartitions)
+        )
+    ]
+    exchange = SparseAlltoall(
+        context,
+        comm,
+        collective_id,
+        srcs=srcs,
+        dsts=dsts,
+    )
+
+    async def send_piece(pid: int, chunk: TableChunk) -> None:
+        with stream_ordered_after(
+            context.br().stream_pool.get_stream,
+            upstreams=(chunk.stream,),
+        ) as stream:
+            exchange.insert(
+                _contiguous_owner(pid, comm.nranks, npartitions),
+                packed_data_from_cudf_packed_columns(
+                    pack(
+                        _append_partition_id(chunk.table_view(), pid, stream),
+                        stream,
+                        mr=context.br().device_mr,
+                    ),
+                    stream,
+                    context.br(),
+                ),
+            )
+
+    async def emit(pid: int, store: ChunkStore | None) -> None:
+        chunks = (
+            [TableChunk.from_message(msg, br=context.br()) for msg in store]
+            if store is not None
+            else []
+        )
+        chunk = (
+            await concat_batch(chunks, context, ref_ir.schema, ir_context)
+            if chunks
+            else empty_table_chunk(ref_ir, context, ir_context.get_cuda_stream())
+        )
+        await ch_out.send(context, Message(pid, chunk))
+
+    # Ranks with no incoming dependency can stream local output immediately
+    # while sending remote-owned pieces as they are encountered.
+    if not srcs:
+        pending_pid: int | None = None
+        pending_chunks: ChunkStore | None = None
+        next_pid = local_window[0]
+
+        async def emit_pending(pid: int) -> None:
+            nonlocal pending_pid, pending_chunks
+            await emit(pid, pending_chunks if pending_pid == pid else None)
+            if pending_pid == pid:
+                pending_pid = None
+                pending_chunks = None
+
+        try:
+            while (msg := await ch_in.recv(context)) is not None:
+                chunk = TableChunk.from_message(
+                    msg, br=context.br()
+                ).make_available_and_spill(context.br(), allow_overbooking=True)
+                if chunk.table_view().num_rows() == 0:
+                    continue
+                with stream_ordered_after(
+                    context.br().stream_pool.get_stream,
+                    upstreams=(chunk.stream, boundary_chunk.stream),
+                ) as stream:
+                    table = chunk.table_view()
+                    splits = _split_points(
+                        table, boundary_table, output_ordering, stream
+                    )
+                    for pid, piece in enumerate(
+                        plc.copying.split(table, splits, stream=stream)
+                    ):
+                        if piece.num_rows() == 0:
+                            continue
+                        owner = _contiguous_owner(pid, comm.nranks, npartitions)
+                        owned = owner == comm.rank
+                        piece_chunk = _copy_to_owned_chunk(piece, stream, context.br())
+                        if not owned:
+                            await send_piece(pid, piece_chunk)
+                            continue
+                        if pending_pid is not None and pending_pid != pid:
+                            emitted_pid = pending_pid
+                            await emit_pending(emitted_pid)
+                            next_pid = emitted_pid + 1
+                        while next_pid < pid:
+                            await emit_pending(next_pid)
+                            next_pid += 1
+                        if pending_pid is None:
+                            pending_pid = pid
+                            pending_chunks = ChunkStore(context)
+                        assert pending_chunks is not None
+                        pending_chunks.insert(Message(pid, piece_chunk))
+        finally:
+            await exchange.insert_finished(context)
+
+        while next_pid < local_window[1]:
+            await emit_pending(next_pid)
+            next_pid += 1
+        await ch_out.drain(context)
+        return
+
+    reader = _OutputPieceReader(context, ch_in, boundary_chunk, output_ordering)
+    local_pieces: dict[int, ChunkStore] = {}
+    # If a higher rank depends on this rank's data, read far enough to make
+    # that data available before waiting for lower-rank input.
+    if dsts:
+        pieces = await reader.collect_window(*local_source_range)
+        for pid, store in pieces.items():
+            owner = _contiguous_owner(pid, comm.nranks, npartitions)
+            if owner == comm.rank:
+                local_pieces[pid] = store
+                continue
+            for msg in store:
+                await send_piece(pid, TableChunk.from_message(msg, br=context.br()))
+    await exchange.insert_finished(context)
+
+    pieces_by_source: dict[int, dict[int, ChunkStore]] = {}
+    if local_pieces:
+        pieces_by_source[comm.rank] = local_pieces
+    for source_rank in srcs:
+        remote_pieces: dict[int, ChunkStore] = {}
+        stream = context.br().stream_pool.get_stream()
+        for packed in exchange.extract(source_rank):
+            remote_piece = _unpack_remote_piece(packed, stream, context.br())
+            if remote_piece is None:
+                continue
+            pid, chunk = remote_piece
+            _store_chunk(context, remote_pieces, pid, chunk)
+        pieces_by_source[source_rank] = remote_pieces
+
+    for pid, store in (await reader.collect_window(*local_window)).items():
+        if _contiguous_owner(pid, comm.nranks, npartitions) == comm.rank:
+            if pid not in local_pieces:
+                local_pieces[pid] = ChunkStore(context)
+            for msg in store:
+                local_pieces[pid].insert(msg)
+    if local_pieces:
+        pieces_by_source[comm.rank] = local_pieces
+
+    contributing_sources = [
+        source_rank
+        for source_rank, source_range in enumerate(source_ranges)
+        if _ranges_overlap(source_range, local_window)
+    ]
+    for pid in range(*local_window):
+        chunks: list[TableChunk] = []
+        for source_rank in contributing_sources:
+            stores = pieces_by_source.get(source_rank)
+            if stores is None:
+                continue
+            pid_store = stores.get(pid)
+            if pid_store is None:
+                continue
+            chunks.extend(
+                TableChunk.from_message(msg, br=context.br()) for msg in pid_store
+            )
+        chunk = (
+            await concat_batch(chunks, context, ref_ir.schema, ir_context)
+            if chunks
+            else empty_table_chunk(ref_ir, context, ir_context.get_cuda_stream())
+        )
+        await ch_out.send(context, Message(pid, chunk))
+    await ch_out.drain(context)
+
+
 async def adjust_orderscheme(
     context: Context,
     comm: Communicator,
@@ -382,8 +626,6 @@ async def adjust_orderscheme(
     _validate_schemes(input_scheme, output_scheme)
     input_ordering = _primary_ordering(input_scheme)
     output_ordering = _primary_ordering(output_scheme)
-    npartitions = output_ordering.num_boundaries + 1
-    local_pids = _local_partitions(comm.rank, comm.nranks, npartitions)
 
     if comm.nranks > 1 and collective_id is None:
         raise ValueError("collective_id is required when comm.nranks > 1.")
@@ -403,105 +645,30 @@ async def adjust_orderscheme(
         input_boundary_chunk = input_ordering.get_boundaries(context.br())
         boundary_chunk = output_ordering.get_boundaries(context.br())
         boundary_table = boundary_chunk.table_view()
-        srcs: list[int] = []
-        dsts: list[int] = []
-        if comm.nranks > 1:
-            with stream_ordered_after(
-                context.br().stream_pool.get_stream,
-                upstreams=(input_boundary_chunk.stream, boundary_chunk.stream),
-            ) as stream:
-                lower_positions, upper_positions = _boundary_search_positions(
-                    input_boundary_chunk.table_view(),
-                    boundary_table,
-                    output_ordering,
-                    stream,
-                )
-            srcs, dsts = _peer_ranks(
-                comm.rank,
-                comm.nranks,
-                input_ordering,
+        with stream_ordered_after(
+            context.br().stream_pool.get_stream,
+            upstreams=(input_boundary_chunk.stream, boundary_chunk.stream),
+        ) as stream:
+            lower_positions, upper_positions = _boundary_search_positions(
+                input_boundary_chunk.table_view(),
+                boundary_table,
                 output_ordering,
-                lower_positions,
-                upper_positions,
+                stream,
             )
-        exchange = (
-            SparseAlltoall(context, comm, collective_id, srcs=srcs, dsts=dsts)
-            if comm.nranks > 1
-            else None
+        assert collective_id is not None
+        await _adjust_orderscheme_rank_hybrid(
+            context,
+            comm,
+            ref_ir,
+            ir_context,
+            ch_out,
+            ch_in,
+            input_ordering,
+            output_ordering,
+            collective_id,
+            lower_positions,
+            upper_positions,
         )
-        local_chunks: dict[int, list[TableChunk]] = defaultdict(list)
-
-        try:
-            while (msg := await ch_in.recv(context)) is not None:
-                chunk = TableChunk.from_message(
-                    msg, br=context.br()
-                ).make_available_and_spill(context.br(), allow_overbooking=True)
-                if chunk.table_view().num_rows() == 0:
-                    continue
-                with stream_ordered_after(
-                    context.br().stream_pool.get_stream,
-                    upstreams=(chunk.stream, boundary_chunk.stream),
-                ) as stream:
-                    table = chunk.table_view()
-                    splits = _split_points(
-                        table, boundary_table, output_ordering, stream
-                    )
-                    for pid, piece in enumerate(
-                        plc.copying.split(table, splits, stream=stream)
-                    ):
-                        if piece.num_rows() == 0:
-                            continue
-                        owner = _contiguous_owner(pid, comm.nranks, npartitions)
-                        if owner == comm.rank:
-                            local_chunks[pid].append(
-                                _copy_to_owned_chunk(piece, stream, context.br())
-                            )
-                        else:
-                            assert exchange is not None
-                            exchange.insert(
-                                owner,
-                                PackedData.from_cudf_packed_columns(
-                                    pack(
-                                        _append_partition_id(piece, pid, stream),
-                                        stream,
-                                        mr=context.br().device_mr,
-                                    ),
-                                    stream,
-                                    context.br(),
-                                ),
-                            )
-        finally:
-            if exchange is not None:
-                await exchange.insert_finished(context)
-
-        output_chunks: dict[int, list[TableChunk]] = defaultdict(list)
-        for source_rank in (
-            *[src for src in srcs if src < comm.rank],
-            comm.rank,
-            *[src for src in srcs if src > comm.rank],
-        ):
-            if source_rank == comm.rank:
-                for pid, chunks in local_chunks.items():
-                    output_chunks[pid].extend(chunks)
-            else:
-                assert exchange is not None
-                stream = context.br().stream_pool.get_stream()
-                for packed in exchange.extract(source_rank):
-                    remote_piece = _unpack_remote_piece(packed, stream, context.br())
-                    if remote_piece is None:
-                        continue
-                    pid, chunk = remote_piece
-                    output_chunks[pid].append(chunk)
-
-        for pid in local_pids:
-            chunks = output_chunks[pid]
-            chunk = (
-                await concat_batch(chunks, context, ref_ir.schema, ir_context)
-                if chunks
-                else empty_table_chunk(ref_ir, context, ir_context.get_cuda_stream())
-            )
-            await ch_out.send(context, Message(pid, chunk))
-        await ch_out.drain(context)
     except BaseException:
         await gather_in_task_group(
             ch_in.shutdown(context),

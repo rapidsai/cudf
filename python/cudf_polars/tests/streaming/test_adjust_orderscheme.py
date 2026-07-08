@@ -337,6 +337,44 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(
 
 
 @pytest.mark.spmd
+def test_adjust_orderscheme_middle_rank_buffers_only_as_needed(
+    spmd_engine: SPMDEngine,
+) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+    if comm.nranks != 3:
+        pytest.skip("This test expects exactly three ranks.")
+
+    keys = {
+        0: [0, 5, 9],
+        1: [10, 15, 19],
+        2: [20, 25],
+    }[comm.rank]
+    stream = context.br().stream_pool.get_stream()
+    input_scheme = _make_scheme(context, [10, 20], stream=stream)
+    output_scheme = _make_scheme(context, [5, 15], stream=stream)
+
+    with reserve_op_id() as op_id:
+        output = asyncio.run(
+            _adjust_and_collect(
+                context,
+                comm,
+                _frame(keys),
+                input_scheme,
+                output_scheme,
+                collective_id=op_id,
+            )
+        )
+
+    expected = {
+        0: {0: [0]},
+        1: {1: [5, 9, 10]},
+        2: {2: [15, 19, 20, 25]},
+    }[comm.rank]
+    _assert_partition_output(output, expected)
+
+
+@pytest.mark.spmd
 def test_adjust_orderscheme_all_empty_input(spmd_engine: SPMDEngine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
