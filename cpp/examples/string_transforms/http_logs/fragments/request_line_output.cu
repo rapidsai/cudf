@@ -5,6 +5,8 @@
 
 #include "udf.cuh"
 
+// The host supplies spans backed by the final strings-column character buffers. Their lengths were
+// computed by the matching sizing fragment.
 extern "C" __device__ int transform(cuda::std::span<char>* method,
                                     cuda::std::span<char>* path,
                                     cuda::std::span<char>* version,

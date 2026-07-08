@@ -5,6 +5,8 @@
 
 #include "udf.cuh"
 
+// One output pointer is provided for each eventual string column. Each row writes only byte counts;
+// the host scans these columns to build string offsets.
 extern "C" __device__ int transform(int32_t* client_ip_size,
                                     int32_t* timestamp_size,
                                     int32_t* method_size,

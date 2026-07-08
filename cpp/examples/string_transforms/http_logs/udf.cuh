@@ -12,6 +12,8 @@
 
 namespace http_log_udf {
 
+// A field is represented as a half-open byte range into the original log line. Keeping ranges
+// avoids copying data while the parser discovers all output fields.
 struct field_range {
   int32_t begin{};
   int32_t end{};
@@ -39,6 +41,7 @@ struct combined_log_fields {
                                                 char const needle,
                                                 int32_t begin)
 {
+  // These example formats are ASCII-delimited, so byte offsets are also valid character offsets.
   for (auto i = begin; i < input.size_bytes(); ++i) {
     if (input.data()[i] == needle) { return i; }
   }
@@ -47,6 +50,7 @@ struct combined_log_fields {
 
 [[nodiscard]] __device__ request_line_fields parse_request_line(cudf::string_view const input)
 {
+  // Expected form: METHOD /path?optional-query HTTP/version
   auto const method_end              = find_character(input, ' ', 0);
   auto const target_end              = find_character(input, ' ', method_end + 1);
   auto const query_begin             = find_character(input, '?', method_end + 1);
@@ -60,6 +64,9 @@ struct combined_log_fields {
 
 [[nodiscard]] __device__ combined_log_fields parse_combined_log(cudf::string_view const input)
 {
+  // Walk the delimiters once and retain only ranges for the seven fields emitted by the example.
+  // The checked-in input is well-formed, so validation and malformed-row handling are intentionally
+  // outside the scope of this transform demonstration.
   auto const ip_end           = find_character(input, ' ', 0);
   auto const timestamp_begin  = find_character(input, '[', ip_end) + 1;
   auto const timestamp_end    = find_character(input, ']', timestamp_begin);
@@ -90,6 +97,7 @@ __device__ void copy_field(cuda::std::span<char> output,
                            cudf::string_view const input,
                            field_range const field)
 {
+  // output is a view into the final chars child allocated from the sizing pass offsets.
   for (auto i = int32_t{0}; i < field.size(); ++i) {
     output[i] = input.data()[field.begin + i];
   }

@@ -33,12 +33,15 @@
 
 namespace {
 
+// Every implementation below produces the same output schema. PRECOMPILED uses public regex APIs,
+// JIT compiles CUDA source at runtime, and LTO links CUDA fragments compiled during the build.
 enum class variant { PRECOMPILED, JIT, LTO };
 enum class operation { REQUEST_LINE, COMBINED_LOG };
 
 constexpr auto request_line_output_count = std::size_t{3};
 constexpr auto combined_log_output_count = std::size_t{7};
 
+// Each capture group becomes one output column in the public-regex baseline.
 constexpr std::string_view request_line_pattern =
   R"(^([A-Z]+) ([^ ?]+)[^ ]* HTTP/([0-9]+[.][0-9]+)$)";
 constexpr std::string_view combined_log_pattern =
@@ -56,6 +59,8 @@ struct options {
 // Runtime JIT compilation consumes CUDA source strings. Each operation has one UDF that computes
 // exact output sizes and another that writes into the resulting character buffers.
 constexpr char request_line_sizes_udf[] = R"***(
+// multi_transform calls this function once per input row. Pointer parameters are output columns;
+// writing a byte count to each one lets the host create exact string offsets before allocation.
 __device__ void compute_request_line_sizes(int32_t* method_size,
                                            int32_t* path_size,
                                            int32_t* version_size,
@@ -70,6 +75,7 @@ __device__ void compute_request_line_sizes(int32_t* method_size,
   auto const method_end  = find_character(' ', 0);
   auto const target_end  = find_character(' ', method_end + 1);
   auto const query_begin = find_character('?', method_end + 1);
+  // Strip the query string so the path matches the first regex capture workload.
   auto const path_end    = query_begin < target_end ? query_begin : target_end;
 
   *method_size  = method_end;
@@ -79,6 +85,8 @@ __device__ void compute_request_line_sizes(int32_t* method_size,
 )***";
 
 constexpr char request_line_output_udf[] = R"***(
+// Each span points at the final character buffer for one output string in this row. Its size came
+// from compute_request_line_sizes, so this pass only copies bytes and performs no allocation.
 __device__ void write_request_line(cuda::std::span<char>* method,
                                    cuda::std::span<char>* path,
                                    cuda::std::span<char>* version,
@@ -108,6 +116,8 @@ __device__ void write_request_line(cuda::std::span<char>* method,
 )***";
 
 constexpr char combined_log_sizes_udf[] = R"***(
+// The combined-log operation has seven outputs, so the UDF receives seven output pointers followed
+// by the input string. The parameter order defines the output-column order.
 __device__ void compute_combined_log_sizes(int32_t* client_ip_size,
                                            int32_t* timestamp_size,
                                            int32_t* method_size,
@@ -140,6 +150,7 @@ __device__ void compute_combined_log_sizes(int32_t* client_ip_size,
   auto const user_agent_begin = find_character('\"', referer_end + 1) + 1;
   auto const user_agent_end   = find_character('\"', user_agent_begin);
 
+  // Report exact byte counts; the scan on the host turns these into run-end offsets.
   *client_ip_size  = client_ip_end;
   *timestamp_size  = timestamp_end - timestamp_begin;
   *method_size     = method_end - request_begin;
@@ -151,6 +162,8 @@ __device__ void compute_combined_log_sizes(int32_t* client_ip_size,
 )***";
 
 constexpr char combined_log_output_udf[] = R"***(
+// This second-pass UDF repeats the inexpensive delimiter search, then copies each parsed field into
+// the exact final allocation described by the sizing pass.
 __device__ void write_combined_log(cuda::std::span<char>* client_ip,
                                    cuda::std::span<char>* timestamp,
                                    cuda::std::span<char>* method,
@@ -299,6 +312,8 @@ constexpr std::string_view usage =
 [[nodiscard]] std::vector<cudf::transform_output> make_output_specs(std::size_t count,
                                                                     cudf::type_id type)
 {
+  // The example data is well-formed, and both parsers always write every field, so no output needs
+  // a null mask.
   auto const spec =
     cudf::transform_output{cudf::data_type{type}, cudf::output_nullability::ALL_VALID};
   return std::vector<cudf::transform_output>(count, spec);
@@ -306,6 +321,8 @@ constexpr std::string_view usage =
 
 [[nodiscard]] std::span<uint8_t const> get_fragment(std::size_t id)
 {
+  // rtcx_embed concatenates all AOT fatbins into one byte array. file_ranges identifies the slice
+  // belonging to the requested sizing or output fragment.
   auto const range = http_log_fragments::file_ranges[id];
   return http_log_fragments::files.subspan(range[0], range[1]);
 }
@@ -354,6 +371,7 @@ constexpr std::string_view usage =
   cudf::transform_input inputs[] = {input};
 
   if (implementation == variant::JIT) {
+    // Compile the human-readable CUDA source on first use, then reuse the cached kernel.
     return cudf::multi_transform(sizing_udf(selected_operation),
                                  cudf::udf_source_type::CUDA,
                                  cudf::null_aware::NO,
@@ -366,6 +384,7 @@ constexpr std::string_view usage =
                                  mr);
   }
 
+  // Link the build-time-compiled fatbin with libcudf's transform kernel at runtime.
   return cudf::transform_lto(get_fragment(sizing_fragment(selected_operation)),
                              cudf::lto_binary_type::FATBIN,
                              cudf::null_aware::NO,
@@ -404,6 +423,7 @@ constexpr std::string_view usage =
   cudf::transform_input inputs[] = {input};
 
   if (implementation == variant::JIT) {
+    // Supplying offsets avoids the usual temporary string_view output and compaction step.
     return cudf::multi_transform(output_udf(selected_operation),
                                  cudf::udf_source_type::CUDA,
                                  cudf::null_aware::NO,
@@ -416,6 +436,7 @@ constexpr std::string_view usage =
                                  mr);
   }
 
+  // The AOT path uses the same offsets and output ABI; only the UDF representation differs.
   return cudf::transform_lto(get_fragment(output_fragment(selected_operation)),
                              cudf::lto_binary_type::FATBIN,
                              cudf::null_aware::NO,
@@ -477,6 +498,7 @@ void write_output(cudf::table_view const result,
   auto input = cudf::io::read_csv(read_options).tbl;
 
   if (opts.rows == input->num_rows()) { return input; }
+  // Sampling with replacement scales the small checked-in dataset to the requested benchmark size.
   return cudf::sample(input->view(), opts.rows, cudf::sample_with_replacement::TRUE);
 }
 
@@ -500,10 +522,13 @@ int main(int argc, char const** argv)
     auto const input_bytes = input->get_column(input_index).alloc_size();
     auto const input_view  = input->get_column(input_index).view();
 
+    // Track allocations made by the transforms without changing the application's upstream memory
+    // resource.
     rmm::mr::statistics_resource_adaptor stats{mr};
     auto const stats_mr = rmm::device_async_resource_ref{stats};
 
     stream.synchronize();
+    // The cold measurement includes regex setup or JIT compilation/linking performed on first use.
     auto const cold_start = std::chrono::steady_clock::now();
     nvtxRangePush("http_log_cold");
     auto cold_result =
@@ -515,6 +540,7 @@ int main(int argc, char const** argv)
     cold_result.reset();
 
     std::unique_ptr<cudf::table> result;
+    // Subsequent calls exercise the cached kernel and represent steady-state throughput.
     auto const warm_start = std::chrono::steady_clock::now();
     nvtxRangePush("http_log_warm");
     for (auto i = 0; i < opts.iterations; ++i) {
@@ -528,6 +554,7 @@ int main(int argc, char const** argv)
       std::chrono::duration<double>{std::chrono::steady_clock::now() - warm_start}.count() /
       opts.iterations;
 
+    // A dash suppresses CSV output so file I/O does not affect benchmark runs.
     if (opts.output_path != "-") {
       write_output(result->view(), opts.selected_operation, opts.output_path);
     }

@@ -5,6 +5,8 @@
 
 #include "udf.cuh"
 
+// The output spans point directly into final allocations, so this fragment only parses delimiters
+// and copies bytes—there is no temporary string representation or compaction pass.
 extern "C" __device__ int transform(cuda::std::span<char>* client_ip,
                                     cuda::std::span<char>* timestamp,
                                     cuda::std::span<char>* method,
