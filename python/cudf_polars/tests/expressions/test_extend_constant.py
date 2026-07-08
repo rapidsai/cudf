@@ -7,6 +7,7 @@ import pytest
 import polars as pl
 
 from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.engine_utils import is_streaming_engine
 
 
 @pytest.mark.parametrize(
@@ -38,3 +39,16 @@ def test_extend_constant_non_literal_value_and_n(engine: pl.GPUEngine) -> None:
     lf = pl.LazyFrame({"a": [1, 2, 3], "v": [9, 9, 9], "n": [2, 2, 2]})
     q = lf.select(pl.col("a").extend_constant(pl.col("v").first(), pl.col("n").first()))
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_extend_constant_negative_n(engine: pl.GPUEngine) -> None:
+    lf = pl.LazyFrame({"a": [1, 2, 3]})
+    q = lf.select(pl.col("a").extend_constant(0, -1))
+    with pytest.raises(pl.exceptions.InvalidOperationError):
+        q.collect()
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)

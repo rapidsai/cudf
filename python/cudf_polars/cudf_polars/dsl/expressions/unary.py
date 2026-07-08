@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
+import polars as pl
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -545,6 +547,9 @@ class UnaryFunction(Expr):
             n_expr = self.children[2]
             if isinstance(n_expr, Literal):
                 count = n_expr.value
+                if count < 0:
+                    # Polars raises during runtime
+                    raise pl.exceptions.InvalidOperationError("n must not be negative")
             else:
                 count = (
                     n_expr.evaluate(df, context=context)
