@@ -34,6 +34,8 @@ function(libcudf_streaming_mpirun_test_add)
       NAME "${_MPIRUN_TEST_TEST_TARGET}_${np}"
       COMMAND mpirun --oversubscribe --map-by node --bind-to none -np ${np}
               "$<TARGET_FILE:${_MPIRUN_TEST_TEST_TARGET}>"
+      GPUS ALL
+      PERCENT 100
       INSTALL_COMPONENT_SET testing INSTALL_TARGET ${_MPIRUN_TEST_TEST_TARGET}
     )
   endforeach(np)
@@ -105,6 +107,8 @@ target_link_libraries(
 rapids_test_add(
   NAME libcudf_streaming_single_tests
   COMMAND libcudf_streaming_single_tests
+  GPUS ALL
+  PERCENT 100
   INSTALL_COMPONENT_SET testing
 )
 
