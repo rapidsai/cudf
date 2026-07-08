@@ -63,9 +63,10 @@ void nvbench_orc_write(nvbench::state& state)
                encoded_file_size = source_sink.size();
              });
 
-  state.add_buffer_size(mem_stats_logger.peak_memory_usage(), "pmu", "Peak Memory Usage");
-  state.add_buffer_size(encoded_file_size, "efs", "Encoded File Size");
-  state.add_element_count(view.num_rows(), "Total Rows");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
+  state.add_element_count(view.num_rows(), "total_rows");
 }
 
 void nvbench_orc_chunked_write(nvbench::state& state)
@@ -123,9 +124,10 @@ void nvbench_orc_chunked_write(nvbench::state& state)
       encoded_file_size = source_sink.size();
     });
 
-  state.add_buffer_size(mem_stats_logger.peak_memory_usage(), "pmu", "Peak Memory Usage");
-  state.add_buffer_size(encoded_file_size, "efs", "Encoded File Size");
-  state.add_element_count(total_rows, "Total Rows");
+  state.add_buffer_size(
+    mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
+  state.add_buffer_size(encoded_file_size, "encoded_file_size", "encoded_file_size");
+  state.add_element_count(total_rows, "total_rows");
 }
 
 NVBENCH_BENCH(nvbench_orc_write)
