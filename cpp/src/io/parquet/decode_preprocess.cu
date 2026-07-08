@@ -379,6 +379,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  * @param min_row Minimum row index to read
  * @param num_rows Number of rows to read starting from min_row
  */
+#pragma nv_diag_suppress static_var_with_dynamic_init
 template <typename level_t, int level_decode_block_size>
 CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   preprocess_levels_kernel(PageInfo* pages,
@@ -428,10 +429,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   using rle_stream_t = rle_stream<level_t, level_decode_block_size, max_output_values>;
   __shared__ __align__(16) uint8_t def_stage[rle_stream_t::smem_stage_size];
   __shared__ __align__(16) uint8_t rep_stage[rle_stream_t::smem_stage_size];
-  using barrier_t = cuda::barrier<cuda::thread_scope_block>;
-  __shared__ alignas(barrier_t) char copy_barrier_storage[sizeof(barrier_t)];
-  auto* copy_barrier = reinterpret_cast<barrier_t*>(copy_barrier_storage);
-  cg::invoke_one(block, [&]() { init(copy_barrier, block.size()); });
+  __shared__ cuda::barrier<cuda::thread_scope_block> copy_barrier;
+  cg::invoke_one(block, [&]() { init(&copy_barrier, block.size()); });
   block.sync();
 
   // Get the level decode buffers for this page
@@ -453,7 +452,7 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           def,
                                           num_to_decode,
                                           def_stage,
-                                          copy_barrier);
+                                          &copy_barrier);
   }
   if (has_repetition) {
     decoders[level_type::REPETITION].init(block,
@@ -463,9 +462,9 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
                                           rep,
                                           num_to_decode,
                                           rep_stage,
-                                          copy_barrier);
+                                          &copy_barrier);
   }
-  copy_barrier->arrive_and_wait();
+  copy_barrier.arrive_and_wait();
 
   // Decode levels for this page up to the last row needed.
   // If skipping the first rows, we still need to decode their levels.

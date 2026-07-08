@@ -192,10 +192,9 @@ struct rle_stream {
   // level_bits-agnostic: definition/repetition levels, dictionary indices, and
   // boolean streams all benefit with identical code. Streams that do not fit
   // the budget transparently fall back to parsing from global.
-  uint8_t const* smem_stage;
   static constexpr int smem_stage_size = 8 * 1024;
 
-  __device__ rle_stream(rle_run* _runs) : runs(_runs), smem_stage(nullptr) {}
+  __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
@@ -231,10 +230,9 @@ struct rle_stream {
     // hardware. Callers must provide a copy_barrier when using smem staging,
     // and must issue copy_barrier->arrive_and_wait() after init() to complete
     // the async copy.
-    smem_stage = _smem_stage != nullptr
-                   ? static_cast<uint8_t const*>(cuda::std::assume_aligned<16>(_smem_stage))
-                   : nullptr;
-    if (smem_stage != nullptr) {
+    if (_smem_stage != nullptr) {
+      auto* const smem_stage =
+        static_cast<uint8_t const*>(cuda::std::assume_aligned<16>(_smem_stage));
       auto const len = static_cast<int>(cuda::std::distance(_start, _end));
       if (len > 0 && len <= smem_stage_size) {
         cuda::memcpy_async(group, _smem_stage, _start, static_cast<size_t>(len), *_copy_barrier);
