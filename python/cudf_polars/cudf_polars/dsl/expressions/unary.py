@@ -562,7 +562,15 @@ class UnaryFunction(Expr):
             child_columns = [
                 child.evaluate(df, context=context) for child in self.children
             ]
-            result = child_columns[0].astype(self.dtype, stream=df.stream).obj
+            first = child_columns[0].astype(self.dtype, stream=df.stream)
+            if first.is_scalar:
+                result = plc.Column.from_scalar(
+                    first.obj_scalar(stream=df.stream),
+                    df.num_rows,
+                    stream=df.stream,
+                )
+            else:
+                result = first.obj
             for candidate in child_columns[1:]:
                 if result.null_count() == 0:
                     break

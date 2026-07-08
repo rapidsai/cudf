@@ -164,6 +164,18 @@ def test_coalesce_strings(engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_coalesce_scalar_first(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"b": [1, None, 3]})
+    q = df.select(pl.coalesce(pl.lit(5, dtype=pl.Int64), "b"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_coalesce_null_scalar_first(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"b": [1, None, 3]})
+    q = df.select(pl.coalesce(pl.lit(None, dtype=pl.Int64), "b"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_concat_list_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [[1, 2], [3]], "b": [[4], [5, 6]]})
     q = df.select(pl.concat_list("a", "b"))
