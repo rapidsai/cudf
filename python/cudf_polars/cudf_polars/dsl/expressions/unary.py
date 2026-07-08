@@ -548,16 +548,16 @@ class UnaryFunction(Expr):
             n_expr = self.children[2]
             if isinstance(n_expr, Literal):
                 count = n_expr.value
-                if count < 0:
-                    # Polars raises during runtime
-                    raise pl.exceptions.InvalidOperationError("n must not be negative")
             else:
                 count = (
                     n_expr.evaluate(df, context=context)
                     .obj_scalar(stream=df.stream)
                     .to_py(stream=df.stream)
                 )
-            if count == 0:
+            if count < 0:
+                # Polars raises during runtime
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
+            elif count == 0:
                 return column
             if isinstance(value_expr, Literal):
                 fill = plc.Scalar.from_py(
