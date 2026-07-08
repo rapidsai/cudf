@@ -142,10 +142,7 @@ def test_groupby(engine: pl.GPUEngine, df: pl.LazyFrame, maintain_order, keys, e
     "dtype",
     [pl.Int8, pl.Int32, pl.Int64, pl.UInt16, pl.Float64],
 )
-def test_groupby_product(engine: pl.GPUEngine, dtype: pl.DataType) -> None:
-    # Exercises the sum/product decomposition in decompose_single_agg:
-    # - small integral dtypes are computed in Int64 then cast back
-    # - an all-null group must yield the product identity (1), not null
+def test_groupby_product_all_null_1(engine: pl.GPUEngine, dtype: pl.DataType) -> None:
     lf = pl.LazyFrame(
         {
             "key": [1, 1, 2, 2, 3, 3, 3],
