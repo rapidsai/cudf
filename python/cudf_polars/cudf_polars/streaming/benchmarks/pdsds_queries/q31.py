@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 31."""
@@ -204,7 +204,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
         .join(ws3, on="ca_county", suffix="_ws3")
         .with_columns(
             [
-                # Calculate ratios with null handling
                 pl.when(pl.col("web_sales") > 0)
                 .then(pl.col("web_sales_ws2") / pl.col("web_sales"))
                 .otherwise(None)
@@ -224,7 +223,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
             ]
         )
         .filter(
-            # First condition: web_q1_q2 > store_q1_q2
             (
                 pl.when(pl.col("web_sales") > 0)
                 .then(pl.col("web_sales_ws2") / pl.col("web_sales"))
@@ -233,9 +231,7 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                 .then(pl.col("store_sales_q2") / pl.col("store_sales"))
                 .otherwise(None)
             )
-            &
-            # Second condition: web_q2_q3 > store_q2_q3
-            (
+            & (
                 pl.when(pl.col("web_sales_ws2") > 0)
                 .then(pl.col("web_sales_ws3") / pl.col("web_sales_ws2"))
                 .otherwise(None)

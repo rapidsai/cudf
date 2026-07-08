@@ -112,7 +112,6 @@ class PDSDSPolarsQueries(PDSDSQueries):
         ],
         19: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
         20: [
-            pl.col("itemrevenue").cast(pl.Decimal(18, 2)),
             pl.col("revenueratio").cast(pl.Decimal(38, 2)),
         ],
         24: [pl.col("paid").cast(pl.Decimal(18, 2))],
@@ -238,6 +237,11 @@ class PDSDSPolarsQueries(PDSDSQueries):
         21: [
             pl.col("inv_before").cast(pl.Int32),
             pl.col("inv_after").cast(pl.Int32),
+        ],
+        29: [
+            pl.col("store_sales_quantity").cast(pl.Int64),
+            pl.col("store_returns_quantity").cast(pl.Int64),
+            pl.col("catalog_sales_quantity").cast(pl.Int64),
         ],
         34: [pl.col("cnt").cast(COUNT_DTYPE)],
         35: [

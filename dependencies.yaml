@@ -1188,6 +1188,7 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - duckdb
+          - pyarrow
           - tpchgen-cli
   test_python_narwhals:
     common:

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Query 49."""
@@ -218,11 +218,22 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .otherwise(None)
                 ).alias("return_ratio"),
                 # Currency ratio calculation
+                # TODO: Polars Decimal/Decimal division returns Decimal, but DuckDB SQL
+                # promotes Decimal/Decimal to Float64. We cast to Float64 here to match.
+                # Other queries with Decimal arithmetic may have similar semantic differences.
                 (
                     pl.when(pl.col("ws_net_paid").drop_nulls().count() > 0)
                     .then(
-                        pl.col("wr_return_amt").fill_null(0).sum().round(4)
-                        / pl.col("ws_net_paid").fill_null(0).sum().round(4)
+                        pl.col("wr_return_amt")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Decimal(15, 4))
+                        .cast(pl.Float64)
+                        / pl.col("ws_net_paid")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Decimal(15, 4))
+                        .cast(pl.Float64)
                     )
                     .otherwise(None)
                 ).alias("currency_ratio"),
@@ -269,11 +280,22 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .otherwise(None)
                 ).alias("return_ratio"),
                 # Currency ratio calculation
+                # TODO: Polars Decimal/Decimal division returns Decimal, but DuckDB SQL
+                # promotes Decimal/Decimal to Float64. We cast to Float64 here to match.
+                # Other queries with Decimal arithmetic may have similar semantic differences.
                 (
                     pl.when(pl.col("cs_net_paid").drop_nulls().count() > 0)
                     .then(
-                        pl.col("cr_return_amount").fill_null(0).sum().round(4)
-                        / pl.col("cs_net_paid").fill_null(0).sum().round(4)
+                        pl.col("cr_return_amount")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Decimal(15, 4))
+                        .cast(pl.Float64)
+                        / pl.col("cs_net_paid")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Decimal(15, 4))
+                        .cast(pl.Float64)
                     )
                     .otherwise(None)
                 ).alias("currency_ratio"),
@@ -320,11 +342,22 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
                     .otherwise(None)
                 ).alias("return_ratio"),
                 # Currency ratio calculation
+                # TODO: Polars Decimal/Decimal division returns Decimal, but DuckDB SQL
+                # promotes Decimal/Decimal to Float64. We cast to Float64 here to match.
+                # Other queries with Decimal arithmetic may have similar semantic differences.
                 (
                     pl.when(pl.col("ss_net_paid").drop_nulls().count() > 0)
                     .then(
-                        pl.col("sr_return_amt").fill_null(0).sum().round(4)
-                        / pl.col("ss_net_paid").fill_null(0).sum().round(4)
+                        pl.col("sr_return_amt")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Decimal(15, 4))
+                        .cast(pl.Float64)
+                        / pl.col("ss_net_paid")
+                        .fill_null(0)
+                        .sum()
+                        .cast(pl.Decimal(15, 4))
+                        .cast(pl.Float64)
                     )
                     .otherwise(None)
                 ).alias("currency_ratio"),

@@ -44,11 +44,20 @@ export TPCH_DATA_DIR
 TPCH_DATA_DIR=$(mktemp -d)
 tpchgen-cli parquet -s 1 --parts=4 --output-dir="${TPCH_DATA_DIR}"
 
-rapids-logger "Generating TPC-DS data at SF=0.01"
+rapids-logger "Generating TPC-DS data at SF=1"
 
 export TPCDS_DATA_DIR
 TPCDS_DATA_DIR=$(mktemp -d)
-python3 "$(dirname "$0")/generate_tpcds_data.py" --scale 0.01 --output-dir "${TPCDS_DATA_DIR}"
+python3 "$(dirname "$0")/generate_tpcds_data.py" --scale 1 --output-dir "${TPCDS_DATA_DIR}"
+
+# Blackwell GPUs (compute capability >= 10.0) have decimal overflow issues in GPU
+# aggregations; pre-convert decimals to float to work around rapidsai/cudf#23150.
+COMPUTE_CAP=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d '.')
+if [[ "${COMPUTE_CAP}" -ge 100 ]]; then
+    rapids-logger "Blackwell GPU detected (sm_${COMPUTE_CAP}): converting decimals to float"
+    python3 "$(dirname "$0")/convert_tpc_decimals.py" --data-dir "${TPCH_DATA_DIR}"
+    python3 "$(dirname "$0")/convert_tpc_decimals.py" --data-dir "${TPCDS_DATA_DIR}"
+fi
 
 rapids-logger "Running TPC-H validation tests"
 
@@ -72,7 +81,7 @@ rapids-logger "Running TPC-DS validation tests"
 
 python -m cudf_polars.streaming.benchmarks.pdsds all \
     --path "${TPCDS_DATA_DIR}" \
-    --scale 0.01 \
+    --scale 1 \
     --qualification \
     --frontend spmd \
     --validate-against duckdb \
