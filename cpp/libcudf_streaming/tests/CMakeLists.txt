@@ -10,7 +10,8 @@
 # ##################################################################################################
 enable_testing()
 
-file(WRITE "${CUDF_STREAMING_BINARY_DIR}/CTestTestfile.cmake" "subdirs(\"tests\")\n")
+include(rapids-test)
+rapids_test_init()
 
 # Create a separate test case for each of these n_ranks.
 set(nranks_to_run 1 2 5)
