@@ -294,12 +294,8 @@ async def shutdown_on_error(
                 ),
                 operator_id=quent_ir_execution_context.quent_operator.id,
             )
-            quent_processor = (
-                quent_ir_execution_context.context.get_or_declare_processor(
-                    quent_ir_execution_context.logger,
-                    thread_ident=threading.get_ident(),
-                    pool_id=quent_ir_execution_context.thread_pool_id,
-                )
+            quent_processor = quent_ir_execution_context.get_or_declare_processor(
+                thread_ident=threading.get_ident(),
             )
             is_io_node = issubclass(type(trace_ir), (Scan, DataFrameScan))
             quent_ir_execution_context.logger.emit(quent_task.queueing())

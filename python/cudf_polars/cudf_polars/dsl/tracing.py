@@ -77,10 +77,8 @@ def _begin_quent_do_evaluate_events(
         ),
         operator_id=quent_ir_execution_context.quent_operator.id,
     )
-    quent_processor = quent_ir_execution_context.context.get_or_declare_processor(
-        quent_ir_execution_context.logger,
+    quent_processor = quent_ir_execution_context.get_or_declare_processor(
         thread_ident=threading.get_ident(),
-        pool_id=quent_ir_execution_context.thread_pool_id,
     )
     is_io_node = issubclass(cls, (Scan, DataFrameScan))
     quent_ir_execution_context.logger.emit(quent_task.queueing())

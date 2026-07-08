@@ -756,11 +756,20 @@ def evaluate_on_rank(
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
         _declare_network_channels(comm, local_quent_context)
-        logical_plan_id = ir.get_stable_plan_id()
+        # ``get_stable_plan_id`` is a deterministic function of the IR
+        # structure, so every rank derives the same logical plan ID for a
+        # given query (only rank 0 emits the declaration, but physical plans
+        # on every rank reference it as their parent). It is *not* unique
+        # across collects, though: re-running an identical query would reuse
+        # the same plan ID under a different parent query. Namespacing by the
+        # per-collect ``query_id`` (which is identical across ranks but unique
+        # per collect) keeps the cross-rank agreement while making the plan ID
+        # unique per collect.
+        logical_plan_id = uuid.uuid5(query_id, str(ir.get_stable_plan_id()))
         plan, ops, ports, logical_op_by_id = build_plan(
             ir,
             config_options,
-            query=local_quent_context.context.query,
+            query=local_quent_context.query,
             plan_id=logical_plan_id,
             worker=local_quent_context.worker,
             instance_name="logical",

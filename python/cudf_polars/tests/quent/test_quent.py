@@ -16,6 +16,7 @@ import polars as pl
 import cudf_polars.quent
 import cudf_polars.quent._logging
 from cudf_polars.dsl.translate import Translator
+from cudf_polars.quent._context import ProcessorRegistry
 from cudf_polars.quent._plan import build_plan, port_names_for_node
 from cudf_polars.quent._types import (
     Attribute,
@@ -36,6 +37,7 @@ from cudf_polars.utils.config import ConfigOptions
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent import QuentContext
+    from cudf_polars.quent._types import Processor
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -602,6 +604,138 @@ def test_emit_query_group_events_idempotent(quent_context: QuentContext):
     quent_context._emit_query_group_events(logger)
     quent_context._emit_query_group_events(logger)
     assert len(logger._buffer) == 1
+
+
+def test_processor_registry_declares_once_per_thread() -> None:
+    pytest.importorskip("structlog")
+
+    logger = cudf_polars.quent._logging.QuentLogger()
+    registry = ProcessorRegistry()
+    pool_id = uuid.uuid4()
+    thread_ident = 42
+
+    processor_a = registry.get_or_declare_processor(
+        logger, thread_ident=thread_ident, pool_id=pool_id
+    )
+    processor_b = registry.get_or_declare_processor(
+        logger, thread_ident=thread_ident, pool_id=pool_id
+    )
+
+    assert processor_a is processor_b
+    processor_events = [x for x in _drained_events(logger) if "Processor" in x["data"]]
+    assert len(processor_events) == 2
+    assert processor_events[0]["data"]["Processor"]["state"] == {
+        "ProcessorInitializing": {
+            "instance_name": f"Thread {processor_a.id.hex[:8]}",
+            "parent_group_id": str(pool_id),
+            "resource_type_name": "processor",
+        }
+    }
+    assert processor_events[1]["data"]["Processor"]["state"] == {
+        "ProcessorOperating": None
+    }
+
+
+def test_processor_registry_concurrent_first_use_declares_once() -> None:
+    pytest.importorskip("structlog")
+
+    logger = cudf_polars.quent._logging.QuentLogger()
+    registry = ProcessorRegistry()
+    pool_id = uuid.uuid4()
+    thread_ident = 123
+
+    def get_processor(_: int) -> Processor:
+        return registry.get_or_declare_processor(
+            logger, thread_ident=thread_ident, pool_id=pool_id
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        processors = list(executor.map(get_processor, range(32)))
+
+    assert len({processor.id for processor in processors}) == 1
+    processor_events = [x for x in _drained_events(logger) if "Processor" in x["data"]]
+    assert len(processor_events) == 2
+
+
+def test_processor_registry_reused_across_quent_contexts() -> None:
+    pytest.importorskip("structlog")
+    logger = cudf_polars.quent._logging.QuentLogger()
+    registry = ProcessorRegistry()
+    pool_id = uuid.uuid4()
+    thread_ident = 99
+
+    context_a = cudf_polars.quent.QuentContext()
+    context_b = cudf_polars.quent.QuentContext()
+    local_a = cudf_polars.quent.LocalQuentContext(
+        context=context_a,
+        query=context_a.query_for(uuid.uuid4()),
+        worker=Worker(id=uuid.uuid4(), engine=context_a.engine, instance_name="rank-0"),
+        logger=logger,
+        thread_pool_id=pool_id,
+        processor_registry=registry,
+        device_memory=Memory(
+            instance_name="device",
+            resource_type_name="memory",
+            parent_group_id=context_a.engine.id,
+        ),
+    )
+    local_b = cudf_polars.quent.LocalQuentContext(
+        context=context_b,
+        query=context_b.query_for(uuid.uuid4()),
+        worker=Worker(id=uuid.uuid4(), engine=context_b.engine, instance_name="rank-0"),
+        logger=logger,
+        thread_pool_id=pool_id,
+        processor_registry=registry,
+        device_memory=Memory(
+            instance_name="device",
+            resource_type_name="memory",
+            parent_group_id=context_b.engine.id,
+        ),
+    )
+
+    processor_a = local_a.get_or_declare_processor(thread_ident=thread_ident)
+    processor_b = local_b.get_or_declare_processor(thread_ident=thread_ident)
+
+    assert processor_a is processor_b
+    processor_events = [x for x in _drained_events(logger) if "Processor" in x["data"]]
+    assert len(processor_events) == 2
+
+
+def test_processor_registry_exit_events_idempotent() -> None:
+    pytest.importorskip("structlog")
+    from cudf_polars.quent._context import ProcessorRegistry
+
+    logger = cudf_polars.quent._logging.QuentLogger()
+    registry = ProcessorRegistry()
+    pool_id = uuid.uuid4()
+
+    registry.get_or_declare_processor(logger, thread_ident=1, pool_id=pool_id)
+    registry.get_or_declare_processor(logger, thread_ident=2, pool_id=pool_id)
+
+    registry._emit_processor_exit_events(logger)
+    registry._emit_processor_exit_events(logger)
+
+    events = _drained_events(logger)
+    finalizing_events = [
+        x
+        for x in events
+        if "Processor" in x["data"]
+        and x["data"]["Processor"]["state"] == {"ProcessorFinalizing": None}
+    ]
+    exit_events = [
+        x
+        for x in events
+        if "Processor" in x["data"] and x["data"]["Processor"]["state"] == "Exit"
+    ]
+    assert len(finalizing_events) == 2
+    assert len(exit_events) == 2
+
+
+def _drained_events(
+    logger: cudf_polars.quent._logging.QuentLogger,
+) -> list[dict]:
+    """Drain Quent logger events into the same shape as engine._quent_events."""
+    return [x["event"] for x in logger.drain()]
 
 
 def test_serialize_list_raises():

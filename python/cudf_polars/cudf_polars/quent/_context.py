@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import threading
 import uuid
 from typing import TYPE_CHECKING
 
@@ -42,9 +43,57 @@ if TYPE_CHECKING:
 
 __all__ = [
     "LocalQuentContext",
+    "ProcessorRegistry",
     "QuentContext",
     "QuentIRExecutionContext",
 ]
+
+
+class ProcessorRegistry:
+    """
+    Engine/worker-scoped registry of dynamically declared Quent Processors.
+
+    One registry is owned by the object that owns the Python
+    :class:`~concurrent.futures.ThreadPoolExecutor` (e.g. ``SPMDEngine``,
+    a Dask worker, or a Ray actor). Processors are declared lazily on first
+    use by a thread-pool worker and finalized once at executor shutdown.
+    """
+
+    def __init__(self) -> None:
+        self._processors: dict[int, Processor] = {}
+        self._lock = threading.Lock()
+        self._closed = False
+
+    def get_or_declare_processor(
+        self, logger: QuentLogger, thread_ident: int, pool_id: uuid.UUID
+    ) -> Processor:
+        """Get (or declare a new) Quent Processor for a CPU thread."""
+        with self._lock:
+            if self._closed:
+                raise RuntimeError(
+                    "Cannot declare processors after registry has been closed"
+                )
+            if thread_ident in self._processors:
+                return self._processors[thread_ident]
+
+            processor = Processor(pool_id=pool_id)
+            self._processors[thread_ident] = processor
+
+        logger.emit(processor.initializing())
+        logger.emit(processor.operating())
+        return processor
+
+    def _emit_processor_exit_events(self, logger: QuentLogger) -> None:
+        """Emit finalizing/exit events for all declared processors."""
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            processors = list(self._processors.values())
+
+        for processor in processors:
+            logger.emit(processor.finalizing())
+            logger.emit(processor.exit())
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -73,11 +122,6 @@ class QuentContext:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "_query_group_cache_", set())
-        object.__setattr__(self, "_processor_map_", {})
-
-    @property
-    def _processor_map(self) -> dict[int, Processor]:
-        return self._processor_map_  # type: ignore[attr-defined]
 
     def serialize(self) -> bytes:
         """
@@ -169,19 +213,32 @@ class QuentContext:
         self._query_group_cache.add(self.query_group.id)
         logger.emit(self.query_group._declare(engine=self.engine))
 
-    def _emit_query_events(self, logger: QuentLogger) -> None:
+    def query_for(self, query_id: uuid.UUID) -> Query:
+        """
+        Build a per-collect Quent Query with a unique id.
+
+        The engine-scoped ``QuentContext`` is reused across many
+        ``.collect()`` calls, so each collect must derive its own
+        :class:`Query` (identified by the per-collect ``query_id``) rather
+        than reusing the shared ``self.query``. The ``instance_name`` from
+        the template ``self.query`` is preserved.
+        """
+        return Query(id=query_id, instance_name=self.query.instance_name)
+
+    def _emit_query_events(self, logger: QuentLogger, query: Query) -> None:
         """
         Emit Quent Query events.
 
         This includes events for 'Declare', 'Init', and 'Planning'.
         """
-        logger.emit(self.query._init(query_group=self.query_group))
-        logger.emit(self.query._planning())
-        logger.emit(self.query._executing())
+        print(f"Query int: {query.id}")
+        logger.emit(query._init(query_group=self.query_group))
+        logger.emit(query._planning())
+        logger.emit(query._executing())
 
-    def _emit_query_exit_events(self, logger: QuentLogger) -> None:
+    def _emit_query_exit_events(self, logger: QuentLogger, query: Query) -> None:
         """Emit a Quent Query exit event."""
-        logger.emit(self.query._exit())
+        logger.emit(query._exit())
 
     def _emit_plan_declarations(
         self,
@@ -316,25 +373,6 @@ class QuentContext:
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
 
-    def get_or_declare_processor(
-        self, quent_logger: QuentLogger, thread_ident: int, pool_id: uuid.UUID
-    ) -> Processor:
-        """Get (or declare a new) Quent Processor for a CPU thread."""
-        if thread_ident in self._processor_map:
-            return self._processor_map[thread_ident]
-
-        processor = Processor(pool_id=pool_id)
-        self._processor_map[thread_ident] = processor
-        quent_logger.emit(processor.initializing())
-        quent_logger.emit(processor.operating())
-        return processor
-
-    def emit_resource_exit_events(self, quent_logger: QuentLogger) -> None:
-        """Emit finalizing/exit events for declared processors."""
-        for processor in self._processor_map.values():
-            quent_logger.emit(processor.finalizing())
-            quent_logger.emit(processor.exit())
-
 
 def declare_worker_resources(
     logger: QuentLogger,
@@ -399,16 +437,38 @@ class LocalQuentContext:
 
     This can contain non-serializable objects (like a ``QuentLogger``)
     and entities that are only valid on the local rank.
+
+    The ``processor_registry`` is engine/worker-scoped and outlives
+    individual queries. It is injected by the backend that owns the
+    ``ThreadPoolExecutor``.
+
+    The ``query`` is per-collect: each ``.collect()`` derives a fresh
+    :class:`Query` from its unique ``query_id`` (see
+    :meth:`QuentContext.query_for`), rather than reusing the shared
+    ``context.query``.
     """
 
     context: QuentContext
+    query: Query
     worker: Worker
     logger: QuentLogger
     thread_pool_id: uuid.UUID
+    processor_registry: ProcessorRegistry
     device_memory: Memory
     disk_to_device_channel: Channel | None = None
     network: Network | None = None
     link_channels: dict[int, Channel] = dataclasses.field(default_factory=dict)
+
+    def get_or_declare_processor(
+        self,
+        thread_ident: int,
+    ) -> Processor:
+        """Get (or declare a new) Quent Processor for a CPU thread."""
+        return self.processor_registry.get_or_declare_processor(
+            self.logger,
+            thread_ident=thread_ident,
+            pool_id=self.thread_pool_id,
+        )
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -425,9 +485,11 @@ class QuentIRExecutionContext(LocalQuentContext):
         return cls(
             quent_operator=quent_operator,
             context=execution_context.context,
+            query=execution_context.query,
             worker=execution_context.worker,
             logger=execution_context.logger,
             thread_pool_id=execution_context.thread_pool_id,
+            processor_registry=execution_context.processor_registry,
             device_memory=execution_context.device_memory,
             disk_to_device_channel=execution_context.disk_to_device_channel,
             network=execution_context.network,

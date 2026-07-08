@@ -43,6 +43,7 @@ from cudf_polars.engine.hardware_binding import (
 )
 from cudf_polars.quent._context import (
     LocalQuentContext,
+    ProcessorRegistry,
     declare_worker_resources,
     finalize_worker_resources,
 )
@@ -127,6 +128,7 @@ class _WorkerContext:
     device_memory: cudf_polars.quent._types.Memory | None = None
     disk_to_device_channel: cudf_polars.quent._types.Channel | None = None
     thread_pool: cudf_polars.quent._types.ThreadPool | None = None
+    processor_registry: ProcessorRegistry | None = None
 
 
 def _setup_root(
@@ -319,7 +321,9 @@ def _setup_worker(
     device_memory = None
     disk_to_device_channel = None
     thread_pool = None
+    processor_registry = None
     if quent_logger is not None:
+        processor_registry = ProcessorRegistry()
         device_memory, disk_to_device_channel, thread_pool = declare_worker_resources(
             quent_logger,
             instance_suffix=f"rank-{comm.rank}",
@@ -338,6 +342,7 @@ def _setup_worker(
         device_memory=device_memory,
         disk_to_device_channel=disk_to_device_channel,
         thread_pool=thread_pool,
+        processor_registry=processor_registry,
     )
     setattr(dask_worker, attr, mp_ctx)
     if mp_ctx.quent_logger is not None:
@@ -366,6 +371,10 @@ def _teardown_worker(
     traces = []
     if mp_ctx is not None:
         if mp_ctx.quent_worker is not None and mp_ctx.quent_logger is not None:
+            if mp_ctx.processor_registry is not None:
+                mp_ctx.processor_registry._emit_processor_exit_events(
+                    mp_ctx.quent_logger
+                )
             if mp_ctx.device_memory is not None:
                 finalize_worker_resources(
                     mp_ctx.quent_logger,
@@ -524,11 +533,14 @@ def _worker_evaluate(
         assert mp_ctx.quent_logger is not None
         assert mp_ctx.device_memory is not None
         assert mp_ctx.thread_pool is not None
+        assert mp_ctx.processor_registry is not None
         local_quent_context = LocalQuentContext(
             context=quent_context,
+            query=quent_context.query_for(query_id),
             worker=mp_ctx.quent_worker,
             logger=mp_ctx.quent_logger,
             thread_pool_id=mp_ctx.thread_pool.id,
+            processor_registry=mp_ctx.processor_registry,
             device_memory=mp_ctx.device_memory,
             disk_to_device_channel=mp_ctx.disk_to_device_channel,
         )
@@ -616,8 +628,9 @@ def evaluate_pipeline_dask_mode(
     if quent_context is not None:
         quent_logger = dask_context.quent_logger
         assert quent_logger is not None
+        query = quent_context.query_for(query_id)
         quent_context._emit_query_group_events(quent_logger)
-        quent_context._emit_query_events(quent_logger)
+        quent_context._emit_query_events(quent_logger, query)
 
     # Strip dask_context before pickling config_options for remote calls.
     worker_config = dataclasses.replace(
@@ -644,7 +657,7 @@ def evaluate_pipeline_dask_mode(
     if quent_context is not None:
         quent_logger = dask_context.quent_logger
         assert quent_logger is not None
-        quent_context._emit_query_exit_events(quent_logger)
+        quent_context._emit_query_exit_events(quent_logger, query)
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -1053,7 +1066,6 @@ class DaskEngine(StreamingEngine):
             if quent_context is not None:
                 assert self._quent_logger is not None
                 quent_context._emit_engine_exit_events(self._quent_logger)
-                quent_context.emit_resource_exit_events(self._quent_logger)
             if ctx.owned_client is not None:
                 ctx.owned_client.close()
             if ctx.owned_cluster is not None:

@@ -45,6 +45,7 @@ from cudf_polars.engine.hardware_binding import (
 )
 from cudf_polars.quent._context import (
     LocalQuentContext,
+    ProcessorRegistry,
     declare_worker_resources,
     finalize_worker_resources,
 )
@@ -70,6 +71,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.quent._types import Channel, Memory, ThreadPool
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -117,32 +119,33 @@ def evaluate_pipeline_spmd_mode(
     comm = config_options.executor.spmd_context.comm
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
+    spmd_context = config_options.executor.spmd_context
 
     quent_context = config_options.executor.quent_context
     local_quent_context: LocalQuentContext | None = None
     if quent_context is not None:
         quent_logger = config_options.executor.spmd_context.quent_logger
         assert quent_logger is not None
+        query = quent_context.query_for(query_id)
         quent_context._emit_query_group_events(quent_logger)
-        quent_context._emit_query_events(quent_logger)
+        quent_context._emit_query_events(quent_logger, query)
         worker_id = config_options.executor.spmd_context.worker_id
-        device_memory, disk_to_device_channel, thread_pool = declare_worker_resources(
-            quent_logger,
-            instance_suffix=f"rank-{comm.rank}",
-            engine_id=quent_context.engine.id,
-            worker_id=worker_id,
-        )
+        assert spmd_context.processor_registry is not None
+        assert spmd_context.thread_pool_id is not None
+        assert spmd_context.device_memory is not None
         local_quent_context = LocalQuentContext(
             context=quent_context,
+            query=query,
             worker=Worker(
                 id=worker_id,
                 engine=quent_context.engine,
                 instance_name=f"rank-{comm.rank}",
             ),
             logger=quent_logger,
-            thread_pool_id=thread_pool.id,
-            device_memory=device_memory,
-            disk_to_device_channel=disk_to_device_channel,
+            thread_pool_id=spmd_context.thread_pool_id,
+            processor_registry=spmd_context.processor_registry,
+            device_memory=spmd_context.device_memory,
+            disk_to_device_channel=spmd_context.disk_to_device_channel,
         )
 
     df, metadata = evaluate_on_rank(
@@ -157,13 +160,11 @@ def evaluate_pipeline_spmd_mode(
     if quent_context is not None:
         assert config_options.executor.spmd_context.quent_logger is not None
         assert local_quent_context is not None
-        finalize_worker_resources(
-            config_options.executor.spmd_context.quent_logger,
-            device_memory=local_quent_context.device_memory,
-            disk_to_device_channel=local_quent_context.disk_to_device_channel,
-        )
+        # Device memory and the disk->device channel are engine-scoped and are
+        # finalized once at engine shutdown, not per query.
         quent_context._emit_query_exit_events(
-            config_options.executor.spmd_context.quent_logger
+            config_options.executor.spmd_context.quent_logger,
+            local_quent_context.query,
         )
     return df, metadata if collect_metadata else None
 
@@ -454,6 +455,10 @@ class SPMDEngine(StreamingEngine):
         self._comm: Communicator | None = comm
         self._ctx: Context | None = None
         self._py_executor: ThreadPoolExecutor | None = None
+        self._processor_registry: ProcessorRegistry | None = None
+        self._quent_thread_pool: ThreadPool | None = None
+        self._device_memory: Memory | None = None
+        self._disk_to_device_channel: Channel | None = None
 
         exit_stack = contextlib.ExitStack()
 
@@ -492,6 +497,26 @@ class SPMDEngine(StreamingEngine):
                 instance_name=f"rank-{self.rank}",  # relies on self.comm
             )
 
+            if quent_context is not None:
+                assert self._quent_logger is not None
+                self._quent_logger.emit(self._quent_worker._init())
+                self._processor_registry = ProcessorRegistry()
+                # Device memory, the disk->device channel, and the thread pool
+                # are all engine-scoped: they live for the lifetime of the
+                # engine's `py_executor`, not any single query. Declaring them
+                # once here (rather than per collect) means a single
+                # init/finalize pair per engine.
+                (
+                    self._device_memory,
+                    self._disk_to_device_channel,
+                    self._quent_thread_pool,
+                ) = declare_worker_resources(
+                    self._quent_logger,
+                    instance_suffix=f"rank-{self.rank}",
+                    engine_id=engine_id,
+                    worker_id=self._quent_worker.id,
+                )
+
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
             # executor shuts down first. `wait=True` is safe because
             # rapidsmpf's `run_actor_network` awaits its only submitted
@@ -517,6 +542,14 @@ class SPMDEngine(StreamingEngine):
                         quent_logger=self._quent_logger,
                         context=self._ctx,
                         py_executor=self._py_executor,
+                        processor_registry=self._processor_registry,
+                        thread_pool_id=(
+                            self._quent_thread_pool.id
+                            if self._quent_thread_pool is not None
+                            else None
+                        ),
+                        device_memory=self._device_memory,
+                        disk_to_device_channel=self._disk_to_device_channel,
                     ),
                 },
                 engine_options={
@@ -525,9 +558,6 @@ class SPMDEngine(StreamingEngine):
                 },
                 exit_stack=exit_stack,
             )
-
-            if self._quent_logger is not None:
-                self._quent_logger.emit(self._quent_worker._init())
         except Exception:
             exit_stack.close()
             raise
@@ -659,6 +689,12 @@ class SPMDEngine(StreamingEngine):
                     engine_id=engine_id,
                     worker_id=self._quent_worker.id,
                     quent_logger=self._quent_logger,
+                    processor_registry=self._processor_registry,
+                    thread_pool_id=(
+                        self._quent_thread_pool.id
+                        if self._quent_thread_pool is not None
+                        else None
+                    ),
                 ),
             },
             engine_options={
@@ -794,15 +830,24 @@ class SPMDEngine(StreamingEngine):
         # quent traces before that.
         # Clear the references only after shutdown completes.
 
-        if self._quent_logger is not None:
-            self._quent_logger.emit(self._quent_worker._exit())
         quent_context: cudf_polars.quent.QuentContext | None = self.config[
             "executor_options"
         ].get("quent_context")
+
+        if self._quent_logger is not None:
+            if quent_context is not None:
+                assert self._processor_registry is not None
+                self._processor_registry._emit_processor_exit_events(self._quent_logger)
+                if self._device_memory is not None:
+                    finalize_worker_resources(
+                        self._quent_logger,
+                        device_memory=self._device_memory,
+                        disk_to_device_channel=self._disk_to_device_channel,
+                    )
+            self._quent_logger.emit(self._quent_worker._exit())
         if quent_context is not None:
             assert self._quent_logger is not None
             quent_context._emit_engine_exit_events(self._quent_logger)
-            quent_context.emit_resource_exit_events(self._quent_logger)
 
         super().shutdown()
 

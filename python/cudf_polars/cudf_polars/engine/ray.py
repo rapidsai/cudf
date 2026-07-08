@@ -41,6 +41,7 @@ from cudf_polars.engine.hardware_binding import (
 )
 from cudf_polars.quent._context import (
     LocalQuentContext,
+    ProcessorRegistry,
     declare_worker_resources,
     finalize_worker_resources,
 )
@@ -120,8 +121,9 @@ def evaluate_pipeline_ray_mode(
     if quent_context is not None:
         quent_logger = config_options.executor.ray_context.quent_logger
         assert quent_logger is not None
+        query = quent_context.query_for(query_id)
         quent_context._emit_query_group_events(quent_logger)
-        quent_context._emit_query_events(quent_logger)
+        quent_context._emit_query_events(quent_logger, query)
 
     # Serialize the IR into the Ray object store so actors fetch by reference
     # instead of receiving N copies.
@@ -150,7 +152,7 @@ def evaluate_pipeline_ray_mode(
     if quent_context is not None:
         quent_logger = config_options.executor.ray_context.quent_logger
         assert quent_logger is not None
-        quent_context._emit_query_exit_events(quent_logger)
+        quent_context._emit_query_exit_events(quent_logger, query)
     return pl.concat(dfs), metadata_collector or None
 
 
@@ -238,7 +240,9 @@ class RankActor:
         self._device_memory = None
         self._disk_to_device_channel = None
         self._quent_thread_pool = None
+        self._processor_registry: ProcessorRegistry | None = None
         if self._quent_logger is not None:
+            self._processor_registry = ProcessorRegistry()
             self._quent_logger.emit(self._quent_worker._init())
             (
                 self._device_memory,
@@ -352,6 +356,8 @@ class RankActor:
         # Maybe generalize this to all application-level things,
         # followed by framework (ray) level things.
         if self._quent_worker is not None and self._quent_logger is not None:
+            if self._processor_registry is not None:
+                self._processor_registry._emit_processor_exit_events(self._quent_logger)
             if (
                 self._device_memory is not None
                 and self._disk_to_device_channel is not None
@@ -474,11 +480,14 @@ class RankActor:
             assert self._quent_logger is not None
             assert self._device_memory is not None
             assert self._quent_thread_pool is not None
+            assert self._processor_registry is not None
             local_quent_context = LocalQuentContext(
                 context=quent_context,
+                query=quent_context.query_for(query_id),
                 worker=self._quent_worker,
                 logger=self._quent_logger,
                 thread_pool_id=self._quent_thread_pool.id,
+                processor_registry=self._processor_registry,
                 device_memory=self._device_memory,
                 disk_to_device_channel=self._disk_to_device_channel,
             )
@@ -947,7 +956,6 @@ class RayEngine(StreamingEngine):
             if quent_context is not None:
                 assert self._quent_logger is not None
                 quent_context._emit_engine_exit_events(self._quent_logger)
-                quent_context.emit_resource_exit_events(self._quent_logger)
             self._rank_actors = None
             super().shutdown()
 
