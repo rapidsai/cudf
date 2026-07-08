@@ -585,7 +585,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
                 ]
             )
             # Only need validity buffer for structs
-            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:1])
+            buffers = cast("list[pa.Buffer | None]", arrow_array.buffers()[:1])
             return pa.StructArray.from_buffers(
                 new_struct_type,
                 len(arrow_array),
@@ -605,7 +605,7 @@ def _handle_nulls(arrow_array: pa.Array, nested: bool = False) -> pa.Array:
         )
 
         if new_values is not values or has_non_nullable_field:
-            buffers = cast("list[pa.Buffer]", arrow_array.buffers()[:2])
+            buffers = cast("list[pa.Buffer | None]", arrow_array.buffers()[:2])
             list_type = pa.list_(
                 pa.field(value_field.name, new_values.type, nullable=True)
             )
@@ -2136,7 +2136,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             ColumnBase.create(gathered, self.dtype),
         )
 
-    def isin(self, values: Sequence) -> ColumnBase:
+    def isin(self, values: Sequence | ColumnBase) -> ColumnBase:
         """Check whether values are contained in the Column.
 
         Parameters
@@ -2175,7 +2175,7 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
         return result
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         """
         Helper function for `isin` which pre-process `values` based on `self`.
@@ -3064,6 +3064,20 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
                     )
 
             if is_na_like(other):
+                is_nat = other is pd.NaT or (
+                    isinstance(other, (np.datetime64, np.timedelta64))
+                    and np.isnat(other)
+                )
+                if (
+                    is_nat
+                    and is_pandas_nullable_extension_dtype(self.dtype)
+                    and self.dtype.kind not in {"m", "M"}
+                ):
+                    # pandas only accepts NaT as a missing value for
+                    # datetime/timedelta dtypes, not for masked dtypes
+                    raise TypeError(
+                        f"Invalid value '{other}' for dtype '{self.dtype}'"
+                    )
                 if (
                     cudf.get_option("mode.pandas_compatible")
                     and not is_pandas_nullable_extension_dtype(self.dtype)

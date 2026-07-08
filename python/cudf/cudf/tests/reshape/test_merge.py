@@ -390,6 +390,43 @@ def test_merge_suffixes():
     )
 
 
+@pytest.mark.parametrize(
+    "col1, col2, suffixes, expected_cols",
+    [
+        (0, 0, ("", "_dup"), ["0", "0_dup"]),
+        (0, 0, (None, "_dup"), [0, "0_dup"]),
+        ("a", "a", ("_x", None), ["a_x", "a"]),
+        ("a", "a", (None, "_x"), ["a", "a_x"]),
+        (0.0, 0.0, ("_x", None), ["0.0_x", 0.0]),
+        (0, 0, ("_a", None), ["0_a", 0]),
+    ],
+)
+def test_merge_suffix_none_and_non_string(col1, col2, suffixes, expected_cols):
+    # A ``None`` suffix leaves that side's (possibly non-string) label
+    # unchanged; a string suffix is appended (coercing to a string), matching
+    # pandas.
+    a = cudf.DataFrame({col1: [1, 2, 3]})
+    b = cudf.DataFrame({col2: [4, 5, 6]})
+    pa = a.to_pandas()
+    pb = b.to_pandas()
+
+    result = a.merge(b, left_index=True, right_index=True, suffixes=suffixes)
+    expected = pa.merge(
+        pb, left_index=True, right_index=True, suffixes=suffixes
+    )
+    assert result.columns.tolist() == expected_cols
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("suffixes", [{"_x", "_y"}, {"left": 0, "right": 0}])
+def test_merge_suffixes_non_sequence_raises(suffixes):
+    # pandas rejects sets/dicts passed as ``suffixes`` with a TypeError.
+    a = cudf.DataFrame({"a": [1, 2, 3]})
+    b = cudf.DataFrame({"b": [3, 4, 5]})
+    with pytest.raises(TypeError, match="Passing 'suffixes' as a"):
+        a.merge(b, left_index=True, right_index=True, suffixes=suffixes)
+
+
 def test_merge_left_on_right_on():
     left = pd.DataFrame({"xx": [1, 2, 3, 4, 5, 6]})
     right = pd.DataFrame({"xx": [10, 20, 30, 6, 5, 4]})

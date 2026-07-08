@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 schema_version: 1
 
@@ -90,11 +90,11 @@ requirements:
     - libcudf =${{ version }}
     - ${{ pin_compatible("rmm", upper_bound="x.x") }}
     - if: cuda_major == "12"
-      then: cuda-python >=12.9.2,<13.0
-      else: cuda-python >=13.0.1,<14.0
+      then: cuda-bindings >=12.9.2,<13.0
+      else: cuda-bindings >=13.0.1,<14.0
     - nvtx >=0.2.1
   run_constraints:
-    - numpy >=1.26,<3.0
+    - numpy >=2.0,<3.0
     - pyarrow>=19.0.0
   ignore_run_exports:
     from_package:

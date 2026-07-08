@@ -1,5 +1,5 @@
 /**
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * reserved. SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,7 +9,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <cudf_streaming/integrations/partition.hpp>
+#include <cudf_streaming/partition_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -40,10 +40,10 @@ std::unique_ptr<cudf::table> create_int_table(cudf::size_type num_rows,
 
 static void BM_PartitionAndPack(benchmark::State& state)
 {
-  const std::int64_t local_size = std::int64_t{state.range(1)} * 1000000;
+  std::int64_t const local_size = std::int64_t{state.range(1)} * 1000000;
   int num_rows                  = int(local_size / std::int64_t{sizeof(std::int32_t)});
 
-  const int num_partitions = state.range(1);
+  int const num_partitions = state.range(1);
 
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
@@ -66,14 +66,13 @@ static void BM_PartitionAndPack(benchmark::State& state)
   std::vector<cudf::size_type> columns_to_hash{0};
 
   for (auto _ : state) {
-    auto pack_partitions =
-      cudf_streaming::integrations::partition_and_pack(*table,
-                                                       columns_to_hash,
-                                                       num_partitions,
-                                                       cudf::hash_id::HASH_MURMUR3,
-                                                       cudf::DEFAULT_HASH_SEED,
-                                                       stream,
-                                                       br.get());
+    auto pack_partitions = cudf_streaming::partition_and_pack(*table,
+                                                              columns_to_hash,
+                                                              num_partitions,
+                                                              cudf::hash_id::HASH_MURMUR3,
+                                                              cudf::DEFAULT_HASH_SEED,
+                                                              stream,
+                                                              br.get());
     benchmark::DoNotOptimize(pack_partitions);
     CUDF_CUDA_TRY(cudaStreamSynchronize(stream));
   }
@@ -87,9 +86,9 @@ static void BM_PartitionAndPack(benchmark::State& state)
 
 static void BM_PartitionAndPackCurrentImpl(benchmark::State& state)
 {
-  const int nranks              = state.range(0);
-  const std::int64_t local_size = std::int64_t{state.range(1)} * 1000000;
-  const int num_partitions      = state.range(2);
+  int const nranks              = state.range(0);
+  std::int64_t const local_size = std::int64_t{state.range(1)} * 1000000;
+  int const num_partitions      = state.range(2);
 
   int total_npartitions = nranks * num_partitions;
   int num_rows =
@@ -117,14 +116,13 @@ static void BM_PartitionAndPackCurrentImpl(benchmark::State& state)
 
   for (auto _ : state) {
     for (int i = 0; i < num_partitions; i++) {
-      auto pack_partitions =
-        cudf_streaming::integrations::partition_and_pack(*table,
-                                                         columns_to_hash,
-                                                         total_npartitions,
-                                                         cudf::hash_id::HASH_MURMUR3,
-                                                         cudf::DEFAULT_HASH_SEED,
-                                                         stream,
-                                                         br.get());
+      auto pack_partitions = cudf_streaming::partition_and_pack(*table,
+                                                                columns_to_hash,
+                                                                total_npartitions,
+                                                                cudf::hash_id::HASH_MURMUR3,
+                                                                cudf::DEFAULT_HASH_SEED,
+                                                                stream,
+                                                                br.get());
       benchmark::DoNotOptimize(pack_partitions);
     }
     CUDF_CUDA_TRY(cudaStreamSynchronize(stream));

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -533,5 +533,32 @@ TEST_F(StringsReplaceRegexTest, CrlfEdgeCasesExtNewline)
     auto p = cudf::strings::regex_program::create("(abc)$", EXT);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*cudf::strings::replace_with_backrefs(view, *p, "[\\1]"),
                                    str_col(&edge_case::exp_abc_backref));
+  }
+}
+
+TEST_F(StringsReplaceRegexTest, AlternationPriorityFirstWins)
+{
+  // Leftmost-first (first-alternative-wins): when a shorter first alternative is a prefix of a
+  // longer second, the shorter match is consumed and the remainder is left for the next search.
+  auto repl = cudf::string_scalar("X");
+
+  {
+    // "foo" wins over "foobar": "foobar" becomes "Xbar".
+    auto input =
+      cudf::test::strings_column_wrapper({"foo", "foobar", "foobarbaz", "bar", "xfoobar", ""});
+    auto sv      = cudf::strings_column_view(input);
+    auto prog    = cudf::strings::regex_program::create("foo|foobar");
+    auto results = cudf::strings::replace_re(sv, *prog, repl);
+    cudf::test::strings_column_wrapper expected({"X", "Xbar", "Xbarbaz", "bar", "xXbar", ""});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    // "cat" wins over "catch": "catch" becomes "Xch".
+    auto input   = cudf::test::strings_column_wrapper({"cat", "catch", "catfish", "dog", ""});
+    auto sv      = cudf::strings_column_view(input);
+    auto prog    = cudf::strings::regex_program::create("cat|catch");
+    auto results = cudf::strings::replace_re(sv, *prog, repl);
+    cudf::test::strings_column_wrapper expected({"X", "Xch", "Xfish", "dog", ""});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 }

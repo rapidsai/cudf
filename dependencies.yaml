@@ -18,7 +18,7 @@ files:
       - cuda_version
       - cudf_polars_trace
       - depends_on_cupy
-      - depends_on_cuda_python
+      - depends_on_cuda_bindings
       - depends_on_dask_cuda
       - depends_on_libkvikio
       - depends_on_librmm
@@ -150,6 +150,17 @@ files:
     includes:
       - develop
       - py_version
+  test_cmake:
+    output: none
+    includes:
+      - build_all
+      - build_base
+      - build_cpp
+      - cuda
+      - cuda_static
+      - cuda_version
+      - develop
+      - py_version
   clang_tidy:
     output: none
     includes:
@@ -206,13 +217,13 @@ files:
       - run_common
       - run_cudf
       - pyarrow_run
+      - depends_on_cuda_bindings
       - depends_on_cupy
       - depends_on_libcudf
       - depends_on_numba_cuda
       - depends_on_numba_cuda_mlir
       - depends_on_pylibcudf_pyarrow
       - depends_on_rmm
-      - depends_on_cuda_python
   py_test_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -282,10 +293,10 @@ files:
     extras:
       table: project
     includes:
+      - depends_on_cuda_bindings
       - depends_on_libcudf
       - depends_on_rmm
       - run_pylibcudf
-      - depends_on_cuda_python
   py_run_pylibcudf_numpy:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -345,10 +356,10 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_cuda_bindings
       - depends_on_rapidsmpf
       - depends_on_cudf_streaming
       - depends_on_pylibcudf
-      - depends_on_cuda_python
   # TODO(26.10): Remove this alias in favor of dask
   py_run_cudf_polars_experimental:
     output: pyproject
@@ -571,14 +582,14 @@ files:
   test_cudf_pandas_compat:
     output: none
     matrix:
-      cuda: ["12.9", "13.1"]
+      cuda: ["12.9", "13.3"]
       pandas_compat_version: ["3.0"]
     includes:
       - test_cudf_pandas_compat
   test_cudf_polars_compat:
     output: none
     matrix:
-      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41"]
+      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41", "1.42"]
     includes:
       - test_cudf_polars_compat
 channels:
@@ -618,8 +629,9 @@ dependencies:
     common:
       - output_types: conda
         packages:
+          - croaring==4.4.2
           - flatbuffers==24.3.25
-          - librdkafka>=2.11.1,<2.12.0
+          - librdkafka<2.15.0a0
   depends_on_libnvcomp:
     common:
       - output_types: conda
@@ -666,12 +678,12 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
 
-          - cython>=3.2.2
+          - cython>=3.2.2,<3.3.0a0
   numpy_run:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
-          - numpy>=1.26,<3.0
+          - numpy>=2.0,<3.0
   pyarrow_run:
     common:
       - output_types: [conda]
@@ -812,6 +824,13 @@ dependencies:
           - matrix:
             packages:
               - *nvjitlink_cu13
+  cuda_static:
+    common:
+      - output_types: [conda]
+        packages:
+          - cuda-cudart-static
+          - cuda-nvrtc-static
+          - libnvjitlink-static
   develop:
     common:
       - output_types: [conda, requirements]
@@ -845,21 +864,15 @@ dependencies:
           - nbsphinx
           - numpydoc
           - pandoc
-          # Minimum version for safe parallel writing again.
-          # https://github.com/pydata/pydata-sphinx-theme/pull/1859
-          # https://github.com/pydata/pydata-sphinx-theme/releases/tag/v0.15.4
-          - pydata-sphinx-theme>=0.15.4
           - scipy
-          # Needed for safe parallel writes as with the pydata-sphinx-theme pin above
-          # https://github.com/sphinx-doc/sphinx/issues/12409
-          # https://github.com/sphinx-doc/sphinx/pull/12888
-          # https://github.com/sphinx-doc/sphinx/releases/tag/v8.1.0
           - sphinx>=8.1.0
           - sphinx-autobuild
           - sphinx-copybutton
           - sphinx-markdown-tables
           - sphinx-remove-toctrees
           - sphinxcontrib-websupport
+          - pip:
+              - nvidia-sphinx-theme
   notebooks:
     common:
       - output_types: [conda, requirements]
@@ -895,24 +908,28 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - fsspec>=0.6.0
-          - &pandas pandas>=3.0.0,<3.1.0
+          # pandas 3.0.4 segfaults constructing pd.Timedelta on Python 3.14,
+          # which breaks `import cudf` (https://github.com/pandas-dev/pandas/issues/66086).
+          # Cap below 3.0.4 (rather than just excluding it) until a fixed
+          # release is confirmed upstream, then raise the bound.
+          - &pandas pandas>=3.0.0,<3.0.4a0
   run_pylibcudf:
     common:
       - output_types: [conda, requirements, pyproject]
         packages:
           - nvtx>=0.2.1
-  depends_on_cuda_python:
+  depends_on_cuda_bindings:
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - cuda-python>=12.9.2,<13.0
+              - cuda-bindings>=12.9.2,<13.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cuda-python>=13.0.1,<14.0
+              - cuda-bindings>=13.0.1,<14.0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -950,7 +967,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.35,<1.42
+          - polars>=1.35,<1.43
           - typing_extensions>=4.0.0
   run_cudf_polars_dask:
     common:
@@ -1014,7 +1031,7 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - numba==0.60.0
-              - pandas==3.0.*
+              - pandas==3.0.*,<3.0.4a0
               - numba-cuda==0.22.2
           - matrix: {dependencies: "latest"}
             packages:
@@ -1025,7 +1042,21 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - cupy==13.6.0
+              - cupy==14.0.1
+          - matrix:
+            packages:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              dependencies: "oldest"
+              cuda: "12.*"
+            packages:
+              - cuda-bindings==12.9.2
+          - matrix:
+              dependencies: "oldest"
+              cuda: "13.*"
+            packages:
+              - cuda-bindings==13.0.1
           - matrix:
             packages:
       - output_types: requirements
@@ -1038,20 +1069,20 @@ dependencies:
               cuda: "12.*"
               dependencies: "oldest"
             packages:
-              - cupy-cuda12x==13.6.0
+              - cupy-cuda12x==14.0.1
           - matrix:
               cuda: "13.*"
               dependencies: "oldest"
             packages:
-              - cupy-cuda13x==13.6.0
+              - cupy-cuda13x==14.0.1
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x!=14.0.0,!=14.1.0
+              - cupy-cuda12x>=14.0.1,!=14.1.0
           - matrix:
               cuda: "13.*"
             packages:
-              - cupy-cuda13x!=14.0.0,!=14.1.0
+              - cupy-cuda13x>=14.0.1,!=14.1.0
           - matrix:
             packages:
   test_python_dask_cudf:
@@ -1063,7 +1094,7 @@ dependencies:
             packages:
               # this is sometimes different from the floor in cudf because
               # dask imposes its own constraints on 'numpy' (e.g. for 'dask.array')
-              - numpy==1.26.*
+              - numpy==2.0.*
           - matrix:
             packages:
   test_python_pylibcudf:
@@ -1119,7 +1150,7 @@ dependencies:
         matrices:
           - matrix: {dependencies: "oldest"}
             packages:
-              - numpy==1.26.*
+              - numpy==2.0.*
               - pyarrow==19.*
           - matrix:
             packages:
@@ -1143,6 +1174,11 @@ dependencies:
           - pytest-httpserver
           - pytest-timeout
           - zstandard
+          # The polars test suite constructs pandas objects for interop and
+          # dask-cuda pulls pandas in transitively (unbounded), so constrain it
+          # here to exclude the 3.0.4 release that segfaults on pd.Timedelta
+          # (https://github.com/pandas-dev/pandas/issues/66086).
+          - *pandas
   test_python_narwhals:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -1174,6 +1210,10 @@ dependencies:
           - {matrix: null, packages: [*libcudf_unsuffixed]}
   depends_on_numba_cuda:
     common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+        # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
+        - numba>=0.60.0,<0.65.0
       - output_types: [conda]
         packages:
         - &numba_cuda numba-cuda>=0.22.2
@@ -1296,21 +1336,41 @@ dependencies:
     common:
       - output_types: conda
         packages:
-          - cupy>=13.6.0,!=14.0.0,!=14.1.0
+          - cupy>=14.0.1,!=14.1.0
     # NOTE: This is intentionally not broken into groups by a 'cuda_suffixed' selector like
     #       other packages with -cu{nn}x suffixes in this file.
     #       All RAPIDS wheel builds (including in devcontainers) expect cupy to be suffixed.
     specific:
-      - output_types: [requirements, pyproject]
+      - output_types: requirements
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - cupy-cuda12x>=13.6.0,!=14.0.0,!=14.1.0
+              - &cupy_cu12 cupy-cuda12x>=14.0.1,!=14.1.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cupy-cuda13x>=13.6.0,!=14.0.0,!=14.1.0
+              - &cupy_cu13 cupy-cuda13x>=14.0.1,!=14.1.0
+      - output_types: pyproject
+        matrices:
+          - matrix:
+              cuda: "12.*"
+              use_cuda_wheels: "false"
+            packages:
+              - *cupy_cu12
+          - matrix:
+              cuda: "13.*"
+              use_cuda_wheels: "false"
+            packages:
+              - *cupy_cu13
+          - matrix:
+              cuda: "12.*"
+            packages:
+              - cupy-cuda12x[ctk]>=14.0.1,!=14.1.0
+          # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
+          - matrix:
+            packages:
+              - cupy-cuda13x[ctk]>=14.0.1,!=14.1.0
   depends_on_libkvikio:
     common:
       - output_types: conda
@@ -1587,7 +1647,15 @@ dependencies:
     common:
       - output_types: [conda]
         packages:
+          # Pinned until pandas 3.0.4 releases with matplotlib 3.11 compat fix
+          # (https://github.com/pandas-dev/pandas/pull/65742)
+          - matplotlib-base<3.11
           - numexpr
+          - odfpy
+          - pyxlsb
+          - python-calamine
+          - pytables
+          - xlrd
           - xlsxwriter
   depends_on_dask_cuda:
     common:
@@ -1651,20 +1719,8 @@ dependencies:
           - matrix:
               pandas_compat_version: "3.0"
             packages:
-              - numpy>=1.26,<2.0a0
-              - pandas==3.0.*
-          - matrix:
-            packages:
-      - output_types: requirements
-        matrices:
-          - matrix:
-              cuda: "12.*"
-            packages:
-              - cupy-cuda12x<14
-          - matrix:
-              cuda: "13.*"
-            packages:
-              - cupy-cuda13x<14
+              - numpy>=2.0,<3.0
+              - pandas==3.0.*,<3.0.4a0
           - matrix:
             packages:
   test_cudf_polars_compat:
@@ -1699,5 +1755,9 @@ dependencies:
               polars_compat_version: "1.41"
             packages:
               - polars==1.41.*
+          - matrix:
+              polars_compat_version: "1.42"
+            packages:
+              - polars==1.42.*
           - matrix:
             packages:

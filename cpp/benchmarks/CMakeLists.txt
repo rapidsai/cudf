@@ -1,13 +1,16 @@
 # =============================================================================
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 # =============================================================================
 
 find_package(Threads REQUIRED)
 
-add_library(cudf_datagen STATIC common/generate_input.cu common/generate_nested_types.cpp)
+add_library(
+  cudf_datagen STATIC common/generate_input.cu common/generate_skewed_data.cpp
+                      common/generate_nested_types.cpp
+)
 target_compile_features(cudf_datagen PUBLIC cxx_std_20 cuda_std_20)
 
 target_compile_options(
@@ -387,10 +390,23 @@ ConfigureNVBench(CSV_WRITER_NVBENCH io/csv/csv_writer.cpp)
 ConfigureNVBench(AST_NVBENCH ast/polynomials.cpp ast/transform.cpp)
 
 # ##################################################################################################
+# * LTO Fragments ----------------------------------------------------------------------------
+rtcx_add_embed(cudf_benchmark_fragments)
+add_fragment(cudf_benchmark_fragments FRAGMENT add_f32 SOURCE binaryop/fragments/add_f32.cu)
+add_fragment(cudf_benchmark_fragments FRAGMENT mul_f32 SOURCE binaryop/fragments/mul_f32.cu)
+rtcx_embed(
+  cudf_benchmark_fragments COMPRESSION none OUTPUT_DIRECTORY
+  "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
+
+# ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
 ConfigureNVBench(
   BINARYOP_NVBENCH binaryop/binaryop.cpp binaryop/compiled_binaryop.cpp binaryop/polynomials.cpp
+  ${cudf_benchmark_fragments_SOURCE_DIR}/cudf_benchmark_fragments.s
 )
+target_include_directories(BINARYOP_NVBENCH PRIVATE ${cudf_benchmark_fragments_SOURCE_DIR})
+add_dependencies(BINARYOP_NVBENCH cudf_benchmark_fragments)
 
 # ##################################################################################################
 # * transform benchmark

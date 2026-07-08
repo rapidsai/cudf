@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "page_data.cuh"
@@ -711,7 +711,7 @@ __device__ int update_validity_and_row_indices_lists(int32_t target_value_count,
         // and we have a valid data_out pointer, it implies this is a list column, so
         // emit an offset.
         if (in_nesting_bounds && ni.data_out != nullptr) {
-          const auto& next_ni = s->nesting_info[d_idx + 1];
+          auto const& next_ni = s->nesting_info[d_idx + 1];
           int const idx       = ni.value_count + thread_value_count;
           cudf::size_type const ofs =
             next_ni.value_count + next_thread_value_count + next_ni.page_start_value;

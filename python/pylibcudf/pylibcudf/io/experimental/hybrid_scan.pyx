@@ -7,6 +7,7 @@ from libc.stddef cimport size_t
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.pair cimport pair
+from libcpp.span cimport span as std_span
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
@@ -279,7 +280,7 @@ cdef class HybridScanReader:
         cdef size_type result
         with nogil:
             result = self.c_obj.get()[0].total_rows_in_row_groups(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size())
+                std_span[const_size_type](indices_vec.data(), indices_vec.size())
             )
         return result
 
@@ -319,7 +320,7 @@ cdef class HybridScanReader:
         cdef vector[size_type] filtered
         with nogil:
             filtered = move(self.c_obj.get()[0].filter_row_groups_with_stats(
-                host_span[const_size_type](
+                std_span[const_size_type](
                     indices_vec.data(), indices_vec.size()
                 ),
                 options.c_obj,
@@ -350,7 +351,7 @@ cdef class HybridScanReader:
         cdef pair[vector[byte_range_info], vector[byte_range_info]] ranges
         with nogil:
             ranges = move(self.c_obj.get()[0].secondary_filters_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             ))
 
@@ -397,10 +398,10 @@ cdef class HybridScanReader:
         cdef vector[size_type] filtered
         with nogil:
             filtered = move(self.c_obj.get()[0].filter_row_groups_with_dictionary_pages(
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value()
             ))
@@ -441,10 +442,10 @@ cdef class HybridScanReader:
         cdef vector[size_type] filtered
         with nogil:
             filtered = move(self.c_obj.get()[0].filter_row_groups_with_bloom_filters(
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value()
             ))
@@ -515,7 +516,7 @@ cdef class HybridScanReader:
         cdef unique_ptr[column] c_result
         with nogil:
             c_result = move(self.c_obj.get()[0].build_row_mask_with_page_index_stats(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj,
                 _stream.view().value(),
                 mr.get_mr()
@@ -545,7 +546,7 @@ cdef class HybridScanReader:
         cdef vector[byte_range_info] ranges
         with nogil:
             ranges = move(self.c_obj.get()[0].filter_column_chunks_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             ))
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
@@ -596,8 +597,8 @@ cdef class HybridScanReader:
         cdef table_with_metadata c_result
         with nogil:
             c_result = move(self.c_obj.get()[0].materialize_filter_columns(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 mask_view,
@@ -631,7 +632,7 @@ cdef class HybridScanReader:
         cdef vector[byte_range_info] ranges
         with nogil:
             ranges = move(self.c_obj.get()[0].payload_column_chunks_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             ))
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
@@ -682,8 +683,8 @@ cdef class HybridScanReader:
         cdef table_with_metadata c_result
         with nogil:
             c_result = move(self.c_obj.get()[0].materialize_payload_columns(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 mask_view,
@@ -717,7 +718,7 @@ cdef class HybridScanReader:
         cdef vector[byte_range_info] ranges
         with nogil:
             ranges = move(self.c_obj.get()[0].all_column_chunks_byte_ranges(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 options.c_obj
             ))
         return [ByteRangeInfo(r.offset(), r.size()) for r in ranges]
@@ -760,8 +761,8 @@ cdef class HybridScanReader:
         cdef table_with_metadata c_result
         with nogil:
             c_result = move(self.c_obj.get()[0].materialize_all_columns(
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 options.c_obj,
@@ -819,10 +820,10 @@ cdef class HybridScanReader:
             self.c_obj.get()[0].setup_chunking_for_filter_columns(
                 chunk_read_limit,
                 pass_read_limit,
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 mask_view,
                 mask_data_pages,
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 options.c_obj,
@@ -904,10 +905,10 @@ cdef class HybridScanReader:
             self.c_obj.get()[0].setup_chunking_for_payload_columns(
                 chunk_read_limit,
                 pass_read_limit,
-                host_span[const_size_type](indices_vec.data(), indices_vec.size()),
+                std_span[const_size_type](indices_vec.data(), indices_vec.size()),
                 mask_view,
                 mask_data_pages,
-                host_span[const_device_span_const_uint8_t](
+                std_span[const_device_span_const_uint8_t](
                     <const_device_span_const_uint8_t*>spans_vec.data(), spans_vec.size()
                 ),
                 options.c_obj,
@@ -974,7 +975,7 @@ cdef class HybridScanReader:
         cdef vector[vector[size_type]] passes
         with nogil:
             passes = move(self.c_obj.get()[0].construct_row_group_passes(
-                host_span[const_size_type](
+                std_span[const_size_type](
                     indices_vec.data(), indices_vec.size()
                 ),
                 pass_read_limit

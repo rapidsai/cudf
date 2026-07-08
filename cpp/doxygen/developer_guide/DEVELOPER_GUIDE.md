@@ -381,6 +381,22 @@ template <typename T>
 std::vector<T> make_std_vector_async(device_span<T const> v, rmm::cuda_stream_view stream)
 ```
 
+### When to use `host_span` vs `std::span`
+
+For host-side data, prefer `std::span` and reserve `cudf::host_span` for the cases where its
+libcudf-specific extensions are actually needed.
+
+Use `std::span<T>` when the parameter is purely a host buffer view and the function does not need
+to know whether the memory is device-accessible.
+
+Use `cudf::host_span<T>` only when one of the following applies:
+
+1. The function needs to query `is_device_accessible()` to take a different code path for pinned
+   or otherwise device-reachable host memory (for example, to enable copy-engine optimizations or
+   skip an explicit host-to-device copy).
+2. The function must accept a libcudf-specific container that `std::span` cannot be constructed
+   from directly.
+
 ## cudf::scalar
 
 A `cudf::scalar` is an object that can represent a singular, nullable value of any of the types
@@ -469,8 +485,14 @@ examples.
 
 **Things that libcudf should not validate**:
 - Integer overflow
-- Ensuring that outputs will not exceed the [2GB size](#cudfsize_type) limit for a given set of
-  inputs
+- Ensuring that outputs will not exceed the [`size_type`](#cudfsize_type) row count limit for a
+  given set of inputs
+
+This policy describes libcudf's default behavior. Some APIs offer opt-in overflow-aware variants for
+callers that need strict semantics, such as the `SUM_OVERFLOW` aggregation, which reports
+overflow through an output flag, and the overflow-checking AST arithmetic operators
+(`ADD_OVERFLOW`, `SUB_OVERFLOW`, and similar) that raise on overflow.
+These are explicit, caller-selected behaviors rather than validation performed on every API.
 
 
 ## libcudf expects nested types to have sanitized null masks
@@ -624,6 +646,30 @@ Notes on `nosync`:
   synchronization before returning or exiting that scope.
 - All new code should use `rmm::exec_policy_nosync(stream)` rather than `rmm::exec_policy(stream)`.
   If a stream sync is needed, call `stream.synchronize()` explicitly.
+
+### Device lambdas
+
+Always declare the return type of an extended `__device__` lambda that is passed to a device
+algorithm. A bare `__device__` lambda cannot have its return type queried from host code, and some
+host-side APIs (for example CUB device algorithms such as `cub::DeviceSelect::If`, and the transform
+iterators) do exactly that, failing to compile with a static assertion in `<cuda/std/functional>`.
+Not every API requires it, but declaring it uniformly keeps call sites correct as the underlying
+APIs evolve.
+
+Prefer a trailing return type; it is the lightest and most readable. Fall back to
+`cuda::proclaim_return_type<T>(lambda)` only when a trailing return type is impractical.
+
+```c++
+// Fails: return type of a bare __device__ lambda is not visible to host code
+cudf::detail::copy_if(begin, end, output, [d] __device__(auto i) { return d[i] > 0; }, stream);
+
+// Preferred: trailing return type
+cudf::detail::copy_if(begin, end, output, [d] __device__(auto i) -> bool { return d[i] > 0; }, stream);
+
+// Alternative: proclaim_return_type
+cudf::detail::copy_if(
+  begin, end, output, cuda::proclaim_return_type<bool>([d] __device__(auto i) { return d[i] > 0; }), stream);
+```
 
 ## Memory Allocation
 

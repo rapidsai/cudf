@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -512,7 +512,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_num_bytes(),
              options.get_row_groups(),
              options.is_enabled_use_jit_filter(),
-             options.is_enabled_case_sensitive_names()},
+             options.is_enabled_case_sensitive_names(),
+             options.is_enabled_prepend_source_index_column()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -678,12 +679,9 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
 
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
-    // Check if number of rows per source should be included in output metadata.
-    if (include_output_num_rows_per_source()) {
-      // Empty dataframe case: Simply initialize to a list of zeros
-      out_metadata.num_rows_per_source =
-        std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
-    }
+    // Empty dataframe case: Simply initialize to a list of zeros
+    out_metadata.num_rows_per_source =
+      std::vector<size_t>(_file_itm_data.num_rows_per_source.size(), 0);
 
     // Finalize output
     return finalize_output(mode, out_metadata, out_columns);
@@ -745,18 +743,13 @@ table_with_metadata reader_impl::read_chunk_internal(read_mode mode)
   out_columns =
     cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
-  // Check if number of rows per source should be included in output metadata.
-  if (include_output_num_rows_per_source()) {
-    // For chunked reading, compute the output number of rows per source
-    if (mode == read_mode::CHUNKED_READ) {
-      out_metadata.num_rows_per_source =
-        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
-    }
-    // Simply move the number of rows per file if reading all at once
-    else {
-      // Move is okay here as we are reading in one go.
-      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
-    }
+  // Compute the output number of rows per source
+  if (mode == read_mode::CHUNKED_READ) {
+    out_metadata.num_rows_per_source =
+      calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
+  } else {
+    // Move is okay here as we are reading in one go.
+    out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
   }
 
   // Add empty columns if needed. Filter output columns based on filter.
@@ -893,8 +886,21 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
+  // Prepend the source index column if requested
+  if (_options.prepend_source_index_column) {
+    prepend_source_index_column(out_metadata.num_rows_per_source, out_columns);
+    out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
+                                     column_name_info{.name = "src_idx", .is_nullable = false});
+  }
+
+  // Offset column references in `_expr_conv` by the number of prepended columns
+  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
+  auto const final_filter =
+    offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
+  auto const final_filter_expr = final_filter.get_converted_expr();
+
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists
-  if (_expr_conv.get_converted_expr().has_value()) {
+  if (final_filter_expr.has_value()) {
     auto read_table         = std::make_unique<table>(std::move(out_columns));
     auto counting_it        = cuda::counting_iterator<std::size_t>{0};
     auto const output_count = read_table->num_columns() - _num_filter_only_columns;
@@ -902,11 +908,14 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
 
     if (_num_filter_only_columns > 0) { out_metadata.schema_info.resize(output_count); }
 
+    // Clear the number of rows per source as it is not valid after filtering
+    out_metadata.num_rows_per_source.clear();
+
     bool use_jit = cudf::get_context().use_jit() || _options.use_jit_filter;
 
     if (!use_jit) {
-      auto predicate = cudf::detail::compute_column(
-        *read_table, _expr_conv.get_converted_expr().value().get(), _stream, _mr);
+      auto predicate =
+        cudf::detail::compute_column(*read_table, final_filter_expr.value().get(), _stream, _mr);
       CUDF_EXPECTS(predicate->view().type().id() == type_id::BOOL8,
                    "Predicate filter should return a boolean");
       // Exclude columns present in filter only in output
@@ -914,11 +923,8 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
         only_output, *predicate, cudf::detail::mask_type::RETENTION, _stream, _mr);
       return {std::move(output_table), std::move(out_metadata)};
     } else {
-      auto output_table = cudf::filter(read_table->view(),
-                                       _expr_conv.get_converted_expr().value().get(),
-                                       only_output,
-                                       _stream,
-                                       _mr);
+      auto output_table = cudf::filter(
+        read_table->view(), final_filter_expr.value().get(), only_output, _stream, _mr);
 
       return {std::move(output_table), std::move(out_metadata)};
     }
@@ -1123,7 +1129,7 @@ parquet_metadata read_parquet_metadata(host_span<std::unique_ptr<datasource> con
 }
 
 std::vector<parquet::FileMetaData> read_parquet_footers(
-  host_span<std::unique_ptr<datasource> const> sources)
+  std::span<std::unique_ptr<datasource> const> sources)
 {
   // Do not use arrow schema when only reading the parquet metadata.
   constexpr auto use_arrow_schema = false;
@@ -1136,7 +1142,10 @@ std::vector<parquet::FileMetaData> read_parquet_footers(
 
   // Parse the source dataset metadata
   return aggregate_reader_metadata(
-           sources, use_arrow_schema, has_column_projection, read_page_indexes)
+           host_span<std::unique_ptr<datasource> const>{sources.data(), sources.size()},
+           use_arrow_schema,
+           has_column_projection,
+           read_page_indexes)
     .get_parquet_metadatas();
 }
 

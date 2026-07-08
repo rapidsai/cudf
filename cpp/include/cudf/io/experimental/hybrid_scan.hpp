@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -16,6 +16,7 @@
 #include <rmm/resource_ref.hpp>
 
 #include <memory>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -41,6 +42,7 @@ namespace io::parquet::experimental {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief Experimental Hybrid Scan Parquet reader optimized for highly selective filters.
  */
 
 /**
@@ -197,7 +199,7 @@ class hybrid_scan_metadata {
  * auto all_row_group_indices = reader->all_row_groups(options);
  *
  * // Span to track the indices of row groups currently at hand
- * auto current_row_group_indices = cudf::host_span<size_type>(all_row_group_indices);
+ * auto current_row_group_indices = std::span<size_type const>(all_row_group_indices);
  *
  * // Optional: Prune row group indices to the ones that start within the byte range
  * auto byte_range_filtered_row_group_indices =
@@ -427,7 +429,7 @@ class hybrid_scan_reader {
    * @return Total number of top-level rows in the row groups
    */
   [[nodiscard]] std::size_t total_rows_in_row_groups(
-    cudf::host_span<size_type const> row_group_indices) const;
+    std::span<size_type const> row_group_indices) const;
 
   /**
    * @brief Resets the current column selection
@@ -450,8 +452,7 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_byte_range(
-    cudf::host_span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Filter the input row groups using column chunk statistics
@@ -462,7 +463,7 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_stats(
-    cudf::host_span<size_type const> row_group_indices,
+    std::span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
@@ -479,7 +480,7 @@ class hybrid_scan_reader {
    *         pages subject to filter predicate
    */
   [[nodiscard]] std::pair<std::vector<byte_range_info>, std::vector<byte_range_info>>
-  secondary_filters_byte_ranges(cudf::host_span<size_type const> row_group_indices,
+  secondary_filters_byte_ranges(std::span<size_type const> row_group_indices,
                                 parquet_reader_options const& options) const;
 
   /**
@@ -493,8 +494,8 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_dictionary_pages(
-    cudf::host_span<cudf::device_span<uint8_t const> const> dictionary_page_data,
-    cudf::host_span<size_type const> row_group_indices,
+    std::span<cudf::device_span<uint8_t const> const> dictionary_page_data,
+    std::span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
@@ -511,8 +512,8 @@ class hybrid_scan_reader {
    * @return Filtered row group indices
    */
   [[nodiscard]] std::vector<size_type> filter_row_groups_with_bloom_filters(
-    cudf::host_span<cudf::device_span<uint8_t const> const> bloom_filter_data,
-    cudf::host_span<size_type const> row_group_indices,
+    std::span<cudf::device_span<uint8_t const> const> bloom_filter_data,
+    std::span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream) const;
 
@@ -527,7 +528,7 @@ class hybrid_scan_reader {
    * row groups
    */
   [[nodiscard]] std::unique_ptr<cudf::column> build_all_true_row_mask(
-    cudf::host_span<size_type const> row_group_indices,
+    std::span<size_type const> row_group_indices,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
 
@@ -543,7 +544,7 @@ class hybrid_scan_reader {
    * index
    */
   [[nodiscard]] std::unique_ptr<cudf::column> build_row_mask_with_page_index_stats(
-    cudf::host_span<size_type const> row_group_indices,
+    std::span<size_type const> row_group_indices,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
@@ -556,8 +557,7 @@ class hybrid_scan_reader {
    * @return Vector of byte ranges to column chunks of filter columns
    */
   [[nodiscard]] std::vector<byte_range_info> filter_column_chunks_byte_ranges(
-    cudf::host_span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Materializes filter columns and updates the input row mask to only the rows
@@ -573,8 +573,8 @@ class hybrid_scan_reader {
    * @return Table of materialized filter columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_filter_columns(
-    cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    std::span<size_type const> row_group_indices,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
     cudf::mutable_column_view& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
@@ -589,15 +589,14 @@ class hybrid_scan_reader {
    * @return Vector of byte ranges to column chunks of payload columns
    */
   [[nodiscard]] std::vector<byte_range_info> payload_column_chunks_byte_ranges(
-    cudf::host_span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Materialize payload columns and applies the row mask to the output table
    *
    * @param row_group_indices Input row groups indices
    * @param column_chunk_data Device spans of column chunk data of payload columns
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param options Parquet reader options
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -605,8 +604,8 @@ class hybrid_scan_reader {
    * @return Table of materialized payload columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_payload_columns(
-    cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    std::span<size_type const> row_group_indices,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
     parquet_reader_options const& options,
@@ -621,8 +620,7 @@ class hybrid_scan_reader {
    * @return Vector of byte ranges to column chunks of all (or selected) columns
    */
   [[nodiscard]] std::vector<byte_range_info> all_column_chunks_byte_ranges(
-    cudf::host_span<size_type const> row_group_indices,
-    parquet_reader_options const& options) const;
+    std::span<size_type const> row_group_indices, parquet_reader_options const& options) const;
 
   /**
    * @brief Materializes all (or selected) columns and returns the final output table
@@ -635,8 +633,8 @@ class hybrid_scan_reader {
    * @return Table of all materialized columns and metadata
    */
   [[nodiscard]] table_with_metadata materialize_all_columns(
-    cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    std::span<size_type const> row_group_indices,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
@@ -648,7 +646,7 @@ class hybrid_scan_reader {
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
    * @param row_group_indices Input row groups indices
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param column_chunk_data Device spans of column chunk data of filter columns
    * @param options Parquet reader options
@@ -658,10 +656,10 @@ class hybrid_scan_reader {
   void setup_chunking_for_filter_columns(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
-    cudf::host_span<size_type const> row_group_indices,
+    std::span<size_type const> row_group_indices,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
-    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
@@ -685,7 +683,7 @@ class hybrid_scan_reader {
    * @param pass_read_limit Limit on the memory used for reading and decompressing data. `0` if
    * there is no limit
    * @param row_group_indices Input row groups indices
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    * @param mask_data_pages Whether to build and use a data page mask using the row mask
    * @param column_chunk_data Device spans of column chunk data of payload columns
    * @param options Parquet reader options
@@ -695,10 +693,10 @@ class hybrid_scan_reader {
   void setup_chunking_for_payload_columns(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
-    cudf::host_span<size_type const> row_group_indices,
+    std::span<size_type const> row_group_indices,
     cudf::column_view const& row_mask,
     use_data_page_mask mask_data_pages,
-    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
@@ -707,7 +705,7 @@ class hybrid_scan_reader {
    * @brief Materializes a chunk of payload columns and applies the corresponding range of input row
    * mask to the output table chunk
    *
-   * @param row_mask Boolean column indicating which rows need to be read. All rows read if empty
+   * @param row_mask Boolean column indicating which rows need to be read
    *
    * @return Table chunk of materialized filter columns and metadata
    */
@@ -731,8 +729,8 @@ class hybrid_scan_reader {
   void setup_chunking_for_all_columns(
     std::size_t chunk_read_limit,
     std::size_t pass_read_limit,
-    cudf::host_span<size_type const> row_group_indices,
-    cudf::host_span<cudf::device_span<uint8_t const> const> column_chunk_data,
+    std::span<size_type const> row_group_indices,
+    std::span<cudf::device_span<uint8_t const> const> column_chunk_data,
     parquet_reader_options const& options,
     rmm::cuda_stream_view stream,
     rmm::device_async_resource_ref mr) const;
@@ -762,7 +760,7 @@ class hybrid_scan_reader {
    * @return Vector of vectors of row group indices, one per constructed pass
    */
   [[nodiscard]] std::vector<std::vector<cudf::size_type>> construct_row_group_passes(
-    cudf::host_span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
+    std::span<cudf::size_type const> row_group_indices, std::size_t pass_read_limit) const;
 
   /**
    * @brief Check if there is any parquet data left to read for the current setup

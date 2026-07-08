@@ -29,6 +29,7 @@ repos:
             ^cpp/cmake/thirdparty/patches/.*|
             ^python/cudf/cudf/tests/data/vocab.txt
           )
+      - id: check-xml
   - repo: https://github.com/MarcoGorelli/cython-lint
     rev: v0.19.0
     hooks:
@@ -38,12 +39,12 @@ repos:
     hooks:
       - id: mypy
         additional_dependencies: [
-          "polars>=1.35,<1.39",
-          "numpy",
-          pyarrow-stubs,
-          "pyarrow<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
-          pytest,
-          types-cachetools,
+          "polars>=1.35,<1.43",
+          "numpy>=1.26",
+          "pyarrow-stubs>=19.0",
+          "pyarrow>=19.0.0,<24.0.0",  # https://github.com/rapidsai/cudf/issues/22229
+          "pytest>=8.0.0,<9.1.0",
+          "types-cachetools>=5.5.0",
           "rmm-cu12==26.8.*,>=0.0.0a0; sys_platform=='linux'",
           "--extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/"
         ]
@@ -241,6 +242,7 @@ repos:
             recipe[.]yaml$|
             dependencies[.]yaml$|
             pytest[.]ini$|
+            ^[.]clang-format$|
             ^[.]pre-commit-config[.]yaml$|
             Makefile$
         # TODO: Remove FindCUDAToolkit once we require CMake 4.4
