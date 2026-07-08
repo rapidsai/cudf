@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import string
 from functools import partial
 
 import pytest
@@ -913,8 +914,7 @@ def test_split_regex_not_supported(engine: pl.GPUEngine):
     [
         ["a.b*c", "no_meta", "", None],
         ["(x)|[y]{z}", "^start$ end+", "back\\slash", "~#&-"],
-        # Every printable ASCII character to exercise the full meta set.
-        ["".join(chr(c) for c in range(32, 127))],
+        [string.printable],
     ],
 )
 def test_escape_regex(engine: pl.GPUEngine, data):
