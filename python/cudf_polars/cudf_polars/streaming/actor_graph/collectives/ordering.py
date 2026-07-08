@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""OrderScheme adjustment utilities for the RapidsMPF streaming runtime."""
+"""Ordering adjustment utilities for the RapidsMPF streaming runtime."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ from cudf_polars.streaming.actor_graph.utils import (
 from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
-    from cudf_streaming.channel_metadata import OrderScheme, Ordering
+    from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.memory.packed_data import PackedData
@@ -41,12 +41,6 @@ if TYPE_CHECKING:
 
 _PID_DTYPE = DataType(pl.Int32())
 _PID_PLC_DTYPE = plc.DataType(plc.TypeId.INT32)
-
-
-def _primary_ordering(scheme: OrderScheme) -> Ordering:
-    """Return the single ordering supported by adjust_orderscheme for now."""
-    (ordering,) = scheme.orderings
-    return ordering
 
 
 def _contiguous_owner(pid: int, nranks: int, npartitions: int) -> int:
@@ -62,17 +56,15 @@ def _partition_range(rank: int, nranks: int, npartitions: int) -> tuple[int, int
     )
 
 
-def _validate_schemes(input_scheme: OrderScheme, output_scheme: OrderScheme) -> None:
-    """Validate the first-pass flat OrderScheme adjustment contract."""
-    input_ordering = _primary_ordering(input_scheme)
-    output_ordering = _primary_ordering(output_scheme)
+def _validate_orderings(input_ordering: Ordering, output_ordering: Ordering) -> None:
+    """Validate the first-pass flat Ordering adjustment contract."""
     if not output_ordering.strict_boundaries:
-        raise ValueError("adjust_orderscheme requires a strict output OrderScheme.")
+        raise ValueError("adjust_ordering requires a strict output Ordering.")
     prefix_len = len(output_ordering.keys)
     if input_ordering.keys[:prefix_len] != output_ordering.keys:
         raise NotImplementedError(
-            "adjust_orderscheme currently requires the output OrderScheme keys "
-            "to be a prefix of the input OrderScheme keys."
+            "adjust_ordering currently requires the output Ordering keys "
+            "to be a prefix of the input Ordering keys."
         )
 
 
@@ -82,7 +74,7 @@ def _split_points(
     ordering: Ordering,
     stream: Stream,
 ) -> list[int]:
-    """Return row split points that partition *table* by *scheme* boundaries."""
+    """Return row split points that partition *table* by *ordering* boundaries."""
     if boundary_table.num_rows() == 0:
         return []
     key_table = plc.Table([table.columns()[key.column_index] for key in ordering.keys])
@@ -294,7 +286,7 @@ class _OutputPieceReader:
         return dict(sorted(out.items()))
 
 
-async def _adjust_orderscheme_local(
+async def _adjust_ordering_local(
     context: Context,
     ref_ir: IR,
     ir_context: IRExecutionContext,
@@ -374,7 +366,7 @@ def _store_chunk(
     stores[pid].insert(Message(pid, chunk))
 
 
-async def _adjust_orderscheme_rank_hybrid(
+async def _adjust_ordering_rank_hybrid(
     context: Context,
     comm: Communicator,
     ref_ir: IR,
@@ -580,20 +572,20 @@ async def _adjust_orderscheme_rank_hybrid(
     await ch_out.drain(context)
 
 
-async def adjust_orderscheme(
+async def adjust_ordering(
     context: Context,
     comm: Communicator,
     ref_ir: IR,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
     ch_in: Channel[TableChunk],
-    input_scheme: OrderScheme,
-    output_scheme: OrderScheme,
+    input_ordering: Ordering,
+    output_ordering: Ordering,
     *,
     collective_id: int | None = None,
 ) -> None:
     """
-    Adjust flat OrderScheme boundaries using contiguous partition ownership.
+    Adjust flat Ordering boundaries using contiguous partition ownership.
 
     Parameters
     ----------
@@ -609,10 +601,10 @@ async def adjust_orderscheme(
         The output channel.
     ch_in
         The input channel.
-    input_scheme
-        The input OrderScheme.
-    output_scheme
-        The output OrderScheme.
+    input_ordering
+        The input Ordering.
+    output_ordering
+        The output Ordering.
     collective_id
         The collective ID to use for SparseAlltoall.
 
@@ -620,19 +612,17 @@ async def adjust_orderscheme(
     -----
     This utility is intentionally narrow and only adjusts data messages. The
     caller is responsible for receiving input metadata and sending output
-    metadata. Input rows are assumed to be globally ordered by ``input_scheme``;
+    metadata. Input rows are assumed to be globally ordered by ``input_ordering``;
     sortedness is not checked here.
     """
-    _validate_schemes(input_scheme, output_scheme)
-    input_ordering = _primary_ordering(input_scheme)
-    output_ordering = _primary_ordering(output_scheme)
+    _validate_orderings(input_ordering, output_ordering)
 
     if comm.nranks > 1 and collective_id is None:
         raise ValueError("collective_id is required when comm.nranks > 1.")
 
     try:
         if comm.nranks == 1:
-            await _adjust_orderscheme_local(
+            await _adjust_ordering_local(
                 context,
                 ref_ir,
                 ir_context,
@@ -656,7 +646,7 @@ async def adjust_orderscheme(
                 stream,
             )
         assert collective_id is not None
-        await _adjust_orderscheme_rank_hybrid(
+        await _adjust_ordering_rank_hybrid(
             context,
             comm,
             ref_ir,

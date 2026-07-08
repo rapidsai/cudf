@@ -14,7 +14,6 @@ import polars as pl
 import pylibcudf as plc
 from cudf_streaming.channel_metadata import (
     OrderKey,
-    OrderScheme,
     Ordering,
 )
 from cudf_streaming.table_chunk import TableChunk
@@ -23,8 +22,8 @@ from rapidsmpf.streaming.core.message import Message
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.dsl.ir import Empty, IRExecutionContext
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
-from cudf_polars.streaming.actor_graph.collectives.orderscheme import (
-    adjust_orderscheme,
+from cudf_polars.streaming.actor_graph.collectives.ordering import (
+    adjust_ordering,
 )
 from cudf_polars.streaming.actor_graph.utils import gather_in_task_group
 
@@ -47,14 +46,14 @@ def _boundary_value(boundary: _Boundary, index: int) -> int:
     return boundary[index] if isinstance(boundary, tuple) else boundary
 
 
-def _make_scheme(
+def _make_ordering(
     context: Context,
     boundary: _Boundary | list[_Boundary],
     *,
     key_indices: tuple[int, ...] = (0,),
     strict: bool = True,
     stream: Stream,
-) -> OrderScheme:
+) -> Ordering:
     boundary_rows: list[_Boundary] = (
         boundary if isinstance(boundary, list) else [boundary]
     )
@@ -70,26 +69,22 @@ def _make_scheme(
         ),
         stream,
     )
-    return OrderScheme(
+    return Ordering(
         [
-            Ordering(
-                [
-                    OrderKey(
-                        index,
-                        plc.types.Order.ASCENDING,
-                        plc.types.NullOrder.BEFORE,
-                    )
-                    for index in key_indices
-                ],
-                TableChunk.from_pylibcudf_table(
-                    boundary_df.table,
-                    stream,
-                    exclusive_view=True,
-                    br=context.br(),
-                ),
-                strict_boundaries=strict,
+            OrderKey(
+                index,
+                plc.types.Order.ASCENDING,
+                plc.types.NullOrder.BEFORE,
             )
-        ]
+            for index in key_indices
+        ],
+        TableChunk.from_pylibcudf_table(
+            boundary_df.table,
+            stream,
+            exclusive_view=True,
+            br=context.br(),
+        ),
+        strict_boundaries=strict,
     )
 
 
@@ -119,8 +114,8 @@ async def _adjust_and_collect(
     context: Context,
     comm: Communicator,
     input_df: pl.DataFrame | list[pl.DataFrame],
-    input_scheme: OrderScheme,
-    output_scheme: OrderScheme,
+    input_ordering: Ordering,
+    output_ordering: Ordering,
     *,
     collective_id: int | None = None,
 ) -> dict[int, pl.DataFrame]:
@@ -160,15 +155,15 @@ async def _adjust_and_collect(
         )
         await gather_in_task_group(
             _produce(),
-            adjust_orderscheme(
+            adjust_ordering(
                 context,
                 comm,
                 Empty(_SCHEMA),
                 ir_context,
                 ch_out,
                 ch_in,
-                input_scheme,
-                output_scheme,
+                input_ordering,
+                output_ordering,
                 collective_id=collective_id,
             ),
             _consume(),
@@ -190,8 +185,8 @@ def _assert_partition_output(
 async def _adjust_direct(
     context: Context,
     comm: Communicator,
-    input_scheme: OrderScheme,
-    output_scheme: OrderScheme,
+    input_ordering: Ordering,
+    output_ordering: Ordering,
     *,
     collective_id: int | None = None,
 ) -> None:
@@ -201,15 +196,15 @@ async def _adjust_direct(
         ir_context = IRExecutionContext(
             executor, get_cuda_stream=context.br().stream_pool.get_stream
         )
-        await adjust_orderscheme(
+        await adjust_ordering(
             context,
             comm,
             Empty(_SCHEMA),
             ir_context,
             ch_out,
             ch_in,
-            input_scheme,
-            output_scheme,
+            input_ordering,
+            output_ordering,
             collective_id=collective_id,
         )
 
@@ -222,7 +217,7 @@ async def _adjust_direct(
         ((0,), (0,), False, ValueError, "strict output"),
     ],
 )
-def test_adjust_orderscheme_rejects_invalid_schemes(
+def test_adjust_ordering_rejects_invalid_orderings(
     spmd_engine: SPMDEngine,
     input_keys: tuple[int, ...],
     output_keys: tuple[int, ...],
@@ -232,8 +227,8 @@ def test_adjust_orderscheme_rejects_invalid_schemes(
 ) -> None:
     context = spmd_engine.context
     stream = context.br().stream_pool.get_stream()
-    input_scheme = _make_scheme(context, 4, key_indices=input_keys, stream=stream)
-    output_scheme = _make_scheme(
+    input_ordering = _make_ordering(context, 4, key_indices=input_keys, stream=stream)
+    output_ordering = _make_ordering(
         context,
         4,
         key_indices=output_keys,
@@ -243,12 +238,12 @@ def test_adjust_orderscheme_rejects_invalid_schemes(
 
     with pytest.raises(err, match=match):
         asyncio.run(
-            _adjust_direct(context, spmd_engine.comm, input_scheme, output_scheme)
+            _adjust_direct(context, spmd_engine.comm, input_ordering, output_ordering)
         )
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_requires_collective_id(
+def test_adjust_ordering_requires_collective_id(
     spmd_engine: SPMDEngine,
 ) -> None:
     context = spmd_engine.context
@@ -257,11 +252,11 @@ def test_adjust_orderscheme_requires_collective_id(
         pytest.skip("collective_id is only required for multi-rank runs.")
 
     stream = context.br().stream_pool.get_stream()
-    input_scheme = _make_scheme(context, 4, stream=stream)
-    output_scheme = _make_scheme(context, 4, stream=stream)
+    input_ordering = _make_ordering(context, 4, stream=stream)
+    output_ordering = _make_ordering(context, 4, stream=stream)
 
     with pytest.raises(ValueError, match="collective_id"):
-        asyncio.run(_adjust_direct(context, comm, input_scheme, output_scheme))
+        asyncio.run(_adjust_direct(context, comm, input_ordering, output_ordering))
 
 
 @pytest.mark.spmd
@@ -272,7 +267,7 @@ def test_adjust_orderscheme_requires_collective_id(
         (5, {0: {0: [0, 1, 2, 3, 4]}, 1: {1: [5, 6, 7]}}),
     ],
 )
-def test_adjust_orderscheme_sparse_boundary_shift(
+def test_adjust_ordering_sparse_boundary_shift(
     spmd_engine: SPMDEngine,
     target_boundary: int,
     expected: _ExpectedByRank,
@@ -285,8 +280,8 @@ def test_adjust_orderscheme_sparse_boundary_shift(
     keys = list(range(4)) if comm.rank == 0 else list(range(4, 8))
     stream = context.br().stream_pool.get_stream()
     # Input sorted on (key, val) is also sorted on the target key prefix.
-    input_scheme = _make_scheme(context, (4, 4), key_indices=(0, 1), stream=stream)
-    output_scheme = _make_scheme(context, target_boundary, stream=stream)
+    input_ordering = _make_ordering(context, (4, 4), key_indices=(0, 1), stream=stream)
+    output_ordering = _make_ordering(context, target_boundary, stream=stream)
 
     with reserve_op_id() as op_id:
         output = asyncio.run(
@@ -294,8 +289,8 @@ def test_adjust_orderscheme_sparse_boundary_shift(
                 context,
                 comm,
                 _frame(keys),
-                input_scheme,
-                output_scheme,
+                input_ordering,
+                output_ordering,
                 collective_id=op_id,
             )
         )
@@ -304,7 +299,7 @@ def test_adjust_orderscheme_sparse_boundary_shift(
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_emits_empty_owned_partitions(
+def test_adjust_ordering_emits_empty_owned_partitions(
     spmd_engine: SPMDEngine,
 ) -> None:
     context = spmd_engine.context
@@ -314,8 +309,8 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(
 
     keys = [0, 1, 2] if comm.rank == 0 else [5, 8]
     stream = context.br().stream_pool.get_stream()
-    input_scheme = _make_scheme(context, 5, stream=stream)
-    output_scheme = _make_scheme(context, [3, 5, 7], stream=stream)
+    input_ordering = _make_ordering(context, 5, stream=stream)
+    output_ordering = _make_ordering(context, [3, 5, 7], stream=stream)
 
     with reserve_op_id() as op_id:
         output = asyncio.run(
@@ -323,8 +318,8 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(
                 context,
                 comm,
                 _frame(keys),
-                input_scheme,
-                output_scheme,
+                input_ordering,
+                output_ordering,
                 collective_id=op_id,
             )
         )
@@ -337,7 +332,7 @@ def test_adjust_orderscheme_emits_empty_owned_partitions(
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_middle_rank_buffers_only_as_needed(
+def test_adjust_ordering_middle_rank_buffers_only_as_needed(
     spmd_engine: SPMDEngine,
 ) -> None:
     context = spmd_engine.context
@@ -351,8 +346,8 @@ def test_adjust_orderscheme_middle_rank_buffers_only_as_needed(
         2: [20, 25],
     }[comm.rank]
     stream = context.br().stream_pool.get_stream()
-    input_scheme = _make_scheme(context, [10, 20], stream=stream)
-    output_scheme = _make_scheme(context, [5, 15], stream=stream)
+    input_ordering = _make_ordering(context, [10, 20], stream=stream)
+    output_ordering = _make_ordering(context, [5, 15], stream=stream)
 
     with reserve_op_id() as op_id:
         output = asyncio.run(
@@ -360,8 +355,8 @@ def test_adjust_orderscheme_middle_rank_buffers_only_as_needed(
                 context,
                 comm,
                 _frame(keys),
-                input_scheme,
-                output_scheme,
+                input_ordering,
+                output_ordering,
                 collective_id=op_id,
             )
         )
@@ -375,13 +370,13 @@ def test_adjust_orderscheme_middle_rank_buffers_only_as_needed(
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_all_empty_input(spmd_engine: SPMDEngine) -> None:
+def test_adjust_ordering_all_empty_input(spmd_engine: SPMDEngine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
     stream = context.br().stream_pool.get_stream()
-    input_scheme = _make_scheme(context, 5, stream=stream)
-    output_scheme = _make_scheme(context, [3, 5, 7], stream=stream)
-    output_npartitions = output_scheme.orderings[0].num_boundaries + 1
+    input_ordering = _make_ordering(context, 5, stream=stream)
+    output_ordering = _make_ordering(context, [3, 5, 7], stream=stream)
+    output_npartitions = output_ordering.num_boundaries + 1
     expected: _ExpectedPartitions = {
         pid: []
         for pid in range(output_npartitions)
@@ -394,8 +389,8 @@ def test_adjust_orderscheme_all_empty_input(spmd_engine: SPMDEngine) -> None:
                 context,
                 comm,
                 _frame([]),
-                input_scheme,
-                output_scheme,
+                input_ordering,
+                output_ordering,
             )
         )
     else:
@@ -405,8 +400,8 @@ def test_adjust_orderscheme_all_empty_input(spmd_engine: SPMDEngine) -> None:
                     context,
                     comm,
                     _frame([]),
-                    input_scheme,
-                    output_scheme,
+                    input_ordering,
+                    output_ordering,
                     collective_id=op_id,
                 )
             )
@@ -422,7 +417,7 @@ def test_adjust_orderscheme_all_empty_input(spmd_engine: SPMDEngine) -> None:
         (0, {0: [], 1: list(range(8))}),
     ],
 )
-def test_adjust_orderscheme_single_rank_no_collective(
+def test_adjust_ordering_single_rank_no_collective(
     spmd_engine: SPMDEngine,
     target_boundary: int,
     expected: _ExpectedPartitions,
@@ -433,15 +428,15 @@ def test_adjust_orderscheme_single_rank_no_collective(
         pytest.skip("This test covers the single-rank path.")
 
     stream = context.br().stream_pool.get_stream()
-    input_scheme = _make_scheme(context, 4, stream=stream)
-    output_scheme = _make_scheme(context, target_boundary, stream=stream)
+    input_ordering = _make_ordering(context, 4, stream=stream)
+    output_ordering = _make_ordering(context, target_boundary, stream=stream)
     output_by_pid = asyncio.run(
         _adjust_and_collect(
             context,
             comm,
             _frame(list(range(8))),
-            input_scheme,
-            output_scheme,
+            input_ordering,
+            output_ordering,
         )
     )
 
@@ -449,22 +444,22 @@ def test_adjust_orderscheme_single_rank_no_collective(
 
 
 @pytest.mark.spmd
-def test_adjust_orderscheme_multi_chunk_input(spmd_engine: SPMDEngine) -> None:
+def test_adjust_ordering_multi_chunk_input(spmd_engine: SPMDEngine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
     if comm.nranks != 1:
         pytest.skip("This test covers local chunk accumulation.")
 
     stream = context.br().stream_pool.get_stream()
-    input_scheme = _make_scheme(context, 4, stream=stream)
-    output_scheme = _make_scheme(context, 4, stream=stream)
+    input_ordering = _make_ordering(context, 4, stream=stream)
+    output_ordering = _make_ordering(context, 4, stream=stream)
     output = asyncio.run(
         _adjust_and_collect(
             context,
             comm,
             [_frame([0, 1]), _frame([2, 3, 4, 5]), _frame([6, 7])],
-            input_scheme,
-            output_scheme,
+            input_ordering,
+            output_ordering,
         )
     )
 
