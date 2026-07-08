@@ -427,11 +427,8 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   // that latency from fill_run_batch(). Streams larger than the per-stream
   // budget fall back to parsing from global with no behavior change.
   using rle_stream_t = rle_stream<level_t, level_decode_block_size, max_output_values>;
-  __shared__ __align__(16) uint8_t def_stage[rle_stream_t::smem_stage_size];
-  __shared__ __align__(16) uint8_t rep_stage[rle_stream_t::smem_stage_size];
+  __shared__ __align__(16) uint8_t stage[rle_stream_t::smem_stage_size];
   __shared__ cuda::barrier<cuda::thread_scope_block> copy_barrier;
-  cg::invoke_one(block, [&]() { init(&copy_barrier, block.size()); });
-  block.sync();
 
   // Get the level decode buffers for this page
   auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
@@ -444,39 +441,43 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
 
   // Initialize the stream decoders
   bool const process_nulls = should_process_nulls(s);
-  if (process_nulls) {
-    decoders[level_type::DEFINITION].init(block,
-                                          s->col.level_bits[level_type::DEFINITION],
-                                          s->abs_lvl_start[level_type::DEFINITION],
-                                          s->abs_lvl_end[level_type::DEFINITION],
-                                          def,
-                                          num_to_decode,
-                                          def_stage,
-                                          &copy_barrier);
-  }
   if (has_repetition) {
+    cg::invoke_one(block, [&]() { init(&copy_barrier, block.size()); });
+    block.sync();
     decoders[level_type::REPETITION].init(block,
                                           s->col.level_bits[level_type::REPETITION],
                                           s->abs_lvl_start[level_type::REPETITION],
                                           s->abs_lvl_end[level_type::REPETITION],
                                           rep,
                                           num_to_decode,
-                                          rep_stage,
+                                          stage,
                                           &copy_barrier);
+    copy_barrier.arrive_and_wait();
+    decoders[level_type::REPETITION].decode_next(t, num_to_decode);
   }
-  copy_barrier.arrive_and_wait();
 
   // Decode levels for this page up to the last row needed.
   // If skipping the first rows, we still need to decode their levels.
   // This is because we need to determine the number of non-null values we skipped.
   // Note that for lists we haven't computed skipped_leaf_values yet; this is used as input for
   // that.
-  if (has_repetition) { decoders[level_type::REPETITION].decode_next(t, num_to_decode); }
-
   // Must sync as shared variables in decode_next() are shared between decoders!!
   block.sync();
 
-  if (process_nulls) { decoders[level_type::DEFINITION].decode_next(t, num_to_decode); }
+  if (process_nulls) {
+    cg::invoke_one(block, [&]() { init(&copy_barrier, block.size()); });
+    block.sync();
+    decoders[level_type::DEFINITION].init(block,
+                                          s->col.level_bits[level_type::DEFINITION],
+                                          s->abs_lvl_start[level_type::DEFINITION],
+                                          s->abs_lvl_end[level_type::DEFINITION],
+                                          def,
+                                          num_to_decode,
+                                          stage,
+                                          &copy_barrier);
+    copy_barrier.arrive_and_wait();
+    decoders[level_type::DEFINITION].decode_next(t, num_to_decode);
+  }
 }
 
 }  // anonymous namespace
