@@ -42,11 +42,11 @@ def test_extend_constant_non_literal_value_and_n(engine: pl.GPUEngine) -> None:
 
 
 @pytest.mark.parametrize(
-    "n", [-1, pl.col("n").min().abs() * -1], ids=["literal", "expression"]
+    "n", [-1, pl.col("a").min().abs() * -1], ids=["literal", "expression"]
 )
 def test_extend_constant_negative_n(engine: pl.GPUEngine, n: int | pl.Expr) -> None:
     lf = pl.LazyFrame({"a": [1, 2, 3]})
-    q = lf.select(pl.col("a").extend_constant(0, -1))
+    q = lf.select(pl.col("a").extend_constant(0, n))
     with pytest.raises(pl.exceptions.InvalidOperationError):
         q.collect()
     if is_streaming_engine(engine):
