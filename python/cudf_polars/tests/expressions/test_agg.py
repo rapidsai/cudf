@@ -34,6 +34,7 @@ from cudf_polars.utils.versions import (
         "std",
         "var",
         # scan aggs from UnaryFunction
+        "cum_count",
         "cum_min",
         "cum_max",
         "cum_prod",
@@ -130,6 +131,21 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     df = pl.LazyFrame({"a": pl.Series(data, dtype=dtype)})
     q = df.select(pl.col("a").product())
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, None, 3, None, 5],
+        [None, None, None],
+        [1, 2, 3],
+        [],
+    ],
+)
+def test_cum_count(engine: pl.GPUEngine, data):
+    df = pl.LazyFrame({"a": pl.Series(data, dtype=pl.Int64())})
+    q = df.select(pl.col("a").cum_count())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("cum_agg", sorted(expr.UnaryFunction._supported_cum_aggs))
