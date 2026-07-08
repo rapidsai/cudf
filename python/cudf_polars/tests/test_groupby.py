@@ -138,6 +138,21 @@ def test_groupby(engine: pl.GPUEngine, df: pl.LazyFrame, maintain_order, keys, e
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Int8, pl.Int32, pl.Int64, pl.UInt16, pl.Float64],
+)
+def test_groupby_product_all_null_1(engine: pl.GPUEngine, dtype: pl.DataType) -> None:
+    lf = pl.LazyFrame(
+        {
+            "key": [1, 1, 2, 2, 3, 3, 3],
+            "value": pl.Series([2, 3, 4, None, None, None, None], dtype=dtype),
+        }
+    )
+    q = lf.group_by("key").agg(pl.col("value").product()).sort("key")
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
 def test_groupby_sorted_keys(
     engine: pl.GPUEngine,
     df: pl.LazyFrame,
