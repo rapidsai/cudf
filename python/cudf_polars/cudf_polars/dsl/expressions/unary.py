@@ -106,6 +106,7 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "drop_nans",
             "drop_nulls",
             "extend_constant",
             "fill_null",
@@ -125,6 +126,7 @@ class UnaryFunction(Expr):
     )
     _supported_cum_aggs = frozenset(
         {
+            "cum_count",
             "cum_min",
             "cum_max",
             "cum_prod",
@@ -333,6 +335,16 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "drop_nans":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            if not plc.traits.is_floating_point(column.obj.type()):
+                return column
+            return Column(
+                plc.stream_compaction.drop_nans(
+                    plc.Table([column.obj]), [0], 1, stream=df.stream
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
@@ -615,6 +627,22 @@ class UnaryFunction(Expr):
             )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
+            if self.name == "cum_count":
+                # cum_count is the cumulative count of non-null values.
+                counts = plc.unary.cast(
+                    plc.unary.is_valid(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                )
+                return Column(
+                    plc.reduce.scan(
+                        counts,
+                        plc.aggregation.sum(),
+                        plc.reduce.ScanType.INCLUSIVE,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             plc_col = column.obj
             col_type = column.dtype.plc_type
             # cum_sum casts
