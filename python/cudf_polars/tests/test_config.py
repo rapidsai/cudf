@@ -14,6 +14,7 @@ import rmm
 from rmm._cuda import gpu
 
 import cudf_polars.callback
+import cudf_polars.quent
 import cudf_polars.utils.config
 from cudf_polars.callback import (
     _is_concurrent_managed_access_supported,
@@ -361,6 +362,7 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         m.setenv("CUDF_POLARS__EXECUTOR__MAX_ROWS_PER_PARTITION", "42")
         m.setenv("CUDF_POLARS__EXECUTOR__TARGET_PARTITION_SIZE", "100")
         m.setenv("CUDF_POLARS__EXECUTOR__BROADCAST_LIMIT", "44")
+        m.setenv("CUDF_POLARS__EXECUTOR__QUENT_CONTEXT", "1")
 
         engine = pl.GPUEngine()
         config = ConfigOptions.from_polars_engine(engine)
@@ -370,6 +372,33 @@ def test_config_option_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
         assert config.executor.max_rows_per_partition == 42
         assert config.executor.target_partition_size == 100
         assert config.executor.broadcast_limit == 44
+        assert config.executor.quent_context is not None
+
+
+def test_quent_context_from_env_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR__QUENT_CONTEXT", "0")
+        engine = pl.GPUEngine()
+        config = ConfigOptions.from_polars_engine(engine)
+        assert config.executor.quent_context is None
+
+
+def test_quent_context_from_env_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    with monkeypatch.context() as m:
+        m.setenv("CUDF_POLARS__EXECUTOR__QUENT_CONTEXT", "foo")
+        engine = pl.GPUEngine()
+        with pytest.raises(ValueError, match="Invalid value for quent_context: 'foo'"):
+            ConfigOptions.from_polars_engine(engine)
+
+
+def test_hash_streaming_executor() -> None:
+    config = ConfigOptions.from_polars_engine(
+        pl.GPUEngine(
+            executor="streaming",
+            executor_options={"quent_context": cudf_polars.quent.QuentContext()},
+        )
+    )
+    assert hash(config.executor) == hash(config.executor)
 
 
 def test_target_partition_from_env(
