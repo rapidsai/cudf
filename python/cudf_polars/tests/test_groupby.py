@@ -138,6 +138,24 @@ def test_groupby(engine: pl.GPUEngine, df: pl.LazyFrame, maintain_order, keys, e
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Int8, pl.Int32, pl.Int64, pl.UInt16, pl.Float64],
+)
+def test_groupby_product(engine: pl.GPUEngine, dtype: pl.DataType) -> None:
+    # Exercises the sum/product decomposition in decompose_single_agg:
+    # - small integral dtypes are computed in Int64 then cast back
+    # - an all-null group must yield the product identity (1), not null
+    lf = pl.LazyFrame(
+        {
+            "key": [1, 1, 2, 2, 3, 3, 3],
+            "value": pl.Series([2, 3, 4, None, None, None, None], dtype=dtype),
+        }
+    )
+    q = lf.group_by("key").agg(pl.col("value").product()).sort("key")
+    assert_gpu_result_equal(q, engine=engine, check_exact=False)
+
+
 def test_groupby_sorted_keys(
     engine: pl.GPUEngine,
     df: pl.LazyFrame,
