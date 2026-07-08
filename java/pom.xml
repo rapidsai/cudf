@@ -459,11 +459,8 @@
                 <filtering>true</filtering>
             </resource>
             <resource>
-                <directory>${basedir}/..</directory>
-                <targetPath>META-INF</targetPath>
-                <includes>
-                    <include>LICENSE</include>
-                </includes>
+                <!-- Populated by the copy-license execution of maven-resources-plugin. -->
+                <directory>${project.build.directory}/license-resources</directory>
             </resource>
         </resources>
         <pluginManagement>
@@ -674,6 +671,24 @@
             <plugin>
                 <artifactId>maven-resources-plugin</artifactId>
                 <executions>
+                    <execution>
+                        <id>copy-license</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/license-resources/META-INF</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${basedir}/..</directory>
+                                    <includes>
+                                        <include>LICENSE</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
                     <execution>
                         <id>copy-native-libs</id>
                         <phase>generate-resources</phase>
