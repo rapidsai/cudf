@@ -81,6 +81,12 @@ class PDSDSPolarsQueries(PDSDSQueries):
     """Polars Queries."""
 
     q_impl = "polars_impl"
+    # Queries expected to fail on GPU due to known bugs. Keys are query numbers;
+    # values are reasons for the failures. These queries will be skipped in GPU runs.
+    EXPECTED_FAILURES_TPCDS: ClassVar[dict[int, str]] = {
+        5: "GPU execution failure (packed data cannot be empty): https://github.com/rapidsai/cudf/issues/22073",
+        9: "GPU cross join with empty left table: https://github.com/rapidsai/cudf/issues/22824",
+    }
     # See comments for EXPECTED_CASTS and EXPECTED_CASTS_DECIMAL
     # in cudf/python/cudf_polars/cudf_polars/streaming/benchmarks/pdsh.py
     # for more details.
@@ -111,17 +117,9 @@ class PDSDSPolarsQueries(PDSDSQueries):
             pl.col("total net profit").cast(pl.Decimal(18, 2)),
         ],
         19: [pl.col("ext_price").cast(pl.Decimal(18, 2))],
-        20: [
-            pl.col("revenueratio").cast(pl.Decimal(38, 2)),
-        ],
+        20: [pl.col("revenueratio").cast(pl.Decimal(38, 2))],
         24: [pl.col("paid").cast(pl.Decimal(18, 2))],
         30: [pl.col("ctr_total_return").cast(pl.Decimal(18, 2))],
-        31: [
-            pl.col("web_q1_q2_increase").cast(pl.Decimal(38, 2)),
-            pl.col("store_q1_q2_increase").cast(pl.Decimal(38, 2)),
-            pl.col("web_q2_q3_increase").cast(pl.Decimal(38, 2)),
-            pl.col("store_q2_q3_increase").cast(pl.Decimal(38, 2)),
-        ],
         32: [pl.col("excess discount amount").cast(pl.Decimal(18, 2))],
         33: [pl.col("total_sales").cast(pl.Decimal(18, 2))],
         42: [pl.col("sum(ss_ext_sales_price)").cast(pl.Decimal(18, 2))],

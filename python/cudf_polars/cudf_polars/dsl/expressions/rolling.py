@@ -416,16 +416,42 @@ class GroupedWindow(Expr):
         cum_named = op.named_exprs
         order_index = op.order_index
 
+        _fill_policy_map = {
+            "forward": plc.replace.ReplacePolicy.PRECEDING,
+            "backward": plc.replace.ReplacePolicy.FOLLOWING,
+        }
+
+        # For fill_null_with_strategy(cum_sum(col)), ne.value is the outer wrapper;
+        # the actual data column lives one level deeper.
+        def _data_child(ne: expr.NamedExpr) -> expr.Expr:
+            v = ne.value
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+            ):
+                return v.children[0].children[0]
+            return v.children[0]
+
+        def _fill_policy(ne: expr.NamedExpr) -> plc.replace.ReplacePolicy | None:
+            v = ne.value
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+            ):
+                return _fill_policy_map.get(v.options[0])
+            return None
+
         requests: list[plc.groupby.GroupByRequest] = []
         out_names: list[str] = []
         out_dtypes: list[DataType] = []
+        fill_policies: list[plc.replace.ReplacePolicy | None] = []
 
         # Instead of calling self._gather_columns, let's call plc.copying.gather directly
         # since we need plc.Column objects, not cudf_polars Column objects
         val_cols: Sequence[plc.Column]
         if order_index is not None:
             plc_cols = [
-                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                _data_child(ne).evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in cum_named
             ]
             val_cols = plc.copying.gather(
@@ -436,7 +462,7 @@ class GroupedWindow(Expr):
             ).columns()
         else:
             val_cols = [
-                ne.value.children[0].evaluate(df, context=ExecutionContext.FRAME).obj
+                _data_child(ne).evaluate(df, context=ExecutionContext.FRAME).obj
                 for ne in cum_named
             ]
         agg = plc.aggregation.sum()
@@ -445,12 +471,31 @@ class GroupedWindow(Expr):
             requests.append(plc.groupby.GroupByRequest(val_col, [agg]))
             out_names.append(ne.name)
             out_dtypes.append(ne.value.dtype)
+            fill_policies.append(_fill_policy(ne))
 
         local_grouper = op.local_grouper
         assert isinstance(local_grouper, plc.groupby.GroupBy)
         _, tables = local_grouper.scan(requests)
 
-        return out_names, out_dtypes, tables
+        # Apply forward/backward fill per-partition for cum_sum wrapped in
+        # fill_null_with_strategy. Create a fresh grouper (same keys/sort order)
+        # so the scan's internal state doesn't interfere with replace_nulls.
+        any_fill = any(p is not None for p in fill_policies)
+        fill_grouper = (
+            GroupedWindow._sorted_grouper(op.by_cols_for_scan)
+            if any_fill and op.by_cols_for_scan is not None
+            else None
+        )
+
+        result_tables = []
+        for tbl, policy in zip(tables, fill_policies, strict=True):
+            if policy is not None and fill_grouper is not None:
+                _, filled = fill_grouper.replace_nulls(tbl, [policy])
+                result_tables.append(filled)
+            else:
+                result_tables.append(tbl)
+
+        return out_names, out_dtypes, result_tables
 
     def _reorder_to_input(
         self,
@@ -514,7 +559,17 @@ class GroupedWindow(Expr):
 
         for ne in self.named_aggs:
             v = ne.value
-            if isinstance(v, expr.UnaryFunction) and v.name in unary_window_ops:
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], expr.UnaryFunction)
+                and v.children[0].name in unary_window_ops
+            ):
+                # fill_null_with_strategy(window_fn(...)):
+                # route to the inner window function's bucket so it runs per-partition;
+                # the fill_null post-step is applied after the scan in that op's handler.
+                unary_window_ops[v.children[0].name].append(ne)
+            elif isinstance(v, expr.UnaryFunction) and v.name in unary_window_ops:
                 unary_window_ops[v.name].append(ne)
             else:
                 reductions.append(ne)

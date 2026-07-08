@@ -1106,7 +1106,16 @@ def _(
         ]
 
         child_deps = [
-            v.children[0]
+            # fill_null_with_strategy(inner_window(col)) is routed to inner_window's
+            # bucket; unwrap one extra level so child_deps tracks the actual data col.
+            v.children[0].children[0]
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], expr.UnaryFunction)
+                and v.children[0].name in {"rank", "cum_sum"}
+            )
+            else v.children[0]
             for ne in named_aggs
             for v in (ne.value,)
             if isinstance(v, expr.Agg)

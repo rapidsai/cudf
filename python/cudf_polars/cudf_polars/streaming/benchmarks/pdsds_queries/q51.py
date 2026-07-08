@@ -97,9 +97,6 @@ def polars_impl(run_config: RunConfig) -> QueryResult:
     store_sales = get_data(run_config.dataset_path, "store_sales", run_config.suffix)
     date_dim = get_data(run_config.dataset_path, "date_dim", run_config.suffix)
 
-    # Polars cum_sum() emits NULL at null positions; SQL SUM() OVER (UNBOUNDED PRECEDING)
-    # skips NULLs and carries the running total forward. forward_fill() corrects that.
-
     def _cume_sales(partition_col: str) -> pl.Expr:
         return (
             pl.col("daily_sum")

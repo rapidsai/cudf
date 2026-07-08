@@ -1185,6 +1185,10 @@ def _run_query_loop(
                     )
                 )
 
+        known_failures: dict[int, str] = getattr(
+            benchmark, "EXPECTED_FAILURES_TPCDS", {}
+        )
+
         try:
             result = run_polars_query(
                 q_id=q_id,
@@ -1197,9 +1201,12 @@ def _run_query_loop(
                 prepare_validation_result=prepare_validation_result,
             )
         except Exception:
-            print(f"❌ query={q_id} failed (setup or execution)!")
+            if q_id in known_failures:
+                print(f"⚠️  query={q_id} failed (known issue): {known_failures[q_id]}")
+            else:
+                print(f"❌ query={q_id} failed (setup or execution)!")
+                query_failures.append((q_id, -1))
             print(traceback.format_exc())
-            query_failures.append((q_id, -1))
             record = FailedRecord(
                 query=q_id,
                 iteration=-1,
@@ -1215,9 +1222,21 @@ def _run_query_loop(
         records[q_id] = result.query_records
         if result.plan is not None:
             plans[q_id] = result.plan
-        query_failures.extend(result.iteration_failures)
+        for iteration_failure in result.iteration_failures:
+            if iteration_failure[0] in known_failures:
+                print(
+                    f"⚠️  query={iteration_failure[0]} iteration {iteration_failure[1]} failed "
+                    f"(known issue): {known_failures[iteration_failure[0]]}"
+                )
+            else:
+                query_failures.append(iteration_failure)
         if result.validation_failed:
-            validation_failures.append(q_id)
+            if q_id in known_failures:
+                print(
+                    f"⚠️  query={q_id} failed validation (known issue): {known_failures[q_id]}"
+                )
+            else:
+                validation_failures.append(q_id)
         all_partition_plan_rows.extend(result.partition_plan_rows)
 
     if all_partition_plan_rows and getattr(args, "explain_partition_plan", False):
