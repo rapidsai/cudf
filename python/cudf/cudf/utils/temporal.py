@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -57,9 +57,12 @@ def infer_format(element: str, **kwargs) -> str:
     # For the case where first_part is '00:00:03'
     if first_part is None:
         tmp = "1970-01-01 " + element_parts[0]
-        first_part = pd.tseries.api.guess_datetime_format(tmp, **kwargs).split(
-            " ", 1
-        )[1]
+        tmp_fmt = pd.tseries.api.guess_datetime_format(tmp, **kwargs)
+        if tmp_fmt is None:
+            raise ValueError(
+                "Unable to infer the timestamp format from the data"
+            )
+        first_part = tmp_fmt.split(" ", 1)[1]
     if first_part is None:
         raise ValueError("Unable to infer the timestamp format from the data")
 
