@@ -36,6 +36,7 @@ function(libcudf_streaming_mpirun_test_add)
               "$<TARGET_FILE:${_MPIRUN_TEST_TEST_TARGET}>"
       INSTALL_COMPONENT_SET testing INSTALL_TARGET ${_MPIRUN_TEST_TEST_TARGET}
     )
+    set_tests_properties("${_MPIRUN_TEST_TEST_TARGET}_${np}" PROPERTIES RUN_SERIAL TRUE)
   endforeach(np)
 endfunction(libcudf_streaming_mpirun_test_add)
 
@@ -107,6 +108,7 @@ rapids_test_add(
   COMMAND libcudf_streaming_single_tests
   INSTALL_COMPONENT_SET testing
 )
+set_tests_properties(libcudf_streaming_single_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ##################################################################################################
 # MPI and UCXX based tests -------------------------------------------------------------------------
