@@ -15,6 +15,7 @@ from cudf.core.column.decimal import DecimalColumn
 from cudf.core.column.numerical import NumericalColumn
 from cudf.testing import assert_eq
 from cudf.testing._utils import assert_exceptions_equal, expect_warning_if
+from cudf.utils.temporal import infer_format
 
 
 @pytest.mark.parametrize(
@@ -593,6 +594,24 @@ def test_str_to_datetime_error():
         rfunc_args_and_kwargs=(["datetime64[s]"],),
         check_exception_type=False,
     )
+
+
+@pytest.mark.parametrize(
+    "bad_input",
+    ["1.2", "9.9", "2078~1.15"],
+)
+def test_infer_format_rejects_non_datetime_dotted_strings(bad_input):
+    with pytest.raises(
+        ValueError, match="Unable to infer the timestamp format"
+    ):
+        infer_format(bad_input)
+
+
+def test_to_datetime_rejects_non_datetime_dotted_string():
+    with pytest.raises(
+        ValueError, match="Unable to infer the timestamp format"
+    ):
+        cudf.to_datetime(cudf.Series(["1.2"]))
 
 
 @pytest.mark.parametrize("timezone", ["", "Z"])
