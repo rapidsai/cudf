@@ -3427,7 +3427,12 @@ class DatetimeIndex(Index):
             header["freq"] = None
         elif type(self._freq) is pd.DateOffset:
             # generic offsets have no parseable freqstr; store the kwds
-            header["freq"] = {"kwds": self._freq.kwds}
+            # plus n/normalize, which .kwds omits
+            header["freq"] = {
+                "kwds": self._freq.kwds,
+                "n": self._freq.n,
+                "normalize": self._freq.normalize,
+            }
         else:
             header["freq"] = self._freq.freqstr
         return header, frames
@@ -3437,7 +3442,11 @@ class DatetimeIndex(Index):
     def deserialize(cls, header, frames):
         obj = super().deserialize(header, frames)
         if isinstance(header_payload := header.get("freq"), dict):
-            freq = pd.DateOffset(**header_payload["kwds"])
+            freq = pd.DateOffset(
+                n=header_payload.get("n", 1),
+                normalize=header_payload.get("normalize", False),
+                **header_payload["kwds"],
+            )
         else:
             freq = header_payload
 
@@ -3620,6 +3629,11 @@ class DatetimeIndex(Index):
                 if (c := getattr(cmps, component)) != 0:
                     kwds[component] = c
 
+            # not pd.DateOffset(**kwds): a generic pd.DateOffset never
+            # compares equal to the fast offsets pandas infers (e.g.
+            # pd.DateOffset(days=1) != pd.offsets.Day()) and its freqstr
+            # is not parseable, so single-unit offsets must be converted
+            # to their fast pandas equivalents
             return cudf.DateOffset(**kwds)._maybe_as_fast_pandas_offset()
 
         # maximum unique count supported is months with 4 unique lengths
@@ -3642,6 +3656,10 @@ class DatetimeIndex(Index):
         return None
 
     def _get_slice_frequency(self, slc=None):
+        if self._freq is None:
+            # match pandas: slicing an index without a cached freq
+            # produces a result with freq=None
+            return None
         if slc.step in (1, None):
             # no change in freq
             return self._freq
