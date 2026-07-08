@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """Callback for the polars collect function to execute on device."""
@@ -24,7 +24,9 @@ import rmm
 from rmm._cuda import gpu
 
 import cudf_polars.dsl.tracing
-from cudf_polars.dsl.ir import IRExecutionContext
+from cudf_polars.dsl.ir import (
+    IRExecutionContext,
+)
 from cudf_polars.dsl.tracing import CUDF_POLARS_NVTX_DOMAIN
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.utils.config import (
@@ -377,7 +379,7 @@ def execute_with_cudf(
                 f"\nThe errors were:\n{formatted_errors}"
             )
             exception = NotImplementedError(error_message, unique_errors)
-            if bool(int(os.environ.get("POLARS_VERBOSE", 0))):
+            if bool(int(os.environ.get("POLARS_VERBOSE", "0"))):
                 warnings.warn(error_message, PerformanceWarning, stacklevel=2)
             if translator.config_options.raise_on_fail:
                 raise exception

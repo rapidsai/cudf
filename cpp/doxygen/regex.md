@@ -1,4 +1,4 @@
-# Regex Features
+# Regex Features {#md_regex}
 
 This page specifies which regular expression (regex) features are currently supported by libcudf strings column APIs that accept regex patterns:
 

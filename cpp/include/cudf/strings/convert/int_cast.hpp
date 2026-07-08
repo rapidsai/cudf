@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -17,6 +17,7 @@ namespace strings {
  * @addtogroup strings_convert
  * @{
  * @file
+ * @brief Strings column APIs for casting short strings to/from an integer bit representation.
  */
 
 /**

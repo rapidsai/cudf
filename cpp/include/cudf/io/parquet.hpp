@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,6 +25,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief APIs for reading and writing Parquet files.
  */
 
 constexpr size_t default_row_group_size_bytes =
@@ -106,6 +107,8 @@ class parquet_reader_options {
   // Whether column name matching is case sensitive. In case of multiple
   // case-insensitive matches, the first matched column is selected
   bool _case_sensitive_names = true;
+  // Whether to prepend a source file index column to the output
+  bool _prepend_source_index_column = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -299,6 +302,16 @@ class parquet_reader_options {
   [[nodiscard]] bool is_enabled_case_sensitive_names() const { return _case_sensitive_names; }
 
   /**
+   * @brief Returns whether to prepend a source file index column to the output.
+   *
+   * @return `true` if a source file index column should be prepended
+   */
+  [[nodiscard]] bool is_enabled_prepend_source_index_column() const
+  {
+    return _prepend_source_index_column;
+  }
+
+  /**
    * @brief Set a new source location
    *
    * @param src New `source_info`.
@@ -391,6 +404,15 @@ class parquet_reader_options {
    * Example:
    * To read row groups [0, 2] from the first input and [1] from the second input, call:
    *   set_row_groups({{0, 2}, {1}});
+   *
+   * Output ordering: rows are emitted in input-source order; all rows selected from source 0
+   * are emitted before rows selected from source 1, and so on. Within each source, row groups
+   * appear in the exact order given by the inner vector; the reader does not sort or deduplicate
+   * the indices, and repeated indices are emitted multiple times. An empty inner vector means that
+   * source contributes no rows but does not affect the order of the remaining sources. When this
+   * setter is not called, all row groups are read in source order, then in on-disk order within
+   * each source. Row groups removed by standard `read_parquet` predicate pushdown (statistics or
+   * bloom filter pruning) are dropped in place; the remaining row groups keep their relative order.
    *
    * @param row_groups A vector of vectors, one per input source, each specifying the
    *                   row group indices to read from that source.
@@ -533,6 +555,13 @@ class parquet_reader_options {
    * @param val Boolean indicating whether to enable case-sensitive matching.
    */
   void enable_case_sensitive_names(bool val) { _case_sensitive_names = val; }
+
+  /**
+   * @brief Sets whether to prepend a source file index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend the source file index column.
+   */
+  void enable_prepend_source_index_column(bool val) { _prepend_source_index_column = val; }
 };
 
 /**
@@ -596,9 +625,7 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets vector of individual row groups to read.
-   *
-   * @param row_groups Vector of row groups to read
+   * @copydoc parquet_reader_options::set_row_groups
    * @return this for chaining
    */
   parquet_reader_options_builder& row_groups(std::vector<std::vector<size_type>> row_groups)
@@ -797,6 +824,18 @@ class parquet_reader_options_builder {
   }
 
   /**
+   * @brief Sets whether to prepend a source file index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend a source file index column
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& prepend_source_index_column(bool val)
+  {
+    options._prepend_source_index_column = val;
+    return *this;
+  }
+
+  /**
    * @brief move parquet_reader_options member once it's built.
    */
   operator parquet_reader_options&&() { return std::move(options); }
@@ -821,6 +860,9 @@ class parquet_reader_options_builder {
  *  auto result  = cudf::io::read_parquet(options);
  * @endcode
  *
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
+ *
  * @param options Settings for controlling reading behavior
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate device memory of the table in the returned
@@ -844,6 +886,9 @@ table_with_metadata read_parquet(
  *  auto options = cudf::io::parquet_reader_options::builder();
  *  auto result  = cudf::io::read_parquet(std::move(sources), std::move(metadatas), options);
  * @endcode
+ *
+ * Row-group selection and output ordering are described in
+ * `parquet_reader_options::set_row_groups()`.
  *
  * @param sources Input `datasource` objects to read the dataset from
  * @param parquet_metadatas Pre-materialized Parquet file metadata(s). Read from sources if empty

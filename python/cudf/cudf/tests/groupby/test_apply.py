@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2018-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import textwrap
@@ -432,7 +432,7 @@ def test_groupby_apply_jit_no_df_ops(groupby_jit_data_small):
 
     with pytest.raises(
         UDFError,
-        match="JIT GroupBy.apply\\(\\) does not support DataFrame.sum\\(\\)",
+        match=r"JIT GroupBy.apply\(\) does not support DataFrame.sum\(\)",
     ):
         run_groupby_apply_jit_test(groupby_jit_data_small, func, ["key1"])
 
@@ -957,3 +957,24 @@ def test_group_by_empty_apply(request, dtype, apply_op):
         check_dtype=True,
         check_index_type=True,
     )
+
+
+def test_groupby_apply_preserves_inner_index_name():
+    # The concatenated apply result keeps the UDF result's index name as
+    # the inner MultiIndex level name, matching pandas.
+    pdf = pd.DataFrame(
+        {
+            "name": ["a", "a", "b"],
+            "amount": [100.0, 200.0, 300.0],
+        },
+        index=pd.Index([1, 2, 3], name="stamp"),
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.groupby("name").apply(
+        lambda x: x["amount"].cumsum(), include_groups=False
+    )
+    got = gdf.groupby("name").apply(
+        lambda x: x["amount"].cumsum(), include_groups=False
+    )
+    assert expect.index.names == got.index.names
+    assert_eq(expect, got)

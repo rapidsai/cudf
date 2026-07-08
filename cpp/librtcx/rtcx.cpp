@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -183,6 +183,7 @@ void log_error(std::string_view msg)
   DO_IT(LibraryUnload)
 
 #define FOR_EACH_NVRTC_FUNC(DO_IT) \
+  DO_IT(Version)                   \
   DO_IT(GetErrorString)            \
   DO_IT(CreateProgram)             \
   DO_IT(DestroyProgram)            \
@@ -199,6 +200,7 @@ void log_error(std::string_view msg)
   DO_IT(GetLoweredName)
 
 #define FOR_EACH_NVJITLINK_FUNC(DO_IT) \
+  DO_IT(Version)                       \
   DO_IT(Create)                        \
   DO_IT(Destroy)                       \
   DO_IT(AddData)                       \
@@ -619,7 +621,8 @@ void log_nvJitLink_result(link_params const& params,
   }
 
   for (auto& frag : params.memory_fragments) {
-    fragments_str = std::format("{}\t{}\n", fragments_str, frag.name);
+    fragments_str =
+      std::format("{}\t{}\n", fragments_str, frag.name == nullptr ? "<unnamed>" : frag.name);
   }
 
   std::string link_options_str;
@@ -656,6 +659,24 @@ void log_nvJitLink_result(link_params const& params,
 }
 
 }  // namespace
+
+std::int32_t nvrtc_version()
+{
+  RTCX_FUNC_RANGE();
+
+  std::int32_t major, minor;
+  RTCX_CHECK_NVRTC(nvrtc->Version(&major, &minor));
+  return major * 1000 + minor * 10;
+}
+
+std::int32_t nvjitlink_version()
+{
+  RTCX_FUNC_RANGE();
+
+  std::uint32_t major, minor;
+  RTCX_CHECK_NVJITLINK(nvjitlink->Version(&major, &minor));
+  return static_cast<std::int32_t>(major * 1000 + minor * 10);
+}
 
 byte_buffer compile(compile_params const& params)
 {
@@ -978,12 +999,14 @@ std::optional<blob_t> blob_t::from_file(char const* path)
 
 namespace {
 
-/// @brief retrieves a blob from disk based on the given sha256 hash and object type (e.g. "blob",
+/// @brief retrieves a blob from disk based on the given hash and object type (e.g. "blob",
 /// "cuLibrary"). Returns nullopt if the file doesn't exist on disk, and throws if any other error
 /// occurs.
-std::optional<blob> get_disk_blob(std::string const& cache_dir, object_type type, sha256 const& sha)
+std::optional<blob> get_disk_blob(std::string const& cache_dir,
+                                  object_type type,
+                                  hash128 const& hash)
 {
-  auto hex  = sha.to_hex_string();
+  auto hex  = hash.to_hex_string();
   auto path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_tag(type));
   auto blob = blob_t::from_file(path.c_str());
 
@@ -991,11 +1014,11 @@ std::optional<blob> get_disk_blob(std::string const& cache_dir, object_type type
   return std::make_shared<blob_t>(std::move(*blob));
 }
 
-std::optional<library> get_disk_library(std::string const& cache_dir, sha256 const& sha)
+std::optional<library> get_disk_library(std::string const& cache_dir, hash128 const& hash)
 {
   RTCX_FUNC_RANGE();
 
-  auto hex  = sha.to_hex_string();
+  auto hex  = hash.to_hex_string();
   auto path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_tag(object_type::LIBRARY));
 
   // WAR: avoid a driver API call when the cache file is not present
@@ -1032,7 +1055,7 @@ std::vector<std::string> get_disk_entries(std::string const& cache_dir)
 void cache_blob_to_disk(std::string const& cache_dir,
                         std::string const& tmp_dir,
                         object_type type,
-                        sha256 const& sha,
+                        hash128 const& hash,
                         std::span<std::uint8_t const> binary)
 {
   RTCX_FUNC_RANGE();
@@ -1060,7 +1083,7 @@ void cache_blob_to_disk(std::string const& cache_dir,
     }
   }
 
-  auto hex        = sha.to_hex_string();
+  auto hex        = hash.to_hex_string();
   auto final_path = std::format("{}/{}.{}.bin", cache_dir, hex.view(), object_tag(type));
 
   std::filesystem::create_directories(std::filesystem::path{final_path}.parent_path());
@@ -1083,7 +1106,7 @@ void cache_blob_to_disk(std::string const& cache_dir,
 
 }  // namespace
 
-std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compile_func compile)
+std::shared_future<blob> cache_t::get_or_add_blob(hash128 const& hash, blob_compile_func compile)
 {
   RTCX_FUNC_RANGE();
 
@@ -1093,7 +1116,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
   std::unique_lock lock{lock_};
 
   // check memory cache
-  if (auto it = enabled_ ? blobs_cache_.entries_.find(sha) : blobs_cache_.entries_.end();
+  if (auto it = enabled_ ? blobs_cache_.entries_.find(hash) : blobs_cache_.entries_.end();
       it != blobs_cache_.entries_.end()) {
     counter_.blob_mem_hits.incr();
 
@@ -1107,7 +1130,7 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
 
     // check disk cache
     std::optional<blob> disk_blob = std::nullopt;
-    if (enabled_) { disk_blob = get_disk_blob(cache_dir_, object_type::BLOB, sha); }
+    if (enabled_) { disk_blob = get_disk_blob(cache_dir_, object_type::BLOB, hash); }
 
     std::promise<blob> promise;
     auto fut       = promise.get_future().share();
@@ -1120,30 +1143,30 @@ std::shared_future<blob> cache_t::get_or_add_blob(sha256 const& sha, blob_compil
       promise.set_value(std::move(*disk_blob));
 
       // insert into cache
-      blobs_cache_.insert(sha, std::move(cache_fut), current_tick);
+      blobs_cache_.insert(hash, std::move(cache_fut), current_tick);
 
       return ret_fut;
 
     } else {
       counter_.blob_disk_misses.incr();
 
-      blobs_cache_.insert(sha, std::move(cache_fut), current_tick);
+      blobs_cache_.insert(hash, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
-      // have already reserved a spot in the cache for this sha
+      // have already reserved a spot in the cache for this hash
       lock.unlock();
 
       auto result = compile();
       promise.set_value(result);
 
-      cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::BLOB, sha, result->view());
+      cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::BLOB, hash, result->view());
 
       return ret_fut;
     }
   }
 }
 
-std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
+std::shared_future<library> cache_t::get_or_add_library(hash128 const& hash,
                                                         library_compile_func compile)
 {
   RTCX_FUNC_RANGE();
@@ -1154,7 +1177,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
   std::unique_lock lock{lock_};
 
   // check memory cache
-  if (auto it = enabled_ ? libraries_cache_.entries_.find(sha) : libraries_cache_.entries_.end();
+  if (auto it = enabled_ ? libraries_cache_.entries_.find(hash) : libraries_cache_.entries_.end();
       it != libraries_cache_.entries_.end()) {
     counter_.library_mem_hits.incr();
 
@@ -1168,7 +1191,7 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
 
     // check disk cache
     std::optional<library> disk_library = std::nullopt;
-    if (enabled_) { disk_library = get_disk_library(cache_dir_, sha); }
+    if (enabled_) { disk_library = get_disk_library(cache_dir_, hash); }
 
     std::promise<library> promise;
     auto fut       = promise.get_future().share();
@@ -1178,10 +1201,10 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
     if (disk_library.has_value()) {
       counter_.library_disk_hits.incr();
 
-      libraries_cache_.insert(sha, std::move(cache_fut), current_tick);
+      libraries_cache_.insert(hash, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
-      // have already reserved a spot in the cache for this sha
+      // have already reserved a spot in the cache for this hash
       lock.unlock();
 
       promise.set_value(std::move(*disk_library));
@@ -1191,17 +1214,17 @@ std::shared_future<library> cache_t::get_or_add_library(sha256 const& sha,
     } else {
       counter_.library_disk_misses.incr();
 
-      libraries_cache_.insert(sha, std::move(cache_fut), current_tick);
+      libraries_cache_.insert(hash, std::move(cache_fut), current_tick);
 
       // we can release the lock while calling the maker function since it may be expensive and we
-      // have already reserved a spot in the cache for this sha
+      // have already reserved a spot in the cache for this hash
       lock.unlock();
 
       auto [library, blob] = compile();
       promise.set_value(library);
 
       // store result to disk
-      cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::LIBRARY, sha, blob->view());
+      cache_blob_to_disk(cache_dir_, tmp_dir_, object_type::LIBRARY, hash, blob->view());
 
       return ret_fut;
     }
@@ -1289,8 +1312,8 @@ void cache_t::preload_from_disk()
     for (auto const& path : entries) {
       try {
         auto file_name = std::filesystem::path{path}.filename().string();
-        auto sha_str   = file_name.substr(0, file_name.find('.'));
-        auto sha       = sha256::parse(sha_str);
+        auto hash_str  = file_name.substr(0, file_name.find('.'));
+        auto hash      = hash128::parse(hash_str);
 
         if (path.ends_with(".blob.bin")) {
           auto data = blob_t::from_file(path.c_str());
@@ -1299,14 +1322,14 @@ void cache_t::preload_from_disk()
           std::promise<rtcx::blob> promise;
           auto fut = promise.get_future().share();
           promise.set_value(std::move(blob));
-          blobs_cache_.insert(sha, std::move(fut), tick_);
+          blobs_cache_.insert(hash, std::move(fut), tick_);
         } else if (path.ends_with(".cuLibrary.bin")) {
-          auto lib = get_disk_library(cache_dir_, sha);
+          auto lib = get_disk_library(cache_dir_, hash);
           if (!lib.has_value()) { continue; }
           std::promise<library> promise;
           auto fut = promise.get_future().share();
           promise.set_value(std::move(*lib));
-          libraries_cache_.insert(sha, std::move(fut), tick_);
+          libraries_cache_.insert(hash, std::move(fut), tick_);
         }
       } catch (std::exception const& e) {
         // ignore any errors during preload

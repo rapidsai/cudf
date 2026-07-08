@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """RapidsMPF streaming-engine using the SPMD Cluster style."""
 
@@ -7,11 +7,13 @@ from __future__ import annotations
 import contextlib
 import dataclasses
 import json
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, cast
 
 import pylibcudf as plc
-from cudf_streaming.integrations.partition import (
+import rmm.mr
+from cudf_streaming.partition_utils import (
     packed_data_from_cudf_packed_columns,
     unpack_and_concat,
 )
@@ -23,10 +25,11 @@ from rapidsmpf.communicator.single import (
 )
 from rapidsmpf.communicator.ucxx import barrier
 from rapidsmpf.progress_thread import ProgressThread
-from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 from rapidsmpf.statistics import Statistics
 from rapidsmpf.streaming.core.context import Context
 
+import cudf_polars.quent
+import cudf_polars.quent._logging
 from cudf_polars.containers import DataFrame, DataType
 from cudf_polars.engine.core import (
     ClusterInfo,
@@ -40,6 +43,8 @@ from cudf_polars.engine.hardware_binding import (
     HardwareBindingPolicy,
     bind_to_gpu,
 )
+from cudf_polars.quent._context import LocalQuentContext
+from cudf_polars.quent._types import Worker
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.utils import set_memory_resource
 from cudf_polars.utils.config import (
@@ -49,14 +54,14 @@ from cudf_polars.utils.config import (
 )
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable
 
     import polars as pl
 
-    from cudf_streaming.streaming.channel_metadata import ChannelMetadata
+    from cudf_streaming.channel_metadata import ChannelMetadata
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.config import Options
+    from rapidsmpf.rmm_resource_adaptor import RmmResourceAdaptor
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
@@ -109,14 +114,37 @@ def evaluate_pipeline_spmd_mode(
     context = config_options.executor.spmd_context.context
     py_executor = config_options.executor.spmd_context.py_executor
 
+    quent_context = config_options.executor.quent_context
+    local_quent_context: LocalQuentContext | None = None
+    if quent_context is not None:
+        quent_logger = config_options.executor.spmd_context.quent_logger
+        assert quent_logger is not None
+        quent_context._emit_query_group_events(quent_logger)
+        quent_context._emit_query_events(quent_logger)
+        local_quent_context = LocalQuentContext(
+            context=quent_context,
+            worker=Worker(
+                id=config_options.executor.spmd_context.worker_id,
+                engine=quent_context.engine,
+                instance_name=f"rank-{comm.rank}",
+            ),
+            logger=quent_logger,
+        )
+
     df, metadata = evaluate_on_rank(
         context,
         comm,
         py_executor,
         ir,
         config_options,
+        local_quent_context=local_quent_context,
         query_id=query_id,
     )
+    if quent_context is not None:
+        assert config_options.executor.spmd_context.quent_logger is not None
+        quent_context._emit_query_exit_events(
+            config_options.executor.spmd_context.quent_logger
+        )
     return df, metadata if collect_metadata else None
 
 
@@ -157,7 +185,7 @@ def allgather_polars_dataframe(
     """
     comm = engine.comm
     ctx = engine.context
-    stream = ctx.get_stream_from_pool()
+    stream = ctx.br().stream_pool.get_stream()
     col_names = local_df.columns
     dtypes = [DataType(dtype) for dtype in local_df.dtypes]
 
@@ -186,6 +214,33 @@ def allgather_polars_dataframe(
         dtypes,
         stream,
     ).to_polars()
+
+
+def synchronize_quent_context(
+    *,
+    comm: Communicator,
+    context: Context,
+) -> cudf_polars.quent.QuentContext:
+    """
+    Ensure all ranks use the same Quent engine ID.
+
+    Rank 0 selects the engine ID (from its local ``quent_context``), then all
+    ranks participate in an AllGather so every process converges on that value.
+    """
+    if comm.rank == 0:
+        quent_context = cudf_polars.quent.QuentContext()
+        data = quent_context.serialize()
+    else:
+        data = b""
+
+    if comm.nranks == 1:
+        # skip the collective
+        return cudf_polars.quent.QuentContext()
+
+    with reserve_op_id() as op_id:
+        all_data = all_gather_host_data(comm, context.br(), op_id, data)
+
+    return cudf_polars.quent.QuentContext.deserialize(all_data[0])
 
 
 class SPMDEngine(StreamingEngine):
@@ -224,10 +279,12 @@ class SPMDEngine(StreamingEngine):
 
     **Memory resource**
 
-    ``SPMDEngine`` captures ``rmm.mr.get_current_device_resource()`` at construction,
-    wraps it in ``RmmResourceAdaptor`` (so libcudf temporary allocations and the
-    RapidsMPF ``Context`` share the same resource), sets the wrapped resource as
-    current, and restores the original on shutdown.
+    ``SPMDEngine`` captures the configured device memory resource at construction
+    and hands it to the RapidsMPF ``Context``, which wraps it in an internal
+    tracking ``RmmResourceAdaptor`` (exposed via ``BufferResource.device_mr_adaptor()``).
+    That tracking adaptor is installed as the current device resource so libcudf
+    temporary allocations and the RapidsMPF ``Context`` share the same resource;
+    the previous current resource is restored on shutdown.
 
     To use a custom allocator, call ``rmm.mr.set_current_device_resource(your_mr)``
     before constructing ``SPMDEngine``. Do not pre-wrap it in ``RmmResourceAdaptor``.
@@ -338,10 +395,17 @@ class SPMDEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
+        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+            "quent_context"
+        )
+        if quent_context is not None:
+            self._quent_logger = cudf_polars.quent._logging.QuentLogger()
+        else:
+            self._quent_logger = None
 
         check_reserved_keys(executor_options, engine_options)
         hw_binding = cast(
-            HardwareBindingPolicy,
+            "HardwareBindingPolicy",
             engine_options.get("hardware_binding", HardwareBindingPolicy()),
         )
         bind_to_gpu(hw_binding)
@@ -351,7 +415,6 @@ class SPMDEngine(StreamingEngine):
             "memory_resource_config", MemoryResourceConfig.default()
         )
         base_mr = mr_config.create_memory_resource()
-        mr = RmmResourceAdaptor(base_mr)
         if comm is None:
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
@@ -366,14 +429,17 @@ class SPMDEngine(StreamingEngine):
                 )
         # else: caller-provided comm; the caller retains ownership
 
-        self._mr: RmmResourceAdaptor = mr
+        self._base_mr: rmm.mr.DeviceMemoryResource = base_mr
+        self._mr: RmmResourceAdaptor  # set after `Context` is built (below).
         self._comm: Communicator | None = comm
         self._ctx: Context | None = None
         self._py_executor: ThreadPoolExecutor | None = None
-        exit_stack = contextlib.ExitStack()
-        try:
-            exit_stack.enter_context(set_memory_resource(mr))
 
+        exit_stack = contextlib.ExitStack()
+
+        # TODO: there's no reason our API needs a plain dict[str, Any] rather than
+        # a typed config object here.
+        try:
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
             if self.rapidsmpf_options is not None:
@@ -382,9 +448,29 @@ class SPMDEngine(StreamingEngine):
                 statistics = None
 
             self._ctx = Context.from_options(
-                comm.logger, mr, self.rapidsmpf_options, statistics
+                comm.logger, base_mr, self.rapidsmpf_options, statistics
             )
+            # `Context` wraps `base_mr` in its `BufferResource`'s internal
+            # tracking `RmmResourceAdaptor`. Capture it as `self._mr` and
+            # install it as the current device resource so libcudf temporary
+            # allocations share the same resource and are tracked.
+            self._mr = self._ctx.br().device_mr_adaptor()
+            exit_stack.enter_context(set_memory_resource(self._mr))
             exit_stack.callback(self._cleanup_ctx)
+
+            if quent_context is not None:
+                executor_options["quent_context"] = quent_context
+                assert self._quent_logger is not None
+                quent_context._emit_engine_init_events(self._quent_logger)
+                engine_id = quent_context.engine.id
+            else:
+                engine_id = uuid.uuid4()
+
+            self._quent_worker = Worker(
+                id=uuid.uuid4(),
+                engine=cudf_polars.quent.Engine(id=engine_id),
+                instance_name=f"rank-{self.rank}",  # relies on self.comm
+            )
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
             # executor shuts down first. `wait=True` is safe because
@@ -392,7 +478,7 @@ class SPMDEngine(StreamingEngine):
             # future so by the time we reach shutdown the executor has no
             # in-flight work and wait returns immediately.
             self._py_executor = ThreadPoolExecutor(
-                max_workers=cast(int, executor_options.get("num_py_executors", 8)),
+                max_workers=cast("int", executor_options.get("num_py_executors", 8)),
                 thread_name_prefix="spmd-executor",
             )
             exit_stack.callback(
@@ -405,7 +491,12 @@ class SPMDEngine(StreamingEngine):
                     **executor_options,
                     "cluster": "spmd",
                     "spmd_context": SPMDContext(
-                        comm=comm, context=self._ctx, py_executor=self._py_executor
+                        comm=comm,
+                        engine_id=engine_id,
+                        worker_id=self._quent_worker.id,
+                        quent_logger=self._quent_logger,
+                        context=self._ctx,
+                        py_executor=self._py_executor,
                     ),
                 },
                 engine_options={
@@ -414,6 +505,9 @@ class SPMDEngine(StreamingEngine):
                 },
                 exit_stack=exit_stack,
             )
+
+            if self._quent_logger is not None:
+                self._quent_logger.emit(self._quent_worker._init())
         except Exception:
             exit_stack.close()
             raise
@@ -483,7 +577,15 @@ class SPMDEngine(StreamingEngine):
             engine_options=engine_options,
         )
         executor_options = executor_options or {}
+        existing_executor_options = self.config.get("executor_options", {})
+        if isinstance(existing_executor_options, dict):
+            existing_quent_context = existing_executor_options.get("quent_context")
+            if existing_quent_context is not None:
+                executor_options.setdefault("quent_context", existing_quent_context)
         engine_options = engine_options or {}
+        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
+            "quent_context"
+        )
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
 
         # Collective: synchronize all ranks before tearing down the Context.
@@ -500,8 +602,24 @@ class SPMDEngine(StreamingEngine):
             statistics = None
 
         self._ctx = Context.from_options(
-            self._comm.logger, self._mr, rapidsmpf_options, statistics
+            self._comm.logger, self._base_mr, rapidsmpf_options, statistics
         )
+        # Refresh `self._mr` and the current device resource to the new
+        # Context's tracking adaptor (the original adaptor was tied to the
+        # now-defunct Context). The original ``set_memory_resource`` exit
+        # callback still restores the pre-engine MR at engine shutdown.
+        self._mr = self._ctx.br().device_mr_adaptor()
+        rmm.mr.set_current_device_resource(self._mr)
+
+        if quent_context is not None:
+            quent_context = synchronize_quent_context(
+                comm=self._comm,
+                context=self._ctx,
+            )
+            executor_options["quent_context"] = quent_context
+            engine_id = quent_context.engine.id
+        else:
+            engine_id = uuid.uuid4()
 
         # Re-run ``StreamingEngine.__init__`` on the existing instance to
         # reconfigure the polars ``GPUEngine`` layer (``self.config``,
@@ -518,6 +636,9 @@ class SPMDEngine(StreamingEngine):
                     comm=self._comm,
                     context=self._ctx,
                     py_executor=self.py_executor,
+                    engine_id=engine_id,
+                    worker_id=self._quent_worker.id,
+                    quent_logger=self._quent_logger,
                 ),
             },
             engine_options={
@@ -649,10 +770,27 @@ class SPMDEngine(StreamingEngine):
         # Order matters: ``super().shutdown()`` closes ``self._exit_stack``,
         # which invokes ``self._cleanup_ctx``. That requires ``self._ctx`` to
         # still be set so the rapidsmpf Context can be shut down correctly.
+        # But, super().shutdown() clears self.config, so we need to emit the
+        # quent traces before that.
         # Clear the references only after shutdown completes.
+
+        if self._quent_logger is not None:
+            self._quent_logger.emit(self._quent_worker._exit())
+        quent_context: cudf_polars.quent.QuentContext | None = self.config[
+            "executor_options"
+        ].get("quent_context")
+        if quent_context is not None:
+            assert self._quent_logger is not None
+            quent_context._emit_engine_exit_events(self._quent_logger)
+
         super().shutdown()
+
         self._comm = None
         self._ctx = None
+        # TODO: Figure out multi-rank handling.
+        if self._quent_logger is not None:
+            self._quent_events_raw.extend(self._quent_logger.drain())
+        self._quent_events_raw.sort(key=lambda x: x["timestamp"])
         self._py_executor = None
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:

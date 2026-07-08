@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import collections
@@ -38,6 +38,7 @@ from cudf.pandas.fast_slow_proxy import (
     NotImplementedFallbackError,
     OOMFallbackError,
     TypeFallbackError,
+    _State,
     _Unusable,
     as_proxy_object,
     is_proxy_object,
@@ -155,6 +156,50 @@ def test_groupby(dataframe):
     gb = df.groupby("a", sort=True)
     got = gb.max()
     tm.assert_frame_equal(expected, got)
+
+
+def test_groupby_reflects_parent_frame_mutation():
+    # A groupby keyed by a string-column-derived array (df["a"].values) falls
+    # back to the slow path, so the proxy groupby is created in the "slow"
+    # state. A column added to the parent frame *after* the groupby is created
+    # must still be visible through it, matching pandas' live-reference
+    # semantics (the groupby holds a reference to the frame, not a snapshot).
+    data = {"a": ["x", "y", "x", "y"], "b": [1, 2, 3, 4]}
+
+    pdf = pd.DataFrame(data)
+    pgb = pdf.groupby(pdf["a"].values)
+    pdf["c"] = pdf["b"] * 10
+    expected = pgb["c"].sum()
+
+    df = xpd.DataFrame(data)
+    gb = df.groupby(df["a"].values)
+    df["c"] = df["b"] * 10
+    got = gb["c"].sum()
+
+    tm.assert_series_equal(expected, got)
+
+
+def test_intermediate_proxy_rederivation_refreshes_cache():
+    # When a parent proxy changes, an intermediate re-derives its wrapped object
+    # on the next conversion. The re-derivation must refresh the cache
+    # (``_fsproxy_wrapped``), not only the parent-id snapshot: otherwise the
+    # snapshot matches the live parents again while the cache still points at the
+    # stale object, so a later conversion returns stale data.
+    data = {"a": ["x", "y", "x", "y"], "b": [1, 2, 3, 4]}
+
+    df = xpd.DataFrame(data)
+    # Grouping by a string-column-derived array falls back to the slow path, so
+    # the groupby proxy is created (and stays) in the "slow" state.
+    gb = df.groupby(df["a"].values)
+    assert gb._fsproxy_state is _State.SLOW
+    df["c"] = df["b"] * 10  # mutate the parent frame after the groupby exists
+
+    # First conversion re-derives from the live parent and must see column "c".
+    assert "c" in gb._fsproxy_fast_to_slow().sum().columns
+    # The cache is now refreshed, so the parent-id snapshot matches again and a
+    # subsequent conversion returns the cached object -- which must also see "c".
+    assert "c" in gb._fsproxy_wrapped.sum().columns
+    assert "c" in gb._fsproxy_fast_to_slow().sum().columns
 
 
 def test_repr(dataframe):
@@ -344,7 +389,7 @@ def test_copy_deepcopy_recursion(dataframe):
     # https://nedbatchelder.com/blog/201010/surprising_getattr_recursion.html
     import copy
 
-    pdf, df = dataframe
+    _pdf, df = dataframe
     copy.copy(df)
     copy.deepcopy(df)
 

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Integration tests for structlog tracing with rapidsmpf."""
 
@@ -15,7 +15,7 @@ import pytest
 
 import polars as pl
 
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.table_chunk import TableChunk
 
 from cudf_polars.containers import DataFrame
 from cudf_polars.streaming.actor_graph.tracing import ActorTracer, send_chunk
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def chunk(spmd_engine: SPMDEngine) -> TableChunk:
     context = spmd_engine.context
-    stream = context.get_stream_from_pool()
+    stream = context.br().stream_pool.get_stream()
     df = DataFrame.from_polars(pl.DataFrame({"x": [1, 2, 3]}), stream)
     return TableChunk.from_pylibcudf_table(
         df.table, stream, exclusive_view=True, br=context.br()
@@ -40,6 +40,12 @@ def test_actor_tracer_counts_table_chunk_without_table_view(chunk: TableChunk) -
     tracer.add_chunk(chunk=chunk)
     assert tracer.chunk_count == 1
     assert tracer.row_count == 3
+
+
+def test_actor_tracer_records_extra_metadata() -> None:
+    tracer = ActorTracer()
+    tracer.set_extra("join_prefilter", {"enabled": True})
+    assert tracer.extra == {"join_prefilter": {"enabled": True}}
 
 
 @pytest.mark.spmd
