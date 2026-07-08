@@ -19,13 +19,6 @@
 
 #include <vector>
 
-// Benchmarks cudf::dictionary::match_dictionaries, the utility used by join() and merge() to give a
-// set of dictionary columns a common set of keys. The current implementation concatenates all the
-// keys, computes the unique combined keys, and rebuilds every input as a new dictionary column that
-// shares (a copy of) those combined keys. The cost therefore scales with the key cardinality (the
-// per-column sort and search) and the number of columns (each holds its own copy of the combined
-// keys). The cardinality and num_tables axes are chosen to expose those costs, and
-// peak_memory_usage captures the combined-keys materialization and its per-column copies.
 static void bench_dictionary_match_keys(nvbench::state& state)
 {
   auto const num_rows    = static_cast<cudf::size_type>(state.get_int64("num_rows"));
