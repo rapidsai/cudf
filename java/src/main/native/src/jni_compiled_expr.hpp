@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -9,6 +9,7 @@
 #include <cudf/scalar/scalar.hpp>
 
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -37,6 +38,11 @@ class compiled_expr {
                                                     cudf::ast::table_reference table_ref)
   {
     return expressions.emplace<cudf::ast::column_reference>(column_index, table_ref);
+  }
+
+  cudf::ast::column_name_reference const& add_column_name_ref(std::string column_name)
+  {
+    return expressions.emplace<cudf::ast::column_name_reference>(std::move(column_name));
   }
 
   cudf::ast::operation const& add_operation(cudf::ast::ast_operator op,

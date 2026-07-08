@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -494,9 +494,16 @@ def _process_col(
                         element=col.element_indexing(0),
                         dayfirst=dayfirst,
                     )
+                target_unit = unit
+                if unit is None:
+                    # pandas infers nanosecond precision from strings with
+                    # more than 6 fractional-second digits
+                    subsecond = re.search(r"%(\d)f", format)
+                    if subsecond is not None and int(subsecond.group(1)) > 6:
+                        target_unit = "ns"
                 col = col.strptime(
                     dtype=np.dtype(
-                        _unit_dtype_map.get(unit, _unit_dtype_map["us"])  # type: ignore[arg-type]
+                        _unit_dtype_map.get(target_unit, _unit_dtype_map["us"])  # type: ignore[arg-type]
                     ),
                     format=format,
                 )
