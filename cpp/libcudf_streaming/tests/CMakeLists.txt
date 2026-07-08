@@ -29,7 +29,7 @@ function(libcudf_streaming_mpirun_test_add)
   endif()
 
   message(STATUS "Adding mpirun test: ${_MPIRUN_TEST_TEST_TARGET} nranks: ${nranks_to_run}")
-  foreach(np IN ITEMS ${nranks_to_run})
+  foreach(np IN LISTS nranks_to_run)
     rapids_test_add(
       NAME "${_MPIRUN_TEST_TEST_TARGET}_${np}"
       COMMAND mpirun --oversubscribe --map-by node --bind-to none -np ${np}
