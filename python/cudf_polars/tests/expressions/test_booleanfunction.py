@@ -12,7 +12,10 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
-from cudf_polars.utils.versions import POLARS_VERSION_LT_142
+from cudf_polars.utils.versions import (
+    POLARS_VERSION_LT_141,
+    POLARS_VERSION_LT_142,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -280,6 +283,17 @@ def test_boolean_is_close(engine: pl.GPUEngine):
     q = ldf.select(pl.col("a").is_close(1.4, abs_tol=0.1))
 
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_141,
+    reason="has_nulls/is_empty added to polars' BooleanFunction in 1.41",
+)
+@pytest.mark.parametrize("data", [[1, 2, 3], [None, None], []])
+def test_boolean_is_empty(engine: pl.GPUEngine, data):
+    ldf = pl.LazyFrame({"a": pl.Series(data, dtype=pl.Int64)})
+    q = ldf.select(pl.col("a").is_empty())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize(
