@@ -499,6 +499,9 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
                           "$['x']",
                           "$.a[*]",
                           "$.a[-1]",
+                          "$.a[+1]",
+                          "$.a[ 1]",
+                          "$.a[01x]",
                           "$.a[1",
                           "$.a[99999999999999999999]"}) {
     EXPECT_THROW(
