@@ -556,6 +556,56 @@ TEST_F(ExtractVariantFieldTest, ArrayIndexingTypeMismatchAndBounds)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*index_on_primitive, null_expected);
 }
 
+TEST_F(ExtractVariantFieldTest, EmptyArrayIndexing)
+{
+  auto col      = make_apache_variant(avf::array_empty);
+  auto stream   = cudf::test::get_default_stream();
+  auto const i8 = cudf::data_type{cudf::type_id::INT8};
+  cudf::test::fixed_width_column_wrapper<int8_t> const null_expected({0}, {false});
+
+  for (auto const* path : {"$[0]", "$[1]"}) {
+    SCOPED_TRACE(std::string{"path: "} + path);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(col, path, i8, stream);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, null_expected);
+  }
+}
+
+TEST_F(ExtractVariantFieldTest, MixedObjectArrayTraversal)
+{
+  // array_nested encodes:
+  //   [ {id:1, thing:{names:["Contrarian","Spider"]}},
+  //     null,
+  //     {id:2, names:["Apple","Ray",null], type:"if"} ]
+  auto col    = make_apache_variant(avf::array_nested);
+  auto stream = cudf::test::get_default_stream();
+
+  auto const check_str = [&](char const* path, char const* expected) {
+    SCOPED_TRACE(std::string{"path: "} + path);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(
+      col, path, cudf::data_type{cudf::type_id::STRING}, stream);
+    cudf::test::strings_column_wrapper const expected_col({expected});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected_col);
+  };
+  auto const check_null = [&](char const* path) {
+    SCOPED_TRACE(std::string{"path: "} + path);
+    auto got = cudf::io::parquet::experimental::extract_variant_field(
+      col, path, cudf::data_type{cudf::type_id::STRING}, stream);
+    cudf::test::strings_column_wrapper const null_col({""}, {false});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, null_col);
+  };
+
+  check_str("$[2].type", "if");
+  check_str("$[0].thing.names[0]", "Contrarian");
+  check_str("$[0].thing.names[1]", "Spider");
+  check_str("$[2].names[0]", "Apple");
+  check_str("$[2].names[1]", "Ray");
+
+  check_null("$[1].id");        // element 1 is a JSON null
+  check_null("$[0].name");      // element 0 has no "name" key (it has "thing")
+  check_null("$[2].names[2]");  // third name is null
+  check_null("$[2].names[3]");  // out-of-bounds array index
+}
+
 TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)
 {
   auto const keys = make_numeric_keys(50);
