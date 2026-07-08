@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -109,14 +109,15 @@ class jni_serialized_ast {
 
 /**
  * Enumeration of the AST expression types that can appear in the serialized data.
- * NOTE: This must be kept in sync with the NodeType enumeration in AstNode.java!
+ * NOTE: This must be kept in sync with the ExpressionType enumeration in AstExpression.java!
  */
 enum class jni_serialized_expression_type : int8_t {
-  VALID_LITERAL    = 0,
-  NULL_LITERAL     = 1,
-  COLUMN_REFERENCE = 2,
-  UNARY_OPERATION  = 3,
-  BINARY_OPERATION = 4
+  VALID_LITERAL         = 0,
+  NULL_LITERAL          = 1,
+  COLUMN_REFERENCE      = 2,
+  UNARY_OPERATION       = 3,
+  BINARY_OPERATION      = 4,
+  COLUMN_NAME_REFERENCE = 5
 };
 
 /**
@@ -323,6 +324,15 @@ cudf::ast::column_reference& compile_column_reference(cudf::jni::ast::compiled_e
     std::make_unique<cudf::ast::column_reference>(column_index, table_ref));
 }
 
+/** Decode a serialized AST column name reference */
+cudf::ast::column_name_reference& compile_column_name_reference(
+  cudf::jni::ast::compiled_expr& compiled_expr, jni_serialized_ast& jni_ast)
+{
+  std::string column_name = jni_ast.read<std::string>();
+  return compiled_expr.add_column_name_ref(
+    std::make_unique<cudf::ast::column_name_reference>(std::move(column_name)));
+}
+
 // forward declaration
 cudf::ast::expression& compile_expression(cudf::jni::ast::compiled_expr& compiled_expr,
                                           jni_serialized_ast& jni_ast);
@@ -360,6 +370,8 @@ cudf::ast::expression& compile_expression(cudf::jni::ast::compiled_expr& compile
       return compile_literal(false, compiled_expr, jni_ast);
     case jni_serialized_expression_type::COLUMN_REFERENCE:
       return compile_column_reference(compiled_expr, jni_ast);
+    case jni_serialized_expression_type::COLUMN_NAME_REFERENCE:
+      return compile_column_name_reference(compiled_expr, jni_ast);
     case jni_serialized_expression_type::UNARY_OPERATION:
       return compile_unary_expression(compiled_expr, jni_ast);
     case jni_serialized_expression_type::BINARY_OPERATION:
