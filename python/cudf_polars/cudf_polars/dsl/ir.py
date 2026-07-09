@@ -1711,6 +1711,17 @@ class DataFrameScan(IR):
             )
         )
 
+    def with_prefetched_metadata(
+        self,
+        cached_parquet_info: list[CachedParquetInfo] | None,
+    ) -> tuple[Any, ...]:
+        """
+        Return ``self.args`` with cached_parquet_info inserted.
+
+        This is a noop for DataFrameScan, which doesn't use parquet metadata.
+        """
+        return self._non_child_args
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="DataFrameScan")

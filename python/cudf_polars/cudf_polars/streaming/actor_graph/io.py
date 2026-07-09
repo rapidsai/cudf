@@ -551,13 +551,11 @@ async def read_chunk(
     tracer
         The actor tracer for collecting runtime statistics.
     """
-    args = scan._non_child_args
-    if cached_parquet_info is not None:
-        args = (*args[:-1], cached_parquet_info)
+    args = scan.with_prefetched_metadata(cached_parquet_info)
 
     # Help mypy with the type inference of the scan.do_evaluate method.
     # DataFrameScan, SplitScan, and FusedScan have different signatures for the
-    # do_evaluate method, but we promise that calling with with `scan.args` is fine.
+    # do_evaluate method, but we promise that calling with `args` is fine.
     do_evaluate: Callable[..., DataFrame] = scan.do_evaluate
     with opaque_memory_usage(
         await reserve_memory(

@@ -16,6 +16,7 @@ from rapidsmpf.streaming.core.message import Message
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl.ir import (
+    DataFrameScan,
     Empty,
     IRExecutionContext,
     Scan,
@@ -547,6 +548,29 @@ def test_prefetch_file_metadata_with_cached_scan_parent_nodes(
     q = left.join(right, on="k").sort("k")
 
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_with_prefetched_metadata() -> None:
+    base = _make_parquet_scan(["a.parquet"])
+    info = _make_cached_parquet_info(base.paths)
+
+    dfs = DataFrameScan(base.schema, pl.DataFrame({"x": [1]})._df, None)
+    assert dfs.with_prefetched_metadata(info) == dfs._non_child_args
+    assert dfs.with_prefetched_metadata(None) == dfs._non_child_args
+
+    split = SplitScan(base.schema, base, base.paths, 0, 4, base.parquet_options, None)
+    assert split.with_prefetched_metadata(None) == split._non_child_args
+    assert split.with_prefetched_metadata(info) == (
+        *split._non_child_args[:-1],
+        info,
+    )
+
+    fused = FusedScan(base.schema, base, base.paths, base.parquet_options, None)
+    assert fused.with_prefetched_metadata(None) == fused._non_child_args
+    assert fused.with_prefetched_metadata(info) == (
+        *fused._non_child_args[:-1],
+        info,
+    )
 
 
 def test_fused_scan_identity_equality() -> None:
