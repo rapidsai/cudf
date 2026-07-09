@@ -1,8 +1,8 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -165,6 +165,17 @@ def test_rank_unsupported(engine: pl.GPUEngine, ldf: pl.LazyFrame) -> None:
 @pytest.mark.parametrize("mode", ["half_to_even", "half_away_from_zero"])
 def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> None:
     q = ldf.select(pl.col("a").sin().round(2, mode=mode))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_to_physical(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame(
+        {
+            "d": pl.Series([date(2024, 1, 1), None, date(2024, 1, 3)], dtype=pl.Date),
+            "x": pl.Series([1, None, 3], dtype=pl.Int64),
+        }
+    )
+    q = df.select(pl.col("d").to_physical(), pl.col("x").to_physical())
     assert_gpu_result_equal(q, engine=engine)
 
 

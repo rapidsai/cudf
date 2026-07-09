@@ -119,6 +119,7 @@ class UnaryFunction(Expr):
             "set_sorted",
             "shift",
             "shift_and_fill",
+            "to_physical",
             "top_k",
             "unique",
             "value_counts",
@@ -143,6 +144,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "round",
             "set_sorted",
+            "to_physical",
         }
     ).union(_OP_MAPPING.keys())
 
@@ -181,6 +183,20 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name == "to_physical":
+            (child,) = self.children
+            column = child.evaluate(df, context=context)
+            obj = column.obj
+            if column.dtype != self.dtype:
+                obj = plc.unary.bit_cast(obj, self.dtype.plc_type, stream=df.stream)
+            return Column(
+                obj,
+                dtype=self.dtype,
+                is_sorted=column.is_sorted,
+                order=column.order,
+                null_order=column.null_order,
+                name=column.name,
+            )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
