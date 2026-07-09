@@ -1096,11 +1096,13 @@ inline __device__ bool prefetch_string_data(int t,
  * @param s Page state containing data_start, dict_size and other info
  * @param num_values_to_process Number of values to process
  * @param str_offsets Output buffer for string offsets
+ * @param error_code Error code to set if a string length overruns the page
  */
 template <int32_t block_size, size_t prefetch_size>
 inline __device__ void read_string_offsets_buffered(page_state_s* s,
                                                     size_t num_values_to_process,
-                                                    uint32_t* str_offsets)
+                                                    uint32_t* str_offsets,
+                                                    kernel_error::pointer error_code)
 {
   auto const block     = cg::this_thread_block();
   int const t          = block.thread_rank();
@@ -1123,6 +1125,7 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
   size_t num_values_written = num_values_to_process;  // Will update below if run out of data
   for (size_t pos = 0; pos < num_values_to_process; pos++) {
     int32_t const string_offset = next_length_offset + sizeof(int32_t);
+    // Benign end-of-data: length prefix itself is past the end (nullable pages over-read).
     if (string_offset > dict_size) {
       num_values_written = pos;  // Can't read any more valid data
       break;
@@ -1146,8 +1149,13 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
                       reinterpret_cast<void const*>(&prefetch_buffer[prefetch_read_index]),
                       sizeof(int32_t));
 
+    // Genuine corruption: a valid length prefix claims more bytes than remain in the page.
     if (string_offset + len > dict_size) {
       num_values_written = pos;  // Data is corrupted or incomplete
+      if (t == 0) {
+        set_error(static_cast<kernel_error::value_type>(decode_error::STRING_DATA_OVERRUN),
+                  error_code);
+      }
       break;
     }
     next_length_offset = string_offset + len;
@@ -1177,11 +1185,13 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
  * @param s Page state containing data_start, dict_size and other info
  * @param num_values_to_process Number of values to process
  * @param str_offsets Output buffer for string offsets
+ * @param error_code Error code to set if a string length overruns the page
  */
 template <int32_t block_size>
 inline __device__ void read_string_offsets_sequential(page_state_s* s,
                                                       size_t num_values_to_process,
-                                                      uint32_t* str_offsets)
+                                                      uint32_t* str_offsets,
+                                                      kernel_error::pointer error_code)
 {
   auto const block = cg::this_thread_block();
   int const t      = block.thread_rank();
@@ -1199,6 +1209,7 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
     num_values_written = num_values_to_process;  // Will update below if run out of data
     for (size_t pos = 0; pos < num_values_to_process; pos++) {
       uint32_t const string_offset = length_offset + sizeof(int32_t);
+      // Benign end-of-data: length prefix itself is past the end (nullable pages over-read).
       if (string_offset > dict_size) {
         num_values_written = pos;  // Can't read any more valid data
         break;
@@ -1210,8 +1221,11 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
                         reinterpret_cast<void const*>(&cur[length_offset]),
                         sizeof(int32_t));
 
+      // Genuine corruption: a valid length prefix claims more bytes than remain in the page.
       if (string_offset + len > dict_size) {
         num_values_written = pos;  // Data is corrupted or incomplete
+        set_error(static_cast<kernel_error::value_type>(decode_error::STRING_DATA_OVERRUN),
+                  error_code);
         break;
       }
       str_offsets[pos] = string_offset;
@@ -1245,6 +1259,7 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
  * @param page_mask Boolean vector indicating which pages need to be processed
  * @param min_row Minimum row index to read
  * @param num_rows Number of rows to read starting from min_row
+ * @param error_code Error code to set if string data is corrupted
  */
 template <int decode_block_size, size_t prefetch_size>
 CUDF_KERNEL void preprocess_string_offsets_kernel(
@@ -1253,7 +1268,8 @@ CUDF_KERNEL void preprocess_string_offsets_kernel(
   device_span<size_t const> page_string_offset_indices,
   cudf::device_span<bool const> page_mask,
   size_t min_row,
-  size_t num_rows)
+  size_t num_rows,
+  kernel_error::pointer error_code)
 {
   int const page_idx = cg::this_grid().block_rank();
   PageInfo* const pp = &pages[page_idx];
@@ -1309,11 +1325,12 @@ CUDF_KERNEL void preprocess_string_offsets_kernel(
 
   if (avg_string_length > max_avg_string_length_for_buffer) {
     // Use sequential processing for large average string lengths
-    read_string_offsets_sequential<decode_block_size>(s, num_values_to_process, str_offsets);
+    read_string_offsets_sequential<decode_block_size>(
+      s, num_values_to_process, str_offsets, error_code);
   } else {
     // Use buffered processing for typical string lengths
     read_string_offsets_buffered<decode_block_size, prefetch_size>(
-      s, num_values_to_process, str_offsets);
+      s, num_values_to_process, str_offsets, error_code);
   }
 }
 
@@ -1328,6 +1345,7 @@ CUDF_KERNEL void preprocess_string_offsets_kernel(
  * @param page_mask Boolean vector indicating which pages need to be processed
  * @param min_row Minimum row index to read
  * @param num_rows Number of rows to read starting from min_row
+ * @param error_code Error code to set if string data is corrupted
  * @param stream CUDA stream to use
  */
 void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
@@ -1336,6 +1354,7 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
                                cudf::device_span<bool const> page_mask,
                                size_t min_row,
                                size_t num_rows,
+                               kernel_error::pointer error_code,
                                rmm::cuda_stream_view stream)
 {
   if (pages.size() == 0) { return; }
@@ -1347,8 +1366,13 @@ void preprocess_string_offsets(cudf::detail::hostdevice_span<PageInfo> pages,
   dim3 dim_grid(pages.size(), 1);  // 1 threadblock per page
 
   preprocess_string_offsets_kernel<preprocess_block_size, prefetch_size>
-    <<<dim_grid, dim_block, 0, stream.value()>>>(
-      pages.device_ptr(), chunks, page_string_offset_indices, page_mask, min_row, num_rows);
+    <<<dim_grid, dim_block, 0, stream.value()>>>(pages.device_ptr(),
+                                                 chunks,
+                                                 page_string_offset_indices,
+                                                 page_mask,
+                                                 min_row,
+                                                 num_rows,
+                                                 error_code);
   CUDF_CUDA_TRY(cudaGetLastError());
 }
 

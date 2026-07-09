@@ -469,16 +469,21 @@ void reader_impl::compute_page_string_offset_indices(size_t skip_rows, size_t nu
   _stream.synchronize();
 
   // Pre-process string offsets for non-dictionary string columns
+  kernel_error error_code(_stream);
   detail::preprocess_string_offsets(subpass.pages,
                                     pass.chunks,
                                     subpass.page_string_offset_indices,
                                     subpass_page_mask_span(),
                                     skip_rows,
                                     num_rows,
+                                    error_code.data(),
                                     _stream);
 
   // Wait for string offset preprocessing to complete before launching decode kernels
-  _stream.synchronize();
+  if (auto const error = error_code.value_sync(_stream); error != 0) {
+    CUDF_FAIL("Parquet string offset preprocess failed with code(s) " +
+              kernel_error::to_string(error));
+  }
 }
 
 std::pair<bool, std::future<void>> reader_impl::read_column_chunks()
