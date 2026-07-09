@@ -13,7 +13,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
-from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -115,6 +115,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "replace_strict",
             "round",
             "set_sorted",
             "shift",
@@ -173,6 +174,18 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "replace_strict":
+            if len(self.children) != 4:
+                raise NotImplementedError(
+                    "replace_strict only supports an explicit default"
+                )
+            if not all(
+                isinstance(child, Literal | LiteralColumn)
+                for child in self.children[1:]
+            ):
+                raise NotImplementedError(
+                    "replace_strict only supports literal old, new, and default values"
+                )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -181,6 +194,49 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name == "replace_strict":
+            column, old, new, default = (
+                child.evaluate(df, context=context) for child in self.children
+            )
+            if old.dtype != column.dtype:
+                old = old.astype(column.dtype, stream=df.stream)
+            if new.dtype != self.dtype:
+                new = new.astype(self.dtype, stream=df.stream)
+            if default.dtype != self.dtype:
+                default = default.astype(self.dtype, stream=df.stream)
+            replace_column = column
+            replace_old = old
+            if replace_column.dtype != self.dtype:
+                replace_column = replace_column.astype(self.dtype, stream=df.stream)
+            if replace_old.dtype != self.dtype:
+                replace_old = replace_old.astype(self.dtype, stream=df.stream)
+            if old.size != new.size:
+                if new.size != 1:
+                    raise pl.exceptions.InvalidOperationError(
+                        "`new` input for `replace_strict` must have the same length as `old` or have length 1"
+                    )
+                new = Column(
+                    plc.Column.from_scalar(
+                        new.obj_scalar(stream=df.stream), old.size, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            replaced = Column(
+                plc.replace.find_and_replace_all(
+                    replace_column.obj, replace_old.obj, new.obj, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
+            mask = plc.search.contains(old.obj, column.obj, stream=df.stream)
+            return Column(
+                plc.copying.copy_if_else(
+                    replaced.obj,
+                    default.obj_scalar(stream=df.stream),
+                    mask,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            ).sorted_like(column)
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
