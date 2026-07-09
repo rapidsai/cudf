@@ -809,8 +809,9 @@ TEST_F(StringsContainsTests, EndOfString)
   expected = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 1, 1});
   results  = cudf::strings::contains_re(view, *prog);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
-  prog_ml = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
-  results = cudf::strings::contains_re(view, *prog);
+  prog_ml  = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 1, 1});
+  results  = cudf::strings::contains_re(view, *prog_ml);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
