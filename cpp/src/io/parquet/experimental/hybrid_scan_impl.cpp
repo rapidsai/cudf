@@ -1133,8 +1133,8 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 
   apply_decimal_width_cast(out_columns);
 
-  // Prepend the source and row index columns if requested
-  {
+  // Prepend the source and row index columns to filter columns only
+  if (read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
     if (_options.prepend_row_index_column) {
       out_columns.emplace(out_columns.begin(), synthesize_row_index_column(read_info));
       out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
@@ -1148,10 +1148,6 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
         column_name_info{.name = "source_index", .is_nullable = false});
     }
   }
-
-  // Compute the final filter expression incorporating any column reference offsets in _expr_conv
-  auto const final_filter      = compute_offset_filter();
-  auto const final_filter_expr = final_filter.get_converted_expr();
 
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
@@ -1176,6 +1172,10 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // For filter columns, apply the filter expression and update the input row mask
   if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view>) {
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::FILTER_COLUMNS, "Invalid read mode");
+
+    // Compute the final filter expression incorporating any column reference offsets in _expr_conv
+    auto const final_filter      = compute_offset_filter();
+    auto const final_filter_expr = final_filter.get_converted_expr();
 
     auto final_row_mask = cudf::detail::compute_column(*read_table,
                                                        final_filter_expr.value().get(),
