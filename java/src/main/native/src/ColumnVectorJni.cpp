@@ -451,7 +451,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSetValid
       // otherwise, return a bare copy.
       auto copy = std::make_unique<cudf::column>(*original_column);
       copy->set_null_mask({}, 0);
-      return cudf::jni::release_as_jlong(copy);
+      return release_as_jlong(copy);
     }
 
     auto const op = static_cast<cudf::binary_operator>(bin_op);
@@ -483,7 +483,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSetValid
       cudf::get_default_stream(),
       cudf::get_current_device_resource_ref());
 
-    return cudf::jni::release_as_jlong(result);
+    return release_as_jlong(result);
   }
   JNI_CATCH(env, 0);
 }
