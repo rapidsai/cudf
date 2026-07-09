@@ -581,7 +581,30 @@ async def parquet_metadata_prefetch_node(
     ch_out: Channel[ArbitraryChunk[MetadataMessagePayload]],
     stats: StatsCollector,
 ) -> None:
-    """Fetch parquet metadata for each scan task and send it to the paired scan actor."""
+    """
+    Fetch parquet metadata for each scan task and send it to the paired scan actor.
+
+    Parameters
+    ----------
+    context
+        The rapidsmpf context.
+    ir_context
+        The execution context for the IR node. Prefetching is offloaded to a thread from
+        its thread pool.
+    ir
+        The StreamingScan node. This actor will send one a message per scan task in this
+        streaming scan node.
+    ch_out
+        The output channel. The Scan actor generated for this StreamingScan node will
+        read messages from this channel.
+    stats
+        The statistics collector, used to populate the parquet metadata cache.
+
+    Notes
+    -----
+    This actor emits one message per SplitScan / FusedScan in the streaming scan.
+    The messages are sent in the order of the scans.
+    """
     async with shutdown_on_error(context, ch_out, trace_ir=ir, ir_context=ir_context):
         cached_by_key: dict[tuple[str, ...], list[CachedParquetInfo]] = {}
         for scan in ir.scans:
