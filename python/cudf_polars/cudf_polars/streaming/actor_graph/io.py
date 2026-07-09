@@ -661,7 +661,30 @@ async def scan_node(
     """
     scans = ir.scans
 
-    prefetched_parquet_metadata: dict[tuple[str, ...], list[CachedParquetInfo]] = {}
+    # A single file split across multiple SplitScans shares one paths key (and
+    # one metadata channel), and those splits may run concurrently across
+    # producers. A channel can only be received once, so memoize a shared
+    # receive Task per key: the first caller starts it, later callers await the
+    # same (possibly already-completed) Task.
+    recv_tasks: dict[tuple[str, ...], asyncio.Task[list[CachedParquetInfo]]] = {}
+
+    async def cached_parquet_info_for_scan(
+        scan: SplitScan | FusedScan,
+    ) -> list[CachedParquetInfo] | None:
+        key = tuple[str, ...](scan.paths)
+        ch_metadata = metadata_channels_by_key.get(key)
+        if ch_metadata is None:
+            # TODO: Figure out what to do here. For parquet Scans with prefetching
+            # enabled, this would be unexpected.
+            return None
+
+        async def _recv() -> list[CachedParquetInfo]:
+            msg = await recv_prefetched_parquet_metadata(context, ch_metadata)
+            return recv_prefetched_parquet_metadata_handler(msg, key)
+
+        if key not in recv_tasks:
+            recv_tasks[key] = asyncio.create_task(_recv())
+        return await recv_tasks[key]
 
     async with shutdown_on_error(
         context,
@@ -670,12 +693,6 @@ async def scan_node(
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
-        for key, ch_metadata in metadata_channels_by_key.items():
-            msg = await ch_metadata.recv(context)
-            prefetched_parquet_metadata[key] = recv_prefetched_parquet_metadata_handler(
-                msg, key
-            )
-
         # Send basic metadata
         await send_metadata(
             ch_out,
@@ -694,6 +711,8 @@ async def scan_node(
             for seq_num, scan in enumerate(scans):
                 # mypy believes that `scan` is an `IR`, but we know that it's
                 # actually a `FusedScan | SplitScan` because it's `ir.scans`.
+                scan = cast("FusedScan | SplitScan", scan)
+                cached_parquet_info = await cached_parquet_info_for_scan(scan)
                 await read_chunk(
                     context,
                     scan,
@@ -701,9 +720,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    prefetched_parquet_metadata.get(
-                        tuple(cast("FusedScan | SplitScan", scan).paths)
-                    ),
+                    cached_parquet_info,
                     tracer=tracer,
                 )
             await ch_out.drain(context)
@@ -724,6 +741,7 @@ async def scan_node(
 
         async def _producer(producer_id: int, ch_out: Channel) -> None:
             for task_idx, scan in producer_tasks[producer_id]:
+                cached_parquet_info = await cached_parquet_info_for_scan(scan)
                 await read_chunk(
                     context,
                     scan,
@@ -731,7 +749,7 @@ async def scan_node(
                     ch_out,
                     ir_context,
                     estimated_chunk_bytes,
-                    prefetched_parquet_metadata.get(tuple(scan.paths)),
+                    cached_parquet_info,
                     tracer=tracer,
                 )
             await ch_out.drain(context)
@@ -915,7 +933,11 @@ def _(
         nodes[ir] = [native_node, metadata_node]
     else:
         if ir.base_scan.typ == "parquet" and parquet_options.prefetch_file_metadata:
-            metadata_channels_by_key = rec.state["metadata_channels_by_scan"][ir]
+            # A node with no assigned scans (e.g. a rank that received no files)
+            # is never registered in metadata_channels_by_scan, so default to {}.
+            metadata_channels_by_key = rec.state["metadata_channels_by_scan"].get(
+                ir, {}
+            )
         else:
             metadata_channels_by_key = {}
         nodes[ir] = [
