@@ -11,13 +11,13 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -106,6 +106,7 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "arg_max",
             "drop_nans",
             "drop_nulls",
             "extend_constant",
@@ -181,6 +182,22 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name == "arg_max":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            result = Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(
+                        column.obj,
+                        plc.aggregation.argmax(),
+                        plc.DataType(plc.TypeId.INT32),
+                        stream=df.stream,
+                    ),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=DataType(pl.Int32()),
+            )
+            return result.astype(self.dtype, stream=df.stream)
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
