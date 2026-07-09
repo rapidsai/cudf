@@ -305,7 +305,7 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  private static Stream<Arguments> createDecimalLiteralParams() {
+  private static Stream<Arguments> createLegacyDecimalLiteralParams() {
     return Stream.of(
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL32, -2),
             new BigInteger("1234567")),
@@ -313,7 +313,11 @@ public class CompiledExpressionTest extends CudfTestBase {
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL32, 0), (BigInteger) null),
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL64, -4),
             new BigInteger("-123456789012345678")),
-        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL64, -18), (BigInteger) null),
+        Arguments.of(DType.create(DType.DTypeEnum.DECIMAL64, -18), (BigInteger) null));
+  }
+
+  private static Stream<Arguments> createDecimal128LiteralParams() {
+    return Stream.of(
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, -4),
             new BigInteger("-123456789012345678901234567890")),
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, -38), BigInteger.ONE),
@@ -322,6 +326,24 @@ public class CompiledExpressionTest extends CudfTestBase {
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, 0),
             BigInteger.ONE.shiftLeft(127).negate()),
         Arguments.of(DType.create(DType.DTypeEnum.DECIMAL128, -10), (BigInteger) null));
+  }
+
+  private static Stream<Arguments> createDecimalLiteralParams() {
+    return Stream.concat(createLegacyDecimalLiteralParams(), createDecimal128LiteralParams());
+  }
+
+  @ParameterizedTest
+  @MethodSource("createLegacyDecimalLiteralParams")
+  public void testDecimalLiteralTransform(DType type, BigInteger value) {
+    Literal expr = Literal.ofDecimal(type, value);
+    try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
+         CompiledExpression compiledExpr = expr.compile();
+         ColumnVector actual = compiledExpr.computeColumn(t);
+         Scalar expectedScalar = value == null ?
+             Scalar.fromNull(type) : Scalar.fromDecimal(value, type);
+         ColumnVector expected = ColumnVector.fromScalar(expectedScalar, 3)) {
+      assertColumnsAreEqual(expected, actual);
+    }
   }
 
   @ParameterizedTest

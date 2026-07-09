@@ -127,9 +127,10 @@ public final class Literal extends AstExpression {
   /**
    * Construct a decimal literal with the specified type and unscaled value.
    * A null {@code unscaledValue} produces a null literal of the requested type.
-   * A {@code DECIMAL128} literal used as the root expression must be evaluated with
-   * {@link CompiledExpression#computeColumnJit}; the legacy executor cannot materialize it
-   * directly.
+   * Root literals of type {@code DECIMAL32} or {@code DECIMAL64} can be evaluated with either
+   * {@link CompiledExpression#computeColumn} or {@link CompiledExpression#computeColumnJit}.
+   * A {@code DECIMAL128} root literal must use {@code computeColumnJit}; the legacy executor
+   * cannot materialize it directly.
    *
    * @param type decimal storage type and scale
    * @param unscaledValue unscaled decimal value, or null
