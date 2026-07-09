@@ -251,6 +251,8 @@ class _OutputPieceReader:
 
     async def collect_window(self, start: int, stop: int) -> dict[int, ChunkStore]:
         """Return all locally-read pieces for output pids in ``[start, stop)``."""
+        if start >= stop:
+            return {}
         while not self.input_done and not self._has_reached(stop):
             msg = await self.ch_in.recv(self.context)
             if msg is None:

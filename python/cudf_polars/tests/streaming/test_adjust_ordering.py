@@ -370,6 +370,38 @@ def test_adjust_ordering_middle_rank_buffers_only_as_needed(
 
 
 @pytest.mark.spmd
+def test_adjust_ordering_empty_rank_window(spmd_engine: SPMDEngine) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+    if comm.nranks != 3:
+        pytest.skip("This test expects exactly three ranks.")
+
+    keys = {0: [0, 1], 1: [5, 6], 2: [9, 10]}[comm.rank]
+    stream = context.br().stream_pool.get_stream()
+    input_ordering = _make_ordering(context, [5, 9], stream=stream)
+    output_ordering = _make_ordering(context, 5, stream=stream)
+
+    with reserve_op_id() as op_id:
+        output = asyncio.run(
+            _adjust_and_collect(
+                context,
+                comm,
+                _frame(keys),
+                input_ordering,
+                output_ordering,
+                collective_id=op_id,
+            )
+        )
+
+    expected = {
+        0: {0: [0, 1]},
+        1: {1: [5, 6, 9, 10]},
+        2: {},
+    }[comm.rank]
+    _assert_partition_output(output, expected)
+
+
+@pytest.mark.spmd
 def test_adjust_ordering_all_empty_input(spmd_engine: SPMDEngine) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
