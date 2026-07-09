@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
+
+import polars as pl
 
 import pylibcudf as plc
 
@@ -104,9 +106,13 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "clip",
+            "drop_nans",
             "drop_nulls",
+            "extend_constant",
             "fill_null",
             "fill_null_with_strategy",
+            "gather_every",
             "mask_nans",
             "null_count",
             "rank",
@@ -122,6 +128,7 @@ class UnaryFunction(Expr):
     )
     _supported_cum_aggs = frozenset(
         {
+            "cum_count",
             "cum_min",
             "cum_max",
             "cum_prod",
@@ -133,6 +140,7 @@ class UnaryFunction(Expr):
     )
     _pointwise_fns = frozenset(
         {
+            "clip",
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
@@ -179,6 +187,33 @@ class UnaryFunction(Expr):
                     "reinterpret between integer and floating-point types is not "
                     "supported"
                 )
+
+    @staticmethod
+    def _bound_clip_operand(
+        expr: Expr,
+        out_type: DataType,
+        df: DataFrame,
+        context: ExecutionContext,
+    ) -> plc.Column | plc.Scalar:
+        """Evaluate a ``clip`` bound as a scalar or column in ``out_type``."""
+        if isinstance(expr, Literal):
+            casted_literal = expr.astype(out_type)
+            return plc.Scalar.from_py(
+                casted_literal.value, out_type.plc_type, stream=df.stream
+            )
+        evaluated = expr.evaluate(df, context=context).astype(
+            out_type, stream=df.stream
+        )
+        if evaluated.is_scalar:
+            return evaluated.obj_scalar(stream=df.stream)
+        return evaluated.obj
+
+    @staticmethod
+    def _is_clamp_scalar(
+        operand: plc.Column | plc.Scalar | None,
+    ) -> TypeGuard[plc.Scalar | None]:
+        """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
+        return operand is None or isinstance(operand, plc.Scalar)
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -341,6 +376,16 @@ class UnaryFunction(Expr):
                 [keys_col, counts_col],
             )
             return Column(plc_column, dtype=self.dtype)
+        elif self.name == "drop_nans":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            if not plc.traits.is_floating_point(column.obj.type()):
+                return column
+            return Column(
+                plc.stream_compaction.drop_nans(
+                    plc.Table([column.obj]), [0], 1, stream=df.stream
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
@@ -553,6 +598,131 @@ class UnaryFunction(Expr):
         elif self.name == "reinterpret":
             column = self.children[0].evaluate(df, context=context)
             return column.astype(self.dtype, stream=df.stream)
+        elif self.name == "clip":
+            column = self.children[0].evaluate(df, context=context)
+            has_min, has_max = self.options
+            bound_children = iter(self.children[1:])
+            lower = (
+                self._bound_clip_operand(next(bound_children), self.dtype, df, context)
+                if has_min
+                else None
+            )
+            upper = (
+                self._bound_clip_operand(next(bound_children), self.dtype, df, context)
+                if has_max
+                else None
+            )
+            out_type = self.dtype.plc_type
+            if self._is_clamp_scalar(lower) and self._is_clamp_scalar(upper):
+                null_bound = plc.Scalar.from_py(None, out_type, stream=df.stream)
+                return Column(
+                    plc.replace.clamp(
+                        column.obj,
+                        lower if lower is not None else null_bound,
+                        upper if upper is not None else null_bound,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            clamped = column.obj
+            if lower is not None:
+                clamped = plc.binaryop.binary_operation(
+                    clamped,
+                    lower,
+                    plc.binaryop.BinaryOperator.NULL_MAX,
+                    out_type,
+                    stream=df.stream,
+                )
+            if upper is not None:
+                clamped = plc.binaryop.binary_operation(
+                    clamped,
+                    upper,
+                    plc.binaryop.BinaryOperator.NULL_MIN,
+                    out_type,
+                    stream=df.stream,
+                )
+            is_float = plc.traits.is_floating_point(out_type)
+            if column.null_count > 0 or is_float:
+                clampable = plc.unary.is_valid(column.obj, stream=df.stream)
+                if is_float:
+                    not_nan = plc.unary.unary_operation(
+                        plc.unary.is_nan(column.obj, stream=df.stream),
+                        plc.unary.UnaryOperator.NOT,
+                        stream=df.stream,
+                    )
+                    clampable = plc.binaryop.binary_operation(
+                        clampable,
+                        not_nan,
+                        plc.binaryop.BinaryOperator.LOGICAL_AND,
+                        plc.DataType(plc.TypeId.BOOL8),
+                        stream=df.stream,
+                    )
+                clamped = plc.copying.copy_if_else(
+                    clamped,
+                    column.obj,
+                    clampable,
+                    stream=df.stream,
+                )
+            return Column(clamped, dtype=self.dtype)
+        elif self.name == "extend_constant":
+            column = self.children[0].evaluate(df, context=context)
+            value_expr = self.children[1]
+            n_expr = self.children[2]
+            if isinstance(n_expr, Literal):
+                count = n_expr.value
+            else:
+                count = (
+                    n_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            if count < 0:
+                # Polars raises during runtime
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
+            elif count == 0:
+                return column
+            if isinstance(value_expr, Literal):
+                fill = plc.Scalar.from_py(
+                    value_expr.value, self.dtype.plc_type, stream=df.stream
+                )
+            else:
+                fill = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+            extension = plc.Column.from_scalar(fill, count, stream=df.stream)
+            return Column(
+                plc.concatenate.concatenate([column.obj, extension], stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "gather_every":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            offset, n = self.options
+            size = column.obj.size()
+            if size == 0 or (offset == 0 and n == 1):
+                return column
+            if offset >= size:
+                return Column(
+                    plc.copying.empty_like(column.obj, stream=df.stream),
+                    dtype=self.dtype,
+                )
+            count = (size - offset + n - 1) // n
+            indices = plc.filling.sequence(
+                count,
+                plc.Scalar.from_py(
+                    offset, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                ),
+                plc.Scalar.from_py(n, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            return Column(
+                plc.copying.gather(
+                    plc.Table([column.obj]),
+                    indices,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
@@ -567,6 +737,22 @@ class UnaryFunction(Expr):
             )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
+            if self.name == "cum_count":
+                # cum_count is the cumulative count of non-null values.
+                counts = plc.unary.cast(
+                    plc.unary.is_valid(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                )
+                return Column(
+                    plc.reduce.scan(
+                        counts,
+                        plc.aggregation.sum(),
+                        plc.reduce.ScanType.INCLUSIVE,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             plc_col = column.obj
             col_type = column.dtype.plc_type
             # cum_sum casts
