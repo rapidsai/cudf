@@ -11,13 +11,13 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -112,6 +112,7 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "gather_every",
+            "hist",
             "mask_nans",
             "null_count",
             "rank",
@@ -173,6 +174,12 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "hist":
+            _, include_category, include_breakpoint = self.options
+            if include_category or include_breakpoint:
+                raise NotImplementedError(
+                    "hist with category or breakpoint output is not supported"
+                )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -189,6 +196,155 @@ class UnaryFunction(Expr):
                         column.null_count, self.dtype.plc_type, stream=df.stream
                     ),
                     1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        if self.name == "hist":
+            bin_count, _, _ = self.options
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            if column.null_count > 0:
+                column = Column(
+                    plc.stream_compaction.drop_nulls(
+                        plc.Table([column.obj]), [0], 1, stream=df.stream
+                    ).columns()[0],
+                    dtype=column.dtype,
+                )
+            if column.size == 0:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                        bin_count,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            min_scalar, max_scalar = plc.reduce.minmax(column.obj, stream=df.stream)
+            min_value = min_scalar.to_py(stream=df.stream)
+            max_value = max_scalar.to_py(stream=df.stream)
+            assert isinstance(min_value, int | float)
+            assert isinstance(max_value, int | float)
+            if min_value == max_value:
+                counts = plc.Column.from_scalar(
+                    plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                    bin_count,
+                    stream=df.stream,
+                )
+                return Column(
+                    plc.filling.fill(
+                        counts,
+                        0,
+                        1,
+                        plc.Scalar.from_py(
+                            column.size, self.dtype.plc_type, stream=df.stream
+                        ),
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            values = column.astype(DataType(pl.Float64()), stream=df.stream)
+            scaled = plc.binaryop.binary_operation(
+                values.obj,
+                plc.Scalar.from_py(
+                    float(min_value), values.dtype.plc_type, stream=df.stream
+                ),
+                plc.binaryop.BinaryOperator.SUB,
+                values.dtype.plc_type,
+                stream=df.stream,
+            )
+            scaled = plc.binaryop.binary_operation(
+                scaled,
+                plc.Scalar.from_py(
+                    (bin_count - 1) / (max_value - min_value),
+                    values.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                plc.binaryop.BinaryOperator.MUL,
+                values.dtype.plc_type,
+                stream=df.stream,
+            )
+            bins = plc.unary.cast(
+                plc.unary.unary_operation(
+                    scaled, plc.unary.UnaryOperator.FLOOR, stream=df.stream
+                ),
+                plc.DataType(plc.TypeId.INT32),
+                stream=df.stream,
+            )
+            bins = plc.replace.clamp(
+                bins,
+                plc.Scalar.from_py(0, bins.type(), stream=df.stream),
+                plc.Scalar.from_py(bin_count - 1, bins.type(), stream=df.stream),
+                stream=df.stream,
+            )
+            (keys_table, (counts_table,)) = plc.groupby.GroupBy(
+                plc.Table([bins]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        bins,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    )
+                ],
+                stream=df.stream,
+            )
+            sort_indices = plc.sorting.sorted_order(
+                keys_table,
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            keys_table = plc.copying.gather(
+                keys_table,
+                sort_indices,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                stream=df.stream,
+            )
+            counts_table = plc.copying.gather(
+                counts_table,
+                sort_indices,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                stream=df.stream,
+            )
+            counts_col = counts_table.columns()[0]
+            if counts_col.type() != self.dtype.plc_type:
+                counts_col = plc.unary.cast(
+                    counts_col, self.dtype.plc_type, stream=df.stream
+                )
+            all_bins = plc.filling.sequence(
+                bin_count,
+                plc.Scalar.from_py(0, bins.type(), stream=df.stream),
+                plc.Scalar.from_py(1, bins.type(), stream=df.stream),
+                stream=df.stream,
+            )
+            gather_map = plc.search.lower_bound(
+                keys_table,
+                plc.Table([all_bins]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            gather_map = plc.replace.clamp(
+                gather_map,
+                plc.Scalar.from_py(0, gather_map.type(), stream=df.stream),
+                plc.Scalar.from_py(
+                    counts_col.size() - 1, gather_map.type(), stream=df.stream
+                ),
+                stream=df.stream,
+            )
+            gathered_counts = plc.copying.gather(
+                plc.Table([counts_col]),
+                gather_map,
+                plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                stream=df.stream,
+            ).columns()[0]
+            contains = plc.search.contains(
+                keys_table.columns()[0], all_bins, stream=df.stream
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    gathered_counts,
+                    plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                    contains,
                     stream=df.stream,
                 ),
                 dtype=self.dtype,
