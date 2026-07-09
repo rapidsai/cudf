@@ -4,19 +4,15 @@
 
 from __future__ import annotations
 
-import concurrent.futures
-import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 
 from cudf_polars.dsl.tracing import nvtx_annotate_cudf_polars
-from cudf_polars.dsl.traversal import traversal
 from cudf_polars.streaming.io import Scan
 
 if TYPE_CHECKING:
-    from cudf_polars.dsl.ir import IR
     from cudf_polars.streaming.base import StatsCollector
 
 
@@ -109,7 +105,7 @@ def _cached_parquet_info_from_stats(
     stats: StatsCollector | None,
 ) -> dict[str, CachedParquetInfo]:
     """Return path -> cached parquet info seeded from statistics collection."""
-    from cudf_polars.streaming.io import ParquetSourceInfo, Scan
+    from cudf_polars.streaming.io import ParquetSourceInfo
 
     cached_parquet_info: dict[str, CachedParquetInfo] = {}
     if stats is None:
@@ -159,62 +155,3 @@ def prefetch_cached_parquet_info_for_paths(
             cached_by_path[info.path] = info
 
     return [cached_by_path[path] for path in paths]
-
-
-@nvtx_annotate_cudf_polars(message="prefetch_parquet_file_metadata_for_ir")
-def prefetch_parquet_file_metadata_for_ir(
-    root: IR,
-    py_executor: concurrent.futures.Executor | None,
-    stats: StatsCollector | None = None,
-) -> dict[str, CachedParquetInfo]:
-    """
-    Prefetch parquet metadata for all parquet scans in an IR graph.
-
-    Parameters
-    ----------
-    root
-        The root of the IR graph, which will be traversed.
-    py_executor
-        The thread pool executor to use for fetching parquet metadata concurrently.
-    stats
-        The stats collector. The file metadata might have already been
-        prefetched during statistics collection, when the number of files
-        sampled equals the total number of files. Providing ``stats`` here will
-        skip rereading metadata for those files.
-
-    Returns
-    -------
-    A dictionary mapping each individual path to its cached parquet metadata.
-    """
-    from cudf_polars.streaming.io import StreamingScan
-
-    all_paths: set[str] = set()
-
-    for node in traversal([root]):
-        if isinstance(node, StreamingScan):
-            for scan in node.scans:
-                for path in scan.paths:
-                    all_paths.add(path)
-        elif isinstance(node, Scan) and node.typ == "parquet":  # pragma: no cover
-            raise RuntimeError("Unexpected parquet 'Scan' node in lowered IR graph.")
-
-    cached_parquet_info = _cached_parquet_info_from_stats(stats)
-    missing_paths = all_paths - set(cached_parquet_info.keys())
-    cm: contextlib.AbstractContextManager[concurrent.futures.Executor | None]
-
-    if py_executor is None:
-        cm = py_executor = concurrent.futures.ThreadPoolExecutor()
-    else:
-        # We didn't create the executor, so we don't close it.
-        cm = contextlib.nullcontext()
-
-    with cm:
-        futures = [
-            py_executor.submit(_prefetch_parquet_footers_for_paths, [path])
-            for path in missing_paths
-        ]
-
-        for future in concurrent.futures.as_completed(futures):
-            for info in future.result():
-                cached_parquet_info[info.path] = info
-    return cached_parquet_info
