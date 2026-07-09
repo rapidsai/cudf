@@ -4050,6 +4050,14 @@ class IndexedFrame(Frame):
             level_names = None
             multiindex = False
             rangeindex = False
+            if len(names) == 0:
+                # pandas' Index.reindex treats an empty non-Index target as
+                # ``columns[:0]``, preserving the original columns' metadata
+                # (label dtype, names, RangeIndex/MultiIndex-ness).
+                level_names = self._data.level_names
+                multiindex = self._data.multiindex
+                rangeindex = self._data.rangeindex
+                label_dtype = self._data.label_dtype
 
         def _new_nulls_column(name):
             # Build a brand-new column produced by reindex (entirely missing

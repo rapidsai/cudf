@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """Multi-partition evaluation."""
 
@@ -65,6 +65,24 @@ def _(
     )
 
 
+def _lower_ir_graph_impl(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
+) -> tuple[tuple[IR, MutableMapping[IR, PartitionInfo]], LowerIRTransformer]:
+    state: State = {
+        "config_options": config_options,
+        "stats": stats,
+        "rank": rank,
+        "nranks": nranks,
+    }
+    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
+    return mapper(ir), mapper
+
+
 def lower_ir_graph(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
@@ -104,14 +122,58 @@ def lower_ir_graph(
     --------
     lower_ir_node
     """
-    state: State = {
-        "config_options": config_options,
-        "stats": stats,
-        "rank": rank,
-        "nranks": nranks,
-    }
-    mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir)
+    return _lower_ir_graph_impl(ir, config_options, stats, rank=rank, nranks=nranks)[0]
+
+
+def lower_ir_graph_with_node_map(
+    ir: IR,
+    config_options: ConfigOptions[StreamingExecutor],
+    stats: StatsCollector,
+    *,
+    rank: int = 0,
+    nranks: int = 1,
+) -> tuple[IR, MutableMapping[IR, PartitionInfo], dict[str, list[str]]]:
+    """
+    Lower an IR graph and return a mapping from physical to logical stable IDs.
+
+    Behaves like :func:`lower_ir_graph`, but additionally returns a
+    mapping from each physical (post-lowering) node's stable ID to the
+    logical (pre-lowering) node(s) it was derived from.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to rewrite.
+    config_options
+        GPUEngine configuration options.
+    stats
+        Pre-computed statistics collector.
+    rank
+        Rank of the current worker.
+    nranks
+        Number of workers in the current cluster.
+
+    Returns
+    -------
+    new_ir
+        The rewritten IR graph.
+    partition_info
+        Mapping from unique nodes in the new graph to partitioning info.
+    node_map
+        Mapping ``{physical_stable_id: [logical_stable_id, ...]}`` built
+        from the internal :class:`CachingVisitor` cache. Nodes inserted
+        by lowering (e.g. ``Repartition``) will not appear as keys.
+    """
+    result, mapper = _lower_ir_graph_impl(
+        ir, config_options, stats, rank=rank, nranks=nranks
+    )
+    node_map: dict[str, list[str]] = {}
+    for old_node, (new_node, _) in mapper.cache.items():  # type: ignore[attr-defined]
+        new_key = str(new_node.get_stable_id())
+        old_key = str(old_node.get_stable_id())
+        node_map.setdefault(new_key, []).append(old_key)
+
+    return *result, node_map
 
 
 def evaluate_streaming(
