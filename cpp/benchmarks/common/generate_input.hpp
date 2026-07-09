@@ -216,7 +216,7 @@ std::vector<cudf::type_id> get_type_or_group(std::vector<int32_t> const& ids);
  *
  * All types have default parameters so it's not necessary to set the parameters before using them.
  */
-class CUDF_EXPORT data_profile {
+class data_profile {
   std::map<cudf::type_id, distribution_params<uint64_t>> int_params;
   std::map<cudf::type_id, distribution_params<double>> float_params;
   distribution_params<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
