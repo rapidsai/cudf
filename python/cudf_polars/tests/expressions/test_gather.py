@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -103,15 +103,8 @@ def test_gather_on_literal(
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "expr",
-    [
-        pl.col("a").gather_every(2),
-        pl.col("a").repeat_by(pl.col("n")),
-    ],
-    ids=["gather_every", "repeat_by"],
-)
-def test_gather_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+def test_gather_repeat_by_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3, 4, 5], "n": [2, 1, 3, 1, 2]})
+    expr = pl.col("a").repeat_by(pl.col("n"))
     q = df.select(expr)
     assert_ir_translation_raises(q, engine, NotImplementedError)

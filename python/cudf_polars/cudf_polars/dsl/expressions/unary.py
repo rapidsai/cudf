@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
+import polars as pl
+
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -104,9 +106,12 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "drop_nans",
             "drop_nulls",
+            "extend_constant",
             "fill_null",
             "fill_null_with_strategy",
+            "gather_every",
             "mask_nans",
             "null_count",
             "rank",
@@ -122,6 +127,7 @@ class UnaryFunction(Expr):
     )
     _supported_cum_aggs = frozenset(
         {
+            "cum_count",
             "cum_min",
             "cum_max",
             "cum_prod",
@@ -334,6 +340,16 @@ class UnaryFunction(Expr):
         elif self.name == "rechunk":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return column
+        elif self.name == "drop_nans":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            if not plc.traits.is_floating_point(column.obj.type()):
+                return column
+            return Column(
+                plc.stream_compaction.drop_nans(
+                    plc.Table([column.obj]), [0], 1, stream=df.stream
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nulls":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if column.null_count == 0:
@@ -543,6 +559,65 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "extend_constant":
+            column = self.children[0].evaluate(df, context=context)
+            value_expr = self.children[1]
+            n_expr = self.children[2]
+            if isinstance(n_expr, Literal):
+                count = n_expr.value
+            else:
+                count = (
+                    n_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            if count < 0:
+                # Polars raises during runtime
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
+            elif count == 0:
+                return column
+            if isinstance(value_expr, Literal):
+                fill = plc.Scalar.from_py(
+                    value_expr.value, self.dtype.plc_type, stream=df.stream
+                )
+            else:
+                fill = value_expr.evaluate(df, context=context).obj_scalar(
+                    stream=df.stream
+                )
+            extension = plc.Column.from_scalar(fill, count, stream=df.stream)
+            return Column(
+                plc.concatenate.concatenate([column.obj, extension], stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "gather_every":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            offset, n = self.options
+            size = column.obj.size()
+            if size == 0 or (offset == 0 and n == 1):
+                return column
+            if offset >= size:
+                return Column(
+                    plc.copying.empty_like(column.obj, stream=df.stream),
+                    dtype=self.dtype,
+                )
+            count = (size - offset + n - 1) // n
+            indices = plc.filling.sequence(
+                count,
+                plc.Scalar.from_py(
+                    offset, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                ),
+                plc.Scalar.from_py(n, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            return Column(
+                plc.copying.gather(
+                    plc.Table([column.obj]),
+                    indices,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
@@ -557,6 +632,22 @@ class UnaryFunction(Expr):
             )
         elif self.name in UnaryFunction._supported_cum_aggs:
             column = self.children[0].evaluate(df, context=context)
+            if self.name == "cum_count":
+                # cum_count is the cumulative count of non-null values.
+                counts = plc.unary.cast(
+                    plc.unary.is_valid(column.obj, stream=df.stream),
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                )
+                return Column(
+                    plc.reduce.scan(
+                        counts,
+                        plc.aggregation.sum(),
+                        plc.reduce.ScanType.INCLUSIVE,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             plc_col = column.obj
             col_type = column.dtype.plc_type
             # cum_sum casts
