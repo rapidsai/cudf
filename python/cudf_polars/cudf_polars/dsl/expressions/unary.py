@@ -115,6 +115,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "repeat",
             "round",
             "set_sorted",
             "shift",
@@ -582,6 +583,27 @@ class UnaryFunction(Expr):
             extension = plc.Column.from_scalar(fill, count, stream=df.stream)
             return Column(
                 plc.concatenate.concatenate([column.obj, extension], stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "repeat":
+            value_expr, n_expr = self.children
+            value = value_expr.evaluate(df, context=context)
+            if isinstance(n_expr, Literal):
+                count = n_expr.value
+            else:
+                count = (
+                    n_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            if count < 0:
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
+            return Column(
+                plc.filling.repeat(
+                    plc.Table([value.obj]),
+                    count,
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name == "gather_every":
