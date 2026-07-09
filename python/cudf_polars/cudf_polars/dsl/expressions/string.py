@@ -160,7 +160,7 @@ class StringFunction(Expr):
     # backslash via a back-reference replacement template.
     _ESCAPE_REGEX_PATTERN: ClassVar[str] = r"([#$&()*+\-.?\[\\\]\^{|}~])"
     _ESCAPE_REGEX_REPLACEMENT: ClassVar[str] = r"\\1"
-    __slots__ = ("_regex_program", "name", "options")
+    __slots__ = ("_empty_regex", "_invalid_regex", "_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
 
     def __init__(
@@ -175,6 +175,8 @@ class StringFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = self.name != StringFunction.Name.ConcatVertical
+        self._empty_regex = False
+        self._invalid_regex = False
         self._validate_input()
 
     def _validate_input(self) -> None:
@@ -219,16 +221,22 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.Find:
             literal, strict = self.options
             if not literal:
-                if not strict:
-                    raise NotImplementedError(
-                        f"{strict=} is not supported for regex contains"
-                    )
                 if not isinstance(self.children[1], Literal):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
                 pattern = self.children[1].value
-                self._regex_program = self._create_regex_program(pattern)
+                if pattern == "":
+                    self._empty_regex = True
+                elif strict:
+                    self._regex_program = self._create_regex_program(pattern)
+                else:
+                    try:
+                        re.compile(pattern)
+                    except re.error:
+                        self._invalid_regex = True
+                    else:
+                        self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.Replace:
             _, literal = self.options
             if not literal:
@@ -527,6 +535,8 @@ class StringFunction(Expr):
             literal, _ = self.options
             (child, expr) = self.children
             plc_column = child.evaluate(df, context=context).obj
+            input_null_mask = plc_column.null_mask()
+            input_null_count = plc_column.null_count()
             if literal:
                 assert isinstance(expr, Literal)
                 plc_column = plc.strings.find.find(
@@ -536,6 +546,22 @@ class StringFunction(Expr):
                     ),
                     stream=df.stream,
                 )
+            elif self._invalid_regex:
+                plc_column = plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                    plc_column.size(),
+                    stream=df.stream,
+                )
+                return Column(plc_column, dtype=self.dtype)
+            elif self._empty_regex:
+                plc_column = plc.Column.from_scalar(
+                    plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                    plc_column.size(),
+                    stream=df.stream,
+                )
+                if input_null_mask:
+                    plc_column = plc_column.with_mask(input_null_mask, input_null_count)
+                return Column(plc_column, dtype=self.dtype)
             else:
                 plc_column = plc.strings.findall.find_re(
                     plc_column, self._regex_program, stream=df.stream
