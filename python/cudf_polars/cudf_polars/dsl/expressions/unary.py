@@ -588,7 +588,7 @@ class UnaryFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name == "coalesce":
-            first_child, *ret = self.children
+            first_child, *other_children = self.children
             first = first_child.evaluate(df, context=context).astype(
                 self.dtype, stream=df.stream
             )
@@ -600,14 +600,15 @@ class UnaryFunction(Expr):
                 ).columns()[0]
             else:
                 result = first.obj
-            for child in ret:
+            for child in other_children:
                 if result.null_count() == 0:
                     break
-                candidate = child.evaluate(df, context=context)
-                cast_candidate = candidate.astype(self.dtype, stream=df.stream)
+                cast_candidate = child.evaluate(df, context=context).astype(
+                    self.dtype, stream=df.stream
+                )
                 fill = (
                     cast_candidate.obj_scalar(stream=df.stream)
-                    if candidate.is_scalar
+                    if cast_candidate.is_scalar
                     else cast_candidate.obj
                 )
                 result = plc.replace.replace_nulls(result, fill, stream=df.stream)
