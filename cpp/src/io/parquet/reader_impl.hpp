@@ -408,7 +408,8 @@ class reader_impl {
    */
   [[nodiscard]] inline offset_column_references compute_offset_filter() const
   {
-    auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column);
+    auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column) +
+                                    static_cast<size_type>(_options.prepend_row_index_column);
     return offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
   }
 

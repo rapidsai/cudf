@@ -902,6 +902,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _options.use_jit_filter              = false;
   _options.case_sensitive_names        = true;
   _options.prepend_source_index_column = false;
+  _options.prepend_row_index_column    = false;
 
   _num_sources             = 0;
   _input_pass_read_limit   = 0;
@@ -923,6 +924,7 @@ void hybrid_scan_reader_impl::initialize_column_selection_options(
   _options.use_jit_filter              = options.is_enabled_use_jit_filter();
   _options.case_sensitive_names        = options.is_enabled_case_sensitive_names();
   _options.prepend_source_index_column = options.is_enabled_prepend_source_index_column();
+  _options.prepend_row_index_column    = options.is_enabled_prepend_row_index_column();
 
   _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 }
@@ -1112,6 +1114,13 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
+  // Row-range of the current output chunk relative to the current row group selection.
+  auto const read_info =
+    (_file_itm_data._current_input_pass < _file_itm_data.num_passes())
+      ? _pass_itm_data->subpass
+          ->output_chunk_read_info[_pass_itm_data->subpass->current_output_chunk]
+      : cudf::io::parquet::detail::row_range{0, 0};
+
   // advance output chunk/subpass/pass info for non-empty tables if and only if we are in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     auto& pass    = *_pass_itm_data;
@@ -1124,10 +1133,20 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
 
   apply_decimal_width_cast(out_columns);
 
-  // Prepend the source index column to filter columns only
-  if (_options.prepend_source_index_column and
-      read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
-    prepend_source_index_column(out_metadata.num_rows_per_source, out_columns);
+  // Prepend the source and row index columns if requested
+  {
+    if (_options.prepend_row_index_column) {
+      out_columns.emplace(out_columns.begin(), synthesize_row_index_column(read_info));
+      out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
+                                       column_name_info{.name = "row_index", .is_nullable = false});
+    }
+    if (_options.prepend_source_index_column) {
+      out_columns.emplace(out_columns.begin(),
+                          synthesize_source_index_column(out_metadata.num_rows_per_source));
+      out_metadata.schema_info.emplace(
+        out_metadata.schema_info.begin(),
+        column_name_info{.name = "source_index", .is_nullable = false});
+    }
   }
 
   // Compute the final filter expression incorporating any column reference offsets in _expr_conv
