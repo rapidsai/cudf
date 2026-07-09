@@ -13,7 +13,7 @@ import pylibcudf as plc
 
 from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
-from cudf_polars.dsl.expressions.literal import Literal
+from cudf_polars.dsl.expressions.literal import Literal, LiteralColumn
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
@@ -115,6 +115,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "replace",
             "round",
             "set_sorted",
             "shift",
@@ -141,6 +142,7 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "replace",
             "round",
             "set_sorted",
         }
@@ -173,6 +175,12 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "replace" and not all(
+            isinstance(child, Literal | LiteralColumn) for child in self.children[1:]
+        ):
+            raise NotImplementedError(
+                "replace only supports literal old and new values"
+            )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -181,6 +189,33 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name == "replace":
+            column, old, new = (
+                child.evaluate(df, context=context) for child in self.children
+            )
+            if old.dtype != column.dtype:
+                old = old.astype(column.dtype, stream=df.stream)
+            if new.dtype != self.dtype:
+                new = new.astype(self.dtype, stream=df.stream)
+            if old.size != new.size:
+                if new.size != 1:
+                    raise pl.exceptions.InvalidOperationError(
+                        "`new` input for `replace` must have the same length as `old` or have length 1"
+                    )
+                new = Column(
+                    plc.Column.from_scalar(
+                        new.obj_scalar(stream=df.stream), old.size, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            result = plc.replace.find_and_replace_all(
+                column.obj, old.obj, new.obj, stream=df.stream
+            )
+            if column.dtype != self.dtype:
+                return Column(result, dtype=column.dtype).astype(
+                    self.dtype, stream=df.stream
+                )
+            return Column(result, dtype=self.dtype).sorted_like(column)
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
