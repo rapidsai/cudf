@@ -259,14 +259,16 @@ bool positions_chars_overlap(gkprog const& gp, uint32_t const p, uint32_t const 
     }
   }
   // Non-ASCII: conservative overlap if both positions are non-CHAR types
-  bool const p_nonascii = (gp.pos_insts[p].type != CHAR) || (gp.pos_insts[p].u1.c >= 128);
-  bool const q_nonascii = (gp.pos_insts[q].type != CHAR) || (gp.pos_insts[q].u1.c >= 128);
+  bool const p_nonascii =
+    (gp.pos_insts[p].type != CHAR) || (gp.pos_insts[p].u1.c >= GLUSHKOV_ASCII_TABLE_SIZE);
+  bool const q_nonascii =
+    (gp.pos_insts[q].type != CHAR) || (gp.pos_insts[q].u1.c >= GLUSHKOV_ASCII_TABLE_SIZE);
   if (p_nonascii && q_nonascii) { return true; }
   // One side is a non-ASCII CHAR literal; if the other is a wildcard it might match
-  if (gp.pos_insts[p].type == CHAR && gp.pos_insts[p].u1.c >= 128) {
+  if (gp.pos_insts[p].type == CHAR && gp.pos_insts[p].u1.c >= GLUSHKOV_ASCII_TABLE_SIZE) {
     return (gp.pos_insts[q].type != CHAR);
   }
-  if (gp.pos_insts[q].type == CHAR && gp.pos_insts[q].u1.c >= 128) {
+  if (gp.pos_insts[q].type == CHAR && gp.pos_insts[q].u1.c >= GLUSHKOV_ASCII_TABLE_SIZE) {
     return (gp.pos_insts[p].type != CHAR);
   }
   return false;
