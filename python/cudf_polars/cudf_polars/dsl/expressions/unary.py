@@ -581,6 +581,7 @@ class UnaryFunction(Expr):
                         ),
                     )
                 else:
+                    # cot
                     expression = plc.expressions.Operation(
                         plc.expressions.ASTOperator.DIV,
                         one,
