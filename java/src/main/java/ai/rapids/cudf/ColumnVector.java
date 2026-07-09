@@ -1,6 +1,6 @@
 /*
  *
- *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ *  SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  *  SPDX-License-Identifier: Apache-2.0
  *
  */
@@ -885,11 +885,12 @@ public final class ColumnVector extends ColumnView {
    *
    * @param baseHandle column view of the column whose null mask is being replaced.
    * @param viewHandles array of views whose null masks are merged, must have identical row counts.
+   * @param mergeOp native id of the binary op (BITWISE_AND or BITWISE_OR) used to merge the null masks.
    * @return two-element array: [native_handle, has_output].
    *         has_output is 0 when the original is unchanged and no copied column was produced.
    */
   private static native long[] bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
-                                                          int nullConfig) throws CudfException;
+                                                          int mergeOp) throws CudfException;
 
   /**
    * Native method to concatenate columns of lists horizontally (row by row), combining a row
