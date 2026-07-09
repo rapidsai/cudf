@@ -103,7 +103,7 @@ cpp/doxygen/xml
 target
 
 # Local Maven repo created by java/ci/build-in-docker.sh
-.m2
+.m2/
 
 # Recreated on every Maven `validate` phase by gmaven-plugin:1.5
 java/bin/
@@ -187,3 +187,6 @@ compile_commands.json
 # pytest artifacts
 rmm_log.txt
 python/cudf/cudf_pandas_tests/data/rmm_log.txt
+
+# Quent traces
+logs/*.ndjson
