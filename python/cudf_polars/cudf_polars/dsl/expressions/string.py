@@ -435,6 +435,7 @@ class StringFunction(Expr):
                 if widths.null_count() > 0:
                     # zfill_by_widths cannot handle null widths, so substitute
                     # a placeholder width and null out those rows afterwards.
+                    # https://github.com/rapidsai/cudf/issues/23207
                     filled = plc.replace.replace_nulls(
                         widths,
                         plc.Scalar.from_py(0, widths.type(), stream=df.stream),
