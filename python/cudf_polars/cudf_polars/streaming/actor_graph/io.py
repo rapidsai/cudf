@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import functools
 import io
 import math
@@ -645,10 +646,24 @@ def _start_metadata_receiver(
     futures = [loop.create_future() for _ in range(len(scans))]
 
     async def _receive() -> None:
-        for task_idx, scan in enumerate(scans):
-            msg = await recv_prefetched_parquet_metadata(context, ch_metadata)
-            cached = recv_prefetched_parquet_metadata_handler(msg, tuple(scan.paths))
-            futures[task_idx].set_result(cached)
+        try:
+            for task_idx, scan in enumerate(scans):
+                msg = await recv_prefetched_parquet_metadata(context, ch_metadata)
+                cached = recv_prefetched_parquet_metadata_handler(
+                    msg, tuple(scan.paths)
+                )
+                futures[task_idx].set_result(cached)
+        except BaseException as exc:
+            # Propagate the failure (including cancellation / premature stop) to
+            # every unfinished future so downstream awaiters fail fast instead of
+            # hanging on metadata that will never arrive.
+            for future in futures:
+                if not future.done():
+                    if isinstance(exc, asyncio.CancelledError):
+                        future.cancel()
+                    else:
+                        future.set_exception(exc)
+            raise
 
     receiver_task = asyncio.create_task(_receive())
     return futures, receiver_task
@@ -733,79 +748,90 @@ async def scan_node(
     if ch_metadata is not None:
         shutdown_channels.append(ch_metadata)
 
-    async with shutdown_on_error(
-        context,
-        *shutdown_channels,
-        trace_ir=ir,
-        ir_context=ir_context,
-    ) as tracer:
-        # Send basic metadata
-        await send_metadata(
-            ch_out,
+    try:
+        async with shutdown_on_error(
             context,
-            ChannelMetadata(local_count=len(scans)),
-        )
-
-        # If there is nothing to scan, drain the channel and return
-        if len(scans) == 0:
-            await ch_out.drain(context)
-            return
-
-        # If there is only one scan or one producer, we can
-        # skip the lineariser and read the chunks directly
-        if len(scans) == 1 or num_producers == 1:
-            for seq_num, scan in enumerate(scans):
-                cached_parquet_info = await cached_parquet_info_for_task(seq_num)
-                await read_chunk(
-                    context,
-                    scan,
-                    seq_num,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    cached_parquet_info,
-                    tracer=tracer,
-                )
-            await ch_out.drain(context)
-            return
-
-        # Use Lineariser to ensure ordered delivery
-        num_producers = min(num_producers, len(scans))
-        lineariser = Lineariser(context, ch_out, num_producers)
-
-        # Assign tasks to producers using round-robin
-        producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
-            [] for _ in range(num_producers)
-        ]
-        for task_idx, scan in enumerate(scans):
-            producer_id = task_idx % num_producers
-            producer_tasks[producer_id].append((task_idx, scan))
-
-        async def _producer(producer_id: int, ch_out: Channel) -> None:
-            for task_idx, scan in producer_tasks[producer_id]:
-                cached_parquet_info = await cached_parquet_info_for_task(task_idx)
-                await read_chunk(
-                    context,
-                    scan,
-                    task_idx,
-                    ch_out,
-                    ir_context,
-                    estimated_chunk_bytes,
-                    cached_parquet_info,
-                    tracer=tracer,
-                )
-            await ch_out.drain(context)
-
-        async with (
-            shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
-        ):
-            await gather_in_task_group(
-                lineariser.drain(),
-                *(
-                    _producer(i, ch_in)
-                    for i, ch_in in enumerate(lineariser.input_channels)
-                ),
+            *shutdown_channels,
+            trace_ir=ir,
+            ir_context=ir_context,
+        ) as tracer:
+            # Send basic metadata
+            await send_metadata(
+                ch_out,
+                context,
+                ChannelMetadata(local_count=len(scans)),
             )
+
+            # If there is nothing to scan, drain the channel and return
+            if len(scans) == 0:
+                await ch_out.drain(context)
+                return
+
+            # If there is only one scan or one producer, we can
+            # skip the lineariser and read the chunks directly
+            if len(scans) == 1 or num_producers == 1:
+                for seq_num, scan in enumerate(scans):
+                    cached_parquet_info = await cached_parquet_info_for_task(seq_num)
+                    await read_chunk(
+                        context,
+                        scan,
+                        seq_num,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        cached_parquet_info,
+                        tracer=tracer,
+                    )
+                await ch_out.drain(context)
+                return
+
+            # Use Lineariser to ensure ordered delivery
+            num_producers = min(num_producers, len(scans))
+            lineariser = Lineariser(context, ch_out, num_producers)
+
+            # Assign tasks to producers using round-robin
+            producer_tasks: list[list[tuple[int, SplitScan | FusedScan]]] = [
+                [] for _ in range(num_producers)
+            ]
+            for task_idx, scan in enumerate(scans):
+                producer_id = task_idx % num_producers
+                producer_tasks[producer_id].append((task_idx, scan))
+
+            async def _producer(producer_id: int, ch_out: Channel) -> None:
+                for task_idx, scan in producer_tasks[producer_id]:
+                    cached_parquet_info = await cached_parquet_info_for_task(task_idx)
+                    await read_chunk(
+                        context,
+                        scan,
+                        task_idx,
+                        ch_out,
+                        ir_context,
+                        estimated_chunk_bytes,
+                        cached_parquet_info,
+                        tracer=tracer,
+                    )
+                await ch_out.drain(context)
+
+            async with (
+                shutdown_on_error(context, *lineariser.input_channels, trace_ir=ir),
+            ):
+                await gather_in_task_group(
+                    lineariser.drain(),
+                    *(
+                        _producer(i, ch_in)
+                        for i, ch_in in enumerate(lineariser.input_channels)
+                    ),
+                )
+    finally:
+        # Always finalize the background metadata receiver, even on early
+        # return or failure, so it is never left orphaned.
+        if _metadata_receiver_task is not None:
+            _metadata_receiver_task.cancel()
+            # Awaiting also retrieves any exception the receiver raised (already
+            # surfaced to producers via the per-task futures), avoiding a stray
+            # "Task exception was never retrieved" warning.
+            with contextlib.suppress(BaseException):
+                await _metadata_receiver_task
 
 
 def make_rapidsmpf_read_parquet_node(
