@@ -9,7 +9,9 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/cuda.hpp>
 #include <cudf/detail/utilities/grid_1d.cuh>
+#include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/strings/detail/utilities.hpp>
 #include <cudf/strings/find.hpp>
@@ -394,46 +396,56 @@ CUDF_KERNEL void contains_string_per_thread_heterogeneous(column_device_view con
  * long-row indices collected by ::contains_string_per_thread_heterogeneous are processed.
  * @see AVG_CHAR_BYTES_THRESHOLD
  *
+ * The row count is read from `d_long_count` on the device so the two passes launch back-to-back on
+ * the stream with no intervening host synchronization. A fixed (grid-stride) launch is used: each
+ * warp strides over the deferred rows, so the second pass works for any `*d_long_count` without the
+ * host needing to know the value to size the grid.
+ *
  * @param d_strings Column of input strings
  * @param d_target String to search for in each row of `d_strings`
  * @param d_results Indicates which rows contain `d_target`
  * @param d_long_indices Indices of the long (non-null) rows to process
- * @param long_count Number of entries in `d_long_indices`
+ * @param d_long_count Number of entries in `d_long_indices` (read on the device)
  */
 CUDF_KERNEL void contains_warp_parallel_fn_heterogeneous(column_device_view const d_strings,
                                                          string_view const d_target,
                                                          bool* d_results,
                                                          size_type const* d_long_indices,
-                                                         size_type const long_count)
+                                                         size_type const* d_long_count)
 {
-  auto const idx = cudf::detail::grid_1d::global_thread_id();
-
-  auto const str_idx = idx / cudf::detail::warp_size;
-  if (str_idx >= static_cast<cudf::thread_index_type>(long_count)) { return; }
+  auto const long_count = *d_long_count;
 
   namespace cg        = cooperative_groups;
   auto const warp     = cg::tiled_partition<cudf::detail::warp_size>(cg::this_thread_block());
   auto const lane_idx = warp.thread_rank();
 
-  // Long indices are guaranteed non-null by the partitioning kernel.
-  auto const real_str_idx = d_long_indices[str_idx];
-  auto const d_str        = d_strings.element<string_view>(real_str_idx);
+  // Grid-stride over the deferred long rows, one warp per row.
+  auto const first_warp = cudf::detail::grid_1d::global_thread_id() / cudf::detail::warp_size;
+  auto const warp_stride =
+    (static_cast<cudf::thread_index_type>(gridDim.x) * blockDim.x) / cudf::detail::warp_size;
 
-  auto constexpr bytes_per_warp = 4;
-  auto found                    = false;
-  for (auto i = lane_idx * bytes_per_warp;
-       !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
-       i += cudf::detail::warp_size * bytes_per_warp) {
-    for (auto j = 0; !found && (j < bytes_per_warp); j++) {
-      if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
-          d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
-        found = true;
+  for (auto str_idx = first_warp; str_idx < static_cast<cudf::thread_index_type>(long_count);
+       str_idx += warp_stride) {
+    // Long indices are guaranteed non-null by the partitioning kernel.
+    auto const real_str_idx = d_long_indices[str_idx];
+    auto const d_str        = d_strings.element<string_view>(real_str_idx);
+
+    auto constexpr bytes_per_warp = 4;
+    auto found                    = false;
+    for (auto i = lane_idx * bytes_per_warp;
+         !found && ((i + d_target.size_bytes()) <= d_str.size_bytes());
+         i += cudf::detail::warp_size * bytes_per_warp) {
+      for (auto j = 0; !found && (j < bytes_per_warp); j++) {
+        if (((i + j + d_target.size_bytes()) <= d_str.size_bytes()) &&
+            d_target.compare(d_str.data() + i + j, d_target.size_bytes()) == 0) {
+          found = true;
+        }
       }
     }
-  }
 
-  auto const result = warp.any(found);
-  if (lane_idx == 0) { d_results[real_str_idx] = result; }
+    auto const result = warp.any(found);
+    if (lane_idx == 0) { d_results[real_str_idx] = result; }
+  }
 }
 
 std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
@@ -487,20 +499,25 @@ std::unique_ptr<column> contains_heterogeneous(strings_column_view const& input,
                                              stream.value()>>>(
     d_strings, d_target, d_results, length_threshold, long_indices.data(), d_long_count.data());
 
-  // Read back how many long rows were deferred (synchronizes the stream).
-  auto const long_count = d_long_count.value(stream);
+  // Second pass (warp-per-string): search the deferred long rows. The deferred count is read on the
+  // device inside the kernel, so this launches back-to-back with the first pass and never
+  // synchronizes the stream (a host readback here dominates the runtime on small columns).
+  //
+  // A fixed grid-stride launch is used: size it for full occupancy but never exceed the worst case
+  // of one warp per row, so short-heavy columns launch only a handful of blocks that read
+  // `*d_long_count == 0` and exit immediately.
+  auto constexpr warps_per_block = block_size / cudf::detail::warp_size;
+  int max_blocks_per_sm          = 0;
+  CUDF_CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    &max_blocks_per_sm, contains_warp_parallel_fn_heterogeneous, block_size, 0));
+  auto const persistent_blocks =
+    static_cast<int64_t>(max_blocks_per_sm) * cudf::detail::num_multiprocessors();
+  auto const worst_case_blocks =
+    cudf::util::div_rounding_up_safe<int64_t>(strings_count, warps_per_block);
+  auto const num_warp_blocks = std::max<int64_t>(1, std::min(persistent_blocks, worst_case_blocks));
 
-  // Second pass (warp-per-string): search the deferred long rows.
-  if (long_count > 0) {
-    int64_t const long_count_warps =
-      static_cast<int64_t>(long_count) * static_cast<int64_t>(cudf::detail::warp_size);
-    auto const warp_grid = cudf::detail::grid_1d{long_count_warps, block_size};
-    contains_warp_parallel_fn_heterogeneous<<<warp_grid.num_blocks,
-                                              warp_grid.num_threads_per_block,
-                                              0,
-                                              stream.value()>>>(
-      d_strings, d_target, d_results, long_indices.data(), long_count);
-  }
+  contains_warp_parallel_fn_heterogeneous<<<num_warp_blocks, block_size, 0, stream.value()>>>(
+    d_strings, d_target, d_results, long_indices.data(), d_long_count.data());
 
   results->set_null_count(input.null_count());
   return results;
