@@ -67,6 +67,7 @@ struct row_group_info {
   size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
                     // called with index and source_index
   size_t start_row;
+  size_t source_start_row;     // file-local start row of this row group within its source file
   size_t unadjusted_num_rows;  // number of unadjusted rows in the row group
   size_type source_index;      // file index.
   size_t compressed_size;      // compressed size of the row group
@@ -481,6 +482,14 @@ class aggregate_reader_metadata {
    * @return Number of row groups per file
    */
   [[nodiscard]] std::vector<size_type> get_num_row_groups_per_file() const;
+
+  /**
+   * @brief Computes file-local row group row offsets for the specified source
+   *
+   * @param src_idx The source (per_file_metadata) index
+   * @return Vector of file-local row group row offsets
+   */
+  [[nodiscard]] std::vector<size_t> compute_source_row_group_offsets(size_type src_idx) const;
 
   /**
    * @brief Checks if a schema index from 0th source is mapped to the specified file index

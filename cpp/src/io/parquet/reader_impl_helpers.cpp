@@ -671,6 +671,22 @@ std::vector<size_type> aggregate_reader_metadata::get_num_row_groups_per_file() 
   return per_file_num_row_groups;
 }
 
+std::vector<size_t> aggregate_reader_metadata::compute_source_row_group_offsets(
+  size_type src_idx) const
+{
+  CUDF_EXPECTS(src_idx >= 0 && std::cmp_less(src_idx, per_file_metadata.size()),
+               "invalid source index");
+  auto const& row_groups = per_file_metadata[src_idx].row_groups;
+  std::vector<size_t> source_row_offsets(row_groups.size());
+  std::transform_exclusive_scan(row_groups.cbegin(),
+                                row_groups.cend(),
+                                source_row_offsets.begin(),
+                                size_t{0},
+                                std::plus<size_t>{},
+                                [](auto const& rg) { return rg.num_rows; });
+  return source_row_offsets;
+}
+
 // Copies info from the column and offset indexes into the passed in row_group_info.
 void aggregate_reader_metadata::column_info_for_row_group(row_group_info& rg_info,
                                                           size_t chunk_start_row) const
@@ -1717,6 +1733,10 @@ aggregate_reader_metadata::select_row_groups(
     [&](auto const& src_idx) {
       auto const& file_metadata = per_file_metadata[src_idx];
 
+      // File-local row group row offsets
+      auto const source_row_offsets =
+        compute_source_row_group_offsets(static_cast<size_type>(src_idx));
+
       // For each row group in this data source
       std::for_each(
         current_row_group_indices[src_idx].begin(),
@@ -1758,6 +1778,7 @@ aggregate_reader_metadata::select_row_groups(
           selection.emplace_back(
             row_group_info{.index               = rg_idx,
                            .start_row           = row_group_start_row,
+                           .source_start_row    = source_row_offsets[rg_idx],
                            .unadjusted_num_rows = num_rows,
                            .source_index        = static_cast<cudf::size_type>(src_idx),
                            .compressed_size     = compressed_size,

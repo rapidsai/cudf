@@ -17,12 +17,12 @@ dependencies:
 - cmake>=4.0
 - cramjam
 - croaring==4.4.2
+- cuda-bindings>=12.9.2,<13.0
 - cuda-cudart-dev
 - cuda-cupti-dev
 - cuda-nvcc
 - cuda-nvrtc-dev
 - cuda-nvtx-dev
-- cuda-python>=12.9.2,<13.0
 - cuda-sanitizer-api
 - cuda-version=12.9
 - cupy>=14.0.1,!=14.1.0
@@ -74,7 +74,7 @@ dependencies:
 - packaging
 - pandas>=3.0.0,<3.0.4a0
 - pandoc
-- polars>=1.35,<1.42
+- polars>=1.35,<1.43
 - pre-commit
 - pyarrow>=19.0.0,<24
 - pytables
