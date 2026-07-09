@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import string
 from functools import partial
 
 import pytest
@@ -917,3 +918,17 @@ def test_split_regex_not_supported(engine: pl.GPUEngine):
     q = lf.select(pl.col("a").str.split(r"\d+", literal=False))
 
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["a.b*c", "no_meta", "", None],
+        ["(x)|[y]{z}", "^start$ end+", "back\\slash", "~#&-"],
+        [string.printable],
+    ],
+)
+def test_escape_regex(engine: pl.GPUEngine, data):
+    lf = pl.LazyFrame({"a": pl.Series(data, dtype=pl.String)})
+    q = lf.select(pl.col("a").str.escape_regex())
+    assert_gpu_result_equal(q, engine=engine)
