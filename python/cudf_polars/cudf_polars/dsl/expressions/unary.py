@@ -177,30 +177,31 @@ class UnaryFunction(Expr):
                 )
 
     @staticmethod
-    def bound_clip_operand(
+    def _bound_clip_operand(
         expr: Expr,
-        out_type: plc.DataType,
+        out_type: DataType,
         df: DataFrame,
         context: ExecutionContext,
     ) -> plc.Column | plc.Scalar:
         """Evaluate a ``clip`` bound as a scalar or column in ``out_type``."""
         if isinstance(expr, Literal):
-            return plc.Scalar.from_py(expr.value, out_type, stream=df.stream)
-        evaluated = expr.evaluate(df, context=context)
+            casted_literal = expr.astype(out_type)
+            return plc.Scalar.from_py(
+                casted_literal.value, out_type.plc_type, stream=df.stream
+            )
+        evaluated = expr.evaluate(df, context=context).astype(
+            out_type, stream=df.stream
+        )
         if evaluated.is_scalar:
             return evaluated.obj_scalar(stream=df.stream)
-        if evaluated.obj.type().id() != out_type.id():
-            return plc.unary.cast(evaluated.obj, out_type, stream=df.stream)
         return evaluated.obj
 
     @staticmethod
     def _is_clamp_scalar(
-        operand: plc.Column | plc.Scalar | None, out_type: plc.DataType
+        operand: plc.Column | plc.Scalar | None,
     ) -> TypeGuard[plc.Scalar | None]:
         """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
-        return operand is None or (
-            isinstance(operand, plc.Scalar) and operand.type().id() == out_type.id()
-        )
+        return operand is None or isinstance(operand, plc.Scalar)
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -585,21 +586,19 @@ class UnaryFunction(Expr):
         elif self.name == "clip":
             column = self.children[0].evaluate(df, context=context)
             has_min, has_max = self.options
-            out_type = self.dtype.plc_type
             bound_children = iter(self.children[1:])
             lower = (
-                self.bound_clip_operand(next(bound_children), out_type, df, context)
+                self._bound_clip_operand(next(bound_children), self.dtype, df, context)
                 if has_min
                 else None
             )
             upper = (
-                self.bound_clip_operand(next(bound_children), out_type, df, context)
+                self._bound_clip_operand(next(bound_children), self.dtype, df, context)
                 if has_max
                 else None
             )
-            if self._is_clamp_scalar(lower, out_type) and self._is_clamp_scalar(
-                upper, out_type
-            ):
+            out_type = self.dtype.plc_type
+            if self._is_clamp_scalar(lower) and self._is_clamp_scalar(upper):
                 null_bound = plc.Scalar.from_py(None, out_type, stream=df.stream)
                 return Column(
                     plc.replace.clamp(
