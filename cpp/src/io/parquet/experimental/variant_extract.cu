@@ -412,13 +412,19 @@ __device__ device_span<uint8_t const> locate_array_element(device_span<uint8_t c
   size_type const values_base = offsets_start + static_cast<size_type>(offsets_bytes);
   auto const values_extent    = val_len - values_base;
 
-  auto const o0 = read_uint64(val, offsets_start + index * offset_size, offset_size);
-  auto const o1 = read_uint64(val, offsets_start + (index + 1) * offset_size, offset_size);
-  if (!o0 || !o1) { return {}; }
-  auto const start_u = *o0;
-  auto const end_u   = *o1;
-  if (end_u < start_u || end_u > static_cast<uint64_t>(values_extent)) { return {}; }
-  return val.subspan(values_base + start_u, end_u - start_u);
+  auto const start_offset_pos = offsets_start + static_cast<uint64_t>(index) * offset_size;
+  auto const end_offset_pos   = offsets_start + (static_cast<uint64_t>(index) + 1) * offset_size;
+  if (end_offset_pos + offset_size > static_cast<uint64_t>(val_len)) { return {}; }
+
+  auto const start_offset = read_uint64(val, static_cast<size_type>(start_offset_pos), offset_size);
+  auto const end_offset   = read_uint64(val, static_cast<size_type>(end_offset_pos), offset_size);
+  if (!start_offset.has_value() || !end_offset.has_value()) { return {}; }
+  auto const element_start = *start_offset;
+  auto const element_end   = *end_offset;
+  if (element_end < element_start || element_end > static_cast<uint64_t>(values_extent)) {
+    return {};
+  }
+  return val.subspan(values_base + element_start, element_end - element_start);
 }
 
 // The fixed-width signed integers a VARIANT value can be cast to: INT{8,16,32,64}.  Matches the
