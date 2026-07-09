@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -10,6 +10,15 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+
+
+@pytest.mark.skip_on_streaming_engine(
+    reason="global unique_counts across partitions are not implemented"
+)
+def test_unique_counts(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 2, None, 3]})
+    q = df.select(pl.col("a").unique_counts())
+    assert_gpu_result_equal(q, engine=engine)
 
 
 @pytest.mark.parametrize("maintain_order", [False, True], ids=["unstable", "stable"])

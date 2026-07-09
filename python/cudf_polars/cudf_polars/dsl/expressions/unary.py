@@ -121,6 +121,7 @@ class UnaryFunction(Expr):
             "shift_and_fill",
             "top_k",
             "unique",
+            "unique_counts",
             "value_counts",
         }
     )
@@ -246,6 +247,62 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
+        elif self.name == "unique_counts":
+            (values,) = (child.evaluate(df, context=context) for child in self.children)
+            stable_keys = plc.stream_compaction.stable_distinct(
+                plc.Table([values.obj]),
+                [0],
+                plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+                stream=df.stream,
+            ).columns()[0]
+            (keys_table, (counts_table,)) = plc.groupby.GroupBy(
+                plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        values.obj,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    )
+                ],
+                stream=df.stream,
+            )
+            keys_col = keys_table.columns()[0]
+            counts_col = counts_table.columns()[0]
+            if counts_col.type() != self.dtype.plc_type:
+                counts_col = plc.unary.cast(
+                    counts_col, self.dtype.plc_type, stream=df.stream
+                )
+            sorted_counts_table = plc.sorting.sort_by_key(
+                plc.Table([counts_col]),
+                keys_table,
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            sorted_keys_table = plc.sorting.sort(
+                keys_table,
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            gather_map = plc.search.lower_bound(
+                sorted_keys_table,
+                plc.Table([stable_keys]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            return Column(
+                plc.copying.gather(
+                    sorted_counts_table,
+                    gather_map,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if isinstance(self.options[0], str):
