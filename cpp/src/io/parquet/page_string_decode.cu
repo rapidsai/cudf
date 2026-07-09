@@ -1048,7 +1048,8 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
  * @param prefetch_buffer Shared memory buffer for prefetching
  * @param[in,out] buffer_base Offset corresponding to the start of the prefetched buffer
  * @param[in,out] buffer_end Offset corresponding to the end of the prefetched buffer
- * @return Whether the buffer contains valid data
+ * @return True if the buffer holds at least a full length prefix (sizeof(int32_t) bytes) starting
+ * at next_length_offset; false if fewer bytes remain (i.e. we've reached the end of the data)
  */
 template <int32_t prefetch_size, int32_t block_size>
 inline __device__ bool prefetch_string_data(int t,
@@ -1063,7 +1064,10 @@ inline __device__ bool prefetch_string_data(int t,
   buffer_base = next_length_offset;
 
   int32_t const total_bytes_to_copy = cuda::std::min(prefetch_size, dict_size - buffer_base);
-  if (total_bytes_to_copy <= 0) { return false; }  // No data left to copy
+  // Callers read a 4-byte length prefix directly out of the prefetched buffer, so require a full
+  // prefix to be available. Fewer bytes than that means we've reached the end of the data: report
+  // failure so the caller stops rather than reading a partial (out-of-bounds) length.
+  if (total_bytes_to_copy < static_cast<int32_t>(sizeof(int32_t))) { return false; }
   buffer_end = buffer_base + total_bytes_to_copy;
 
   // Nominally, each thread will copy an equal number of bytes; this rounds up.
@@ -1125,9 +1129,10 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
   size_t num_values_written = num_values_to_process;  // Will update below if run out of data
   for (size_t pos = 0; pos < num_values_to_process; pos++) {
     int32_t const string_offset = next_length_offset + sizeof(int32_t);
-    // Benign end-of-data: length prefix itself is past the end (nullable pages over-read).
+    // Natural end-of-data exit: we've consumed all the value bytes, so the next length prefix
+    // would begin at or past the end of the data -- it doesn't exist. Nothing left to read.
     if (string_offset > dict_size) {
-      num_values_written = pos;  // Can't read any more valid data
+      num_values_written = pos;  // Reached the end of the data
       break;
     }
 
@@ -1149,8 +1154,11 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
                       reinterpret_cast<void const*>(&prefetch_buffer[prefetch_read_index]),
                       sizeof(int32_t));
 
-    // Genuine corruption: a valid length prefix claims more bytes than remain in the page.
-    if (string_offset + len > dict_size) {
+    // Genuine corruption: the length prefix is not a valid in-page size. This covers a length
+    // that claims more bytes than remain in the page, and a negative length (never valid in PLAIN,
+    // e.g. from a stray byte shifting the length window). The sum is widened to 64 bits so a
+    // near-INT_MAX corrupt length cannot overflow the comparison itself (int32 overflow is UB).
+    if (len < 0 || static_cast<int64_t>(string_offset) + len > dict_size) {
       num_values_written = pos;  // Data is corrupted or incomplete
       if (t == 0) {
         set_error(static_cast<kernel_error::value_type>(decode_error::STRING_DATA_OVERRUN),
@@ -1209,9 +1217,10 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
     num_values_written = num_values_to_process;  // Will update below if run out of data
     for (size_t pos = 0; pos < num_values_to_process; pos++) {
       uint32_t const string_offset = length_offset + sizeof(int32_t);
-      // Benign end-of-data: length prefix itself is past the end (nullable pages over-read).
+      // Natural end-of-data exit: we've consumed all the value bytes, so the next length prefix
+      // would begin at or past the end of the data -- it doesn't exist. Nothing left to read.
       if (string_offset > dict_size) {
-        num_values_written = pos;  // Can't read any more valid data
+        num_values_written = pos;  // Reached the end of the data
         break;
       }
 
@@ -1221,8 +1230,11 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
                         reinterpret_cast<void const*>(&cur[length_offset]),
                         sizeof(int32_t));
 
-      // Genuine corruption: a valid length prefix claims more bytes than remain in the page.
-      if (string_offset + len > dict_size) {
+      // Genuine corruption: the length prefix is not a valid in-page size. This covers a length
+      // that claims more bytes than remain in the page, and a negative length (never valid in
+      // PLAIN, e.g. from a stray byte shifting the length window). The sum is widened to 64 bits so
+      // a near-INT_MAX corrupt length cannot overflow the comparison itself (int32 overflow is UB).
+      if (len < 0 || static_cast<int64_t>(string_offset) + len > dict_size) {
         num_values_written = pos;  // Data is corrupted or incomplete
         set_error(static_cast<kernel_error::value_type>(decode_error::STRING_DATA_OVERRUN),
                   error_code);
