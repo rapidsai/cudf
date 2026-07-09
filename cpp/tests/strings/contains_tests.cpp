@@ -803,6 +803,15 @@ TEST_F(StringsContainsTests, EndOfString)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
   results = cudf::strings::count_re(view, *prog_ml);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
+
+  pattern  = std::string("abé$");
+  prog     = cudf::strings::regex_program::create(pattern);
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 1, 1});
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  prog_ml = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
+  results = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsContainsTests, DotAll)

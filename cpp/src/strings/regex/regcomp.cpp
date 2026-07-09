@@ -1255,7 +1255,7 @@ std::pair<literal_fast_path, std::string> reprog::check_for_literal_fast_path() 
             std::move(literal)};
   }
   // Final check for ends-with: EOL followed by END
-  if (!has_bol && inst.type == EOL) {
+  if (!has_bol && inst.type == EOL && inst.u1.c == 'Z') {
     auto const id = inst.u2.next_id;
     if (id >= 0 && id < count && _insts[id].type == END) {
       return {literal_fast_path::ENDS_WITH, std::move(literal)};
