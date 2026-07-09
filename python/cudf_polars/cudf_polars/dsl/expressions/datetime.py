@@ -152,6 +152,7 @@ class TemporalFunction(Expr):
         Name.CastTimeUnit,
         Name.Truncate,
         Name.Date,
+        Name.DaysInMonth,
         *_CENTURY_MILLENNIUM_DIVISOR.keys(),
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
@@ -241,6 +242,12 @@ class TemporalFunction(Expr):
                 plc.unary.cast(column.obj, self.dtype.plc_type, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name is TemporalFunction.Name.DaysInMonth:
+            (column,) = columns
+            return Column(
+                plc.datetime.days_in_month(column.obj, stream=df.stream),
+                dtype=DataType(pl.Int16()),
+            ).astype(self.dtype, stream=df.stream)
         elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
             (column,) = columns
             int32 = plc.DataType(plc.TypeId.INT32)

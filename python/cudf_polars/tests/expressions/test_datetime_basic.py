@@ -549,6 +549,26 @@ def test_datetime_truncate_unsupported(engine: pl.GPUEngine, every: str):
 
 
 @pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
+def test_datetime_days_in_month(engine: pl.GPUEngine, dtype):
+    data = pl.Series(
+        [
+            datetime.date(2001, 1, 15),
+            datetime.date(2001, 2, 15),  # non-leap February
+            datetime.date(2000, 2, 15),  # leap February
+            datetime.date(2001, 4, 15),
+            datetime.date(2001, 12, 31),
+            None,
+        ],
+        dtype=pl.Date(),
+    ).cast(dtype)
+    ldf = pl.LazyFrame({"dates": data})
+    q = ldf.select(pl.col("dates").dt.days_in_month())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
     "datetime_dtype",
     [
         pl.Datetime("ms"),
