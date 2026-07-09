@@ -158,9 +158,18 @@ def test_unsupported_stringfunction(engine: pl.GPUEngine, ldf):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
-def test_contains_re_non_strict_raises(engine: pl.GPUEngine, ldf):
+def test_contains_re_non_strict(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").str.contains(".", strict=False))
+    assert_gpu_result_equal(q, engine=engine)
 
+
+def test_contains_re_non_strict_invalid(engine: pl.GPUEngine, ldf):
+    q = ldf.select(pl.col("a").str.contains("[", strict=False))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_contains_re_non_strict_libcudf_unsupported(engine: pl.GPUEngine, ldf):
+    q = ldf.select(pl.col("a").str.contains("a{1000}", strict=False))
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
@@ -466,7 +475,10 @@ def test_unsupported_regex_raises(engine: pl.GPUEngine, pattern):
     df = pl.LazyFrame({"a": ["abc"]})
 
     q = df.select(pl.col("a").str.contains(pattern, strict=True))
-    assert_ir_translation_raises(q, engine, NotImplementedError)
+    if pattern == "":
+        assert_gpu_result_equal(q, engine=engine)
+    else:
+        assert_ir_translation_raises(q, engine, NotImplementedError)
 
     q = df.select(pl.col("a").str.count_matches(pattern))
     assert_ir_translation_raises(q, engine, NotImplementedError)

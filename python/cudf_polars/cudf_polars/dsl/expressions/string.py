@@ -160,7 +160,7 @@ class StringFunction(Expr):
     # backslash via a back-reference replacement template.
     _ESCAPE_REGEX_PATTERN: ClassVar[str] = r"([#$&()*+\-.?\[\\\]\^{|}~])"
     _ESCAPE_REGEX_REPLACEMENT: ClassVar[str] = r"\\1"
-    __slots__ = ("_regex_program", "name", "options")
+    __slots__ = ("_empty_regex", "_invalid_regex", "_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
 
     def __init__(
@@ -175,6 +175,8 @@ class StringFunction(Expr):
         self.name = name
         self.children = children
         self.is_pointwise = self.name != StringFunction.Name.ConcatVertical
+        self._empty_regex = False
+        self._invalid_regex = False
         self._validate_input()
 
     def _validate_input(self) -> None:
@@ -193,16 +195,22 @@ class StringFunction(Expr):
         elif self.name is StringFunction.Name.Contains:
             literal, strict = self.options
             if not literal:
-                if not strict:
-                    raise NotImplementedError(
-                        f"{strict=} is not supported for regex contains"
-                    )
                 if not isinstance(self.children[1], Literal):
                     raise NotImplementedError(
                         "Regex contains only supports a scalar pattern"
                     )
                 pattern = self.children[1].value
-                self._regex_program = self._create_regex_program(pattern)
+                if pattern == "":
+                    self._empty_regex = True
+                elif strict:
+                    self._regex_program = self._create_regex_program(pattern)
+                else:
+                    try:
+                        re.compile(pattern)
+                    except re.error:
+                        self._invalid_regex = True
+                    else:
+                        self._regex_program = self._create_regex_program(pattern)
         elif self.name is StringFunction.Name.EscapeRegex:
             self._regex_program = self._create_regex_program(self._ESCAPE_REGEX_PATTERN)
         elif self.name is StringFunction.Name.Extract:
@@ -454,6 +462,28 @@ class StringFunction(Expr):
                     plc.strings.find.contains(column.obj, pattern, stream=df.stream),
                     dtype=self.dtype,
                 )
+            elif self._invalid_regex:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                        column.size,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            elif self._empty_regex:
+                result = plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        py_val=True, dtype=self.dtype.plc_type, stream=df.stream
+                    ),
+                    column.size,
+                    stream=df.stream,
+                )
+                if column.obj.null_mask():
+                    result = result.with_mask(
+                        column.obj.null_mask(), column.obj.null_count()
+                    )
+                return Column(result, dtype=self.dtype)
             else:
                 return Column(
                     plc.strings.contains.contains_re(
