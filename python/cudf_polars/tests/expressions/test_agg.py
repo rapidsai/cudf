@@ -133,6 +133,15 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    reason="global mode across partitions is not implemented"
+)
+def test_mode(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1]})
+    q = df.select(pl.col("a").mode())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "data",
     [
