@@ -242,9 +242,9 @@ class UnaryFunction(Expr):
                 plc.types.NanEquality.ALL_EQUAL,
                 stream=df.stream,
             )
-            if indices.type() != self.dtype.plc_type:
-                indices = plc.unary.cast(indices, self.dtype.plc_type, stream=df.stream)
-            return Column(indices, dtype=self.dtype)
+            return Column(indices, dtype=DataType(pl.Int32())).astype(
+                self.dtype, stream=df.stream
+            )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(

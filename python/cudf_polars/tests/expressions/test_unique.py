@@ -12,9 +12,6 @@ from cudf_polars.testing.asserts import (
 )
 
 
-@pytest.mark.skip_on_streaming_engine(
-    reason="global arg_unique indexes across partitions are not implemented"
-)
 def test_arg_unique(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 2, None, 3]})
     q = df.select(pl.col("a").arg_unique())
