@@ -513,7 +513,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
              options.get_row_groups(),
              options.is_enabled_use_jit_filter(),
              options.is_enabled_case_sensitive_names(),
-             options.is_enabled_prepend_source_index_column()},
+             options.is_enabled_prepend_source_index_column(),
+             options.is_enabled_prepend_row_index_column()},
     _sources{std::move(sources)},
     _output_chunk_read_limit{chunk_read_limit},
     _input_pass_read_limit{pass_read_limit}
@@ -876,6 +877,13 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
+  // Row-range of the current output chunk relative to the current row group selection.
+  auto const read_info =
+    (_file_itm_data._current_input_pass < _file_itm_data.num_passes())
+      ? _pass_itm_data->subpass
+          ->output_chunk_read_info[_pass_itm_data->subpass->current_output_chunk]
+      : row_range{0, 0};
+
   // advance output chunk/subpass/pass info for non-empty tables if and only if we are in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     auto& pass    = *_pass_itm_data;
@@ -886,15 +894,27 @@ table_with_metadata reader_impl::finalize_output(read_mode mode,
   // increment the output chunk count
   _file_itm_data._output_chunk_count++;
 
-  // Prepend the source index column if requested
-  if (_options.prepend_source_index_column) {
-    prepend_source_index_column(out_metadata.num_rows_per_source, out_columns);
-    out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
-                                     column_name_info{.name = "src_idx", .is_nullable = false});
+  // Prepend the source and row index columns if requested
+  {
+    if (_options.prepend_row_index_column) {
+      out_columns.emplace(out_columns.begin(), synthesize_row_index_column(read_info));
+      out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
+                                       column_name_info{.name = "row_index", .is_nullable = false});
+    }
+    if (_options.prepend_source_index_column) {
+      out_columns.emplace(out_columns.begin(),
+                          synthesize_source_index_column(out_metadata.num_rows_per_source));
+      out_metadata.schema_info.emplace(
+        out_metadata.schema_info.begin(),
+        column_name_info{.name = "source_index", .is_nullable = false});
+    }
   }
 
-  // Compute the final filter expression incorporating any column reference offsets in _expr_conv
-  auto const final_filter      = compute_offset_filter();
+  // Offset column references in `_expr_conv` by the number of prepended columns
+  auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column) +
+                                  static_cast<size_type>(_options.prepend_row_index_column);
+  auto const final_filter =
+    offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
   auto const final_filter_expr = final_filter.get_converted_expr();
 
   // check if the output filter AST expression (= _expr_conv.get_converted_expr()) exists

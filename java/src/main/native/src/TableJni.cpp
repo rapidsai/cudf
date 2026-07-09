@@ -223,7 +223,7 @@ class native_arrow_ipc_writer_handle final {
     return col_meta;
   }
 
-  std::string& get_column_name(const size_t idx)
+  std::string& get_column_name(size_t const idx)
   {
     if (idx < 0 || idx >= column_names.size()) {
       throw cudf::jni::jni_exception("Missing names for columns or nested struct columns");
@@ -1199,13 +1199,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_sortOrder(JNIEnv* env,
     cudf::jni::native_jpointerArray<cudf::column_view> n_sort_keys_columns(env,
                                                                            j_sort_keys_columns);
     jsize num_columns = n_sort_keys_columns.size();
-    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    cudf::jni::native_jbooleanArray const n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(
       env, num_columns_is_desc == num_columns, "columns and is_descending lengths don't match", 0);
 
-    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    cudf::jni::native_jbooleanArray const n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env,
@@ -1243,13 +1243,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_orderBy(JNIEnv* env,
     cudf::jni::native_jpointerArray<cudf::column_view> n_sort_keys_columns(env,
                                                                            j_sort_keys_columns);
     jsize num_columns = n_sort_keys_columns.size();
-    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    cudf::jni::native_jbooleanArray const n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(
       env, num_columns_is_desc == num_columns, "columns and is_descending lengths don't match", 0);
 
-    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    cudf::jni::native_jbooleanArray const n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env,
@@ -1290,9 +1290,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv* env,
     cudf::jni::auto_set_device(env);
     cudf::jni::native_jpointerArray<cudf::table_view> n_table_handles(env, j_table_handles);
 
-    const cudf::jni::native_jintArray n_sort_key_indexes(env, j_sort_key_indexes);
+    cudf::jni::native_jintArray const n_sort_key_indexes(env, j_sort_key_indexes);
     jsize num_columns = n_sort_key_indexes.size();
-    const cudf::jni::native_jbooleanArray n_is_descending(env, j_is_descending);
+    cudf::jni::native_jbooleanArray const n_is_descending(env, j_is_descending);
     jsize num_columns_is_desc = n_is_descending.size();
 
     JNI_ARG_CHECK(env,
@@ -1300,7 +1300,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_merge(JNIEnv* env,
                   "columns and is_descending lengths don't match",
                   NULL);
 
-    const cudf::jni::native_jbooleanArray n_are_nulls_smallest(env, j_are_nulls_smallest);
+    cudf::jni::native_jbooleanArray const n_are_nulls_smallest(env, j_are_nulls_smallest);
     jsize num_columns_null_smallest = n_are_nulls_smallest.size();
 
     JNI_ARG_CHECK(env,
@@ -4428,6 +4428,8 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
                                                       jintArray j_keys,
                                                       jintArray j_orderby_column_indices,
                                                       jbooleanArray j_is_orderby_ascending,
+                                                      jbooleanArray j_is_orderby_nulls_first,
+                                                      jintArray j_orderby_offsets,
                                                       jintArray j_aggregate_column_indices,
                                                       jlongArray j_agg_instances,
                                                       jintArray j_min_periods,
@@ -4441,6 +4443,8 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
   JNI_NULL_CHECK(env, j_keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, j_orderby_column_indices, "input orderby_column_indices are null", NULL);
   JNI_NULL_CHECK(env, j_is_orderby_ascending, "input orderby_ascending is null", NULL);
+  JNI_NULL_CHECK(env, j_is_orderby_nulls_first, "input orderby_nulls_first is null", NULL);
+  JNI_NULL_CHECK(env, j_orderby_offsets, "input orderby_offsets are null", NULL);
   JNI_NULL_CHECK(env, j_aggregate_column_indices, "input aggregate_column_indices are null", NULL);
   JNI_NULL_CHECK(env, j_agg_instances, "agg_instances are null", NULL);
   JNI_NULL_CHECK(env, j_preceding, "preceding are null", NULL);
@@ -4457,6 +4461,8 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
     cudf::jni::native_jintArray keys{env, j_keys};
     cudf::jni::native_jintArray orderbys{env, j_orderby_column_indices};
     cudf::jni::native_jbooleanArray orderbys_ascending{env, j_is_orderby_ascending};
+    cudf::jni::native_jbooleanArray orderbys_nulls_first{env, j_is_orderby_nulls_first};
+    cudf::jni::native_jintArray orderby_offsets{env, j_orderby_offsets};
     cudf::jni::native_jintArray values{env, j_aggregate_column_indices};
     cudf::jni::native_jpointerArray<cudf::aggregation> agg_instances(env, j_agg_instances);
     cudf::jni::native_jintArray min_periods{env, j_min_periods};
@@ -4471,70 +4477,161 @@ Java_ai_rapids_cudf_Table_rangeRollingWindowAggregate(JNIEnv* env,
                     "Number of aggregation columns must match number of agg ops, and window-specs",
                     nullptr);
     }
+    JNI_ARG_CHECK(env,
+                  orderby_offsets.size() == values.size() + 1,
+                  "orderby_offsets length must be one more than the number of aggregation columns",
+                  nullptr);
+    JNI_ARG_CHECK(env,
+                  orderbys.size() == orderbys_ascending.size() &&
+                    orderbys.size() == orderbys_nulls_first.size(),
+                  "orderby column-index, ascending, and nulls-first arrays must have equal length",
+                  nullptr);
+    JNI_ARG_CHECK(env,
+                  orderby_offsets[values.size()] == orderbys.size(),
+                  "last orderby_offsets entry must equal the total number of order-by columns",
+                  nullptr);
+    // The CSR offsets must be non-decreasing and start at zero. Combined with the last-entry check
+    // above, this guarantees every per-op slice satisfies 0 <= ob_begin <= ob_end <=
+    // orderbys.size().
+    JNI_ARG_CHECK(
+      env, orderby_offsets[0] == 0, "first orderby_offsets entry must be zero", nullptr);
+    for (int i = 0; i < values.size(); ++i) {
+      JNI_ARG_CHECK(env,
+                    orderby_offsets[i] <= orderby_offsets[i + 1],
+                    "orderby_offsets must be non-decreasing",
+                    nullptr);
+    }
 
     // Extract table-view.
     cudf::table_view groupby_keys{
       input_table->select(std::vector<cudf::size_type>(keys.data(), keys.data() + keys.size()))};
 
+    // Range extents are defined as:
+    // a) 0 == CURRENT ROW
+    // b) 1 == BOUNDED
+    // c) 2 == UNBOUNDED
+    auto constexpr CURRENT_ROW = 0;
+    auto constexpr BOUNDED     = 1;
+    auto constexpr UNBOUNDED   = 2;
+
+    // Clone a (borrowed) rolling_aggregation into an owned unique_ptr, as required by
+    // cudf::rolling_request. The Java side retains ownership of the original aggregation instances.
+    // Each agg is verified to be a rolling_aggregation before this is called, so clone() preserves
+    // its dynamic type and the cast succeeds, mirroring the groupby_aggregation clone idiom above.
+    auto const clone_rolling = [](cudf::rolling_aggregation const& agg) {
+      return std::unique_ptr<cudf::rolling_aggregation>(
+        dynamic_cast<cudf::rolling_aggregation*>(agg.clone().release()));
+    };
+
     std::vector<std::unique_ptr<cudf::column>> result_columns;
     for (int i(0); i < values.size(); ++i) {
-      int agg_column_index                     = values[i];
-      cudf::column_view const& order_by_column = input_table->column(orderbys[i]);
-      cudf::data_type order_by_type            = order_by_column.type();
-      cudf::data_type duration_type            = order_by_type;
-
-      // Range extents are defined as:
-      // a) 0 == CURRENT ROW
-      // b) 1 == BOUNDED
-      // c) 2 == UNBOUNDED
-      // Must set unbounded_type for only the BOUNDED case.
-      auto constexpr CURRENT_ROW = 0;
-      auto constexpr BOUNDED     = 1;
-      auto constexpr UNBOUNDED   = 2;
-      if (preceding_extent[i] != BOUNDED || following_extent[i] != BOUNDED) {
-        switch (order_by_type.id()) {
-          case cudf::type_id::TIMESTAMP_DAYS:
-            duration_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
-            break;
-          case cudf::type_id::TIMESTAMP_SECONDS:
-            duration_type = cudf::data_type{cudf::type_id::DURATION_SECONDS};
-            break;
-          case cudf::type_id::TIMESTAMP_MILLISECONDS:
-            duration_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
-            break;
-          case cudf::type_id::TIMESTAMP_MICROSECONDS:
-            duration_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
-            break;
-          case cudf::type_id::TIMESTAMP_NANOSECONDS:
-            duration_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
-            break;
-          default: break;
-        }
-      }
+      int agg_column_index = values[i];
 
       cudf::rolling_aggregation* agg = dynamic_cast<cudf::rolling_aggregation*>(agg_instances[i]);
       JNI_ARG_CHECK(
         env, agg != nullptr, "aggregation is not an instance of rolling_aggregation", nullptr);
 
-      auto const make_window_bounds = [&](auto const& range_extent, auto const* p_scalar) {
-        if (range_extent == CURRENT_ROW) {
-          return cudf::range_window_bounds::current_row(duration_type);
-        } else if (range_extent == UNBOUNDED) {
-          return cudf::range_window_bounds::unbounded(duration_type);
-        } else {
-          return cudf::range_window_bounds::get(*p_scalar);
-        }
-      };
+      // orderby_offsets is CSR-style with length == values.size() + 1; ob_begin/ob_end
+      // delimit this op's order-by slice, and ob_count is the slice length.
+      int const ob_begin = orderby_offsets[i];
+      int const ob_end   = orderby_offsets[i + 1];
+      int const ob_count = ob_end - ob_begin;
 
-      result_columns.emplace_back(cudf::grouped_range_rolling_window(
-        groupby_keys,
-        order_by_column,
-        orderbys_ascending[i] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
-        input_table->column(agg_column_index),
-        make_window_bounds(preceding_extent[i], preceding[i]),
-        make_window_bounds(following_extent[i], following[i]),
-        min_periods[i],
-        *agg));
+      if (ob_count == 1) {
+        // Single order-by column: use the legacy range_window_bounds overload, which deduces null
+        // ordering from the data and supports bounded scalar ranges.
+        cudf::column_view const& order_by_column = input_table->column(orderbys[ob_begin]);
+        cudf::data_type order_by_type            = order_by_column.type();
+        cudf::data_type duration_type            = order_by_type;
+
+        // Must set the duration type for only the non-BOUNDED cases.
+        if (preceding_extent[i] != BOUNDED || following_extent[i] != BOUNDED) {
+          switch (order_by_type.id()) {
+            case cudf::type_id::TIMESTAMP_DAYS:
+              duration_type = cudf::data_type{cudf::type_id::DURATION_DAYS};
+              break;
+            case cudf::type_id::TIMESTAMP_SECONDS:
+              duration_type = cudf::data_type{cudf::type_id::DURATION_SECONDS};
+              break;
+            case cudf::type_id::TIMESTAMP_MILLISECONDS:
+              duration_type = cudf::data_type{cudf::type_id::DURATION_MILLISECONDS};
+              break;
+            case cudf::type_id::TIMESTAMP_MICROSECONDS:
+              duration_type = cudf::data_type{cudf::type_id::DURATION_MICROSECONDS};
+              break;
+            case cudf::type_id::TIMESTAMP_NANOSECONDS:
+              duration_type = cudf::data_type{cudf::type_id::DURATION_NANOSECONDS};
+              break;
+            default: break;
+          }
+        }
+
+        auto const make_window_bounds = [&](auto const& range_extent, auto const* p_scalar) {
+          if (range_extent == CURRENT_ROW) {
+            return cudf::range_window_bounds::current_row(duration_type);
+          } else if (range_extent == UNBOUNDED) {
+            return cudf::range_window_bounds::unbounded(duration_type);
+          } else {
+            return cudf::range_window_bounds::get(*p_scalar);
+          }
+        };
+
+        result_columns.emplace_back(cudf::grouped_range_rolling_window(
+          groupby_keys,
+          order_by_column,
+          orderbys_ascending[ob_begin] ? cudf::order::ASCENDING : cudf::order::DESCENDING,
+          input_table->column(agg_column_index),
+          make_window_bounds(preceding_extent[i], preceding[i]),
+          make_window_bounds(following_extent[i], following[i]),
+          min_periods[i],
+          *agg));
+      } else {
+        // Multi-column order-by: use the table overload. Only peer-frame bounds (UNBOUNDED and
+        // CURRENT_ROW) are supported; bounded scalar ranges are rejected on the Java side, but
+        // guard here as defense in depth.
+        JNI_ARG_CHECK(env,
+                      preceding_extent[i] != BOUNDED && following_extent[i] != BOUNDED,
+                      "Multi-column RANGE windows do not support bounded scalar ranges",
+                      nullptr);
+
+        std::vector<cudf::size_type> ob_indices(orderbys.data() + ob_begin,
+                                                orderbys.data() + ob_end);
+        cudf::table_view order_by_table{input_table->select(ob_indices)};
+
+        std::vector<cudf::order> orders;
+        std::vector<cudf::null_order> null_orders;
+        orders.reserve(ob_count);
+        null_orders.reserve(ob_count);
+        for (int j = ob_begin; j < ob_end; ++j) {
+          orders.push_back(orderbys_ascending[j] ? cudf::order::ASCENDING
+                                                 : cudf::order::DESCENDING);
+          null_orders.push_back(orderbys_nulls_first[j] ? cudf::null_order::BEFORE
+                                                        : cudf::null_order::AFTER);
+        }
+
+        auto const to_range_window_type = [&](int range_extent) -> cudf::range_window_type {
+          if (range_extent == CURRENT_ROW) {
+            return cudf::current_row{};
+          } else {
+            return cudf::unbounded{};
+          }
+        };
+
+        std::vector<cudf::rolling_request> requests;
+        requests.push_back(cudf::rolling_request{
+          input_table->column(agg_column_index), min_periods[i], clone_rolling(*agg)});
+
+        auto const result = cudf::grouped_range_rolling_window(
+          groupby_keys,
+          order_by_table,
+          cudf::host_span<cudf::order const>{orders},
+          cudf::host_span<cudf::null_order const>{null_orders},
+          to_range_window_type(preceding_extent[i]),
+          to_range_window_type(following_extent[i]),
+          cudf::host_span<cudf::rolling_request const>{requests});
+        auto result_cols = result->release();
+        result_columns.emplace_back(std::move(result_cols[0]));
+      }
     }
 
     auto result_table = std::make_unique<cudf::table>(std::move(result_columns));

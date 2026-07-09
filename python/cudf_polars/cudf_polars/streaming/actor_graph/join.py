@@ -40,6 +40,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     CUDF_ROW_LIMIT,
     MAX_ROWS_PER_PARTITION,
     ChannelManager,
+    ChunkStore,
     NormalizedPartitioning,
     TableSizeStats,
     _sample_chunks,
@@ -344,6 +345,7 @@ async def _broadcast_join(
             ir,
             left_metadata.partitioning,
             child_ir=ir.children[0],
+            context=context,
         )
     else:
         small_ch, large_ch = ch_left, ch_right
@@ -355,6 +357,7 @@ async def _broadcast_join(
                 ir,
                 right_metadata.partitioning,
                 child_ir=ir.children[1],
+                context=context,
             )
             if ir.options[0] == "Right"
             else None
@@ -1213,11 +1216,22 @@ async def _choose_strategy(
         keys=names_to_indices(ir.right_on, ir.children[1].schema, concrete_prefix=True),
     )
 
-    if left_partitioning.is_aligned_with(right_partitioning, context.br()):
+    hash_chunkwise = isinstance(
+        left_partitioning.inter_rank_scheme, HashScheme
+    ) and isinstance(right_partitioning.inter_rank_scheme, HashScheme)
+    if hash_chunkwise and left_partitioning.is_aligned_with(
+        right_partitioning, context.br()
+    ):
         # We can use a chunkwise join
         chunkwise = True
-        left_sample = TableSizeStats(total_chunks=left_metadata.local_count)
-        right_sample = TableSizeStats(total_chunks=right_metadata.local_count)
+        left_sample = TableSizeStats(
+            chunks=ChunkStore(context),
+            total_chunks=left_metadata.local_count,
+        )
+        right_sample = TableSizeStats(
+            chunks=ChunkStore(context),
+            total_chunks=right_metadata.local_count,
+        )
     else:
         # Need to shuffle or broadcast - Use sampled data to choose a strategy
         chunkwise = False

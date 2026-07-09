@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,6 +19,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup column_reduction
  * @{
  * @file
+ * @brief API for counting the number of distinct elements in a column
  */
 
 /**

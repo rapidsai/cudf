@@ -18,7 +18,7 @@ files:
       - cuda_version
       - cudf_polars_trace
       - depends_on_cupy
-      - depends_on_cuda_python
+      - depends_on_cuda_bindings
       - depends_on_dask_cuda
       - depends_on_libkvikio
       - depends_on_librmm
@@ -217,13 +217,13 @@ files:
       - run_common
       - run_cudf
       - pyarrow_run
+      - depends_on_cuda_bindings
       - depends_on_cupy
       - depends_on_libcudf
       - depends_on_numba_cuda
       - depends_on_numba_cuda_mlir
       - depends_on_pylibcudf_pyarrow
       - depends_on_rmm
-      - depends_on_cuda_python
   py_test_cudf:
     output: pyproject
     pyproject_dir: python/cudf
@@ -293,10 +293,10 @@ files:
     extras:
       table: project
     includes:
+      - depends_on_cuda_bindings
       - depends_on_libcudf
       - depends_on_rmm
       - run_pylibcudf
-      - depends_on_cuda_python
   py_run_pylibcudf_numpy:
     output: pyproject
     pyproject_dir: python/pylibcudf
@@ -356,10 +356,10 @@ files:
       table: project
     includes:
       - run_cudf_polars
+      - depends_on_cuda_bindings
       - depends_on_rapidsmpf
       - depends_on_cudf_streaming
       - depends_on_pylibcudf
-      - depends_on_cuda_python
   # TODO(26.10): Remove this alias in favor of dask
   py_run_cudf_polars_experimental:
     output: pyproject
@@ -589,7 +589,7 @@ files:
   test_cudf_polars_compat:
     output: none
     matrix:
-      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41"]
+      polars_compat_version: ["1.35", "1.36", "1.37", "1.38", "1.39", "1.40", "1.41", "1.42"]
     includes:
       - test_cudf_polars_compat
 channels:
@@ -918,18 +918,18 @@ dependencies:
       - output_types: [conda, requirements, pyproject]
         packages:
           - nvtx>=0.2.1
-  depends_on_cuda_python:
+  depends_on_cuda_bindings:
     specific:
       - output_types: [conda, requirements, pyproject]
         matrices:
           - matrix:
               cuda: "12.*"
             packages:
-              - cuda-python>=12.9.2,<13.0
+              - cuda-bindings>=12.9.2,<13.0
           # fallback to CUDA 13 versions if 'cuda' is '13.*' or not provided
           - matrix:
             packages:
-              - cuda-python>=13.0.1,<14.0
+              - cuda-bindings>=13.0.1,<14.0
   run_cudf:
     common:
       - output_types: [conda, requirements, pyproject]
@@ -967,7 +967,7 @@ dependencies:
           # 'nvidia-ml-py' provides the 'pynvml' module
           - &nvidia_ml_py nvidia-ml-py>=12
           - packaging
-          - polars>=1.35,<1.42
+          - polars>=1.35,<1.43
           - typing_extensions>=4.0.0
   run_cudf_polars_dask:
     common:
@@ -1043,6 +1043,20 @@ dependencies:
           - matrix: {dependencies: "oldest"}
             packages:
               - cupy==14.0.1
+          - matrix:
+            packages:
+      - output_types: [conda, requirements, pyproject]
+        matrices:
+          - matrix:
+              dependencies: "oldest"
+              cuda: "12.*"
+            packages:
+              - cuda-bindings==12.9.2
+          - matrix:
+              dependencies: "oldest"
+              cuda: "13.*"
+            packages:
+              - cuda-bindings==13.0.1
           - matrix:
             packages:
       - output_types: requirements
@@ -1196,6 +1210,10 @@ dependencies:
           - {matrix: null, packages: [*libcudf_unsuffixed]}
   depends_on_numba_cuda:
     common:
+      - output_types: [conda, requirements, pyproject]
+        packages:
+        # TODO: Remove after https://github.com/rapidsai/build-planning/issues/301 is resolved.
+        - numba>=0.60.0,<0.65.0
       - output_types: [conda]
         packages:
         - &numba_cuda numba-cuda>=0.22.2
@@ -1737,5 +1755,9 @@ dependencies:
               polars_compat_version: "1.41"
             packages:
               - polars==1.41.*
+          - matrix:
+              polars_compat_version: "1.42"
+            packages:
+              - polars==1.42.*
           - matrix:
             packages:
