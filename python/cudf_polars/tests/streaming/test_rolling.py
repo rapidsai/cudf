@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -9,7 +9,10 @@ import polars as pl
 
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.engine.spmd import SPMDEngine
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 from cudf_polars.testing.engine_utils import warns_on_spmd
 from cudf_polars.utils.versions import POLARS_VERSION_LT_136, POLARS_VERSION_LT_139
 
@@ -89,6 +92,27 @@ def test_over_select(engine, expr):
         }
     )
     assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
+
+
+@pytest.mark.parametrize("strategy", ["forward", "backward"])
+def test_over_cum_sum_fill_null_per_partition(engine, strategy):
+    df = pl.LazyFrame(
+        {
+            "g": [1, 1, 1, 2, 2],
+            "s": [1, 2, 3, 1, 2],
+            "x": [10.0, None, 5.0, 20.0, None],
+        }
+    )
+    expr = pl.col("x").cum_sum().fill_null(strategy=strategy).over("g", order_by="s")
+    assert_gpu_result_equal(df.select(expr), engine=engine, check_row_order=True)
+
+
+def test_over_rank_fill_null_fails_translation(engine):
+    df = pl.LazyFrame({"g": [1, 1, 2, 2, 2, 1], "x": [1, 2, 3, 4, 5, 6]})
+    q = df.select(
+        pl.col("x").rank().fill_null(strategy="forward").over("g", order_by="x")
+    )
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_over_with_columns(engine):

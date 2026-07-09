@@ -1103,12 +1103,32 @@ def _(
 
         named_aggs = [agg for agg, _ in aggs]
 
+        for named_agg in named_aggs:
+            v = named_agg.value
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], expr.UnaryFunction)
+                and v.children[0].name == "rank"
+            ):
+                raise NotImplementedError(
+                    "fill_null with strategy applied to rank() over a window "
+                    "is not supported"
+                )
+
         by_exprs = [
             translator.translate_expr(n=n, schema=schema) for n in node.partition_by
         ]
 
         child_deps = [
-            v.children[0]
+            v.children[0].children[0]
+            if (
+                isinstance(v, expr.UnaryFunction)
+                and v.name == "fill_null_with_strategy"
+                and isinstance(v.children[0], expr.UnaryFunction)
+                and v.children[0].name == "cum_sum"
+            )
+            else v.children[0]
             for ne in named_aggs
             for v in (ne.value,)
             if isinstance(v, expr.Agg)
