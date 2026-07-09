@@ -11,13 +11,13 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -115,6 +115,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "repeat_by",
             "round",
             "set_sorted",
             "shift",
@@ -173,6 +174,8 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "repeat_by" and len(self.children) != 2:
+            raise NotImplementedError("repeat_by only supports one repeat count")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -524,6 +527,65 @@ class UnaryFunction(Expr):
                     if reverse
                     else plc.types.Order.DESCENDING,
                     stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "repeat_by":
+            value, count_column = (
+                child.evaluate(df, context=context) for child in self.children
+            )
+            count_column = count_column.astype(
+                DataType(pl.UInt32()), stream=df.stream, strict=True
+            )
+            if count_column.null_count > 0:
+                repeat_count = Column(
+                    plc.replace.replace_nulls(
+                        count_column.obj,
+                        plc.Scalar.from_py(
+                            0, count_column.dtype.plc_type, stream=df.stream
+                        ),
+                        stream=df.stream,
+                    ),
+                    dtype=count_column.dtype,
+                )
+            else:
+                repeat_count = count_column
+            repeated = plc.filling.repeat(
+                plc.Table([value.obj]), repeat_count.obj, stream=df.stream
+            ).columns()[0]
+            offsets = plc.reduce.scan(
+                repeat_count.obj,
+                plc.aggregation.sum(),
+                plc.reduce.ScanType.EXCLUSIVE,
+                stream=df.stream,
+            )
+            total = plc.reduce.reduce(
+                repeat_count.obj,
+                plc.aggregation.sum(),
+                repeat_count.dtype.plc_type,
+                stream=df.stream,
+            )
+            offsets = plc.concatenate.concatenate(
+                [
+                    offsets,
+                    plc.Column.from_scalar(total, 1, stream=df.stream),
+                ],
+                stream=df.stream,
+            )
+            offsets = plc.unary.cast(
+                offsets, plc.DataType(plc.TypeId.INT32), stream=df.stream
+            )
+            return Column(
+                plc.Column(
+                    self.dtype.plc_type,
+                    value.size,
+                    None,
+                    plc.null_mask.copy_bitmask(count_column.obj, stream=df.stream)
+                    if count_column.null_count > 0
+                    else None,
+                    count_column.null_count,
+                    0,
+                    [offsets, repeated],
                 ),
                 dtype=self.dtype,
             )
