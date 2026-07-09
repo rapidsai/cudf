@@ -602,8 +602,6 @@ class StringFunction(Expr):
             parse_ok = plc.strings.convert.convert_integers.is_integer(
                 plc_column, self.dtype.plc_type, stream=df.stream
             )
-            # Maybe https://github.com/rapidsai/cudf/issues/23201 would simplify
-            # nullifying invalid elements
             if parse_ok.null_count() > 0:
                 # is_integer marks null inputs as null; treat them as
                 # non-parseable so they map to null in the output.
