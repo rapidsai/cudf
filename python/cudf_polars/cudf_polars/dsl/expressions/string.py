@@ -149,6 +149,7 @@ class StringFunction(Expr):
         Name.StripCharsEnd,
         Name.StripPrefix,
         Name.StripSuffix,
+        Name.ToDecimal,
         Name.Uppercase,
         Name.Reverse,
         Name.Tail,
@@ -607,6 +608,23 @@ class StringFunction(Expr):
                         plc_column, stream=df.stream
                     ),
                     self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.ToDecimal:
+            plc_column = self.children[0].evaluate(df, context=context).obj
+            valid = plc.strings.convert.convert_fixed_point.is_fixed_point(
+                plc_column, self.dtype.plc_type, stream=df.stream
+            )
+            decimal_column = plc.strings.convert.convert_fixed_point.to_fixed_point(
+                plc_column, self.dtype.plc_type, stream=df.stream
+            )
+            return Column(
+                plc.copying.copy_if_else(
+                    decimal_column,
+                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                    valid,
                     stream=df.stream,
                 ),
                 dtype=self.dtype,

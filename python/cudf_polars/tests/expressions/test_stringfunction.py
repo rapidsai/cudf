@@ -487,6 +487,15 @@ def test_string_to_float(engine: pl.GPUEngine, str_to_float_data, floating_type)
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("scale", [0, 1, 2, 4])
+def test_string_to_decimal(engine: pl.GPUEngine, scale):
+    ldf = pl.LazyFrame(
+        {"a": ["1.23", "-4.5", None, "0", "123456789.01", "abc", "1.234"]}
+    )
+    q = ldf.select(pl.col("a").str.to_decimal(scale=scale))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_string_from_float(engine: pl.GPUEngine, request, str_from_float_data):
     if str_from_float_data.collect_schema()["a"] == pl.Float32:
         # libcudf will return a string representing the precision out to
