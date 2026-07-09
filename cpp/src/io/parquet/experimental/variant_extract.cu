@@ -462,15 +462,14 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
 // Parse an array-index step token of the form "[<N>]" into its zero-based index. Returns nullopt
 // for any malformed token or an index that does not fit in `size_type` (such an index is out of
 // range for any array, so the caller treats it as a missing element).
-//
-// The index is accumulated in an unsigned 64-bit value so a long digit run cannot overflow the
-// signed `size_type` accumulator (which would be UB) before the range check rejects it.
 __device__ cuda::std::optional<size_type> parse_index_step(cudf::string_view step)
 {
   auto const slen = step.size_bytes();
   auto const* sd  = step.data();
   if (slen < 3 || sd[0] != '[' || sd[slen - 1] != ']') { return cuda::std::nullopt; }
 
+  // The index is accumulated in an unsigned 64-bit value so a long digit run cannot overflow the
+  // signed `size_type` accumulator (which would be UB) before the range check rejects it.
   uint64_t index = 0;
   for (size_type k = 1; k < slen - 1; ++k) {
     char const c = sd[k];
