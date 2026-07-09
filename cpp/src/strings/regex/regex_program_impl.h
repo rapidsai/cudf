@@ -5,7 +5,7 @@
 #pragma once
 
 #include "glushkov.cuh"
-#include "glushkov_regcomp.h"
+#include "glushkov_regcomp.hpp"
 #include "regcomp.h"
 #include "regex.cuh"
 

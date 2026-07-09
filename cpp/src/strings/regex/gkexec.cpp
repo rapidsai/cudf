@@ -4,7 +4,7 @@
  */
 
 #include "strings/regex/glushkov.cuh"
-#include "strings/regex/glushkov_regcomp.h"
+#include "strings/regex/glushkov_regcomp.hpp"
 
 #include <cudf/detail/utilities/cuda_memcpy.hpp>
 #include <cudf/detail/utilities/integer_utils.hpp>

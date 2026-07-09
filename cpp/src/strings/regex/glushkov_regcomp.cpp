@@ -3,8 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "glushkov_regcomp.hpp"
+
+#include "strings/char_types/char_flags.h"
+
+#include <cudf/strings/detail/char_tables.hpp>
+
+#include <algorithm>
+#include <array>
+#include <bit>
+#include <memory>
+#include <tuple>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
 /**
- * @file glushkov_regcomp.cpp
  * @brief Glushkov NFA compiler: ε-elimination from a Thompson NFA.
  *
  * Algorithm overview
@@ -32,21 +46,6 @@
  * Remaining transitions (backward / large-span) are stored as per-position
  * exception successor masks.
  */
-
-#include "glushkov_regcomp.h"
-
-#include "strings/char_types/char_flags.h"
-
-#include <cudf/strings/detail/char_tables.hpp>
-
-#include <algorithm>
-#include <array>
-#include <bit>
-#include <memory>
-#include <tuple>
-#include <unordered_set>
-#include <utility>
-#include <vector>
 
 namespace cudf {
 namespace strings {

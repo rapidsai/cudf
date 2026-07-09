@@ -96,9 +96,20 @@ struct gkprog_device {
    */
   [[nodiscard]] int32_t compute_shared_memory_size() const;
 
+  /**
+   * @brief Returns amount of working memory needed to hold state for a stride of threads.
+   */
   [[nodiscard]] std::pair<std::size_t, int32_t> compute_strided_working_memory(
     int32_t rows, int32_t min_rows = 0, std::size_t requested_max_size = 0) const;
+
+  /**
+   * @brief Sets the working memory pointer for this instance.
+   */
   void set_working_memory(void* buffer, int32_t thread_count, int32_t max_insts = 0);
+
+  /**
+   * @brief Returns number of threads set by set_working_memory
+   */
   [[nodiscard]] __device__ inline int32_t thread_count() const { return _thread_count; }
 
   /**

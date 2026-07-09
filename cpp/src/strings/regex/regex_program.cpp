@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "glushkov_regcomp.h"
+#include "glushkov_regcomp.hpp"
 #include "regex_program_impl.h"
 
 #include <cudf/strings/regex/flags.hpp>

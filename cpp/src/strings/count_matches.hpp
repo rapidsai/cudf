@@ -29,11 +29,12 @@ namespace detail {
  * also need the device program for other work (e.g. extraction) should build it once
  * and pass it here to avoid a redundant device program build.
  *
- * @param d_strings Device view of the input strings column.
- * @param d_prog Device regex program to evaluate on each string.
- * @param strings_count Number of strings (and rows in the output column).
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @tparam The regex prog device instance used for this API
+ * @param d_strings Device view of the input strings column
+ * @param d_prog Device regex program to evaluate on each string
+ * @param strings_count Number of strings (and rows in the output column)
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Integer column of match counts
  */
 template <typename ProgDevice>
