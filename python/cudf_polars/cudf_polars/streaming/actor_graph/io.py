@@ -62,7 +62,7 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.channel import Channel
@@ -572,30 +572,55 @@ async def read_chunk(
 async def parquet_metadata_prefetch_node(
     context: Context,
     ir_context: IRExecutionContext,
-    group_key: tuple[str, ...],
-    channels: tuple[Channel[ArbitraryChunk[MetadataMessagePayload]], ...],
+    ir: StreamingScan,
+    ch_out: Channel[ArbitraryChunk[MetadataMessagePayload]],
     stats: StatsCollector,
-    trace_ir: IR,
 ) -> None:
-    """Fetch parquet metadata once and fan it out to dependent scans."""
-    async with shutdown_on_error(
-        context, *channels, trace_ir=trace_ir, ir_context=ir_context
-    ):
-        cached_parquet_info = await ir_context.to_thread(
-            prefetch_cached_parquet_info_for_paths,
-            list(group_key),
-            stats=stats,
-        )
-        payload = MetadataMessagePayload(
-            group_key=group_key,
-            cached_parquet_info=cached_parquet_info,
-        )
-        for ch in channels:
-            await ch.send(
+    """Fetch parquet metadata for each scan task and send it to the paired scan actor."""
+    async with shutdown_on_error(context, ch_out, trace_ir=ir, ir_context=ir_context):
+        cached_by_key: dict[tuple[str, ...], list[CachedParquetInfo]] = {}
+        for scan in ir.scans:
+            scan = cast("SplitScan | FusedScan", scan)
+            key = tuple[str, ...](scan.paths)
+            if key not in cached_by_key:
+                cached_by_key[key] = await ir_context.to_thread(
+                    prefetch_cached_parquet_info_for_paths,
+                    list(key),
+                    stats=stats,
+                )
+            payload = MetadataMessagePayload(
+                group_key=key,
+                cached_parquet_info=cached_by_key[key],
+            )
+            await ch_out.send(
                 context,
                 Message(0, ArbitraryChunk(payload)),
             )
-            await ch.drain(context)
+        await ch_out.drain(context)
+
+
+def _start_metadata_receiver(
+    context: Context,
+    ch_metadata: Channel[ArbitraryChunk[MetadataMessagePayload]],
+    scans: Sequence[SplitScan | FusedScan],
+) -> tuple[list[asyncio.Future[list[CachedParquetInfo]]], asyncio.Task[None]]:
+    """
+    Receive metadata messages sequentially and expose one Future per scan task.
+
+    A single receiver task preserves channel order while allowing concurrent
+    producers to await only the metadata for their assigned task index.
+    """
+    loop = asyncio.get_running_loop()
+    futures = [loop.create_future() for _ in range(len(scans))]
+
+    async def _receive() -> None:
+        for task_idx, scan in enumerate(scans):
+            msg = await recv_prefetched_parquet_metadata(context, ch_metadata)
+            cached = recv_prefetched_parquet_metadata_handler(msg, tuple(scan.paths))
+            futures[task_idx].set_result(cached)
+
+    receiver_task = asyncio.create_task(_receive())
+    return futures, receiver_task
 
 
 async def recv_prefetched_parquet_metadata(
@@ -631,9 +656,7 @@ async def scan_node(
     ir: StreamingScan,
     ir_context: IRExecutionContext,
     ch_out: Channel[TableChunk],
-    metadata_channels_by_key: dict[
-        tuple[str, ...], Channel[ArbitraryChunk[MetadataMessagePayload]]
-    ],
+    ch_metadata: Channel[ArbitraryChunk[MetadataMessagePayload]] | None,
     *,
     num_producers: int,
     estimated_chunk_bytes: int,
@@ -651,45 +674,37 @@ async def scan_node(
         The execution context for the IR node.
     ch_out
         The output Channel[TableChunk].
-    metadata_channels_by_key
-        Mapping from parquet path tuple to the corresponding metadata channel.
+    ch_metadata
+        Optional channel carrying prefetched parquet metadata messages, one
+        per `SplitScan`/`FusedScan` in `ir.scans` order.
     num_producers
         The number of producers to use for the scan node.
     estimated_chunk_bytes
         Estimated size of each chunk in bytes. Used for memory reservation
         with block spilling to avoid thrashing.
     """
-    scans = ir.scans
+    scans = cast("Sequence[SplitScan | FusedScan]", ir.scans)
+    metadata_futures: list[asyncio.Future[list[CachedParquetInfo]]] | None = None
+    _metadata_receiver_task: asyncio.Task[None] | None = None
+    if ch_metadata is not None:
+        metadata_futures, _metadata_receiver_task = _start_metadata_receiver(
+            context, ch_metadata, scans
+        )
 
-    # A single file split across multiple SplitScans shares one paths key (and
-    # one metadata channel), and those splits may run concurrently across
-    # producers. A channel can only be received once, so memoize a shared
-    # receive Task per key: the first caller starts it, later callers await the
-    # same (possibly already-completed) Task.
-    recv_tasks: dict[tuple[str, ...], asyncio.Task[list[CachedParquetInfo]]] = {}
-
-    async def cached_parquet_info_for_scan(
-        scan: SplitScan | FusedScan,
+    async def cached_parquet_info_for_task(
+        task_idx: int,
     ) -> list[CachedParquetInfo] | None:
-        key = tuple[str, ...](scan.paths)
-        ch_metadata = metadata_channels_by_key.get(key)
-        if ch_metadata is None:
-            # TODO: Figure out what to do here. For parquet Scans with prefetching
-            # enabled, this would be unexpected.
+        if metadata_futures is None:
             return None
+        return await metadata_futures[task_idx]
 
-        async def _recv() -> list[CachedParquetInfo]:
-            msg = await recv_prefetched_parquet_metadata(context, ch_metadata)
-            return recv_prefetched_parquet_metadata_handler(msg, key)
-
-        if key not in recv_tasks:
-            recv_tasks[key] = asyncio.create_task(_recv())
-        return await recv_tasks[key]
+    shutdown_channels: list[Channel[Any]] = [ch_out]
+    if ch_metadata is not None:
+        shutdown_channels.append(ch_metadata)
 
     async with shutdown_on_error(
         context,
-        ch_out,
-        *metadata_channels_by_key.values(),
+        *shutdown_channels,
         trace_ir=ir,
         ir_context=ir_context,
     ) as tracer:
@@ -709,10 +724,7 @@ async def scan_node(
         # skip the lineariser and read the chunks directly
         if len(scans) == 1 or num_producers == 1:
             for seq_num, scan in enumerate(scans):
-                # mypy believes that `scan` is an `IR`, but we know that it's
-                # actually a `FusedScan | SplitScan` because it's `ir.scans`.
-                scan = cast("FusedScan | SplitScan", scan)
-                cached_parquet_info = await cached_parquet_info_for_scan(scan)
+                cached_parquet_info = await cached_parquet_info_for_task(seq_num)
                 await read_chunk(
                     context,
                     scan,
@@ -736,12 +748,11 @@ async def scan_node(
         ]
         for task_idx, scan in enumerate(scans):
             producer_id = task_idx % num_producers
-            # mypy resolves __iter__ on union-of-sequences to the common base (IR)
-            producer_tasks[producer_id].append((task_idx, scan))  # type: ignore[arg-type]
+            producer_tasks[producer_id].append((task_idx, scan))
 
         async def _producer(producer_id: int, ch_out: Channel) -> None:
             for task_idx, scan in producer_tasks[producer_id]:
-                cached_parquet_info = await cached_parquet_info_for_scan(scan)
+                cached_parquet_info = await cached_parquet_info_for_task(task_idx)
                 await read_chunk(
                     context,
                     scan,
@@ -933,20 +944,16 @@ def _(
         nodes[ir] = [native_node, metadata_node]
     else:
         if ir.base_scan.typ == "parquet" and parquet_options.prefetch_file_metadata:
-            # A node with no assigned scans (e.g. a rank that received no files)
-            # is never registered in metadata_channels_by_scan, so default to {}.
-            metadata_channels_by_key = rec.state["metadata_channels_by_scan"].get(
-                ir, {}
-            )
+            ch_metadata = rec.state["metadata_channel_by_scan"].get(ir)
         else:
-            metadata_channels_by_key = {}
+            ch_metadata = None
         nodes[ir] = [
             scan_node(
                 rec.state["context"],
                 ir,
                 rec.state["ir_context"],
                 ch_out,
-                metadata_channels_by_key,
+                ch_metadata,
                 num_producers=num_producers,
                 estimated_chunk_bytes=(
                     plan.estimated_chunk_bytes or executor.target_partition_size

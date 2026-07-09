@@ -54,11 +54,8 @@ if TYPE_CHECKING:
     from cudf_polars.utils.config import StreamingExecutor
 
 
-Paths: TypeAlias = tuple[str, ...]
 MetadataChannel: TypeAlias = Channel[ArbitraryChunk[MetadataMessagePayload]]
-MetadataScanGroups: TypeAlias = dict[Paths, set[StreamingScan]]
-MetadataGroupChannels: TypeAlias = dict[Paths, tuple[MetadataChannel, ...]]
-MetadataChannelsByScan: TypeAlias = dict[StreamingScan, dict[Paths, MetadataChannel]]
+MetadataChannelByScan: TypeAlias = dict[StreamingScan, MetadataChannel]
 
 
 def evaluate_logical_plan(
@@ -219,21 +216,24 @@ def determine_fanout_nodes(
     return fanout_nodes
 
 
-def _collect_scan_metadata_groups(
+def _collect_metadata_scans(
     ir: IR,
     *,
     partition_info: MutableMapping[IR, PartitionInfo],
     config_options: ConfigOptions,
     nranks: int,
-) -> dict[tuple[str, ...], set[StreamingScan]]:
-    groups: defaultdict[tuple[str, ...], set[StreamingScan]] = defaultdict(set)
+) -> tuple[StreamingScan, ...]:
+    """Return non-native parquet StreamingScan nodes that need metadata prefetch."""
     if not config_options.parquet_options.prefetch_file_metadata:
-        return {}
+        return ()
 
+    metadata_scans: list[StreamingScan] = []
     for node in traversal([ir]):
         if not isinstance(node, StreamingScan):
             continue
         if node.base_scan.typ != "parquet":
+            continue
+        if not node.scans:
             continue
         node_partition_info = partition_info[node]
         assert node_partition_info.io_plan is not None, (
@@ -249,23 +249,16 @@ def _collect_scan_metadata_groups(
         )
         if use_native:
             continue
-        for scan in node.scans:
-            groups[tuple(scan.paths)].add(node)
-    return dict(groups)
+        metadata_scans.append(node)
+    return tuple(metadata_scans)
 
 
-def _build_scan_metadata_channels(
+def _build_metadata_channels_by_scan(
     context: Context,
-    metadata_scan_groups: MetadataScanGroups,
-) -> tuple[MetadataGroupChannels, MetadataChannelsByScan]:
-    metadata_group_channels: MetadataGroupChannels = {}
-    metadata_channels_by_scan: MetadataChannelsByScan = {}
-    for key, scans in metadata_scan_groups.items():
-        channels = tuple(context.create_channel() for _ in scans)
-        metadata_group_channels[key] = channels
-        for scan, channel in zip(sorted(scans, key=id), channels, strict=True):
-            metadata_channels_by_scan.setdefault(scan, {})[key] = channel
-    return metadata_group_channels, metadata_channels_by_scan
+    metadata_scans: tuple[StreamingScan, ...],
+) -> MetadataChannelByScan:
+    """Create one metadata channel per eligible StreamingScan actor."""
+    return {scan: context.create_channel() for scan in metadata_scans}
 
 
 def generate_network(
@@ -325,15 +318,13 @@ def generate_network(
     # Get max_io_threads from config (default: 2)
     max_io_threads_global = config_options.executor.max_io_threads
     max_io_threads_local = max(1, max_io_threads_global // max(1, num_io_nodes))
-    metadata_scan_groups = _collect_scan_metadata_groups(
+    metadata_scans = _collect_metadata_scans(
         ir,
         partition_info=partition_info,
         config_options=config_options,
         nranks=comm.nranks,
     )
-    metadata_group_channels, metadata_channels_by_scan = _build_scan_metadata_channels(
-        context, metadata_scan_groups
-    )
+    metadata_channel_by_scan = _build_metadata_channels_by_scan(context, metadata_scans)
 
     # Generate the network
     state: GenState = {
@@ -346,9 +337,8 @@ def generate_network(
         "max_io_threads": max_io_threads_local,
         "stats": stats,
         "collective_id_map": collective_id_map,
-        "metadata_scan_groups": metadata_scan_groups,
-        "metadata_group_channels": metadata_group_channels,
-        "metadata_channels_by_scan": metadata_channels_by_scan,
+        "metadata_scans": metadata_scans,
+        "metadata_channel_by_scan": metadata_channel_by_scan,
     }
     mapper: SubNetGenerator = CachingVisitor(
         generate_ir_sub_network_wrapper, state=state
@@ -359,12 +349,11 @@ def generate_network(
         parquet_metadata_prefetch_node(
             context,
             ir_context,
-            key,
-            state["metadata_group_channels"][key],
+            scan,
+            metadata_channel_by_scan[scan],
             stats,
-            sorted(scans, key=id)[0],
         )
-        for key, scans in state["metadata_scan_groups"].items()
+        for scan in metadata_scans
     ]
 
     # Add node to drain metadata before pull_from_channel

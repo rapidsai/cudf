@@ -19,12 +19,17 @@ from cudf_polars.dsl.ir import (
     Empty,
     IRExecutionContext,
     Scan,
+    Union,
 )
 from cudf_polars.dsl.utils.io import (
     CachedParquetInfo,
     prefetch_parquet_file_metadata_for_ir,
 )
 from cudf_polars.engine.options import StreamingOptions
+from cudf_polars.streaming.actor_graph.core import (
+    _build_metadata_channels_by_scan,
+    _collect_metadata_scans,
+)
 from cudf_polars.streaming.actor_graph.io import (
     MetadataMessagePayload,
     recv_prefetched_parquet_metadata_handler,
@@ -33,6 +38,7 @@ from cudf_polars.streaming.base import (
     DataSourceInfo,
     IOPartitionFlavor,
     IOPartitionPlan,
+    PartitionInfo,
     StatsCollector,
 )
 from cudf_polars.streaming.io import (
@@ -58,6 +64,7 @@ if TYPE_CHECKING:
     import pylibcudf as plc
 
     import cudf_polars.engine.core
+    from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import StreamingEngine
 
 
@@ -689,6 +696,16 @@ def _make_config(target: int) -> ConfigOptions:
     return ConfigOptions.from_polars_engine(engine)
 
 
+def _make_prefetch_config(target: int) -> ConfigOptions:
+    engine = pl.GPUEngine(
+        raise_on_fail=True,
+        executor="streaming",
+        executor_options={"target_partition_size": target},
+        parquet_options={"prefetch_file_metadata": True},
+    )
+    return ConfigOptions.from_polars_engine(engine)
+
+
 @pytest.mark.parametrize(
     "file_size,n_paths,expected_factor,expected_flavor",
     [
@@ -715,6 +732,134 @@ def test_scan_partition_plan_nearest(
     plan = scan_partition_plan(scan, FooStats(scan, file_size), _make_config(10))
     assert plan.factor == expected_factor
     assert plan.flavor == expected_flavor
+
+
+def test_collect_metadata_scans_one_actor_per_streaming_scan() -> None:
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    paths = [f"part.{i}.parquet" for i in range(6)]
+    base_scan = _make_parquet_scan(paths, parquet_options)
+    plan = IOPartitionPlan(9, IOPartitionFlavor.SPLIT_FILES)
+    partition_count = plan.factor * len(paths)
+    streaming_scan = expand_scan_for_rank(
+        base_scan,
+        plan,
+        partition_count,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    assert len(streaming_scan.scans) == partition_count
+    assert len({tuple(scan.paths) for scan in streaming_scan.scans}) == len(paths)
+
+    config_options = _make_prefetch_config(873_630_000)
+    partition_info: dict[IR, PartitionInfo] = {
+        streaming_scan: PartitionInfo(count=partition_count, io_plan=plan),
+    }
+    metadata_scans = _collect_metadata_scans(
+        streaming_scan,
+        partition_info=partition_info,
+        config_options=config_options,
+        nranks=1,
+    )
+    assert metadata_scans == (streaming_scan,)
+
+
+def test_collect_metadata_scans_union_disjoint_paths() -> None:
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    plan = IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES)
+    left = expand_scan_for_rank(
+        _make_parquet_scan(["left.parquet"], parquet_options),
+        plan,
+        1,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    right = expand_scan_for_rank(
+        _make_parquet_scan(["right.parquet"], parquet_options),
+        plan,
+        1,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    union = Union(left.schema, None, False, left, right)  # noqa: FBT003
+    config_options = _make_prefetch_config(10_000)
+    partition_info: dict[IR, PartitionInfo] = {
+        left: PartitionInfo(count=1, io_plan=plan),
+        right: PartitionInfo(count=1, io_plan=plan),
+        union: PartitionInfo(count=2),
+    }
+    metadata_scans = _collect_metadata_scans(
+        union,
+        partition_info=partition_info,
+        config_options=config_options,
+        nranks=1,
+    )
+    assert metadata_scans == (left, right)
+
+
+def test_collect_metadata_scans_skips_empty_rank() -> None:
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    plan = IOPartitionPlan(3, IOPartitionFlavor.SINGLE_READ)
+    paths = ["a.parquet", "b.parquet", "c.parquet"]
+    streaming_scan = expand_scan_for_rank(
+        _make_parquet_scan(paths, parquet_options),
+        plan,
+        1,
+        rank=1,
+        nranks=2,
+        parquet_options=parquet_options,
+    )
+    assert len(streaming_scan.scans) == 0
+    config_options = _make_prefetch_config(10_000)
+    partition_info: dict[IR, PartitionInfo] = {
+        streaming_scan: PartitionInfo(count=0, io_plan=plan),
+    }
+    metadata_scans = _collect_metadata_scans(
+        streaming_scan,
+        partition_info=partition_info,
+        config_options=config_options,
+        nranks=2,
+    )
+    assert metadata_scans == ()
+
+
+def test_build_metadata_channels_by_scan_one_channel_per_scan_actor() -> None:
+    class DummyContext:
+        def __init__(self) -> None:
+            self._channels: list[object] = []
+
+        def create_channel(self) -> object:
+            ch = object()
+            self._channels.append(ch)
+            return ch
+
+    parquet_options = ParquetOptions(prefetch_file_metadata=True)
+    left = expand_scan_for_rank(
+        _make_parquet_scan(["left.parquet"], parquet_options),
+        IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES),
+        1,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    right = expand_scan_for_rank(
+        _make_parquet_scan(["right.parquet"], parquet_options),
+        IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES),
+        1,
+        rank=0,
+        nranks=1,
+        parquet_options=parquet_options,
+    )
+    context = DummyContext()
+    metadata_scans = (left, right)
+    metadata_channel_by_scan = _build_metadata_channels_by_scan(
+        context,
+        metadata_scans,
+    )
+    assert set(metadata_channel_by_scan) == {left, right}
+    assert len(set(metadata_channel_by_scan.values())) == 2
 
 
 def test_recv_prefetched_parquet_metadata_handler_errors() -> None:
