@@ -152,6 +152,7 @@ class TemporalFunction(Expr):
         Name.CastTimeUnit,
         Name.Truncate,
         Name.DaysInMonth,
+        Name.Quarter,
         *_CENTURY_MILLENNIUM_DIVISOR.keys(),
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
@@ -237,6 +238,12 @@ class TemporalFunction(Expr):
             (column,) = columns
             return Column(
                 plc.datetime.days_in_month(column.obj, stream=df.stream),
+                dtype=DataType(pl.Int16()),
+            ).astype(self.dtype, stream=df.stream)
+        elif self.name is TemporalFunction.Name.Quarter:
+            (column,) = columns
+            return Column(
+                plc.datetime.extract_quarter(column.obj, stream=df.stream),
                 dtype=DataType(pl.Int16()),
             ).astype(self.dtype, stream=df.stream)
         elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
