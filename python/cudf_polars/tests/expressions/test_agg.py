@@ -134,6 +134,19 @@ def test_product(engine: pl.GPUEngine, data, dtype):
 
 
 @pytest.mark.parametrize(
+    "data,allow_empty",
+    [
+        ([42], False),
+        ([], True),
+    ],
+)
+def test_item(engine: pl.GPUEngine, data, allow_empty) -> None:
+    df = pl.LazyFrame({"a": pl.Series(data, dtype=pl.Int64)})
+    q = df.select(pl.col("a").item(allow_empty=allow_empty))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [1, None, 3, None, 5],
