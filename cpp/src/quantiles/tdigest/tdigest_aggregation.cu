@@ -25,7 +25,6 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/device_buffer.hpp>
-#include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
@@ -34,6 +33,7 @@
 #include <cuda/iterator>
 #include <cuda/std/span>
 #include <cuda/std/tuple>
+#include <cuda/stream_ref>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
 #include <thrust/iterator/transform_iterator.h>
@@ -1052,32 +1052,18 @@ std::unique_ptr<column> compute_tdigests(int delta,
   auto const num_values = std::distance(centroids_begin, centroids_end);
   // Use `cub::DeviceReduce::ReduceByKey` instead of `thrust::reduce_by_key`: nvcc 13.0
   // mis-compiles thrust's reduce-by-key kernel for sm_100, causing illegal memory accesses
-  {
-    auto temp_mr = cudf::get_current_device_resource_ref();
-    rmm::device_scalar<size_type> num_runs(stream, temp_mr);
-    size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::ReduceByKey(nullptr,
-                                   temp_storage_bytes,
-                                   keys,
-                                   cuda::make_discard_iterator(),
-                                   centroids_begin,
-                                   output,
-                                   num_runs.data(),
-                                   merge_centroids{},
-                                   num_values,
-                                   stream.value());
-    rmm::device_buffer temp_storage(temp_storage_bytes, stream, temp_mr);
-    cub::DeviceReduce::ReduceByKey(temp_storage.data(),
-                                   temp_storage_bytes,
-                                   keys,
-                                   cuda::make_discard_iterator(),
-                                   centroids_begin,
-                                   output,
-                                   num_runs.data(),
-                                   merge_centroids{},
-                                   num_values,
-                                   stream.value());
-  }
+  auto env = cuda::std::execution::env{
+    cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
+    cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
+                               cudf::get_current_device_resource_ref()}};
+  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(keys,
+                                               cuda::make_discard_iterator(),
+                                               centroids_begin,
+                                               output,
+                                               cuda::make_discard_iterator(),
+                                               merge_centroids{},
+                                               num_values,
+                                               env));
 
   // generate offsets column. if we are running in the simple case, cinfo.cluster_start will not
   // be accurate, so we need to compute with a scan. in the non-simple case, cinfo.cluster_start
