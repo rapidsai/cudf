@@ -174,10 +174,9 @@ def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> No
     "expr",
     [
         pl.col("a").sign(),
-        pl.col("a").clip(0, 2),
         pl.col("a").hash(),
     ],
-    ids=["sign", "clip", "hash"],
+    ids=["sign", "hash"],
 )
 def test_unary_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3]})
