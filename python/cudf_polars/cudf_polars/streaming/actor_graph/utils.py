@@ -10,7 +10,7 @@ import itertools
 import operator
 import struct
 import time
-from collections import deque
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from functools import reduce
@@ -23,6 +23,7 @@ from cudf_streaming.channel_metadata import (
     HashScheme,
     OrderKey,
     OrderScheme,
+    Ordering,
     Partitioning,
 )
 from cudf_streaming.table_chunk import (
@@ -36,7 +37,7 @@ from rapidsmpf.streaming.core.message import Message
 
 import cudf_polars.dsl.tracing
 from cudf_polars.containers import DataFrame
-from cudf_polars.dsl.expr import Col, NamedExpr
+from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
 from cudf_polars.dsl.ir import Cache, Filter, GroupBy, HStack, Join, Projection, Select
 from cudf_polars.dsl.tracing import Scope
 from cudf_polars.dsl.utils.naming import names_to_indices
@@ -55,7 +56,6 @@ if TYPE_CHECKING:
         Sequence,
     )
 
-    from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
@@ -63,6 +63,7 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.spillable_messages import SpillableMessages
     from rmm.pylibrmm.stream import Stream
 
+    from cudf_polars.dsl.expr import Expr
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.typing import Schema
@@ -310,36 +311,187 @@ def _update_ordering_indices(
     )
 
 
+def _is_truncate_transparent_cast(expr: Cast) -> bool:
+    src_id = expr.children[0].dtype.id()
+    dst_id = expr.dtype.id()
+    if src_id == dst_id:
+        return True
+    return (
+        src_id == plc.TypeId.INT64 and dst_id == plc.TypeId.TIMESTAMP_NANOSECONDS
+    ) or (src_id == plc.TypeId.TIMESTAMP_NANOSECONDS and dst_id == plc.TypeId.INT64)
+
+
+def _unwrap_truncate_transparent_casts(expr: Expr) -> Expr:
+    while isinstance(expr, Cast) and _is_truncate_transparent_cast(expr):
+        (expr,) = expr.children
+    return expr
+
+
+def _truncate_source_name(expr: Expr) -> str | None:
+    expr = _unwrap_truncate_transparent_casts(expr)
+    if (
+        isinstance(expr, TemporalFunction)
+        and expr.name is TemporalFunction.Name.Truncate
+    ):
+        source = _unwrap_truncate_transparent_casts(expr.children[0])
+        if isinstance(source, Col):
+            return source.name
+    return None
+
+
+def _ordering_derivation(ne: NamedExpr) -> tuple[str, bool] | None:
+    """
+    Return derivation metadata for supported one-column ordering derivations.
+
+    This is intentionally narrow for now: only temporal truncation is recognized.
+    """
+    source_name = _truncate_source_name(ne.value)
+    if source_name is None:
+        return None
+    # Truncated boundaries may be non-strict.
+    return source_name, False
+
+
+def _derived_ordering(
+    ordering: Ordering,
+    ne: NamedExpr,
+    old_to_new_names: dict[str, dict[str, None]],
+    child_schema: Schema,
+    output_schema: Schema,
+    context: Context | None,
+) -> Ordering | None:
+    """Create an ordering for a supported derivation of one key."""
+    if context is None:
+        return None
+
+    derivation = _ordering_derivation(ne)
+    if derivation is None:
+        return None
+    source_name, strict_boundaries = derivation
+
+    old_key_names = indices_to_names(ordering.column_indices, child_schema)
+    try:
+        source_position = old_key_names.index(source_name)
+    except ValueError:
+        return None
+
+    prefix_names = old_key_names[:source_position]
+    if not set(prefix_names).issubset(set(old_to_new_names)):
+        return None
+
+    target_key_names = (
+        *(
+            _preferred_target_name(name, old_to_new_names[name])
+            for name in prefix_names
+        ),
+        ne.name,
+    )
+    new_indices = names_to_indices(target_key_names, output_schema)
+
+    br = context.br()
+    boundary_chunk = ordering.get_boundaries(br)
+    stream = boundary_chunk.stream
+    boundary_df = DataFrame.from_table(
+        boundary_chunk.table_view(),
+        old_key_names,
+        [child_schema[name] for name in old_key_names],
+        stream,
+    )
+    column = ne.evaluate(boundary_df)
+    boundary_columns = [
+        *boundary_chunk.table_view().columns()[:source_position],
+        column.obj,
+    ]
+    boundary_table = plc.concatenate.concatenate(
+        [plc.Table(boundary_columns)],
+        stream=stream,
+        mr=br.device_mr,
+    )
+    boundaries = TableChunk.from_pylibcudf_table(
+        boundary_table,
+        stream,
+        exclusive_view=True,
+        br=br,
+    )
+    keys = tuple(
+        OrderKey(idx, key.order, key.null_order)
+        for idx, key in zip(
+            new_indices,
+            (*ordering.keys[:source_position], ordering.keys[source_position]),
+            strict=True,
+        )
+    )
+    return Ordering(
+        keys,
+        boundaries,
+        strict_boundaries=strict_boundaries,
+    )
+
+
+def _select_column_targets(select: Select) -> dict[str, dict[str, None]]:
+    old_to_new_names: defaultdict[str, dict[str, None]] = defaultdict(dict)
+    for ne in select.exprs:
+        if isinstance(ne.value, Col):
+            old_to_new_names[ne.value.name][ne.name] = None
+    return dict(old_to_new_names)
+
+
+def _preferred_target_name(old_name: str, targets: dict[str, None]) -> str:
+    return old_name if old_name in targets else next(iter(targets))
+
+
 def _remap_scheme_select(
-    select: Select, scheme: PartitioningScheme
+    select: Select, scheme: PartitioningScheme, context: Context | None
 ) -> PartitioningScheme:
     if isinstance(scheme, HashScheme):
-        old_to_new_names = {
-            ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
-        }
+        old_to_new_names = _select_column_targets(select)
         old_key_names = indices_to_names(
             scheme.column_indices, select.children[0].schema
         )
         if set(old_key_names).issubset(set(old_to_new_names)):
             new_indices = names_to_indices(
-                tuple(old_to_new_names[n] for n in old_key_names), select.schema
+                tuple(
+                    _preferred_target_name(n, old_to_new_names[n])
+                    for n in old_key_names
+                ),
+                select.schema,
             )
             return HashScheme(new_indices, scheme.modulus)
         return None
     if isinstance(scheme, OrderScheme):
-        old_to_new_names = {
-            ne.value.name: ne.name for ne in select.exprs if isinstance(ne.value, Col)
-        }
+        old_to_new_names = _select_column_targets(select)
         new_orderings: list[Ordering] = []
         for ordering in scheme.orderings:
             old_key_names = indices_to_names(
                 ordering.column_indices, select.children[0].schema
             )
             if set(old_key_names).issubset(set(old_to_new_names)):
-                new_indices = names_to_indices(
-                    tuple(old_to_new_names[n] for n in old_key_names), select.schema
+                target_key_names = tuple(
+                    _preferred_target_name(n, old_to_new_names[n])
+                    for n in old_key_names
                 )
+                new_indices = names_to_indices(target_key_names, select.schema)
                 new_orderings.append(_update_ordering_indices(ordering, new_indices))
+                if len(old_key_names) == 1:
+                    for alias in old_to_new_names[old_key_names[0]]:
+                        if alias == target_key_names[0]:
+                            continue
+                        new_orderings.append(
+                            _update_ordering_indices(
+                                ordering, names_to_indices((alias,), select.schema)
+                            )
+                        )
+            for ne in select.exprs:
+                derived = _derived_ordering(
+                    ordering,
+                    ne,
+                    old_to_new_names,
+                    select.children[0].schema,
+                    select.schema,
+                    context,
+                )
+                if derived is not None:
+                    new_orderings.append(derived)
         if new_orderings:
             return OrderScheme(new_orderings)
         return None
@@ -384,7 +536,11 @@ def _hstack_to_select(hstack: HStack) -> Select:
 
 
 def maybe_remap_partitioning(
-    ir: IR, partitioning: Partitioning | None, *, child_ir: IR | None = None
+    ir: IR,
+    partitioning: Partitioning | None,
+    *,
+    child_ir: IR | None = None,
+    context: Context | None = None,
 ) -> Partitioning | None:
     """
     Remap partitioning for simple IR nodes.
@@ -398,6 +554,9 @@ def maybe_remap_partitioning(
     child_ir
         The child IR whose schema the partitioning refers to. When None,
         the first child (ir.children[0]) is used.
+    context
+        Runtime context used to materialize transformed boundary tables for
+        derived orderings. When None, only metadata-only remapping is applied.
 
     Returns
     -------
@@ -418,8 +577,8 @@ def maybe_remap_partitioning(
             # HStack is a special case of Select
             ir = _hstack_to_select(ir)
         return Partitioning(
-            inter_rank=_remap_scheme_select(ir, partitioning.inter_rank),
-            local=_remap_scheme_select(ir, partitioning.local),
+            inter_rank=_remap_scheme_select(ir, partitioning.inter_rank, context),
+            local=_remap_scheme_select(ir, partitioning.local, context),
         )
     if isinstance(ir, GroupBy):
         return Partitioning(
