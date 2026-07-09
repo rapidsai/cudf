@@ -106,6 +106,7 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "arg_unique",
             "drop_nans",
             "drop_nulls",
             "extend_constant",
@@ -181,6 +182,18 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name == "arg_unique":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            indices = plc.stream_compaction.distinct_indices(
+                plc.Table([column.obj]),
+                plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+                stream=df.stream,
+            )
+            if indices.type() != self.dtype.plc_type:
+                indices = plc.unary.cast(indices, self.dtype.plc_type, stream=df.stream)
+            return Column(indices, dtype=self.dtype)
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
