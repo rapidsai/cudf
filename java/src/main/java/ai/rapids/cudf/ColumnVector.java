@@ -848,12 +848,11 @@ public final class ColumnVector extends ColumnView {
       columnViews[i] = columns[i].getNativeView();
     }
 
-    long[] mergeOutput = bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId);
-    assert mergeOutput.length == 2;
-    if (mergeOutput[1] == 0) {  // no-op, the current column is unchanged
+    long mergeOutput = bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId);
+    if (mergeOutput == 0) {  // no-op, the current column is unchanged
       return incRefCount();
     }
-    return new ColumnVector(mergeOutput[0]);
+    return new ColumnVector(mergeOutput);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -886,11 +885,11 @@ public final class ColumnVector extends ColumnView {
    * @param baseHandle column view of the column whose null mask is being replaced.
    * @param viewHandles array of views whose null masks are merged, must have identical row counts.
    * @param mergeOp native id of the binary op (BITWISE_AND or BITWISE_OR) used to merge the null masks.
-   * @return two-element array: [native_handle, has_output].
-   *         has_output is 0 when the original is unchanged and no copied column was produced.
+   * @return native handle of the resulting column, or 0 when the original is unchanged
+   *         (a no-op) and no copied column was produced.
    */
-  private static native long[] bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
-                                                          int mergeOp) throws CudfException;
+  private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
+                                                        int mergeOp) throws CudfException;
 
   /**
    * Native method to concatenate columns of lists horizontally (row by row), combining a row

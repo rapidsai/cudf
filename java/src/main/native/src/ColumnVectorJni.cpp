@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -432,41 +432,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sha1(JNIEnv* env,
   JNI_CATCH(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSetValidity(
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSetValidity(
   JNIEnv* env, jobject j_object, jlong base_column, jlongArray column_handles, jint bin_op)
 {
-  JNI_NULL_CHECK(env, base_column, "base column native handle is null", nullptr);
-  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", nullptr);
+  JNI_NULL_CHECK(env, base_column, "base column native handle is null", 0);
+  JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
   JNI_TRY
   {
     cudf::jni::auto_set_device(env);
     cudf::column_view* original_column = reinterpret_cast<cudf::column_view*>(base_column);
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
 
-    // Helper to make array output.
-    auto make_result = [&](std::unique_ptr<cudf::column> output_column) {
-      auto const has_output = output_column != nullptr;
-
-      cudf::jni::native_jlongArray result(env, 2);
-      result[1] = has_output ? 1 : 0;
-      result[0] = cudf::jni::release_as_jlong(output_column);
-      return result.get_jArray();
-    };
-
     // If we have no columns to merge, drop the top-level null mask.
     if (n_cudf_columns.size() == 0) {
-      // if the original column already has no null mask, we can return it back unchanged.
-      if (!original_column->nullable()) { return make_result({}); }
+      // if the original column already has no null mask, we leave it unchanged.
+      // 0 signals to the caller that this was a no-op.
+      if (!original_column->nullable()) { return 0; }
       // otherwise, return a bare copy.
       auto copy = std::make_unique<cudf::column>(*original_column);
       copy->set_null_mask({}, 0);
-      return make_result(std::move(copy));
+      return cudf::jni::release_as_jlong(copy);
     }
 
     auto const op = static_cast<cudf::binary_operator>(bin_op);
     if (op != cudf::binary_operator::BITWISE_AND && op != cudf::binary_operator::BITWISE_OR) {
-      JNI_THROW_NEW(
-        env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation", nullptr);
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation", 0);
     }
 
     // Merge the null masks of the provided columns using the binary op.
@@ -478,7 +468,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSet
 
     // bitmask_and / bitmask_or can return an empty mask, meaning the merged mask is all-valid.
     // If so, we do not need to touch the original mask.
-    if (merge_mask.is_empty()) { return make_result({}); }
+    if (merge_mask.is_empty()) { return 0; }
 
     auto copy = std::make_unique<cudf::column>(*original_column);
 
@@ -493,9 +483,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_bitwiseMergeAndSet
       cudf::get_default_stream(),
       cudf::get_current_device_resource_ref());
 
-    return make_result(std::move(result));
+    return cudf::jni::release_as_jlong(result);
   }
-  JNI_CATCH(env, nullptr);
+  JNI_CATCH(env, 0);
 }
 
 ////////
