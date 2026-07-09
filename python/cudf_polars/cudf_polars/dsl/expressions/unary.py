@@ -588,21 +588,22 @@ class UnaryFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name == "coalesce":
-            child_columns = [
-                child.evaluate(df, context=context) for child in self.children
-            ]
-            first = child_columns[0].astype(self.dtype, stream=df.stream)
+            first_child, *ret = self.children
+            first = first_child.evaluate(df, context=context).astype(
+                self.dtype, stream=df.stream
+            )
             if first.is_scalar:
-                result = plc.Column.from_scalar(
-                    first.obj_scalar(stream=df.stream),
+                result = plc.filling.repeat(
+                    plc.Table([first.obj]),
                     df.num_rows,
                     stream=df.stream,
-                )
+                ).columns()[0]
             else:
                 result = first.obj
-            for candidate in child_columns[1:]:
+            for child in ret:
                 if result.null_count() == 0:
                     break
+                candidate = child.evaluate(df, context=context)
                 cast_candidate = candidate.astype(self.dtype, stream=df.stream)
                 fill = (
                     cast_candidate.obj_scalar(stream=df.stream)
