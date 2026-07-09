@@ -120,6 +120,7 @@ class UnaryFunction(Expr):
             "shift",
             "shift_and_fill",
             "top_k",
+            "top_k_by",
             "unique",
             "value_counts",
         }
@@ -173,6 +174,8 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "top_k_by" and len(self.children) != 3:
+            raise NotImplementedError("top_k_by only supports a single by expression")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -525,6 +528,29 @@ class UnaryFunction(Expr):
                     else plc.types.Order.DESCENDING,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        elif self.name == "top_k_by":
+            value, _k, by = (
+                child.evaluate(df, context=context) for child in self.children
+            )
+            (descending,) = self.options
+            k = cast("Literal", self.children[1]).value
+            sorted_values = plc.sorting.sort_by_key(
+                plc.Table([value.obj]),
+                plc.Table([by.obj]),
+                [
+                    plc.types.Order.ASCENDING
+                    if descending[0]
+                    else plc.types.Order.DESCENDING
+                ],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            ).columns()[0]
+            return Column(
+                plc.copying.slice(
+                    sorted_values, [0, min(k, value.size)], stream=df.stream
+                )[0],
                 dtype=self.dtype,
             )
         elif self.name in ("shift", "shift_and_fill"):
