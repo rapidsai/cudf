@@ -26,12 +26,9 @@ from cudf_polars.dsl.utils.io import (
     prefetch_parquet_file_metadata_for_ir,
 )
 from cudf_polars.engine.options import StreamingOptions
-from cudf_polars.streaming.actor_graph.core import (
-    _build_metadata_channels_by_scan,
-    _collect_metadata_scans,
-)
 from cudf_polars.streaming.actor_graph.io import (
     MetadataMessagePayload,
+    collect_metadata_scans,
     recv_prefetched_parquet_metadata_handler,
 )
 from cudf_polars.streaming.base import (
@@ -755,7 +752,7 @@ def test_collect_metadata_scans_one_actor_per_streaming_scan() -> None:
     partition_info: dict[IR, PartitionInfo] = {
         streaming_scan: PartitionInfo(count=partition_count, io_plan=plan),
     }
-    metadata_scans = _collect_metadata_scans(
+    metadata_scans = collect_metadata_scans(
         streaming_scan,
         partition_info=partition_info,
         config_options=config_options,
@@ -790,7 +787,7 @@ def test_collect_metadata_scans_union_disjoint_paths() -> None:
         right: PartitionInfo(count=1, io_plan=plan),
         union: PartitionInfo(count=2),
     }
-    metadata_scans = _collect_metadata_scans(
+    metadata_scans = collect_metadata_scans(
         union,
         partition_info=partition_info,
         config_options=config_options,
@@ -816,50 +813,13 @@ def test_collect_metadata_scans_skips_empty_rank() -> None:
     partition_info: dict[IR, PartitionInfo] = {
         streaming_scan: PartitionInfo(count=0, io_plan=plan),
     }
-    metadata_scans = _collect_metadata_scans(
+    metadata_scans = collect_metadata_scans(
         streaming_scan,
         partition_info=partition_info,
         config_options=config_options,
         nranks=2,
     )
     assert metadata_scans == ()
-
-
-def test_build_metadata_channels_by_scan_one_channel_per_scan_actor() -> None:
-    class DummyContext:
-        def __init__(self) -> None:
-            self._channels: list[object] = []
-
-        def create_channel(self) -> object:
-            ch = object()
-            self._channels.append(ch)
-            return ch
-
-    parquet_options = ParquetOptions(prefetch_file_metadata=True)
-    left = expand_scan_for_rank(
-        _make_parquet_scan(["left.parquet"], parquet_options),
-        IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES),
-        1,
-        rank=0,
-        nranks=1,
-        parquet_options=parquet_options,
-    )
-    right = expand_scan_for_rank(
-        _make_parquet_scan(["right.parquet"], parquet_options),
-        IOPartitionPlan(1, IOPartitionFlavor.FUSED_FILES),
-        1,
-        rank=0,
-        nranks=1,
-        parquet_options=parquet_options,
-    )
-    context = DummyContext()
-    metadata_scans = (left, right)
-    metadata_channel_by_scan = _build_metadata_channels_by_scan(
-        context,
-        metadata_scans,
-    )
-    assert set(metadata_channel_by_scan) == {left, right}
-    assert len(set(metadata_channel_by_scan.values())) == 2
 
 
 def test_recv_prefetched_parquet_metadata_handler_errors() -> None:

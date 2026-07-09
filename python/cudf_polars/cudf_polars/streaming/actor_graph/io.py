@@ -10,7 +10,7 @@ import io
 import math
 import reprlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 import polars as pl
 
@@ -19,6 +19,7 @@ from cudf_streaming.channel_metadata import ChannelMetadata
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.memory.memory_reservation import opaque_memory_usage
 from rapidsmpf.streaming.chunks.arbitrary import ArbitraryChunk
+from rapidsmpf.streaming.core.channel import Channel
 from rapidsmpf.streaming.core.memory_reserve_or_wait import (
     reserve_memory,
 )
@@ -33,6 +34,7 @@ from cudf_polars.dsl.ir import (
     _prepare_parquet_predicate,
 )
 from cudf_polars.dsl.to_ast import to_parquet_filter
+from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.io import prefetch_cached_parquet_info_for_paths
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
@@ -62,10 +64,9 @@ from cudf_polars.streaming.io import (
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Sequence
+    from collections.abc import Callable, MutableMapping, Sequence
 
     from rapidsmpf.communicator.communicator import Communicator
-    from rapidsmpf.streaming.core.channel import Channel
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.dsl.ir import IR, IRExecutionContext, Scan
@@ -78,7 +79,11 @@ if TYPE_CHECKING:
         StatsCollector,
     )
     from cudf_polars.streaming.io import FusedScan, SplitScan
-    from cudf_polars.utils.config import ParquetOptions
+    from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+
+
+MetadataChannel: TypeAlias = Channel[ArbitraryChunk["MetadataMessagePayload"]]
+MetadataChannelByScan: TypeAlias = dict[StreamingScan, MetadataChannel]
 
 
 @dataclass(frozen=True)
@@ -1093,3 +1098,40 @@ def _(
     ]
 
     return nodes, channels
+
+
+def collect_metadata_scans(
+    ir: IR,
+    *,
+    partition_info: MutableMapping[IR, PartitionInfo],
+    config_options: ConfigOptions,
+    nranks: int,
+) -> list[StreamingScan]:
+    """Return non-native parquet StreamingScan nodes that need metadata prefetch."""
+    if not config_options.parquet_options.prefetch_file_metadata:
+        return []
+
+    metadata_scans: list[StreamingScan] = []
+    for node in traversal([ir]):
+        if not isinstance(node, StreamingScan):
+            continue
+        if node.base_scan.typ != "parquet":
+            continue
+        if not node.scans:
+            continue
+        node_partition_info = partition_info[node]
+        assert node_partition_info.io_plan is not None, (
+            "Scan node must have a partition plan"
+        )
+        use_native = can_use_native_parquet_node(
+            node.base_scan,
+            plan=node_partition_info.io_plan,
+            count=node_partition_info.count,
+            nranks=nranks,
+            parquet_options=config_options.parquet_options,
+            config_options=config_options,
+        )
+        if use_native:
+            continue
+        metadata_scans.append(node)
+    return metadata_scans

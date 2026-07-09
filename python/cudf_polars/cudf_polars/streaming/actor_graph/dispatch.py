@@ -75,7 +75,7 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
-    metadata_scans: tuple[StreamingScan, ...]
+    metadata_scans: list[StreamingScan]
     metadata_channel_by_scan: dict[
         StreamingScan, Channel[ArbitraryChunk[MetadataMessagePayload]]
     ]
