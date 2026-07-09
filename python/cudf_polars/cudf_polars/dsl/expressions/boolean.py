@@ -98,6 +98,7 @@ class BooleanFunction(Expr):
         self.is_pointwise = self.name not in (
             BooleanFunction.Name.All,
             BooleanFunction.Name.Any,
+            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsDuplicated,
             BooleanFunction.Name.IsEmpty,
             BooleanFunction.Name.IsFirstDistinct,
@@ -106,7 +107,6 @@ class BooleanFunction(Expr):
             BooleanFunction.Name.IsUnique,
         )
         if self.name in {
-            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsClose,
         }:
             raise NotImplementedError(
@@ -192,13 +192,17 @@ class BooleanFunction(Expr):
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
         """Evaluate this expression given a dataframe for context."""
-        if self.name is BooleanFunction.Name.IsEmpty:
+        if self.name in (BooleanFunction.Name.IsEmpty, BooleanFunction.Name.HasNulls):
             (child,) = self.children
             column = child.evaluate(df, context=context)
             return Column(
                 plc.Column.from_scalar(
                     plc.Scalar.from_py(
-                        column.size == 0, self.dtype.plc_type, stream=df.stream
+                        column.size == 0
+                        if self.name is BooleanFunction.Name.IsEmpty
+                        else column.null_count > 0,
+                        self.dtype.plc_type,
+                        stream=df.stream,
                     ),
                     1,
                     stream=df.stream,
