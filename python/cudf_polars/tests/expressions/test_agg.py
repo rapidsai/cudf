@@ -133,6 +133,20 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
+@pytest.mark.skip_on_streaming_engine(
+    reason="global arg_min indexes across partitions are not implemented"
+)
+def test_arg_min(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series([1, 2, 2, None, 3], dtype=pl.Int64),
+            "b": pl.Series([None, None, None, None, None], dtype=pl.Int64),
+        }
+    )
+    q = df.select(pl.col("a").arg_min(), pl.col("b").arg_min())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "data",
     [
