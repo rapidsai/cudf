@@ -133,6 +133,12 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
+def test_implode(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, None, 3]})
+    q = df.select(pl.col("a").implode())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "data",
     [
