@@ -113,6 +113,7 @@ class UnaryFunction(Expr):
             "fill_null_with_strategy",
             "gather_every",
             "mask_nans",
+            "min_by",
             "null_count",
             "rank",
             "round",
@@ -173,6 +174,8 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "min_by" and len(self.children) != 2:
+            raise NotImplementedError("min_by only supports a single by expression")
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -191,6 +194,19 @@ class UnaryFunction(Expr):
                     1,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        if self.name == "min_by":
+            value, by = (child.evaluate(df, context=context) for child in self.children)
+            sorted_values = plc.sorting.sort_by_key(
+                plc.Table([value.obj]),
+                plc.Table([by.obj]),
+                [plc.types.Order.ASCENDING],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            ).columns()[0]
+            return Column(
+                plc.copying.slice(sorted_values, [0, 1], stream=df.stream)[0],
                 dtype=self.dtype,
             )
         arg: plc.Column | plc.Scalar
