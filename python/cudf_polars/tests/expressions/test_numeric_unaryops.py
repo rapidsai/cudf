@@ -39,6 +39,7 @@ if TYPE_CHECKING:
         "floor",
         "abs",
         "cot",
+        "log1p",
     ]
 )
 def op(request):

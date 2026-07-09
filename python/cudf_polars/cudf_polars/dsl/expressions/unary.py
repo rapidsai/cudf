@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
 
-import polars as pl
-
 import pylibcudf as plc
 
 from cudf_polars.containers import Column
@@ -136,6 +134,7 @@ class UnaryFunction(Expr):
     _supported_math_fns = frozenset(
         {
             "cot",
+            "log1p",
         }
     )
     _supported_fns = frozenset().union(
@@ -563,83 +562,36 @@ class UnaryFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name in UnaryFunction._supported_math_fns:
-            column = self.children[0].evaluate(df, context=context)
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
             out_type = self.dtype.plc_type
-            operand = column.obj
-            if operand.type().id() != out_type.id():
-                operand = plc.unary.cast(operand, out_type, stream=df.stream)
-            one = plc.expressions.Literal(
-                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
-            )
-            column_ref = plc.expressions.ColumnReference(0)
-            expression = plc.expressions.Operation(
-                plc.expressions.ASTOperator.DIV,
-                one,
-                plc.expressions.Operation(plc.expressions.ASTOperator.TAN, column_ref),
-            )
+            if self.name in ("log1p", "cot"):
+                column_ref = plc.expressions.ColumnReference(0)
+                one = plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+                )
+                if self.name == "log1p":
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.LOG,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.ADD, column_ref, one
+                        ),
+                    )
+                else:
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.DIV,
+                        one,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.TAN, column_ref
+                        ),
+                    )
             return Column(
                 plc.transform.compute_column(
-                    plc.Table([operand]), expression, stream=df.stream
+                    plc.Table([column.obj]), expression, stream=df.stream
                 ),
-                dtype=self.dtype,
-            )
-        elif self.name == "extend_constant":
-            column = self.children[0].evaluate(df, context=context)
-            value_expr = self.children[1]
-            n_expr = self.children[2]
-            if isinstance(n_expr, Literal):
-                count = n_expr.value
-            else:
-                count = (
-                    n_expr.evaluate(df, context=context)
-                    .obj_scalar(stream=df.stream)
-                    .to_py(stream=df.stream)
-                )
-            if count < 0:
-                # Polars raises during runtime
-                raise pl.exceptions.InvalidOperationError("n must not be negative")
-            elif count == 0:
-                return column
-            if isinstance(value_expr, Literal):
-                fill = plc.Scalar.from_py(
-                    value_expr.value, self.dtype.plc_type, stream=df.stream
-                )
-            else:
-                fill = value_expr.evaluate(df, context=context).obj_scalar(
-                    stream=df.stream
-                )
-            extension = plc.Column.from_scalar(fill, count, stream=df.stream)
-            return Column(
-                plc.concatenate.concatenate([column.obj, extension], stream=df.stream),
-                dtype=self.dtype,
-            )
-        elif self.name == "gather_every":
-            (column,) = (child.evaluate(df, context=context) for child in self.children)
-            offset, n = self.options
-            size = column.obj.size()
-            if size == 0 or (offset == 0 and n == 1):
-                return column
-            if offset >= size:
-                return Column(
-                    plc.copying.empty_like(column.obj, stream=df.stream),
-                    dtype=self.dtype,
-                )
-            count = (size - offset + n - 1) // n
-            indices = plc.filling.sequence(
-                count,
-                plc.Scalar.from_py(
-                    offset, plc.DataType(plc.TypeId.INT32), stream=df.stream
-                ),
-                plc.Scalar.from_py(n, plc.DataType(plc.TypeId.INT32), stream=df.stream),
-                stream=df.stream,
-            )
-            return Column(
-                plc.copying.gather(
-                    plc.Table([column.obj]),
-                    indices,
-                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
-                    stream=df.stream,
-                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name in self._OP_MAPPING:
