@@ -83,7 +83,11 @@ def set_random_null_mask_inplace(series, null_probability=0.5):
 def gen_rand_ufunc_input(ufunc, rng, size, low=1, high=10):
     """Generate random input appropriate for a ufunc's valid domain."""
     name = ufunc.__name__
-    if name.startswith("bitwise") or name in ("invert", "left_shift", "right_shift"):
+    if name.startswith("bitwise") or name in (
+        "invert",
+        "left_shift",
+        "right_shift",
+    ):
         return rng.integers(low=low, high=high, size=size)
     if name == "arccosh":
         return rng.uniform(low=0.9, high=10.0, size=size)
