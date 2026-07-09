@@ -131,6 +131,7 @@ class UnaryFunction(Expr):
     _supported_math_fns = frozenset(
         {
             "degrees",
+            "radians",
         }
     )
     _supported_fns = frozenset().union(
@@ -548,15 +549,20 @@ class UnaryFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name in UnaryFunction._supported_math_fns:
-            column = self.children[0].evaluate(df, context=context)
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
+            if self.name == "degrees":
+                factor = 180.0 / math.pi
+            else:
+                # radians
+                factor = math.pi / 180.0
             out_type = self.dtype.plc_type
-            operand = column.obj
-            if operand.type().id() != out_type.id():
-                operand = plc.unary.cast(operand, out_type, stream=df.stream)
-            factor = 180.0 / math.pi
             return Column(
                 plc.binaryop.binary_operation(
-                    operand,
+                    column.obj,
                     plc.Scalar.from_py(factor, out_type, stream=df.stream),
                     plc.binaryop.BinaryOperator.MUL,
                     out_type,
