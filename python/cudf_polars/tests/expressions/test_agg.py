@@ -133,17 +133,15 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
-@pytest.mark.skip_on_streaming_engine(
-    reason="global arg_max indexes across partitions are not implemented"
-)
-def test_arg_max(engine: pl.GPUEngine) -> None:
+@pytest.mark.parametrize("agg", ["arg_max", "arg_min"])
+def test_arg_max_min(engine: pl.GPUEngine, agg: str) -> None:
     df = pl.LazyFrame(
         {
             "a": pl.Series([1, 2, 2, None, 3], dtype=pl.Int64),
             "b": pl.Series([None, None, None, None, None], dtype=pl.Int64),
         }
     )
-    q = df.select(pl.col("a").arg_max(), pl.col("b").arg_max())
+    q = df.select(getattr(pl.col("a"), agg)(), getattr(pl.col("b"), agg)())
     assert_gpu_result_equal(q, engine=engine)
 
 

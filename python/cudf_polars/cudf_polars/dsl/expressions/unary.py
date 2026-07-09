@@ -107,6 +107,7 @@ class UnaryFunction(Expr):
         {
             "as_struct",
             "arg_max",
+            "arg_min",
             "clip",
             "drop_nans",
             "drop_nulls",
@@ -211,13 +212,18 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
-        if self.name == "arg_max":
+        if self.name in ("arg_max", "arg_min"):
             (column,) = (child.evaluate(df, context=context) for child in self.children)
-            result = Column(
+            arg_agg = (
+                plc.aggregation.argmax()
+                if self.name == "arg_max"
+                else plc.aggregation.argmin()
+            )
+            return Column(
                 plc.Column.from_scalar(
                     plc.reduce.reduce(
                         column.obj,
-                        plc.aggregation.argmax(),
+                        arg_agg,
                         plc.DataType(plc.TypeId.INT32),
                         stream=df.stream,
                     ),
@@ -225,8 +231,7 @@ class UnaryFunction(Expr):
                     stream=df.stream,
                 ),
                 dtype=DataType(pl.Int32()),
-            )
-            return result.astype(self.dtype, stream=df.stream)
+            ).astype(self.dtype, stream=df.stream)
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
