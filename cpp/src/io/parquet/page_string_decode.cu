@@ -1048,8 +1048,7 @@ void compute_page_string_sizes_pass2(cudf::detail::hostdevice_span<PageInfo> pag
  * @param prefetch_buffer Shared memory buffer for prefetching
  * @param[in,out] buffer_base Offset corresponding to the start of the prefetched buffer
  * @param[in,out] buffer_end Offset corresponding to the end of the prefetched buffer
- * @return True if the buffer holds at least a full length prefix (sizeof(int32_t) bytes) starting
- * at next_length_offset; false if fewer bytes remain (i.e. we've reached the end of the data)
+ * @return Whether the buffer contains valid data
  */
 template <int32_t prefetch_size, int32_t block_size>
 inline __device__ bool prefetch_string_data(int t,
@@ -1064,10 +1063,7 @@ inline __device__ bool prefetch_string_data(int t,
   buffer_base = next_length_offset;
 
   int32_t const total_bytes_to_copy = cuda::std::min(prefetch_size, dict_size - buffer_base);
-  // Callers read a 4-byte length prefix directly out of the prefetched buffer, so require a full
-  // prefix to be available. Fewer bytes than that means we've reached the end of the data: report
-  // failure so the caller stops rather than reading a partial (out-of-bounds) length.
-  if (total_bytes_to_copy < static_cast<int32_t>(sizeof(int32_t))) { return false; }
+  if (total_bytes_to_copy <= 0) { return false; }  // No data left to copy
   buffer_end = buffer_base + total_bytes_to_copy;
 
   // Nominally, each thread will copy an equal number of bytes; this rounds up.
@@ -1160,15 +1156,15 @@ inline __device__ void read_string_offsets_buffered(page_state_s* s,
     // near-INT_MAX corrupt length cannot overflow the comparison itself (int32 overflow is UB).
     if (len < 0 || static_cast<int64_t>(string_offset) + len > dict_size) {
       num_values_written = pos;  // Data is corrupted or incomplete
-      if (t == 0) {
+      cg::invoke_one(block, [&]() {
         set_error(static_cast<kernel_error::value_type>(decode_error::STRING_DATA_OVERRUN),
                   error_code);
-      }
+      });
       break;
     }
     next_length_offset = string_offset + len;
 
-    if (t == 0) { str_offsets[pos] = string_offset; }
+    cg::invoke_one(block, [&]() { str_offsets[pos] = string_offset; });
   }
 
   // +4 for "stored" length of "next" string that we'll subtract off during decode
@@ -1207,7 +1203,7 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
   __shared__ size_t num_values_written;
   __shared__ uint32_t last_offset;  // offset into data_start
 
-  if (t == 0) {
+  cg::invoke_one(block, [&]() {
     uint8_t const* cur     = s->data_start;
     uint32_t length_offset = 0;
     auto const dict_size   = s->dict_size;
@@ -1246,7 +1242,7 @@ inline __device__ void read_string_offsets_sequential(page_state_s* s,
 
     // +4 for "stored" length of "next" string that we'll subtract off during decode
     last_offset = length_offset + sizeof(int32_t);
-  }
+  });
 
   block.sync();  // Ensure all threads see num_values_written
 
