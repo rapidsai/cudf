@@ -55,7 +55,9 @@ class memory_resources {
    */
   template <typename Resource>
   memory_resources(Resource&& output_mr)
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
     requires std::constructible_from<rmm::device_async_resource_ref, Resource&&>
+#endif
     : _output_mr{std::forward<Resource>(output_mr)},
       _temporary_mr{cudf::get_current_device_resource_ref()}
   {
@@ -73,8 +75,10 @@ class memory_resources {
    */
   template <typename OutputResource, typename TemporaryResource>
   memory_resources(OutputResource&& output_mr, TemporaryResource&& temporary_mr)
+#ifndef DOXYGEN_SHOULD_SKIP_THIS
     requires(std::constructible_from<rmm::device_async_resource_ref, OutputResource &&> and
              std::constructible_from<rmm::device_async_resource_ref, TemporaryResource &&>)
+#endif
     : _output_mr{std::forward<OutputResource>(output_mr)},
       _temporary_mr{std::forward<TemporaryResource>(temporary_mr)}
   {
