@@ -141,6 +141,7 @@ class TemporalFunction(Expr):
     }
     _valid_ops: ClassVar[set[Name]] = {
         *_COMPONENT_MAP.keys(),
+        Name.Round,
         Name.IsLeapYear,
         Name.OrdinalDay,
         Name.ToString,
@@ -151,7 +152,7 @@ class TemporalFunction(Expr):
         Name.TimeStamp,
         Name.CastTimeUnit,
         Name.Truncate,
-        Name.Round,
+        Name.DaysInMonth,
         *_CENTURY_MILLENNIUM_DIVISOR.keys(),
         *_TOTAL_COMPONENT_NANOSECONDS.keys(),
     }
@@ -226,16 +227,6 @@ class TemporalFunction(Expr):
             return column.astype(
                 DataType(pl.Datetime(time_unit)), stream=df_stream
             ).astype(self.dtype, stream=df_stream)
-        elif self.name is TemporalFunction.Name.Truncate:
-            (column, _) = columns
-            return Column(
-                plc.datetime.floor_datetimes(
-                    column.obj,
-                    self.options[0],
-                    stream=df.stream,
-                ),
-                dtype=self.dtype,
-            )
         elif self.name is TemporalFunction.Name.Round:
             (column, _) = columns
             return Column(
@@ -246,6 +237,22 @@ class TemporalFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name is TemporalFunction.Name.Truncate:
+            (column, _) = columns
+            return Column(
+                plc.datetime.floor_datetimes(
+                    column.obj,
+                    self.options[0],
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name is TemporalFunction.Name.DaysInMonth:
+            (column,) = columns
+            return Column(
+                plc.datetime.days_in_month(column.obj, stream=df.stream),
+                dtype=DataType(pl.Int16()),
+            ).astype(self.dtype, stream=df.stream)
         elif self.name in self._CENTURY_MILLENNIUM_DIVISOR:
             (column,) = columns
             int32 = plc.DataType(plc.TypeId.INT32)
