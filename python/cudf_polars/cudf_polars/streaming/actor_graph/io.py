@@ -218,7 +218,7 @@ async def dataframescan_node(
         )
 
         # Build list of IR slices to read
-        ir_slices = []
+        ir_slices: list[DataFrameScan] = []
         # Partial workaround for
         # https://github.com/pola-rs/polars/issues/23214 If a struct column
         # has nulls and is sliced then polars exports invalid validity
@@ -520,7 +520,7 @@ def _(
 
 async def read_chunk(
     context: Context,
-    scan: IR,
+    scan: DataFrameScan | SplitScan | FusedScan,
     seq_num: int,
     ch_out: Channel[TableChunk],
     ir_context: IRExecutionContext,
@@ -554,13 +554,18 @@ async def read_chunk(
     args = scan._non_child_args
     if cached_parquet_info is not None:
         args = (*args[:-1], cached_parquet_info)
+
+    # Help mypy with the type inference of the scan.do_evaluate method.
+    # DataFrameScan, SplitScan, and FusedScan have different signatures for the
+    # do_evaluate method, but we promise that calling with with `scan.args` is fine.
+    do_evaluate: Callable[..., DataFrame] = scan.do_evaluate
     with opaque_memory_usage(
         await reserve_memory(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     ):
         df = await ir_context.to_thread(
-            scan.do_evaluate,
+            do_evaluate,
             *args,
             context=ir_context,
         )
