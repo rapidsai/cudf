@@ -379,10 +379,15 @@ struct compute_page_offset_count {
     // Fixed length byte array: Offsets are fixed, no need to preprocess
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
+    // page_end_row and subpass_end_row are sentinel bounds: they are the first row of the next
+    // page and the first row of the next subpass, respectively. 
+    // However, a list row can span page boundaries, so a page can contain data but have 0 rows. 
+    // That collapses page_end_row onto page_start_row and defeats the sentinel boundaries. 
+    // Treat a 0-row page/subpass as occupying a single row so the sentinels still work.
     auto const page_start_row    = chunk.start_row + page.chunk_row;
-    auto const page_end_row      = page_start_row + page.num_rows;
+    auto const page_end_row      = page_start_row + (page.num_rows == 0 ? 1 : page.num_rows);
     auto const subpass_start_row = skip_rows;
-    auto const subpass_end_row   = subpass_start_row + num_rows;
+    auto const subpass_end_row   = subpass_start_row + (num_rows == 0 ? 1 : num_rows);
 
     if ((page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row)) {
       return 0;  // will skip the page
