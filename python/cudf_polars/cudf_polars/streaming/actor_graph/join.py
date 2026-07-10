@@ -345,6 +345,7 @@ async def _broadcast_join(
             ir,
             left_metadata.partitioning,
             child_ir=ir.children[0],
+            context=context,
         )
     else:
         small_ch, large_ch = ch_left, ch_right
@@ -356,6 +357,7 @@ async def _broadcast_join(
                 ir,
                 right_metadata.partitioning,
                 child_ir=ir.children[1],
+                context=context,
             )
             if ir.options[0] == "Right"
             else None
@@ -1214,7 +1216,12 @@ async def _choose_strategy(
         keys=names_to_indices(ir.right_on, ir.children[1].schema, concrete_prefix=True),
     )
 
-    if left_partitioning.is_aligned_with(right_partitioning, context.br()):
+    hash_chunkwise = isinstance(
+        left_partitioning.inter_rank_scheme, HashScheme
+    ) and isinstance(right_partitioning.inter_rank_scheme, HashScheme)
+    if hash_chunkwise and left_partitioning.is_aligned_with(
+        right_partitioning, context.br()
+    ):
         # We can use a chunkwise join
         chunkwise = True
         left_sample = TableSizeStats(
