@@ -39,7 +39,10 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.temporal import infer_format
+from cudf.utils.temporal import (
+    infer_format,
+    raise_if_datetime_seconds_out_of_bounds,
+)
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
@@ -328,6 +331,30 @@ class StringColumn(ColumnBase, Scannable):
             valid = valid_ts | is_nat
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
+
+            if isinstance(dtype, np.dtype):
+                target_unit = np.datetime_data(dtype)[0]
+            elif isinstance(dtype, pd.DatetimeTZDtype):
+                target_unit = dtype.unit
+            else:
+                target_unit = dtype.pyarrow_dtype.unit
+            if target_unit != "s" and len(without_nat):
+                # libcudf parses directly into int64 values of the
+                # target unit and silently wraps on overflow. Parse to
+                # seconds first (which cannot realistically overflow)
+                # and reject values whose whole-second part falls
+                # outside the target unit's range, like pandas does.
+                with without_nat.access(mode="read", scope="internal"):
+                    seconds = ColumnBase.create(
+                        plc.strings.convert.convert_datetime.to_timestamps(
+                            without_nat.plc_column,
+                            dtype_to_pylibcudf_type(np.dtype("datetime64[s]")),
+                            format,
+                        ),
+                        np.dtype("datetime64[s]"),
+                    )
+                lo, hi = seconds.minmax()
+                raise_if_datetime_seconds_out_of_bounds(lo, hi, target_unit)
 
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
             add_back_nat = is_nat.any()
