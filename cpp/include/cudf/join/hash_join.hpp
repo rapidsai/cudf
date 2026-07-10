@@ -96,15 +96,23 @@ class hash_join {
             rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
-   * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view,
-   * rmm::device_async_resource_ref)
+   * @brief Construct a hash join object for subsequent probe calls.
    *
+   * @note The `hash_join` object must not outlive the table viewed by `right`, else behavior is
+   * undefined.
+   *
+   * @throws std::invalid_argument if the right table has no columns
    * @throws std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
    *
+   * @param right The right table, from which the hash table is built
    * @param has_nulls Flag to indicate if there exists any nulls in the `right` table or
    *                  any `left` table that will be used later for join
+   * @param compare_nulls Controls whether null join-key values should match or not
    * @param load_factor The hash table occupancy ratio in (0,1]. A value of 0.5 means 50% desired
    * occupancy.
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the internal hash table, which must remain
+   *           valid for the lifetime of this object
    */
   hash_join(cudf::table_view const& right,
             nullable_join has_nulls,
