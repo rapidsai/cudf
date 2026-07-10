@@ -40,6 +40,8 @@ if TYPE_CHECKING:
         "abs",
         "cot",
         "log1p",
+        "degrees",
+        "radians",
     ]
 )
 def op(request):

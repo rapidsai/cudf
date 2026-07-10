@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
 
 import polars as pl
@@ -116,6 +117,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "reinterpret",
             "round",
             "set_sorted",
             "shift",
@@ -137,7 +139,9 @@ class UnaryFunction(Expr):
     _supported_math_fns = frozenset(
         {
             "cot",
+            "degrees",
             "log1p",
+            "radians",
         }
     )
     _supported_fns = frozenset().union(
@@ -152,6 +156,7 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "reinterpret",
             "round",
             "set_sorted",
         }
@@ -183,6 +188,16 @@ class UnaryFunction(Expr):
             if method not in {"average", "min", "max", "dense", "ordinal"}:
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
+                )
+        if self.name == "reinterpret":
+            source = children[0].dtype.plc_type
+            target = self.dtype.plc_type
+            if plc.traits.is_floating_point(source) != plc.traits.is_floating_point(
+                target
+            ):
+                raise NotImplementedError(
+                    "reinterpret between integer and floating-point types is not "
+                    "supported"
                 )
 
     @staticmethod
@@ -592,6 +607,9 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "reinterpret":
+            column = self.children[0].evaluate(df, context=context)
+            return column.astype(self.dtype, stream=df.stream)
         elif self.name == "clip":
             column = self.children[0].evaluate(df, context=context)
             has_min, has_max = self.options
@@ -744,12 +762,29 @@ class UnaryFunction(Expr):
                             plc.expressions.ASTOperator.TAN, column_ref
                         ),
                     )
-            return Column(
-                plc.transform.compute_column(
-                    plc.Table([column.obj]), expression, stream=df.stream
-                ),
-                dtype=self.dtype,
-            )
+                return Column(
+                    plc.transform.compute_column(
+                        plc.Table([column.obj]), expression, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            else:
+                if self.name == "degrees":
+                    factor = 180.0 / math.pi
+                else:
+                    # radians
+                    factor = math.pi / 180.0
+                out_type = self.dtype.plc_type
+                return Column(
+                    plc.binaryop.binary_operation(
+                        column.obj,
+                        plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                        plc.binaryop.BinaryOperator.MUL,
+                        out_type,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
