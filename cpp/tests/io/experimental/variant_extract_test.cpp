@@ -633,17 +633,20 @@ TEST_F(ExtractVariantFieldTest, SyntaxErrors)
 
 TEST_F(ExtractVariantFieldTest, LargeDictionaryAndObjectScan)
 {
-  auto const keys = make_numeric_keys(50);
-  auto const meta = build_metadata(keys);
-  auto const val  = build_sequential_int32_object(50);
-  auto col        = wrap_single_variant(meta, val);
-  auto stream     = cudf::test::get_default_stream();
-  auto const i32  = cudf::data_type{cudf::type_id::INT32};
+  auto const keys        = make_numeric_keys(50);
+  auto const meta        = build_metadata(keys);
+  auto const val         = build_sequential_int32_object(50);
+  auto col               = wrap_single_variant(meta, val);
+  auto stream            = cudf::test::get_default_stream();
+  auto const int32_dtype = cudf::data_type{cudf::type_id::INT32};
 
   // First, middle, and last keys each decode to their own field id.
-  auto first = cudf::io::parquet::experimental::extract_variant_field(col, "k00", i32, stream);
-  auto mid   = cudf::io::parquet::experimental::extract_variant_field(col, "k24", i32, stream);
-  auto last  = cudf::io::parquet::experimental::extract_variant_field(col, "k49", i32, stream);
+  auto first =
+    cudf::io::parquet::experimental::extract_variant_field(col, "k00", int32_dtype, stream);
+  auto mid =
+    cudf::io::parquet::experimental::extract_variant_field(col, "k24", int32_dtype, stream);
+  auto last =
+    cudf::io::parquet::experimental::extract_variant_field(col, "k49", int32_dtype, stream);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*first, cudf::test::fixed_width_column_wrapper<int32_t>{0});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*mid, cudf::test::fixed_width_column_wrapper<int32_t>{24});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*last, cudf::test::fixed_width_column_wrapper<int32_t>{49});
@@ -654,8 +657,8 @@ TEST_F(ExtractVariantFieldTest, MalformedVariantDataYieldsNull)
   // The column shape is a valid STRUCT<list<uint8>, list<uint8>>, but the VARIANT bytes are
   // internally inconsistent. Each such row must resolve to a null result rather than throwing or
   // reading out of bounds.
-  auto stream    = cudf::test::get_default_stream();
-  auto const i32 = cudf::data_type{cudf::type_id::INT32};
+  auto stream            = cudf::test::get_default_stream();
+  auto const int32_dtype = cudf::data_type{cudf::type_id::INT32};
 
   struct data_case {
     std::string label;
@@ -677,7 +680,8 @@ TEST_F(ExtractVariantFieldTest, MalformedVariantDataYieldsNull)
   for (auto const& c : cases) {
     SCOPED_TRACE(c.label);
     auto col = wrap_single_variant(c.meta, c.val);
-    auto got = cudf::io::parquet::experimental::extract_variant_field(col, "x", i32, stream);
+    auto got =
+      cudf::io::parquet::experimental::extract_variant_field(col, "x", int32_dtype, stream);
     ASSERT_EQ(got->size(), 1);
     EXPECT_EQ(got->null_count(), 1);
   }
@@ -923,7 +927,7 @@ TEST_F(CastVariantTest, CastSourceTargetMatrix)
   auto const stream = cudf::test::get_default_stream();
 
   struct source_blob {
-    char const* label;
+    std::string label;
     std::vector<uint8_t> bytes;
   };
   std::vector<source_blob> const sources{
@@ -1041,6 +1045,22 @@ TEST_F(CastVariantTest, LongStringDeclaredLengthExceedsPayloadYieldsNull)
     ASSERT_EQ(got->size(), 1);
     EXPECT_EQ(got->null_count(), 1);
   }
+}
+
+TEST_F(CastVariantTest, LongStringPayloadExceedsDeclaredLength)
+{
+  // When more bytes are present than the declared length, decode_string should read exactly the
+  // declared number of bytes and ignore the trailing ones.
+  auto stream    = cudf::test::get_default_stream();
+  auto const hdr = make_variant_primitive(variant_primitive_type::long_string);
+  // Declared length = 3 ("abc"), followed by 5 extra bytes that must be ignored.
+  std::vector<uint8_t> const val{
+    hdr, 0x03, 0x00, 0x00, 0x00, 'a', 'b', 'c', 'x', 'x', 'x', 'x', 'x'};
+  cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
+  auto got = cudf::io::parquet::experimental::cast_variant(
+    values, cudf::data_type{cudf::type_id::STRING}, stream);
+  cudf::test::strings_column_wrapper expected({"abc"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*got, expected);
 }
 
 struct InvalidInputShapeTest : public cudf::test::BaseFixture {};
