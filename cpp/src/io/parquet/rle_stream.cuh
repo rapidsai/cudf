@@ -154,8 +154,15 @@ struct rle_run {
   int remaining;  // number of output items remaining to be decoded
 };
 
+// Chunked-expand path: number of run headers parsed per chunk.
+// Chosen to fit preprocess_levels_kernel SMEM budget on V100 (adds 4100 B).
+static constexpr int kGenRuns = 512;
+
 // a stream of rle_runs
-template <typename level_t, int decode_threads, int max_output_values>
+template <typename level_t,
+          int decode_threads,
+          int max_output_values,
+          bool use_chunked_expand = false>
 struct rle_stream {
   static constexpr int num_rle_stream_decode_threads = decode_threads;
   // the -1 here is for the look-ahead warp that fills in the list of runs to be decoded
@@ -168,6 +175,7 @@ struct rle_stream {
   static constexpr int run_buffer_size = rle_stream_required_run_buffer_size<decode_threads>();
 
   int level_bits;
+  uint8_t const* s_start;
   uint8_t const* cur;
   uint8_t const* end;
 
@@ -194,7 +202,21 @@ struct rle_stream {
   // the budget transparently fall back to parsing from global.
   static constexpr int smem_stage_size = 8 * 1024;
 
+  // Chunked-expand cross-call partial-run state.
+  // When a run straddles a decode_next_chunked boundary we record its meta,
+  // total count, and how many values were already emitted so the next call
+  // can resume from the correct payload offset.  partial_run_meta == -1
+  // means no pending partial run.
+  int partial_run_meta;   // meta word for the split run (-1 = none)
+  int partial_run_total;  // full value count of that run
+  int partial_run_done;   // values already emitted from it
+
   __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
+
+  struct chunked_smem_t {
+    int gen_out_off[kGenRuns + 1];
+    int gen_meta[kGenRuns];
+  };
 
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
@@ -212,6 +234,9 @@ struct rle_stream {
                        cuda::barrier<cuda::thread_scope_block>* _copy_barrier = nullptr)
   {
     level_bits = _level_bits;
+    // s_start is set below after any smem-staging rebase, so downstream code
+    // that stores offsets relative to s_start (chunked-expand meta) works
+    // uniformly whether cur points into global or shared memory.
     cur        = _start;
     end        = _end;
 
@@ -243,6 +268,13 @@ struct rle_stream {
         end = smem_stage + len;
       }
     }
+    // Anchor s_start to the (possibly rebased) cur so chunked-expand meta
+    // offsets index into the same memory space that the parse cursor uses.
+    s_start = cur;
+
+    partial_run_meta  = -1;
+    partial_run_total = 0;
+    partial_run_done  = 0;
   }
 
   __device__ inline int get_rle_run_info(rle_run& run)
@@ -289,7 +321,17 @@ struct rle_stream {
     }
   }
 
-  __device__ inline int decode_next(int t, int count)
+  __device__ __forceinline__ static void warp_fill(
+    level_t* __restrict__ out, int abs_lo, int abs_hi, level_t value, int lane)
+  {
+    if (abs_lo >= abs_hi) return;
+    // abs_lo and abs_hi are absolute indices; apply rolling_index at each write.
+    for (int q = abs_lo + lane; q < abs_hi; q += 32) {
+      out[rolling_index<max_output_values>(q)] = value;
+    }
+  }
+
+  __device__ inline int decode_next_ring(int t, int count)
   {
     int const output_count = min(count, total_values - cur_values);
     // special case. if level_bits == 0, just return all zeros. this should tremendously speed up
@@ -404,6 +446,204 @@ struct rle_stream {
     return values_processed_shared;
   }
 
+  __device__ inline int decode_next_chunked(int t, int count)
+  {
+    static_assert(use_chunked_expand, "decode_next_chunked requires use_chunked_expand=true");
+
+    int const output_count = min(count, total_values - cur_values);
+
+    if (level_bits == 0) {
+      int written = 0;
+      while (written < output_count) {
+        int const batch_size = min(num_rle_stream_decode_threads, output_count - written);
+        if (t < batch_size) {
+          output[rolling_index<max_output_values>(cur_values + written + t)] = 0;
+        }
+        written += batch_size;
+        __syncthreads();
+      }
+      cur_values += output_count;
+      return output_count;
+    }
+
+    __shared__ int gen_out_off[kGenRuns + 1];
+    __shared__ int gen_meta[kGenRuns];
+    // Payload offset within run slot 0: non-zero only when continuing a run
+    // that was split across two decode_next_chunked calls.
+    __shared__ int s_run0_payload_offset;
+    __shared__ int s_chunk_runs;
+    __shared__ int s_chunk_total;
+    __shared__ int s_base_out;
+
+    int const lane        = t & 31;
+    int const warp        = t >> 5;
+    int constexpr kWarps  = num_rle_stream_decode_threads / cudf::detail::warp_size;
+    int const value_width = (level_bits + 7) >> 3;
+    int out_pos_total     = cur_values;
+    int const out_end     = cur_values + output_count;
+
+    while (out_pos_total < out_end) {
+      if (t == 0) {
+        int co                = 0;
+        int n                 = 0;
+        int out_base          = out_pos_total;
+        gen_out_off[0]        = 0;
+        s_run0_payload_offset = 0;
+
+        // If a partial run was saved from the previous call, inject it as slot 0.
+        // cur already points past this run's payload (it was fully consumed last
+        // call), so we do NOT re-parse the header.
+        if (partial_run_meta != -1) {
+          int const remaining   = partial_run_total - partial_run_done;
+          int const room        = out_end - out_base;
+          int const cnt         = min(remaining, room);
+          gen_meta[0]           = partial_run_meta;
+          gen_out_off[1]        = cnt;
+          s_run0_payload_offset = partial_run_done;
+          n                     = 1;
+          co                    = cnt;
+          if (cnt < remaining) {
+            partial_run_done += cnt;
+          } else {
+            partial_run_meta = -1;
+          }
+        }
+
+        while (n < kGenRuns && (out_base + co) < out_end && cur < end) {
+          uint32_t const level_run = get_vlq32(cur, end);
+          int cnt;
+          int meta;
+
+          if (level_run & 1u) {
+            int const groups = level_run >> 1;
+            cnt              = groups * 8;
+            meta             = static_cast<int>(cur - s_start) | (1 << 31);
+            cur += groups * level_bits;
+          } else {
+            cnt  = level_run >> 1;
+            meta = static_cast<int>(cur - s_start);
+            cur += value_width;
+          }
+
+          int const room = out_end - (out_base + co);
+          if (cnt > room) {
+            // Run straddles the output boundary.  cur has already advanced
+            // past the full payload, which is correct.  Record partial state
+            // so the next call resumes at the right payload offset.
+            partial_run_meta  = meta;
+            partial_run_total = cnt;
+            partial_run_done  = room;
+            cnt               = room;
+          }
+          co += cnt;
+          gen_meta[n]      = meta;
+          gen_out_off[++n] = co;
+          if (partial_run_meta != -1) { break; }
+        }
+        s_chunk_runs  = n;
+        s_chunk_total = co;
+        s_base_out    = out_base;
+      }
+      __syncthreads();
+
+      int const chunk_runs          = s_chunk_runs;
+      int const chunk_total         = s_chunk_total;
+      int const base_out            = s_base_out;
+      int const run0_payload_offset = s_run0_payload_offset;
+
+      if (chunk_runs == 0) { break; }
+
+      int const per = (chunk_total + kWarps - 1) / kWarps;
+      int const lo  = warp * per;
+      int const hi  = min(lo + per, chunk_total);
+
+      if (lo < hi) {
+        int a = 0;
+        int b = chunk_runs;
+        while (a < b) {
+          int const mid = (a + b) >> 1;
+          if (gen_out_off[mid + 1] <= lo) {
+            a = mid + 1;
+          } else {
+            b = mid;
+          }
+        }
+
+        for (int r = a; r < chunk_runs && gen_out_off[r] < hi; ++r) {
+          int const r_lo   = gen_out_off[r];
+          int const r_hi   = gen_out_off[r + 1];
+          int const seg_lo = max(r_lo, lo);
+          int const seg_hi = min(r_hi, hi);
+          int const meta   = gen_meta[r];
+          // For slot 0 of a resumed partial run add the already-emitted offset
+          // so we read from the correct position in the payload.
+          int const run_payload_off = (r == 0) ? run0_payload_offset : 0;
+
+          if (meta & (1 << 31)) {
+            int const payload_off     = meta & 0x7fffffff;
+            uint8_t const* payload    = s_start + payload_off;
+            uint32_t const level_mask = (level_bits == 32) ? 0xffffffffu : ((1u << level_bits) - 1);
+            for (int p = seg_lo + lane; p < seg_hi; p += 32) {
+              int const local       = (p - r_lo) + run_payload_off;
+              int bitpos            = local * level_bits;
+              uint8_t const* source = payload + (bitpos >> 3);
+              bitpos &= 7;
+              uint32_t level_val = 0;
+              if (source < end) { level_val = source[0]; }
+              ++source;
+              if (level_bits > 8 - bitpos && source < end) {
+                level_val |= static_cast<uint32_t>(source[0]) << 8;
+                ++source;
+                if (level_bits > 16 - bitpos && source < end) {
+                  level_val |= static_cast<uint32_t>(source[0]) << 16;
+                  ++source;
+                  if (level_bits > 24 - bitpos && source < end) {
+                    level_val |= static_cast<uint32_t>(source[0]) << 24;
+                  }
+                }
+              }
+              level_val = (level_val >> bitpos) & level_mask;
+              output[rolling_index<max_output_values>(base_out + p)] =
+                static_cast<level_t>(level_val);
+            }
+          } else {
+            uint8_t const* vptr = s_start + (meta & 0x7fffffff);
+            uint32_t level_val  = vptr[0];
+            if constexpr (sizeof(level_t) > 1) {
+              if (level_bits > 8) {
+                level_val |= static_cast<uint32_t>(vptr[1]) << 8;
+                if constexpr (sizeof(level_t) > 2) {
+                  if (level_bits > 16) {
+                    level_val |= static_cast<uint32_t>(vptr[2]) << 16;
+                    if (level_bits > 24) { level_val |= static_cast<uint32_t>(vptr[3]) << 24; }
+                  }
+                }
+              }
+            }
+            warp_fill(
+              output, base_out + seg_lo, base_out + seg_hi, static_cast<level_t>(level_val), lane);
+          }
+        }
+      }
+      __syncthreads();
+
+      out_pos_total = base_out + chunk_total;
+    }
+
+    int const decoded = out_pos_total - cur_values;
+    cur_values        = out_pos_total;
+    return decoded;
+  }
+
+  __device__ inline int decode_next(int t, int count)
+  {
+    if constexpr (use_chunked_expand) {
+      return decode_next_chunked(t, count);
+    } else {
+      return decode_next_ring(t, count);
+    }
+  }
+
   __device__ inline int skip_runs(int target_count)
   {
     // we want to process all runs UP TO BUT NOT INCLUDING the run that overlaps with the skip
@@ -439,5 +679,8 @@ struct rle_stream {
 
   __device__ inline int decode_next(int t) { return decode_next(t, max_output_values); }
 };
+
+template <typename level_t, int decode_threads, int max_output_values>
+using rle_stream_chunked = rle_stream<level_t, decode_threads, max_output_values, true>;
 
 }  // namespace cudf::io::parquet::detail

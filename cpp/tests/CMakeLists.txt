@@ -347,6 +347,11 @@ ConfigureTest(
   PERCENT 100
 )
 ConfigureTest(
+  PARQUET_RLE_CHUNKED_EQUIVALENCE_TEST io/parquet_rle_chunked_equivalence_test.cu
+  GPUS 1
+  PERCENT 100
+)
+ConfigureTest(
   HYBRID_SCAN_TEST
   io/experimental/hybrid_scan_common.cpp
   io/experimental/hybrid_scan_composer.cpp
