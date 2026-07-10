@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
 
 import polars as pl
@@ -116,6 +117,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "reinterpret",
             "round",
             "set_sorted",
             "shift",
@@ -135,10 +137,17 @@ class UnaryFunction(Expr):
         }
     )
     _supported_horizontal_fns = frozenset({"coalesce"})
+    _supported_math_fns = frozenset(
+        {
+            "degrees",
+            "radians",
+        }
+    )
     _supported_fns = frozenset().union(
-        _supported_misc_fns,
         _supported_cum_aggs,
         _supported_horizontal_fns,
+        _supported_math_fns,
+        _supported_misc_fns,
         _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
@@ -147,10 +156,11 @@ class UnaryFunction(Expr):
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "reinterpret",
             "round",
             "set_sorted",
         }
-    ).union(_supported_horizontal_fns, _OP_MAPPING.keys())
+    ).union(_supported_math_fns, _supported_horizontal_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -178,6 +188,16 @@ class UnaryFunction(Expr):
             if method not in {"average", "min", "max", "dense", "ordinal"}:
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
+                )
+        if self.name == "reinterpret":
+            source = children[0].dtype.plc_type
+            target = self.dtype.plc_type
+            if plc.traits.is_floating_point(source) != plc.traits.is_floating_point(
+                target
+            ):
+                raise NotImplementedError(
+                    "reinterpret between integer and floating-point types is not "
+                    "supported"
                 )
 
     @staticmethod
@@ -501,6 +521,32 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name == "coalesce":
+            first_child, *other_children = self.children
+            first = first_child.evaluate(df, context=context).astype(
+                self.dtype, stream=df.stream
+            )
+            if first.is_scalar:
+                result = plc.filling.repeat(
+                    plc.Table([first.obj]),
+                    df.num_rows,
+                    stream=df.stream,
+                ).columns()[0]
+            else:
+                result = first.obj
+            for child in other_children:
+                if result.null_count() == 0:
+                    break
+                cast_candidate = child.evaluate(df, context=context).astype(
+                    self.dtype, stream=df.stream
+                )
+                fill = (
+                    cast_candidate.obj_scalar(stream=df.stream)
+                    if cast_candidate.is_scalar
+                    else cast_candidate.obj
+                )
+                result = plc.replace.replace_nulls(result, fill, stream=df.stream)
+            return Column(result, dtype=self.dtype)
         elif self.name == "rank":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             method_str, descending, _ = self.options
@@ -587,32 +633,31 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
-        elif self.name == "coalesce":
-            first_child, *other_children = self.children
-            first = first_child.evaluate(df, context=context).astype(
-                self.dtype, stream=df.stream
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
             )
-            if first.is_scalar:
-                result = plc.filling.repeat(
-                    plc.Table([first.obj]),
-                    df.num_rows,
-                    stream=df.stream,
-                ).columns()[0]
+            if self.name == "degrees":
+                factor = 180.0 / math.pi
             else:
-                result = first.obj
-            for child in other_children:
-                if result.null_count() == 0:
-                    break
-                cast_candidate = child.evaluate(df, context=context).astype(
-                    self.dtype, stream=df.stream
-                )
-                fill = (
-                    cast_candidate.obj_scalar(stream=df.stream)
-                    if cast_candidate.is_scalar
-                    else cast_candidate.obj
-                )
-                result = plc.replace.replace_nulls(result, fill, stream=df.stream)
-            return Column(result, dtype=self.dtype)
+                # radians
+                factor = math.pi / 180.0
+            out_type = self.dtype.plc_type
+            return Column(
+                plc.binaryop.binary_operation(
+                    column.obj,
+                    plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                    plc.binaryop.BinaryOperator.MUL,
+                    out_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "reinterpret":
+            column = self.children[0].evaluate(df, context=context)
+            return column.astype(self.dtype, stream=df.stream)
         elif self.name == "clip":
             column = self.children[0].evaluate(df, context=context)
             has_min, has_max = self.options
