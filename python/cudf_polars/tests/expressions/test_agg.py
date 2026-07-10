@@ -152,6 +152,12 @@ def test_item(engine: pl.GPUEngine, data, allow_empty) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_mode(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1]})
+    q = df.select(pl.col("a").mode())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize(
     "data",
     [

@@ -115,6 +115,7 @@ class UnaryFunction(Expr):
             "fill_null_with_strategy",
             "gather_every",
             "mask_nans",
+            "mode",
             "null_count",
             "rank",
             "reinterpret",
@@ -242,6 +243,45 @@ class UnaryFunction(Expr):
                     1,
                     stream=df.stream,
                 ),
+                dtype=self.dtype,
+            )
+        if self.name == "mode":
+            (values,) = (child.evaluate(df, context=context) for child in self.children)
+            (keys_table, (counts_table,)) = plc.groupby.GroupBy(
+                plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        values.obj,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    )
+                ],
+                stream=df.stream,
+            )
+            counts_col = counts_table.columns()[0]
+            max_count = plc.reduce.reduce(
+                counts_col,
+                plc.aggregation.max(),
+                counts_col.type(),
+                stream=df.stream,
+            )
+            mask = plc.binaryop.binary_operation(
+                counts_col,
+                max_count,
+                plc.binaryop.BinaryOperator.EQUAL,
+                plc.DataType(plc.TypeId.BOOL8),
+                stream=df.stream,
+            )
+            modes = plc.stream_compaction.apply_boolean_mask(
+                keys_table, mask, stream=df.stream
+            )
+            return Column(
+                plc.sorting.sort(
+                    modes,
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         arg: plc.Column | plc.Scalar
