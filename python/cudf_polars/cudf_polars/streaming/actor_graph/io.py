@@ -1066,17 +1066,13 @@ def _(
         )
         nodes[ir] = [native_node, metadata_node]
     else:
-        if ir.base_scan.typ == "parquet" and parquet_options.prefetch_file_metadata:
-            ch_metadata = rec.state["metadata_channel_by_scan"].get(ir)
-        else:
-            ch_metadata = None
         nodes[ir] = [
             scan_node(
                 rec.state["context"],
                 ir,
                 rec.state["ir_context"],
                 ch_out,
-                ch_metadata,
+                rec.state["metadata_channel_by_scan"].get(ir),
                 num_producers=num_producers,
                 estimated_chunk_bytes=(
                     plan.estimated_chunk_bytes or executor.target_partition_size
