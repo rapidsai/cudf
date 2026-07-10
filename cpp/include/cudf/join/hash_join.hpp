@@ -87,13 +87,17 @@ class hash_join {
    * @param right The right table, from which the hash table is built
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the internal hash table, which must remain
+   *           valid for the lifetime of this object
    */
   hash_join(cudf::table_view const& right,
             null_equality compare_nulls,
-            rmm::cuda_stream_view stream = cudf::get_default_stream());
+            rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+            rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
-   * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view)
+   * @copydoc hash_join(cudf::table_view const&, null_equality, rmm::cuda_stream_view,
+   * rmm::device_async_resource_ref)
    *
    * @throws std::invalid_argument if load_factor is not greater than 0 and less than or equal to 1
    *
@@ -106,7 +110,8 @@ class hash_join {
             nullable_join has_nulls,
             null_equality compare_nulls,
             double load_factor,
-            rmm::cuda_stream_view stream = cudf::get_default_stream());
+            rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+            rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
   /**
    * Returns the row indices that can be used to construct the result of performing

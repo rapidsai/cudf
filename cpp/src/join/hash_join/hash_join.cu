@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -102,8 +102,9 @@ template <typename Hasher>
 hash_join<Hasher>::hash_join(cudf::table_view const& right,
                              bool has_nulls,
                              cudf::null_equality compare_nulls,
-                             rmm::cuda_stream_view stream)
-  : hash_join{right, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream}
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
+  : hash_join{right, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream, mr}
 {
 }
 
@@ -112,7 +113,8 @@ hash_join<Hasher>::hash_join(cudf::table_view const& right,
                              bool has_nulls,
                              cudf::null_equality compare_nulls,
                              double load_factor,
-                             rmm::cuda_stream_view stream)
+                             rmm::cuda_stream_view stream,
+                             rmm::device_async_resource_ref mr)
   : _has_nulls(has_nulls),
     _is_empty{right.num_rows() == 0},
     _nulls_equal{compare_nulls},
@@ -124,7 +126,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& right,
       {},
       {},
       {},
-      rmm::mr::polymorphic_allocator<char>{},
+      rmm::mr::polymorphic_allocator<char>{mr},
       stream.value()}})},
     _right{right},
     _preprocessed_right{cudf::detail::row::equality::preprocessed_table::create(_right, stream)}
@@ -151,13 +153,15 @@ hash_join<Hasher>::hash_join(cudf::table_view const& right,
 template hash_join<hash_join_hasher>::hash_join(cudf::table_view const& right,
                                                 bool has_nulls,
                                                 cudf::null_equality compare_nulls,
-                                                rmm::cuda_stream_view stream);
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr);
 
 template hash_join<hash_join_hasher>::hash_join(cudf::table_view const& right,
                                                 bool has_nulls,
                                                 cudf::null_equality compare_nulls,
                                                 double load_factor,
-                                                rmm::cuda_stream_view stream);
+                                                rmm::cuda_stream_view stream,
+                                                rmm::device_async_resource_ref mr);
 
 template <typename Hasher>
 hash_join<Hasher>::~hash_join() = default;
@@ -172,9 +176,10 @@ hash_join::~hash_join() = default;
 
 hash_join::hash_join(cudf::table_view const& right,
                      null_equality compare_nulls,
-                     rmm::cuda_stream_view stream)
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref mr)
   : hash_join(
-      right, nullable_join::YES, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream)
+      right, nullable_join::YES, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream, mr)
 {
 }
 
@@ -182,9 +187,10 @@ hash_join::hash_join(cudf::table_view const& right,
                      nullable_join has_nulls,
                      null_equality compare_nulls,
                      double load_factor,
-                     rmm::cuda_stream_view stream)
+                     rmm::cuda_stream_view stream,
+                     rmm::device_async_resource_ref mr)
   : _impl{std::make_unique<impl_type const>(
-      right, has_nulls == nullable_join::YES, compare_nulls, load_factor, stream)}
+      right, has_nulls == nullable_join::YES, compare_nulls, load_factor, stream, mr)}
 {
 }
 
