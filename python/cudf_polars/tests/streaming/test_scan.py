@@ -144,11 +144,22 @@ def test_scan_parquet_prefetch_file_metadata(
     assert_gpu_result_equal(pl.scan_parquet(tmp_path), engine=streaming_engine)
 
 
+@pytest.mark.timeout(90)
 def test_scan_parquet_prefetch_metadata_shared_scan_paths(
     tmp_path: Path,
     df: pl.DataFrame,
     prefetch_file_metadata_engine: StreamingEngine,
 ):
+    # The spmd-small case creates *many* partitions with the length-3000 df.
+    # A smaller dataframe gives us sufficient test coverage, and runs much faster.
+    if (
+        prefetch_file_metadata_engine.config["executor_options"][
+            "max_rows_per_partition"
+        ]
+        == SMALL_MAX_ROWS_PER_PARTITION
+    ):
+        df = df.head(40)
+
     make_partitioned_source(df, tmp_path, "parquet", n_files=2)
     scan = pl.scan_parquet(tmp_path)
     query = pl.concat([scan.select("x"), scan.select("x")])
