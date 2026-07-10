@@ -29,17 +29,20 @@ namespace detail {
  * @brief HyperLogLog-based approximate distinct count sketch for use by the public API
  *
  * This detail implementation provides the core HyperLogLog functionality used by the
- * public `cudf::approx_distinct_count` class. It supports both owning and non-owning
- * storage modes:
+ * public `cudf::approx_distinct_count` class. In the HLL literature, "sketch" refers to
+ * the register array that summarizes the input. This class supports both owning and
+ * non-owning sketch storage modes:
  *
- * - **Owning mode**: Allocates and manages its own `rmm::device_uvector<int32_t>` storage.
- *   Used when constructing from a table or when copying from a span.
+ * - **Owning mode**: Allocates and manages its own sketch storage as an
+ *   `rmm::device_uvector<int32_t>`. Used when constructing from a table or when copying
+ *   from a span.
  *
- * - **Non-owning mode**: Operates on user-provided `cuda::std::span<int32_t>` storage.
- *   Enables zero-copy operations on pre-existing buffers.
+ * - **Non-owning mode**: Operates on user-provided `cuda::std::span<int32_t>` sketch
+ *   storage. Enables zero-copy operations on pre-existing buffers.
  *
- * Internally, storage uses `int32_t` for efficient 32-bit GPU atomics. The public API
- * exposes storage as `cuda::std::byte` spans for generic serialization.
+ * Internally, the sketch uses `int32_t` registers for efficient 32-bit GPU atomics. The
+ * public API exposes the sketch storage as `cuda::std::byte` spans for generic
+ * serialization.
  *
  * @tparam Hasher The hash function template to use for hashing table rows. Must be compatible
  *                with cudf's row_hasher device_hasher interface (a template taking a Key type).

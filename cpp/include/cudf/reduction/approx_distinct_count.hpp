@@ -45,6 +45,10 @@ class approx_distinct_count;
  * This class provides an object-oriented interface to HyperLogLog sketches, allowing
  * incremental addition of data and cardinality estimation.
  *
+ * In the HLL literature, "sketch" refers to the register array that summarizes the input.
+ * In this implementation, the sketch is stored as an `int32_t` device vector to enable
+ * efficient device-side atomic operations.
+ *
  * The implementation uses XXHash64 to hash table rows into 64-bit values, which are
  * then added to the HyperLogLog sketch without additional hashing (identity function).
  *
