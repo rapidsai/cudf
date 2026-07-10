@@ -110,6 +110,7 @@ class UnaryFunction(Expr):
             "fill_null_with_strategy",
             "mask_nans",
             "null_count",
+            "pct_change",
             "rank",
             "round",
             "set_sorted",
@@ -581,6 +582,34 @@ class UnaryFunction(Expr):
                         (0, column.obj.size() + offset), stream=df.stream
                     )
             return diffed
+        elif self.name == "pct_change":
+            column = self.children[0].evaluate(df, context=context)
+            offset = self._evaluate_n(self.children[1], df, context)
+            out_type = self.dtype.plc_type
+            operand = plc.unary.cast(column.obj, out_type, stream=df.stream)
+            shifted = plc.copying.shift(
+                operand,
+                offset,
+                plc.Scalar.from_py(None, out_type, stream=df.stream),
+                stream=df.stream,
+            )
+            expression = plc.expressions.Operation(
+                plc.expressions.ASTOperator.SUB,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV,
+                    plc.expressions.ColumnReference(0),
+                    plc.expressions.ColumnReference(1),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+                ),
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([operand, shifted]), expression, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
