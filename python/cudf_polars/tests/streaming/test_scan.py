@@ -773,7 +773,7 @@ def test_collect_metadata_scans_one_actor_per_streaming_scan() -> None:
         config_options=config_options,
         nranks=1,
     )
-    assert metadata_scans == (streaming_scan,)
+    assert metadata_scans == [streaming_scan]
 
 
 def test_collect_metadata_scans_union_disjoint_paths() -> None:
