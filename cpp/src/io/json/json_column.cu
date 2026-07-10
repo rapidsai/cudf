@@ -512,11 +512,13 @@ namespace {
 // When `mismatched_columns_out` is non-null, the names of top-level output columns whose JSON
 // value tree contained a schema-mismatch are pushed onto it (deduplicated, order preserved by
 // the column order of the result). When null, schema-mismatch information is dropped.
-table_with_metadata device_parse_nested_json_impl(device_span<SymbolT const> d_input,
-                                                  cudf::io::json_reader_options const& options,
-                                                  rmm::cuda_stream_view stream,
-                                                  rmm::device_async_resource_ref mr,
-                                                  std::vector<std::string>* mismatched_columns_out)
+table_with_metadata device_parse_nested_json_impl(
+  device_span<SymbolT const> d_input,
+  cudf::io::json_reader_options const& options,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr,
+  std::vector<std::string>* mismatched_columns_out,
+  std::vector<schema_mismatch_rows>* mismatched_rows_out = nullptr)
 {
   CUDF_FUNC_RANGE();
 
@@ -575,6 +577,7 @@ table_with_metadata device_parse_nested_json_impl(device_span<SymbolT const> d_i
                           gpu_row_offsets,
                           root_column,
                           is_array_of_arrays,
+                          mismatched_rows_out != nullptr,
                           options,
                           stream,
                           mr);
@@ -721,6 +724,20 @@ table_with_metadata device_parse_nested_json_impl(device_span<SymbolT const> d_i
     }
   }
 
+  if (mismatched_rows_out != nullptr) {
+    mismatched_rows_out->clear();
+    mismatched_rows_out->reserve(root_column.rows_with_schema_mismatch.size());
+    for (auto const& column : out_column_names) {
+      auto row_it =
+        std::find_if(root_column.rows_with_schema_mismatch.begin(),
+                     root_column.rows_with_schema_mismatch.end(),
+                     [&column](auto const& rows) { return rows.column_name == column.name; });
+      if (row_it != root_column.rows_with_schema_mismatch.end()) {
+        mismatched_rows_out->push_back(std::move(*row_it));
+      }
+    }
+  }
+
   return table_with_metadata{std::make_unique<table>(std::move(out_columns)), {out_column_names}};
 }
 
@@ -739,13 +756,18 @@ table_with_metadata device_parse_nested_json(device_span<SymbolT const> d_input,
 device_parse_nested_json_result device_parse_nested_json_with_diagnostics(
   device_span<SymbolT const> d_input,
   cudf::io::json_reader_options const& options,
+  bool collect_schema_mismatch_rows,
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   std::vector<std::string> mismatched_columns;
-  auto data = device_parse_nested_json_impl(d_input, options, stream, mr, &mismatched_columns);
-  return device_parse_nested_json_result{std::move(data), std::move(mismatched_columns)};
+  std::vector<schema_mismatch_rows> mismatched_rows;
+  auto* mismatched_rows_out = collect_schema_mismatch_rows ? &mismatched_rows : nullptr;
+  auto data                 = device_parse_nested_json_impl(
+    d_input, options, stream, mr, &mismatched_columns, mismatched_rows_out);
+  return device_parse_nested_json_result{
+    std::move(data), std::move(mismatched_columns), std::move(mismatched_rows)};
 }
 
 }  // namespace cudf::io::json::detail
