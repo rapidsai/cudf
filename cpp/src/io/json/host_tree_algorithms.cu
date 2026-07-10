@@ -120,7 +120,7 @@ std::vector<std::string> copy_strings_to_host_sync(
                                    cudf::get_current_device_resource_ref());
   auto to_host        = [stream](auto const& col) {
     if (col.is_empty()) return std::vector<std::string>{};
-    auto const scv     = cudf::strings_column_view(col);
+    auto const scv     = cudf::strings_column_view(col, stream);
     auto const h_chars = cudf::detail::make_host_vector_async<char>(
       cudf::device_span<char const>(scv.chars_begin(stream), scv.chars_size(stream)), stream);
     auto const h_offsets = cudf::detail::make_host_vector_async(

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -56,7 +56,7 @@ std::unique_ptr<column> reverse(strings_column_view const& input,
 
   // copy the column; replace data in the chars column
   auto result          = std::make_unique<column>(input.parent(), stream, mr);
-  auto sv              = strings_column_view(result->view());
+  auto sv              = strings_column_view(result->view(), stream);
   auto const d_offsets = cudf::detail::offsetalator_factory::make_input_iterator(sv.offsets());
   auto d_chars         = result->mutable_view().head<char>();
 

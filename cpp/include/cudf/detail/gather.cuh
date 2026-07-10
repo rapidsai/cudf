@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -256,10 +256,10 @@ struct column_gatherer_impl<string_view> {
   {
     if (true == nullify_out_of_bounds) {
       return cudf::strings::detail::gather<true>(
-        strings_column_view(source_column), gather_map_begin, gather_map_end, stream, mr);
+        strings_column_view(source_column, stream), gather_map_begin, gather_map_end, stream, mr);
     } else {
       return cudf::strings::detail::gather<false>(
-        strings_column_view(source_column), gather_map_begin, gather_map_end, stream, mr);
+        strings_column_view(source_column, stream), gather_map_begin, gather_map_end, stream, mr);
     }
   }
 };

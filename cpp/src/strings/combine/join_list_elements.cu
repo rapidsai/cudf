@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -182,7 +182,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
   // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the
   // lists column returns a pointer to the offsets of the original lists column, which may not start
   // from `0`.
-  auto const strings_col     = strings_column_view(lists_strings_column.child());
+  auto const strings_col     = strings_column_view(lists_strings_column.child(), stream);
   auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
   auto const strings_dv_ptr  = column_device_view::create(strings_col.parent(), stream);
   auto const sep_dv          = get_scalar_device_view(const_cast<string_scalar&>(separator));
@@ -256,7 +256,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
   // lists column, not `get_sliced_child()`. This is because calling to `offsets_begin()` on the
   // lists column returns a pointer to the offsets of the original lists column, which may not start
   // from `0`.
-  auto const strings_col     = strings_column_view(lists_strings_column.child());
+  auto const strings_col     = strings_column_view(lists_strings_column.child(), stream);
   auto const lists_dv_ptr    = column_device_view::create(lists_strings_column.parent(), stream);
   auto const strings_dv_ptr  = column_device_view::create(strings_col.parent(), stream);
   auto const string_narep_dv = get_scalar_device_view(const_cast<string_scalar&>(string_narep));

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -44,7 +44,7 @@ void fill_table_meta(table_input_metadata& table_meta)
   if (is_fixed_width(column.type())) {
     return size_of(column.type()) * column.size();
   } else if (column.type().id() == type_id::STRING) {
-    auto const scol = strings_column_view(column);
+    auto const scol = strings_column_view(column, stream);
     return cudf::strings::detail::get_offset_value(
              scol.offsets(), column.size() + column.offset(), stream) -
            cudf::strings::detail::get_offset_value(scol.offsets(), column.offset(), stream);

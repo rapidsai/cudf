@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,7 +22,9 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cuda/iterator>
+#include <thrust/functional.h>
 #include <thrust/transform.h>
+#include <thrust/transform_reduce.h>
 
 #include <cstdlib>
 #include <string>
@@ -191,6 +193,40 @@ std::pair<int64_t, int64_t> get_first_and_last_offset(cudf::strings_column_view 
   auto const last_offset =
     cudf::strings::detail::get_offset_value(input.offsets(), input.size() + input.offset(), stream);
   return {first_offset, last_offset};
+}
+
+std::pair<int64_t, int64_t> compute_min_max_string_lengths(cudf::strings_column_view const& input,
+                                                           rmm::cuda_stream_view stream)
+{
+  if (input.is_empty()) { return {0L, 0L}; }
+
+  auto d_strings_owner = column_device_view::create(input.parent(), stream);
+  auto const d_strings = *d_strings_owner;
+  auto const n         = input.size();
+
+  auto size_fn = [d_strings] __device__(cudf::size_type i) -> int64_t {
+    return d_strings.is_null(i)
+             ? int64_t{0}
+             : static_cast<int64_t>(d_strings.element<cudf::string_view>(i).size_bytes());
+  };
+
+  auto const itr     = cuda::counting_iterator<cudf::size_type>{0};
+  auto const max_len = thrust::transform_reduce(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    itr,
+    itr + n,
+    size_fn,
+    int64_t{0},
+    cuda::maximum<int64_t>{});
+  auto const min_len = thrust::transform_reduce(
+    rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+    itr,
+    itr + n,
+    size_fn,
+    max_len,
+    cuda::minimum<int64_t>{});
+
+  return {min_len, max_len};
 }
 
 }  // namespace detail

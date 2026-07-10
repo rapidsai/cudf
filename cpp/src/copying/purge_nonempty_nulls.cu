@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #include <cudf/copying.hpp>
@@ -35,7 +35,7 @@ bool has_nonempty_null_rows(cudf::column_view const& input, rmm::cuda_stream_vie
   // Cross-reference nullmask and offsets.
   auto const type    = input.type().id();
   auto const offsets = offsetalator_factory::make_input_iterator(
-    (type == type_id::STRING) ? strings_column_view{input}.offsets()
+    (type == type_id::STRING) ? strings_column_view{input, stream}.offsets()
                               : lists_column_view{input}.offsets(),
     input.offset());
   auto const d_input      = cudf::column_device_view::create(input, stream);

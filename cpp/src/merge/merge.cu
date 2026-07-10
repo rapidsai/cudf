@@ -428,7 +428,7 @@ std::unique_ptr<column> column_merger::operator()<cudf::string_view>(
   rmm::device_async_resource_ref mr) const
 {
   return strings::detail::merge(
-    strings_column_view(lcol), strings_column_view(rcol), row_order_, stream, mr);
+    strings_column_view(lcol, stream), strings_column_view(rcol, stream), row_order_, stream, mr);
 }
 
 // specialization for dictionary

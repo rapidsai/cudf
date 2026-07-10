@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -96,6 +96,19 @@ int64_t get_offset_value(cudf::column_view const& offsets,
  */
 std::pair<int64_t, int64_t> get_first_and_last_offset(cudf::strings_column_view const& input,
                                                       rmm::cuda_stream_view stream);
+
+/**
+ * @brief Compute the minimum and maximum string byte lengths in a strings column.
+ *
+ * Performs two device reductions over the column. Null entries are treated as
+ * zero-length strings. Returns {0, 0} for an empty column.
+ *
+ * @param input Strings column
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @return Pair of {min_length, max_length} in bytes
+ */
+std::pair<int64_t, int64_t> compute_min_max_string_lengths(cudf::strings_column_view const& input,
+                                                           rmm::cuda_stream_view stream);
 
 }  // namespace strings::detail
 }  // namespace CUDF_EXPORT cudf

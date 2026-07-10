@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -404,7 +404,7 @@ int dispatch_to_arrow_device_view::operator()<cudf::string_view>(ArrowArray* out
 
   NANOARROW_RETURN_NOT_OK(set_null_mask(column, tmp.get()));
 
-  auto const scv = cudf::strings_column_view(column);
+  auto const scv = cudf::strings_column_view(column, stream);
   NANOARROW_RETURN_NOT_OK(set_view_to_buffer(scv.offsets(), tmp.get()));
   NANOARROW_RETURN_NOT_OK(
     set_buffer_view(scv.chars_begin(stream), scv.chars_size(stream), 2, tmp.get()));

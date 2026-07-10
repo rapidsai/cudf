@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -7,6 +7,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/export.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
 
 /**
  * @file
@@ -27,11 +29,27 @@ namespace CUDF_EXPORT cudf {
 class strings_column_view : private column_view {
  public:
   /**
-   * @brief Construct a new strings column view object from a column view.s
+   * @brief Construct a new strings column view object from a column view.
+   *
+   * The minimum and maximum string byte lengths are not computed by this constructor.
+   * Use the stream-taking overload to compute them at construction time.
    *
    * @param strings_column The column view to wrap.
    */
   strings_column_view(column_view strings_column);
+
+  /**
+   * @brief Construct a new strings column view and compute min/max string byte lengths.
+   *
+   * Minimum and maximum are computed once on the device using @p stream and cached.
+   * Subsequent calls to minimum() and maximum() return the cached values.
+   * Null entries are treated as zero-length strings.
+   *
+   * @param strings_column The column view to wrap.
+   * @param stream CUDA stream used for the min/max reduction.
+   */
+  strings_column_view(column_view strings_column, rmm::cuda_stream_view stream);
+
   // So we can use this from cython.
   strings_column_view()                           = default;
   strings_column_view(strings_column_view&&)      = default;  ///< Move constructor
@@ -111,6 +129,32 @@ class strings_column_view : private column_view {
    * @return Iterator pointing 1 past the last char byte.
    */
   [[nodiscard]] chars_iterator chars_end(rmm::cuda_stream_view stream) const;
+
+  /**
+   * @brief Returns the minimum string byte length in this view.
+   *
+   * Requires construction via strings_column_view(column_view, rmm::cuda_stream_view).
+   * Null entries are counted as zero-length.
+   *
+   * @throws cudf::logic_error if min/max were not computed at construction.
+   * @return Minimum byte length across all strings in the view.
+   */
+  [[nodiscard]] int64_t minimum() const;
+
+  /**
+   * @brief Returns the maximum string byte length in this view.
+   *
+   * Requires construction via strings_column_view(column_view, rmm::cuda_stream_view).
+   * Null entries are counted as zero-length.
+   *
+   * @throws cudf::logic_error if min/max were not computed at construction.
+   * @return Maximum byte length across all strings in the view.
+   */
+  [[nodiscard]] int64_t maximum() const;
+
+ private:
+  int64_t _min_length{-1};  ///< Cached minimum string byte length; -1 means not computed.
+  int64_t _max_length{-1};  ///< Cached maximum string byte length; -1 means not computed.
 };
 
 //! Strings column APIs.

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -231,11 +231,13 @@ character_normalizer::character_normalizer(bool do_lower_case,
     cudf::sort(cudf::table_view({special_tokens.parent()}), {}, {}, stream)->release().front());
   if (do_lower_case) {
     // lower-case the tokens so they will match the normalized input
-    sorted = cudf::strings::to_lower(cudf::strings_column_view(sorted->view()), stream);
+    sorted = cudf::strings::to_lower(cudf::strings_column_view(sorted->view(), stream), stream);
   }
 
   auto tokens_view = cudf::strings::detail::create_string_vector_from_column(
-    cudf::strings_column_view(sorted->view()), stream, cudf::get_current_device_resource_ref());
+    cudf::strings_column_view(sorted->view(), stream),
+    stream,
+    cudf::get_current_device_resource_ref());
 
   _impl = std::make_unique<character_normalizer_impl>(std::move(cp_metadata),
                                                       std::move(aux_table),

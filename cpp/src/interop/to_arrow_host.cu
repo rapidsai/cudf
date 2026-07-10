@@ -181,7 +181,7 @@ int dispatch_to_arrow_host::operator()<cudf::string_view>(ArrowArray* out) const
 
   NANOARROW_RETURN_NOT_OK(populate_validity_bitmap(ArrowArrayValidityBitmap(tmp.get())));
 
-  auto const scv     = cudf::strings_column_view(column);
+  auto const scv     = cudf::strings_column_view(column, stream);
   auto const offsets = scv.offsets();
   if (offsets.type().id() == cudf::type_id::INT64) {
     NANOARROW_RETURN_NOT_OK(populate_data_buffer(
@@ -463,7 +463,7 @@ unique_device_array_t to_arrow_host_stringview(cudf::strings_column_view const& 
     auto longer_strings = cudf::strings::detail::make_strings_column(
       indices, indices + col.size(), stream, cudf::get_current_device_resource_ref());
     stream.synchronize();
-    auto const sv = cudf::strings_column_view(longer_strings->view());
+    auto const sv = cudf::strings_column_view(longer_strings->view(), stream);
     return std::pair{std::move(longer_strings), sv};
   }();
   auto [first, last] = cudf::strings::detail::get_first_and_last_offset(longer_strings, stream);

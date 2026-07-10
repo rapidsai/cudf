@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -111,7 +111,7 @@ std::unique_ptr<column> timestamp_to_strings(column_view const& column,
 
   auto empty_strings = make_empty_column(type_id::STRING);
   return cudf::strings::detail::from_timestamps(
-    column, format, strings_column_view(empty_strings->view()), stream, mr);
+    column, format, strings_column_view(empty_strings->view(), stream), stream, mr);
 }
 
 std::unique_ptr<column> duration_to_strings(column_view const& column,

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -365,7 +365,7 @@ std::unique_ptr<column> struct_to_strings(table_view const& strings_columns,
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
   // gather from offset and create a new string column
-  auto old_offsets = strings_column_view(joined_col->view()).offsets();
+  auto old_offsets = strings_column_view(joined_col->view(), stream).offsets();
   rmm::device_uvector<size_type> row_string_offsets(num_rows + 1, stream, mr);
   auto const d_strview_offsets = cudf::detail::make_counting_transform_iterator(
     0, cuda::proclaim_return_type<size_type>([num_strviews_per_row] __device__(size_type const i) {
@@ -524,7 +524,7 @@ std::unique_ptr<column> join_list_of_strings(lists_column_view const& lists_stri
   auto joined_col = make_strings_column(d_strviews, string_view{nullptr, 0}, stream, mr);
 
   // gather from offset and create a new string column
-  auto old_offsets = strings_column_view(joined_col->view()).offsets();
+  auto old_offsets = strings_column_view(joined_col->view(), stream).offsets();
   rmm::device_uvector<size_type> row_string_offsets(num_offsets, stream, mr);
   thrust::gather(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                  d_strview_offsets.begin(),

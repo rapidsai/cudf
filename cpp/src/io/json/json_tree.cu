@@ -561,7 +561,7 @@ std::pair<size_t, rmm::device_uvector<size_type>> remapped_field_nodes_after_uni
   // insert and find. -> array
   // store to static_map with keys as field key[index], and values as key[array[index]]
 
-  auto str_view         = strings_column_view{utf8_decoded_fields->view()};
+  auto str_view         = strings_column_view{utf8_decoded_fields->view(), stream};
   auto const char_ptr   = str_view.chars_begin(stream);
   auto const offset_ptr = str_view.offsets().begin<size_type>();
 

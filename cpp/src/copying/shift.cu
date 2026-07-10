@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -74,7 +74,7 @@ struct shift_functor {
     requires(std::is_same_v<cudf::string_view, T>)
   {
     auto output = cudf::strings::detail::shift(
-      cudf::strings_column_view(input), offset, fill_value, stream, mr);
+      cudf::strings_column_view(input, stream), offset, fill_value, stream, mr);
 
     if (input.nullable() || not fill_value.is_valid(stream)) {
       auto const d_input           = column_device_view::create(input, stream);
