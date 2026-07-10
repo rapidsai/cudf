@@ -252,19 +252,30 @@ class UnaryFunction(Expr):
             )
         if self.name in ("max_by", "min_by"):
             value, by = (child.evaluate(df, context=context) for child in self.children)
-            sorted_values = plc.sorting.sort_by_key(
-                plc.Table([value.obj]),
-                plc.Table([by.obj]),
-                [plc.types.Order.ASCENDING],
-                [plc.types.NullOrder.BEFORE],
-                stream=df.stream,
-            ).columns()[0]
-            if self.name == "max_by":
-                slice_indices = [value.size - 1, value.size]
-            else:
-                slice_indices = [0, 1]
+            agg = (
+                plc.aggregation.argmax()
+                if self.name == "max_by"
+                else plc.aggregation.argmin()
+            )
+            index = plc.reduce.reduce(
+                by.obj, agg, plc.types.SIZE_TYPE, stream=df.stream
+            )
+            if not index.is_valid(stream=df.stream):
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             return Column(
-                plc.copying.slice(sorted_values, slice_indices, stream=df.stream)[0],
+                plc.copying.gather(
+                    plc.Table([value.obj]),
+                    plc.Column.from_scalar(index, 1, stream=df.stream),
+                    plc.copying.OutOfBoundsPolicy.NULLIFY,
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         arg: plc.Column | plc.Scalar

@@ -134,8 +134,24 @@ def test_product(engine: pl.GPUEngine, data, dtype):
 
 
 @pytest.mark.parametrize("expr", ["max_by", "min_by"])
-def test_max_min_by(engine: pl.GPUEngine, expr: str) -> None:
-    df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1], "b": [5, 4, 3, 2, 1, 6]})
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 2, None, 3, 1], "b": [5, 4, 3, 2, 1, 6]},
+        {"a": [1, 2, 3, 4], "b": [5, None, 3, None]},
+        {"a": [10, 20, 30, 40], "b": [1, 5, 5, 2]},
+        {"a": [None, None, None], "b": [None, None, None]},
+        {"a": [7], "b": [3]},
+        {"a": [], "b": []},
+    ],
+)
+def test_max_min_by(engine: pl.GPUEngine, expr: str, data) -> None:
+    df = pl.LazyFrame(
+        {
+            "a": pl.Series(data["a"], dtype=pl.Int64),
+            "b": pl.Series(data["b"], dtype=pl.Int64),
+        }
+    )
     q = df.select(getattr(pl.col("a"), expr)("b"))
     assert_gpu_result_equal(q, engine=engine)
 
