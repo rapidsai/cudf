@@ -17,6 +17,7 @@ I/O Functions
 
     avro
     csv
+    experimental
     json
     orc
     parquet
