@@ -404,7 +404,9 @@ async def _allgather_and_broadcast(
 
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,
-        partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+        partitioning=maybe_remap_partitioning(
+            ir, metadata_in.partitioning, context=context
+        ),
         duplicated=metadata_in.duplicated,
     )
     await send_metadata(ch_out, context, metadata_out)
@@ -600,7 +602,9 @@ async def _shuffle_and_reassemble(
 
     metadata_out = ChannelMetadata(
         local_count=metadata_in.local_count,
-        partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+        partitioning=maybe_remap_partitioning(
+            ir, metadata_in.partitioning, context=context
+        ),
         duplicated=False,
     )
     await send_metadata(ch_out, context, metadata_out)
@@ -719,7 +723,9 @@ async def over_actor(
         if partitioning.is_strictly_partitioned():
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
-                partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+                partitioning=maybe_remap_partitioning(
+                    ir, metadata_in.partitioning, context=context
+                ),
                 duplicated=metadata_in.duplicated,
             )
             await chunkwise_evaluate(
