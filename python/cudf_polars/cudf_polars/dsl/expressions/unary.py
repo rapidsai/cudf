@@ -189,10 +189,6 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
-        if self.name in ("max_by", "min_by") and len(self.children) != 2:
-            raise NotImplementedError(
-                f"{self.name} only supports a single by expression"
-            )
         if self.name == "reinterpret":
             source = children[0].dtype.plc_type
             target = self.dtype.plc_type
