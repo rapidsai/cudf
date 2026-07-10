@@ -20,6 +20,7 @@ from cudf_polars.dsl.ir import (
 from cudf_polars.dsl.traversal import CachingVisitor, traversal
 from cudf_polars.streaming.actor_graph.dispatch import FanoutInfo
 from cudf_polars.streaming.actor_graph.io import (
+    ParquetMetadataCache,
     collect_metadata_scans,
     parquet_metadata_prefetch_node,
 )
@@ -277,6 +278,7 @@ def generate_network(
     metadata_channel_by_scan = {
         scan: context.create_channel() for scan in metadata_scans
     }
+    metadata_cache = ParquetMetadataCache(stats)
 
     # Generate the network
     state: GenState = {
@@ -303,7 +305,7 @@ def generate_network(
             ir_context,
             scan,
             metadata_channel_by_scan[scan],
-            stats,
+            metadata_cache,
         )
         for scan in metadata_scans
     ]

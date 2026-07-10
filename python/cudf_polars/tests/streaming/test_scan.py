@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import math
+from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, cast
 
 import pytest
@@ -27,6 +29,7 @@ from cudf_polars.dsl.utils.io import (
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.actor_graph.io import (
     MetadataMessagePayload,
+    ParquetMetadataCache,
     collect_metadata_scans,
     recv_prefetched_parquet_metadata_handler,
 )
@@ -863,3 +866,28 @@ def test_recv_prefetched_parquet_metadata_handler_errors() -> None:
         match=r"Unexpected parquet metadata key on scan input channel. .*",
     ):
         recv_prefetched_parquet_metadata_handler(msg, ("file2.parquet",))
+
+
+def test_parquet_metadata_cache_dedupes_identical_paths() -> None:
+    fetch_count = 0
+
+    def mock_fetch(paths: list[str], stats: StatsCollector) -> list[CachedParquetInfo]:
+        nonlocal fetch_count
+        fetch_count += 1
+        return _make_cached_parquet_info(paths)
+
+    cache = ParquetMetadataCache(StatsCollector(), fetch=mock_fetch)
+    paths = ["a.parquet", "b.parquet"]
+
+    async def run() -> list[list[CachedParquetInfo]]:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            ir_context = IRExecutionContext(executor)
+            async with asyncio.TaskGroup() as tg:
+                first = tg.create_task(cache.get(paths, ir_context))
+                second = tg.create_task(cache.get(paths, ir_context))
+            return [first.result(), second.result()]
+
+    results = asyncio.run(run())
+    assert fetch_count == 1
+    assert results[0] == results[1]
+    assert [info.path for info in results[0]] == paths

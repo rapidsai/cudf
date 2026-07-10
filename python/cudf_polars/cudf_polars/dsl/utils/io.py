@@ -101,7 +101,7 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
     ]
 
 
-def _cached_parquet_info_from_stats(
+def cached_parquet_info_from_stats(
     stats: StatsCollector,
 ) -> dict[str, CachedParquetInfo]:
     """Return path -> cached parquet info seeded from statistics collection."""
@@ -122,7 +122,7 @@ def _cached_parquet_info_from_stats(
 
 @nvtx_annotate_cudf_polars(message="prefetch_cached_parquet_info_for_paths")
 def prefetch_cached_parquet_info_for_paths(
-    paths: list[str], *, stats: StatsCollector
+    paths: list[str], stats: StatsCollector
 ) -> list[CachedParquetInfo]:
     """
     Prefetch parquet metadata for a path group.
@@ -141,7 +141,7 @@ def prefetch_cached_parquet_info_for_paths(
     -------
     Cached parquet metadata ordered to match ``paths``.
     """
-    cached_by_path = _cached_parquet_info_from_stats(stats)
+    cached_by_path = cached_parquet_info_from_stats(stats)
     missing_paths = [path for path in paths if path not in cached_by_path]
 
     if missing_paths:

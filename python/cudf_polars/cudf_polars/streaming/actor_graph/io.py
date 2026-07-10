@@ -95,6 +95,78 @@ class MetadataMessagePayload:
     cached_parquet_info: list[CachedParquetInfo]
 
 
+class ParquetMetadataCache:
+    """
+    Query-scoped cache for prefetched parquet metadata.
+
+    Coordinates footer reads across concurrent metadata prefetch actors so each
+    distinct ``scan.paths`` tuple is fetched at most once per query/rank.
+    """
+
+    def __init__(
+        self,
+        stats: StatsCollector,
+        fetch: Callable[
+            [list[str], StatsCollector], list[CachedParquetInfo]
+        ] = prefetch_cached_parquet_info_for_paths,
+    ) -> None:
+        self._stats = stats
+        self._cached_by_key: dict[tuple[str, ...], list[CachedParquetInfo]] = {}
+        self._pending_by_key: dict[
+            tuple[str, ...], asyncio.Future[list[CachedParquetInfo]]
+        ] = {}
+        self._lock = asyncio.Lock()
+        self._fetch = fetch
+
+    async def get(
+        self,
+        paths: list[str],
+        ir_context: IRExecutionContext,
+    ) -> list[CachedParquetInfo]:
+        """
+        Return cached parquet metadata for ``paths``, fetching on first use.
+
+        Concurrent callers with identical ``paths`` share a single in-flight fetch.
+        """
+        key = tuple(paths)
+        async with self._lock:
+            if key in self._cached_by_key:
+                return self._cached_by_key[key]
+            if key in self._pending_by_key:
+                future = self._pending_by_key[key]
+                should_fetch = False
+            else:
+                loop = asyncio.get_running_loop()
+                future = loop.create_future()
+                self._pending_by_key[key] = future
+                should_fetch = True
+
+        if should_fetch:
+            try:
+                result = await ir_context.to_thread(
+                    self._fetch,
+                    list(key),
+                    self._stats,
+                )
+            except BaseException as exc:
+                async with self._lock:
+                    self._pending_by_key.pop(key, None)
+                    if not future.done():
+                        if isinstance(exc, asyncio.CancelledError):
+                            future.cancel()
+                        else:
+                            future.set_exception(exc)
+                raise
+            async with self._lock:
+                self._cached_by_key[key] = result
+                self._pending_by_key.pop(key)
+                if not future.done():
+                    future.set_result(result)
+            return result
+
+        return await future
+
+
 class Lineariser:
     """
     Linearizer that ensures ordered delivery from multiple concurrent producers.
@@ -583,7 +655,7 @@ async def parquet_metadata_prefetch_node(
     ir_context: IRExecutionContext,
     ir: StreamingScan,
     ch_out: Channel[ArbitraryChunk[MetadataMessagePayload]],
-    stats: StatsCollector,
+    metadata_cache: ParquetMetadataCache,
 ) -> None:
     """
     Fetch parquet metadata for each scan task and send it to the paired scan actor.
@@ -601,8 +673,8 @@ async def parquet_metadata_prefetch_node(
     ch_out
         The output channel. The Scan actor generated for this StreamingScan node will
         read messages from this channel.
-    stats
-        The statistics collector, used to populate the parquet metadata cache.
+    metadata_cache
+        Shared query-scoped cache for prefetched parquet metadata.
 
     Notes
     -----
@@ -610,19 +682,13 @@ async def parquet_metadata_prefetch_node(
     The messages are sent in the order of the scans.
     """
     async with shutdown_on_error(context, ch_out, trace_ir=ir, ir_context=ir_context):
-        cached_by_key: dict[tuple[str, ...], list[CachedParquetInfo]] = {}
         for scan in ir.scans:
             scan = cast("SplitScan | FusedScan", scan)
             key = tuple[str, ...](scan.paths)
-            if key not in cached_by_key:
-                cached_by_key[key] = await ir_context.to_thread(
-                    prefetch_cached_parquet_info_for_paths,
-                    list(key),
-                    stats=stats,
-                )
+            cached_parquet_info = await metadata_cache.get(list(key), ir_context)
             payload = MetadataMessagePayload(
                 group_key=key,
-                cached_parquet_info=cached_by_key[key],
+                cached_parquet_info=cached_parquet_info,
             )
             await ch_out.send_metadata(
                 context,
