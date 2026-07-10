@@ -133,10 +133,10 @@ void hybrid_scan_reader_impl::setup_page_indexes(
 void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode,
                                              parquet_reader_options const& options)
 {
-  // Initialize reader configuration
+  // Initialize reader configuration.
   initialize_reader_config(options);
 
-  // Build column selection options, must be done after reader configuration is initialized
+  // Build column selection options directly from the user options.
   auto selection_options = make_column_selection_options(options);
 
   if (read_columns_mode == read_columns_mode::ALL_COLUMNS) {

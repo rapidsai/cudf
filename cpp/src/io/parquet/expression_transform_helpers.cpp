@@ -248,12 +248,6 @@ void names_from_expression::visit_operands(
   auto const& selected_column_indices   = options.get_column_indices();
   auto const& selected_column_field_ids = options.get_column_field_ids();
 
-  CUDF_EXPECTS(static_cast<int>(selected_column_names.has_value()) +
-                   static_cast<int>(selected_column_indices.has_value()) +
-                   static_cast<int>(selected_column_field_ids.has_value()) <=
-                 1,
-               "Parquet reader encountered multiple column selection modes");
-
   // Map counting indices to the selected column by names
   if (selected_column_names.has_value()) {
     std::transform(selected_column_names->begin(),

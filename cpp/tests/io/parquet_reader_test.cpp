@@ -470,6 +470,46 @@ TEST_F(ParquetReaderTest, ReorderedColumns)
   }
 }
 
+TEST_F(ParquetReaderTest, SelectColumnByMissingFieldIds)
+{
+  auto const a = cudf::test::fixed_width_column_wrapper<int>{1, 2, 3};
+  auto const b = cudf::test::fixed_width_column_wrapper<int>{4, 5, 6};
+  cudf::table_view const table{{a, b}};
+  auto const filepath = write_parquet_temp_file(table, "SelectColumnByMissingFieldIds.parquet");
+
+  {
+    auto const options = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                           .column_field_ids({1})
+                           .build();
+    auto const result = cudf::io::read_parquet(options);
+    EXPECT_EQ(result.tbl->num_columns(), 0);
+  }
+
+  {
+    auto const options = cudf::io::parquet_reader_options::builder(cudf::io::source_info{filepath})
+                           .column_field_ids({1})
+                           .ignore_missing_columns(false)
+                           .build();
+    EXPECT_THROW(cudf::io::read_parquet(options), std::invalid_argument);
+  }
+}
+
+TEST_F(ParquetReaderTest, ColumnSelectionModesAreExclusive)
+{
+  auto selected_by_name = cudf::io::parquet_reader_options{};
+  selected_by_name.set_column_names({});
+  EXPECT_THROW(selected_by_name.set_column_indices({}), cudf::logic_error);
+  EXPECT_THROW(selected_by_name.set_column_field_ids({}), cudf::logic_error);
+
+  auto selected_by_index = cudf::io::parquet_reader_options{};
+  selected_by_index.set_column_indices({});
+  EXPECT_THROW(selected_by_index.set_column_field_ids({}), cudf::logic_error);
+
+  auto selected_by_field_id = cudf::io::parquet_reader_options{};
+  selected_by_field_id.set_column_field_ids({});
+  EXPECT_THROW(selected_by_field_id.set_column_names({}), cudf::logic_error);
+}
+
 TEST_F(ParquetReaderTest, SelectNestedColumn)
 {
   // Struct<is_human:bool,

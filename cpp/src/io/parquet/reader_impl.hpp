@@ -390,7 +390,7 @@ class reader_impl {
    * @param options Reader options
    * @return True if the user has specified columns from mismatched sources
    */
-  [[nodiscard]] inline bool has_cols_from_mismatched_sources(parquet_reader_options const& options)
+  [[nodiscard]] bool has_cols_from_mismatched_sources(parquet_reader_options const& options)
   {
     return (options.get_column_names().has_value() or
             options.get_column_field_ids().has_value()) and

@@ -810,12 +810,6 @@ std::optional<std::vector<std::string>> reader_impl::get_column_projection(
   auto const has_column_indices   = options.get_column_indices().has_value();
   auto const has_column_field_ids = options.get_column_field_ids().has_value();
 
-  auto constexpr max_allowed_col_selection_modes = 1;
-  CUDF_EXPECTS(static_cast<int>(has_column_names) + static_cast<int>(has_column_indices) +
-                   static_cast<int>(has_column_field_ids) <=
-                 max_allowed_col_selection_modes,
-               "Parquet reader encountered more than one column selection mode");
-
   if (has_column_names) { return options.get_column_names(); }
 
   if (has_column_indices) {
@@ -873,13 +867,6 @@ void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>&
 column_selection_options reader_impl::make_column_selection_options(
   parquet_reader_options const& options) const
 {
-  auto constexpr max_allowed_col_selection_modes = 1;
-  CUDF_EXPECTS(static_cast<int>(options.get_column_names().has_value()) +
-                   static_cast<int>(options.get_column_indices().has_value()) +
-                   static_cast<int>(options.get_column_field_ids().has_value()) <=
-                 max_allowed_col_selection_modes,
-               "Parquet reader encountered more than one column selection mode");
-
   auto const selection_mode = [&]() {
     if (options.get_column_names().has_value()) {
       return column_selection_mode::BY_NAME;
@@ -893,13 +880,13 @@ column_selection_options reader_impl::make_column_selection_options(
   }();
 
   return column_selection_options{
+    .selection_mode         = selection_mode,
     .include_index          = options.is_enabled_use_pandas_metadata(),
-    .strings_to_categorical = _strings_to_categorical,
+    .strings_to_categorical = options.is_enabled_convert_strings_to_categories(),
     .ignore_missing_columns = options.is_enabled_ignore_missing_columns(),
-    .timestamp_type_id      = _options.timestamp_type.id(),
-    .decimal_type_id        = _options.decimal_width,
-    .case_sensitive_names   = _options.case_sensitive_names,
-    .selection_mode         = selection_mode};
+    .timestamp_type_id      = options.get_timestamp_type().id(),
+    .decimal_type_id        = options.get_decimal_width(),
+    .case_sensitive_names   = options.is_enabled_case_sensitive_names()};
 }
 
 table_with_metadata reader_impl::finalize_output(read_mode mode,

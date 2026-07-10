@@ -157,6 +157,8 @@ enum class column_selection_mode : uint8_t {
  * @brief Bundle of column selection parameters
  */
 struct column_selection_options {
+  // Column selection mode
+  column_selection_mode selection_mode = column_selection_mode::NONE;
   // Whether to always include the PANDAS index column(s)
   bool include_index = false;
   // Type conversion parameter: convert strings to categorical columns
@@ -169,8 +171,6 @@ struct column_selection_options {
   type_id decimal_type_id = type_id::EMPTY;
   // Whether column name matching is case sensitive
   bool case_sensitive_names = true;
-  // Column selection mode
-  column_selection_mode selection_mode = column_selection_mode::NONE;
 };
 
 class aggregate_reader_metadata {

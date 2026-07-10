@@ -310,8 +310,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   /**
    * @brief Populate the reader's `_options` config (and related members) from the user options.
    *
-   * Must run before `make_column_selection_options()`, which reads back these cached values.
-   *
    * @param options Reader options
    */
   void initialize_reader_config(parquet_reader_options const& options);

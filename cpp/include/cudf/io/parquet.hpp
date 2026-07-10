@@ -67,7 +67,7 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Column selection options. Only one of these must be set at a time.
+  // Column selection options. At most one of these may be set at a time.
 
   // Path in schema of column names to read; `nullopt` is all
   std::optional<std::vector<std::string>> _column_names;
