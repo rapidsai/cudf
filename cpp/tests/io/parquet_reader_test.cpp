@@ -4802,7 +4802,7 @@ TEST_F(ParquetReaderTest, SourceIndexColumn)
                        .build();
     auto const read = cudf::io::read_parquet(read_opts);
     EXPECT_EQ(read.tbl->num_columns(), table.num_columns() + 1);
-    EXPECT_EQ(read.metadata.schema_info.front().name, "src_idx");
+    EXPECT_EQ(read.metadata.schema_info.front().name, "source_index");
 
     auto const src_index = cudf::detail::make_counting_transform_iterator(
       0, [](cudf::size_type i) { return i / num_rows; });
@@ -4976,4 +4976,180 @@ TEST_F(ParquetReaderTest, MismatchedSchemaFilterOnlyColumnCollision)
   cudf::table_view const expected{{exp_id}};
   auto const result = cudf::io::read_parquet(opts);
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetReaderTest, RowIndexColumn)
+{
+  auto constexpr num_rows = 3;
+  auto col0               = cudf::test::fixed_width_column_wrapper<int32_t>(
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{num_rows});
+  auto col1 = cudf::test::fixed_width_column_wrapper<int64_t>(
+    cuda::counting_iterator<int64_t>{0}, cuda::counting_iterator<int64_t>{num_rows});
+  auto table = cudf::table_view{{col0, col1}};
+
+  auto filepath = temp_env->get_temp_filepath("RowIndexColumn.parquet");
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table).build());
+
+  auto const test_row_index_column = [&](auto num_sources) {
+    auto const sources = std::vector<std::string>(num_sources, filepath);
+    auto read_opts     = cudf::io::parquet_reader_options::builder(cudf::io::source_info(sources))
+                       .prepend_row_index_column(true)
+                       .build();
+    auto const read = cudf::io::read_parquet(read_opts);
+    EXPECT_EQ(read.tbl->num_columns(), table.num_columns() + 1);
+    EXPECT_EQ(read.metadata.schema_info.front().name, "row_index");
+
+    // The row index restarts at zero for each source
+    auto const row_index = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type i) -> size_t { return i % num_rows; });
+    auto const expected =
+      cudf::test::fixed_width_column_wrapper<size_t>(row_index, row_index + num_sources * num_rows);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(read.tbl->view().column(0), expected);
+
+    // The data columns are the single source file tiled `num_sources` times
+    auto const tiled = cudf::tile(table, num_sources);
+    CUDF_TEST_EXPECT_TABLES_EQUAL(read.tbl->select({1, 2}), tiled->view());
+
+    // Use filter `col0 < 2` so only rows {0, 1} from each source are read
+    auto scalar  = cudf::numeric_scalar<cudf::size_type>(2);
+    auto literal = cudf::ast::literal(scalar);
+    auto col_ref = cudf::ast::column_reference(0);
+    auto filter  = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref, literal);
+
+    read_opts.set_filter(filter);
+    auto const read_filtered      = cudf::io::read_parquet(read_opts);
+    auto const filtered_row_index = cudf::detail::make_counting_transform_iterator(
+      0, [](cudf::size_type i) -> size_t { return i % 2; });
+    auto const filtered_expected = cudf::test::fixed_width_column_wrapper<size_t>(
+      filtered_row_index, filtered_row_index + num_sources * 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(read_filtered.tbl->view().column(0), filtered_expected);
+  };
+
+  test_row_index_column(1);
+  test_row_index_column(5);
+}
+
+TEST_F(ParquetReaderTest, SourceAndRowIndexColumns)
+{
+  auto constexpr num_rows    = 3;
+  auto constexpr num_sources = 3;
+  auto col0                  = cudf::test::fixed_width_column_wrapper<int32_t>(
+    cuda::counting_iterator<int32_t>{0}, cuda::counting_iterator<int32_t>{num_rows});
+  auto col1 = cudf::test::fixed_width_column_wrapper<int64_t>(
+    cuda::counting_iterator<int64_t>{0}, cuda::counting_iterator<int64_t>{num_rows});
+  auto table = cudf::table_view{{col0, col1}};
+
+  auto filepath = temp_env->get_temp_filepath("RowIndexAndSourceIndexColumns.parquet");
+  cudf::io::write_parquet(
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath}, table).build());
+
+  auto const sources   = std::vector<std::string>(num_sources, filepath);
+  auto const read_opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info(sources))
+                           .prepend_source_index_column(true)
+                           .prepend_row_index_column(true)
+                           .build();
+  auto const read = cudf::io::read_parquet(read_opts);
+  EXPECT_EQ(read.tbl->num_columns(), table.num_columns() + 2);
+  EXPECT_EQ(read.metadata.schema_info[0].name, "source_index");
+  EXPECT_EQ(read.metadata.schema_info[1].name, "row_index");
+
+  auto const src_index = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) { return i / num_rows; });
+  auto const expected_src_index = cudf::test::fixed_width_column_wrapper<cudf::size_type>(
+    src_index, src_index + num_sources * num_rows);
+  auto const row_index = cudf::detail::make_counting_transform_iterator(
+    0, [](cudf::size_type i) -> size_t { return i % num_rows; });
+  auto const expected_row_index =
+    cudf::test::fixed_width_column_wrapper<size_t>(row_index, row_index + num_sources * num_rows);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(read.tbl->view().column(0), expected_src_index);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(read.tbl->view().column(1), expected_row_index);
+}
+
+TEST_F(ParquetReaderTest, RowIndexSelectedRead)
+{
+  auto write_parquet = [](auto const& filepath, auto const& col) {
+    auto constexpr rows_per_row_group = 2;
+    auto const write_opts = cudf::io::parquet_writer_options::builder(cudf::io::sink_info{filepath},
+                                                                      cudf::table_view{{col}})
+                              .row_group_size_rows(rows_per_row_group)
+                              .max_page_size_rows(rows_per_row_group)
+                              .max_page_fragment_size(rows_per_row_group)
+                              .build();
+    cudf::io::write_parquet(write_opts);
+  };
+
+  auto col0      = cudf::test::fixed_width_column_wrapper<int32_t>{0, 1, 2, 3};
+  auto filepath0 = temp_env->get_temp_filepath("RowIndexSelectedRead0.parquet");
+  write_parquet(filepath0, col0);
+
+  auto col1      = cudf::test::fixed_width_column_wrapper<int32_t>{10, 11, 12, 13};
+  auto filepath1 = temp_env->get_temp_filepath("RowIndexSelectedRead1.parquet");
+  write_parquet(filepath1, col1);
+
+  auto source = cudf::io::source_info{std::vector<std::string>{filepath0, filepath1}};
+
+  // The row index column contains file-local row indices
+  auto expected_values    = cudf::test::fixed_width_column_wrapper<int32_t>{2, 3, 10, 11};
+  auto expected_source    = cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 1, 1};
+  auto expected_row_index = cudf::test::fixed_width_column_wrapper<size_t>{2, 3, 0, 1};
+  auto expected = cudf::table_view{{expected_source, expected_row_index, expected_values}};
+
+  // Test with row bounds
+  {
+    auto const read_opts = cudf::io::parquet_reader_options::builder(source)
+                             .skip_rows(2)
+                             .num_rows(4)
+                             .prepend_source_index_column(true)
+                             .prepend_row_index_column(true)
+                             .build();
+    CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::io::read_parquet(read_opts).tbl->view(), expected);
+  }
+
+  // Test with row group selection
+  {
+    auto const read_opts = cudf::io::parquet_reader_options::builder(source)
+                             .row_groups({{1}, {0}})
+                             .prepend_source_index_column(true)
+                             .prepend_row_index_column(true)
+                             .build();
+    CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::io::read_parquet(read_opts).tbl->view(), expected);
+  }
+
+  // Test with out-of-order row group selection within a single source
+  {
+    auto const read_opts = cudf::io::parquet_reader_options::builder(
+                             cudf::io::source_info{std::vector<std::string>{filepath0}})
+                             .row_groups({{1, 0}})
+                             .prepend_row_index_column(true)
+                             .build();
+    auto const expected_values    = cudf::test::fixed_width_column_wrapper<int32_t>{2, 3, 0, 1};
+    auto const expected_row_index = cudf::test::fixed_width_column_wrapper<size_t>{2, 3, 0, 1};
+    auto const expected           = cudf::table_view{{expected_row_index, expected_values}};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::io::read_parquet(read_opts).tbl->view(), expected);
+  }
+
+  // Test with a filter: `col >= 2` prunes leading rows of source 0 (values {0, 1, 2, 3}) while
+  // keeping all of source 1 (values {10, 11, 12, 13}).
+  {
+    auto scalar  = cudf::numeric_scalar<int32_t>(2);
+    auto literal = cudf::ast::literal(scalar);
+    auto col_ref = cudf::ast::column_reference(0);
+    auto filter  = cudf::ast::operation(cudf::ast::ast_operator::GREATER_EQUAL, col_ref, literal);
+
+    auto const read_opts = cudf::io::parquet_reader_options::builder(source)
+                             .filter(filter)
+                             .prepend_source_index_column(true)
+                             .prepend_row_index_column(true)
+                             .build();
+    auto const expected_filtered_values =
+      cudf::test::fixed_width_column_wrapper<int32_t>{2, 3, 10, 11, 12, 13};
+    auto const expected_filtered_source =
+      cudf::test::fixed_width_column_wrapper<cudf::size_type>{0, 0, 1, 1, 1, 1};
+    auto const expected_filtered_row_index =
+      cudf::test::fixed_width_column_wrapper<size_t>{2, 3, 0, 1, 2, 3};
+    auto const expected_filtered = cudf::table_view{
+      {expected_filtered_source, expected_filtered_row_index, expected_filtered_values}};
+    CUDF_TEST_EXPECT_TABLES_EQUAL(cudf::io::read_parquet(read_opts).tbl->view(), expected_filtered);
+  }
 }
