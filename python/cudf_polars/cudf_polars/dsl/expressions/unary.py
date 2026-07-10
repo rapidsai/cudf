@@ -189,6 +189,14 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
+        if self.name == "repeat":
+            n_expr = children[1]
+            if (
+                isinstance(n_expr, Literal)
+                and n_expr.value is not None
+                and n_expr.value < 0
+            ):
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
         if self.name == "repeat_by" and len(self.children) != 2:
             raise NotImplementedError("repeat_by only supports one repeat count")
         if self.name == "reinterpret":
@@ -570,19 +578,23 @@ class UnaryFunction(Expr):
             value_expr, n_expr = self.children
             value = value_expr.evaluate(df, context=context)
             if isinstance(n_expr, Literal):
-                count = n_expr.value
+                # A negative literal count is rejected in __init__.
+                rep_count: int = n_expr.value
             else:
-                count = (
-                    n_expr.evaluate(df, context=context)
-                    .obj_scalar(stream=df.stream)
-                    .to_py(stream=df.stream)
+                rep_count = cast(
+                    "int",
+                    (
+                        n_expr.evaluate(df, context=context)
+                        .obj_scalar(stream=df.stream)
+                        .to_py(stream=df.stream)
+                    ),
                 )
-            if count < 0:
-                raise pl.exceptions.InvalidOperationError("n must not be negative")
+                if rep_count < 0:
+                    raise pl.exceptions.InvalidOperationError("n must not be negative")
             return Column(
                 plc.filling.repeat(
                     plc.Table([value.obj]),
-                    count,
+                    rep_count,
                     stream=df.stream,
                 ).columns()[0],
                 dtype=self.dtype,
@@ -591,9 +603,18 @@ class UnaryFunction(Expr):
             value, count_column = (
                 child.evaluate(df, context=context) for child in self.children
             )
-            count_column = count_column.astype(
-                DataType(pl.UInt32()), stream=df.stream, strict=True
+            min_count = cast(
+                "int | None",
+                plc.reduce.reduce(
+                    count_column.obj,
+                    plc.aggregation.min(),
+                    count_column.dtype.plc_type,
+                    stream=df.stream,
+                ).to_py(stream=df.stream),
             )
+            if min_count is not None and min_count < 0:
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
+            count_column = count_column.astype(DataType(pl.Int32()), stream=df.stream)
             if count_column.null_count > 0:
                 repeat_count = Column(
                     plc.replace.replace_nulls(
@@ -613,24 +634,19 @@ class UnaryFunction(Expr):
             offsets = plc.reduce.scan(
                 repeat_count.obj,
                 plc.aggregation.sum(),
-                plc.reduce.ScanType.EXCLUSIVE,
-                stream=df.stream,
-            )
-            total = plc.reduce.reduce(
-                repeat_count.obj,
-                plc.aggregation.sum(),
-                repeat_count.dtype.plc_type,
+                plc.reduce.ScanType.INCLUSIVE,
                 stream=df.stream,
             )
             offsets = plc.concatenate.concatenate(
                 [
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(0, offsets.type(), stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
                     offsets,
-                    plc.Column.from_scalar(total, 1, stream=df.stream),
                 ],
                 stream=df.stream,
-            )
-            offsets = plc.unary.cast(
-                offsets, plc.DataType(plc.TypeId.INT32), stream=df.stream
             )
             return Column(
                 plc.Column(

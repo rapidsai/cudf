@@ -16,6 +16,7 @@ from cudf_polars.testing.asserts import (
     assert_gpu_result_equal,
     assert_ir_translation_raises,
 )
+from cudf_polars.testing.engine_utils import is_streaming_engine
 
 
 @pytest.fixture(
@@ -126,6 +127,25 @@ def test_repeat_null_unsupported(engine: pl.GPUEngine):
     df = pl.LazyFrame({"a": [1, 2, 3]})
     q = df.select(pl.repeat(None, 2))
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_repeat_negative_literal_raises(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = df.select(pl.repeat(5, -1))
+    assert_ir_translation_raises(q, engine, pl.exceptions.InvalidOperationError)
+
+
+def test_repeat_negative_expression_result_raises(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": [-3, 1, 2]})
+    q = df.select(pl.repeat("x", pl.col("a").min()))
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(
+            pl.exceptions.InvalidOperationError, match="must not be negative"
+        ):
+            q.collect(engine=engine)
 
 
 @pytest.mark.parametrize(

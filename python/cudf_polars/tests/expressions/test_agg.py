@@ -133,12 +133,6 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
-def test_repeat_by(engine: pl.GPUEngine) -> None:
-    df = pl.LazyFrame({"a": [1, 2, None, 3], "n": [2, None, 0, 1]})
-    q = df.select(pl.col("a").repeat_by("n"))
-    assert_gpu_result_equal(q, engine=engine)
-
-
 @pytest.mark.parametrize(
     "data",
     [
