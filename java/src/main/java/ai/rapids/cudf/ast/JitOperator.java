@@ -19,71 +19,53 @@ import java.nio.ByteBuffer;
  */
 public enum JitOperator {
   /** Return the first non-null input. */
-  COALESCE(0, 2, false, false),
+  COALESCE(0),
   /** Convert a nullable boolean input into an always-valid predicate. */
-  PREDICATE(1, 1, false, false),
-  ADD(2, 2, false, false),
-  SUB(3, 2, false, false),
-  MUL(4, 2, false, false),
+  PREDICATE(1),
+  ADD(2),
+  SUB(3),
+  MUL(4),
   /** Divide without reporting arithmetic errors. */
-  DIV(5, 2, false, false),
-  NEG(6, 1, false, false),
-  ABS(7, 1, false, false),
-  MOD(8, 2, false, false),
-  ADD_OVERFLOW(9, 2, true, false),
-  SUB_OVERFLOW(10, 2, true, false),
-  MUL_OVERFLOW(11, 2, true, false),
+  DIV(5),
+  NEG(6),
+  ABS(7),
+  MOD(8),
+  ADD_OVERFLOW(9),
+  SUB_OVERFLOW(10),
+  MUL_OVERFLOW(11),
   /** Divide and report division-by-zero and signed-overflow errors. */
-  DIV_OVERFLOW(12, 2, true, false),
-  NEG_OVERFLOW(13, 1, true, false),
-  ABS_OVERFLOW(14, 1, true, false),
-  MOD_OVERFLOW(15, 2, true, false),
+  DIV_OVERFLOW(12),
+  NEG_OVERFLOW(13),
+  ABS_OVERFLOW(14),
+  MOD_OVERFLOW(15),
   /** Verify that decimal input 0 fits the INT32 precision supplied by input 1. */
-  CHECK_PRECISION(16, 2, true, false),
-  BITWISE_SHIFT_LEFT(17, 2, false, false),
-  BITWISE_SHIFT_RIGHT(18, 2, false, false),
-  CAST_TO_BOOL8(19, 1, false, false),
-  CAST_TO_INT8(20, 1, false, false),
-  CAST_TO_INT16(21, 1, false, false),
-  CAST_TO_INT32(22, 1, false, false),
-  CAST_TO_INT64(23, 1, false, false),
-  CAST_TO_UINT8(24, 1, false, false),
-  CAST_TO_UINT16(25, 1, false, false),
-  CAST_TO_UINT32(26, 1, false, false),
-  CAST_TO_UINT64(27, 1, false, false),
-  CAST_TO_FLOAT32(28, 1, false, false),
-  CAST_TO_FLOAT64(29, 1, false, false),
-  CAST_TO_DECIMAL32(30, 1, false, false),
-  CAST_TO_DECIMAL64(31, 1, false, false),
-  CAST_TO_DECIMAL128(32, 1, false, false),
+  CHECK_PRECISION(16),
+  BITWISE_SHIFT_LEFT(17),
+  BITWISE_SHIFT_RIGHT(18),
+  CAST_TO_BOOL8(19),
+  CAST_TO_INT8(20),
+  CAST_TO_INT16(21),
+  CAST_TO_INT32(22),
+  CAST_TO_INT64(23),
+  CAST_TO_UINT8(24),
+  CAST_TO_UINT16(25),
+  CAST_TO_UINT32(26),
+  CAST_TO_UINT64(27),
+  CAST_TO_FLOAT32(28),
+  CAST_TO_FLOAT64(29),
+  CAST_TO_DECIMAL32(30),
+  CAST_TO_DECIMAL64(31),
+  CAST_TO_DECIMAL128(32),
   /** Rescale a decimal input to the target scale supplied to {@link JitOperation}. */
-  RESCALE(33, 1, false, true),
+  RESCALE(33),
   /** Select input 0 when input 2 is true, otherwise input 1. */
-  IF_ELSE(34, 3, false, false);
+  IF_ELSE(34);
 
   private final byte nativeId;
-  private final int arity;
-  private final boolean fallible;
-  private final boolean requiresTargetScale;
 
-  JitOperator(int nativeId, int arity, boolean fallible, boolean requiresTargetScale) {
+  JitOperator(int nativeId) {
     this.nativeId = (byte) nativeId;
-    this.arity = arity;
-    this.fallible = fallible;
-    this.requiresTargetScale = requiresTargetScale;
     assert this.nativeId == nativeId;
-  }
-
-  int getArity() {
-    return arity;
-  }
-
-  boolean isFallible() {
-    return fallible;
-  }
-
-  boolean requiresTargetScale() {
-    return requiresTargetScale;
   }
 
   int getSerializedSize() {

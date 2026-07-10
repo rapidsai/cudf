@@ -9,8 +9,10 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
- * A libcudf row-IR operation. Expressions containing a JIT operation must be evaluated with
+ * A libcudf JIT operation. Expressions containing a JIT operation must be evaluated with
  * {@link CompiledExpression#computeColumnJit}.
+ * Operator arity, error policy, and target-scale constraints are validated when the expression
+ * is compiled.
  */
 public final class JitOperation extends AstExpression {
   private final JitOperator op;
@@ -24,7 +26,6 @@ public final class JitOperation extends AstExpression {
    * @param op operator to apply
    * @param inputs operator inputs
    * @throws NullPointerException if {@code op}, {@code inputs}, or an input is null
-   * @throws IllegalArgumentException if the operator arity or target-scale usage is invalid
    */
   public JitOperation(JitOperator op, AstExpression... inputs) {
     this(op, JitErrorPolicy.PROPAGATE, null, inputs);
@@ -37,7 +38,6 @@ public final class JitOperation extends AstExpression {
    * @param errorPolicy error handling policy
    * @param inputs operator inputs
    * @throws NullPointerException if any argument or input is null
-   * @throws IllegalArgumentException if the arity, policy, or target-scale usage is invalid
    */
   public JitOperation(JitOperator op, JitErrorPolicy errorPolicy, AstExpression... inputs) {
     this(op, errorPolicy, null, inputs);
@@ -51,8 +51,6 @@ public final class JitOperation extends AstExpression {
    * @param targetScale target fixed-point scale
    * @param inputs operator inputs
    * @throws NullPointerException if {@code op}, {@code inputs}, or an input is null
-   * @throws IllegalArgumentException if the operator is not {@link JitOperator#RESCALE} or its
-   *         arity is invalid
    */
   public JitOperation(JitOperator op, int targetScale, AstExpression... inputs) {
     this(op, JitErrorPolicy.PROPAGATE, Integer.valueOf(targetScale), inputs);
@@ -67,16 +65,6 @@ public final class JitOperation extends AstExpression {
     this.errorPolicy = Objects.requireNonNull(errorPolicy, "errorPolicy is null");
     this.inputs = Objects.requireNonNull(inputs, "inputs is null").clone();
     this.targetScale = targetScale;
-    if (this.inputs.length != op.getArity()) {
-      throw new IllegalArgumentException(
-          op + " requires " + op.getArity() + " inputs, found " + this.inputs.length);
-    }
-    if (!op.isFallible() && errorPolicy == JitErrorPolicy.NULLIFY) {
-      throw new IllegalArgumentException(op + " cannot nullify errors");
-    }
-    if (op.requiresTargetScale() != (targetScale != null)) {
-      throw new IllegalArgumentException(op + " target scale usage is invalid");
-    }
     for (AstExpression input : this.inputs) {
       Objects.requireNonNull(input, "input is null");
     }

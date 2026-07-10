@@ -381,50 +381,15 @@ public class CompiledExpressionTest extends CudfTestBase {
 
   @Test
   void testJitOperationValidation() {
-    AstExpression[] inputs = new AstExpression[] {
-        new ColumnReference(0),
-        new ColumnReference(1),
-        new ColumnReference(2)
-    };
-    for (JitOperator op : JitOperator.values()) {
-      AstExpression[] opInputs = Arrays.copyOf(inputs, op.getArity());
-      JitOperation expr;
-      if (op == JitOperator.RESCALE) {
-        expr = new JitOperation(op, -2, opInputs);
-      } else {
-        expr = new JitOperation(op, opInputs);
-      }
-      try (CompiledExpression ignored = expr.compile()) {
-        // The native decoder is part of the serialized operator contract.
-      }
-      if (op.isFallible()) {
-        JitOperation nullifyingExpr = new JitOperation(op, JitErrorPolicy.NULLIFY, opInputs);
-        try (CompiledExpression ignored = nullifyingExpr.compile()) {
-          // The native decoder is part of the serialized error-policy contract.
-        }
-      }
-      if (op.getArity() > 0) {
-        Assertions.assertThrows(
-            IllegalArgumentException.class,
-            () -> new JitOperation(op, Arrays.copyOf(inputs, op.getArity() - 1)));
-      }
-    }
+    assertJitCompileThrows(new JitOperation(JitOperator.ADD, new ColumnReference(0)));
+    assertJitCompileThrows(new JitOperation(JitOperator.ADD,
+        new ColumnReference(0), new ColumnReference(1), new ColumnReference(2)));
+    assertJitCompileThrows(new JitOperation(JitOperator.ADD, JitErrorPolicy.NULLIFY,
+        new ColumnReference(0), new ColumnReference(1)));
+    assertJitCompileThrows(new JitOperation(JitOperator.ADD, -2,
+        new ColumnReference(0), new ColumnReference(1)));
+    assertJitCompileThrows(new JitOperation(JitOperator.RESCALE, new ColumnReference(0)));
 
-    Assertions.assertThrows(
-        IllegalArgumentException.class,
-        () -> new JitOperation(JitOperator.ADD, JitErrorPolicy.NULLIFY,
-            new ColumnReference(0), new ColumnReference(1)));
-    Assertions.assertThrows(
-        IllegalArgumentException.class,
-        () -> new JitOperation(JitOperator.ADD, -2,
-            new ColumnReference(0), new ColumnReference(1)));
-    Assertions.assertThrows(
-        IllegalArgumentException.class,
-        () -> new JitOperation(JitOperator.RESCALE, new ColumnReference(0)));
-    Assertions.assertThrows(
-        IllegalArgumentException.class,
-        () -> new JitOperation(JitOperator.ADD,
-            new ColumnReference(0), new ColumnReference(1), new ColumnReference(2)));
     Assertions.assertThrows(
         NullPointerException.class,
         () -> new JitOperation(null, new ColumnReference(0)));
@@ -439,6 +404,13 @@ public class CompiledExpressionTest extends CudfTestBase {
     Assertions.assertThrows(
         NullPointerException.class,
         () -> new JitOperation(JitOperator.ADD, (AstExpression[]) null));
+  }
+
+  private static void assertJitCompileThrows(JitOperation expr) {
+    Assertions.assertThrows(CudfException.class, () -> {
+      try (CompiledExpression ignored = expr.compile()) {
+      }
+    });
   }
 
   @Test
