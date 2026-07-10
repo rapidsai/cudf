@@ -22,6 +22,7 @@
 #include <cstring>
 #include <filesystem>
 #include <format>
+#include <mutex>
 #include <numeric>
 #include <source_location>
 
@@ -455,8 +456,8 @@ struct LibNVJitLink {
 static std::optional<LibCuda> cu;
 static std::optional<LibNVRTC> nvrtc;
 static std::optional<LibNVJitLink> nvjitlink;
-static std::optional<std::once_flag> init_libraries_flag{std::in_place};
-static std::optional<std::once_flag> teardown_libraries_flag{std::in_place};
+static std::mutex libraries_mutex;
+static bool libraries_initialized = false;
 
 }  // namespace
 
@@ -464,28 +465,35 @@ void initialize()
 {
   RTCX_FUNC_RANGE();
 
-  std::call_once(init_libraries_flag.value(), [] {
+  std::lock_guard guard{libraries_mutex};
+  if (libraries_initialized) { return; }
+
+  try {
     cu.emplace(LibCuda::_load());
     RTCX_EXPECTS(
       cu->Init(0) == CUDA_SUCCESS, "Failed to initialize CUDA driver API", std::runtime_error);
     nvrtc.emplace(LibNVRTC::_load());
     nvjitlink.emplace(LibNVJitLink::_load());
-  });
+    libraries_initialized = true;
+  } catch (...) {
+    nvjitlink.reset();
+    nvrtc.reset();
+    cu.reset();
+    throw;
+  }
 }
 
 void teardown()
 {
   RTCX_FUNC_RANGE();
 
-  std::call_once(teardown_libraries_flag.value(), [] {
-    nvjitlink.reset();
-    nvrtc.reset();
-    cu.reset();
-    init_libraries_flag.reset();
-    teardown_libraries_flag.reset();
-    init_libraries_flag.emplace();
-    teardown_libraries_flag.emplace();
-  });
+  std::lock_guard guard{libraries_mutex};
+  if (!libraries_initialized) { return; }
+
+  nvjitlink.reset();
+  nvrtc.reset();
+  cu.reset();
+  libraries_initialized = false;
 }
 
 blob_t blob_t::from_buffer(byte_buffer buffer)
