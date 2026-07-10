@@ -808,7 +808,7 @@ def test_collect_metadata_scans_union_disjoint_paths() -> None:
         config_options=config_options,
         nranks=1,
     )
-    assert metadata_scans == (left, right)
+    assert metadata_scans == [left, right]
 
 
 def test_collect_metadata_scans_skips_empty_rank() -> None:
@@ -834,7 +834,7 @@ def test_collect_metadata_scans_skips_empty_rank() -> None:
         config_options=config_options,
         nranks=2,
     )
-    assert metadata_scans == ()
+    assert metadata_scans == []
 
 
 def test_recv_prefetched_parquet_metadata_handler_errors() -> None:

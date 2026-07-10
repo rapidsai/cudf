@@ -102,15 +102,12 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
 
 
 def _cached_parquet_info_from_stats(
-    stats: StatsCollector | None,
+    stats: StatsCollector,
 ) -> dict[str, CachedParquetInfo]:
     """Return path -> cached parquet info seeded from statistics collection."""
     from cudf_polars.streaming.io import ParquetSourceInfo
 
     cached_parquet_info: dict[str, CachedParquetInfo] = {}
-    if stats is None:
-        return cached_parquet_info
-
     for node, datasource_info in stats.scan_stats.items():
         if (
             isinstance(node, Scan)
@@ -125,9 +122,7 @@ def _cached_parquet_info_from_stats(
 
 @nvtx_annotate_cudf_polars(message="prefetch_cached_parquet_info_for_paths")
 def prefetch_cached_parquet_info_for_paths(
-    paths: list[str],
-    *,
-    stats: StatsCollector | None = None,
+    paths: list[str], *, stats: StatsCollector
 ) -> list[CachedParquetInfo]:
     """
     Prefetch parquet metadata for a path group.
