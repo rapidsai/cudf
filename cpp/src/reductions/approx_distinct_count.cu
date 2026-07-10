@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -17,6 +17,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>
@@ -164,9 +165,10 @@ approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
                                                      std::int32_t precision,
                                                      null_policy null_handling,
                                                      nan_policy nan_handling,
-                                                     rmm::cuda_stream_view stream)
+                                                     rmm::cuda_stream_view stream,
+                                                     rmm::device_async_resource_ref mr)
   : _storage{rmm::device_uvector<register_type>{
-      sketch_bytes(check_precision(precision)) / sizeof(register_type), stream}},
+      sketch_bytes(check_precision(precision)) / sizeof(register_type), stream, mr}},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
@@ -183,9 +185,10 @@ approx_distinct_count<Hasher>::approx_distinct_count(
   cudf::approx_distinct_count::desired_standard_error error,
   null_policy null_handling,
   nan_policy nan_handling,
-  rmm::cuda_stream_view stream)
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr)
   : approx_distinct_count{
-      input, precision_from_standard_error(error.value), null_handling, nan_handling, stream}
+      input, precision_from_standard_error(error.value), null_handling, nan_handling, stream, mr}
 {
 }
 
@@ -362,8 +365,9 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              std::int32_t precision,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
-                                             rmm::cuda_stream_view stream)
-  : _impl(std::make_unique<impl_type>(input, precision, null_handling, nan_handling, stream))
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
+  : _impl(std::make_unique<impl_type>(input, precision, null_handling, nan_handling, stream, mr))
 {
 }
 
@@ -371,8 +375,9 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              desired_standard_error error,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
-                                             rmm::cuda_stream_view stream)
-  : _impl(std::make_unique<impl_type>(input, error, null_handling, nan_handling, stream))
+                                             rmm::cuda_stream_view stream,
+                                             rmm::device_async_resource_ref mr)
+  : _impl(std::make_unique<impl_type>(input, error, null_handling, nan_handling, stream, mr))
 {
 }
 

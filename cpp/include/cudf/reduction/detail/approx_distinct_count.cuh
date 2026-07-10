@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -12,6 +12,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/resource_ref.hpp>
 
 #include <cuco/hyperloglog_ref.cuh>
 #include <cuda/functional>
@@ -75,12 +76,15 @@ class approx_distinct_count {
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the sketch storage, which must remain
+   *           valid for the lifetime of this object
    */
   approx_distinct_count(table_view const& input,
                         std::int32_t precision,
                         null_policy null_handling,
                         nan_policy nan_handling,
-                        rmm::cuda_stream_view stream);
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
 
   /**
    * @brief Constructs an owning approximate distinct count sketch from a table with standard
@@ -99,12 +103,15 @@ class approx_distinct_count {
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the sketch storage, which must remain
+   *           valid for the lifetime of this object
    */
   approx_distinct_count(table_view const& input,
                         cudf::approx_distinct_count::desired_standard_error error,
                         null_policy null_handling,
                         nan_policy nan_handling,
-                        rmm::cuda_stream_view stream);
+                        rmm::cuda_stream_view stream,
+                        rmm::device_async_resource_ref mr);
 
   /**
    * @brief Constructs a non-owning approximate distinct count sketch from user-allocated storage
