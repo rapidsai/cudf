@@ -176,8 +176,12 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
-        if self.name == "top_k_by" and len(self.children) != 3:
-            raise NotImplementedError("top_k_by only supports a single by expression")
+        if self.name == "top_k_by":
+            if len(self.children) != 3:
+                raise NotImplementedError(
+                    "top_k_by only supports a single by expression"
+                )
+            self.options = (tuple(self.options[0]),)
 
     @staticmethod
     def _bound_clip_operand(
@@ -565,21 +569,21 @@ class UnaryFunction(Expr):
             )
             (descending,) = self.options
             k = cast("Literal", self.children[1]).value
-            sorted_values = plc.sorting.sort_by_key(
-                plc.Table([value.obj]),
-                plc.Table([by.obj]),
-                [
-                    plc.types.Order.ASCENDING
-                    if descending[0]
-                    else plc.types.Order.DESCENDING
-                ],
-                [plc.types.NullOrder.BEFORE],
+            indices = plc.sorting.top_k_order(
+                by.obj,
+                k,
+                plc.types.Order.ASCENDING
+                if descending[0]
+                else plc.types.Order.DESCENDING,
                 stream=df.stream,
-            ).columns()[0]
+            )
             return Column(
-                plc.copying.slice(
-                    sorted_values, [0, min(k, value.size)], stream=df.stream
-                )[0],
+                plc.copying.gather(
+                    plc.Table([value.obj]),
+                    indices,
+                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                    stream=df.stream,
+                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name in ("shift", "shift_and_fill"):
