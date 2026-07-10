@@ -515,20 +515,25 @@ class UnaryFunction(Expr):
                     )
 
             return Column(ranked, dtype=self.dtype)
-        elif self.name == "top_k":
-            (column, _k) = (
-                child.evaluate(df, context=context) for child in self.children
-            )
-            (reverse,) = self.options
+        elif self.name == "repeat":
+            value_expr, n_expr = self.children
+            value = value_expr.evaluate(df, context=context)
+            if isinstance(n_expr, Literal):
+                count = n_expr.value
+            else:
+                count = (
+                    n_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
+            if count < 0:
+                raise pl.exceptions.InvalidOperationError("n must not be negative")
             return Column(
-                plc.sorting.top_k(
-                    column.obj,
-                    cast("Literal", self.children[1]).value,
-                    plc.types.Order.ASCENDING
-                    if reverse
-                    else plc.types.Order.DESCENDING,
+                plc.filling.repeat(
+                    plc.Table([value.obj]),
+                    count,
                     stream=df.stream,
-                ),
+                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name == "repeat_by":
@@ -590,6 +595,22 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
+        elif self.name == "top_k":
+            (column, _k) = (
+                child.evaluate(df, context=context) for child in self.children
+            )
+            (reverse,) = self.options
+            return Column(
+                plc.sorting.top_k(
+                    column.obj,
+                    cast("Literal", self.children[1]).value,
+                    plc.types.Order.ASCENDING
+                    if reverse
+                    else plc.types.Order.DESCENDING,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
         elif self.name in ("shift", "shift_and_fill"):
             column = self.children[0].evaluate(df, context=context)
             n_expr = self.children[1]
@@ -645,27 +666,6 @@ class UnaryFunction(Expr):
             extension = plc.Column.from_scalar(fill, count, stream=df.stream)
             return Column(
                 plc.concatenate.concatenate([column.obj, extension], stream=df.stream),
-                dtype=self.dtype,
-            )
-        elif self.name == "repeat":
-            value_expr, n_expr = self.children
-            value = value_expr.evaluate(df, context=context)
-            if isinstance(n_expr, Literal):
-                count = n_expr.value
-            else:
-                count = (
-                    n_expr.evaluate(df, context=context)
-                    .obj_scalar(stream=df.stream)
-                    .to_py(stream=df.stream)
-                )
-            if count < 0:
-                raise pl.exceptions.InvalidOperationError("n must not be negative")
-            return Column(
-                plc.filling.repeat(
-                    plc.Table([value.obj]),
-                    count,
-                    stream=df.stream,
-                ).columns()[0],
                 dtype=self.dtype,
             )
         elif self.name == "gather_every":
