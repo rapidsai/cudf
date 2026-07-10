@@ -650,12 +650,15 @@ class UnaryFunction(Expr):
                     )
             return diffed
         elif self.name == "pct_change":
-            column = self.children[0].evaluate(df, context=context)
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
             offset = self._evaluate_n(self.children[1], df, context)
             out_type = self.dtype.plc_type
-            operand = plc.unary.cast(column.obj, out_type, stream=df.stream)
             shifted = plc.copying.shift(
-                operand,
+                column.obj,
                 offset,
                 plc.Scalar.from_py(None, out_type, stream=df.stream),
                 stream=df.stream,
@@ -673,7 +676,7 @@ class UnaryFunction(Expr):
             )
             return Column(
                 plc.transform.compute_column(
-                    plc.Table([operand, shifted]), expression, stream=df.stream
+                    plc.Table([column.obj, shifted]), expression, stream=df.stream
                 ),
                 dtype=self.dtype,
             )
