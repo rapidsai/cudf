@@ -15,7 +15,7 @@ import pylibcudf as plc
 from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame
@@ -109,6 +109,7 @@ class UnaryFunction(Expr):
             "as_struct",
             "arg_max",
             "arg_min",
+            "arg_sort",
             "arg_unique",
             "clip",
             "drop_nans",
@@ -251,6 +252,21 @@ class UnaryFunction(Expr):
                         stream=df.stream,
                     ),
                     1,
+                    stream=df.stream,
+                ),
+                dtype=DataType(pl.Int32()),
+            ).astype(self.dtype, stream=df.stream)
+        if self.name == "arg_sort":
+            (descending, nulls_last) = self.options
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            arg_order, arg_null_order = sorting.sort_order(
+                [descending], nulls_last=[nulls_last], num_keys=1
+            )
+            return Column(
+                plc.sorting.stable_sorted_order(
+                    plc.Table([column.obj]),
+                    arg_order,
+                    arg_null_order,
                     stream=df.stream,
                 ),
                 dtype=DataType(pl.Int32()),
