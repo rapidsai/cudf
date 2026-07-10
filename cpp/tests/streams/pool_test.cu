@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,6 +21,17 @@ TEST_F(StreamPoolTest, ForkStreams)
   for (auto& stream : streams) {
     do_nothing_kernel<<<1, 32, 0, stream.value()>>>();
   }
+}
+
+TEST_F(StreamPoolTest, ForkJoinStreams)
+{
+  auto stream  = cudf::test::get_default_stream();
+  auto streams = cudf::detail::fork_streams(stream, 2);
+  for (auto& s : streams) {
+    do_nothing_kernel<<<1, 32, 0, s.value()>>>();
+  }
+  cudf::detail::join_streams(streams, stream);
+  CUDF_CUDA_TRY(cudaStreamSynchronize(stream.value()));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
