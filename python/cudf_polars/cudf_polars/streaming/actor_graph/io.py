@@ -624,7 +624,7 @@ async def parquet_metadata_prefetch_node(
                 group_key=key,
                 cached_parquet_info=cached_by_key[key],
             )
-            await ch_out.send(
+            await ch_out.send_metadata(
                 context,
                 Message(0, ArbitraryChunk(payload)),
             )
@@ -674,7 +674,7 @@ async def recv_prefetched_parquet_metadata(
     ch: Channel[ArbitraryChunk[MetadataMessagePayload]],
 ) -> Message[ArbitraryChunk[MetadataMessagePayload]] | None:
     """Receive and validate one prefetched parquet metadata message."""
-    return await ch.recv(context)
+    return await ch.recv_metadata(context)
 
 
 def recv_prefetched_parquet_metadata_handler(
