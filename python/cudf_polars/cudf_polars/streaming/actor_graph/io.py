@@ -740,12 +740,12 @@ def recv_prefetched_parquet_metadata_handler(
     group_key: tuple[str, ...],
 ) -> list[CachedParquetInfo]:
     """Synchronous handler for prefetched parquet metadata messages."""
-    if msg is None:  # pragma: no cover; unreachable
+    if msg is None:
         raise AssertionError(
             f"Missing parquet metadata message for paths: {reprlib.repr(group_key)}"
         )
     payload = ArbitraryChunk[MetadataMessagePayload].from_message(msg).release()
-    if payload.group_key != group_key:  # pragma: no cover; unreachable
+    if payload.group_key != group_key:
         difference = set(group_key) ^ set(payload.group_key)
         raise AssertionError(
             "Unexpected parquet metadata key on scan input channel. "
