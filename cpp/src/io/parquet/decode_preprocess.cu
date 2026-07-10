@@ -418,7 +418,7 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   __shared__ rle_run def_runs[rle_run_buffer_size];
   __shared__ rle_run rep_runs[rle_run_buffer_size];
   static constexpr int max_output_values = cuda::std::numeric_limits<int>::max();
-  rle_stream<level_t, level_decode_block_size, max_output_values>
+  rle_stream<level_t, level_decode_block_size, max_output_values, true>
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
   // Shared-memory staging scratch for the encoded level streams. Level streams
