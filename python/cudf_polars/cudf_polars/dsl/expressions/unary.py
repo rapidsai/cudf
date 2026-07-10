@@ -114,6 +114,7 @@ class UnaryFunction(Expr):
             "gather_every",
             "mask_nans",
             "max_by",
+            "min_by",
             "null_count",
             "rank",
             "round",
@@ -174,8 +175,10 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"ranking with {method=} is not yet supported"
                 )
-        if self.name == "max_by" and len(self.children) != 2:
-            raise NotImplementedError("max_by only supports a single by expression")
+        if self.name in ("max_by", "min_by") and len(self.children) != 2:
+            raise NotImplementedError(
+                f"{self.name} only supports a single by expression"
+            )
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -196,7 +199,7 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             )
-        if self.name == "max_by":
+        if self.name in ("max_by", "min_by"):
             value, by = (child.evaluate(df, context=context) for child in self.children)
             sorted_values = plc.sorting.sort_by_key(
                 plc.Table([value.obj]),
@@ -205,10 +208,12 @@ class UnaryFunction(Expr):
                 [plc.types.NullOrder.BEFORE],
                 stream=df.stream,
             ).columns()[0]
+            if self.name == "max_by":
+                slice_indices = [value.size - 1, value.size]
+            else:
+                slice_indices = [0, 1]
             return Column(
-                plc.copying.slice(
-                    sorted_values, [value.size - 1, value.size], stream=df.stream
-                )[0],
+                plc.copying.slice(sorted_values, slice_indices, stream=df.stream)[0],
                 dtype=self.dtype,
             )
         arg: plc.Column | plc.Scalar

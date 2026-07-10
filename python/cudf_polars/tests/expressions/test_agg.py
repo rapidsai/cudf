@@ -133,12 +133,15 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
-@pytest.mark.skip_on_streaming_engine(
-    reason="global max_by across partitions is not implemented"
-)
 def test_max_by(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1], "b": [5, 4, 3, 2, 1, 6]})
     q = df.select(pl.col("a").max_by("b"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_min_by(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1], "b": [5, 4, 3, 2, 1, 6]})
+    q = df.select(pl.col("a").min_by("b"))
     assert_gpu_result_equal(q, engine=engine)
 
 
