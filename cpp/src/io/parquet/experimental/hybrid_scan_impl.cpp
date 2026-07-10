@@ -1136,13 +1136,15 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   // Prepend the source and row index columns to filter columns only
   if (read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
     if (_options.prepend_row_index_column) {
-      out_columns.emplace(out_columns.begin(), synthesize_row_index_column(read_info));
+      out_columns.emplace(out_columns.begin(),
+                          synthesize_row_index_column(read_info, _stream, _mr));
       out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
                                        column_name_info{.name = "row_index", .is_nullable = false});
     }
     if (_options.prepend_source_index_column) {
-      out_columns.emplace(out_columns.begin(),
-                          synthesize_source_index_column(out_metadata.num_rows_per_source));
+      out_columns.emplace(
+        out_columns.begin(),
+        synthesize_source_index_column(out_metadata.num_rows_per_source, _stream, _mr));
       out_metadata.schema_info.emplace(
         out_metadata.schema_info.begin(),
         column_name_info{.name = "source_index", .is_nullable = false});
