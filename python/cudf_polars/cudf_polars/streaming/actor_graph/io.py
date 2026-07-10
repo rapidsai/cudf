@@ -714,7 +714,7 @@ def _start_metadata_receiver(
     async def _receive() -> None:
         try:
             for task_idx, scan in enumerate(scans):
-                msg = await recv_prefetched_parquet_metadata(context, ch_metadata)
+                msg = await ch_metadata.recv_metadata(context)
                 cached = recv_prefetched_parquet_metadata_handler(
                     msg, tuple(scan.paths)
                 )
@@ -733,14 +733,6 @@ def _start_metadata_receiver(
 
     receiver_task = asyncio.create_task(_receive())
     return futures, receiver_task
-
-
-async def recv_prefetched_parquet_metadata(
-    context: Context,
-    ch: Channel[ArbitraryChunk[MetadataMessagePayload]],
-) -> Message[ArbitraryChunk[MetadataMessagePayload]] | None:
-    """Receive and validate one prefetched parquet metadata message."""
-    return await ch.recv_metadata(context)
 
 
 def recv_prefetched_parquet_metadata_handler(
