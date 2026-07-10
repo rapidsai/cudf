@@ -59,3 +59,43 @@ def test_bottom_k_by(engine: pl.GPUEngine, df, by, k, reverse):
 def test_top_k_by_multiple_by_unsupported(engine: pl.GPUEngine, df):
     q = df.select(pl.col("test").top_k_by(["val", "str_value"], 2))
     assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
+    "k_expr",
+    [
+        pl.col("test").max(),
+        pl.col("test").min(),
+        pl.lit(2) + pl.lit(1),
+    ],
+)
+def test_top_k_expr_k(engine: pl.GPUEngine, df, k_expr):
+    q = df.select(pl.col("val").top_k(k_expr))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "k_expr",
+    [
+        pl.col("test").max(),
+        pl.col("test").min(),
+        pl.lit(2) + pl.lit(1),
+    ],
+)
+def test_bottom_k_expr_k(engine: pl.GPUEngine, df, k_expr):
+    q = df.select(pl.col("val").bottom_k(k_expr))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
+
+
+@pytest.mark.parametrize(
+    "k_expr",
+    [
+        pl.col("test").max(),
+        pl.col("test").min(),
+        pl.lit(2) + pl.lit(1),
+    ],
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_top_k_by_expr_k(engine: pl.GPUEngine, df, k_expr, reverse):
+    q = df.select(pl.col("val").top_k_by("col_with_nulls", k_expr, reverse=reverse))
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)

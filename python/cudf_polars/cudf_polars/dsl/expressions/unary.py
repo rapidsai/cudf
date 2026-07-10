@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never
 
 import polars as pl
 
@@ -548,14 +548,21 @@ class UnaryFunction(Expr):
 
             return Column(ranked, dtype=self.dtype)
         elif self.name == "top_k":
-            (column, _k) = (
-                child.evaluate(df, context=context) for child in self.children
-            )
+            column = self.children[0].evaluate(df, context=context)
             (reverse,) = self.options
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
             return Column(
                 plc.sorting.top_k(
                     column.obj,
-                    cast("Literal", self.children[1]).value,
+                    k,
                     plc.types.Order.ASCENDING
                     if reverse
                     else plc.types.Order.DESCENDING,
@@ -564,11 +571,18 @@ class UnaryFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name == "top_k_by":
-            value, _k, by = (
-                child.evaluate(df, context=context) for child in self.children
-            )
+            value = self.children[0].evaluate(df, context=context)
+            by = self.children[2].evaluate(df, context=context)
             (descending,) = self.options
-            k = cast("Literal", self.children[1]).value
+            k_expr = self.children[1]
+            if isinstance(k_expr, Literal):
+                k = k_expr.value
+            else:
+                k = (
+                    k_expr.evaluate(df, context=context)
+                    .obj_scalar(stream=df.stream)
+                    .to_py(stream=df.stream)
+                )
             indices = plc.sorting.top_k_order(
                 by.obj,
                 k,
