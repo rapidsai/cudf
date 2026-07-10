@@ -75,6 +75,16 @@ def df():
     )
 
 
+@pytest.fixture
+def prefetch_file_metadata_engine(
+    streaming_engine_factory: Callable[..., StreamingEngine],
+):
+    """Streaming Engine fixture with parquet metadata prefetching enabled."""
+    return streaming_engine_factory(
+        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
+    )
+
+
 @pytest.mark.parametrize(
     "fmt, scan_fn",
     [
@@ -137,24 +147,18 @@ def test_scan_parquet_prefetch_file_metadata(
 def test_scan_parquet_prefetch_metadata_shared_scan_paths(
     tmp_path: Path,
     df: pl.DataFrame,
-    streaming_engine_factory: Callable[..., StreamingEngine],
+    prefetch_file_metadata_engine: StreamingEngine,
 ):
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
     make_partitioned_source(df, tmp_path, "parquet", n_files=2)
     scan = pl.scan_parquet(tmp_path)
     query = pl.concat([scan.select("x"), scan.select("x")])
-    assert_gpu_result_equal(query, engine=streaming_engine)
+    assert_gpu_result_equal(query, engine=prefetch_file_metadata_engine)
 
 
 def test_scan_parquet_prefetch_metadata_disjoint_scan_paths(
     tmp_path: Path,
-    streaming_engine_factory: Callable[..., StreamingEngine],
+    prefetch_file_metadata_engine: StreamingEngine,
 ):
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
     left = pl.DataFrame({"x": [1, 2, 3]})
     right = pl.DataFrame({"x": [4, 5, 6]})
     left.write_parquet(tmp_path / "left.parquet")
@@ -166,28 +170,24 @@ def test_scan_parquet_prefetch_metadata_disjoint_scan_paths(
             pl.scan_parquet(tmp_path / "right.parquet"),
         ]
     )
-    assert_gpu_result_equal(query, engine=streaming_engine)
+    assert_gpu_result_equal(query, engine=prefetch_file_metadata_engine)
 
 
-def test_prefetch_file_metadata_non_parquet_scan(df, streaming_engine_factory) -> None:
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
-    assert_gpu_result_equal(df.lazy().select("x"), engine=streaming_engine)
+def test_prefetch_file_metadata_non_parquet_scan(
+    df: pl.DataFrame, prefetch_file_metadata_engine: StreamingEngine
+) -> None:
+    assert_gpu_result_equal(df.lazy().select("x"), engine=prefetch_file_metadata_engine)
 
 
 def test_prefetch_file_metadata_select_fast_count(
     df: pl.DataFrame,
-    streaming_engine_factory: Callable[..., StreamingEngine],
+    prefetch_file_metadata_engine: StreamingEngine,
     tmp_path: Path,
 ) -> None:
-    streaming_engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
     source = tmp_path / "data.parquet"
     df.write_parquet(source)
     q = pl.scan_parquet(source).select(pl.len())
-    assert_gpu_result_equal(q, engine=streaming_engine)
+    assert_gpu_result_equal(q, engine=prefetch_file_metadata_engine)
 
 
 # ---------------------------------------------------------------------------
@@ -487,19 +487,15 @@ def test_split_scan_do_evaluate_missing_prefetch_metadata() -> None:
 
 
 def test_prefetch_file_metadata_join(
-    tmp_path: Path, streaming_engine_factory: Callable[..., StreamingEngine]
+    tmp_path: Path, prefetch_file_metadata_engine: StreamingEngine
 ) -> None:
     p1 = tmp_path / "f1.parquet"
     p2 = tmp_path / "f2.parquet"
     pl.DataFrame({"k": [1, 2, 3], "a": [4, 5, 6]}).write_parquet(p1)
     pl.DataFrame({"k": [1, 2, 3], "b": [7, 8, 9]}).write_parquet(p2)
 
-    engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
-
     q = pl.scan_parquet(p1).join(pl.scan_parquet(p2), on="k")
-    q.collect(engine=engine)
+    q.collect(engine=prefetch_file_metadata_engine)
 
 
 def _make_cached_parquet_info(
@@ -518,7 +514,7 @@ def _make_cached_parquet_info(
 
 
 def test_prefetch_file_metadata_with_cached_scan_parent_nodes(
-    tmp_path: Path, streaming_engine_factory: Callable[..., StreamingEngine]
+    tmp_path: Path, prefetch_file_metadata_engine: StreamingEngine
 ) -> None:
     # Regression test for replace not replacing StreamingScan nodes with their prefetched variants.
     source = tmp_path / "data.parquet"
@@ -529,16 +525,12 @@ def test_prefetch_file_metadata_with_cached_scan_parent_nodes(
         }
     ).write_parquet(source)
 
-    engine = streaming_engine_factory(
-        StreamingOptions(parquet_options={"prefetch_file_metadata": True}),
-    )
-
     cached_scan = pl.scan_parquet(source).cache()
     left = cached_scan.group_by("k").agg(pl.col("v").sum().alias("sum_v"))
     right = cached_scan.group_by("k").agg(pl.len().alias("n"))
     q = left.join(right, on="k").sort("k")
 
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=prefetch_file_metadata_engine)
 
 
 def test_with_prefetched_metadata() -> None:
