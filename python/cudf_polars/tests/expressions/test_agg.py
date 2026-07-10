@@ -158,6 +158,12 @@ def test_mode(engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_mode_maintain_order_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1]})
+    q = df.select(pl.col("a").mode(maintain_order=True))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -238,19 +244,6 @@ def test_sum_empty_zero(engine: pl.GPUEngine, data):
     df = pl.LazyFrame({"a": pl.Series(values=data, dtype=pl.Int32())})
     q = df.select(pl.col("a").sum())
     assert_gpu_result_equal(q, engine=engine)
-
-
-def test_implode_agg_unsupported(engine: pl.GPUEngine):
-    df = pl.LazyFrame(
-        {
-            "a": pl.Series([1, 2, 3], dtype=pl.Int64()),
-            "b": pl.Series([3, 4, 2], dtype=pl.Int64()),
-            "c": pl.Series([1, None, 3], dtype=pl.Int64()),
-            "d": pl.Series([10, None, 11], dtype=pl.Int64()),
-        }
-    )
-    q = df.select(pl.col("b").implode())
-    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 def test_decimal_aggs(

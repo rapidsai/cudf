@@ -182,6 +182,12 @@ class UnaryFunction(Expr):
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
             )
+        if self.name == "mode":
+            (maintain_order,) = self.options
+            if maintain_order:
+                raise NotImplementedError(
+                    "mode with maintain_order=True is not yet supported"
+                )
         if self.name == "rank":
             method, _, _ = self.options
             if method not in {"average", "min", "max", "dense", "ordinal"}:
