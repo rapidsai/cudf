@@ -1078,6 +1078,11 @@ CUDF_KERNEL void __launch_bounds__(decode_block_size_t, 8)
   auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   auto* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
 
+  // decode_page_data_generic already uses 13024 B worst-case SMEM here, which exceeds
+  // the 12288 B/block cap needed to keep min_blocks=8 on V100.
+  // We cannot adopt use_chunked_expand=true here without first reducing the
+  // kernel's base SMEM footprint.
+
   rle_stream<uint32_t, decode_block_size_t, rolling_buf_size> dict_stream{dict_runs};
   if constexpr (has_dict_t) {
     dict_stream.init(
