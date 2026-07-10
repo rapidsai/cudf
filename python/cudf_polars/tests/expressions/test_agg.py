@@ -16,6 +16,7 @@ from cudf_polars.testing.asserts import (
 )
 from cudf_polars.utils.versions import (
     POLARS_VERSION_LT_136,
+    POLARS_VERSION_LT_137,
 )
 
 
@@ -133,6 +134,9 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_137, reason="polars 1.37.0 does not support max_by and min_by"
+)
 @pytest.mark.parametrize("expr", ["max_by", "min_by"])
 @pytest.mark.parametrize(
     "data",
