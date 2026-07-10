@@ -135,7 +135,7 @@ def test_product(engine: pl.GPUEngine, data, dtype):
 
 
 @pytest.mark.skipif(
-    POLARS_VERSION_LT_137, reason="polars 1.37.0 does not support max_by and min_by"
+    POLARS_VERSION_LT_137, reason="polars 1.37.0 introduced max_by and min_by"
 )
 @pytest.mark.parametrize("expr", ["max_by", "min_by"])
 @pytest.mark.parametrize(
