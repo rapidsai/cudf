@@ -517,7 +517,7 @@ struct rle_stream {
           if (level_run & 1u) {
             int const groups = level_run >> 1;
             cnt              = groups * 8;
-            meta             = static_cast<int>(cur - s_start) | (1 << 31);
+            meta             = static_cast<int>(cur - s_start) | (1u << 31);
             cur += groups * level_bits;
           } else {
             cnt  = level_run >> 1;
@@ -579,7 +579,7 @@ struct rle_stream {
           // so we read from the correct position in the payload.
           int const run_payload_off = (r == 0) ? run0_payload_offset : 0;
 
-          if (meta & (1 << 31)) {
+          if (meta & (1u << 31)) {
             int const payload_off     = meta & 0x7fffffff;
             uint8_t const* payload    = s_start + payload_off;
             uint32_t const level_mask = (level_bits == 32) ? 0xffffffffu : ((1u << level_bits) - 1);

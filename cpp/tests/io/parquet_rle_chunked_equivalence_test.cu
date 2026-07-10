@@ -158,6 +158,12 @@ TEST_F(ParquetRleChunkedEquivalenceTest, SingleLiteral)
   run_case<uint8_t>(encoded, 4, 8, 8);
 }
 
+TEST_F(ParquetRleChunkedEquivalenceTest, EmptyInput)
+{
+  std::vector<uint8_t> encoded;
+  run_case<uint8_t>(encoded, 4, 0, 0);
+}
+
 TEST_F(ParquetRleChunkedEquivalenceTest, MixedRuns)
 {
   std::vector<uint8_t> encoded;
@@ -170,10 +176,10 @@ TEST_F(ParquetRleChunkedEquivalenceTest, MixedRuns)
 TEST_F(ParquetRleChunkedEquivalenceTest, ManyShortRepeatedRuns)
 {
   std::vector<uint8_t> encoded;
-  for (int i = 0; i < 130; ++i) {
+  for (int i = 0; i < 600; ++i) {
     append_repeated(encoded, 1, i & 15, 4);
   }
-  run_case<uint8_t>(encoded, 4, 130, 130);
+  run_case<uint8_t>(encoded, 4, 600, 600);
 }
 
 TEST_F(ParquetRleChunkedEquivalenceTest, PartialDecode)
