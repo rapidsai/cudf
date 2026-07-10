@@ -441,6 +441,9 @@ CUDF_KERNEL void contains_warp_parallel_fn_heterogeneous(column_device_view cons
           found = true;
         }
       }
+      // Early exit: stop all lanes as soon as any lane finds the target. Without this, `!found`
+      // only gates the lane's own loop — other lanes continue scanning past the match.
+      if (warp.any(found)) break;
     }
 
     auto const result = warp.any(found);
