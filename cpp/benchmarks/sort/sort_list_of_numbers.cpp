@@ -114,7 +114,7 @@ static std::unique_ptr<cudf::column> trim_forced_last_row(cudf::column_view cons
 }
 
 // Benchmarks cudf::lists::sort_lists on LIST<numeric>, the operation Spark array_sort lowers to.
-// Axis values straddle the CUB fast-path gate; per-axis rationale at the registrations.
+// Axis values straddle the fast-path routing crossovers; per-axis rationale at the registrations.
 template <typename Type>
 void bench_sort_list_of_numbers(nvbench::state& state, nvbench::type_list<Type>)
 {
@@ -189,23 +189,23 @@ void bench_sort_list_of_numbers(nvbench::state& state, nvbench::type_list<Type>)
     mem_stats_logger.peak_memory_usage(), "peak_memory_usage", "peak_memory_usage");
 }
 
-// Chrono is omitted: neither integral nor fixed-point, so it takes the same comparator sort the
-// float/double cells already measure. decimal128 skips the CUB path (its 128-bit width is
-// unsupported there) and needs its own type-string mapping.
+// Chrono is omitted: its packed key is byte-identical to the int32/int64 rep it extracts to, so
+// those cells already measure it. decimal128 stays on the comparator fallback and needs its own
+// type-string mapping.
 NVBENCH_DECLARE_TYPE_STRINGS(numeric::decimal128, "decimal128", "decimal128");
 
 NVBENCH_BENCH_TYPES(
   bench_sort_list_of_numbers,
   NVBENCH_TYPE_AXES(nvbench::type_list<std::int32_t, std::int64_t, float, double>))
   .set_name("sort_list_of_numbers")
-  // Row counts measure scaling; on this grid they never change which path runs.
   .add_int64_axis("num_rows", {32'768, 262'144, 2'097'152, 16'777'216})
-  // 4, 32, 128: short lists (average < 100) on the CUB path; 256 (average ~128): past the gate at
-  // every row count here, so the comparator sort.
+  // 4 and 32 keep no-null cells below the packed-radix average gate (100); 256 (average ~128)
+  // crosses it, routing eligible ascending / nulls-after cells to the packed radix.
   .add_int64_axis("max_list_size", {4, 16, 32, 64, 128, 256})
-  // Any null forces the comparator sort.
+  // The null-bearing case routes eligible ascending / nulls-after cells to the packed radix.
   .add_float64_axis("null_frequency", {0, 0.1})
-  // The CUB path applies only order; the comparator sort applies both order and null_order.
+  // The packed-radix gate engages only for explicit ascending / nulls-after; the other combinations
+  // measure the base routing.
   .add_string_axis("order", {"ASC", "DESC"})
   .add_string_axis("null_order", {"AFTER", "BEFORE"});
 

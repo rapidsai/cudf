@@ -212,10 +212,10 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
 /**
  * @brief Whether the segment offsets span every row `[0, num_rows]`
  *
- * The fast paths label elements by dense segment ordinal and index the output by raw offset, so
- * partial-coverage offsets -- allowed by the public contract -- must take the comparison path.
- * Requiring at least two offsets also excludes `num_segments == 0`, whose zero-width segment field
- * would shift a 64-bit packed key by 64 (undefined behavior).
+ * The packed-radix and strings fast paths label elements by dense segment ordinal and index the
+ * output by raw offset, so partial-coverage offsets -- allowed by the public contract -- must take
+ * the comparison path. Requiring at least two offsets also excludes `num_segments == 0`, whose
+ * zero-width segment field would shift a 64-bit packed key by 64 (undefined behavior).
  *
  * @param segment_offsets The segment offsets (segment count plus one)
  * @param num_rows Element count the offsets must span
@@ -277,30 +277,43 @@ std::unique_ptr<column> segmented_sorted_order_common(
                  "Mismatch between number of columns and null_precedence size.");
   }
 
-  // the average row size for which to prefer fast sort
-  constexpr cudf::size_type MAX_AVG_LIST_SIZE_FOR_FAST_SORT{100};
-  // the maximum row count for which to prefer fast sort
-  constexpr cudf::size_type MAX_LIST_SIZE_FOR_FAST_SORT{1 << 18};
+  // Unstable-only packed-radix fast path for a single fixed-width key column sorted ascending
+  // with nulls last: null-bearing at any list size, or no-null with long lists. The order and
+  // null precedence must be explicit, so the defaulted-argument cases fall through unchanged.
+  if constexpr (method == sort_method::UNSTABLE) {
+    // Routing runs first so a column routed to `comparison` skips the probe's stream sync.
+    if (keys.num_columns() == 1 and segment_offsets.size() > 0 and column_order.size() == 1 and
+        column_order.front() == order::ASCENDING and null_precedence.size() == 1 and
+        null_precedence.front() == null_order::AFTER) {
+      auto const path =
+        choose_fixed_width_sort_path(keys.column(0), keys.num_rows(), segment_offsets, stream);
+      if (path == fixed_width_sort_path::packed_radix and
+          fast_path_offsets_cover_all_rows(segment_offsets, keys.num_rows(), stream)) {
+        return fast_segmented_sorted_order_numeric_packed(
+          keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+      }
+    }
+  }
 
   // fast-path for single column sort:
   // - single-column table
-  // - not stable-sort
+  // - both stable and unstable sort
   // - no nulls and allowable fixed-width type
   // - size and width are limited -- based on benchmark results
   if (keys.num_columns() == 1 and
       column_fast_sort_fn<method>::is_fast_sort_supported(keys.column(0)) and
       (segment_offsets.size() > 0) and
-      (((keys.num_rows() / segment_offsets.size()) < MAX_AVG_LIST_SIZE_FOR_FAST_SORT) or
-       (keys.num_rows() < MAX_LIST_SIZE_FOR_FAST_SORT))) {
+      prefer_cub_segmented_sort(keys.num_rows(), segment_offsets.size())) {
     auto const col_order = column_order.empty() ? order::ASCENDING : column_order.front();
     return fast_segmented_sorted_order<method>(
       keys.column(0), segment_offsets, col_order, stream, mr);
   }
 
-  // Unstable-only fast paths for a single STRING key column. Segments that all fit the warp tile
-  // take the graduated in-warp merge sort, which beats the prefix-radix engine there; otherwise a
-  // radix sort over packed leading-byte prefixes with byte-window tie-breaking. Only an explicit
-  // ascending / nulls-last request qualifies; anything else falls through to the comparison path.
+  // Unstable-only fast paths for a single STRING key column sorted ascending with nulls last.
+  // Segments that all fit the warp tile take the graduated in-warp merge sort, which beats the
+  // prefix-radix engine there; otherwise a radix sort over packed leading-byte prefixes with
+  // byte-window tie-breaking. The order and null precedence must be stated explicitly; the
+  // defaulted-argument cases fall through to the comparison path below.
   if constexpr (method == sort_method::UNSTABLE) {
     if (keys.num_columns() == 1 and keys.column(0).type().id() == type_id::STRING and
         (segment_offsets.size() > 0) and column_order.size() == 1 and

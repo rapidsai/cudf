@@ -19,6 +19,75 @@ namespace cudf {
 namespace detail {
 
 /**
+ * @brief Average and total element-count bounds below which CUB `DeviceSegmentedSort` is preferred
+ *
+ * Benchmark-chosen; the packed-radix path takes exactly the complement of this gate.
+ */
+constexpr size_type MAX_AVG_LIST_SIZE_FOR_FAST_SORT{100};
+constexpr size_type MAX_LIST_SIZE_FOR_FAST_SORT{1 << 18};
+
+/**
+ * @brief Whether a single fixed-width column is small enough to prefer CUB `DeviceSegmentedSort`
+ *
+ * @param num_rows Total element count; the average-size disjunct divides it by `num_offsets`
+ * @param num_offsets Number of segments plus one, matching the historical average-size heuristic;
+ *        the caller guarantees it is nonzero
+ */
+inline bool prefer_cub_segmented_sort(size_type num_rows, size_type num_offsets)
+{
+  return (num_rows / num_offsets) < MAX_AVG_LIST_SIZE_FOR_FAST_SORT or
+         num_rows < MAX_LIST_SIZE_FOR_FAST_SORT;
+}
+
+/**
+ * @brief Fixed-width fast path a single key column takes within the explicit ascending /
+ * nulls-after, unstable envelope
+ */
+enum class fixed_width_sort_path {
+  comparison,     ///< No fast path applies
+  tiered,         ///< Register / warp / block tiered kernel
+  cub_segmented,  ///< CUB `DeviceSegmentedSort` over the packed rep
+  packed_radix    ///< One global packed-radix sort
+};
+
+/**
+ * @brief Routes a single fixed-width key column to the fast path measured best for its shape
+ *
+ * Ineligible types -- whatever the packed key cannot encode losslessly -- keep `comparison`. The
+ * rest go packed radix wherever it wins outright: null-bearing at any list size, since validity
+ * folds into the packed key with no separate null pass, and no-null past the average-list-size
+ * cutoff, where long lists amortize the bandwidth-bound global pass; the short no-null remainder
+ * keeps main's CUB-or-comparison decision.
+ *
+ * @param key The fixed-width key column being routed
+ * @param num_rows Element count of `key`, used to compute the average list size
+ * @param segment_offsets The segment offsets; the caller guarantees non-empty
+ * @param stream Unused; the routing reads only host-side metadata
+ */
+fixed_width_sort_path choose_fixed_width_sort_path(column_view const& key,
+                                                   size_type num_rows,
+                                                   column_view const& segment_offsets,
+                                                   rmm::cuda_stream_view stream);
+
+/**
+ * @brief Faster segmented sorted-order for a single fixed-width key column via one radix sort
+ *
+ * One non-segmented radix over a packed [segment | null class | transformed value] key whose
+ * unsigned order equals the requested order (`polarity` complements the value field for descending
+ * and picks the null side). The value is fully encoded, so the radix permutation is final -- no
+ * tie-break, and no null post-pass since null-vs-null order is immaterial under the unstable
+ * contract.
+ *
+ * @throw cudf::logic_error If `polarity.nulls_first` is requested on a column with no null mask
+ */
+[[nodiscard]] std::unique_ptr<column> fast_segmented_sorted_order_numeric_packed(
+  column_view const& input,
+  column_view const& segment_offsets,
+  sort_polarity polarity,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
+/**
  * @brief Faster segmented sorted-order for a single STRING key column via iterative radix sort
  *
  * The first pass radixes one `uint64` per element laid out `[segment : S bits][class : 1 bit when
