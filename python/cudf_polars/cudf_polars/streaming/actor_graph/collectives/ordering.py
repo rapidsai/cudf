@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -28,8 +29,6 @@ from cudf_polars.streaming.actor_graph.utils import (
 from cudf_polars.utils.cuda_stream import stream_ordered_after
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
     from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
@@ -43,6 +42,18 @@ if TYPE_CHECKING:
 
 _PID_DTYPE = DataType(pl.Int32())
 _PID_PLC_DTYPE = plc.DataType(plc.TypeId.INT32)
+
+
+@dataclass(frozen=True)
+class _RoutingPlan:
+    npartitions: int
+    boundary_chunk: TableChunk
+    local_window: tuple[int, int]
+    source_ranges: list[tuple[int, int]]
+    remote_sources: list[int]
+    owed_remote_pids: list[int]
+    remote_destinations: list[int]
+    owed_remote_range: tuple[int, int]
 
 
 def _contiguous_owner(pid: int, nranks: int, npartitions: int) -> int:
@@ -307,97 +318,6 @@ class _OutputPieceReader:
                 self.input_done = True
 
 
-async def _adjust_ordering_streaming_window(
-    context: Context,
-    ref_ir: IR,
-    ir_context: IRExecutionContext,
-    ch_out: Channel[TableChunk],
-    ch_in: Channel[TableChunk],
-    output_ordering: Ordering,
-    local_window: tuple[int, int],
-    boundary_chunk: TableChunk,
-    owns_pid: Callable[[int], bool],
-    send_remote_piece: Callable[[int, TableChunk], Awaitable[None]] | None = None,
-    finish_remote_sends: Callable[[], Awaitable[None]] | None = None,
-) -> None:
-    """Stream one output window without draining all input before emitting."""
-    pending_pid: int | None = None
-    pending_chunks: ChunkStore | None = None
-    next_pid = local_window[0]
-
-    async def emit_pending(pid: int) -> None:
-        nonlocal pending_pid, pending_chunks
-        await _emit_partition(
-            context,
-            ref_ir,
-            ir_context,
-            ch_out,
-            pid,
-            pending_chunks if pending_pid == pid else None,
-        )
-        if pending_pid == pid:
-            pending_pid = None
-            pending_chunks = None
-
-    try:
-        while (msg := await ch_in.recv(context)) is not None:
-            chunk = TableChunk.from_message(
-                msg, br=context.br()
-            ).make_available_and_spill(context.br(), allow_overbooking=True)
-            if chunk.table_view().num_rows() == 0:
-                continue
-            with stream_ordered_after(
-                context.br().stream_pool.get_stream,
-                upstreams=(chunk.stream, boundary_chunk.stream),
-            ) as stream:
-                table = chunk.table_view()
-                splits = _split_points(
-                    table,
-                    boundary_chunk.table_view(),
-                    output_ordering,
-                    stream,
-                )
-                for pid, piece in enumerate(
-                    plc.copying.split(table, splits, stream=stream)
-                ):
-                    if piece.num_rows() == 0:
-                        continue
-                    piece_chunk = _copy_to_owned_chunk(piece, stream, context.br())
-                    if not owns_pid(pid):
-                        if send_remote_piece is None:
-                            raise RuntimeError(
-                                "Encountered remote-owned ordering piece without "
-                                "a remote sender."
-                            )
-                        await send_remote_piece(pid, piece_chunk)
-                        continue
-                    if pending_pid is not None and pending_pid != pid:
-                        emitted_pid = pending_pid
-                        await emit_pending(emitted_pid)
-                        next_pid = emitted_pid + 1
-                    while next_pid < pid:
-                        await emit_pending(next_pid)
-                        next_pid += 1
-                    if pending_pid is None:
-                        pending_pid = pid
-                        pending_chunks = ChunkStore(context)
-                    assert pending_chunks is not None
-                    pending_chunks.insert(
-                        Message(
-                            pid,
-                            piece_chunk,
-                        )
-                    )
-    finally:
-        if finish_remote_sends is not None:
-            await finish_remote_sends()
-
-    while next_pid < local_window[1]:
-        await emit_pending(next_pid)
-        next_pid += 1
-    await ch_out.drain(context)
-
-
 def _store_chunk(
     context: Context,
     stores: dict[int, ChunkStore],
@@ -407,6 +327,26 @@ def _store_chunk(
     if pid not in stores:
         stores[pid] = ChunkStore(context)
     stores[pid].insert(Message(pid, chunk))
+
+
+async def _send_remote_store(
+    context: Context,
+    comm: Communicator,
+    exchange: SparseAlltoall,
+    npartitions: int,
+    pid: int,
+    store: ChunkStore,
+) -> None:
+    """Send all locally-read pieces for one remote-owned output partition."""
+    for msg in store:
+        await _send_remote_piece(
+            context,
+            comm,
+            exchange,
+            npartitions,
+            pid,
+            TableChunk.from_message(msg, br=context.br()),
+        )
 
 
 async def _send_remote_piece(
@@ -463,6 +403,20 @@ async def _send_remote_marker(
         )
 
 
+async def _send_missing_remote_markers(
+    context: Context,
+    comm: Communicator,
+    exchange: SparseAlltoall,
+    npartitions: int,
+    owed_remote_pids: list[int],
+    sent_remote_pids: set[int],
+) -> None:
+    """Send empty markers for remote-owned partitions with no payload."""
+    for pid in owed_remote_pids:
+        if pid not in sent_remote_pids:
+            await _send_remote_marker(context, comm, exchange, npartitions, pid)
+
+
 async def _emit_partition(
     context: Context,
     ref_ir: IR,
@@ -485,18 +439,13 @@ async def _emit_partition(
     await ch_out.send(context, Message(pid, chunk))
 
 
-async def _adjust_ordering_impl(
+def _make_routing_plan(
     context: Context,
     comm: Communicator,
-    ref_ir: IR,
-    ir_context: IRExecutionContext,
-    ch_out: Channel[TableChunk],
-    ch_in: Channel[TableChunk],
     input_ordering: Ordering,
     output_ordering: Ordering,
-    collective_id: int | None,
-) -> None:
-    """Adjust ordering while using exchange only for remote dependencies."""
+) -> _RoutingPlan:
+    """Compute local ownership and sparse-exchange obligations."""
     npartitions = output_ordering.num_boundaries + 1
     boundary_chunk = output_ordering.get_boundaries(context.br())
     local_window = _partition_range(comm.rank, comm.nranks, npartitions)
@@ -543,62 +492,91 @@ async def _adjust_ordering_impl(
     owed_remote_range = (
         (owed_remote_pids[0], owed_remote_pids[-1] + 1) if owed_remote_pids else (0, 0)
     )
+    return _RoutingPlan(
+        npartitions=npartitions,
+        boundary_chunk=boundary_chunk,
+        local_window=local_window,
+        source_ranges=source_ranges,
+        remote_sources=remote_sources,
+        owed_remote_pids=owed_remote_pids,
+        remote_destinations=remote_destinations,
+        owed_remote_range=owed_remote_range,
+    )
+
+
+async def _adjust_ordering_impl(
+    context: Context,
+    comm: Communicator,
+    ref_ir: IR,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    input_ordering: Ordering,
+    output_ordering: Ordering,
+    collective_id: int | None,
+) -> None:
+    """Adjust ordering while using exchange only for remote dependencies."""
+    plan = _make_routing_plan(context, comm, input_ordering, output_ordering)
+    reader = _OutputPieceReader(context, ch_in, plan.boundary_chunk, output_ordering)
 
     # Ranks with no incoming dependency can stream local output immediately
     # while sending remote-owned pieces as they are encountered.
-    if not remote_sources:
-        if remote_destinations:
+    if not plan.remote_sources:
+        if plan.remote_destinations:
             assert collective_id is not None
             exchange = SparseAlltoall(
                 context,
                 comm,
                 collective_id,
                 srcs=[],
-                dsts=remote_destinations,
+                dsts=plan.remote_destinations,
             )
         else:
             exchange = None
 
         streamed_remote_pids: set[int] = set()
-
-        async def send_piece(pid: int, chunk: TableChunk) -> None:
-            assert exchange is not None
-            streamed_remote_pids.add(pid)
-            await _send_remote_piece(
+        start, stop = plan.local_window
+        if plan.owed_remote_pids:
+            start = min(start, plan.owed_remote_range[0])
+            stop = max(stop, plan.owed_remote_range[1])
+        for pid in range(start, stop):
+            pieces = await reader.collect_window(pid, pid + 1)
+            owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
+            if (
+                owner == comm.rank
+                and plan.local_window[0] <= pid < plan.local_window[1]
+            ):
+                await _emit_partition(
+                    context,
+                    ref_ir,
+                    ir_context,
+                    ch_out,
+                    pid,
+                    pieces.get(pid),
+                )
+                continue
+            if exchange is not None and pid in pieces:
+                streamed_remote_pids.add(pid)
+                await _send_remote_store(
+                    context,
+                    comm,
+                    exchange,
+                    plan.npartitions,
+                    pid,
+                    pieces[pid],
+                )
+        if exchange is not None:
+            await _send_missing_remote_markers(
                 context,
                 comm,
                 exchange,
-                npartitions,
-                pid,
-                chunk,
+                plan.npartitions,
+                plan.owed_remote_pids,
+                streamed_remote_pids,
             )
-
-        async def finish_sends() -> None:
-            assert exchange is not None
-            for pid in owed_remote_pids:
-                if pid not in streamed_remote_pids:
-                    await _send_remote_marker(
-                        context,
-                        comm,
-                        exchange,
-                        npartitions,
-                        pid,
-                    )
             await exchange.insert_finished(context)
-
-        await _adjust_ordering_streaming_window(
-            context,
-            ref_ir,
-            ir_context,
-            ch_out,
-            ch_in,
-            output_ordering,
-            local_window,
-            boundary_chunk,
-            lambda pid: _contiguous_owner(pid, comm.nranks, npartitions) == comm.rank,
-            send_piece if exchange is not None else None,
-            finish_sends if exchange is not None else None,
-        )
+        await reader.drain_remaining()
+        await ch_out.drain(context)
         return
 
     assert collective_id is not None
@@ -606,27 +584,28 @@ async def _adjust_ordering_impl(
         context,
         comm,
         collective_id,
-        srcs=remote_sources,
-        dsts=remote_destinations,
+        srcs=plan.remote_sources,
+        dsts=plan.remote_destinations,
     )
 
-    reader = _OutputPieceReader(context, ch_in, boundary_chunk, output_ordering)
     local_pieces: dict[int, ChunkStore] = {}
     buffered_remote_pids: set[int] = set()
     first_blocked_pid = next(
         (
             pid
-            for pid in range(*local_window)
+            for pid in range(*plan.local_window)
             if any(
                 source_rank != comm.rank
-                for source_rank in _sources_for_pid(source_ranges, pid)
+                for source_rank in _sources_for_pid(plan.source_ranges, pid)
             )
         ),
-        local_window[1],
+        plan.local_window[1],
     )
-    if first_blocked_pid > local_window[0]:
-        prefix_pieces = await reader.collect_window(local_window[0], first_blocked_pid)
-        for pid in range(local_window[0], first_blocked_pid):
+    if first_blocked_pid > plan.local_window[0]:
+        prefix_pieces = await reader.collect_window(
+            plan.local_window[0], first_blocked_pid
+        )
+        for pid in range(plan.local_window[0], first_blocked_pid):
             await _emit_partition(
                 context,
                 ref_ir,
@@ -637,37 +616,35 @@ async def _adjust_ordering_impl(
             )
 
     # Read only far enough to satisfy destination liabilities before receiving.
-    if owed_remote_pids:
-        pieces = await reader.collect_window(*owed_remote_range)
+    if plan.owed_remote_pids:
+        pieces = await reader.collect_window(*plan.owed_remote_range)
         for pid, store in pieces.items():
-            owner = _contiguous_owner(pid, comm.nranks, npartitions)
+            owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
             if owner == comm.rank:
                 local_pieces[pid] = store
                 continue
-            for msg in store:
-                buffered_remote_pids.add(pid)
-                await _send_remote_piece(
-                    context,
-                    comm,
-                    exchange,
-                    npartitions,
-                    pid,
-                    TableChunk.from_message(msg, br=context.br()),
-                )
-    for pid in owed_remote_pids:
-        if pid not in buffered_remote_pids:
-            await _send_remote_marker(
+            buffered_remote_pids.add(pid)
+            await _send_remote_store(
                 context,
                 comm,
                 exchange,
-                npartitions,
+                plan.npartitions,
                 pid,
+                store,
             )
+    await _send_missing_remote_markers(
+        context,
+        comm,
+        exchange,
+        plan.npartitions,
+        plan.owed_remote_pids,
+        buffered_remote_pids,
+    )
     await exchange.insert_finished(context)
 
     pieces_by_source: dict[int, dict[int, ChunkStore]] = {}
     pieces_by_source[comm.rank] = local_pieces
-    for source_rank in remote_sources:
+    for source_rank in plan.remote_sources:
         remote_pieces: dict[int, ChunkStore] = {}
         stream = context.br().stream_pool.get_stream()
         for packed in exchange.extract(source_rank):
@@ -678,8 +655,8 @@ async def _adjust_ordering_impl(
             _store_chunk(context, remote_pieces, pid, chunk)
         pieces_by_source[source_rank] = remote_pieces
 
-    for pid in range(first_blocked_pid, local_window[1]):
-        pid_sources = _sources_for_pid(source_ranges, pid)
+    for pid in range(first_blocked_pid, plan.local_window[1]):
+        pid_sources = _sources_for_pid(plan.source_ranges, pid)
         if comm.rank in pid_sources and pid not in local_pieces:
             local_pieces.update(
                 {
@@ -687,7 +664,7 @@ async def _adjust_ordering_impl(
                     for piece_pid, store in (
                         await reader.collect_window(pid, pid + 1)
                     ).items()
-                    if _contiguous_owner(piece_pid, comm.nranks, npartitions)
+                    if _contiguous_owner(piece_pid, comm.nranks, plan.npartitions)
                     == comm.rank
                 }
             )
