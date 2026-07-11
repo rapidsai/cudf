@@ -197,8 +197,6 @@ class UnaryFunction(Expr):
                 and n_expr.value < 0
             ):
                 raise pl.exceptions.InvalidOperationError("n must not be negative")
-        if self.name == "repeat_by" and len(self.children) != 2:
-            raise NotImplementedError("repeat_by only supports one repeat count")
         if self.name == "reinterpret":
             source = children[0].dtype.plc_type
             target = self.dtype.plc_type
