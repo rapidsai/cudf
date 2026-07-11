@@ -212,7 +212,7 @@ rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
 /**
  * @brief Whether the segment offsets span every row `[0, num_rows]`
  *
- * The packed-radix and strings fast paths label elements by dense segment ordinal and index the
+ * The packed, tiered, and strings fast paths label elements by dense segment ordinal and index the
  * output by raw offset, so partial-coverage offsets -- allowed by the public contract -- must take
  * the comparison path. Requiring at least two offsets also excludes `num_segments == 0`, whose
  * zero-width segment field would shift a 64-bit packed key by 64 (undefined behavior).
@@ -277,9 +277,8 @@ std::unique_ptr<column> segmented_sorted_order_common(
                  "Mismatch between number of columns and null_precedence size.");
   }
 
-  // Unstable-only packed-radix fast path for a single fixed-width key column sorted ascending
-  // with nulls last: null-bearing at any list size, or no-null with long lists. The order and
-  // null precedence must be explicit, so the defaulted-argument cases fall through unchanged.
+  // Unstable-only fast paths for a single fixed-width key column sorted ascending / nulls-last,
+  // routed by type class and list shape; any other configuration falls through unchanged.
   if constexpr (method == sort_method::UNSTABLE) {
     // Routing runs first so a column routed to `comparison` skips the probe's stream sync.
     if (keys.num_columns() == 1 and segment_offsets.size() > 0 and column_order.size() == 1 and
@@ -287,10 +286,16 @@ std::unique_ptr<column> segmented_sorted_order_common(
         null_precedence.front() == null_order::AFTER) {
       auto const path =
         choose_fixed_width_sort_path(keys.column(0), keys.num_rows(), segment_offsets, stream);
-      if (path == fixed_width_sort_path::packed_radix and
+      if (path != fixed_width_sort_path::comparison and
           fast_path_offsets_cover_all_rows(segment_offsets, keys.num_rows(), stream)) {
-        return fast_segmented_sorted_order_numeric_packed(
-          keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+        if (path == fixed_width_sort_path::tiered) {
+          return fast_segmented_sorted_order_tiered(
+            keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+        }
+        if (path == fixed_width_sort_path::packed_radix) {
+          return fast_segmented_sorted_order_numeric_packed(
+            keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+        }
       }
     }
   }
@@ -309,11 +314,10 @@ std::unique_ptr<column> segmented_sorted_order_common(
       keys.column(0), segment_offsets, col_order, stream, mr);
   }
 
-  // Unstable-only fast paths for a single STRING key column sorted ascending with nulls last.
+  // Unstable-only fast paths for a single STRING key column sorted ascending / nulls-last.
   // Segments that all fit the warp tile take the graduated in-warp merge sort, which beats the
   // prefix-radix engine there; otherwise a radix sort over packed leading-byte prefixes with
-  // byte-window tie-breaking. The order and null precedence must be stated explicitly; the
-  // defaulted-argument cases fall through to the comparison path below.
+  // byte-window tie-breaking. Any other configuration falls through unchanged.
   if constexpr (method == sort_method::UNSTABLE) {
     if (keys.num_columns() == 1 and keys.column(0).type().id() == type_id::STRING and
         (segment_offsets.size() > 0) and column_order.size() == 1 and

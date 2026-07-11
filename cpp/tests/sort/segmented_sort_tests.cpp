@@ -379,12 +379,12 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expected->view().column(0));
 }
 
-// The unstable single-column fast paths (packed-radix, strings) require segment offsets spanning
-// every row `[0, num_rows]`, while the public contract also allows partial and single-index
-// offsets. These tests pin the offsets-coverage guard that routes such inputs to the comparison
-// path, for each fast-path family.
+// The unstable single-column fast paths (tiered, packed-radix, strings) require segment offsets
+// spanning every row `[0, num_rows]`, while the public contract also allows partial and
+// single-index offsets. These tests pin the offsets-coverage guard that routes such inputs to the
+// comparison path, for each fast-path family.
 
-// Short lists route to the comparison/CUB path before the guard is consulted; only [3, 7) sorts.
+// Without the guard these offsets would take the tiered fast path; guarded, only [3, 7) sorts.
 TEST_F(SegmentedSortInt, FastPathPartialOffsetsNumeric)
 {
   using T = int;

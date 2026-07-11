@@ -53,21 +53,46 @@ enum class fixed_width_sort_path {
 /**
  * @brief Routes a single fixed-width key column to the fast path measured best for its shape
  *
- * Ineligible types -- whatever the packed key cannot encode losslessly -- keep `comparison`. The
- * rest go packed radix wherever it wins outright: null-bearing at any list size, since validity
- * folds into the packed key with no separate null pass, and no-null past the average-list-size
- * cutoff, where long lists amortize the bandwidth-bound global pass; the short no-null remainder
- * keeps main's CUB-or-comparison decision.
+ * Four engines picked by type x null-presence x average list size, since their costs scale
+ * differently:
+ * - Non-tiered numerics (narrow/unsigned ints, `bool`, `DECIMAL32`/`DECIMAL64`) -> packed radix if
+ *   null-bearing or long, else comparison (resolving to CUB): the tiered key can't encode them.
+ * - `DECIMAL128` -> comparison: out of this stage's scope.
+ * - Null-bearing tiered types -> tiered: validity folds into the key, no separate null pass.
+ * - No-null past the fast cutoff -> packed radix: bandwidth-bound, amortized by long lists.
+ * - Other no-null tiered types -> tiered (register networks make tiny-segment cost
+ *   width-independent; the warp tiers beat CUB), except a small-scale int64 tiny-average pocket
+ *   that stays on CUB.
+ * - Outside the envelope -> comparison sort.
  *
  * @param key The fixed-width key column being routed
  * @param num_rows Element count of `key`, used to compute the average list size
  * @param segment_offsets The segment offsets; the caller guarantees non-empty
- * @param stream Unused; the routing reads only host-side metadata
+ * @param stream Unused until the `DECIMAL128` mid-band shape gate lands
  */
 fixed_width_sort_path choose_fixed_width_sort_path(column_view const& key,
                                                    size_type num_rows,
                                                    column_view const& segment_offsets,
                                                    rmm::cuda_stream_view stream);
+
+/**
+ * @brief Faster segmented sorted-order for a single fixed-width key column via a tiered sort
+ *
+ * Four size tiers whose cost tracks segment size rather than key width -- the win over packed
+ * radix when segments are tiny but values are wide: one thread with a fixed Batcher network
+ * (<= `TIERED_NETWORK_CAP`), a warp with `cub::WarpMergeSort` (<= `TIERED_WARP_CAP`), a block with
+ * `cub::BlockMergeSort` (<= `TIERED_BLOCK_TIER_CAP`), else a packed radix over just that segment's
+ * elements. `polarity` folds nulls (three-valued class flag) and descending (value complement)
+ * into the key; the result matches the comparison path's order.
+ *
+ * @throw cudf::logic_error If `polarity.nulls_first` is requested on a column with no null mask
+ */
+[[nodiscard]] std::unique_ptr<column> fast_segmented_sorted_order_tiered(
+  column_view const& input,
+  column_view const& segment_offsets,
+  sort_polarity polarity,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
 
 /**
  * @brief Faster segmented sorted-order for a single fixed-width key column via one radix sort
