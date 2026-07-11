@@ -351,6 +351,29 @@ TEST_F(SortListsString, PrefixUtf8Multibyte)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
 }
 
+// The fast path folds every explicit (order, null_order) into its keys; these pin the two combos
+// the ascending/nulls-after tests never touch.
+TEST_F(SortListsString, DescendingAndNullsBeforeFastPath)
+{
+  using StrLCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  {  // DESCENDING, no nulls
+    StrLCW input{{"banana", "apple", "cherry", "date"}};
+    StrLCW expected{{"date", "cherry", "banana", "apple"}};
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{input}, cudf::order::DESCENDING, cudf::null_order::AFTER);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
+  }
+  {  // ASCENDING, nulls BEFORE: the null moves to the front
+    StrLCW input{StrLCW{{"banana", "x", "apple"}, null_at(1)}};
+    StrLCW expected{StrLCW{{"x", "apple", "banana"}, null_at(0)}};
+    auto const [sorted_lists, stable_sorted_lists] = generate_sorted_lists(
+      cudf::lists_column_view{input}, cudf::order::ASCENDING, cudf::null_order::BEFORE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(sorted_lists->view(), expected);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted_lists->view(), expected);
+  }
+}
+
 // Per-row prefix ties must resolve without crossing row boundaries (the segment_id key field); the
 // empty row checks dense segment-ordinal labeling skips a zero-length segment without misaligning
 // its neighbors.
@@ -399,6 +422,12 @@ void expect_both_sort_paths_equivalent(cudf::lists_column_view const& input,
   auto const stable_sorted = cudf::lists::stable_sort_lists(input, column_order, null_precedence);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(stable_sorted->view(), expected);
 }
+
+// The three explicit combos beyond the shipped ascending / nulls-after configuration.
+constexpr std::array<std::pair<cudf::order, cudf::null_order>, 3> non_default_combos{
+  {{cudf::order::DESCENDING, cudf::null_order::AFTER},
+   {cudf::order::ASCENDING, cudf::null_order::BEFORE},
+   {cudf::order::DESCENDING, cudf::null_order::BEFORE}}};
 
 // Host oracle for one list row. cudf's null_order is comparator-level and DESCENDING swaps the
 // comparison operands, inverting null placement too: nulls land first iff (BEFORE) != (DESCENDING).
@@ -1035,6 +1064,100 @@ void expect_string_polarity_matrix(std::vector<std::vector<std::string>> const& 
 }
 }  // namespace
 
+// ============= full (order, null_order) polarity matrix over the string prefix path =============
+// Each test drives one facet of the key packing through all four combos.
+
+// Lengths 0,1,7,8,9,15,16,17 straddle the packed-key prefix boundary (~7 whole bytes) and the
+// window boundaries at bytes 8 and 16; descending exercises the byte complement across all three.
+TEST_F(SortListsString, PrefixPolarityMatrixWindowBoundaries)
+{
+  std::vector<std::string> const row{"",
+                                     "z",
+                                     "abcdefg",             // 7: exhausts at the first window
+                                     "abcdefgh",            // 8: byte-7 divergence vs "abcdefg"
+                                     "abcdefgX",            // 8: byte-7 divergence ('X' < 'h')
+                                     "PQRSTUVW1",           // 9: shares 8 bytes, diverges at byte 8
+                                     "PQRSTUVW2",           // 9
+                                     "0123456789ABCDE",     // 15
+                                     "0123456789ABCDEF",    // 16
+                                     "0123456789ABCDEFg",   // 17: byte-16 divergence, 2nd window
+                                     "0123456789ABCDEFh"};  // 17
+  expect_string_polarity_matrix({row}, {std::vector<bool>(row.size(), true)});
+}
+
+// Exhausted-window zero-fill under the descending complement: an exhausted window packs to zero,
+// which descending sends to the maximum, so proper prefixes sort last; the "a" / "a\0"
+// zero-extension pair flips with direction only via the cleanup's length tie-break.
+TEST_F(SortListsString, PrefixPolarityMatrixExhaustedAndEmbeddedNul)
+{
+  std::vector<std::string> const row{"",
+                                     "a",
+                                     std::string("a\0", 2),
+                                     std::string("a\0b", 3),
+                                     "ab",
+                                     "abc",
+                                     "abcd",
+                                     "b",
+                                     "a"};  // exact duplicate of an earlier element
+  expect_string_polarity_matrix({row}, {std::vector<bool>(row.size(), true)});
+}
+
+// Null-bearing rows exercise the class-bit placement in both the first-pass and window keys and
+// the null-run guards in the tie-break; row 1's ties resolve only past the first window.
+TEST_F(SortListsString, PrefixPolarityMatrixNullsBothPrecedences)
+{
+  std::vector<std::vector<std::string>> const rows{
+    {"apple", "x", "apricot", "apple", "y", "banana"},
+    {"z", "AAAAAAAAA", "AAAAAAAAb", "AAAAAAAAa"}};
+  std::vector<std::vector<bool>> const valids{{true, false, true, true, false, true},
+                                              {false, true, true, true}};
+  expect_string_polarity_matrix(rows, valids);
+}
+
+// The 80-byte shared prefix outlasts every window, so the run reaches the tie-break's heapsort
+// branch under each combo; the empty row checks dense segment labeling skips it cleanly.
+TEST_F(SortListsString, PrefixPolarityMatrixMultiSegmentHeapsortRun)
+{
+  std::string const shared(80, 'Q');
+  std::vector<std::string> big;
+  for (int i = 0; i < 70; ++i) {
+    big.push_back(shared + std::to_string(i / 10) + std::to_string(i % 10));
+  }
+  big.push_back(shared + "07");  // exact duplicate within the run
+  auto shuffled = big;
+  std::shuffle(shuffled.begin(), shuffled.end(), std::mt19937{0x5A17});
+  shuffled.insert(shuffled.begin() + 3, "");
+  shuffled.push_back("zzz");
+  std::vector<bool> row0_valids(shuffled.size(), true);
+  row0_valids[1]                   = false;  // two scattered nulls
+  row0_valids[shuffled.size() - 2] = false;
+
+  std::vector<std::vector<std::string>> const rows{
+    shuffled, {}, {"melon", "apple", "cherry", "apple"}};
+  std::vector<std::vector<bool>> const valids{row0_valids, {}, std::vector<bool>(4, true)};
+  expect_string_polarity_matrix(rows, valids);
+}
+
+// Mirrors PrefixSlicedWithNulls (ascending), pinning offset + null handling in both directions.
+TEST_F(SortListsString, PrefixDescendingSliced)
+{
+  using StrLCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  StrLCW l{StrLCW{"zz", "aa"},
+           StrLCW{{"banana", "apple", "x", "cherry"}, null_at(2)},  // element 2 ("x") is null
+           StrLCW{"b", "a"}};
+  auto const sliced = cudf::slice(l, {1, 3})[0];  // drops row 0 -> nonzero child offset
+  {  // DESCENDING / AFTER: the comparator swap places the null first, then values descending
+    StrLCW expected{StrLCW{{"z", "cherry", "banana", "apple"}, null_at(0)}, StrLCW{"b", "a"}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{sliced}, expected, cudf::order::DESCENDING, cudf::null_order::AFTER);
+  }
+  {  // DESCENDING / BEFORE: values descending, then the null last
+    StrLCW expected{StrLCW{{"cherry", "banana", "apple", "z"}, null_at(3)}, StrLCW{"b", "a"}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{sliced}, expected, cudf::order::DESCENDING, cudf::null_order::BEFORE);
+  }
+}
+
 // ===== graduated-warp string path: per-band polarity coverage (segments within the 64-element cap)
 // The default string fast path once every segment fits a warp tile; its bands are (0,8] one item
 // per lane, then (8,16] W8, W16, and W32.
@@ -1226,6 +1349,93 @@ TEST_F(SortListsString, GradOversizedSegmentFallsThrough)
   std::vector<std::vector<bool>> const valids{std::vector<bool>(big.size(), true),
                                               {true, true, true}};
   expect_string_polarity_matrix(rows, valids);
+}
+
+// ===== prefix string path: high-value scenarios forced past the 64-element graduated cap =====
+// Each probe pairs its data with a >64-element row: the oversized row fails the graduated
+// admission gate, so the whole column -- probe included -- genuinely rides the prefix path.
+
+// Pins the prefix path's descending byte complement and nulls-BEFORE class-bit placement, which
+// the grad-routed small-segment polarity tests never reach.
+TEST_F(SortListsString, PrefixPolarityMatrixOversizedRun)
+{
+  std::string const shared(80, 'P');
+  std::vector<std::pair<std::string, bool>> elems;
+  for (int i = 0; i < 66; ++i) {
+    elems.emplace_back(shared + std::to_string(i / 10) + std::to_string(i % 10), i % 13 != 0);
+  }
+  std::shuffle(elems.begin(), elems.end(), std::mt19937{0x9A1E});
+  std::vector<std::string> row;
+  std::vector<bool> valids;
+  for (auto const& [str, valid] : elems) {
+    row.push_back(str);
+    valids.push_back(valid);
+  }
+  expect_string_polarity_matrix({row}, {valids});
+}
+
+// The null / all-0xFF sentinel collision under all four combos; the ASCII filler tail pushes the
+// segment past the graduated cap.
+TEST_F(SortListsString, PrefixNullSentinelCollisionFFOversized)
+{
+  std::string const ff72(72, '\xff');
+  std::string const ff73(73, '\xff');
+  std::vector<std::string> row{"apple", ff73, "mango", ff72, ""};
+  std::vector<bool> valids{true, true, true, true, false};
+  for (int i = 0; i < 65; ++i) {
+    row.push_back("filler" + std::to_string(100 + i));
+    valids.push_back(true);
+  }
+  expect_string_polarity_matrix({row}, {valids});
+}
+
+// UTF-8 lead-byte ordering (0xC3 / 0xE2 / 0xF0 after ASCII) on the prefix path's packed key and
+// window compare.
+TEST_F(SortListsString, PrefixUtf8MultibyteOversized)
+{
+  std::vector<std::string> row{
+    "\xE2\x82\xAC\x75\x72\x6F", "zoo", "\xF0\x9F\x98\x80", "\xC3\xA9\x70\xC3\xA9\x65", "apple"};
+  std::vector<bool> valids(row.size(), true);
+  for (int i = 0; i < 65; ++i) {
+    row.push_back("fill" + std::to_string(100 + i));
+    valids.push_back(true);
+  }
+  expect_string_polarity_matrix({row}, {valids});
+}
+
+// Nonzero child offset on the prefix path: the packed-key builder and window compare must honor
+// it under every combo.
+TEST_F(SortListsString, PrefixSlicedOversized)
+{
+  std::string const shared(80, 'M');
+  std::vector<std::pair<std::string, bool>> elems;
+  for (int i = 0; i < 66; ++i) {
+    elems.emplace_back(shared + std::to_string(i / 10) + std::to_string(i % 10), i % 11 != 0);
+  }
+  std::shuffle(elems.begin(), elems.end(), std::mt19937{0x5CED});
+  std::vector<std::string> big;
+  std::vector<bool> big_v;
+  for (auto const& [str, valid] : elems) {
+    big.push_back(str);
+    big_v.push_back(valid);
+  }
+  std::vector<std::vector<std::string>> const rows{{"drop"}, big, {"b", "a"}};
+  std::vector<std::vector<bool>> const valids{{true}, big_v, {true, true}};
+  auto const full   = make_string_lists(rows, valids);
+  auto const sliced = cudf::slice(full->view(), {1, 3})[0];  // drop row 0 -> nonzero child offset
+
+  constexpr std::array<std::pair<cudf::order, cudf::null_order>, 4> combos{
+    {{cudf::order::ASCENDING, cudf::null_order::AFTER},
+     {cudf::order::DESCENDING, cudf::null_order::AFTER},
+     {cudf::order::ASCENDING, cudf::null_order::BEFORE},
+     {cudf::order::DESCENDING, cudf::null_order::BEFORE}}};
+  for (auto const& [ord, np] : combos) {
+    auto const s1 = host_sorted_row(big, big_v, ord, np);
+    auto const s2 =
+      host_sorted_row(std::vector<std::string>{"b", "a"}, std::vector<bool>{true, true}, ord, np);
+    auto const expected = make_string_lists({s1.first, s2.first}, {s1.second, s2.second});
+    expect_both_sort_paths_match(cudf::lists_column_view{sliced}, expected->view(), ord, np);
+  }
 }
 
 // Sign-flip correctness at INT_MIN / INT_MAX for both tiered key widths (int32 -> uint64,
@@ -2217,6 +2427,442 @@ TEST_F(SortListsInt, NumericDecimal128TwoPhaseAllTied)
   expect_both_sort_paths_match(cudf::lists_column_view{input->view()}, expected->view());
 }
 
+// The same all-tied shape under DESCENDING: the complement keeps equal encoded hi64 words equal,
+// so the run still ties and phase two's complemented lo64 must reverse the refined order.
+TEST_F(SortListsInt, NumericDecimal128TwoPhaseAllTiedDescending)
+{
+  auto constexpr scale = numeric::scale_type{0};
+  auto const band      = static_cast<__int128_t>(1) << 63;
+
+  std::vector<__int128_t> row0(250);
+  for (cudf::size_type i = 0; i < 250; ++i) {
+    row0[i] = band + (static_cast<__int128_t>(249 - i) << 32) + (i * 13) % 251;
+  }
+  row0[20] = row0[10];  // exact duplicates inside the run
+  row0[21] = row0[11];
+
+  std::vector<__int128_t> row1;
+  for (int j = 49; j >= 0; --j) {
+    auto const pair_hi      = static_cast<__int128_t>(j + 1) << 70;
+    auto const singleton_hi = static_cast<__int128_t>(j + 200) << 70;
+    row1.push_back(pair_hi + 2 * j + 1);
+    row1.push_back(singleton_hi + j);
+    row1.push_back(pair_hi + 2 * j);
+  }
+
+  auto const make_lists = [&](std::vector<__int128_t> const& a, std::vector<__int128_t> const& b) {
+    std::vector<__int128_t> leaf(a);
+    leaf.insert(leaf.end(), b.begin(), b.end());
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> offsets{
+      0, static_cast<cudf::size_type>(a.size()), static_cast<cudf::size_type>(leaf.size())};
+    return cudf::make_lists_column(
+      2,
+      offsets.release(),
+      cudf::test::fixed_point_column_wrapper<__int128_t>(leaf.begin(), leaf.end(), scale).release(),
+      0,
+      {});
+  };
+
+  std::vector<__int128_t> ex0(row0);
+  std::vector<__int128_t> ex1(row1);
+  std::sort(ex0.begin(), ex0.end());
+  std::reverse(ex0.begin(), ex0.end());
+  std::sort(ex1.begin(), ex1.end());
+  std::reverse(ex1.begin(), ex1.end());
+  auto const input    = make_lists(row0, row1);
+  auto const expected = make_lists(ex0, ex1);
+  expect_both_sort_paths_match(cudf::lists_column_view{input->view()},
+                               expected->view(),
+                               cudf::order::DESCENDING,
+                               cudf::null_order::AFTER);
+}
+
+// ============ full (order, null_order) polarity matrix over the fixed-width fast paths ==========
+// Each test drives one engine family through the three non-shipped combos; under DESCENDING the
+// comparator operands swap, so nulls-AFTER leads with nulls and nulls-BEFORE trails.
+
+// Batcher-network tier (segments <= 8): negatives, duplicates, and nulls make each combo's
+// expectation unique.
+TEST_F(SortListsInt, NumericTieredNetworkPolarityMatrix)
+{
+  std::vector<bool> const in3{true, false, true};
+  std::vector<bool> const in8{true, true, false, true, true, false, true, true};
+  LCW<int32_t> input{LCW<int32_t>{},
+                     LCW<int32_t>{5},
+                     LCW<int32_t>{{2, 0, -7}, in3.begin()},
+                     LCW<int32_t>{{8, -3, 0, 8, 0, 0, -3, 1}, in8.begin()}};
+
+  std::vector<bool> const nulls_lead3{false, true, true};
+  std::vector<bool> const nulls_tail3{true, true, false};
+  std::vector<bool> const nulls_lead8{false, false, true, true, true, true, true, true};
+  std::vector<bool> const nulls_tail8{true, true, true, true, true, true, false, false};
+  {  // DESCENDING / AFTER: nulls first, then values descending
+    LCW<int32_t> expected{LCW<int32_t>{},
+                          LCW<int32_t>{5},
+                          LCW<int32_t>{{0, 2, -7}, nulls_lead3.begin()},
+                          LCW<int32_t>{{0, 0, 8, 8, 1, 0, -3, -3}, nulls_lead8.begin()}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{input}, expected, cudf::order::DESCENDING, cudf::null_order::AFTER);
+  }
+  {  // ASCENDING / BEFORE: nulls first, then values ascending
+    LCW<int32_t> expected{LCW<int32_t>{},
+                          LCW<int32_t>{5},
+                          LCW<int32_t>{{0, -7, 2}, nulls_lead3.begin()},
+                          LCW<int32_t>{{0, 0, -3, -3, 0, 1, 8, 8}, nulls_lead8.begin()}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{input}, expected, cudf::order::ASCENDING, cudf::null_order::BEFORE);
+  }
+  {  // DESCENDING / BEFORE: values descending, then nulls last
+    LCW<int32_t> expected{LCW<int32_t>{},
+                          LCW<int32_t>{5},
+                          LCW<int32_t>{{2, -7, 0}, nulls_tail3.begin()},
+                          LCW<int32_t>{{8, 8, 1, 0, -3, -3, 0, 0}, nulls_tail8.begin()}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{input}, expected, cudf::order::DESCENDING, cudf::null_order::BEFORE);
+  }
+}
+
+// Null-bearing int32/int64 across the packed-key warp bands (w32x1 for 9..32, w32x2 for 33..64)
+// and the radix outlier, pinning the 32/33 and 64/65 boundaries under every non-shipped combo.
+TEST_F(SortListsInt, NumericTieredWarpBandsPolarityMatrix)
+{
+  std::vector<cudf::size_type> const sizes{9, 32, 33, 64, 65};
+  auto const run = [&](auto tag, auto spread) {
+    using T = decltype(tag);
+    for (auto const& [ord, np] : non_default_combos) {
+      std::vector<T> in_vals;
+      std::vector<bool> in_valids;
+      std::vector<T> ex_vals;
+      std::vector<bool> ex_valids;
+      std::vector<cudf::size_type> offsets{0};
+      for (auto const s : sizes) {
+        std::vector<T> rv(s);
+        std::vector<bool> rok(s);
+        for (cudf::size_type i = 0; i < s; ++i) {
+          rv[i]  = static_cast<T>((s - i) * spread);
+          rok[i] = (i % 5 != 2);  // scattered element nulls
+        }
+        rv[0]                = std::numeric_limits<T>::max();
+        rv[1]                = std::numeric_limits<T>::min();
+        rv[3]                = rv[4];  // a duplicate value among the non-nulls
+        auto const [ev, eok] = host_sorted_row(rv, rok, ord, np);
+        in_vals.insert(in_vals.end(), rv.begin(), rv.end());
+        in_valids.insert(in_valids.end(), rok.begin(), rok.end());
+        ex_vals.insert(ex_vals.end(), ev.begin(), ev.end());
+        ex_valids.insert(ex_valids.end(), eok.begin(), eok.end());
+        offsets.push_back(static_cast<cudf::size_type>(in_vals.size()));
+      }
+      auto const num_rows  = static_cast<cudf::size_type>(sizes.size());
+      auto const make_list = [&](std::vector<T> const& vals, std::vector<bool> const& valids) {
+        cudf::test::fixed_width_column_wrapper<T> leaf(vals.begin(), vals.end(), valids.begin());
+        cudf::test::fixed_width_column_wrapper<cudf::size_type> off(offsets.begin(), offsets.end());
+        return cudf::make_lists_column(num_rows, off.release(), leaf.release(), 0, {});
+      };
+      auto const input    = make_list(in_vals, in_valids);
+      auto const expected = make_list(ex_vals, ex_valids);
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  };
+  run(int32_t{}, int32_t{1});
+  run(int64_t{}, int64_t{5'000'000'000});  // distinct values beyond 32 bits
+}
+
+// Descending encodes the MINIMUM element to the all-ones raw-key pad sentinel -- the mirror of
+// the ascending INT*_MAX collision -- so `rv[1] = min` in every row proves the pad tie-breaks
+// keep it inside the segment across the 8/9, 16/17, 32/33, and 64/65 boundaries.
+TEST_F(SortListsInt, NumericTieredBitonicDescendingPolarityMatrix)
+{
+  std::vector<cudf::size_type> const sizes{8, 9, 16, 17, 32, 33, 48, 64, 65};
+  auto const run = [&](auto tag, auto spread) {
+    using T = decltype(tag);
+    for (auto const& [ord, np] : non_default_combos) {
+      std::vector<T> in_vals;
+      std::vector<T> ex_vals;
+      std::vector<cudf::size_type> offsets{0};
+      for (auto const s : sizes) {
+        std::vector<T> rv(s);
+        for (cudf::size_type i = 0; i < s; ++i) {
+          rv[i] = static_cast<T>((s - i) * spread);
+        }
+        rv[0] = std::numeric_limits<T>::max();
+        rv[1] = std::numeric_limits<T>::min();  // descending: encodes to the raw-key pad sentinel
+        rv[2] = rv[3];                          // a duplicate value
+        std::vector<bool> const rok(s, true);
+        auto const ev = host_sorted_row(rv, rok, ord, np).first;
+        in_vals.insert(in_vals.end(), rv.begin(), rv.end());
+        ex_vals.insert(ex_vals.end(), ev.begin(), ev.end());
+        offsets.push_back(static_cast<cudf::size_type>(in_vals.size()));
+      }
+      auto const num_rows  = static_cast<cudf::size_type>(sizes.size());
+      auto const make_list = [&](std::vector<T> const& vals) {
+        cudf::test::fixed_width_column_wrapper<T> leaf(vals.begin(), vals.end());
+        cudf::test::fixed_width_column_wrapper<cudf::size_type> off(offsets.begin(), offsets.end());
+        return cudf::make_lists_column(num_rows, off.release(), leaf.release(), 0, {});
+      };
+      auto const input    = make_list(in_vals);
+      auto const expected = make_list(ex_vals);
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  };
+  run(int32_t{}, int32_t{1});
+  run(int64_t{}, int64_t{5'000'000'000});  // distinct values beyond 32 bits
+}
+
+// Packed-radix long lists under the non-shipped combos, across all three key widths and every
+// Site A range gate; the shared-high-word two-phase tie pass must resolve complemented low words.
+TEST_F(SortListsInt, NumericPackedRadixLongListsPolarityMatrix)
+{
+  cudf::size_type const n = 220;  // single row, average 110 -> packed radix
+  auto const check_fixed  = [&](auto tag, auto spread) {
+    using T = decltype(tag);
+    std::vector<T> in(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      in[i] = static_cast<T>((n / 2 - i) * spread);
+    }
+    std::vector<bool> const ok(n, true);
+    auto const input =
+      as_single_row_list(cudf::test::fixed_width_column_wrapper<T>(in.begin(), in.end()).release());
+    for (auto const& [ord, np] : non_default_combos) {
+      auto const ev       = host_sorted_row(in, ok, ord, np).first;
+      auto const expected = as_single_row_list(
+        cudf::test::fixed_width_column_wrapper<T>(ev.begin(), ev.end()).release());
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  };
+  check_fixed(int32_t{}, int32_t{1});
+  check_fixed(int64_t{}, int64_t{5'000'000'000});
+
+  auto constexpr scale     = numeric::scale_type{0};
+  auto const check_decimal = [&](std::vector<__int128_t> const& in) {
+    std::vector<bool> const ok(in.size(), true);
+    auto const input = as_single_row_list(
+      cudf::test::fixed_point_column_wrapper<__int128_t>(in.begin(), in.end(), scale).release());
+    for (auto const& [ord, np] : non_default_combos) {
+      auto const ev       = host_sorted_row(in, ok, ord, np).first;
+      auto const expected = as_single_row_list(
+        cudf::test::fixed_point_column_wrapper<__int128_t>(ev.begin(), ev.end(), scale).release());
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  };
+  {  // range < 2^32 -> min-biased uint64 key (the biased value is complemented in-field)
+    std::vector<__int128_t> in(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      in[i] = static_cast<__int128_t>(n / 2 - i);
+    }
+    check_decimal(in);
+  }
+  {  // fits int64 (range > 2^32) -> prefix_key96 key
+    auto const step = static_cast<__int128_t>(int64_t{1} << 40);
+    std::vector<__int128_t> in(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      in[i] = static_cast<__int128_t>(n / 2 - i) * step;
+    }
+    check_decimal(in);
+  }
+  {  // wide, distinct high words -> two-phase, phase one resolves
+    auto const step = static_cast<__int128_t>(1) << 90;
+    std::vector<__int128_t> in(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      in[i] = static_cast<__int128_t>(n / 2 - i) * step;
+    }
+    check_decimal(in);
+  }
+  {  // wide with shared high words -> the two-phase tie pass orders complemented low words
+    auto const base = static_cast<__int128_t>(1) << 100;
+    std::vector<__int128_t> in;
+    for (int i = 0; i < 110; ++i) {
+      in.push_back(-base + i);
+    }
+    for (int i = 0; i < 110; ++i) {
+      in.push_back(base + i);
+    }
+    check_decimal(in);
+  }
+}
+
+// The Site B two-phase tie pass under every combo: the nulls-first combos flip the key's class
+// bit, so the tie detector's parameterized null flag must still exclude exactly the nulls.
+TEST_F(SortListsInt, NumericDecimal128SiteBPolarityMatrix)
+{
+  auto constexpr scale    = numeric::scale_type{0};
+  cudf::size_type const n = 200;
+  auto const base         = static_cast<__int128_t>(1) << 100;
+  std::vector<__int128_t> in;
+  std::vector<bool> ok;
+  for (int i = 0; i < 100; ++i) {
+    in.push_back(-base + i);
+    ok.push_back(i % 7 != 3);
+  }
+  for (int i = 0; i < 100; ++i) {
+    in.push_back(base + i);
+    ok.push_back(i % 5 != 2);
+  }
+  ASSERT_EQ(static_cast<cudf::size_type>(in.size()), n);
+  auto const input = as_single_row_list(
+    cudf::test::fixed_point_column_wrapper<__int128_t>(in.begin(), in.end(), ok.begin(), scale)
+      .release());
+  for (auto const& [ord, np] : non_default_combos) {
+    auto const [ev, eok] = host_sorted_row(in, ok, ord, np);
+    auto const expected  = as_single_row_list(
+      cudf::test::fixed_point_column_wrapper<__int128_t>(ev.begin(), ev.end(), eok.begin(), scale)
+        .release());
+    expect_both_sort_paths_match(cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+  }
+}
+
+// The router averages a single row of n as n / 2: check(6) scores 3 (tiny -> tiered network) and
+// check(50) scores 25 (past the CUB band -> tiered warp), so both route tiered regardless of
+// nulls; the nulls exercise tiered_key128's null-class assignment under the descending complement.
+TEST_F(SortListsInt, NumericDecimal128TieredNetworkAndWarpPolarityMatrix)
+{
+  auto constexpr scale = numeric::scale_type{0};
+  auto const check     = [&](cudf::size_type n) {
+    std::vector<__int128_t> in(n);
+    std::vector<bool> ok(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      in[i] = static_cast<__int128_t>(n / 2 - i) * (i % 2 == 0 ? 1 : -1);
+      ok[i] = i % 4 != 1;  // scattered element nulls
+    }
+    auto const input = as_single_row_list(
+      cudf::test::fixed_point_column_wrapper<__int128_t>(in.begin(), in.end(), ok.begin(), scale)
+        .release());
+    for (auto const& [ord, np] : non_default_combos) {
+      auto const [ev, eok] = host_sorted_row(in, ok, ord, np);
+      auto const expected  = as_single_row_list(
+        cudf::test::fixed_point_column_wrapper<__int128_t>(ev.begin(), ev.end(), eok.begin(), scale)
+          .release());
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  };
+  check(6);   // Network tier (<= TIERED_NETWORK_CAP == 8).
+  check(50);  // Warp tier (<= TIERED_WARP_CAP == 64).
+}
+
+// Descending routes the lifted CUB band to its `SortPairsDescending` variant; the BEFORE combos
+// pin the zero-null precedence relaxation on that band.
+TEST_F(SortListsInt, NumericMidBandDecimal128CubPolarityMatrix)
+{
+  auto constexpr scale = numeric::scale_type{0};
+  auto const k         = [] {
+    __int128_t v = 1;
+    for (int i = 0; i < 30; ++i) {
+      v *= 10;
+    }
+    return v;
+  }();
+  cudf::size_type const n = 16;
+  std::vector<__int128_t> in(n);
+  for (cudf::size_type i = 0; i < n; ++i) {
+    in[i] = static_cast<__int128_t>(n / 2 - i) * k;
+  }
+  std::vector<bool> const ok(n, true);
+  auto const input = as_single_row_list(
+    cudf::test::fixed_point_column_wrapper<__int128_t>(in.begin(), in.end(), scale).release());
+  for (auto const& [ord, np] : non_default_combos) {
+    auto const ev       = host_sorted_row(in, ok, ord, np).first;
+    auto const expected = as_single_row_list(
+      cudf::test::fixed_point_column_wrapper<__int128_t>(ev.begin(), ev.end(), scale).release());
+    expect_both_sort_paths_match(cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+  }
+}
+
+// BOOL8/int8/uint32 are packed-supported but not tiered, so their nulls force the packed radix at
+// any size; uint32 additionally pins the unsigned encode (no sign flip) under the complement.
+TEST_F(SortListsInt, NumericPackedNarrowAndBoolPolarityMatrix)
+{
+  {  // BOOL8 with nulls: values {t, f, X, t, f, X, f}
+    std::vector<bool> const in_valids{true, true, false, true, true, false, true};
+    auto const input =
+      as_single_row_list(cudf::test::fixed_width_column_wrapper<bool>(
+                           {true, false, true, true, false, false, false}, in_valids.begin())
+                           .release());
+    auto const check = [&](std::vector<bool> const& ex_vals,
+                           std::vector<bool> const& ex_valids,
+                           cudf::order ord,
+                           cudf::null_order np) {
+      auto expected = as_single_row_list(cudf::test::fixed_width_column_wrapper<bool>(
+                                           ex_vals.begin(), ex_vals.end(), ex_valids.begin())
+                                           .release());
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    };
+    check({false, false, true, true, false, false, false},
+          {false, false, true, true, true, true, true},
+          cudf::order::DESCENDING,
+          cudf::null_order::AFTER);
+    check({false, false, false, false, false, true, true},
+          {false, false, true, true, true, true, true},
+          cudf::order::ASCENDING,
+          cudf::null_order::BEFORE);
+    check({true, true, false, false, false, false, false},
+          {true, true, true, true, true, false, false},
+          cudf::order::DESCENDING,
+          cudf::null_order::BEFORE);
+  }
+  {  // int8 with nulls, covering both signed extremes
+    std::vector<int8_t> const in{5, -8, 0, 127, -128, 0, 5};
+    std::vector<bool> const ok{true, true, false, true, true, false, true};
+    for (auto const& [ord, np] : non_default_combos) {
+      auto const [ev, eok] = host_sorted_row(in, ok, ord, np);
+      auto input           = as_single_row_list(
+        cudf::test::fixed_width_column_wrapper<int8_t>(in.begin(), in.end(), ok.begin()).release());
+      auto expected = as_single_row_list(
+        cudf::test::fixed_width_column_wrapper<int8_t>(ev.begin(), ev.end(), eok.begin())
+          .release());
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  }
+  {  // uint32 with a null: unsigned encode, values past INT32_MAX
+    std::vector<uint32_t> const in{4'000'000'000u, 7u, 0u, 0u, 4'000'000'000u};
+    std::vector<bool> const ok{true, true, false, true, true};
+    for (auto const& [ord, np] : non_default_combos) {
+      auto const [ev, eok] = host_sorted_row(in, ok, ord, np);
+      auto input           = as_single_row_list(
+        cudf::test::fixed_width_column_wrapper<uint32_t>(in.begin(), in.end(), ok.begin())
+          .release());
+      auto expected = as_single_row_list(
+        cudf::test::fixed_width_column_wrapper<uint32_t>(ev.begin(), ev.end(), eok.begin())
+          .release());
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  }
+}
+
+// Timestamps under the non-shipped combos for both rep widths: the signed rep flip composed with
+// the descending complement must order pre-epoch values last.
+TEST_F(SortListsInt, NumericTieredTimestampsPolarityMatrix)
+{
+  auto const run = [&](auto rep_tag, auto wrapper_tag, std::vector<decltype(rep_tag)> const& in) {
+    using Rep     = decltype(rep_tag);
+    using Wrapper = decltype(wrapper_tag);
+    std::vector<bool> const ok{true, true, false, true, true};
+    for (auto const& [ord, np] : non_default_combos) {
+      auto const [ev, eok] = host_sorted_row(in, ok, ord, np);
+      auto input           = as_single_row_list(
+        cudf::test::fixed_width_column_wrapper<Wrapper, Rep>(in.begin(), in.end(), ok.begin())
+          .release());
+      auto expected = as_single_row_list(
+        cudf::test::fixed_width_column_wrapper<Wrapper, Rep>(ev.begin(), ev.end(), eok.begin())
+          .release());
+      expect_both_sort_paths_match(
+        cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+    }
+  };
+  run(int32_t{}, cudf::timestamp_D{}, std::vector<int32_t>{100, -50, 0, 0, 25});
+  auto constexpr big = int64_t{5} * 1'000 * 1'000 * 1'000;  // 5e9 > INT32_MAX
+  run(int64_t{}, cudf::timestamp_ms{}, std::vector<int64_t>{big, -big, 0, 1, -1});
+  // The is_duration branch of radix_encode is textually distinct, so cover one duration per width.
+  run(int32_t{}, cudf::duration_D{}, std::vector<int32_t>{100, -50, 0, 0, 25});
+  run(int64_t{}, cudf::duration_us{}, std::vector<int64_t>{big, -big, 0, 1, -1});
+}
+
 // The block tier's band seams (63/64/65, 128/129, 256/257, 512/513, 1024/1025) per key width;
 // DECIMAL128 routes tiered here because the CUB lift declines this column's oversized segments.
 TEST_F(SortListsInt, NumericTieredBlockTierBoundaries)
@@ -2237,8 +2883,7 @@ TEST_F(SortListsInt, NumericTieredBlockTierBoundariesWithNulls)
   check_block_tier_boundaries<__int128_t>(true, cudf::order::ASCENDING);
 }
 
-// The same seams under DESCENDING, with and without nulls (nulls lead under DESCENDING + AFTER);
-// the gate declines DESCENDING today, so these pin the comparison fallback for a future widening.
+// The same seams under DESCENDING, with and without nulls (nulls lead under DESCENDING + AFTER).
 TEST_F(SortListsInt, NumericTieredBlockTierBoundariesDescending)
 {
   check_block_tier_boundaries<int32_t>(false, cudf::order::DESCENDING);
@@ -2444,5 +3089,65 @@ TEST_F(SortListsDouble, NumericPackedFloatNaNInfinity)
     LCWf input{{{-NaN, Inf, -0.0f, 2.5f, -Inf, denorm, 0.0f, NaN, Max, -Max}, null_at(6)}};
     LCWf expected{{{-Inf, -Max, -0.0f, denorm, 2.5f, Max, Inf, NaN, -NaN, 0.0f}, null_at(9)}};
     expect_both_sort_paths_equivalent(cudf::lists_column_view{input}, expected);
+  }
+}
+
+// NaN ranks above +Inf, so a descending output leads with the NaN block (after any leading
+// nulls); the descending complement maps the canonical all-ones NaN key to the smallest valid key.
+TEST_F(SortListsDouble, NumericPackedFloatNaNInfinityPolarityMatrix)
+{
+  {  // FLOAT64: thirteen elements (one null) land in the warp tier.
+    auto constexpr NaN    = std::numeric_limits<double>::quiet_NaN();
+    auto constexpr Inf    = std::numeric_limits<double>::infinity();
+    auto constexpr denorm = std::numeric_limits<double>::denorm_min();
+    auto constexpr Max    = std::numeric_limits<double>::max();
+    using LCWd            = cudf::test::lists_column_wrapper<double>;
+    LCWd input{
+      {{NaN, -Inf, -0.0, 3.5, -NaN, Inf, 0.0, denorm, -2.0, 0.0, Inf, Max, -Max}, null_at(9)}};
+    {  // DESCENDING / AFTER: null first, then NaNs, then values descending
+      LCWd expected{
+        {{0.0, NaN, -NaN, Inf, Inf, Max, 3.5, denorm, 0.0, -0.0, -2.0, -Max, -Inf}, null_at(0)}};
+      expect_both_sort_paths_equivalent(
+        cudf::lists_column_view{input}, expected, cudf::order::DESCENDING, cudf::null_order::AFTER);
+    }
+    {  // ASCENDING / BEFORE: null first, then values ascending, NaNs last
+      LCWd expected{
+        {{0.0, -Inf, -Max, -2.0, -0.0, 0.0, denorm, 3.5, Max, Inf, Inf, NaN, -NaN}, null_at(0)}};
+      expect_both_sort_paths_equivalent(
+        cudf::lists_column_view{input}, expected, cudf::order::ASCENDING, cudf::null_order::BEFORE);
+    }
+    {  // DESCENDING / BEFORE: NaNs first, values descending, null last
+      LCWd expected{
+        {{NaN, -NaN, Inf, Inf, Max, 3.5, denorm, 0.0, -0.0, -2.0, -Max, -Inf, 0.0}, null_at(12)}};
+      expect_both_sort_paths_equivalent(cudf::lists_column_view{input},
+                                        expected,
+                                        cudf::order::DESCENDING,
+                                        cudf::null_order::BEFORE);
+    }
+  }
+  {  // FLOAT32: ten elements (one null) land in the warp tier.
+    auto constexpr NaN    = std::numeric_limits<float>::quiet_NaN();
+    auto constexpr Inf    = std::numeric_limits<float>::infinity();
+    auto constexpr denorm = std::numeric_limits<float>::denorm_min();
+    auto constexpr Max    = std::numeric_limits<float>::max();
+    using LCWf            = cudf::test::lists_column_wrapper<float>;
+    LCWf input{{{-NaN, Inf, -0.0f, 2.5f, -Inf, denorm, 0.0f, NaN, Max, -Max}, null_at(6)}};
+    {  // DESCENDING / AFTER
+      LCWf expected{{{0.0f, NaN, -NaN, Inf, Max, 2.5f, denorm, -0.0f, -Max, -Inf}, null_at(0)}};
+      expect_both_sort_paths_equivalent(
+        cudf::lists_column_view{input}, expected, cudf::order::DESCENDING, cudf::null_order::AFTER);
+    }
+    {  // ASCENDING / BEFORE
+      LCWf expected{{{0.0f, -Inf, -Max, -0.0f, denorm, 2.5f, Max, Inf, NaN, -NaN}, null_at(0)}};
+      expect_both_sort_paths_equivalent(
+        cudf::lists_column_view{input}, expected, cudf::order::ASCENDING, cudf::null_order::BEFORE);
+    }
+    {  // DESCENDING / BEFORE
+      LCWf expected{{{NaN, -NaN, Inf, Max, 2.5f, denorm, -0.0f, -Max, -Inf, 0.0f}, null_at(9)}};
+      expect_both_sort_paths_equivalent(cudf::lists_column_view{input},
+                                        expected,
+                                        cudf::order::DESCENDING,
+                                        cudf::null_order::BEFORE);
+    }
   }
 }

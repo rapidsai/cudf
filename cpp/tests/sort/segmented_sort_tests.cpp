@@ -382,7 +382,7 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
 // The unstable single-column fast paths (tiered, packed-radix, strings) require segment offsets
 // spanning every row `[0, num_rows]`, while the public contract also allows partial and
 // single-index offsets. These tests pin the offsets-coverage guard that routes such inputs to the
-// comparison path, for each fast-path family.
+// comparison path, for each fast-path family and for both explicit sort orders.
 
 // Without the guard these offsets would take the tiered fast path; guarded, only [3, 7) sorts.
 TEST_F(SegmentedSortInt, FastPathPartialOffsetsNumeric)
@@ -442,6 +442,38 @@ TEST_F(SegmentedSortInt, FastPathPartialOffsetsPackedRadix)
   CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
 }
 
+TEST_F(SegmentedSortInt, FastPathPartialOffsetsPackedRadixDescending)
+{
+  using T                 = int;
+  cudf::size_type const n = 400;
+  std::vector<T> vals(n);
+  std::vector<T> ex(n);
+  for (cudf::size_type i = 0; i < n; ++i) {
+    vals[i] = i;  // strictly ascending, distinct
+    // [100, 300) sorted descending is 299..100.
+    ex[i] = (i < 100 or i >= 300) ? vals[i] : (399 - i);
+  }
+  column_wrapper<T> col(vals.begin(), vals.end());
+  column_wrapper<T> expected(ex.begin(), ex.end());
+  column_wrapper<int> segments{{100, 300}};
+  cudf::table_view input{{col}};
+  auto result = cudf::segmented_sort_by_key(
+    input, input, segments, {cudf::order::DESCENDING}, {cudf::null_order::AFTER});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
+}
+
+TEST_F(SegmentedSortInt, FastPathPartialOffsetsDescending)
+{
+  using T = int;
+  column_wrapper<T> col{{50, 51, 52, 40, 10, 30, 20, 57, 58, 59}};
+  column_wrapper<int> segments{{3, 7}};
+  cudf::table_view input{{col}};
+  column_wrapper<T> expected{{50, 51, 52, 40, 30, 20, 10, 57, 58, 59}};
+  auto result = cudf::segmented_sort_by_key(
+    input, input, segments, {cudf::order::DESCENDING}, {cudf::null_order::AFTER});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
+}
+
 // Without the guard these offsets would take the strings fast path; guarded, only [3, 7) sorts.
 TEST_F(SegmentedSortInt, FastPathPartialOffsetsStrings)
 {
@@ -453,6 +485,19 @@ TEST_F(SegmentedSortInt, FastPathPartialOffsetsStrings)
   auto const input = cudf::table_view{{col}};
   auto result      = cudf::segmented_sort_by_key(
     input, input, segments, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
+}
+
+TEST_F(SegmentedSortInt, FastPathPartialOffsetsStringsDescending)
+{
+  cudf::test::strings_column_wrapper col{
+    "a0", "a1", "a2", "banana", "apple", "cherry", "date", "z7", "z8", "z9"};
+  cudf::test::strings_column_wrapper expected{
+    "a0", "a1", "a2", "date", "cherry", "banana", "apple", "z7", "z8", "z9"};
+  column_wrapper<int> segments{{3, 7}};
+  auto const input = cudf::table_view{{col}};
+  auto result      = cudf::segmented_sort_by_key(
+    input, input, segments, {cudf::order::DESCENDING}, {cudf::null_order::AFTER});
   CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
 }
 

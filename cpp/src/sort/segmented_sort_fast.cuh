@@ -49,8 +49,8 @@ inline bool prefer_cub_segmented_sort(size_type num_rows, size_type num_offsets)
 }
 
 /**
- * @brief Fixed-width fast path a single key column takes within the explicit ascending /
- * nulls-after, unstable envelope
+ * @brief Fixed-width fast path a single key column takes within the explicit-(order, null_order) /
+ * unstable envelope
  */
 enum class fixed_width_sort_path {
   comparison,     ///< No fast path applies

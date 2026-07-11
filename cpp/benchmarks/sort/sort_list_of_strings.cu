@@ -231,7 +231,6 @@ NVBENCH_BENCH(bench_sort_list_of_strings)
   // Shared prefixes are the realistic regime for keyed array_sort data.
   .add_int64_axis("shared_prefix_len", {0, 8, 32, 96})
   .add_float64_axis("null_frequency", {0, 0.1})
-  // The string fast path engages only for explicit ascending / nulls-after; the other combinations
-  // measure the comparator fallback.
+  // The fast path folds (order, null_order) into its keys, so all four combinations exercise it.
   .add_string_axis("order", {"ASC", "DESC"})
   .add_string_axis("null_order", {"AFTER", "BEFORE"});

@@ -13,7 +13,6 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
-#include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table_view.hpp>
@@ -23,11 +22,30 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_segmented_sort.cuh>
+#include <cuda/iterator>
+#include <thrust/for_each.h>
 
 namespace cudf {
 namespace detail {
+
+/**
+ * @brief Seeds the segmented sort's paired index buffers with the identity permutation
+ *
+ * `d_values_out` must start as the identity: the segmented sort leaves rows outside every segment
+ * unwritten, and the contract keeps such rows mapped to themselves.
+ */
+struct identity_seed_pair {
+  size_type* d_values_in;
+  size_type* d_values_out;
+  __device__ void operator()(size_type idx) const
+  {
+    d_values_in[idx]  = idx;
+    d_values_out[idx] = idx;
+  }
+};
 
 /**
  * @brief Functor performs faster segmented sort on eligible columns
@@ -77,10 +95,12 @@ struct column_fast_sort_fn {
                                                 stream,
                                                 cudf::get_current_device_resource_ref());
     mutable_column_view output_view = temp_col->mutable_view();
-    auto temp_indices =
-      cudf::column(cudf::column_view(indices.type(), indices.size(), indices.head(), nullptr, 0),
-                   stream,
-                   cudf::get_current_device_resource_ref());
+    // One pass seeds CUB's value-input buffer and identity-prefills the output `indices`.
+    rmm::device_uvector<size_type> temp_indices(input.size(), stream);
+    thrust::for_each_n(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
+                       cuda::counting_iterator<size_type>{0},
+                       input.size(),
+                       identity_seed_pair{temp_indices.data(), indices.begin<size_type>()});
 
     // DeviceSegmentedSort is faster than DeviceSegmentedRadixSort at this time
     auto fast_sort_impl = [stream](bool ascending, [[maybe_unused]] auto&&... args) {
@@ -120,7 +140,7 @@ struct column_fast_sort_fn {
     fast_sort_impl(ascending,
                    input.begin<T>(),
                    output_view.begin<T>(),
-                   temp_indices.view().begin<size_type>(),
+                   temp_indices.data(),
                    indices.begin<size_type>(),
                    input.size(),
                    segment_offsets.size() - 1,
@@ -165,13 +185,9 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::device_async_resource_ref mr)
 {
-  // Unfortunately, CUB's segmented sort functions cannot accept iterators.
-  // We have to build a pre-filled sequence of indices as input.
-  auto sorted_indices = cudf::detail::sequence(
-    input.size(),
-    numeric_scalar<size_type>{0, true, stream, cudf::get_current_device_resource_ref()},
-    stream,
-    mr);
+  // Allocated unfilled: the sort functor identity-seeds it along with CUB's value-input buffer.
+  auto sorted_indices = cudf::make_numeric_column(
+    data_type{type_to_id<size_type>()}, input.size(), mask_state::UNALLOCATED, stream, mr);
   auto indices_view = sorted_indices->mutable_view();
 
   cudf::type_dispatcher<dispatch_storage_type>(input.type(),
@@ -281,23 +297,24 @@ std::unique_ptr<column> segmented_sorted_order_common(
   }
 
   // Unstable-only fast paths for a single fixed-width key column, routed by type class and list
-  // shape; accepted only for an explicit ascending / nulls-last request.
+  // shape; any explicit (order, null_order) is folded into the fast-path sort keys.
   if constexpr (method == sort_method::UNSTABLE) {
-    // Routing runs first so a column routed to `comparison` skips the probe's stream sync.
     if (keys.num_columns() == 1 and segment_offsets.size() > 0 and column_order.size() == 1 and
-        column_order.front() == order::ASCENDING and null_precedence.size() == 1 and
-        null_precedence.front() == null_order::AFTER) {
+        null_precedence.size() == 1) {
+      // Routing runs first so a column routed to `comparison` skips the probe's stream sync.
       auto const path =
         choose_fixed_width_sort_path(keys.column(0), keys.num_rows(), segment_offsets, stream);
       if (path != fixed_width_sort_path::comparison and
           fast_path_offsets_cover_all_rows(segment_offsets, keys.num_rows(), stream)) {
+        auto const polarity = resolve_sort_polarity(
+          keys.column(0).has_nulls(), column_order.front(), null_precedence.front());
         switch (path) {
           case fixed_width_sort_path::tiered:  // short lists, or any nulls
             return fast_segmented_sorted_order_tiered(
-              keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+              keys.column(0), segment_offsets, polarity, stream, mr);
           case fixed_width_sort_path::packed_radix:  // long no-null lists
             return fast_segmented_sorted_order_numeric_packed(
-              keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+              keys.column(0), segment_offsets, polarity, stream, mr);
           case fixed_width_sort_path::cub_segmented:  // wider-rep no-null mid band
             return fast_segmented_sorted_order<method>(
               keys.column(0), segment_offsets, column_order.front(), stream, mr);
@@ -325,22 +342,23 @@ std::unique_ptr<column> segmented_sorted_order_common(
       keys.column(0), segment_offsets, col_order, stream, mr);
   }
 
-  // Unstable-only fast paths for a single STRING key column, accepted only for an explicit
-  // ascending / nulls-last request. Segments that all fit the warp tile take the graduated in-warp
-  // merge sort, which beats the prefix-radix engine there; otherwise a radix sort over packed
-  // leading-byte prefixes with byte-window tie-breaking.
+  // Unstable-only fast paths for a single STRING key column. Segments that all fit the warp tile
+  // take the graduated in-warp merge sort, which beats the prefix-radix engine there; otherwise a
+  // radix sort over packed leading-byte prefixes with byte-window tie-breaking. Any explicit
+  // (order, null_order) is folded into both engines' keys.
   if constexpr (method == sort_method::UNSTABLE) {
     if (keys.num_columns() == 1 and keys.column(0).type().id() == type_id::STRING and
         (segment_offsets.size() > 0) and column_order.size() == 1 and
-        column_order.front() == order::ASCENDING and null_precedence.size() == 1 and
-        null_precedence.front() == null_order::AFTER and
+        null_precedence.size() == 1 and
         fast_path_offsets_cover_all_rows(segment_offsets, keys.num_rows(), stream)) {
+      auto const polarity = resolve_sort_polarity(
+        keys.column(0).has_nulls(), column_order.front(), null_precedence.front());
       if (strings_grad_all_segments_fit(segment_offsets, stream)) {
         return fast_segmented_sorted_order_strings_grad(
-          keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+          keys.column(0), segment_offsets, polarity, stream, mr);
       }
       return fast_segmented_sorted_order_strings_prefix(
-        keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+        keys.column(0), segment_offsets, polarity, stream, mr);
     }
   }
 

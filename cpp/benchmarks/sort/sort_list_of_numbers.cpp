@@ -202,9 +202,9 @@ NVBENCH_BENCH_TYPES(
   // 4: tiny lists (tiered network/warp tiers); 32: the mid band where no-null routing splits by
   // type between CUB DeviceSegmentedSort and the tiered kernel; 256: past the packed-radix cutoff.
   .add_int64_axis("max_list_size", {4, 16, 32, 64, 128, 256})
-  // Null-bearing ascending / nulls-after cells route to the tiered kernel.
+  // The null-bearing case routes every supported type to the tiered kernel.
   .add_float64_axis("null_frequency", {0, 0.1})
-  // Only explicit ascending / nulls-after engages the fast paths; the rest measure base routing.
+  // The fast path folds (order, null_order) into its keys, so all four combinations exercise it.
   .add_string_axis("order", {"ASC", "DESC"})
   .add_string_axis("null_order", {"AFTER", "BEFORE"});
 

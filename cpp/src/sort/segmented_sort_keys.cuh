@@ -39,9 +39,8 @@ constexpr int TIERED_BLOCK_THREADS = 128;
  * folded into the key bits -- one XOR/class operation per element -- rather than into per-engine
  * comparators, which would multiply kernel instantiations. `descending` complements the encoded
  * value field: an order-reversing bijection confined to the field's exact width, leaving the
- * class/segment bits above it untouched. `nulls_first` picks the null class bit. Callers currently
- * construct only the default `{false, false}`, which reproduces the shipped ascending / nulls-last
- * keys bit for bit.
+ * class/segment bits above it untouched. `nulls_first` picks the null class bit. The default
+ * `{false, false}` reproduces the shipped ascending / nulls-last keys bit for bit.
  */
 struct sort_polarity {
   bool descending  = false;
@@ -64,6 +63,18 @@ struct sort_polarity {
     return descending ? ~cuda::std::uint64_t{0} : cuda::std::uint64_t{0};
   }
 };
+
+/// null_order is comparator-level -- a descending sort swaps the comparison operands, inverting
+/// null placement -- so nulls land first exactly when (BEFORE) != (DESCENDING); a zero-null column
+/// relaxes to nulls-last, keeping its keys bit-identical to the shipped configuration.
+inline sort_polarity resolve_sort_polarity(bool has_nulls,
+                                           order column_order,
+                                           null_order null_precedence)
+{
+  auto const descending  = column_order == order::DESCENDING;
+  auto const nulls_first = has_nulls and ((null_precedence == null_order::BEFORE) != descending);
+  return sort_polarity{descending, nulls_first};
+}
 
 /**
  * @brief Fixed-width radix key ordering runs still tied after the single-`uint64` first pass
