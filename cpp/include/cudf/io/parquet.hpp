@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -25,6 +25,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief APIs for reading and writing Parquet files.
  */
 
 constexpr size_t default_row_group_size_bytes =
@@ -66,11 +67,14 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
+  // Column selection options. At most one of these may be set at a time.
+
   // Path in schema of column names to read; `nullopt` is all
   std::optional<std::vector<std::string>> _column_names;
-  // Indices of top-level columns to read; `nullopt` is all (cannot be used alongside
-  // `_column_names`)
+  // Indices of top-level columns to read; `nullopt` is all
   std::optional<std::vector<cudf::size_type>> _column_indices;
+  // Parquet field IDs of columns/fields to read; `nullopt` is all
+  std::optional<std::vector<int32_t>> _column_field_ids;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -106,6 +110,10 @@ class parquet_reader_options {
   // Whether column name matching is case sensitive. In case of multiple
   // case-insensitive matches, the first matched column is selected
   bool _case_sensitive_names = true;
+  // Whether to prepend a source file index column to the output
+  bool _prepend_source_index_column = false;
+  // Whether to prepend a file-local row index column to the output
+  bool _prepend_row_index_column = false;
 
   std::optional<std::vector<reader_column_schema>> _reader_column_schema;
 
@@ -254,6 +262,13 @@ class parquet_reader_options {
   [[nodiscard]] auto const& get_column_indices() const { return _column_indices; }
 
   /**
+   * @brief Returns Parquet field IDs of columns/fields to be read, if set.
+   *
+   * @return Parquet field IDs of columns/fields to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_field_ids() const { return _column_field_ids; }
+
+  /**
    * @brief Returns list of individual row groups to be read.
    *
    * @return List of individual row groups to be read
@@ -297,6 +312,30 @@ class parquet_reader_options {
    * @return `true` if column name matching is case sensitive (default)
    */
   [[nodiscard]] bool is_enabled_case_sensitive_names() const { return _case_sensitive_names; }
+
+  /**
+   * @brief Returns whether to prepend a source file index column to the output.
+   *
+   * @return `true` if a source file index column should be prepended
+   */
+  [[nodiscard]] bool is_enabled_prepend_source_index_column() const
+  {
+    return _prepend_source_index_column;
+  }
+
+  /**
+   * @brief Returns whether to prepend a file-local row index column to the output.
+   *
+   * The row index column contains, for each output row, the row's index within its parquet
+   * source file. If the source index column is also enabled, the column order is: source index,
+   * row index, data columns.
+   *
+   * @return `true` if a row index column should be prepended
+   */
+  [[nodiscard]] bool is_enabled_prepend_row_index_column() const
+  {
+    return _prepend_row_index_column;
+  }
 
   /**
    * @brief Set a new source location
@@ -357,6 +396,8 @@ class parquet_reader_options {
   {
     CUDF_EXPECTS(not _column_indices.has_value(),
                  "Cannot select columns by indices and names simultaneously");
+    CUDF_EXPECTS(not _column_field_ids.has_value(),
+                 "Cannot select columns by field IDs and names simultaneously");
     _column_names = std::move(column_names);
   }
 
@@ -375,7 +416,24 @@ class parquet_reader_options {
   {
     CUDF_EXPECTS(not _column_names.has_value(),
                  "Cannot select columns by indices and names simultaneously");
+    CUDF_EXPECTS(not _column_field_ids.has_value(),
+                 "Cannot select columns by field IDs and indices simultaneously");
     _column_indices = std::move(col_indices);
+  }
+
+  /**
+   * @brief Sets the Parquet field IDs of columns/fields to be read from all input sources.
+   *
+   * @param column_field_ids A vector of Parquet field IDs to attempt to read from each input
+   * source.
+   */
+  void set_column_field_ids(std::vector<int32_t> column_field_ids)
+  {
+    CUDF_EXPECTS(not _column_names.has_value(),
+                 "Cannot select columns by field IDs and names simultaneously");
+    CUDF_EXPECTS(not _column_indices.has_value(),
+                 "Cannot select columns by field IDs and indices simultaneously");
+    _column_field_ids = std::move(column_field_ids);
   }
 
   /**
@@ -542,6 +600,20 @@ class parquet_reader_options {
    * @param val Boolean indicating whether to enable case-sensitive matching.
    */
   void enable_case_sensitive_names(bool val) { _case_sensitive_names = val; }
+
+  /**
+   * @brief Sets whether to prepend a source file index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend the source file index column.
+   */
+  void enable_prepend_source_index_column(bool val) { _prepend_source_index_column = val; }
+
+  /**
+   * @brief Sets whether to prepend a file-local row index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend the row index column.
+   */
+  void enable_prepend_row_index_column(bool val) { _prepend_row_index_column = val; }
 };
 
 /**
@@ -601,6 +673,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& column_indices(std::vector<cudf::size_type> col_indices)
   {
     options.set_column_indices(std::move(col_indices));
+    return *this;
+  }
+
+  /**
+   * @brief Sets the Parquet field IDs of columns/fields to be read from all input sources.
+   *
+   * @param column_field_ids A vector of Parquet field IDs to attempt to read from each input
+   * source.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& column_field_ids(std::vector<int32_t> column_field_ids)
+  {
+    options.set_column_field_ids(std::move(column_field_ids));
     return *this;
   }
 
@@ -800,6 +885,30 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& case_sensitive_names(bool val)
   {
     options._case_sensitive_names = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether to prepend a source file index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend a source file index column
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& prepend_source_index_column(bool val)
+  {
+    options._prepend_source_index_column = val;
+    return *this;
+  }
+
+  /**
+   * @brief Sets whether to prepend a file-local row index column to the output.
+   *
+   * @param val Boolean indicating whether to prepend a row index column
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& prepend_row_index_column(bool val)
+  {
+    options._prepend_row_index_column = val;
     return *this;
   }
 

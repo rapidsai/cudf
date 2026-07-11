@@ -216,6 +216,18 @@ class reader_impl {
   std::pair<bool, std::future<void>> read_column_chunks();
 
   /**
+   * @brief Build the `column_selection_options` bundle for `select_columns()`.
+   *
+   * Type-conversion and case-sensitivity settings are read from the cached `_options` (which must
+   * already be populated); selection-only settings are taken from @p options.
+   *
+   * @param options Reader options
+   * @return Column selection options
+   */
+  [[nodiscard]] column_selection_options make_column_selection_options(
+    parquet_reader_options const& options) const;
+
+  /**
    * @brief Read compressed data and page information for the current pass.
    */
   void read_compressed_data();
@@ -363,10 +375,26 @@ class reader_impl {
    */
   void compute_output_chunks_for_subpass();
 
+  /**
+   * @brief Check if there is more work to be done
+   */
   [[nodiscard]] bool has_more_work() const
   {
     return _file_itm_data.num_passes() > 0 &&
            _file_itm_data._current_input_pass < _file_itm_data.num_passes();
+  }
+
+  /**
+   * @brief Check if the user has specified columns from mismatched sources
+   *
+   * @param options Reader options
+   * @return True if the user has specified columns from mismatched sources
+   */
+  [[nodiscard]] bool has_cols_from_mismatched_sources(parquet_reader_options const& options)
+  {
+    return (options.get_column_names().has_value() or
+            options.get_column_field_ids().has_value()) and
+           options.is_enabled_allow_mismatched_pq_schemas();
   }
 
  protected:
@@ -421,6 +449,34 @@ class reader_impl {
                                                                          size_t chunk_num_rows);
 
   /**
+   * @brief Synthesize source index column
+   *
+   * @param num_rows_per_source Number of rows per parquet source
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   * @return Synthesized source index column
+   */
+  [[nodiscard]] std::unique_ptr<column> synthesize_source_index_column(
+    std::span<std::size_t const> num_rows_per_source,
+    rmm::cuda_stream_view stream,
+    rmm::device_async_resource_ref mr);
+
+  /**
+   * @brief Synthesize file-local row index column
+   *
+   * For each output row, the column contains the row's index within its parquet source file,
+   * accounting for row group selection and row bounds.
+   *
+   * @param read_info Row range of the output chunk relative to the first row of the first
+   *                  selected row group
+   * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource to use for device memory allocation
+   * @return Synthesized row index column
+   */
+  [[nodiscard]] std::unique_ptr<column> synthesize_row_index_column(
+    row_range const& read_info, rmm::cuda_stream_view stream, rmm::device_async_resource_ref mr);
+
+  /**
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
@@ -459,6 +515,10 @@ class reader_impl {
     bool use_jit_filter = false;
     // Whether to use case-sensitive matching for column names
     bool case_sensitive_names = true;
+    // Whether to prepend the source file index column to the output
+    bool prepend_source_index_column = false;
+    // Whether to prepend the file-local row index column to the output
+    bool prepend_row_index_column = false;
   } _options;
 
   // name to reference converter to extract AST output filter

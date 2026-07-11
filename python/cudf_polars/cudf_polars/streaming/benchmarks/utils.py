@@ -20,6 +20,7 @@ import textwrap
 import time
 import traceback
 import uuid
+import warnings
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -65,6 +66,8 @@ except ImportError:
     pynvml = None
 
 try:
+    import cudf_polars.dsl.tracing
+    import cudf_polars.quent
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.dsl.tracing import Scope
     from cudf_polars.dsl.translate import Translator
@@ -118,6 +121,26 @@ else:
 
 _STREAMING_FRONTENDS = frozenset({"dask", "ray", "spmd"})
 _CPU_ENGINES = frozenset({"polars-cpu", "duckdb"})
+
+
+@dataclasses.dataclass
+class NightlyRole:
+    """Role indicating a nightly benchmark run."""
+
+    type: Literal["nightly"] = dataclasses.field(default="nightly", init=False)
+    date: str = dataclasses.field(
+        default_factory=lambda: datetime.now(UTC).isoformat(timespec="seconds")
+    )
+
+
+@dataclasses.dataclass
+class NsysRole:
+    """Role indicating a benchmark run with nsys profiling enabled."""
+
+    type: Literal["nsys"] = dataclasses.field(default="nsys", init=False)
+
+
+Role = NightlyRole | NsysRole
 
 
 @dataclasses.dataclass
@@ -198,20 +221,12 @@ class ValidationMethod:
     comparison_options: dict[str, Any]
     expected_location: str | None
 
-    def expected_file(self, q_id: int) -> Path:
+    def expected_file(self, q_id: int) -> str:
         """Return path to disk-based result for the given query."""
         if self.expected_location is None:
             raise RuntimeError("No expected location given")
 
-        # search for either q_{q_id:02d}.parquet or q{q_id:02d}.parquet
-        files = list(Path(self.expected_location).glob(f"q*{q_id:02d}.parquet"))
-        if not files:
-            raise FileNotFoundError(f"Expected result file for query {q_id} not found")
-        elif len(files) > 1:
-            raise ValueError(
-                f"Multiple expected result files for query {q_id}: {files}"
-            )
-        return files[0]
+        return self.expected_location.rstrip("/") + f"/q*{q_id:02d}.parquet"
 
 
 @dataclasses.dataclass(kw_only=True)
@@ -500,6 +515,7 @@ class RunConfig:
     )
     command_line: str
     capture_env_vars: str
+    roles: list[Role] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.io_mode == "hot" and self.iterations < 2:
@@ -575,7 +591,7 @@ class RunConfig:
                 expected_source="duckdb-disk",
                 comparison_method="polars",
                 comparison_options=get_validation_options(args),
-                expected_location=str(args.validate_directory),
+                expected_location=args.validate_directory,
             )
         elif args.validate_against is not None:
             validation_method = ValidationMethod(
@@ -594,6 +610,12 @@ class RunConfig:
             engine_name = "polars-cpu"
         else:
             engine_name = "cudf-polars"
+
+        roles: list[Role] = []
+        if args.role_nightly:
+            roles.append(NightlyRole())
+        if args.role_nsys:
+            roles.append(NsysRole())
 
         return cls(
             engine_name=engine_name,
@@ -622,6 +644,7 @@ class RunConfig:
             hardware=HardwareInfo.collect(
                 collect_gpus=args.frontend not in _CPU_ENGINES
             ),
+            roles=roles,
         )
 
     def serialize(self, engine: StreamingEngine | None) -> dict:
@@ -660,6 +683,7 @@ class RunConfig:
             "validation_method": dataclasses.asdict(self.validation_method)
             if self.validation_method
             else None,
+            "roles": [dataclasses.asdict(r) for r in self.roles],
         }
         if engine is not None:
             config_options = ConfigOptions.from_polars_engine(engine)
@@ -678,6 +702,11 @@ class RunConfig:
                 "config_options": dataclasses.asdict(config_options),
                 "rapidsmpf_options": rapidsmpf_options,
             }
+            # discard unserializable / unnecessary UUIDs
+            result["config_options"]["config_options"]["executor"].pop(
+                "quent_context", None
+            )
+
         return result
 
     def summarize(self) -> None:
@@ -725,6 +754,9 @@ def get_executor_options(
         run_config.streaming_options.to_executor_options()
     )
     executor_options["max_io_threads"] = run_config.max_io_threads
+    executor_options["quent_context"] = cudf_polars.quent.QuentContext(
+        engine=cudf_polars.quent.Engine(id=run_config.run_id)
+    )
 
     return executor_options
 
@@ -1049,7 +1081,17 @@ def run_polars_query(
         if _HAS_STRUCTLOG and run_config.collect_traces:
             setup_logging(q_id, i)
             if isinstance(engine, StreamingEngine):
-                engine._run(setup_logging, q_id, i)
+                quent_context = engine.config["executor_options"].get("quent_context")
+                if quent_context is not None:
+                    engine.config["executor_options"]["quent_context"] = (
+                        dataclasses.replace(
+                            quent_context,
+                            query=cudf_polars.quent.Query(
+                                instance_name=f"Iteration {i + 1}",
+                            ),
+                        )
+                    )
+                    engine._run(setup_logging, q_id, i)
 
         try:
             record = run_polars_query_iteration(
@@ -1123,6 +1165,18 @@ def _run_query_loop(
     all_partition_plan_rows: list = []
 
     for q_id in run_config.queries:
+        if engine is not None:
+            quent_context = engine.config["executor_options"].get("quent_context")
+            if quent_context is not None:
+                engine.config["executor_options"]["quent_context"] = (
+                    dataclasses.replace(
+                        quent_context,
+                        query_group=cudf_polars.quent.QueryGroup(
+                            instance_name=f"PDSH Query {q_id}",
+                        ),
+                    )
+                )
+
         try:
             result = run_polars_query(
                 q_id=q_id,
@@ -1278,6 +1332,8 @@ def run_polars_spmd(
         )
         from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 
+        is_rank_0 = engine.rank == 0
+
         def _allgather_result(df: pl.DataFrame) -> pl.DataFrame:
             with reserve_op_id() as op_id:
                 return allgather_polars_dataframe(
@@ -1302,9 +1358,16 @@ def run_polars_spmd(
         run_config = _consolidate_logs(
             run_config, engine=engine, gather_client_logs=False
         )
-        _finalize_benchmark_run(
-            args, run_config, validation_failures, query_failures, engine=engine
+
+    if is_rank_0:
+        _write_quent_traces(
+            engine=engine,
+            run_id=run_config.run_id,
+            collect_traces=run_config.collect_traces,
         )
+    _finalize_benchmark_run(
+        args, run_config, validation_failures, query_failures, engine=engine
+    )
 
 
 def run_polars_ray(
@@ -1350,6 +1413,11 @@ def run_polars_ray(
         run_config = dataclasses.replace(run_config, records=dict(records), plans=plans)
         run_config = _consolidate_logs(run_config, engine=engine)
 
+    _write_quent_traces(
+        engine=engine,
+        run_id=run_config.run_id,
+        collect_traces=run_config.collect_traces,
+    )
     _finalize_benchmark_run(
         args, run_config, validation_failures, query_failures, engine=engine
     )
@@ -1403,6 +1471,12 @@ def run_polars_dask(
                 run_config, records=dict(records), plans=plans
             )
             run_config = _consolidate_logs(run_config, engine)
+
+        _write_quent_traces(
+            engine=engine,
+            run_id=run_config.run_id,
+            collect_traces=run_config.collect_traces,
+        )
     finally:
         if dask_client is not None:
             dask_client.close()
@@ -1412,8 +1486,6 @@ def run_polars_dask(
 
 
 def setup_logging(query_id: int, iteration: int) -> None:
-    import cudf_polars.dsl.tracing
-
     if not cudf_polars.dsl.tracing.LOG_TRACES:
         msg = (
             "Tracing requested via --collect-traces, but tracking is not enabled. "
@@ -1484,6 +1556,36 @@ def setup_logging(query_id: int, iteration: int) -> None:
             wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
             cache_logger_on_first_use=True,
         )
+
+
+def _write_quent_traces(
+    engine: StreamingEngine, run_id: uuid.UUID, *, collect_traces: bool
+) -> None:
+    """Write collected Quent events to logs/{run_id}.ndjson."""
+    if not (_HAS_STRUCTLOG or collect_traces):
+        return
+
+    quent_logs = list(engine._quent_events)
+
+    # The quent UI currently requires the filename to match the engine's ID.
+    for log in quent_logs:
+        if log.get("data", {}).get("Engine", {}).get("Init") and log.get("id") != str(
+            run_id
+        ):
+            msg = (
+                f"Engine ID mismatch: Quent ID ({log['id']}) != Run ID ({run_id}). "
+                "The data might not load in the Quent UI."
+            )
+            warnings.warn(msg, stacklevel=2)
+
+    logs_dir = Path("logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    output_path = logs_dir / f"{run_id}.ndjson"
+    with output_path.open("w") as f:
+        for log in quent_logs:
+            f.write(json.dumps(log))
+            f.write("\n")
+    print(f"Wrote {len(quent_logs)} Quent trace events to {output_path}")
 
 
 def _consolidate_logs(
@@ -1991,12 +2093,12 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     )
     group.add_argument(
         "--validate-directory",
-        type=Path,
+        type=str,
         default=None,
         help=(
-            "Validate the results against a directory with a pre-computed set of 'golden' results. "
-            "The directory should contain one parquet file per query, named 'q_DD.parquet', or `qDD.parquet` "
-            "where DD is the zero-padded query number."
+            "Validate the results against a directory or object-storage prefix with a pre-computed set "
+            "of 'golden' results. The directory should contain one parquet file per query, "
+            "named 'q_DD.parquet', or `qDD.parquet` where DD is the zero-padded query number."
         ),
     )
     parser.add_argument(
@@ -2045,8 +2147,20 @@ def build_parser(num_queries: int = 22) -> argparse.ArgumentParser:
     parser.add_argument(
         "--capture-env-vars",
         type=str,
-        default="CUDF_POLARS_LOG_TRACES_MEMORY,CUDF_POLARS_LOG_TRACES,DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT,DASK_DISTRIBUTED__COMM__UCX__CONNECT_TIMEOUT,KVIKIO_NTHREADS,LIBCUDF_NUM_HOST_WORKERS,OMP_NUM_THREADS,POLARS_MAX_THREADS,RAPIDSMPF_num_streaming_threads,UCX_MAX_RNDV_RAILS,UCX_PROTO_ENABLE,UCX_RNDV_FRAG_MEM_TYPES,UCX_RNDV_MTYPE_WORKER_FC_ENABLE,UCX_RNDV_MTYPE_WORKER_MAX_MEM,UCX_RNDV_PIPELINE_ERROR_HANDLING",
+        default="CUDF_POLARS_LOG_TRACES_MEMORY,CUDF_POLARS_LOG_TRACES,DASK_DISTRIBUTED__COMM__TIMEOUTS__CONNECT,DASK_DISTRIBUTED__COMM__UCX__CONNECT_TIMEOUT,KVIKIO_NTHREADS,LIBCUDF_NUM_HOST_WORKERS,OMP_NUM_THREADS,POLARS_MAX_THREADS,RAPIDSMPF_NUM_STREAMING_THREADS,UCX_MAX_RNDV_RAILS,UCX_PROTO_ENABLE,UCX_RNDV_FRAG_MEM_TYPES,UCX_RNDV_MTYPE_WORKER_FC_ENABLE,UCX_RNDV_MTYPE_WORKER_MAX_MEM,UCX_RNDV_PIPELINE_ERROR_HANDLING",
         help="Comma-separated list of environment variables to capture. Written to ``extra_info.environment``.",
+    )
+    parser.add_argument(
+        "--role-nightly",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Add the 'nightly' role to the benchmark run output.",
+    )
+    parser.add_argument(
+        "--role-nsys",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Add the 'nsys' role to the benchmark run output.",
     )
 
     StreamingOptions._add_cli_args(parser)
@@ -2088,14 +2202,6 @@ def parse_args(
         parser.error(
             "--blocksize is not supported with --frontend; "
             "use --target-partition-size instead."
-        )
-
-    if (
-        parsed_args.validate_directory is not None
-        and not parsed_args.validate_directory.exists()
-    ):
-        raise FileNotFoundError(
-            f"--validate-directory: {parsed_args.validate_directory} does not exist."
         )
 
     if (
