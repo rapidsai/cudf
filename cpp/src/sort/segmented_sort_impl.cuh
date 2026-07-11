@@ -297,15 +297,20 @@ std::unique_ptr<column> segmented_sorted_order_common(
       keys.column(0), segment_offsets, col_order, stream, mr);
   }
 
-  // Unstable-only fast path for a single STRING key column sorted ascending with nulls last: a
-  // radix sort over packed leading-byte prefixes with byte-window tie-breaking. The order and null
-  // precedence must be explicit; any other configuration falls through to the comparison path.
+  // Unstable-only fast paths for a single STRING key column. Segments that all fit the warp tile
+  // take the graduated in-warp merge sort, which beats the prefix-radix engine there; otherwise a
+  // radix sort over packed leading-byte prefixes with byte-window tie-breaking. Only an explicit
+  // ascending / nulls-last request qualifies; anything else falls through to the comparison path.
   if constexpr (method == sort_method::UNSTABLE) {
     if (keys.num_columns() == 1 and keys.column(0).type().id() == type_id::STRING and
         (segment_offsets.size() > 0) and column_order.size() == 1 and
         column_order.front() == order::ASCENDING and null_precedence.size() == 1 and
         null_precedence.front() == null_order::AFTER and
         fast_path_offsets_cover_all_rows(segment_offsets, keys.num_rows(), stream)) {
+      if (strings_grad_all_segments_fit(segment_offsets, stream)) {
+        return fast_segmented_sorted_order_strings_grad(
+          keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+      }
       return fast_segmented_sorted_order_strings_prefix(
         keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
     }

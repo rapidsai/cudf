@@ -55,5 +55,36 @@ namespace detail {
   rmm::cuda_stream_view stream,
   rmm::device_async_resource_ref mr);
 
+/**
+ * @brief Whether every segment fits the graduated path's largest warp tile
+ * (`STRINGS_GRAD_WARP_CAP`)
+ *
+ * Synchronizing device probe; the caller runs the cheap scalar gates first and guarantees at
+ * least two offsets, so `segment_offsets.size() - 1` is a valid segment count.
+ */
+bool strings_grad_all_segments_fit(column_view const& segment_offsets,
+                                   rmm::cuda_stream_view stream);
+
+/**
+ * @brief Segmented sorted-order for a STRING column via graduated in-warp sorts
+ *
+ * One virtual warp per segment with `cub::WarpMergeSort` under a string comparator; the warp width
+ * follows the segment-size band (W8/W16/W32, two items per lane except the (0,8] slice at one) so
+ * a tiny segment never occupies a full warp. Every band launches over the full segment list and
+ * self-filters to its size slice; the bands partition [1, 64], so every output slot is written
+ * exactly once. The caller guarantees every segment fits `STRINGS_GRAD_WARP_CAP`
+ * (`strings_grad_all_segments_fit`) and offsets spanning all rows; `polarity` folds order and
+ * null placement into the keys as in `fast_segmented_sorted_order_strings_prefix`.
+ *
+ * The cap precondition is re-verified in debug builds only, so a release-build violation is an
+ * unchecked out-of-bounds hazard.
+ */
+[[nodiscard]] std::unique_ptr<column> fast_segmented_sorted_order_strings_grad(
+  column_view const& input,
+  column_view const& segment_offsets,
+  sort_polarity polarity,
+  rmm::cuda_stream_view stream,
+  rmm::device_async_resource_ref mr);
+
 }  // namespace detail
 }  // namespace cudf

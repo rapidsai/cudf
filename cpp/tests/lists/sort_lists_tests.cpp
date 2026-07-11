@@ -387,6 +387,40 @@ void expect_both_sort_paths_match(cudf::lists_column_view const& input,
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(stable_sorted->view(), expected);
 }
 
+// Host oracle for one list row. cudf's null_order is comparator-level and DESCENDING swaps the
+// comparison operands, inverting null placement too: nulls land first iff (BEFORE) != (DESCENDING).
+template <typename T>
+std::pair<std::vector<T>, std::vector<bool>> host_sorted_row(std::vector<T> const& vals,
+                                                             std::vector<bool> const& valids,
+                                                             cudf::order column_order,
+                                                             cudf::null_order null_precedence)
+{
+  std::vector<T> nn;
+  for (std::size_t i = 0; i < vals.size(); ++i) {
+    if (valids[i]) { nn.push_back(vals[i]); }
+  }
+  std::sort(nn.begin(), nn.end());
+  if (column_order == cudf::order::DESCENDING) { std::reverse(nn.begin(), nn.end()); }
+  auto const num_nulls = vals.size() - nn.size();
+  auto const nulls_first =
+    (null_precedence == cudf::null_order::BEFORE) != (column_order == cudf::order::DESCENDING);
+  std::vector<T> out;
+  std::vector<bool> out_valids;
+  auto const push_nulls = [&] {
+    for (std::size_t k = 0; k < num_nulls; ++k) {
+      out.push_back(T{});
+      out_valids.push_back(false);
+    }
+  };
+  if (nulls_first) { push_nulls(); }
+  for (auto const& v : nn) {
+    out.push_back(v);
+    out_valids.push_back(true);
+  }
+  if (not nulls_first) { push_nulls(); }
+  return {std::move(out), std::move(out_valids)};
+}
+
 // Wraps a leaf column as a one-row LIST, so the sort orders within a single segment.
 std::unique_ptr<cudf::column> as_single_row_list(std::unique_ptr<cudf::column> leaf)
 {
@@ -532,7 +566,6 @@ TEST_F(SortListsString, PrefixIterativeDeepLongSharedPrefix)
     tail.insert(tail.begin(), 4 - tail.size(), '0');
     row1.push_back(prefix1 + tail);
   }
-
   std::shuffle(row1.begin(), row1.end(), std::mt19937{0x5EED});
 
   std::vector<std::string> in_strings;
@@ -705,7 +738,6 @@ TEST_F(SortListsString, PrefixPackedKeyPartialByteTieOffset)
   }
   in_strings.emplace_back("");  // second null placeholder
   in_valids.push_back(false);
-
   auto const num_elements = static_cast<cudf::size_type>(in_strings.size());
 
   std::vector<std::string> non_null;
@@ -832,6 +864,250 @@ TEST_F(SortListsString, PrefixTrueHeapsortRun)
   auto const input    = make_single_row_list(shuffled);
   auto const expected = make_single_row_list(sorted);
   expect_both_sort_paths_match(cudf::lists_column_view{input->view()}, expected->view());
+}
+
+namespace {
+// Builds a LIST<STRING> column from per-row (string, validity) data. Embedded NUL bytes ride
+// through unchanged, so callers pass explicit-length `std::string`s. The leaf takes a mask only
+// when a null exists: the sort returns null-free columns non-nullable, and expected columns built
+// here must match that contract.
+std::unique_ptr<cudf::column> make_string_lists(std::vector<std::vector<std::string>> const& rows,
+                                                std::vector<std::vector<bool>> const& valids)
+{
+  std::vector<std::string> flat;
+  std::vector<bool> flat_v;
+  std::vector<cudf::size_type> offsets{0};
+  for (std::size_t r = 0; r < rows.size(); ++r) {
+    flat.insert(flat.end(), rows[r].begin(), rows[r].end());
+    flat_v.insert(flat_v.end(), valids[r].begin(), valids[r].end());
+    offsets.push_back(static_cast<cudf::size_type>(flat.size()));
+  }
+  auto const has_null_element = std::find(flat_v.cbegin(), flat_v.cend(), false) != flat_v.cend();
+  auto leaf =
+    has_null_element
+      ? cudf::test::strings_column_wrapper(flat.begin(), flat.end(), flat_v.begin()).release()
+      : cudf::test::strings_column_wrapper(flat.begin(), flat.end()).release();
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> off(offsets.begin(), offsets.end());
+  return cudf::make_lists_column(
+    static_cast<cudf::size_type>(rows.size()), off.release(), std::move(leaf), 0, {});
+}
+
+// Drives the rows through all four (order, null_order) combos against a per-row host oracle;
+// `std::string`'s unsigned-byte order and length tie-break match cudf's string order.
+void expect_string_polarity_matrix(std::vector<std::vector<std::string>> const& rows,
+                                   std::vector<std::vector<bool>> const& valids)
+{
+  constexpr std::array<std::pair<cudf::order, cudf::null_order>, 4> combos{
+    {{cudf::order::ASCENDING, cudf::null_order::AFTER},
+     {cudf::order::DESCENDING, cudf::null_order::AFTER},
+     {cudf::order::ASCENDING, cudf::null_order::BEFORE},
+     {cudf::order::DESCENDING, cudf::null_order::BEFORE}}};
+  auto const input = make_string_lists(rows, valids);
+  for (auto const& [ord, np] : combos) {
+    std::vector<std::vector<std::string>> ex_rows(rows.size());
+    std::vector<std::vector<bool>> ex_valids(rows.size());
+    for (std::size_t r = 0; r < rows.size(); ++r) {
+      auto sorted_row = host_sorted_row(rows[r], valids[r], ord, np);
+      ex_rows[r]      = std::move(sorted_row.first);
+      ex_valids[r]    = std::move(sorted_row.second);
+    }
+    auto const expected = make_string_lists(ex_rows, ex_valids);
+    expect_both_sort_paths_match(cudf::lists_column_view{input->view()}, expected->view(), ord, np);
+  }
+}
+}  // namespace
+
+// ===== graduated-warp string path: per-band polarity coverage (segments within the 64-element cap)
+// The default string fast path once every segment fits a warp tile; its bands are (0,8] one item
+// per lane, then (8,16] W8, W16, and W32.
+
+// Sizes at and across every band boundary (8/9, 15/16/17, 31/32/33, 63/64) plus an empty row, side
+// by side in one column; the 8/16/32/64 rows fill their tiles exactly (zero pads).
+TEST_F(SortListsString, GradPolarityMatrixBandBoundarySizes)
+{
+  std::vector<cudf::size_type> const sizes{1, 2, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 0};
+  std::mt19937 rng{0xBEEF};
+  std::vector<std::vector<std::string>> rows;
+  std::vector<std::vector<bool>> valids;
+  for (auto const n : sizes) {
+    std::vector<std::string> row(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      // Distinct within a row: 97 is coprime to 1000, so the numeric part never repeats for i < 64.
+      row[i] = "k" + std::to_string(i * 97 % 1'000) + static_cast<char>('a' + i % 26);
+    }
+    std::shuffle(row.begin(), row.end(), rng);
+    valids.emplace_back(row.size(), true);
+    rows.push_back(std::move(row));
+  }
+  expect_string_polarity_matrix(rows, valids);
+}
+
+// The nulls-first combos put the valid class at ordinal 1: a comparator hardcoding it to 0 would
+// collapse valid-vs-valid pairs to "equal" and keep the shuffled order. Row 1 (2 valid / 15 null /
+// 15 pad) stresses the pad class ranking above tier_null; row 5 is all null.
+TEST_F(SortListsString, GradPolarityMatrixNullsAcrossBands)
+{
+  std::vector<cudf::size_type> const sizes{12, 17, 20, 40, 64, 16, 5, 8};
+  std::mt19937 rng{0xD00D};
+  std::vector<std::vector<std::string>> rows;
+  std::vector<std::vector<bool>> valids;
+  for (std::size_t r = 0; r < sizes.size(); ++r) {
+    auto const n = sizes[r];
+    std::vector<std::pair<std::string, bool>> cells(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      // Row 1: only elements 3 and 11 valid (2 valid / 15 null). Row 5: all null. Others: every
+      // (i % 5 == 2) element is null.
+      bool const v = (r == 1) ? (i == 3 || i == 11) : (r == 5 ? false : (i % 5 != 2));
+      cells[i]     = {"v" + std::to_string(i * 97 % 1'000), v};
+    }
+    if (n > 1 && cells[0].second && cells[1].second) {
+      cells[1].first = cells[0].first;  // A duplicate among the valids.
+    }
+    std::shuffle(cells.begin(), cells.end(), rng);  // Interleave nulls; don't pre-group them.
+    std::vector<std::string> row(n);
+    std::vector<bool> valid(n);
+    for (cudf::size_type i = 0; i < n; ++i) {
+      row[i]   = cells[i].first;
+      valid[i] = cells[i].second;
+    }
+    rows.push_back(std::move(row));
+    valids.push_back(std::move(valid));
+  }
+  expect_string_polarity_matrix(rows, valids);
+}
+
+// Zero-extension pairs (`S` vs `S + "\0"`) collide on the zero-filled window and resolve only by
+// the length tie-break, whose side the descending complement flips; the shared eight-byte prefixes
+// force every pair onto the suffix fallback in each band. Row 3 is pure duplicates.
+TEST_F(SortListsString, GradPolarityMatrixTiesAndZeroExtension)
+{
+  using namespace std::string_literals;
+  std::mt19937 rng{0xACE5};
+  std::vector<std::string> row0{""s, "a"s, "ab"s, "ab"s, "ab\0"s, "ab\0c"s, "abc"s, "abcd"s, "b"s};
+  std::vector<std::string> row1;
+  for (int i = 0; i < 16; ++i) {
+    row1.push_back("PPPPPPPP" + std::to_string(i));
+  }
+  row1.push_back("PPPPPPPP"s);
+  row1.push_back("PPPPPPPP\0"s);
+  row1.push_back("PPPPPPPP3"s);  // duplicate
+  row1.push_back("PPPPPPPP7"s);  // duplicate
+  std::vector<std::string> row2;
+  for (int i = 0; i < 38; ++i) {
+    row2.push_back("SAMEPREF" + std::string(1, static_cast<char>('0' + (i % 10))) +
+                   std::to_string(i));
+  }
+  row2.push_back("SAMEPREF"s);
+  row2.push_back("SAMEPREF\0"s);
+  std::vector<std::string> row3(10, "dup"s);
+
+  std::vector<std::vector<std::string>> rows;
+  std::vector<std::vector<bool>> valids;
+  for (auto* row : {&row0, &row1, &row2, &row3}) {
+    std::shuffle(row->begin(), row->end(), rng);
+    valids.emplace_back(row->size(), true);
+    rows.push_back(*row);
+  }
+  expect_string_polarity_matrix(rows, valids);
+}
+
+// Raw unsigned-byte order across the 2-/3-/4-byte UTF-8 lead classes; row 1 shares a multibyte
+// prefix so the prekey ties past the lead bytes.
+TEST_F(SortListsString, GradPolarityMatrixUtf8Multibyte)
+{
+  std::mt19937 rng{0xFACE};
+  std::vector<std::string> row0{
+    "\xE2\x82\xAC\x75\x72\x6F", "zoo", "\xF0\x9F\x98\x80", "\xC3\xA9\x70\xC3\xA9\x65", "apple"};
+  std::vector<std::string> row1;
+  for (int i = 0; i < 36; ++i) {
+    row1.push_back("\xC3\xA9" + std::to_string(i * 97 % 1'000));
+  }
+  std::vector<std::vector<std::string>> rows;
+  std::vector<std::vector<bool>> valids;
+  for (auto* row : {&row0, &row1}) {
+    std::shuffle(row->begin(), row->end(), rng);
+    valids.emplace_back(row->size(), true);
+    rows.push_back(*row);
+  }
+  expect_string_polarity_matrix(rows, valids);
+}
+
+// A few hundred segments cycling every band size in (0, 64] drive the string instantiations of
+// the shared warp-band kernel across block boundaries -- hundreds of virtual warps over multiple
+// blocks per band -- where the small tests above stay within two blocks. Scattered nulls and a
+// sprinkle of empty rows ride along, all against the host oracle under every combo.
+TEST_F(SortListsString, GradManySegmentsAcrossBands)
+{
+  std::vector<std::vector<std::string>> rows;
+  std::vector<std::vector<bool>> valids;
+  for (int seg = 0; seg < 300; ++seg) {
+    if (seg % 50 == 49) {  // Interleave empty rows; no band owns them.
+      rows.emplace_back();
+      valids.emplace_back();
+      continue;
+    }
+    auto const size = seg % 64 + 1;
+    std::vector<std::string> row(size);
+    std::vector<bool> valid(size);
+    for (int i = 0; i < size; ++i) {
+      row[i]   = "s" + std::to_string((seg * 31 + i * 7) % 97) + std::string(i % 9, 'x');
+      valid[i] = (seg * 13 + i) % 11 != 0;
+    }
+    rows.push_back(std::move(row));
+    valids.push_back(std::move(valid));
+  }
+  expect_string_polarity_matrix(rows, valids);
+}
+
+// Slicing off row 0 gives the leaf strings a genuine nonzero offset, which the graduated key
+// builders and comparators must honor under every combo.
+TEST_F(SortListsString, GradSlicedWithNulls)
+{
+  using StrLCW = cudf::test::lists_column_wrapper<cudf::string_view>;
+  StrLCW l{StrLCW{"zz", "aa"},
+           StrLCW{{"banana", "apple", "x", "cherry"}, null_at(2)},  // element 2 ("x") is null
+           StrLCW{"b", "a"},
+           StrLCW{"x"}};
+  auto const sliced = cudf::slice(l, {1, 4})[0];  // drops row 0 -> nonzero child offset
+  {                                               // ASC / AFTER: values ascending, null last
+    StrLCW expected{
+      StrLCW{{"apple", "banana", "cherry", "x"}, null_at(3)}, StrLCW{"a", "b"}, StrLCW{"x"}};
+    expect_both_sort_paths_match(cudf::lists_column_view{sliced}, expected);
+  }
+  {  // ASC / BEFORE: null first, then values ascending
+    StrLCW expected{
+      StrLCW{{"x", "apple", "banana", "cherry"}, null_at(0)}, StrLCW{"a", "b"}, StrLCW{"x"}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{sliced}, expected, cudf::order::ASCENDING, cudf::null_order::BEFORE);
+  }
+  {  // DESC / AFTER: the comparator swap places the null first, then values descending
+    StrLCW expected{
+      StrLCW{{"x", "cherry", "banana", "apple"}, null_at(0)}, StrLCW{"b", "a"}, StrLCW{"x"}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{sliced}, expected, cudf::order::DESCENDING, cudf::null_order::AFTER);
+  }
+  {  // DESC / BEFORE: values descending, then the null last
+    StrLCW expected{
+      StrLCW{{"cherry", "banana", "apple", "x"}, null_at(3)}, StrLCW{"b", "a"}, StrLCW{"x"}};
+    expect_both_sort_paths_match(
+      cudf::lists_column_view{sliced}, expected, cudf::order::DESCENDING, cudf::null_order::BEFORE);
+  }
+}
+
+// One 65-element segment exceeds the warp cap and disqualifies the whole column, so the prefix
+// path must produce the result under every combo.
+TEST_F(SortListsString, GradOversizedSegmentFallsThrough)
+{
+  std::mt19937 rng{0xF00D};
+  std::vector<std::string> big(65);
+  for (int i = 0; i < 65; ++i) {
+    big[i] = "q" + std::to_string(i * 97 % 1'000);
+  }
+  std::shuffle(big.begin(), big.end(), rng);
+  std::vector<std::vector<std::string>> const rows{big, {"b", "a", "c"}};
+  std::vector<std::vector<bool>> const valids{std::vector<bool>(big.size(), true),
+                                              {true, true, true}};
+  expect_string_polarity_matrix(rows, valids);
 }
 
 // Sliced string input with a retained null: the packed-key builder, window tie-break, and

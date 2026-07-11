@@ -108,10 +108,10 @@ static std::unique_ptr<cudf::column> apply_shared_prefix(cudf::column_view const
 }
 
 // The list generator forces its final offset to the child size, so the last row absorbs every
-// leftover element -- an artifact often far above `max_list_size`, handing the sweep a shape no
-// axis value asked for. Trimming that row (untimed) restores the declared [0, max_list_size]
-// regime. Returns nullptr when the last row already fits. The generator purges nonempty nulls, so
-// the trim cannot create a nonempty null.
+// leftover element -- an artifact often far above `max_list_size` that would disqualify the whole
+// column from the graduated-warp path and silently demote it to the prefix path. Trimming that row
+// (untimed) restores the declared [0, max_list_size] regime. Returns nullptr when the last row
+// already fits. The generator purges nonempty nulls, so the trim cannot create a nonempty null.
 static std::unique_ptr<cudf::column> trim_forced_last_row(cudf::column_view const& list_col,
                                                           cudf::size_type max_list_size,
                                                           rmm::cuda_stream_view stream)
@@ -152,7 +152,6 @@ static std::unique_ptr<cudf::column> trim_forced_last_row(cudf::column_view cons
                                         std::move(new_leaf),
                                         list_col.null_count(),
                                         cudf::copy_bitmask(list_col, stream, mr));
-
   stream.synchronize();
   return result;
 }
@@ -232,6 +231,7 @@ NVBENCH_BENCH(bench_sort_list_of_strings)
   // Shared prefixes are the realistic regime for keyed array_sort data.
   .add_int64_axis("shared_prefix_len", {0, 8, 32, 96})
   .add_float64_axis("null_frequency", {0, 0.1})
-  // The fast path takes only ASC/nulls-last; the other combinations exercise the fallback sort.
+  // The string fast path engages only for explicit ascending / nulls-after; the other combinations
+  // measure the comparator fallback.
   .add_string_axis("order", {"ASC", "DESC"})
   .add_string_axis("null_order", {"AFTER", "BEFORE"});

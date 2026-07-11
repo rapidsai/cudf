@@ -17,6 +17,20 @@
 namespace cudf {
 namespace detail {
 
+// Element class within the tiered ordering key. The ranks are load-bearing: `element_class` maps
+// valid/null to 0/1 per the polarity, and `tier_pad` MUST rank strictly above both --
+// `cub::BlockMergeSortStrategy::Sort` fills the slots past a segment's real elements with the pad
+// key and requires it ordered after every valid item, so a tie could let the merge displace a real
+// element past the valid-item boundary and drop it.
+enum class tiered_element_class : cuda::std::uint32_t {
+  tier_valid = 0,
+  tier_null  = 1,
+  tier_pad   = 2
+};
+
+/// Block size hosting the register/warp tiered virtual warps and the graduated-string warp bands.
+constexpr int TIERED_BLOCK_THREADS = 128;
+
 /**
  * @brief Runtime key polarity realizing one explicit (order, null_order) on the segmented-sort
  * fast paths
@@ -25,16 +39,16 @@ namespace detail {
  * folded into the key bits -- one XOR/class operation per element -- rather than into per-engine
  * comparators, which would multiply kernel instantiations. `descending` complements the encoded
  * value field: an order-reversing bijection confined to the field's exact width, leaving the
- * class/segment bits above it untouched. `nulls_first` picks the null class bit. The only current
- * caller constructs the default `{false, false}` state, which reproduces the shipped ascending /
- * nulls-last keys bit for bit; the other states engage once the gate widens to the full matrix.
+ * class/segment bits above it untouched. `nulls_first` picks the null class bit. Callers currently
+ * construct only the default `{false, false}` -- the engines are gated to explicit ascending /
+ * nulls-after requests -- which reproduces the shipped ascending / nulls-last keys bit for bit.
  */
 struct sort_polarity {
   bool descending  = false;
   bool nulls_first = false;
 
   /// Class bit for a valid (0/1) or null (1/0) element: unsigned key order then places nulls on
-  /// the requested side of every valid element.
+  /// the requested side of every valid element; the tiered pad class (2) stays strictly above both.
   __host__ __device__ cuda::std::uint32_t element_class(bool is_null) const
   {
     return static_cast<cuda::std::uint32_t>(is_null != nulls_first);
@@ -163,6 +177,15 @@ void cub_select_flagged(InputIteratorT d_in,
                              count,
                              stream.value());
 }
+
+struct segment_exceeds_size {
+  size_type const* d_offsets;
+  size_type limit;
+  __device__ bool operator()(size_type i) const
+  {
+    return (d_offsets[i + 1] - d_offsets[i]) > limit;
+  }
+};
 
 }  // namespace detail
 }  // namespace cudf
