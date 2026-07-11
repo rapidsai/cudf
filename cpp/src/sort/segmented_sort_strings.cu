@@ -182,10 +182,10 @@ __device__ inline bool packed_key_is_tied(cuda::std::uint64_t const* d_keys,
 /**
  * @brief Flags `uint64`-key positions equal to a neighbor (a run of two or more), never a null
  *
- * Sizes and gates the iterative tie-break. A null is position-final after the first pass and its
- * order among nulls immaterial, so it is reported untied rather than dragged through every window.
- * `null_flag` is the class-bit value marking a null (`polarity.element_class(true)`); the bit sits
- * at `prefix_bits`.
+ * The `uint64` analogue of `key_tied_flag`, sizing and gating the iterative tie-break. A null is
+ * position-final after the first pass and its order among nulls immaterial, so it is reported
+ * untied rather than dragged through every window. `null_flag` is the class-bit value marking a
+ * null (`polarity.element_class(true)`); the bit sits at `prefix_bits`.
  */
 struct key_tied_flag_packed {
   cuda::std::uint64_t const* d_keys;

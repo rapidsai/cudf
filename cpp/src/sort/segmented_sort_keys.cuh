@@ -40,8 +40,8 @@ constexpr int TIERED_BLOCK_THREADS = 128;
  * comparators, which would multiply kernel instantiations. `descending` complements the encoded
  * value field: an order-reversing bijection confined to the field's exact width, leaving the
  * class/segment bits above it untouched. `nulls_first` picks the null class bit. Callers currently
- * construct only the default `{false, false}` -- the engines are gated to explicit ascending /
- * nulls-after requests -- which reproduces the shipped ascending / nulls-last keys bit for bit.
+ * construct only the default `{false, false}`, which reproduces the shipped ascending / nulls-last
+ * keys bit for bit.
  */
 struct sort_polarity {
   bool descending  = false;
@@ -142,12 +142,36 @@ struct key_head_flag {
 };
 
 /**
+ * @brief Flags positions whose key equals a neighbor, i.e. those in a run of two or more
+ *
+ * Used to compact the sorted order to just the still-tied positions later windows must re-sort;
+ * singletons are already final. A null-classed position never counts as tied: nulls are
+ * position-final after the first pass. `null_flag` is the `seg_null` bit-0 value marking a null --
+ * 1 for the strings path and the numeric nulls-last polarity, 0 under numeric nulls-first, whose
+ * valid elements carry bit 1 and must stay tie-detectable.
+ */
+struct key_tied_flag {
+  prefix_key96 const* d_keys;
+  size_type const num_elements;
+  cuda::std::uint32_t const null_flag = 1u;
+  __device__ bool operator()(size_type i) const
+  {
+    auto const cur = d_keys[i];
+    if ((cur.seg_null & 1u) == null_flag) { return false; }
+    auto const eq_prev = i > 0 && keys_equal(d_keys[i - 1], cur);
+    auto const eq_next = i + 1 < num_elements && keys_equal(d_keys[i + 1], cur);
+    return eq_prev || eq_next;
+  }
+};
+
+/**
  * @brief Runs `cub::DeviceSelect::Flagged` to completion: the temp-storage query pass, then the
  * execute pass
  *
- * Shared by every call site that compacts positions down to their `tied_flags`-true subset -- the
- * strings prefix-radix setup and its per-pass loop repeat this exact two-call CUB idiom (size the
- * scratch buffer, then execute) with only the iterator types and the element count differing.
+ * Shared by every call site that compacts positions down to their `tied_flags`-true subset --
+ * both the numeric two-phase DECIMAL128 sort and the strings prefix-radix loop repeat this exact
+ * two-call CUB idiom (size the scratch buffer, then execute) with only the iterator types and the
+ * element count differing.
  */
 template <typename InputIteratorT, typename OutputIteratorT>
 void cub_select_flagged(InputIteratorT d_in,

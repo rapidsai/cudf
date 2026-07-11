@@ -37,26 +37,29 @@ struct column_fast_sort_fn {
   /**
    * @brief Run-time check for faster segmented sort on an eligible column
    *
-   * Fast segmented sort can handle integral types including
-   * decimal types if dispatch_storage_type is used but it does not support int128.
+   * Integral types and the fixed-point reps (via `dispatch_storage_type`) are supported; the
+   * `__int128` DECIMAL128 rep is admitted for the unstable sort only.
    */
   static bool is_fast_sort_supported(column_view const& col)
   {
-    return !col.has_nulls() and
-           (cudf::is_integral(col.type()) ||
-            (cudf::is_fixed_point(col.type()) and (col.type().id() != type_id::DECIMAL128)));
+    auto const decimal128_ok =
+      col.type().id() == type_id::DECIMAL128 and method == sort_method::UNSTABLE;
+    return !col.has_nulls() and (cudf::is_integral(col.type()) ||
+                                 (cudf::is_fixed_point(col.type()) and
+                                  (col.type().id() != type_id::DECIMAL128 or decimal128_ok)));
   }
 
   /**
    * @brief Compile-time check for supporting fast segmented sort for a specific type
    *
-   * The dispatch_storage_type means we can check for integral types to
-   * include fixed-point types but the CUB limitation means we need to exclude int128.
+   * The `dispatch_storage_type` lets the integral check cover the fixed-point reps; `__int128` is
+   * admitted for the unstable sort only, matching the run-time gate.
    */
   template <typename T>
   static constexpr bool is_fast_sort_supported()
   {
-    return cudf::is_integral<T>() and !std::is_same_v<__int128, T>;
+    return (cudf::is_integral<T>() and !std::is_same_v<__int128, T>) or
+           (std::is_same_v<__int128, T> and method == sort_method::UNSTABLE);
   }
 
   template <typename T>
@@ -277,8 +280,8 @@ std::unique_ptr<column> segmented_sorted_order_common(
                  "Mismatch between number of columns and null_precedence size.");
   }
 
-  // Unstable-only fast paths for a single fixed-width key column sorted ascending / nulls-last,
-  // routed by type class and list shape; any other configuration falls through unchanged.
+  // Unstable-only fast paths for a single fixed-width key column, routed by type class and list
+  // shape; accepted only for an explicit ascending / nulls-last request.
   if constexpr (method == sort_method::UNSTABLE) {
     // Routing runs first so a column routed to `comparison` skips the probe's stream sync.
     if (keys.num_columns() == 1 and segment_offsets.size() > 0 and column_order.size() == 1 and
@@ -288,13 +291,17 @@ std::unique_ptr<column> segmented_sorted_order_common(
         choose_fixed_width_sort_path(keys.column(0), keys.num_rows(), segment_offsets, stream);
       if (path != fixed_width_sort_path::comparison and
           fast_path_offsets_cover_all_rows(segment_offsets, keys.num_rows(), stream)) {
-        if (path == fixed_width_sort_path::tiered) {
-          return fast_segmented_sorted_order_tiered(
-            keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
-        }
-        if (path == fixed_width_sort_path::packed_radix) {
-          return fast_segmented_sorted_order_numeric_packed(
-            keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+        switch (path) {
+          case fixed_width_sort_path::tiered:  // short lists, or any nulls
+            return fast_segmented_sorted_order_tiered(
+              keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+          case fixed_width_sort_path::packed_radix:  // long no-null lists
+            return fast_segmented_sorted_order_numeric_packed(
+              keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+          case fixed_width_sort_path::cub_segmented:  // wider-rep no-null mid band
+            return fast_segmented_sorted_order<method>(
+              keys.column(0), segment_offsets, column_order.front(), stream, mr);
+          case fixed_width_sort_path::comparison: break;  // excluded by the guard above
         }
       }
     }
@@ -308,16 +315,20 @@ std::unique_ptr<column> segmented_sorted_order_common(
   if (keys.num_columns() == 1 and
       column_fast_sort_fn<method>::is_fast_sort_supported(keys.column(0)) and
       (segment_offsets.size() > 0) and
-      prefer_cub_segmented_sort(keys.num_rows(), segment_offsets.size())) {
+      prefer_cub_segmented_sort(keys.num_rows(), segment_offsets.size()) and
+      // DECIMAL128 wins with CUB only in its measured short-list band; above it CUB loses
+      // several-fold to the comparison sort.
+      (keys.column(0).type().id() != type_id::DECIMAL128 or
+       keys.num_rows() / segment_offsets.size() <= DECIMAL128_CUB_MAX_AVG_LIST_SIZE)) {
     auto const col_order = column_order.empty() ? order::ASCENDING : column_order.front();
     return fast_segmented_sorted_order<method>(
       keys.column(0), segment_offsets, col_order, stream, mr);
   }
 
-  // Unstable-only fast paths for a single STRING key column sorted ascending / nulls-last.
-  // Segments that all fit the warp tile take the graduated in-warp merge sort, which beats the
-  // prefix-radix engine there; otherwise a radix sort over packed leading-byte prefixes with
-  // byte-window tie-breaking. Any other configuration falls through unchanged.
+  // Unstable-only fast paths for a single STRING key column, accepted only for an explicit
+  // ascending / nulls-last request. Segments that all fit the warp tile take the graduated in-warp
+  // merge sort, which beats the prefix-radix engine there; otherwise a radix sort over packed
+  // leading-byte prefixes with byte-window tie-breaking.
   if constexpr (method == sort_method::UNSTABLE) {
     if (keys.num_columns() == 1 and keys.column(0).type().id() == type_id::STRING and
         (segment_offsets.size() > 0) and column_order.size() == 1 and

@@ -27,6 +27,15 @@ constexpr size_type MAX_AVG_LIST_SIZE_FOR_FAST_SORT{100};
 constexpr size_type MAX_LIST_SIZE_FOR_FAST_SORT{1 << 18};
 
 /**
+ * @brief Average list size at or below which a no-null `DECIMAL128` column prefers CUB
+ * `DeviceSegmentedSort`
+ *
+ * Measured band top shared by both fast paths; above it CUB loses several-fold to the comparison
+ * sort.
+ */
+constexpr size_type DECIMAL128_CUB_MAX_AVG_LIST_SIZE{16};
+
+/**
  * @brief Whether a single fixed-width column is small enough to prefer CUB `DeviceSegmentedSort`
  *
  * @param num_rows Total element count; the average-size disjunct divides it by `num_offsets`
@@ -56,10 +65,12 @@ enum class fixed_width_sort_path {
  * Four engines picked by type x null-presence x average list size, since their costs scale
  * differently:
  * - Non-tiered numerics (narrow/unsigned ints, `bool`, `DECIMAL32`/`DECIMAL64`) -> packed radix if
- *   null-bearing or long, else comparison (resolving to CUB): the tiered key can't encode them.
- * - `DECIMAL128` -> comparison: out of this stage's scope.
+ *   null-bearing or long, else CUB/comparison: the tiered key can't encode them.
  * - Null-bearing tiered types -> tiered: validity folds into the key, no separate null pass.
  * - No-null past the fast cutoff -> packed radix: bandwidth-bound, amortized by long lists.
+ * - No-null `DECIMAL128` -> tiered, CUB in a sparse-large mid band, tiered above it: CUB's
+ *   16-byte-pair merge tiles cap at 32 elements, so dense large segments would explode into a
+ *   radix.
  * - Other no-null tiered types -> tiered (register networks make tiny-segment cost
  *   width-independent; the warp tiers beat CUB), except a small-scale int64 tiny-average pocket
  *   that stays on CUB.
@@ -68,7 +79,7 @@ enum class fixed_width_sort_path {
  * @param key The fixed-width key column being routed
  * @param num_rows Element count of `key`, used to compute the average list size
  * @param segment_offsets The segment offsets; the caller guarantees non-empty
- * @param stream Unused until the `DECIMAL128` mid-band shape gate lands
+ * @param stream Used only by the `DECIMAL128` mid-band shape gate
  */
 fixed_width_sort_path choose_fixed_width_sort_path(column_view const& key,
                                                    size_type num_rows,

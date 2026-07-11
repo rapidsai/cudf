@@ -190,8 +190,8 @@ void bench_sort_list_of_numbers(nvbench::state& state, nvbench::type_list<Type>)
 }
 
 // Chrono is omitted: its packed key is byte-identical to the int32/int64 rep it extracts to, so
-// those cells already measure it. decimal128 stays on the comparator fallback at this stage and
-// needs its own type-string mapping.
+// those cells already measure it. decimal128 exercises the range-gated radix keys (8-byte
+// min-biased / prefix_key96 / two-phase hi64/lo64) and needs its own type-string mapping.
 NVBENCH_DECLARE_TYPE_STRINGS(numeric::decimal128, "decimal128", "decimal128");
 
 NVBENCH_BENCH_TYPES(
@@ -199,12 +199,12 @@ NVBENCH_BENCH_TYPES(
   NVBENCH_TYPE_AXES(nvbench::type_list<std::int32_t, std::int64_t, float, double>))
   .set_name("sort_list_of_numbers")
   .add_int64_axis("num_rows", {32'768, 262'144, 2'097'152, 16'777'216})
-  // 4: tiny lists (tiered network/warp tiers); 32: the mid band the tiered kernel also claims;
-  // 256: past the packed-radix cutoff.
+  // 4: tiny lists (tiered network/warp tiers); 32: the mid band where no-null routing splits by
+  // type between CUB DeviceSegmentedSort and the tiered kernel; 256: past the packed-radix cutoff.
   .add_int64_axis("max_list_size", {4, 16, 32, 64, 128, 256})
-  // The null-bearing ascending / nulls-after cells route to the tiered kernel.
+  // Null-bearing ascending / nulls-after cells route to the tiered kernel.
   .add_float64_axis("null_frequency", {0, 0.1})
-  // The fast path engages only for ascending / nulls-after; the rest measure the base routing.
+  // Only explicit ascending / nulls-after engages the fast paths; the rest measure base routing.
   .add_string_axis("order", {"ASC", "DESC"})
   .add_string_axis("null_order", {"AFTER", "BEFORE"});
 
