@@ -181,6 +181,18 @@ def _ranges_overlap(left: tuple[int, int], right: tuple[int, int]) -> bool:
     return max(left[0], right[0]) < min(left[1], right[1])
 
 
+def _sources_for_pid(
+    source_ranges: list[tuple[int, int]],
+    pid: int,
+) -> list[int]:
+    """Return source ranks that may contribute to one output partition."""
+    return [
+        source_rank
+        for source_rank, source_range in enumerate(source_ranges)
+        if source_range[0] <= pid < source_range[1]
+    ]
+
+
 def _unpack_remote_piece(
     packed: PackedData,
     stream: Stream,
@@ -201,6 +213,8 @@ def _unpack_remote_piece(
         .to_polars()
         .item(0, 0)
     )
+    if not payload_cols:
+        return None
     payload = plc.Table(payload_cols).copy(stream=stream, mr=br.device_mr)
     return pid, TableChunk.from_pylibcudf_table(
         payload,
@@ -285,6 +299,12 @@ class _OutputPieceReader:
             if start <= pid < stop
         }
         return dict(sorted(out.items()))
+
+    async def drain_remaining(self) -> None:
+        """Consume input that cannot affect any remaining output partition."""
+        while not self.input_done:
+            if await self.ch_in.recv(self.context) is None:
+                self.input_done = True
 
 
 async def _adjust_ordering_streaming_window(
@@ -416,6 +436,33 @@ async def _send_remote_piece(
         )
 
 
+async def _send_remote_marker(
+    context: Context,
+    comm: Communicator,
+    exchange: SparseAlltoall,
+    npartitions: int,
+    pid: int,
+) -> None:
+    """Send a no-payload marker for an empty remote-owned partition."""
+    with stream_ordered_after(
+        context.br().stream_pool.get_stream,
+        upstreams=(),
+    ) as stream:
+        pid_col = plc.Column.from_scalar(
+            plc.Scalar.from_py(pid, _PID_PLC_DTYPE, stream=stream),
+            1,
+            stream=stream,
+        )
+        exchange.insert(
+            _contiguous_owner(pid, comm.nranks, npartitions),
+            packed_data_from_cudf_packed_columns(
+                pack(plc.Table([pid_col]), stream, mr=context.br().device_mr),
+                stream,
+                context.br(),
+            ),
+        )
+
+
 async def _emit_partition(
     context: Context,
     ref_ir: IR,
@@ -485,14 +532,17 @@ async def _adjust_ordering_impl(
         for source_rank, source_range in enumerate(source_ranges)
         if source_rank != comm.rank and _ranges_overlap(source_range, local_window)
     ]
-    remote_destinations = [
-        output_rank
-        for output_rank in range(comm.nranks)
-        if output_rank != comm.rank
-        and _ranges_overlap(
-            local_source_range, _partition_range(output_rank, comm.nranks, npartitions)
-        )
+    owed_remote_pids = [
+        pid
+        for pid in range(*local_source_range)
+        if _contiguous_owner(pid, comm.nranks, npartitions) != comm.rank
     ]
+    remote_destinations = sorted(
+        {_contiguous_owner(pid, comm.nranks, npartitions) for pid in owed_remote_pids}
+    )
+    owed_remote_range = (
+        (owed_remote_pids[0], owed_remote_pids[-1] + 1) if owed_remote_pids else (0, 0)
+    )
 
     # Ranks with no incoming dependency can stream local output immediately
     # while sending remote-owned pieces as they are encountered.
@@ -509,8 +559,11 @@ async def _adjust_ordering_impl(
         else:
             exchange = None
 
+        streamed_remote_pids: set[int] = set()
+
         async def send_piece(pid: int, chunk: TableChunk) -> None:
             assert exchange is not None
+            streamed_remote_pids.add(pid)
             await _send_remote_piece(
                 context,
                 comm,
@@ -522,6 +575,15 @@ async def _adjust_ordering_impl(
 
         async def finish_sends() -> None:
             assert exchange is not None
+            for pid in owed_remote_pids:
+                if pid not in streamed_remote_pids:
+                    await _send_remote_marker(
+                        context,
+                        comm,
+                        exchange,
+                        npartitions,
+                        pid,
+                    )
             await exchange.insert_finished(context)
 
         await _adjust_ordering_streaming_window(
@@ -550,16 +612,40 @@ async def _adjust_ordering_impl(
 
     reader = _OutputPieceReader(context, ch_in, boundary_chunk, output_ordering)
     local_pieces: dict[int, ChunkStore] = {}
-    # If a higher rank depends on this rank's data, read far enough to make
-    # that data available before waiting for lower-rank input.
-    if remote_destinations:
-        pieces = await reader.collect_window(*local_source_range)
+    buffered_remote_pids: set[int] = set()
+    first_blocked_pid = next(
+        (
+            pid
+            for pid in range(*local_window)
+            if any(
+                source_rank != comm.rank
+                for source_rank in _sources_for_pid(source_ranges, pid)
+            )
+        ),
+        local_window[1],
+    )
+    if first_blocked_pid > local_window[0]:
+        prefix_pieces = await reader.collect_window(local_window[0], first_blocked_pid)
+        for pid in range(local_window[0], first_blocked_pid):
+            await _emit_partition(
+                context,
+                ref_ir,
+                ir_context,
+                ch_out,
+                pid,
+                prefix_pieces.get(pid),
+            )
+
+    # Read only far enough to satisfy destination liabilities before receiving.
+    if owed_remote_pids:
+        pieces = await reader.collect_window(*owed_remote_range)
         for pid, store in pieces.items():
             owner = _contiguous_owner(pid, comm.nranks, npartitions)
             if owner == comm.rank:
                 local_pieces[pid] = store
                 continue
             for msg in store:
+                buffered_remote_pids.add(pid)
                 await _send_remote_piece(
                     context,
                     comm,
@@ -568,11 +654,19 @@ async def _adjust_ordering_impl(
                     pid,
                     TableChunk.from_message(msg, br=context.br()),
                 )
+    for pid in owed_remote_pids:
+        if pid not in buffered_remote_pids:
+            await _send_remote_marker(
+                context,
+                comm,
+                exchange,
+                npartitions,
+                pid,
+            )
     await exchange.insert_finished(context)
 
     pieces_by_source: dict[int, dict[int, ChunkStore]] = {}
-    if local_pieces:
-        pieces_by_source[comm.rank] = local_pieces
+    pieces_by_source[comm.rank] = local_pieces
     for source_rank in remote_sources:
         remote_pieces: dict[int, ChunkStore] = {}
         stream = context.br().stream_pool.get_stream()
@@ -584,23 +678,21 @@ async def _adjust_ordering_impl(
             _store_chunk(context, remote_pieces, pid, chunk)
         pieces_by_source[source_rank] = remote_pieces
 
-    for pid, store in (await reader.collect_window(*local_window)).items():
-        if _contiguous_owner(pid, comm.nranks, npartitions) == comm.rank:
-            if pid not in local_pieces:
-                local_pieces[pid] = ChunkStore(context)
-            for msg in store:
-                local_pieces[pid].insert(msg)
-    if local_pieces:
-        pieces_by_source[comm.rank] = local_pieces
-
-    contributing_sources = [
-        source_rank
-        for source_rank, source_range in enumerate(source_ranges)
-        if _ranges_overlap(source_range, local_window)
-    ]
-    for pid in range(*local_window):
+    for pid in range(first_blocked_pid, local_window[1]):
+        pid_sources = _sources_for_pid(source_ranges, pid)
+        if comm.rank in pid_sources and pid not in local_pieces:
+            local_pieces.update(
+                {
+                    piece_pid: store
+                    for piece_pid, store in (
+                        await reader.collect_window(pid, pid + 1)
+                    ).items()
+                    if _contiguous_owner(piece_pid, comm.nranks, npartitions)
+                    == comm.rank
+                }
+            )
         chunks: list[TableChunk] = []
-        for source_rank in contributing_sources:
+        for source_rank in pid_sources:
             stores = pieces_by_source.get(source_rank)
             if stores is None:
                 continue
@@ -616,6 +708,7 @@ async def _adjust_ordering_impl(
             else empty_table_chunk(ref_ir, context, ir_context.get_cuda_stream())
         )
         await ch_out.send(context, Message(pid, chunk))
+    await reader.drain_remaining()
     await ch_out.drain(context)
 
 
