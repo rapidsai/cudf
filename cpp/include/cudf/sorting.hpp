@@ -425,6 +425,17 @@ std::unique_ptr<column> top_k_order(
  * result is [[5,4,3], [4,3,2], [10,8,9]] // each segment may not be sorted
  * @endcode
  *
+ * The segment_offsets are not required to include all indices. Any indices outside the specified
+ * segments are excluded from the result.
+ *
+ * @code{.pseudo}
+ * Example: (offsets do not cover all indices)
+ * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
+ * offsets = [3, 10]
+ * result = cudf::segmented_top_k(col, offsets, 3);
+ * result is [[7,6,5]] // rows 0-2 and 10-12 are excluded
+ * @endcode
+ *
  * @throw std::invalid_argument if k less than or equal to zero
  * @throw cudf::data_type_error if segment_offsets is not size_type
  * @throw std::invalid_argument segments_offsets is empty or contains nulls
@@ -459,6 +470,17 @@ std::unique_ptr<column> segmented_top_k(
  * offsets = [0, 3, 7, 13]
  * result = cudf::segmented_top_k_order(col, offsets, 3);
  * result is [[2,1,0], [3,6,5], [12,10,11]] // each segment may not be sorted
+ * @endcode
+ *
+ * The segment_offsets are not required to include all indices. Any indices outside the specified
+ * segments are excluded from the result.
+ *
+ * @code{.pseudo}
+ * Example: (offsets do not cover all indices)
+ * col = [ 3, 4, 5, 4, 1, 2, 3, 5, 6, 7, 8, 9, 10 ]
+ * offsets = [3, 10]
+ * result = cudf::segmented_top_k_order(col, offsets, 3);
+ * result is [[9,8,7]] // rows 0-2 and 10-12 are excluded
  * @endcode
  *
  * @throw std::invalid_argument if k less than or equal to zero

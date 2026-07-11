@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 set -euo pipefail
@@ -43,6 +43,8 @@ git clone https://github.com/pola-rs/polars.git --branch "${TAG}" --depth 1
 rapids-logger "Install polars test requirements"
 # We don't need to pick up dependencies from polars-cloud, so we remove it.
 sed -i '/^polars-cloud$/d' polars/py-polars/requirements-dev.txt
+# Pin pyarrow to avoid FutureWarning https://github.com/pola-rs/polars/pull/28323.
+sed -i 's/^pyarrow$/pyarrow<25/' polars/py-polars/requirements-dev.txt
 
 # notes:
 #
