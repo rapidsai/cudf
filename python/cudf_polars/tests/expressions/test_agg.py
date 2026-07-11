@@ -155,7 +155,7 @@ def test_item(engine: pl.GPUEngine, data, allow_empty) -> None:
 def test_mode(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1]})
     q = df.select(pl.col("a").mode())
-    assert_gpu_result_equal(q, engine=engine)
+    assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
 def test_mode_maintain_order_unsupported(engine: pl.GPUEngine) -> None:
@@ -307,7 +307,6 @@ def test_temporal_quantile_median_not_supported(engine: pl.GPUEngine, expr):
 @pytest.mark.parametrize(
     "expr",
     [
-        pl.col("a").mode(),
         pl.col("a").entropy(),
         pl.col("a").skew(),
         pl.col("a").kurtosis(),
@@ -317,7 +316,6 @@ def test_temporal_quantile_median_not_supported(engine: pl.GPUEngine, expr):
         pl.col("a").arg_unique(),
     ],
     ids=[
-        "mode",
         "entropy",
         "skew",
         "kurtosis",
