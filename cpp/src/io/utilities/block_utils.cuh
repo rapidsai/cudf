@@ -58,7 +58,7 @@ inline __device__ T warp_reduce_pos(T pos, uint32_t t)
 }
 
 template <typename T>
-  requires(cuda::std::is_integral_v<T> || cuda::std::is_floating_point_v<T>)
+  requires(cuda::std::is_trivially_copyable_v<T>)
 inline __device__ T unaligned_load(uint8_t const* p)
 {
   T value;
