@@ -1,20 +1,27 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
 #pragma once
 
+#include "segmented_sort_fast.cuh"
+#include "segmented_sort_keys.cuh"
 #include "sort.hpp"
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/utilities/memory_resource.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
 #include <cub/device/device_segmented_sort.cuh>
@@ -180,19 +187,19 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
  * The segments are added to the input table-view keys so they
  * are lexicographically sorted within the segmented groups.
  *
- * ```
+ * @code{.pseudo}
  * Example 1:
  * num_rows = 10
  * offsets = {0, 3, 7, 10}
  * segment-indices -> { 3,3,3, 7,7,7,7, 10,10,10 }
- * ```
+ * @endcode
  *
- * ```
+ * @code{.pseudo}
  * Example 2: (offsets do not cover all indices)
  * num_rows = 10
  * offsets = {3, 7}
  * segment-indices -> { 0,1,2, 7,7,7,7, 8,9,10 }
- * ```
+ * @endcode
  *
  * @param num_rows Total number of rows in the input keys to sort
  * @param offsets The offsets identifying the segments
@@ -201,6 +208,34 @@ std::unique_ptr<column> fast_segmented_sorted_order(column_view const& input,
 rmm::device_uvector<size_type> get_segment_indices(size_type num_rows,
                                                    column_view const& offsets,
                                                    rmm::cuda_stream_view stream);
+
+/**
+ * @brief Whether the segment offsets span every row `[0, num_rows]`
+ *
+ * The fast paths label elements by dense segment ordinal and index the output by raw offset, so
+ * partial-coverage offsets -- allowed by the public contract -- must take the comparison path.
+ * Requiring at least two offsets also excludes `num_segments == 0`, whose zero-width segment field
+ * would shift a 64-bit packed key by 64 (undefined behavior).
+ *
+ * @param segment_offsets The segment offsets (segment count plus one)
+ * @param num_rows Element count the offsets must span
+ * @param stream CUDA stream used for the boundary reads
+ * @return true when there are at least two offsets spanning `[0, num_rows]`
+ */
+inline bool fast_path_offsets_cover_all_rows(column_view const& segment_offsets,
+                                             size_type num_rows,
+                                             rmm::cuda_stream_view stream)
+{
+  auto const num_offsets = segment_offsets.size();
+  if (num_offsets < 2) { return false; }
+  auto const first = cudf::detail::make_pinned_vector_async(
+    device_span<size_type const>{segment_offsets.begin<size_type>(), 1}, stream);
+  auto const last = cudf::detail::make_pinned_vector_async(
+    device_span<size_type const>{segment_offsets.begin<size_type>() + (num_offsets - 1), 1},
+    stream);
+  stream.synchronize();
+  return first[0] == 0 and last[0] == num_rows;
+}
 
 /**
  * @brief Segmented sorted-order utility
@@ -262,6 +297,20 @@ std::unique_ptr<column> segmented_sorted_order_common(
       keys.column(0), segment_offsets, col_order, stream, mr);
   }
 
+  // Unstable-only fast path for a single STRING key column sorted ascending with nulls last: a
+  // radix sort over packed leading-byte prefixes with byte-window tie-breaking. The order and null
+  // precedence must be explicit; any other configuration falls through to the comparison path.
+  if constexpr (method == sort_method::UNSTABLE) {
+    if (keys.num_columns() == 1 and keys.column(0).type().id() == type_id::STRING and
+        (segment_offsets.size() > 0) and column_order.size() == 1 and
+        column_order.front() == order::ASCENDING and null_precedence.size() == 1 and
+        null_precedence.front() == null_order::AFTER and
+        fast_path_offsets_cover_all_rows(segment_offsets, keys.num_rows(), stream)) {
+      return fast_segmented_sorted_order_strings_prefix(
+        keys.column(0), segment_offsets, sort_polarity{}, stream, mr);
+    }
+  }
+
   // Get segment id of each element in all segments.
   auto segment_ids = get_segment_indices(keys.num_rows(), segment_offsets, stream);
 
@@ -312,12 +361,19 @@ std::unique_ptr<table> segmented_sort_by_key_common(table_view const& values,
                                           stream,
                                           cudf::get_current_device_resource_ref());
   // Gather segmented sort of child value columns
-  return detail::gather(values,
-                        sorted_order->view(),
-                        out_of_bounds_policy::DONT_CHECK,
-                        negative_index_policy::NOT_ALLOWED,
-                        stream,
-                        mr);
+  auto result = detail::gather(values,
+                               sorted_order->view(),
+                               out_of_bounds_policy::DONT_CHECK,
+                               negative_index_policy::NOT_ALLOWED,
+                               stream,
+                               mr);
+  // A nullable but null-free input still yields a gather-allocated all-valid mask; release it so
+  // output columns are nullable only when they contain nulls.
+  for (auto i = size_type{0}; i < result->num_columns(); ++i) {
+    auto& col = result->get_column(i);
+    if (col.null_count() == 0) { col.set_null_mask(rmm::device_buffer{}, 0); }
+  }
+  return result;
 }
 
 }  // namespace detail

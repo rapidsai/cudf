@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -207,6 +207,31 @@ TYPED_TEST(SegmentedSort, StableWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(results->view(), cudf::table_view{{col_des}});
 }
 
+// Values that are nullable but hold no nulls must come back without a null mask: the sort-by-key
+// gather cannot add nulls, so the output is nullable only when nulls are present.
+TEST_F(SegmentedSortInt, ValuesWithZeroNullsDropMask)
+{
+  using T = int;
+  column_wrapper<T> keys{{3, 1, 2, 7, 5, 6}};
+  column_wrapper<T> values{{10, 20, 30, 40, 50, 60}, {1, 1, 1, 1, 1, 1}};
+  column_wrapper<int> segments{{0, 3, 6}};
+  cudf::table_view values_view{{values}};
+  cudf::table_view keys_view{{keys}};
+  ASSERT_TRUE(cudf::column_view{values}.nullable());
+  ASSERT_EQ(cudf::column_view{values}.null_count(), 0);
+
+  column_wrapper<T> expected{{20, 30, 10, 50, 60, 40}};
+  auto result = cudf::segmented_sort_by_key(
+    values_view, keys_view, segments, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+  EXPECT_FALSE(result->get_column(0).nullable());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
+
+  result = cudf::stable_segmented_sort_by_key(
+    values_view, keys_view, segments, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+  EXPECT_FALSE(result->get_column(0).nullable());
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
+}
+
 TEST_F(SegmentedSortInt, NonZeroSegmentsStart)
 {
   using T = int;
@@ -352,4 +377,18 @@ TEST_F(SegmentedSortInt, UnbalancedOffsets)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expected->view().column(0));
   result = cudf::stable_segmented_sort_by_key(input_view, input_view, segments);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view().column(0), expected->view().column(0));
+}
+
+// Without the guard these offsets would take the strings fast path; guarded, only [3, 7) sorts.
+TEST_F(SegmentedSortInt, FastPathPartialOffsetsStrings)
+{
+  cudf::test::strings_column_wrapper col{
+    "a0", "a1", "a2", "banana", "apple", "cherry", "date", "z7", "z8", "z9"};
+  cudf::test::strings_column_wrapper expected{
+    "a0", "a1", "a2", "apple", "banana", "cherry", "date", "z7", "z8", "z9"};
+  column_wrapper<int> segments{{3, 7}};
+  auto const input = cudf::table_view{{col}};
+  auto result      = cudf::segmented_sort_by_key(
+    input, input, segments, {cudf::order::ASCENDING}, {cudf::null_order::AFTER});
+  CUDF_TEST_EXPECT_TABLES_EQUAL(result->view(), cudf::table_view{{expected}});
 }

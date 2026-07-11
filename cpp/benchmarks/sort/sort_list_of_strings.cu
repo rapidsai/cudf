@@ -52,8 +52,8 @@ static cudf::detail::host_vector<int64_t> offsets_to_host_int64(cudf::column_vie
 
 // Overwrites the first `min(plen, byte_length)` bytes of every non-null leaf string with 'A',
 // returning a new LIST<STRING> column: strings stay distinct in their tails but share a
-// `plen`-byte prefix -- the regime where every compare must scan past the shared prefix before it
-// can distinguish two strings. Untimed setup, so a host round-trip is fine.
+// `plen`-byte prefix -- the regime where the packed-prefix key is uninformative and the tie-break
+// does the real work. Untimed setup, so a host round-trip is fine.
 // Assumes an unsliced leaf, which holds for the freshly generated column.
 static std::unique_ptr<cudf::column> apply_shared_prefix(cudf::column_view const& list_col,
                                                          cudf::size_type plen,
@@ -152,13 +152,13 @@ static std::unique_ptr<cudf::column> trim_forced_last_row(cudf::column_view cons
                                         std::move(new_leaf),
                                         list_col.null_count(),
                                         cudf::copy_bitmask(list_col, stream, mr));
+
   stream.synchronize();
   return result;
 }
 
 // Benchmarks cudf::lists::sort_lists on LIST<STRING>, the operation Spark array_sort lowers to and
-// which a plain table sort does not exercise. STRING is never eligible for the CUB fast path, so
-// every cell measures the segment-id + comparator sort; per-axis rationale at the registration.
+// which a plain table sort does not exercise; per-axis rationale at the registration below.
 static void bench_sort_list_of_strings(nvbench::state& state)
 {
   auto const num_rows          = static_cast<cudf::size_type>(state.get_int64("num_rows"));
@@ -180,7 +180,7 @@ static void bench_sort_list_of_strings(nvbench::state& state)
   }
 
   // Leaf strings are all-distinct (cardinality 0) to match the near-unique elements of real
-  // array_sort workloads -- the hardest case for the comparator, stressed by shared_prefix_len --
+  // array_sort workloads -- the hardest tie-break case, stressed further by shared_prefix_len --
   // so leaf cardinality is not a separate axis. Nulls apply at both the list-row and leaf levels.
   // null_frequency == 0 must pass std::nullopt: a literal null_probability(0.0) still samples
   // per-element validity, and thrust's uniform_real<float> endpoint rounding injects stray nulls
@@ -223,15 +223,15 @@ static void bench_sort_list_of_strings(nvbench::state& state)
 NVBENCH_BENCH(bench_sort_list_of_strings)
   .set_name("sort_list_of_strings")
   .add_int64_axis("num_rows", {32'768, 262'144, 2'097'152, 16'777'216})
-  // List length sets the share of compares that stay within a segment and scan string bytes.
+  // Tiny lists stress per-segment overhead; large ones amortize it.
   .add_int64_axis("max_list_size", {4, 16, 32, 64, 128, 256})
-  // Short strings resolve compares in a few bytes; wide ones give the comparator more to scan.
+  // Short strings mostly fit the packed key; wide strings push work into the byte-window tie-break.
   .add_int64_axis("row_width", {16, 64})
-  // 0: control; 8 and 32 force compares through a shared leading prefix before bytes can differ.
+  // 0: control; 8: exactly the packed-key width (first tie-break window); 32: several windows.
   // 96: exceeds both row widths, so bytes never differ and compares resolve by length alone.
   // Shared prefixes are the realistic regime for keyed array_sort data.
   .add_int64_axis("shared_prefix_len", {0, 8, 32, 96})
   .add_float64_axis("null_frequency", {0, 0.1})
-  // Full (order, null_order) matrix: the comparator sort applies both.
+  // The fast path takes only ASC/nulls-last; the other combinations exercise the fallback sort.
   .add_string_axis("order", {"ASC", "DESC"})
   .add_string_axis("null_order", {"AFTER", "BEFORE"});
