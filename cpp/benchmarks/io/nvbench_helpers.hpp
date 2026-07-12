@@ -10,6 +10,7 @@
 
 #include <cudf/io/types.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <nvbench/nvbench.cuh>
 
@@ -132,11 +133,9 @@ NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
 NVBENCH_DECLARE_ENUM_TYPE_STRINGS(
   cudf::type_id,
   [](auto value) {
-    switch (value) {
-      case cudf::type_id::EMPTY: return "EMPTY";
-      case cudf::type_id::TIMESTAMP_NANOSECONDS: return "TIMESTAMP_NANOSECONDS";
-      default: return "Unknown";
-    }
+    // type_to_name cannot dispatch on EMPTY since it has no corresponding C++ type.
+    if (value == cudf::type_id::EMPTY) { return std::string{"EMPTY"}; }
+    return cudf::type_to_name(cudf::data_type{value});
   },
   [](auto) { return std::string{}; })
 

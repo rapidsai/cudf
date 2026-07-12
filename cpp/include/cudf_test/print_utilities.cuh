@@ -8,15 +8,32 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/export.hpp>
 #include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
 
+#include <string>
 #include <type_traits>
 
 namespace CUDF_EXPORT cudf {
 namespace test::print {
+
+/**
+ * @brief Returns the name of the C++ type corresponding to a `data_type`, for debugging.
+ *
+ * Convenience wrapper around `cudf::type_to_name` that also handles `type_id::EMPTY`, which
+ * `type_to_name` cannot dispatch on since it has no corresponding C++ type.
+ *
+ * @param type The data type to name
+ * @return The C++ type name as a string, or "EMPTY" if `type.id() == type_id::EMPTY`
+ */
+inline std::string print_type(cudf::data_type type)
+{
+  if (type.id() == cudf::type_id::EMPTY) { return "EMPTY"; }
+  return cudf::type_to_name(type);
+}
 
 constexpr int32_t hex_tag = 0;
 
