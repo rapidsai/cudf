@@ -16,6 +16,7 @@ from cudf_polars.containers import Column
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
 from cudf_polars.utils import dtypes
+from cudf_polars.utils.versions import POLARS_VERSION_LT_136
 
 if TYPE_CHECKING:
     from cudf_polars.containers import DataFrame, DataType
@@ -182,7 +183,7 @@ class UnaryFunction(Expr):
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
             )
-        if self.name == "mode":
+        if self.name == "mode" and not POLARS_VERSION_LT_136:
             (maintain_order,) = self.options
             if maintain_order:
                 raise NotImplementedError(
