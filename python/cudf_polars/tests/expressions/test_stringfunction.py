@@ -477,6 +477,38 @@ def test_string_to_integer(engine: pl.GPUEngine, str_to_integer_data, integer_ty
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("strict", [True, False])
+def test_str_to_integer(engine: pl.GPUEngine, strict, integer_type):
+    df = pl.LazyFrame({"a": ["1", "2", "-3", None, "0"]})
+    q = df.select(pl.col("a").str.to_integer(dtype=integer_type, strict=strict))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_str_to_integer_non_strict_invalid_to_null(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": ["1", "invalid", "", None, "999999999999999999999999"]})
+    q = df.select(pl.col("a").str.to_integer(dtype=pl.Int32, strict=False))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_str_to_integer_strict_raises(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": ["1", "invalid"]})
+    q = df.select(pl.col("a").str.to_integer(strict=True))
+    with pytest.raises(pl.exceptions.ComputeError):
+        q.collect()
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.InvalidOperationError):
+            q.collect(engine=engine)
+
+
+def test_str_to_integer_base_unsupported(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": ["110", "101"]})
+    q = df.select(pl.col("a").str.to_integer(base=2, strict=False))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
 def test_string_from_integer(engine: pl.GPUEngine, str_from_integer_data):
     q = str_from_integer_data.select(pl.col("a").cast(pl.String))
     assert_gpu_result_equal(q, engine=engine)
