@@ -444,27 +444,32 @@ inline std::vector<uint8_t> enc_null()
 {
   return {make_variant_primitive(variant_primitive_type::null)};
 }
+
 inline std::vector<uint8_t> enc_bool(bool b)
 {
   return {make_variant_primitive(b ? variant_primitive_type::boolean_true
                                    : variant_primitive_type::boolean_false)};
 }
+
 inline std::vector<uint8_t> enc_int8(int8_t v)
 {
   return {make_variant_primitive(variant_primitive_type::int8), static_cast<uint8_t>(v)};
 }
+
 inline std::vector<uint8_t> enc_int16(int16_t v)
 {
   std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::int16)};
   append_le(out, static_cast<uint16_t>(v), 2);
   return out;
 }
+
 inline std::vector<uint8_t> enc_int64(int64_t v)
 {
   std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::int64)};
   append_le(out, static_cast<uint64_t>(v), 8);
   return out;
 }
+
 inline std::vector<uint8_t> enc_float64(double v)
 {
   std::uint64_t bits = 0;
@@ -473,6 +478,7 @@ inline std::vector<uint8_t> enc_float64(double v)
   append_le(out, bits, 8);
   return out;
 }
+
 // Long-string primitive blob: header + 4-byte LE length + payload.
 inline std::vector<uint8_t> enc_long_string(std::string_view s)
 {
@@ -895,20 +901,22 @@ TEST_F(CastVariantTest, CastToUnsupportedTargetThrows)
   std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::null)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
 
-  for (auto const id : {cudf::type_id::BOOL8,
-                        cudf::type_id::UINT8,
-                        cudf::type_id::UINT16,
-                        cudf::type_id::UINT32,
-                        cudf::type_id::UINT64,
-                        cudf::type_id::FLOAT32,
-                        cudf::type_id::FLOAT64,
-                        cudf::type_id::TIMESTAMP_DAYS,
-                        cudf::type_id::TIMESTAMP_SECONDS,
-                        cudf::type_id::TIMESTAMP_MICROSECONDS,
-                        cudf::type_id::DURATION_SECONDS,
-                        cudf::type_id::DECIMAL32,
-                        cudf::type_id::DECIMAL64,
-                        cudf::type_id::DECIMAL128}) {
+  std::vector<cudf::type_id> const ids{cudf::type_id::BOOL8,
+                                       cudf::type_id::UINT8,
+                                       cudf::type_id::UINT16,
+                                       cudf::type_id::UINT32,
+                                       cudf::type_id::UINT64,
+                                       cudf::type_id::FLOAT32,
+                                       cudf::type_id::FLOAT64,
+                                       cudf::type_id::TIMESTAMP_DAYS,
+                                       cudf::type_id::TIMESTAMP_SECONDS,
+                                       cudf::type_id::TIMESTAMP_MICROSECONDS,
+                                       cudf::type_id::DURATION_SECONDS,
+                                       cudf::type_id::DECIMAL32,
+                                       cudf::type_id::DECIMAL64,
+                                       cudf::type_id::DECIMAL128};
+
+  for (auto const id : ids) {
     SCOPED_TRACE(std::string{"target type_id: "} + std::to_string(static_cast<int32_t>(id)));
     EXPECT_THROW(static_cast<void>(cudf::io::parquet::experimental::cast_variant(
                    values, cudf::data_type{id}, stream)),
