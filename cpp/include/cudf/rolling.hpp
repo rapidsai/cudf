@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <optional>
+#include <span>
 #include <variant>
 
 namespace CUDF_EXPORT cudf {
@@ -25,6 +26,7 @@ namespace CUDF_EXPORT cudf {
  * @addtogroup aggregation_rolling
  * @{
  * @file
+ * @brief APIs for computing rolling window aggregations over columns.
  */
 
 /**
@@ -684,7 +686,7 @@ std::unique_ptr<table> grouped_range_rolling_window(
   null_order null_order,
   range_window_type preceding,
   range_window_type following,
-  host_span<rolling_request const> requests,
+  std::span<rolling_request const> requests,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 

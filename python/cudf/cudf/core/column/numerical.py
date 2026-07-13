@@ -298,6 +298,14 @@ class NumericalColumn(NumericalBaseColumn):
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
                 )
+            if pa.types.is_temporal(scalar.type):
+                # Reject datetime64/timedelta64 scalars (including NaT)
+                # assigned into a numeric column. pyarrow would otherwise
+                # silently cast timestamp[ns]/duration[ns] to int64 via the
+                # underlying integer representation.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
+                )
             return pa_scalar_to_plc_scalar(
                 scalar.cast(cudf_dtype_to_pa_type(self.dtype))
             )
@@ -306,6 +314,13 @@ class NumericalColumn(NumericalBaseColumn):
             if col.dtype.kind == "b" and self.dtype.kind != "b":
                 raise TypeError(
                     f"Invalid value {value} for dtype {self.dtype}"
+                )
+            if col.dtype.kind in "mM":
+                # See the temporal-scalar rejection above: assigning a
+                # datetime64/timedelta64 array into a numeric column is
+                # invalid.
+                raise TypeError(
+                    f"Invalid value '{value}' for dtype '{self.dtype}'"
                 )
             if (
                 cudf.get_option("mode.pandas_compatible")
@@ -649,14 +664,35 @@ class NumericalColumn(NumericalBaseColumn):
             res = res.astype(
                 get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))
             )
-        elif op == "INT_POW" and res.null_count:
-            if (
-                isinstance(lhs_binaryop, plc.Scalar)
-                and lhs_binaryop.to_py() == 1
-                and isinstance(rhs_binaryop, ColumnBase)
-                and rhs_binaryop.null_count > 0
-            ):
-                res = res.fillna(lhs_binaryop.to_py())
+        elif (
+            op in {"__pow__", "INT_POW"}
+            and res.null_count
+            and not (self_is_arrow or other_is_arrow)
+        ):
+            # pandas: ``1 ** x == 1`` and ``x ** 0 == 1`` hold even when
+            # ``x`` is missing, for both NaN (numpy semantics) and NA
+            # (masked semantics). libcudf propagates nulls unconditionally,
+            # so patch the positions covered by these identities. pandas'
+            # ArrowDtype follows pyarrow and propagates nulls, hence the
+            # arrow exclusion.
+            fix_mask = None
+            if isinstance(lhs, pa.Scalar):
+                if lhs.is_valid and lhs.as_py() == 1:
+                    res = res.fillna(1)
+            else:
+                fix_mask = lhs._binaryop(1, "__eq__").fillna(False)
+            if isinstance(rhs, pa.Scalar):
+                if rhs.is_valid and rhs.as_py() == 0:
+                    res = res.fillna(1)
+            else:
+                exp_is_zero = rhs._binaryop(0, "__eq__").fillna(False)
+                fix_mask = (
+                    exp_is_zero
+                    if fix_mask is None
+                    else fix_mask._binaryop(exp_is_zero, "__or__")
+                )
+            if fix_mask is not None and res.null_count:
+                res = res.fillna(1).copy_if_else(res, fix_mask)
         elif (
             cudf.get_option("mode.pandas_compatible")
             and op in cmp_ops
@@ -912,7 +948,7 @@ class NumericalColumn(NumericalBaseColumn):
         return self.isnan().sum()
 
     def _process_values_for_isin(
-        self, values: Sequence
+        self, values: Sequence | ColumnBase
     ) -> tuple[ColumnBase, ColumnBase]:
         try:
             lhs, rhs = super()._process_values_for_isin(values)
@@ -1117,7 +1153,7 @@ class NumericalColumn(NumericalBaseColumn):
                     iinfo = np.iinfo(to_dtype_numpy)
                     lower_, upper_ = iinfo.min, iinfo.max
 
-                return (min_ >= lower_) and (col.max() < upper_)
+                return (min_ >= lower_) and (col.max() <= upper_)
 
         # want to cast int to uint
         elif self_dtype_numpy.kind == "i" and to_dtype_numpy.kind == "u":
@@ -1125,7 +1161,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(to_dtype_numpy).max
 
             return (self.min() >= 0) and (
-                (i_max_ <= u_max_) or (self.max() < u_max_)
+                (i_max_ <= u_max_) or (self.max() <= u_max_)
             )
 
         # want to cast uint to int
@@ -1133,7 +1169,7 @@ class NumericalColumn(NumericalBaseColumn):
             u_max_ = np.iinfo(self_dtype_numpy).max
             i_max_ = np.iinfo(to_dtype_numpy).max
 
-            return (u_max_ <= i_max_) or (self.max() < i_max_)
+            return (u_max_ <= i_max_) or (self.max() <= i_max_)
 
         # want to cast int to float
         elif (

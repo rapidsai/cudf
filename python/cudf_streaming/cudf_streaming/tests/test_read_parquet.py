@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,8 +10,8 @@ import numpy as np
 import pylibcudf as plc
 import pytest
 
-from cudf_streaming.streaming.parquet import Filter, read_parquet
-from cudf_streaming.streaming.table_chunk import TableChunk
+from cudf_streaming.parquet import Filter, read_parquet
+from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.streaming.core.actor import run_actor_network
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 
@@ -75,7 +75,7 @@ def make_producer(
     use_filter: bool,
 ) -> CppActor:
     if use_filter:
-        fstream = context.get_stream_from_pool()
+        fstream = context.br().stream_pool.get_stream()
         return read_parquet(
             context,
             comm,
@@ -104,7 +104,7 @@ def get_expected(
     if num_rows != "all":
         options.set_num_rows(num_rows)
     if use_filter:
-        fstream = ctx.get_stream_from_pool()
+        fstream = ctx.br().stream_pool.get_stream()
         filter = make_filter(fstream)
         fstream.synchronize()
         options.set_filter(filter)

@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -595,7 +595,7 @@ TYPED_TEST(FromArrowNumericScalarTest, Basic)
 struct FromArrowDecimalScalarTest : public cudf::test::BaseFixture {};
 
 template <typename ScalarType, typename DecimalType>
-void check_decimal_scalar(const int value, ScalarType const& arrow_scalar)
+void check_decimal_scalar(int const value, ScalarType const& arrow_scalar)
 {
   auto const scale{4};
   auto const cudf_scalar = export_scalar(arrow_scalar);

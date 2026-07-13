@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -67,6 +67,7 @@ struct row_group_info {
   size_type index;  // row group index within a file. aggregate_reader_metadata::get_row_group() is
                     // called with index and source_index
   size_t start_row;
+  size_t source_start_row;     // file-local start row of this row group within its source file
   size_t unadjusted_num_rows;  // number of unadjusted rows in the row group
   size_type source_index;      // file index.
   size_t compressed_size;      // compressed size of the row group
@@ -98,6 +99,14 @@ struct row_group_info {
            ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
            : data_type{t_id};
 }
+
+/**
+ * @brief Derives a bounded input `pass_read_limit` from a `chunk_read_limit`.
+ *
+ * @param chunk_read_limit The output chunk byte limit
+ * @return The derived input pass byte limit
+ */
+[[nodiscard]] std::size_t derive_pass_read_limit(std::size_t chunk_read_limit);
 
 /**
  * @brief Class for parsing dataset metadata
@@ -132,6 +141,36 @@ struct arrow_schema_data_types {
 struct surviving_row_group_metrics {
   std::optional<size_type> after_stats_filter;  // number of surviving row groups after stats filter
   std::optional<size_type> after_bloom_filter;  // number of surviving row groups after bloom filter
+};
+
+/**
+ * @brief Column selection mode
+ */
+enum class column_selection_mode : uint8_t {
+  NONE        = 0,  // No column selection
+  BY_NAME     = 1,  // Select columns by name
+  BY_INDEX    = 2,  // Select columns by top-levelindex
+  BY_FIELD_ID = 3,  // Select columns by field ID
+};
+
+/**
+ * @brief Bundle of column selection parameters
+ */
+struct column_selection_options {
+  // Column selection mode
+  column_selection_mode selection_mode = column_selection_mode::NONE;
+  // Whether to always include the PANDAS index column(s)
+  bool include_index = false;
+  // Type conversion parameter: convert strings to categorical columns
+  bool strings_to_categorical = false;
+  // Whether to ignore non-existent projected columns
+  bool ignore_missing_columns = false;
+  // Type conversion parameter for timestamp columns
+  type_id timestamp_type_id = type_id::EMPTY;
+  // Type conversion parameter for decimal columns
+  type_id decimal_type_id = type_id::EMPTY;
+  // Whether column name matching is case sensitive
+  bool case_sensitive_names = true;
 };
 
 class aggregate_reader_metadata {
@@ -283,6 +322,25 @@ class aggregate_reader_metadata {
     size_t bytes_to_skip,
     std::optional<size_t> const& bytes_to_read) const;
 
+ private:
+  /**
+   * @brief Probe whether any filter column carries usable row-group statistics
+   *
+   * Returns true iff at least one column chunk referenced by `filter_column_schemas` in the first
+   * selected row group of any source carries any of `min` / `max` / `min_value` / `max_value` /
+   * `null_count`. Inspecting one row group per source is sufficient; see
+   * https://github.com/rapidsai/cudf/pull/22664#issuecomment-4557500237.
+   *
+   * @param input_row_group_indices Selected row group indices, one vector per source
+   * @param filter_column_schemas Zeroth-source schema indices of the columns referenced by the
+   *        filter
+   * @return True if any filter column carries row-group statistics
+   */
+  [[nodiscard]] bool any_row_group_stats_available(
+    host_span<std::vector<size_type> const> input_row_group_indices,
+    host_span<int const> filter_column_schemas) const;
+
+ protected:
   /**
    * @brief Filters the row groups using stats filter
    *
@@ -424,6 +482,14 @@ class aggregate_reader_metadata {
    * @return Number of row groups per file
    */
   [[nodiscard]] std::vector<size_type> get_num_row_groups_per_file() const;
+
+  /**
+   * @brief Computes file-local row group row offsets for the specified source
+   *
+   * @param src_idx The source (per_file_metadata) index
+   * @return Vector of file-local row group row offsets
+   */
+  [[nodiscard]] std::vector<size_t> compute_source_row_group_offsets(size_type src_idx) const;
 
   /**
    * @brief Checks if a schema index from 0th source is mapped to the specified file index
@@ -597,11 +663,7 @@ class aggregate_reader_metadata {
    * @param use_names List of paths of column names to select; `nullopt` if user did not select
    * columns to read
    * @param filter_columns_names List of paths of column names that are present only in filter
-   * @param include_index Whether to always include the PANDAS index column(s)
-   * @param strings_to_categorical Type conversion parameter
-   * @param ignore_missing_columns Whether to ignore non-existent projected columns
-   * @param timestamp_type_id Type conversion parameter
-   * @param decimal_type_id Type conversion parameter
+   * @param selection_options Column selection options
    *
    * @return input column information, output column buffers, list of output column schema
    * indices
@@ -611,12 +673,7 @@ class aggregate_reader_metadata {
                            std::vector<size_type>>
   select_columns(std::optional<std::vector<std::string>> const& use_names,
                  std::optional<std::vector<std::string>> const& filter_columns_names,
-                 bool include_index,
-                 bool strings_to_categorical,
-                 bool ignore_missing_columns,
-                 type_id timestamp_type_id,
-                 type_id decimal_type_id,
-                 bool case_sensitive_names);
+                 column_selection_options const& selection_options);
 };
 
 }  // namespace cudf::io::parquet::detail

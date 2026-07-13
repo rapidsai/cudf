@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import abc
 import contextlib
@@ -9,7 +9,6 @@ import inspect
 import os
 import pickle
 
-import numpy as np
 import pandas as pd
 
 # cuGraph third party integration test, test_cugraph_from_pandas_adjacency,
@@ -386,12 +385,6 @@ _SeriesiAtIndexer = make_intermediate_proxy_type(
 )
 
 
-def _argsort(self, *args, **kwargs):
-    return _maybe_wrap_result(
-        self._fsproxy_wrapped.argsort(*args, **kwargs).astype(np.intp), self
-    )
-
-
 Series = make_final_proxy_type(
     "Series",
     cudf.Series,
@@ -418,7 +411,6 @@ Series = make_final_proxy_type(
         "_constructor_expanddim": _FastSlowAttribute("_constructor_expanddim"),
         "_accessors": set(),
         "dtype": property(_Series_dtype),
-        "argsort": _argsort,
         "to_xarray": _to_xarray,
         "attrs": _FastSlowAttribute("attrs"),
         "_mgr": _FastSlowAttribute("_mgr", private=True),
@@ -492,6 +484,9 @@ Index = make_final_proxy_type(
         "__array_function__": array_function_method,
         "__arrow_array__": arrow_array_method,
         "__cuda_array_interface__": cuda_array_interface,
+        # matches pd.Index (1000) so wrapped-ndarray proxies defer
+        # binops/ufuncs to the Index's reflected op
+        "__array_priority__": pd.Index.__array_priority__,
         "dt": _AccessorAttr(CombinedDatetimelikeProperties),
         "str": _AccessorAttr(StringMethods),
         "cat": _AccessorAttr(_CategoricalAccessor),
@@ -511,9 +506,6 @@ Index = make_final_proxy_type(
         "name": _FastSlowAttribute("name"),
         "nbytes": _FastSlowAttribute("nbytes", private=True),
         "array": _FastSlowAttribute("array", private=True),
-        # TODO: Handle special cases like mergesort being unsupported
-        # and raising for certain types like Categorical and RangeIndex
-        "argsort": _argsort,
         "values": property(_Index_values),
     },
 )
@@ -2800,6 +2792,10 @@ copyreg.dispatch_table[pd.Timestamp] = _reduce_obj
 # same reducer/unpickler can be used for Timedelta:
 copyreg.dispatch_table[Timedelta] = _reduce_proxied_td_obj
 copyreg.dispatch_table[pd.Timedelta] = _reduce_obj
+# Period has no fast (cudf) representation; pickle the wrapped/real pandas
+# object directly (e.g. matplotlib figures store pandas.Period x-data).
+copyreg.dispatch_table[Period] = _reduce_proxied_td_obj
+copyreg.dispatch_table[pd.Period] = _reduce_obj
 
 # TODO: Need to find a way to unpickle cross-version(old) pickled objects.
 # Register custom reducer/unpickler functions for pandas objects
@@ -2831,6 +2827,18 @@ copyreg.dispatch_table[pd.MultiIndex] = lambda obj: _generic_reduce_obj(
 )
 
 copyreg.dispatch_table[pd.DateOffset] = _reduce_offset_obj
+# Concrete pandas offsets (Day, Week, Minute, ...) are stored e.g. as the
+# ``freq`` of matplotlib's date converters. The module accelerator makes the
+# offset module attributes resolve to proxies, so pickle's class-identity
+# check fails; reduce each via its real ``__reduce__`` (with the accelerator
+# disabled). ``DateOffset`` keeps its dedicated reducer above.
+for _offset_cls in vars(pd.tseries.offsets).values():
+    if (
+        isinstance(_offset_cls, type)
+        and issubclass(_offset_cls, pd.tseries.offsets.BaseOffset)
+        and _offset_cls is not pd.DateOffset
+    ):
+        copyreg.dispatch_table.setdefault(_offset_cls, _reduce_obj)
 
 
 def _unpickle_NaT():

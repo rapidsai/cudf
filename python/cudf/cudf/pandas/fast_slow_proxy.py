@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ import operator
 import pickle
 import types
 import warnings
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from enum import IntEnum
 from typing import Any, Literal
 
@@ -421,6 +421,17 @@ def make_intermediate_proxy_type(
     def _fsproxy_slow_to_fast(self):
         if self._fsproxy_state is _State.SLOW:
             return super(type(self), self)._fsproxy_slow_to_fast()
+        # Already fast: re-derive from the originating call if a parent proxy
+        # was mutated/replaced since creation, so the intermediate reflects the
+        # live parent (e.g. a column added to a frame after its groupby).
+        if self._fsproxy_parents_changed():
+            result = super(type(self), self)._fsproxy_slow_to_fast()
+            # Refresh the cache (not just the parent-id snapshot) so later
+            # conversions return the re-derived object instead of falling back
+            # to the stale one once the snapshot matches the live parents again.
+            self._fsproxy_wrapped = result
+            self._fsproxy_record_parent_ids()
+            return result
         return self._fsproxy_wrapped
 
     @nvtx.annotate(
@@ -431,6 +442,15 @@ def make_intermediate_proxy_type(
     def _fsproxy_fast_to_slow(self):
         if self._fsproxy_state is _State.FAST:
             return super(type(self), self)._fsproxy_fast_to_slow()
+        # Already slow: re-derive from the originating call if a parent proxy
+        # was mutated/replaced since creation (see _fsproxy_slow_to_fast).
+        if self._fsproxy_parents_changed():
+            result = super(type(self), self)._fsproxy_fast_to_slow()
+            # See _fsproxy_slow_to_fast: refresh the cache so subsequent
+            # conversions don't revert to the stale wrapped object.
+            self._fsproxy_wrapped = result
+            self._fsproxy_record_parent_ids()
+            return result
         return self._fsproxy_wrapped
 
     slow_dir = dir(slow_type)
@@ -840,6 +860,13 @@ class _IntermediateProxy(_FastSlowProxy):
     """
 
     _method_chain: tuple[Callable, tuple, dict]
+    # The proxy objects this intermediate was derived from and a snapshot of
+    # their wrapped objects' identities. Both are always (re)assigned together
+    # in ``_fsproxy_wrap`` / ``__setstate__`` / ``_fsproxy_record_parent_ids``;
+    # the empty class-level defaults just guarantee the attributes always exist
+    # (e.g. on a bare ``object.__new__`` instance before it is populated).
+    _fsproxy_parents: Sequence[_FastSlowProxy] = ()
+    _fsproxy_parent_ids: Sequence[int] = ()
 
     @classmethod
     def _fsproxy_wrap(
@@ -859,7 +886,44 @@ class _IntermediateProxy(_FastSlowProxy):
         proxy = object.__new__(cls)
         proxy._fsproxy_wrapped = obj
         proxy._method_chain = method_chain
+        proxy._fsproxy_parents = _collect_parent_proxies(method_chain)
+        proxy._fsproxy_record_parent_ids()
         return proxy
+
+    def _fsproxy_record_parent_ids(self) -> None:
+        """Snapshot the identity of each parent proxy's wrapped object.
+
+        ``_fsproxy_parent_ids[i]`` is the recorded identity of
+        ``_fsproxy_parents[i]``: the two lists are built from the same source
+        in the same order, so they stay positionally aligned.
+        """
+        self._fsproxy_parent_ids = [
+            id(parent._fsproxy_wrapped) for parent in self._fsproxy_parents
+        ]
+
+    def _fsproxy_parents_changed(self) -> bool:
+        """
+        Return True if any parent proxy's wrapped object has been replaced
+        (e.g. mutated in place or transferred between fast and slow) since this
+        intermediate was last derived from it. When that happens the cached
+        wrapped object is stale and must be re-derived from the live parents.
+        """
+        parents = self._fsproxy_parents
+        if not parents:
+            return False
+        # ``_fsproxy_parent_ids`` was recorded from ``_fsproxy_parents`` in the
+        # same order (see ``_fsproxy_record_parent_ids``), so the ``zip`` pairs
+        # each parent with its own prior identity. The comparison is
+        # deliberately positional rather than set-based: we must detect whether
+        # a *given* parent's object was replaced, which a set of identities
+        # would lose (and it would not save any re-derivation, since parents are
+        # already de-duplicated when collected).
+        return any(
+            id(parent._fsproxy_wrapped) != old_id
+            for parent, old_id in zip(
+                parents, self._fsproxy_parent_ids, strict=True
+            )
+        )
 
     @nvtx.annotate(
         "COPY_SLOW_TO_FAST",
@@ -908,6 +972,8 @@ class _IntermediateProxy(_FastSlowProxy):
         unpickled_method_chain = pickle.loads(state[1])
         self._fsproxy_wrapped = unpickled_wrapped_obj
         self._method_chain = unpickled_method_chain
+        self._fsproxy_parents = _collect_parent_proxies(unpickled_method_chain)
+        self._fsproxy_record_parent_ids()
 
 
 class _CallableProxyMixin:
@@ -1411,6 +1477,19 @@ def _transform_arg(
         transformed: list[Any] = [
             _transform_arg(a, attribute_name, seen) for a in arg.flat
         ]
+        if all(
+            new is old for new, old in zip(transformed, arg.flat, strict=True)
+        ):
+            # No element needed transforming: return the original array
+            # (as we already do for non-object ndarrays below) to
+            # preserve buffer identity. Rebuilding an equivalent copy
+            # breaks aliasing checks such as
+            # ``np.may_share_memory(np.asarray(x), x)`` that numpy uses
+            # (e.g. in ``Generator.permutation``) to decide whether to
+            # defensively copy before an in-place shuffle; the views
+            # pandas returns under copy-on-write are read-only, so
+            # skipping that copy raises "ValueError: array is read-only".
+            return arg
         # Keep the same memory layout as arg (the default is C_CONTIGUOUS)
         if arg.flags["F_CONTIGUOUS"] and not arg.flags["C_CONTIGUOUS"]:
             order = "F"
@@ -1451,6 +1530,59 @@ def _transform_arg(
         return _replace_closurevars(arg, attribute_name, seen)
     else:
         return arg
+
+
+def _collect_parent_proxies(
+    method_chain: tuple[Callable, tuple, dict],
+) -> list[_FastSlowProxy]:
+    """
+    Collect the ``_FastSlowProxy`` objects referenced by an intermediate
+    proxy's method chain.
+
+    An ``_IntermediateProxy`` (e.g. a groupby, rolling, or accessor object)
+    is created by calling ``func(*args, **kwargs)`` on one or more "parent"
+    proxies (the originating frame/series and any proxy arguments such as a
+    grouping key). We record those parents so that, if one of them is later
+    mutated or replaced in place (e.g. ``df["new"] = ...`` after
+    ``gp = df.groupby(...)``), the intermediate can re-derive itself from the
+    live parent instead of returning a stale snapshot. Method/function
+    proxies are intentionally skipped: they carry the operation, not the data,
+    and consumable intermediates (e.g. file readers) have no proxy parents at
+    all, so they are never re-derived.
+
+    The traversal is intentionally iterative (an explicit stack) rather than a
+    nested recursive helper. A recursive closure would hold a cell referencing
+    itself, forming a reference cycle that keeps the closure -- and everything
+    it captured, including the collected parent proxies -- alive until the
+    cyclic garbage collector runs. That delayed collection breaks code that
+    relies on prompt reference-counted teardown of a proxy (e.g. pandas'
+    ``Series.str``-accessor circular-reference test).
+    """
+    import numpy as np
+
+    _, args, kwargs = method_chain
+    parents: list[_FastSlowProxy] = []
+    seen: set[int] = set()
+    stack: list[Any] = [args, kwargs]
+
+    while stack:
+        obj = stack.pop()
+        oid = id(obj)
+        if oid in seen:
+            continue
+        seen.add(oid)
+        if isinstance(obj, _FastSlowProxy):
+            parents.append(obj)
+        elif isinstance(obj, (tuple, list)):
+            stack.extend(obj)
+        elif isinstance(obj, dict):
+            for key, value in obj.items():
+                stack.append(key)
+                stack.append(value)
+        elif isinstance(obj, np.ndarray) and obj.dtype == "O":
+            stack.extend(obj.flat)
+
+    return parents
 
 
 def _fast_arg(arg: Any) -> Any:

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 """
@@ -29,9 +29,8 @@ import json
 import os
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
-from rmm.pylibrmm import CudaStreamFlags, CudaStreamPool
-
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
@@ -45,6 +44,8 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.engine.ray import RankActor
+    from cudf_polars.quent._context import QuentContext
+    from cudf_polars.quent._logging import QuentLogger
 
 
 __all__ = [
@@ -144,12 +145,13 @@ class Cluster(enum.StrEnum):
 
 
 T = TypeVar("T")
+DefaultT = TypeVar("DefaultT")
 
 
 def _make_default_factory(
-    key: str, converter: Callable[[str], T], *, default: T
-) -> Callable[[], T]:
-    def default_factory() -> T:
+    key: str, converter: Callable[[str], T], *, default: DefaultT
+) -> Callable[[], T | DefaultT]:
+    def default_factory() -> T | DefaultT:
         v = os.environ.get(key)
         if v is None:
             return default
@@ -160,12 +162,36 @@ def _make_default_factory(
 
 def _bool_converter(v: str) -> bool:
     lowered = v.lower()
-    if lowered in {"1", "true", "yes", "y"}:
+    if lowered in {"true", "yes", "y", "1"}:
         return True
-    elif lowered in {"0", "false", "no", "n"}:
+    elif lowered in {"false", "no", "n", "0"}:
         return False
     else:
         raise ValueError(f"Invalid boolean value: '{v}'")
+
+
+def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
+    if v.lower() in {"none", "null"}:
+        return None
+    return parse(v)
+
+
+def _optional_int_converter(v: str) -> int | None:
+    return _optional_converter(v, int)
+
+
+def _quent_context_converter(v: str) -> QuentContext | None:
+    from cudf_polars.quent._context import QuentContext
+
+    try:
+        enabled = _bool_converter(v)
+    except ValueError as e:
+        raise ValueError(f"Invalid value for quent_context: '{v}'") from e
+    else:
+        if enabled:
+            return QuentContext()
+        else:
+            return None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -205,6 +231,14 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
+        Default is False.
+    prefetch_file_metadata
+        Whether to prefetch parquet file metadata and pass it through
+        `parquet_metadatas` to avoid rereading file footers.
+    use_jit_filter
+        Whether to use JIT compilation for post-read filtering in Parquet scans.
+        When enabled, filter predicates are JIT-compiled to CUDA kernels for
+        improved performance on large datasets with complex filters.
         Default is False.
     """
 
@@ -247,6 +281,20 @@ class ParquetOptions:
             default=False,
         )
     )
+    prefetch_file_metadata: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PREFETCH_FILE_METADATA",
+            _bool_converter,
+            default=False,
+        )
+    )
+    use_jit_filter: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_JIT_FILTER",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -263,6 +311,15 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.prefetch_file_metadata, bool):
+            raise TypeError("prefetch_file_metadata must be a bool")
+
+        if self.use_rapidsmpf_native and self.prefetch_file_metadata:
+            raise NotImplementedError(
+                "'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'"
+            )
+        if not isinstance(self.use_jit_filter, bool):
+            raise TypeError("use_jit_filter must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:
@@ -302,12 +359,17 @@ class DynamicPlanningOptions:
     Parameters
     ----------
     sample_chunk_count
-        The maximum number of chunks to sample before deciding whether
-        to shuffle. Default is 2.
-    bloom_filter_threshold
-        Row-count ratio (small / large) below which a bloom filter is applied
-        to pre-filter the large side of an inner or semi shuffle join.
-        Set to 0 to disable bloom filtering. Default is 0.5.
+        The maximum number of chunks to sample before making
+        dynamic-planning decisions. Default is 2.
+    join_prefilter_threshold
+        Row-count ratio (small / large) below which a join key prefilter is
+        applied. Set to 0 to disable join prefiltering. Default is 0.5.
+    join_prefilter_max_key_columns
+        Maximum number of columns from the join-key prefix to use for the
+        prefilter. Set to ``None`` to use the full join-key list. Default is 1.
+    join_prefilter_trace
+        Whether to collect input/output row counts around applied join
+        prefilters. Default is False.
     """
 
     _env_prefix = "CUDF_POLARS__EXECUTOR__DYNAMIC_PLANNING"
@@ -317,9 +379,25 @@ class DynamicPlanningOptions:
             f"{_env_prefix}__SAMPLE_CHUNK_COUNT", int, default=2
         )
     )
-    bloom_filter_threshold: float = dataclasses.field(
+    join_prefilter_threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
-            f"{_env_prefix}__BLOOM_FILTER_THRESHOLD", float, default=0.5
+            f"{_env_prefix}__JOIN_PREFILTER_THRESHOLD",
+            float,
+            default=0.5,
+        )
+    )
+    join_prefilter_max_key_columns: int | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_PREFILTER_MAX_KEY_COLUMNS",
+            _optional_int_converter,
+            default=1,
+        )
+    )
+    join_prefilter_trace: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__JOIN_PREFILTER_TRACE",
+            _bool_converter,
+            default=False,
         )
     )
 
@@ -328,10 +406,26 @@ class DynamicPlanningOptions:
             raise TypeError("sample_chunk_count must be an int")
         if self.sample_chunk_count < 1:
             raise ValueError("sample_chunk_count must be at least 1")
-        if not isinstance(self.bloom_filter_threshold, float):
-            raise TypeError("bloom_filter_threshold must be a float")
-        if not 0.0 <= self.bloom_filter_threshold <= 1.0:
-            raise ValueError("bloom_filter_threshold must be between 0 and 1")
+        join_prefilter_threshold = self.join_prefilter_threshold
+        if isinstance(join_prefilter_threshold, bool) or not isinstance(
+            join_prefilter_threshold, (int, float)
+        ):
+            raise TypeError("join_prefilter_threshold must be a float or int")
+        join_prefilter_threshold = float(join_prefilter_threshold)
+        object.__setattr__(self, "join_prefilter_threshold", join_prefilter_threshold)
+        if not 0.0 <= join_prefilter_threshold <= 1.0:
+            raise ValueError("join_prefilter_threshold must be between 0 and 1")
+        if self.join_prefilter_max_key_columns is not None:
+            if isinstance(self.join_prefilter_max_key_columns, bool) or not isinstance(
+                self.join_prefilter_max_key_columns, int
+            ):
+                raise TypeError("join_prefilter_max_key_columns must be an int or None")
+            if self.join_prefilter_max_key_columns < 1:
+                raise ValueError(
+                    "join_prefilter_max_key_columns must be at least 1 or None"
+                )
+        if not isinstance(self.join_prefilter_trace, bool):
+            raise TypeError("join_prefilter_trace must be a bool")
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -481,6 +575,9 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+    engine_id: uuid.UUID
+    worker_id: uuid.UUID
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -503,6 +600,7 @@ class RayContext:
     """
 
     rank_actors: list[ActorHandle[RankActor]]
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -532,6 +630,7 @@ class DaskContext:
 
     client: distributed.Client
     rapidsmpf_id: str
+    quent_logger: QuentLogger | None
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
 
@@ -605,6 +704,12 @@ class StreamingExecutor:
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
+    quent_context
+        Quent tracing context. When ``None`` (default), Quent tracing is disabled.
+        Pass a :class:`~cudf_polars.quent.QuentContext` instance to enable tracing.
+        Can be set via the ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` environment
+        variable (``true`` enables tracing with a default context, ``false``
+        disables it).
 
     Notes
     -----
@@ -672,10 +777,16 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
+
     min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
+    quent_context: QuentContext | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__QUENT_CONTEXT", _quent_context_converter, default=None
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.cluster is None:
@@ -744,6 +855,13 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
+
+        # Hash the quent context UUIDs as ints
+        quent_context = d["quent_context"]
+        if quent_context is not None:
+            for key in ["engine", "query_group", "query"]:
+                quent_context[key]["id"] = int(quent_context[key]["id"])
+            d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
 
 
@@ -759,74 +877,6 @@ class InMemoryExecutor:
 
 
 ExecutorType = TypeVar("ExecutorType", StreamingExecutor, InMemoryExecutor)
-
-
-@dataclasses.dataclass(frozen=True, eq=True)
-class CUDAStreamPoolConfig:
-    """
-    Configuration for the CUDA stream pool.
-
-    Parameters
-    ----------
-    pool_size
-        The size of the CUDA stream pool.
-    flags
-        The flags to use for the CUDA stream pool.
-    """
-
-    pool_size: int = 16
-    flags: CudaStreamFlags = CudaStreamFlags.NON_BLOCKING
-
-    def build(self) -> CudaStreamPool:
-        return CudaStreamPool(
-            pool_size=self.pool_size,
-            flags=self.flags,
-        )
-
-
-def _convert_cuda_stream_policy(
-    user_cuda_stream_policy: dict | str,
-) -> CUDAStreamPoolConfig | None:
-    match user_cuda_stream_policy:
-        case "default":
-            return None
-        case "pool":
-            return CUDAStreamPoolConfig()
-        case dict():
-            return CUDAStreamPoolConfig(**user_cuda_stream_policy)
-        case str():
-            # assume it's a JSON encoded CUDAStreamPoolConfig
-            try:
-                d = json.loads(user_cuda_stream_policy)
-            except json.JSONDecodeError:
-                raise ValueError(
-                    f"Invalid CUDA stream policy: '{user_cuda_stream_policy}'"
-                ) from None
-            match d:
-                case {"pool_size": int(), "flags": int()}:
-                    return CUDAStreamPoolConfig(
-                        pool_size=d["pool_size"], flags=CudaStreamFlags(d["flags"])
-                    )
-                case {"pool_size": int(), "flags": str()}:
-                    # convert the string names to enums
-                    return CUDAStreamPoolConfig(
-                        pool_size=d["pool_size"],
-                        flags=CudaStreamFlags(CudaStreamFlags.__members__[d["flags"]]),
-                    )
-                case _:
-                    try:
-                        return CUDAStreamPoolConfig(**d)
-                    except TypeError:
-                        raise ValueError(
-                            f"Invalid CUDA stream policy: {user_cuda_stream_policy}"
-                        ) from None
-
-
-def _default_cuda_stream_policy() -> CUDAStreamPoolConfig | None:
-    v = os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY")
-    if v is None:
-        return None
-    return _convert_cuda_stream_policy(v)
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -848,10 +898,6 @@ class ConfigOptions(Generic[ExecutorType]):
     device
         The GPU used to run the query. If not provided, the
         query uses the current CUDA device.
-    cuda_stream_policy
-        The policy to use for CUDA streams. ``None`` (the default) uses the
-        default CUDA stream. A :class:`~cudf_polars.utils.config.CUDAStreamPoolConfig`
-        can be used to configure a stream pool.
     """
 
     raise_on_fail: bool = False
@@ -863,9 +909,6 @@ class ConfigOptions(Generic[ExecutorType]):
     )
     device: int | None = None
     memory_resource_config: MemoryResourceConfig | None = None
-    cuda_stream_policy: CUDAStreamPoolConfig | None = dataclasses.field(
-        default_factory=_default_cuda_stream_policy
-    )
 
     @classmethod
     def from_polars_engine(
@@ -880,7 +923,6 @@ class ConfigOptions(Generic[ExecutorType]):
             "parquet_options",
             "raise_on_fail",
             "memory_resource_config",
-            "cuda_stream_policy",
             "hardware_binding",
         }
 
@@ -896,6 +938,11 @@ class ConfigOptions(Generic[ExecutorType]):
         user_parquet_options = engine.config.get("parquet_options", {})
         if user_parquet_options is None:
             user_parquet_options = {}
+
+        if isinstance(user_parquet_options, dict):
+            parquet_options = ParquetOptions(**user_parquet_options)
+        else:
+            parquet_options = user_parquet_options
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
         user_memory_resource_config = engine.config.get("memory_resource_config", None)
@@ -923,6 +970,10 @@ class ConfigOptions(Generic[ExecutorType]):
         match user_executor:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
+                if parquet_options.prefetch_file_metadata:
+                    raise NotImplementedError(
+                        "Prefetching is not supported for the in-memory executor."
+                    )
             case "streaming":
                 user_executor_options = user_executor_options.copy()
                 if "min_device_size" not in user_executor_options:
@@ -945,35 +996,10 @@ class ConfigOptions(Generic[ExecutorType]):
 
         kwargs = {
             "raise_on_fail": user_raise_on_fail,
-            "parquet_options": ParquetOptions(**user_parquet_options),
+            "parquet_options": parquet_options,
             "executor": executor,
             "device": engine.device,
             "memory_resource_config": user_memory_resource_config,
         }
-
-        # Handle "cuda-stream-policy".
-        # The default will depend on the executor.
-        user_cuda_stream_policy = engine.config.get(
-            "cuda_stream_policy", None
-        ) or os.environ.get("CUDF_POLARS__CUDA_STREAM_POLICY", None)
-
-        cuda_stream_policy: CUDAStreamPoolConfig | None
-
-        if user_cuda_stream_policy is None:
-            if executor.name == "streaming":
-                cuda_stream_policy = CUDAStreamPoolConfig()
-            else:
-                cuda_stream_policy = None
-        else:
-            cuda_stream_policy = _convert_cuda_stream_policy(user_cuda_stream_policy)
-
-        if isinstance(cuda_stream_policy, CUDAStreamPoolConfig) and (
-            executor.name != "streaming"
-        ):
-            raise ValueError(
-                "A stream pool is only supported by the streaming executor."
-            )
-
-        kwargs["cuda_stream_policy"] = cuda_stream_policy
 
         return cls(**kwargs)
