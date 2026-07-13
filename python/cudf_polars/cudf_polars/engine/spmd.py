@@ -47,6 +47,7 @@ from cudf_polars.engine.hardware_binding import (
 from cudf_polars.quent._context import (
     LocalQuentContext,
     ProcessorRegistry,
+    QuentContext,
     declare_worker_resources,
     finalize_worker_resources,
 )
@@ -242,7 +243,7 @@ def synchronize_quent_context(
     *,
     comm: Communicator,
     context: Context,
-) -> cudf_polars.quent.QuentContext:
+) -> QuentContext:
     """
     Ensure all ranks use the same Quent engine ID.
 
@@ -250,19 +251,19 @@ def synchronize_quent_context(
     ranks participate in an AllGather so every process converges on that value.
     """
     if comm.rank == 0:
-        quent_context = cudf_polars.quent.QuentContext()
+        quent_context = QuentContext()
         data = quent_context.serialize()
     else:
         data = b""
 
     if comm.nranks == 1:
         # skip the collective
-        return cudf_polars.quent.QuentContext()
+        return QuentContext()
 
     with reserve_op_id() as op_id:
         all_data = all_gather_host_data(comm, context.br(), op_id, data)
 
-    return cudf_polars.quent.QuentContext.deserialize(all_data[0])
+    return QuentContext.deserialize(all_data[0])
 
 
 class SPMDEngine(StreamingEngine):
@@ -421,9 +422,7 @@ class SPMDEngine(StreamingEngine):
     ) -> None:
         executor_options = executor_options or {}
         engine_options = engine_options or {}
-        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
-            "quent_context"
-        )
+        quent_context: QuentContext | None = executor_options.get("quent_context")
         if quent_context is not None:
             self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         else:
@@ -638,9 +637,7 @@ class SPMDEngine(StreamingEngine):
             if existing_quent_context is not None:
                 executor_options.setdefault("quent_context", existing_quent_context)
         engine_options = engine_options or {}
-        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
-            "quent_context"
-        )
+        quent_context: QuentContext | None = executor_options.get("quent_context")
         rapidsmpf_options = resolve_rapidsmpf_options(rapidsmpf_options)
 
         # Collective: synchronize all ranks before tearing down the Context.
@@ -835,9 +832,9 @@ class SPMDEngine(StreamingEngine):
         # quent traces before that.
         # Clear the references only after shutdown completes.
 
-        quent_context: cudf_polars.quent.QuentContext | None = self.config[
-            "executor_options"
-        ].get("quent_context")
+        quent_context: QuentContext | None = self.config["executor_options"].get(
+            "quent_context"
+        )
 
         if self._quent_logger is not None:
             if quent_context is not None:

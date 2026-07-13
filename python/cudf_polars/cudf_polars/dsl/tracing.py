@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     import cudf_polars.containers
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.quent import Task
+    from cudf_polars.quent._types import Task
 
 
 def _dataframe_size_bytes(frame: cudf_polars.containers.DataFrame) -> int:
@@ -94,14 +94,14 @@ def _begin_quent_do_evaluate_events(
     --------
     _end_quent_do_evaluate_events
     """
-    import cudf_polars.quent
+    import cudf_polars.quent._types
 
     quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
     if quent_ir_execution_context is None:
         return None
 
     token = uuid.uuid4()
-    quent_task = cudf_polars.quent.Task(
+    quent_task = cudf_polars.quent._types.Task(
         instance_name=(
             f"{cls.__name__}-{quent_ir_execution_context.quent_operator.id.hex[:8]}-"
             f"{token.hex[:8]}"
@@ -174,7 +174,7 @@ def _end_quent_do_evaluate_events(
     --------
     _begin_quent_do_evaluate_events
     """
-    import cudf_polars.quent
+    import cudf_polars.quent._types
 
     quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
     if quent_ir_execution_context is None:
@@ -183,7 +183,7 @@ def _end_quent_do_evaluate_events(
     output_capacity_bytes = _dataframe_size_bytes(result)
     quent_ir_execution_context.logger.emit(
         quent_ir_execution_context.quent_operator.statistics(
-            statistics=cudf_polars.quent.Statistics(
+            statistics=cudf_polars.quent._types.Statistics(
                 input_bytes=sum(_dataframe_size_bytes(frame) for frame in frames),
                 output_bytes=output_capacity_bytes,
                 output_rows=result.num_rows,

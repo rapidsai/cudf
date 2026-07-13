@@ -36,7 +36,7 @@ from rapidsmpf.streaming.coll.allgather import AllGather
 from rapidsmpf.streaming.core.message import Message
 
 import cudf_polars.dsl.tracing
-import cudf_polars.quent
+import cudf_polars.quent._types
 from cudf_polars.containers import DataFrame
 from cudf_polars.dsl.expr import Cast, Col, NamedExpr, TemporalFunction
 from cudf_polars.dsl.ir import (
@@ -347,7 +347,7 @@ async def shutdown_on_error(
                     output_rows = tracer.row_count
                 quent_ir_execution_context.logger.emit(
                     quent_ir_execution_context.quent_operator.statistics(
-                        statistics=cudf_polars.quent.Statistics(
+                        statistics=cudf_polars.quent._types.Statistics(
                             output_rows=output_rows,
                             input_bytes=0,
                             output_bytes=0,

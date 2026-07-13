@@ -60,6 +60,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
+    from cudf_polars.quent._context import QuentContext
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -143,7 +144,7 @@ def _setup_root(
     dask_worker: distributed.Worker | None = None,
     engine_id: uuid.UUID,
     worker_id: uuid.UUID,
-    quent_context: cudf_polars.quent.QuentContext | None,
+    quent_context: QuentContext | None,
 ) -> bytes:
     """
     Initialize the root rank on one Dask worker.
@@ -233,7 +234,7 @@ def _setup_worker(
     worker_ids: list[uuid.UUID],
     engine_id: uuid.UUID,
     num_py_executors: int,
-    quent_context: cudf_polars.quent.QuentContext | None,
+    quent_context: QuentContext | None,
     dask_worker: distributed.Worker | None = None,
 ) -> None:
     """
@@ -495,7 +496,7 @@ def _worker_evaluate(
     uid: str,
     collect_metadata: bool = False,
     query_id: uuid.UUID,
-    quent_context: cudf_polars.quent.QuentContext | None = None,
+    quent_context: QuentContext | None = None,
     dask_worker: distributed.Worker | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata] | None]:
     """
@@ -768,9 +769,7 @@ class DaskEngine(StreamingEngine):
         executor_options = executor_options or {}
         engine_options = engine_options or {}
 
-        quent_context: cudf_polars.quent.QuentContext | None = executor_options.get(
-            "quent_context"
-        )
+        quent_context: QuentContext | None = executor_options.get("quent_context")
         if quent_context is not None:
             self._quent_logger = cudf_polars.quent._logging.QuentLogger()
         else:
@@ -1054,9 +1053,9 @@ class DaskEngine(StreamingEngine):
         ctx = self._dask_context
         self._dask_context = None
         exceptions: list[Exception] = []
-        quent_context: cudf_polars.quent.QuentContext | None = self.config[
-            "executor_options"
-        ].get("quent_context")
+        quent_context: QuentContext | None = self.config["executor_options"].get(
+            "quent_context"
+        )
         try:
             # Teardown emits Worker.exit, then we drain all buffered events
             # (including the exit event) from workers.

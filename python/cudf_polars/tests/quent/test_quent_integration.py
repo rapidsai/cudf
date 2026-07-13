@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from cudf_polars.engine.core import StreamingEngine
-    from cudf_polars.quent import QuentContext
+    from cudf_polars.quent._context import QuentContext
 
 # Quent tracing requires structlog to emit events. Skip the whole module when
 # it is unavailable so the engine fixture below is never even constructed.

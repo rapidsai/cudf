@@ -16,7 +16,11 @@ import polars as pl
 import cudf_polars.quent
 import cudf_polars.quent._logging
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.quent._context import ProcessorRegistry
+from cudf_polars.quent._context import (
+    LocalQuentContext,
+    ProcessorRegistry,
+    QuentContext,
+)
 from cudf_polars.quent._plan import build_plan, port_names_for_node
 from cudf_polars.quent._types import (
     Attribute,
@@ -36,7 +40,6 @@ from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.quent import QuentContext
     from cudf_polars.quent._types import Processor
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -556,20 +559,20 @@ def test_query_lifecycle() -> None:
 
 @pytest.fixture
 def quent_context() -> QuentContext:
-    return cudf_polars.quent.QuentContext(
+    return QuentContext(
         query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
         query=cudf_polars.quent.Query(instance_name="test_query"),
     )
 
 
 def test_quent_context_serialization() -> None:
-    quent_context = cudf_polars.quent.QuentContext(
+    quent_context = QuentContext(
         query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
         query=cudf_polars.quent.Query(instance_name="test_query"),
     )
     data = quent_context.serialize()
 
-    new = cudf_polars.quent.QuentContext.deserialize(data)
+    new = QuentContext.deserialize(data)
     assert new == quent_context
 
 
@@ -586,14 +589,14 @@ def test_quent_context_serialization_with_custom_attributes() -> None:
             ],
         )
     )
-    quent_context = cudf_polars.quent.QuentContext(
+    quent_context = QuentContext(
         engine=engine,
         query_group=cudf_polars.quent.QueryGroup(instance_name="test_query_group"),
         query=cudf_polars.quent.Query(instance_name="test_query"),
     )
 
     data = quent_context.serialize()
-    new = cudf_polars.quent.QuentContext.deserialize(data)
+    new = QuentContext.deserialize(data)
 
     assert new == quent_context
 
@@ -664,9 +667,9 @@ def test_processor_registry_reused_across_quent_contexts() -> None:
     pool_id = uuid.uuid4()
     thread_ident = 99
 
-    context_a = cudf_polars.quent.QuentContext()
-    context_b = cudf_polars.quent.QuentContext()
-    local_a = cudf_polars.quent.LocalQuentContext(
+    context_a = QuentContext()
+    context_b = QuentContext()
+    local_a = LocalQuentContext(
         context=context_a,
         query=context_a.query_for(uuid.uuid4()),
         worker=Worker(id=uuid.uuid4(), engine=context_a.engine, instance_name="rank-0"),
@@ -679,7 +682,7 @@ def test_processor_registry_reused_across_quent_contexts() -> None:
             parent_group_id=context_a.engine.id,
         ),
     )
-    local_b = cudf_polars.quent.LocalQuentContext(
+    local_b = LocalQuentContext(
         context=context_b,
         query=context_b.query_for(uuid.uuid4()),
         worker=Worker(id=uuid.uuid4(), engine=context_b.engine, instance_name="rank-0"),

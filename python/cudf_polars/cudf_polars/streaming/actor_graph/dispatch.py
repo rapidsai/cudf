@@ -16,7 +16,8 @@ if TYPE_CHECKING:
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.streaming.core.context import Context
 
-    import cudf_polars.quent
+    import cudf_polars.quent._context
+    import cudf_polars.quent._types
     from cudf_polars.dsl.ir import IR, IRExecutionContext
     from cudf_polars.streaming.actor_graph.utils import ChannelManager
     from cudf_polars.streaming.base import (
@@ -75,13 +76,13 @@ class GenState(TypedDict):
     max_io_threads: int
     stats: StatsCollector
     collective_id_map: dict[IR, list[int]]
-    quent_operator_map: dict[IR, cudf_polars.quent.Operator] | None
-    quent_execution_context: cudf_polars.quent.LocalQuentContext | None
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None
+    quent_execution_context: cudf_polars.quent._context.LocalQuentContext | None
 
 
 def ir_context_for_node(rec: SubNetGenerator, ir: IR) -> IRExecutionContext:
     """Return ``ir_context`` with the physical Quent operator bound when tracing."""
-    import cudf_polars.quent
+    import cudf_polars.quent._context
 
     ir_context = rec.state["ir_context"]
     quent_operator_map = rec.state["quent_operator_map"]
@@ -90,7 +91,7 @@ def ir_context_for_node(rec: SubNetGenerator, ir: IR) -> IRExecutionContext:
         quent_operator = quent_operator_map[ir]
         return dataclasses.replace(
             ir_context,
-            quent_ir_execution_context=cudf_polars.quent.QuentIRExecutionContext.from_execution_context(
+            quent_ir_execution_context=cudf_polars.quent._context.QuentIRExecutionContext.from_execution_context(
                 execution_context=quent_execution_context,
                 quent_operator=quent_operator,
             ),

@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Any
 from rapidsmpf.streaming.core.leaf_actor import pull_from_channel
 
 import cudf_polars.dsl.tracing
-import cudf_polars.quent
+import cudf_polars.quent._context
+import cudf_polars.quent._types
 from cudf_polars.dsl.ir import (
     DataFrameScan,
     Join,
@@ -230,8 +231,8 @@ def generate_network(
     ir_context: IRExecutionContext,
     collective_id_map: dict[IR, list[int]],
     metadata_collector: list[ChannelMetadata] | None,
-    quent_operator_map: dict[IR, cudf_polars.quent.Operator] | None = None,
-    local_quent_context: cudf_polars.quent.LocalQuentContext | None = None,
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None,
+    local_quent_context: cudf_polars.quent._context.LocalQuentContext | None = None,
 ) -> tuple[list[Any], DeferredMessages]:
     """
     Translate the IR graph to a RapidsMPF streaming network.

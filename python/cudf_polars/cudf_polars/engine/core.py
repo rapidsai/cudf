@@ -53,8 +53,8 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
 
-    import cudf_polars.quent
     import cudf_polars.quent._logging
+    import cudf_polars.quent._types
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._context import LocalQuentContext
     from cudf_polars.streaming.base import PartitionInfo
@@ -497,7 +497,7 @@ def execute_ir_on_rank(
     stats: StatsCollector,
     collective_id_map: dict[IR, list[int]],
     *,
-    quent_operator_map: dict[IR, cudf_polars.quent.Operator] | None = None,
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None,
     local_quent_context: LocalQuentContext | None = None,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
@@ -780,8 +780,8 @@ def evaluate_on_rank(
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
 
-    physical_op_by_id: dict[str, cudf_polars.quent.Operator] | None = None
-    quent_operator_map: dict[IR, cudf_polars.quent.Operator] | None = None
+    physical_op_by_id: dict[str, cudf_polars.quent._types.Operator] | None = None
+    quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
         _declare_network_channels(comm, local_quent_context)
