@@ -46,14 +46,22 @@ _PID_PLC_DTYPE = plc.DataType(plc.TypeId.INT32)
 
 @dataclass(frozen=True)
 class _RoutingPlan:
+    """Static ownership and exchange plan for one ordering adjustment."""
+
     npartitions: int
-    boundary_chunk: TableChunk
+    """Number of output partitions implied by the target ordering."""
     local_window: tuple[int, int]
+    """Half-open output-partition range owned by this rank."""
     source_ranges: list[tuple[int, int]]
+    """Half-open output-partition range each source rank may contribute to."""
     remote_sources: list[int]
+    """Remote ranks that may contribute to this rank's local output window."""
     owed_remote_pids: list[int]
+    """Remote-owned output partitions this rank may contribute to."""
     remote_destinations: list[int]
+    """Remote ranks that may receive this rank's data."""
     owed_remote_range: tuple[int, int]
+    """Half-open range spanning owed remote pids, or empty when none are owed."""
 
 
 def _contiguous_owner(pid: int, nranks: int, npartitions: int) -> int:
@@ -246,8 +254,8 @@ def _copy_to_owned_chunk(
     )
 
 
-class _OutputPieceReader:
-    """Read input only far enough to materialize requested output windows."""
+class _OutputPartitionBuffer:
+    """Incrementally split and buffer pieces by target output partition."""
 
     def __init__(
         self,
@@ -263,11 +271,21 @@ class _OutputPieceReader:
         self.pending: dict[int, ChunkStore] = {}
         self.input_done = False
 
-    async def collect_window(self, start: int, stop: int) -> dict[int, ChunkStore]:
-        """Return all locally-read pieces for output pids in ``[start, stop)``."""
-        if start >= stop:
-            return {}
-        while not self.input_done and not any(pid >= stop for pid in self.pending):
+    async def collect_output_partition(self, pid: int) -> ChunkStore | None:
+        """
+        Return buffered pieces for one output pid.
+
+        Notes
+        -----
+        This reads ordered input chunks until the requested output partition
+        is complete. All pieces produced by those chunks are held in a
+        spillable container, and pieces for later output partitions remain
+        cached for later calls.
+        """
+        stop = pid + 1
+        while not self.input_done and not any(
+            pending_pid >= stop for pending_pid in self.pending
+        ):
             msg = await self.ch_in.recv(self.context)
             if msg is None:
                 self.input_done = True
@@ -288,7 +306,7 @@ class _OutputPieceReader:
                     self.output_ordering,
                     stream,
                 )
-                for pid, piece in enumerate(
+                for piece_pid, piece in enumerate(
                     plc.copying.split(table, splits, stream=stream)
                 ):
                     if piece.num_rows() == 0:
@@ -296,22 +314,24 @@ class _OutputPieceReader:
                     _store_chunk(
                         self.context,
                         self.pending,
-                        pid,
+                        piece_pid,
                         _copy_to_owned_chunk(piece, stream, self.context.br()),
                     )
+        return self.pending.pop(pid, None)
 
-        out = {
-            pid: self.pending.pop(pid)
-            for pid in list(self.pending)
-            if start <= pid < stop
-        }
-        return dict(sorted(out.items()))
-
-    async def drain_remaining(self) -> None:
-        """Consume input that cannot affect any remaining output partition."""
-        while not self.input_done:
-            if await self.ch_in.recv(self.context) is None:
-                self.input_done = True
+    async def assert_input_drained(self) -> None:
+        """Verify that no buffered or unread input remains."""
+        if self.pending:
+            raise RuntimeError(
+                "adjust_ordering left buffered data after all output was emitted."
+            )
+        if not self.input_done:
+            while (msg := await self.ch_in.recv(self.context)) is not None:
+                if TableChunk.from_message(msg, br=self.context.br()).shape[0] > 0:
+                    raise RuntimeError(
+                        "adjust_ordering left unread input after all output was emitted"
+                    )
+        self.input_done = True
 
 
 def _store_chunk(
@@ -399,10 +419,10 @@ def _make_routing_plan(
     comm: Communicator,
     input_ordering: Ordering,
     output_ordering: Ordering,
+    output_boundaries: TableChunk,
 ) -> _RoutingPlan:
     """Compute local ownership and sparse-exchange obligations."""
     npartitions = output_ordering.num_boundaries + 1
-    boundary_chunk = output_ordering.get_boundaries(context.br())
     local_window = _partition_range(comm.rank, comm.nranks, npartitions)
 
     if comm.nranks == 1:
@@ -411,11 +431,11 @@ def _make_routing_plan(
         input_boundary_chunk = input_ordering.get_boundaries(context.br())
         with stream_ordered_after(
             context.br().stream_pool.get_stream,
-            upstreams=(input_boundary_chunk.stream, boundary_chunk.stream),
+            upstreams=(input_boundary_chunk.stream, output_boundaries.stream),
         ) as stream:
             lower_positions, upper_positions = _boundary_search_positions(
                 input_boundary_chunk.table_view(),
-                boundary_chunk.table_view(),
+                output_boundaries.table_view(),
                 output_ordering,
                 stream,
             )
@@ -449,7 +469,6 @@ def _make_routing_plan(
     )
     return _RoutingPlan(
         npartitions=npartitions,
-        boundary_chunk=boundary_chunk,
         local_window=local_window,
         source_ranges=source_ranges,
         remote_sources=remote_sources,
@@ -471,8 +490,11 @@ async def _adjust_ordering_impl(
     collective_id: int | None,
 ) -> None:
     """Adjust ordering while using exchange only for remote dependencies."""
-    plan = _make_routing_plan(context, comm, input_ordering, output_ordering)
-    reader = _OutputPieceReader(context, ch_in, plan.boundary_chunk, output_ordering)
+    output_boundaries = output_ordering.get_boundaries(context.br())
+    plan = _make_routing_plan(
+        context, comm, input_ordering, output_ordering, output_boundaries
+    )
+    buffer = _OutputPartitionBuffer(context, ch_in, output_boundaries, output_ordering)
 
     exchange = None
     if plan.remote_sources or plan.remote_destinations:
@@ -484,7 +506,7 @@ async def _adjust_ordering_impl(
             srcs=plan.remote_sources,
             dsts=plan.remote_destinations,
         )
-    local_pieces: dict[int, ChunkStore] = {}
+
     first_blocked_pid = next(
         (
             pid
@@ -497,27 +519,29 @@ async def _adjust_ordering_impl(
         plan.local_window[1],
     )
 
+    # Before receiving remote pieces, emit the local-only prefix and send all
+    # remote-owned pieces this rank is responsible for.
     pre_start, pre_stop = plan.local_window[0], first_blocked_pid
     if plan.owed_remote_pids:
         pre_start = min(pre_start, plan.owed_remote_range[0])
         pre_stop = max(pre_stop, plan.owed_remote_range[1])
 
-    # Before receiving remote pieces, emit the local-only prefix and send all
-    # remote-owned pieces this rank is responsible for.
+    pieces_by_source: dict[int, dict[int, ChunkStore]] = {comm.rank: {}}
+    local_pieces = pieces_by_source[comm.rank]
     for pid in range(pre_start, pre_stop):
-        pieces = await reader.collect_window(pid, pid + 1)
+        piece = await buffer.collect_output_partition(pid)
         owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
-        if exchange is not None and owner != comm.rank and pid in pieces:
+        if exchange is not None and owner != comm.rank and piece is not None:
             await _send_remote_store(
                 context,
                 comm,
                 exchange,
                 plan.npartitions,
                 pid,
-                pieces[pid],
+                piece,
             )
-        elif owner == comm.rank and pid in pieces:
-            local_pieces[pid] = pieces[pid]
+        elif owner == comm.rank and piece is not None:
+            local_pieces[pid] = piece
         if plan.local_window[0] <= pid < first_blocked_pid:
             await _emit_partition(
                 context,
@@ -531,8 +555,7 @@ async def _adjust_ordering_impl(
     if exchange is not None:
         await exchange.insert_finished(context)
 
-    pieces_by_source: dict[int, dict[int, ChunkStore]] = {}
-    pieces_by_source[comm.rank] = local_pieces
+    # Collect remote pieces from other ranks.
     if exchange is not None:
         for source_rank in plan.remote_sources:
             remote_pieces: dict[int, ChunkStore] = {}
@@ -542,19 +565,13 @@ async def _adjust_ordering_impl(
                 _store_chunk(context, remote_pieces, pid, chunk)
             pieces_by_source[source_rank] = remote_pieces
 
+    # Collect and emit the remaining output partitions for this rank.
     for pid in range(first_blocked_pid, plan.local_window[1]):
         pid_sources = _sources_for_pid(plan.source_ranges, pid)
         if comm.rank in pid_sources and pid not in local_pieces:
-            local_pieces.update(
-                {
-                    piece_pid: store
-                    for piece_pid, store in (
-                        await reader.collect_window(pid, pid + 1)
-                    ).items()
-                    if _contiguous_owner(piece_pid, comm.nranks, plan.npartitions)
-                    == comm.rank
-                }
-            )
+            piece = await buffer.collect_output_partition(pid)
+            if piece is not None:
+                local_pieces[pid] = piece
         chunks: list[TableChunk] = []
         for source_rank in pid_sources:
             stores = pieces_by_source.get(source_rank)
@@ -572,7 +589,7 @@ async def _adjust_ordering_impl(
             else empty_table_chunk(ref_ir, context, ir_context.get_cuda_stream())
         )
         await ch_out.send(context, Message(pid, chunk))
-    await reader.drain_remaining()
+    await buffer.assert_input_drained()
     await ch_out.drain(context)
 
 
