@@ -210,9 +210,13 @@ The following guidelines apply to organizing `#include` lines.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
    and brackets wrong. Correct the usage of quotes or brackets and then run clang-format to correct
    the grouping.
- * Always check that includes are only necessary for the file in which they are included.
-   Try to avoid excessive including especially in header files. Double check this when you remove
-   code.
+ * Follow the "include what you use" principle. Directly `#include` the header that declares every
+   symbol a file uses, and do not rely on that header being pulled in transitively through another
+   include. Transitive reliance is fragile: the file stops compiling as soon as an intermediate
+   header stops including the one that actually provides the symbol.
+ * Always check that includes are only necessary for the file in which they are included. Do not
+   include headers whose symbols the file does not use, and avoid excessive including especially in
+   header files. Double check this when you remove code.
  * Avoid relative paths with `..` when possible. Paths with `..` are necessary when including
    (internal) headers from source paths not in the same directory as the including file,
    because source paths are not passed with `-I`.
