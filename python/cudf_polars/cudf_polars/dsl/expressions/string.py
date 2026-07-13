@@ -124,6 +124,7 @@ class StringFunction(Expr):
         Name.Contains,
         Name.CountMatches,
         Name.EndsWith,
+        Name.EscapeRegex,
         Name.Extract,
         Name.ExtractGroups,
         Name.Find,
@@ -154,6 +155,11 @@ class StringFunction(Expr):
         Name.Titlecase,
         Name.ZFill,
     }
+    # Regex meta characters escaped by ``str.escape_regex`` (matching polars'
+    # ``regex_syntax::escape``). Each matched character is prefixed with a
+    # backslash via a back-reference replacement template.
+    _ESCAPE_REGEX_PATTERN: ClassVar[str] = r"([#$&()*+\-.?\[\\\]\^{|}~])"
+    _ESCAPE_REGEX_REPLACEMENT: ClassVar[str] = r"\\1"
     __slots__ = ("_regex_program", "name", "options")
     _non_child = ("dtype", "name", "options")
 
@@ -197,6 +203,8 @@ class StringFunction(Expr):
                     )
                 pattern = self.children[1].value
                 self._regex_program = self._create_regex_program(pattern)
+        elif self.name is StringFunction.Name.EscapeRegex:
+            self._regex_program = self._create_regex_program(self._ESCAPE_REGEX_PATTERN)
         elif self.name is StringFunction.Name.Extract:
             (group_index,) = self.options
             literal_expr = self.children[1]
@@ -1003,6 +1011,17 @@ class StringFunction(Expr):
             (column,) = columns
             return Column(
                 plc.strings.capitalize.title(column.obj, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name is StringFunction.Name.EscapeRegex:
+            (column,) = columns
+            return Column(
+                plc.strings.replace_re.replace_with_backrefs(
+                    column.obj,
+                    self._regex_program,
+                    self._ESCAPE_REGEX_REPLACEMENT,
+                    stream=df.stream,
+                ),
                 dtype=self.dtype,
             )
         raise NotImplementedError(
