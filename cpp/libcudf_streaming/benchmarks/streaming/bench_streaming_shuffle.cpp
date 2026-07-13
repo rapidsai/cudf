@@ -15,6 +15,7 @@
 #include <rapidsmpf/bootstrap/bootstrap.hpp>
 #include <rapidsmpf/bootstrap/utils.hpp>
 #include <rapidsmpf/communicator/communicator.hpp>
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/nvtx.hpp>
 #include <rapidsmpf/shuffler/shuffler.hpp>
@@ -276,6 +277,7 @@ int main(int argc, char** argv)
 
   // Initialize configuration options from environment variables.
   rapidsmpf::config::Options options{rapidsmpf::config::get_environment_variables()};
+  auto log             = rapidsmpf::Logger::from_options(options);
   auto progress_thread = std::make_shared<rapidsmpf::ProgressThread>();
 
   std::shared_ptr<rapidsmpf::Communicator> comm;
@@ -288,7 +290,7 @@ int main(int argc, char** argv)
       return 1;
     }
     rapidsmpf::mpi::init(&argc, &argv);
-    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, options, progress_thread);
+    comm = std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, progress_thread, log);
 #else
     std::cerr << "Error: MPI communicator is not available in this build." << std::endl;
     return 1;
@@ -298,11 +300,11 @@ int main(int argc, char** argv)
     if (use_bootstrap) {
       // Launched with rrun - use bootstrap backend
       comm = rapidsmpf::bootstrap::create_ucxx_comm(
-        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options);
+        progress_thread, rapidsmpf::bootstrap::BackendType::AUTO, options, log);
     } else {
 #ifdef CUDF_STREAMING_HAVE_MPI
       // Launched with mpirun - use MPI bootstrap
-      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread);
+      comm = rapidsmpf::ucxx::init_using_mpi(MPI_COMM_WORLD, options, progress_thread, log);
 #else
       std::cerr << "Error: UCXX without MPI support requires bootstrap mode." << std::endl;
       return 1;
@@ -345,7 +347,6 @@ int main(int argc, char** argv)
   auto& stat_enabled_mr = br->device_mr_adaptor();
   rmm::mr::set_current_device_resource(stat_enabled_mr);
 
-  auto& log                    = *comm->logger();
   rmm::cuda_stream_view stream = cudf::get_default_stream();
 
   // Print benchmark/hardware info.
@@ -362,7 +363,7 @@ int main(int argc, char** argv)
     ss << "    PCI Bus ID: " << pci_bus_id.substr(0, pci_bus_id.find('\0')) << "\n";
     ss << "    Total Memory: " << rapidsmpf::format_nbytes(properties.totalGlobalMem, 0) << "\n";
     ss << "  Comm: " << *comm << "\n";
-    log.print(ss.str());
+    log->print(ss.str());
   }
 
   auto ctx = std::make_shared<rapidsmpf::streaming::Context>(options, comm->logger(), br);
@@ -379,7 +380,7 @@ int main(int argc, char** argv)
        << "/s | global throughput: " << rapidsmpf::format_nbytes(args.total_nbytes / elapsed)
        << "/s";
     if (i < args.num_warmups) { ss << " (warmup run)"; }
-    log.print(ss.str());
+    log->print(ss.str());
     if (i >= args.num_warmups) { elapsed_vec.push_back(elapsed); }
   }
 
@@ -418,18 +419,18 @@ int main(int argc, char** argv)
          << rapidsmpf::format_nbytes(record.total() / static_cast<std::int64_t>(total_num_runs))
          << " (avg)";
     }
-    log.print(ss.str());
+    log->print(ss.str());
   }
 
   auto statistics = ctx->statistics();
   if (args.enable_memory_profiler) {
-    log.print(statistics->report({
+    log->print(statistics->report({
       .mr        = stat_enabled_mr,
       .pinned_mr = br->try_pinned_mr(),
       .header    = "Statistics (of the last run):",
     }));
   } else {
-    log.print(statistics->report({.header = "Statistics (of the last run):"}));
+    log->print(statistics->report({.header = "Statistics (of the last run):"}));
   }
 
 #ifdef CUDF_STREAMING_HAVE_MPI
