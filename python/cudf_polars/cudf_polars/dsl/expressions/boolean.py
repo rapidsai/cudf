@@ -98,19 +98,14 @@ class BooleanFunction(Expr):
         self.is_pointwise = self.name not in (
             BooleanFunction.Name.All,
             BooleanFunction.Name.Any,
+            BooleanFunction.Name.HasNulls,
             BooleanFunction.Name.IsDuplicated,
+            BooleanFunction.Name.IsEmpty,
             BooleanFunction.Name.IsFirstDistinct,
             BooleanFunction.Name.IsLastDistinct,
             BooleanFunction.Name.IsSorted,
             BooleanFunction.Name.IsUnique,
         )
-        if self.name in {
-            BooleanFunction.Name.HasNulls,
-            BooleanFunction.Name.IsEmpty,
-        }:
-            raise NotImplementedError(
-                f"Boolean function {self.name}"
-            )  # pragma: no cover
         if self.name is BooleanFunction.Name.IsIn and len(children) == 2:
             # TODO: Polars should raise an error ahead of time
             # for us for these kind of shape mismatches
@@ -321,6 +316,23 @@ class BooleanFunction(Expr):
         """Evaluate this expression given a dataframe for context."""
         if self.name is BooleanFunction.Name.IsClose:
             return self._is_close(df, context=context)
+        if self.name in (BooleanFunction.Name.IsEmpty, BooleanFunction.Name.HasNulls):
+            (child,) = self.children
+            column = child.evaluate(df, context=context)
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(
+                        column.size == 0
+                        if self.name is BooleanFunction.Name.IsEmpty
+                        else column.null_count > 0,
+                        self.dtype.plc_type,
+                        stream=df.stream,
+                    ),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
         if self.name in (
             BooleanFunction.Name.IsFinite,
             BooleanFunction.Name.IsInfinite,
