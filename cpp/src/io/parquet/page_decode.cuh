@@ -270,7 +270,7 @@ inline __device__ bool page_has_rows_to_process(PageInfo const& page,
   // A page has rows to read when its row range intersects the requested range.
   bool const has_rows =
     (page.num_rows > 0) && (page_start_row < end_row) && (page_end_row > min_row);
-  if (has_rows || !has_repetition) { return has_rows; }
+  if (has_rows || !has_repetition) { return true; }
 
   // A single list row can span pages, so a list page can carry values (and offsets) with 0 rows;
   // such a page carries no rows of its own but must still be processed.
