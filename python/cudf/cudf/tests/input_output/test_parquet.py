@@ -671,7 +671,7 @@ def test_parquet_reader_select_nonexistent_columns(ignore_missing_columns):
     else:
         with pytest.raises(
             ValueError,
-            match="Encountered non-existent column in selected path",
+            match=r"Encountered non-existent column '[^']+' in the selected path",
         ):
             cudf.read_parquet(
                 buf,
@@ -1306,7 +1306,8 @@ def test_parquet_reader_struct_select_columns_nonexistent_error(data, columns):
     pa.parquet.write_table(table, buff)
 
     with pytest.raises(
-        ValueError, match="Encountered non-existent column in selected path"
+        ValueError,
+        match=r"Encountered non-existent column '[^']+' in the selected path",
     ):
         cudf.read_parquet(buff, columns=columns, ignore_missing_columns=False)
 
