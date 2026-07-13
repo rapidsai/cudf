@@ -878,9 +878,9 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Enable/disable use of JIT for filter step.
+   * @brief Sets whether to use JIT for filtering.
    *
-   * @param use_jit_filter Boolean value whether to use JIT filter
+   * @param val Boolean indicating whether to enable JIT filtering.
    * @return this for chaining
    */
   parquet_reader_options_builder& use_jit_filter(bool val)
