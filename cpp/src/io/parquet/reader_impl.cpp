@@ -542,10 +542,11 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
 
-  auto const ignore_missing_columns = effective_ignore_missing_columns(options);
+  // Build effective `ignore_missing_columns` value
+  auto const effective_ignore_missing_columns_value = effective_ignore_missing_columns(options);
 
   // Select only columns required by the options and filter
-  auto select_column_names = get_column_projection(options, ignore_missing_columns);
+  auto select_column_names = get_column_projection(options, effective_ignore_missing_columns_value);
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
   auto const has_column_selection = options.get_column_names().has_value() or
@@ -561,7 +562,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   std::tie(_input_columns, _output_buffers, _output_column_schemas) =
     _metadata->select_columns(select_column_names,
                               filter_only_columns_names,
-                              make_column_selection_options(options, ignore_missing_columns));
+                              make_column_selection_options(options,
+                                                            effective_ignore_missing_columns_value));
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
