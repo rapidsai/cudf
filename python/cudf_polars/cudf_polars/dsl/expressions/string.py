@@ -818,15 +818,31 @@ class StringFunction(Expr):
                 dtype=self.dtype,
             )
 
-        elif self.name is StringFunction.Name.Tail:
+        elif self.name in {StringFunction.Name.Head, StringFunction.Name.Tail}:
             column = self.children[0].evaluate(df, context=context)
+            n_expr = self.children[1]
 
-            if not isinstance(self.children[1], Literal):
-                n_col = self.children[1].evaluate(df, context=context)
+            if not isinstance(n_expr, Literal):
+                n_col = n_expr.evaluate(df, context=context)
+                if column.size == 0 or column.null_count == column.size:
+                    return column
+                if n_col.null_count == n_col.size:
+                    return Column(
+                        plc.Column.from_scalar(
+                            plc.Scalar.from_py(
+                                None, self.dtype.plc_type, stream=df.stream
+                            ),
+                            column.size,
+                            stream=df.stream,
+                        ),
+                        self.dtype,
+                    )
+
                 zero = plc.Scalar.from_py(0, n_col.obj.type(), stream=df.stream)
-                n_is_null = plc.unary.is_null(n_col.obj, stream=df.stream)
-                n = plc.copying.copy_if_else(
-                    zero, n_col.obj, n_is_null, stream=df.stream
+                n = (
+                    plc.replace.replace_nulls(n_col.obj, zero, stream=df.stream)
+                    if n_col.null_count > 0
+                    else n_col.obj
                 )
                 char_count = plc.unary.cast(
                     plc.strings.attributes.count_characters(
@@ -835,26 +851,10 @@ class StringFunction(Expr):
                     n_col.obj.type(),
                     stream=df.stream,
                 )
-                char_count = plc.copying.copy_if_else(
-                    zero,
-                    char_count,
-                    plc.unary.is_null(char_count, stream=df.stream),
-                    stream=df.stream,
-                )
-                start = plc.binaryop.binary_operation(
-                    char_count,
-                    n,
-                    plc.binaryop.BinaryOperator.SUB,
-                    n_col.obj.type(),
-                    stream=df.stream,
-                )
-                negative_start = plc.binaryop.binary_operation(
-                    zero,
-                    n,
-                    plc.binaryop.BinaryOperator.SUB,
-                    n_col.obj.type(),
-                    stream=df.stream,
-                )
+                if column.null_count > 0:
+                    char_count = plc.replace.replace_nulls(
+                        char_count, zero, stream=df.stream
+                    )
                 n_is_negative = plc.binaryop.binary_operation(
                     n,
                     zero,
@@ -862,31 +862,62 @@ class StringFunction(Expr):
                     plc.DataType(plc.TypeId.BOOL8),
                     stream=df.stream,
                 )
-                start = plc.copying.copy_if_else(
-                    negative_start, start, n_is_negative, stream=df.stream
-                )
-                start_before_begin = plc.binaryop.binary_operation(
-                    start,
-                    zero,
-                    plc.binaryop.BinaryOperator.LESS,
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                )
-                start = plc.copying.copy_if_else(
-                    zero, start, start_before_begin, stream=df.stream
-                )
+                if self.name is StringFunction.Name.Tail:
+                    start = plc.binaryop.binary_operation(
+                        char_count,
+                        n,
+                        plc.binaryop.BinaryOperator.SUB,
+                        n_col.obj.type(),
+                        stream=df.stream,
+                    )
+                    negative_start = plc.binaryop.binary_operation(
+                        zero,
+                        n,
+                        plc.binaryop.BinaryOperator.SUB,
+                        n_col.obj.type(),
+                        stream=df.stream,
+                    )
+                    start = plc.copying.copy_if_else(
+                        negative_start, start, n_is_negative, stream=df.stream
+                    )
+                    start = plc.binaryop.binary_operation(
+                        start,
+                        zero,
+                        plc.binaryop.BinaryOperator.NULL_MAX,
+                        n_col.obj.type(),
+                        stream=df.stream,
+                    )
+                    stop = char_count
+                else:
+                    stop = plc.binaryop.binary_operation(
+                        char_count,
+                        n,
+                        plc.binaryop.BinaryOperator.ADD,
+                        n_col.obj.type(),
+                        stream=df.stream,
+                    )
+                    stop = plc.copying.copy_if_else(
+                        stop, n, n_is_negative, stream=df.stream
+                    )
+                    stop = plc.binaryop.binary_operation(
+                        stop,
+                        zero,
+                        plc.binaryop.BinaryOperator.NULL_MAX,
+                        n_col.obj.type(),
+                        stream=df.stream,
+                    )
+                    start = plc.Column.from_scalar(zero, n_col.size, stream=df.stream)
                 result = plc.strings.slice.slice_strings(
-                    column.obj, start, char_count, stream=df.stream
+                    column.obj, start, stop, stream=df.stream
                 )
-                result = plc.copying.copy_if_else(
-                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
-                    result,
-                    n_is_null,
-                    stream=df.stream,
-                )
+                if n_col.null_count > 0:
+                    combined_mask, null_count = plc.null_mask.bitmask_and(
+                        [column.obj, n_col.obj], stream=df.stream
+                    )
+                    result = result.with_mask(combined_mask, null_count)
                 return Column(result, self.dtype)
 
-            if self.children[1].value is None:
+            if n_expr.value is None:
                 return Column(
                     plc.Column.from_scalar(
                         plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
@@ -895,7 +926,7 @@ class StringFunction(Expr):
                     ),
                     self.dtype,
                 )
-            elif self.children[1].value == 0:
+            if n_expr.value == 0:
                 result = plc.Column.from_scalar(
                     plc.Scalar.from_py("", self.dtype.plc_type, stream=df.stream),
                     column.size,
@@ -907,103 +938,20 @@ class StringFunction(Expr):
                     )
                 return Column(result, self.dtype)
 
+            if self.name is StringFunction.Name.Tail:
+                start = -n_expr.value
+                stop = 2**31 - 1
             else:
-                start = -(self.children[1].value)
-                end = 2**31 - 1
-                return Column(
-                    plc.strings.slice.slice_strings(
-                        column.obj,
-                        plc.Scalar.from_py(
-                            start, plc.DataType(plc.TypeId.INT32), stream=df.stream
-                        ),
-                        plc.Scalar.from_py(
-                            end, plc.DataType(plc.TypeId.INT32), stream=df.stream
-                        ),
-                        None,
-                        stream=df.stream,
-                    ),
-                    self.dtype,
-                )
-        elif self.name is StringFunction.Name.Head:
-            column = self.children[0].evaluate(df, context=context)
-
-            if not isinstance(self.children[1], Literal):
-                n_col = self.children[1].evaluate(df, context=context)
-                zero = plc.Scalar.from_py(0, n_col.obj.type(), stream=df.stream)
-                n_is_null = plc.unary.is_null(n_col.obj, stream=df.stream)
-                n = plc.copying.copy_if_else(
-                    zero, n_col.obj, n_is_null, stream=df.stream
-                )
-                char_count = plc.unary.cast(
-                    plc.strings.attributes.count_characters(
-                        column.obj, stream=df.stream
-                    ),
-                    n_col.obj.type(),
-                    stream=df.stream,
-                )
-                char_count = plc.copying.copy_if_else(
-                    zero,
-                    char_count,
-                    plc.unary.is_null(char_count, stream=df.stream),
-                    stream=df.stream,
-                )
-                stop = plc.binaryop.binary_operation(
-                    char_count,
-                    n,
-                    plc.binaryop.BinaryOperator.ADD,
-                    n_col.obj.type(),
-                    stream=df.stream,
-                )
-                n_is_negative = plc.binaryop.binary_operation(
-                    n,
-                    zero,
-                    plc.binaryop.BinaryOperator.LESS,
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                )
-                stop = plc.copying.copy_if_else(
-                    stop, n, n_is_negative, stream=df.stream
-                )
-                stop_before_begin = plc.binaryop.binary_operation(
-                    stop,
-                    zero,
-                    plc.binaryop.BinaryOperator.LESS,
-                    plc.DataType(plc.TypeId.BOOL8),
-                    stream=df.stream,
-                )
-                stop = plc.copying.copy_if_else(
-                    zero, stop, stop_before_begin, stream=df.stream
-                )
-                start = plc.Column.from_scalar(zero, n_col.size, stream=df.stream)
-                result = plc.strings.slice.slice_strings(
-                    column.obj, start, stop, stream=df.stream
-                )
-                result = plc.copying.copy_if_else(
-                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
-                    result,
-                    n_is_null,
-                    stream=df.stream,
-                )
-                return Column(result, self.dtype)
-
-            end = self.children[1].value
-            if end is None:
-                return Column(
-                    plc.Column.from_scalar(
-                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
-                        column.size,
-                        stream=df.stream,
-                    ),
-                    self.dtype,
-                )
+                start = 0
+                stop = n_expr.value
             return Column(
                 plc.strings.slice.slice_strings(
                     column.obj,
                     plc.Scalar.from_py(
-                        0, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                        start, plc.DataType(plc.TypeId.INT32), stream=df.stream
                     ),
                     plc.Scalar.from_py(
-                        end, plc.DataType(plc.TypeId.INT32), stream=df.stream
+                        stop, plc.DataType(plc.TypeId.INT32), stream=df.stream
                     ),
                     stream=df.stream,
                 ),

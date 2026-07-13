@@ -736,6 +736,43 @@ def test_string_head(engine: pl.GPUEngine, ldf, head):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("operation", ["head", "tail"])
+@pytest.mark.parametrize("integer_type", [pl.Int32, pl.Int64])
+def test_string_head_tail_by_column(engine: pl.GPUEngine, operation, integer_type):
+    ldf = pl.LazyFrame(
+        {
+            "a": ["AbC", "de", "FGHI", None, "", "Wïth ünicode"],
+            "n": pl.Series([1, -1, 0, 2, None, 999], dtype=integer_type),
+        }
+    )
+    q = ldf.select(getattr(pl.col("a").str, operation)(pl.col("n")))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize("operation", ["head", "tail"])
+@pytest.mark.parametrize(
+    "a,n",
+    [
+        (
+            pl.Series([], dtype=pl.String),
+            pl.Series([], dtype=pl.Int64),
+        ),
+        (
+            pl.Series([None, None], dtype=pl.String),
+            pl.Series([1, -1], dtype=pl.Int64),
+        ),
+        (
+            pl.Series(["abc", None], dtype=pl.String),
+            pl.Series([None, None], dtype=pl.Int64),
+        ),
+    ],
+)
+def test_string_head_tail_by_column_shortcuts(engine: pl.GPUEngine, operation, a, n):
+    ldf = pl.LazyFrame({"a": a, "n": n})
+    q = ldf.select(getattr(pl.col("a").str, operation)(pl.col("n")))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize("ignore_nulls", [True, False])
 @pytest.mark.parametrize("separator", ["*", ""])
 def test_concat_horizontal(engine: pl.GPUEngine, ldf, ignore_nulls, separator):
