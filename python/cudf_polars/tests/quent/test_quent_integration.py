@@ -161,35 +161,41 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
     assert query_exit["id"] == query_id
     assert query_exit["data"]["Query"]["seq"] == 3
 
-
-def test_quent_events_include_resources(
-    engine_with_quent_context: StreamingEngine, quent_context: QuentContext
-) -> None:
-    q = pl.LazyFrame({"x": [1, 2, 3, 4]}).filter(pl.col("x") > 1)
-    with engine_with_quent_context:
-        q.collect(engine=engine_with_quent_context)
-
-    quent_events = engine_with_quent_context._quent_events
     memory_events = [x for x in quent_events if "Memory" in x["data"]]
     task_events = [x for x in quent_events if "Task" in x["data"]]
     assert len(memory_events) > 0
     assert len(task_events) > 0
 
+    # A single collect exercises the full processor lifecycle, so fold that
+    # check in here rather than paying for a dedicated engine startup.
+    check_processor_lifecycle(quent_events)
 
-def test_quent_device_memory_declared_once_per_engine(
+
+def test_quent_events_multiple_collects(
     engine_with_quent_context: StreamingEngine, quent_context: QuentContext
 ) -> None:
-    # Device memory is an engine-scoped resource: it must be initialized and
-    # finalized exactly once per engine, regardless of how many collects run.
-    q1 = pl.LazyFrame({"x": [1, 2, 3]}).filter(pl.col("x") > 1)
-    q2 = pl.LazyFrame({"y": [4, 5, 6]}).filter(pl.col("y") > 4)
+    # Everything that depends on running more than one collect against the same
+    # engine is folded into this single test to avoid paying for extra engine
+    # startups. Running the *same* query twice is the strongest scenario: query
+    # ids are derived per-collect and ``get_stable_plan_id`` is a deterministic
+    # function of the IR structure, so an un-namespaced plan id would collide
+    # across the two identical collects.
+    q = pl.LazyFrame({"x": [1, 2, 3]}).filter(pl.col("x") > 1)
     with engine_with_quent_context:
-        q1.collect(engine=engine_with_quent_context)
-        q2.collect(engine=engine_with_quent_context)
+        q.collect(engine=engine_with_quent_context)
+        q.collect(engine=engine_with_quent_context)
 
     quent_events = engine_with_quent_context._quent_events
-    memory_events = [x for x in quent_events if "Memory" in x["data"]]
 
+    # The processor lifecycle stays balanced across multiple collects.
+    check_processor_lifecycle(quent_events)
+
+    # Device memory is engine/worker-scoped: it is initialized and finalized
+    # exactly once per worker, matching the number of engine-scoped ThreadPool
+    # declarations. Critically, running two collects must NOT re-declare it
+    # (the per-query bug would produce a fresh device memory per collect, i.e.
+    # twice as many inits as thread pools).
+    memory_events = [x for x in quent_events if "Memory" in x["data"]]
     device_init_events = [
         x
         for x in memory_events
@@ -204,12 +210,6 @@ def test_quent_device_memory_declared_once_per_engine(
         if x["data"]["Memory"]["state"] == "Exit"
         and x["id"] in {e["id"] for e in device_init_events}
     ]
-
-    # Device memory is engine/worker-scoped: it is initialized and finalized
-    # exactly once per worker, matching the number of engine-scoped ThreadPool
-    # declarations. Critically, running two collects must NOT re-declare it
-    # (the per-query bug would produce a fresh device memory per collect, i.e.
-    # twice as many inits as thread pools).
     thread_pool_decls = [
         x
         for x in quent_events
@@ -217,72 +217,24 @@ def test_quent_device_memory_declared_once_per_engine(
     ]
     assert len(thread_pool_decls) >= 1
     assert len(device_init_events) == len(thread_pool_decls)
-
     # Every device memory id is initialized once and exited once.
     init_ids = [x["id"] for x in device_init_events]
     assert len(set(init_ids)) == len(init_ids)
     assert {x["id"] for x in device_exit_events} == set(init_ids)
 
-
-def test_quent_processor_lifecycle_balanced(
-    engine_with_quent_context: StreamingEngine, quent_context: QuentContext
-) -> None:
-    q = pl.LazyFrame({"x": list(range(100))}).filter(pl.col("x") > 1)
-    with engine_with_quent_context:
-        q.collect(engine=engine_with_quent_context)
-
-    quent_events = engine_with_quent_context._quent_events
-    check_processor_lifecycle(quent_events)
-
-
-def test_quent_processor_lifecycle_across_multiple_collects(
-    engine_with_quent_context: StreamingEngine, quent_context: QuentContext
-) -> None:
-    q1 = pl.LazyFrame({"x": [1, 2, 3]}).filter(pl.col("x") > 1)
-    q2 = pl.LazyFrame({"y": [4, 5, 6]}).filter(pl.col("y") > 4)
-    with engine_with_quent_context:
-        q1.collect(engine=engine_with_quent_context)
-        q2.collect(engine=engine_with_quent_context)
-
-    quent_events = engine_with_quent_context._quent_events
-    check_processor_lifecycle(quent_events)
-
-
-def test_quent_query_id_unique_per_collect(
-    engine_with_quent_context: StreamingEngine, quent_context: QuentContext
-) -> None:
-    q1 = pl.LazyFrame({"x": [1, 2, 3]}).filter(pl.col("x") > 1)
-    q2 = pl.LazyFrame({"y": [4, 5, 6]}).filter(pl.col("y") > 4)
-    with engine_with_quent_context:
-        q1.collect(engine=engine_with_quent_context)
-        q2.collect(engine=engine_with_quent_context)
-
-    quent_events = engine_with_quent_context._quent_events
+    # Each collect reuses the engine-scoped QuentContext but must emit a
+    # distinct query id.
     query_init_ids = [
         x["id"]
         for x in quent_events
         if "Query" in x["data"] and "Init" in x["data"]["Query"].get("state", {})
     ]
     assert len(query_init_ids) == 2
-    # Each collect reuses the engine-scoped QuentContext but must emit a
-    # distinct query id.
     assert len(set(query_init_ids)) == 2
     assert str(quent_context.query.id) not in query_init_ids
 
-
-def test_quent_plan_id_unique_per_collect(
-    engine_with_quent_context: StreamingEngine, quent_context: QuentContext
-) -> None:
-    # Run the *same* query twice. ``get_stable_plan_id`` is a deterministic
-    # function of the IR structure, so without namespacing by the per-collect
-    # query id both collects would emit the same logical plan id under
-    # different parent queries.
-    q = pl.LazyFrame({"x": [1, 2, 3]}).filter(pl.col("x") > 1)
-    with engine_with_quent_context:
-        q.collect(engine=engine_with_quent_context)
-        q.collect(engine=engine_with_quent_context)
-
-    quent_events = engine_with_quent_context._quent_events
+    # Without namespacing by the per-collect query id, both identical collects
+    # would emit the same logical plan id under different parent queries.
     logical_plan_decls = [
         x
         for x in quent_events
@@ -291,10 +243,8 @@ def test_quent_plan_id_unique_per_collect(
         and x["data"]["Plan"]["Declaration"]["instance_name"] == "logical"
     ]
     assert len(logical_plan_decls) == 2
-
     plan_ids = [x["id"] for x in logical_plan_decls]
     assert len(set(plan_ids)) == 2
-
     # Each logical plan must hang off the distinct per-collect query id.
     parent_query_ids = [
         x["data"]["Plan"]["Declaration"]["parent"]["query_id"]
