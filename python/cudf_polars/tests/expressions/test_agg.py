@@ -158,6 +158,9 @@ def test_mode(engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine, check_row_order=False)
 
 
+@pytest.mark.skipif(
+    POLARS_VERSION_LT_136, reason="maintain_order added in Polars 1.36.0"
+)
 def test_mode_maintain_order_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1]})
     q = df.select(pl.col("a").mode(maintain_order=True))
