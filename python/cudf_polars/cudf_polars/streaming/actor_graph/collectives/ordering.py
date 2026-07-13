@@ -519,77 +519,18 @@ async def _adjust_ordering_impl(
     plan = _make_routing_plan(context, comm, input_ordering, output_ordering)
     reader = _OutputPieceReader(context, ch_in, plan.boundary_chunk, output_ordering)
 
-    # Ranks with no incoming dependency can stream local output immediately
-    # while sending remote-owned pieces as they are encountered.
-    if not plan.remote_sources:
-        if plan.remote_destinations:
-            assert collective_id is not None
-            exchange = SparseAlltoall(
-                context,
-                comm,
-                collective_id,
-                srcs=[],
-                dsts=plan.remote_destinations,
-            )
-        else:
-            exchange = None
-
-        streamed_remote_pids: set[int] = set()
-        start, stop = plan.local_window
-        if plan.owed_remote_pids:
-            start = min(start, plan.owed_remote_range[0])
-            stop = max(stop, plan.owed_remote_range[1])
-        for pid in range(start, stop):
-            pieces = await reader.collect_window(pid, pid + 1)
-            owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
-            if (
-                owner == comm.rank
-                and plan.local_window[0] <= pid < plan.local_window[1]
-            ):
-                await _emit_partition(
-                    context,
-                    ref_ir,
-                    ir_context,
-                    ch_out,
-                    pid,
-                    pieces.get(pid),
-                )
-                continue
-            if exchange is not None and pid in pieces:
-                streamed_remote_pids.add(pid)
-                await _send_remote_store(
-                    context,
-                    comm,
-                    exchange,
-                    plan.npartitions,
-                    pid,
-                    pieces[pid],
-                )
-        if exchange is not None:
-            await _send_missing_remote_markers(
-                context,
-                comm,
-                exchange,
-                plan.npartitions,
-                plan.owed_remote_pids,
-                streamed_remote_pids,
-            )
-            await exchange.insert_finished(context)
-        await reader.drain_remaining()
-        await ch_out.drain(context)
-        return
-
-    assert collective_id is not None
-    exchange = SparseAlltoall(
-        context,
-        comm,
-        collective_id,
-        srcs=plan.remote_sources,
-        dsts=plan.remote_destinations,
-    )
-
+    exchange = None
+    if plan.remote_sources or plan.remote_destinations:
+        assert collective_id is not None
+        exchange = SparseAlltoall(
+            context,
+            comm,
+            collective_id,
+            srcs=plan.remote_sources,
+            dsts=plan.remote_destinations,
+        )
     local_pieces: dict[int, ChunkStore] = {}
-    buffered_remote_pids: set[int] = set()
+    sent_remote_pids: set[int] = set()
     first_blocked_pid = next(
         (
             pid
@@ -601,59 +542,63 @@ async def _adjust_ordering_impl(
         ),
         plan.local_window[1],
     )
-    if first_blocked_pid > plan.local_window[0]:
-        prefix_pieces = await reader.collect_window(
-            plan.local_window[0], first_blocked_pid
-        )
-        for pid in range(plan.local_window[0], first_blocked_pid):
-            await _emit_partition(
-                context,
-                ref_ir,
-                ir_context,
-                ch_out,
-                pid,
-                prefix_pieces.get(pid),
-            )
 
-    # Read only far enough to satisfy destination liabilities before receiving.
+    pre_start, pre_stop = plan.local_window[0], first_blocked_pid
     if plan.owed_remote_pids:
-        pieces = await reader.collect_window(*plan.owed_remote_range)
-        for pid, store in pieces.items():
-            owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
-            if owner == comm.rank:
-                local_pieces[pid] = store
-                continue
-            buffered_remote_pids.add(pid)
+        pre_start = min(pre_start, plan.owed_remote_range[0])
+        pre_stop = max(pre_stop, plan.owed_remote_range[1])
+
+    # Before receiving remote pieces, emit the local-only prefix and send all
+    # remote-owned pieces this rank is responsible for.
+    for pid in range(pre_start, pre_stop):
+        pieces = await reader.collect_window(pid, pid + 1)
+        owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
+        if exchange is not None and owner != comm.rank and pid in pieces:
+            sent_remote_pids.add(pid)
             await _send_remote_store(
                 context,
                 comm,
                 exchange,
                 plan.npartitions,
                 pid,
-                store,
+                pieces[pid],
             )
-    await _send_missing_remote_markers(
-        context,
-        comm,
-        exchange,
-        plan.npartitions,
-        plan.owed_remote_pids,
-        buffered_remote_pids,
-    )
-    await exchange.insert_finished(context)
+        elif owner == comm.rank and pid in pieces:
+            local_pieces[pid] = pieces[pid]
+        if plan.local_window[0] <= pid < first_blocked_pid:
+            await _emit_partition(
+                context,
+                ref_ir,
+                ir_context,
+                ch_out,
+                pid,
+                local_pieces.pop(pid, None),
+            )
+
+    if exchange is not None:
+        await _send_missing_remote_markers(
+            context,
+            comm,
+            exchange,
+            plan.npartitions,
+            plan.owed_remote_pids,
+            sent_remote_pids,
+        )
+        await exchange.insert_finished(context)
 
     pieces_by_source: dict[int, dict[int, ChunkStore]] = {}
     pieces_by_source[comm.rank] = local_pieces
-    for source_rank in plan.remote_sources:
-        remote_pieces: dict[int, ChunkStore] = {}
-        stream = context.br().stream_pool.get_stream()
-        for packed in exchange.extract(source_rank):
-            remote_piece = _unpack_remote_piece(packed, stream, context.br())
-            if remote_piece is None:
-                continue
-            pid, chunk = remote_piece
-            _store_chunk(context, remote_pieces, pid, chunk)
-        pieces_by_source[source_rank] = remote_pieces
+    if exchange is not None:
+        for source_rank in plan.remote_sources:
+            remote_pieces: dict[int, ChunkStore] = {}
+            stream = context.br().stream_pool.get_stream()
+            for packed in exchange.extract(source_rank):
+                remote_piece = _unpack_remote_piece(packed, stream, context.br())
+                if remote_piece is None:
+                    continue
+                pid, chunk = remote_piece
+                _store_chunk(context, remote_pieces, pid, chunk)
+            pieces_by_source[source_rank] = remote_pieces
 
     for pid in range(first_blocked_pid, plan.local_window[1]):
         pid_sources = _sources_for_pid(plan.source_ranges, pid)
