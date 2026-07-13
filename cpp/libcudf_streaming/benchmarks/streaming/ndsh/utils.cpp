@@ -195,15 +195,14 @@ std::pair<std::shared_ptr<streaming::Context>, std::shared_ptr<Communicator>> cr
     "noting that this may significantly degrade spilling performance.",
     std::invalid_argument);
 
-  auto br                              = BufferResource::create(std::move(mr),
-                                   arguments.no_pinned_host_memory
-                                                                  ? PinnedMemoryDisabled
-                                                                  : std::optional<PinnedPoolProperties>(std::in_place),
-                                   std::move(memory_limits),
-                                   arguments.periodic_spill,
-                                   std::make_shared<rmm::cuda_stream_pool>(
-                                     arguments.num_streams, rmm::cuda_stream::flags::non_blocking),
-                                   statistics);
+  auto br = BufferResource::create(
+    std::move(mr),
+    arguments.no_pinned_host_memory ? PinnedMemoryDisabled : PinnedPoolProperties{},
+    std::move(memory_limits),
+    arguments.periodic_spill,
+    std::make_shared<rmm::cuda_stream_pool>(arguments.num_streams,
+                                            rmm::cuda_stream::flags::non_blocking),
+    statistics);
   auto environment                     = config::get_environment_variables();
   environment["NUM_STREAMING_THREADS"] = std::to_string(arguments.num_streaming_threads);
   auto options                         = config::Options(environment);

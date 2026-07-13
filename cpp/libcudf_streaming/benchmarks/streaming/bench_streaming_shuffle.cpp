@@ -332,8 +332,7 @@ int main(int argc, char** argv)
   auto stats = rapidsmpf::Statistics::create();
 
   std::optional<rapidsmpf::PinnedPoolProperties> pinned_pool_properties =
-    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryDisabled
-                            : std::optional<rapidsmpf::PinnedPoolProperties>(std::in_place);
+    args.pinned_mem_disable ? rapidsmpf::PinnedMemoryDisabled : rapidsmpf::PinnedPoolProperties{};
   auto br = rapidsmpf::BufferResource::create(
     rmm_mr,
     pinned_pool_properties,
