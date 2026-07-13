@@ -160,6 +160,7 @@ class UnaryFunction(Expr):
             "mask_nans",
             "reinterpret",
             "replace",
+            "replace_strict",
             "round",
             "set_sorted",
         }
