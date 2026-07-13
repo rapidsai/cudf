@@ -231,7 +231,6 @@ class QuentContext:
 
         This includes events for 'Declare', 'Init', and 'Planning'.
         """
-        print(f"Query int: {query.id}")
         logger.emit(query._init(query_group=self.query_group))
         logger.emit(query._planning())
         logger.emit(query._executing())
