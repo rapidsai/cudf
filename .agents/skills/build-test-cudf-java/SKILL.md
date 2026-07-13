@@ -38,7 +38,7 @@ Use a local libcudf source build when the changes affect libcudf, require unrele
 
 ## Running Java tests
 
-**Always run `mvn install -DskipTests` first** before running tests. The `mvn test` goal re-triggers the cmake/native build step. If `target/cmake-build` already contains fully built artifacts from a prior `mvn install`, this is an incremental no-op. But if the cmake-build directory was cleaned or is missing, `mvn test` may hit a race condition where the linker tries to link `libcudfjni.so` before `libarrow.a` is fully built, causing a `cannot find libarrow.a` error. If this happens, re-run `mvn install -DskipTests` to rebuild the native code cleanly, then retry `mvn test`.
+**Always run `mvn install $MVN_COMMON_OPTS -DskipTests` first** before running tests. The `mvn test` goal re-triggers the cmake/native build step. If `target/cmake-build` already contains fully built artifacts from a prior `mvn install`, this is an incremental no-op. But if the cmake-build directory was cleaned or is missing, `mvn test` may hit a race condition where the linker tries to link `libcudfjni.so` before `libarrow.a` is fully built, causing a `cannot find libarrow.a` error. If this happens, re-run `mvn install $MVN_COMMON_OPTS -DskipTests` to rebuild the native code cleanly, then retry `mvn test`.
 
 ### All tests
 

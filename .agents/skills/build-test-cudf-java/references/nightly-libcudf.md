@@ -4,21 +4,22 @@ Use this path for Java/JNI-only changes when rebuilding libcudf from source is u
 
 ## Select and install the nightly
 
-Identify the libcudf commit required by the branch. For a pull request, use its base commit or merge base unless the changes explicitly require a newer libcudf commit:
+Identify the libcudf commit required by the branch and the package series from `VERSION`. For a pull request, use its base commit or merge base unless the changes explicitly require a newer libcudf commit:
 
 ```bash
-git merge-base HEAD upstream/main
+REQUIRED_COMMIT="$(git merge-base HEAD upstream/main)"
+LIBCUDF_SERIES="$(cut -d. -f1,2 "$(git rev-parse --show-toplevel)/VERSION")"
 ```
 
-Inspect available nightly versions and build strings:
+Inspect available nightly versions and build strings for that series:
 
 ```bash
 conda search --override-channels \
   -c rapidsai-nightly -c conda-forge -c nvidia \
-  'libcudf=<VERSION>'
+  "libcudf=${LIBCUDF_SERIES}.*"
 ```
 
-Choose an exact package whose commit is the required commit or a compatible ancestor. Match the CUDA major version used by the devcontainer. Use an existing conda environment, or create one before installing the package.
+The build string ends in the first eight characters of the source commit, as defined by `conda/recipes/libcudf/recipe.yaml`. Prefer a build ending in the first eight characters of `REQUIRED_COMMIT`; if it is unavailable, use `git merge-base --is-ancestor <PACKAGE_COMMIT> "$REQUIRED_COMMIT"` to select the nearest available ancestor. Match the CUDA major version used by the devcontainer. Use an existing conda environment, or create one before installing the package.
 
 Let conda solve libcudf's declared dependencies instead of pinning its transitive libraries manually. Preview the solution, then install the same exact libcudf build:
 

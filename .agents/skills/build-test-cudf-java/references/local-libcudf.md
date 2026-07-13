@@ -35,7 +35,7 @@ Match these JNI settings to the libcudf build:
 
 - Set `CUDF_USE_PER_THREAD_DEFAULT_STREAM=ON` only when libcudf was built with `CUDF_USE_PER_THREAD_DEFAULT_STREAM=ON`.
 - Set `CUDF_JNI_LIBCUDF_STATIC=ON` for a static libcudf build and `OFF` for a shared build.
-- Keep `USE_GDS=OFF` unless libcudf and the test environment were built for GDS.
+- Keep `USE_GDS=OFF` unless the test environment supports GDS and GDS tests are required.
 
 For example, a static PTDS build like the Java CI configuration uses:
 
