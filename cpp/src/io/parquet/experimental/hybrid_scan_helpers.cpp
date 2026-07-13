@@ -266,24 +266,12 @@ std::tuple<std::vector<input_column_info>,
 aggregate_reader_metadata::select_payload_columns(
   std::optional<std::vector<std::string>> const& payload_column_names,
   std::optional<std::vector<std::string>> const& filter_column_names,
-  bool include_index,
-  bool strings_to_categorical,
-  bool ignore_missing_columns,
-  type_id timestamp_type_id,
-  type_id decimal_type_id,
-  bool case_sensitive_names)
+  parquet::detail::column_selection_options const& selection_options)
 {
   // If neither payload nor filter columns are specified, select all columns
   if (not payload_column_names.has_value() and not filter_column_names.has_value()) {
     // Call the base `select_columns()` method without specifying any columns
-    return select_columns({},
-                          {},
-                          include_index,
-                          strings_to_categorical,
-                          ignore_missing_columns,
-                          timestamp_type_id,
-                          decimal_type_id,
-                          case_sensitive_names);
+    return select_columns({}, {}, selection_options);
   }
 
   std::vector<std::string> valid_payload_columns;
@@ -302,7 +290,7 @@ aggregate_reader_metadata::select_payload_columns(
     // Remove filter columns from the provided payload column names
     if (filter_column_names.has_value() and not filter_column_names->empty()) {
       auto const filter_columns_set =
-        construct_filter_columns_set(*filter_column_names, case_sensitive_names);
+        construct_filter_columns_set(*filter_column_names, selection_options.case_sensitive_names);
       // Remove a payload column name if it is also present in the hash set
       valid_payload_columns.erase(
         std::remove_if(valid_payload_columns.begin(),
@@ -311,20 +299,13 @@ aggregate_reader_metadata::select_payload_columns(
         valid_payload_columns.end());
     }
     // Call the base `select_columns()` method with valid payload columns
-    return select_columns(valid_payload_columns,
-                          {},
-                          include_index,
-                          strings_to_categorical,
-                          ignore_missing_columns,
-                          timestamp_type_id,
-                          decimal_type_id,
-                          case_sensitive_names);
+    return select_columns(valid_payload_columns, {}, selection_options);
   }
 
   // Else if only filter columns are specified, select all columns that do not appear in the
   // filter expression
   auto const filter_columns_set =
-    construct_filter_columns_set(*filter_column_names, case_sensitive_names);
+    construct_filter_columns_set(*filter_column_names, selection_options.case_sensitive_names);
 
   std::function<void(std::string, int)> add_column_path = [&](std::string path_till_now,
                                                               int schema_idx) {
@@ -341,14 +322,7 @@ aggregate_reader_metadata::select_payload_columns(
     }
   }
 
-  return select_columns(valid_payload_columns,
-                        {},
-                        include_index,
-                        strings_to_categorical,
-                        ignore_missing_columns,
-                        timestamp_type_id,
-                        decimal_type_id,
-                        case_sensitive_names);
+  return select_columns(valid_payload_columns, {}, selection_options);
 }
 
 std::vector<std::vector<cudf::size_type>>
