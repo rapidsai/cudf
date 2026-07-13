@@ -346,6 +346,7 @@ async def _broadcast_join(
             ir,
             left_metadata.partitioning,
             child_ir=ir.children[0],
+            context=context,
         )
     else:
         small_ch, large_ch = ch_left, ch_right
@@ -357,6 +358,7 @@ async def _broadcast_join(
                 ir,
                 right_metadata.partitioning,
                 child_ir=ir.children[1],
+                context=context,
             )
             if ir.options[0] == "Right"
             else None

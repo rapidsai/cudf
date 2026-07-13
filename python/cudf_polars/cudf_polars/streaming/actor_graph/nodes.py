@@ -82,7 +82,9 @@ async def default_node_single(
         metadata_in = await recv_metadata(ch_in, context)
         metadata_out = ChannelMetadata(
             local_count=metadata_in.local_count,
-            partitioning=maybe_remap_partitioning(ir, metadata_in.partitioning),
+            partitioning=maybe_remap_partitioning(
+                ir, metadata_in.partitioning, context=context
+            ),
             duplicated=metadata_in.duplicated,
         )
 
@@ -146,7 +148,10 @@ async def default_node_multi(
             if idx == partitioning_index:
                 # Remap partitioning from child schema to output schema
                 partitioning = maybe_remap_partitioning(
-                    ir, md_child.partitioning, child_ir=ir.children[idx]
+                    ir,
+                    md_child.partitioning,
+                    child_ir=ir.children[idx],
+                    context=context,
                 )
         metadata = ChannelMetadata(
             local_count=local_count,
