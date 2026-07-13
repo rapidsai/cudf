@@ -423,8 +423,11 @@ __device__ __forceinline__ match_result reprog_device::extract(int32_t const thr
                                                                cudf::size_type end,
                                                                cudf::size_type const group_id) const
 {
-  end = begin.position() + 1;
-  return call_regexec(thread_idx, dstr, begin, end, group_id + 1);
+  end               = begin.position() + 1;
+  auto const result = call_regexec(thread_idx, dstr, begin, end, group_id + 1);
+  // a capture group that did not participate in the overall match
+  // (e.g. an unmatched optional group) has an invalid range
+  return (result && (result->first >= 0)) ? result : cuda::std::nullopt;
 }
 
 template <positional P>

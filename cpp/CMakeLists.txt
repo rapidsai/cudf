@@ -419,11 +419,8 @@ include(cmake/thirdparty/get_xxhash.cmake)
 # find zstd
 include(cmake/thirdparty/get_zstd.cmake)
 
-# Build librtcx as a subdirectory (zstd and nvtx3 are already available at this point)
-add_subdirectory(librtcx)
-
-# JIT Embedding helper functions
-include(librtcx/embed.cmake)
+# Fetch librtcx via CPM (zstd and nvtx3 are already available at this point)
+include(cmake/thirdparty/get_rtcx.cmake)
 
 # Pre-compiled fragment management helper functions
 include(cmake/Modules/AddFragment.cmake)
@@ -432,7 +429,7 @@ include(cmake/Modules/AddFragment.cmake)
 if(NOT BUILD_SHARED_LIBS)
   include("${rapids-cmake-dir}/export/find_package_file.cmake")
   list(APPEND METADATA_KINDS BUILD INSTALL)
-  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd)
+  list(APPEND dependencies KvikIO ZLIB nvcomp nanoarrow zstd rtcx)
 
   foreach(METADATA_KIND IN LISTS METADATA_KINDS)
     foreach(dep IN LISTS dependencies)
@@ -443,18 +440,13 @@ if(NOT BUILD_SHARED_LIBS)
   if(TARGET conda_env)
     install(TARGETS conda_env EXPORT cudf-exports)
   endif()
-  install(
-    TARGETS rtcx
-    EXPORT cudf-exports
-    DESTINATION ${lib_dir}
-  )
 endif()
 
 rtcx_add_embed(cudf_cuda_embed)
 
 rtcx_embed_includes(
-  cudf_cuda_embed SOURCE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/librtcx/libcxx DEST_DIRECTORY
-  librtcx/libcxx INCLUDE_DIRECTORIES librtcx/libcxx
+  cudf_cuda_embed SOURCE_DIRECTORY ${rtcx_SOURCE_DIR}/libcxx DEST_DIRECTORY librtcx/libcxx
+  INCLUDE_DIRECTORIES librtcx/libcxx
 )
 
 rtcx_embed_includes(
@@ -1217,7 +1209,6 @@ target_include_directories(
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
-          "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/librtcx>"
           "$<BUILD_INTERFACE:${cudf_cuda_embed_INCLUDE_DIRS}>"
           "$<BUILD_INTERFACE:${cudf_fragments_INCLUDE_DIRS}>"
   INTERFACE "$<INSTALL_INTERFACE:include>"
@@ -1444,18 +1435,21 @@ if(CUDF_BUILD_TESTUTIL)
   add_library(cudf::cudftestutil_impl ALIAS cudftestutil_impl)
   target_sources(
     cudftestutil_impl
-    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/io/metadata_utilities.cpp>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/column_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
-              $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
-              $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
-              $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
+    INTERFACE
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/io/metadata_utilities.cpp>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/column_utilities.cu>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/debug_utilities.cu>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/memory_resource_utilities.cpp>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/random_seed.cpp>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/table_utilities.cu>
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/tests/utilities/tdigest_utilities.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/io/metadata_utilities.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/column_utilities.cu>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/debug_utilities.cu>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/memory_resource_utilities.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/random_seed.cpp>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/table_utilities.cu>
+      $<INSTALL_INTERFACE:src/cudftestutil/utilities/tdigest_utilities.cpp>
   )
   target_link_libraries(cudftestutil_impl INTERFACE cudf::cudftestutil)
   target_compile_features(cudftestutil_impl INTERFACE cxx_std_20)
@@ -1475,6 +1469,7 @@ if(CUDF_BUILD_TESTUTIL)
   install(
     FILES tests/utilities/column_utilities.cu
           tests/utilities/debug_utilities.cu
+          tests/utilities/memory_resource_utilities.cpp
           tests/utilities/random_seed.cpp
           tests/utilities/table_utilities.cu
           tests/utilities/tdigest_utilities.cpp
