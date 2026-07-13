@@ -222,10 +222,12 @@ class reader_impl {
    * already be populated); selection-only settings are taken from @p options.
    *
    * @param options Reader options
+   * @param ignore_missing_columns Whether to ignore non-existent projected columns, resolved by the
+   * caller (see `effective_ignore_missing_columns`)
    * @return Column selection options
    */
   [[nodiscard]] column_selection_options make_column_selection_options(
-    parquet_reader_options const& options) const;
+    parquet_reader_options const& options, bool ignore_missing_columns) const;
 
   /**
    * @brief Read compressed data and page information for the current pass.
@@ -494,10 +496,11 @@ class reader_impl {
    * @brief Computes the names of columns to be read from the file, if specified.
    *
    * @param options The reader options
+   * @param ignore_missing_columns Whether to ignore non-existent projected columns
    * @return Names of columns to be read from the file if specified, `nullopt` otherwise
    */
   [[nodiscard]] std::optional<std::vector<std::string>> get_column_projection(
-    parquet_reader_options const& options) const;
+    parquet_reader_options const& options, bool ignore_missing_columns) const;
 
   /**
    * @brief Cast any fixed-point output columns to the decimal width specified in options.
