@@ -91,7 +91,7 @@ TEST_F(JoinTest, DirectInnerJoin)
 {
   cudf::test::fixed_width_column_wrapper<uint32_t> left_keys{{0, 1, 2, 5}};
   cudf::test::fixed_width_column_wrapper<uint32_t> right_keys{{0, 1, 2, 3}};
-  std::ignore = cudf::direct_inner_join(left_keys, right_keys, 4, cudf::test::get_default_stream());
+  std::ignore = cudf::direct_inner_join(left_keys, right_keys, 6, cudf::test::get_default_stream());
 }
 
 TEST_F(JoinTest, ConditionalInnerJoin)

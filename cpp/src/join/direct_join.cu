@@ -91,7 +91,8 @@ direct_inner_join(column_view const& left_keys,
   }
 
   // Build: scatter each right row index to the slot addressed by its key value
-  auto lookup = rmm::device_uvector<size_type>(capacity, stream);
+  auto lookup =
+    rmm::device_uvector<size_type>(capacity, stream, cudf::get_current_device_resource_ref());
   CUDF_CUDA_TRY(
     cub::DeviceTransform::Fill(lookup.begin(), lookup.size(), JoinNoMatch, stream.value()));
   CUDF_CUDA_TRY(
