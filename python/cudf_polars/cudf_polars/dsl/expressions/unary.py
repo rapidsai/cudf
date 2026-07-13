@@ -120,6 +120,7 @@ class UnaryFunction(Expr):
             "rank",
             "reinterpret",
             "round",
+            "search_sorted",
             "set_sorted",
             "shift",
             "shift_and_fill",
@@ -446,6 +447,27 @@ class UnaryFunction(Expr):
                 plc.Table([matched]), [0, 1], stream=df.stream
             )[0].columns()
             return Column(first, dtype=self.dtype)
+        elif self.name == "search_sorted":
+            side, descending = self.options
+            column = self.children[0].evaluate(df, context=context)
+            needles = self.children[1].evaluate(df, context=context)
+            order = (
+                plc.types.Order.DESCENDING if descending else plc.types.Order.ASCENDING
+            )
+            bound = (
+                plc.search.upper_bound if side == "right" else plc.search.lower_bound
+            )
+            indices = bound(
+                plc.Table([column.obj]),
+                plc.Table([needles.obj]),
+                [order],
+                [plc.types.NullOrder.BEFORE],
+                stream=df.stream,
+            )
+            return Column(
+                plc.unary.cast(indices, self.dtype.plc_type, stream=df.stream),
+                dtype=self.dtype,
+            )
         elif self.name == "drop_nans":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if not plc.traits.is_floating_point(column.obj.type()):
