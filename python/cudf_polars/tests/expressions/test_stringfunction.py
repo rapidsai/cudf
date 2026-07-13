@@ -242,6 +242,15 @@ def test_slice_column(engine: pl.GPUEngine, slice_column_data):
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
+@pytest.mark.parametrize("name", ["head", "tail"])
+def test_head_tail_expr_n(engine: pl.GPUEngine, name):
+    df = pl.LazyFrame(
+        {"a": ["abcdef", "hello", None, "xy", "abcd"], "n": [2, 0, 3, None, -1]}
+    )
+    q = df.select(getattr(pl.col("a").str, name)(pl.col("n")))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.fixture
 def ldf_split():
     return pl.LazyFrame({"a": ["a b", "a_b", "a_b_c", "a_b c_d", None]})
