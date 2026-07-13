@@ -898,8 +898,6 @@ void hybrid_scan_reader_impl::initialize_reader_config(parquet_reader_options co
   _options.case_sensitive_names        = options.is_enabled_case_sensitive_names();
   _options.prepend_source_index_column = options.is_enabled_prepend_source_index_column();
   _options.prepend_row_index_column    = options.is_enabled_prepend_row_index_column();
-
-  _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 }
 
 void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& options,
