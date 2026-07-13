@@ -296,6 +296,10 @@ TEST_F(GroupByDecimal128ShmemAlignmentTest, MultiColumnDecimal128Sum)
   constexpr int num_groups           = 4;
   auto const scale                   = scale_type{-2};
 
+  // A large base makes each group's running sum cross the 2^64 low-word boundary, exercising
+  // carry propagation in the fallback, and every fifth row is negated to exercise borrow.
+  constexpr __int128_t base = static_cast<__int128_t>(1) << 50;
+
   std::vector<int32_t> keys_data(num_rows);
   std::vector<std::vector<__int128_t>> vals_data(num_cols, std::vector<__int128_t>(num_rows));
   std::vector<std::vector<__int128_t>> sums(num_cols, std::vector<__int128_t>(num_groups, 0));
@@ -303,7 +307,8 @@ TEST_F(GroupByDecimal128ShmemAlignmentTest, MultiColumnDecimal128Sum)
     auto const k = i % num_groups;
     keys_data[i] = k;
     for (int c = 0; c < num_cols; ++c) {
-      auto const v    = static_cast<__int128_t>((100 + i % 7) * 100 + (13 * c + i) % 100);
+      auto v = base + static_cast<__int128_t>((100 + i % 7) * 100 + (13 * c + i) % 100);
+      if (i % 5 == 0) { v = -v; }
       vals_data[c][i] = v;
       sums[c][k] += v;
     }
