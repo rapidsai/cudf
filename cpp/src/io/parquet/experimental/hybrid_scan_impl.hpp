@@ -315,11 +315,11 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
   enum class read_columns_mode { FILTER_COLUMNS, PAYLOAD_COLUMNS, ALL_COLUMNS };
 
   /**
-   * @brief Initialize column selection related options
+   * @brief Populate the reader's `_options` config (and related members) from the user options.
    *
    * @param options Reader options
    */
-  void initialize_column_selection_options(parquet_reader_options const& options);
+  void initialize_reader_config(parquet_reader_options const& options);
 
   /**
    * @brief Initialize the necessary options related internal variables for use later on
@@ -563,8 +563,6 @@ class hybrid_scan_reader_impl : public parquet::detail::reader_impl {
 
   cudf::size_type _row_mask_offset{0};
   bool _output_chunk_produced{false};
-
-  bool _use_pandas_metadata{false};
 
   bool _is_filter_columns_selected{false};
   bool _is_payload_columns_selected{false};
