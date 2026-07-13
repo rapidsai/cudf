@@ -492,18 +492,17 @@ def test_broadcast_limit(
     q = left.join(right, on="y", how="inner")
     ir = Translator(q._ldf.visit(), engine).translate_ir()
     config_options = ConfigOptions.from_polars_engine(engine)
-    shuffle_nodes = [
-        type(node)
-        for node in lower_ir_graph(
+    lowering = lower_ir_graph(
+        ir,
+        config_options,
+        collect_statistics(
             ir,
             config_options,
-            collect_statistics(
-                ir,
-                config_options,
-                parquet_stats_executor,
-            ),
-        )[1]
-        if isinstance(node, Shuffle)
+            parquet_stats_executor,
+        ),
+    )
+    shuffle_nodes = [
+        type(node) for node in lowering.partition_info if isinstance(node, Shuffle)
     ]
 
     # NOTE: Expect small table to have 3 partitions (9 / 3).
@@ -543,11 +542,13 @@ def test_cache_preserves_partitioning_join(
 
     config_options = ConfigOptions.from_polars_engine(engine)
     ir = Translator(q._ldf.visit(), engine).translate_ir()
-    lowered_ir, partition_info = lower_ir_graph(
+    lowering = lower_ir_graph(
         ir,
         config_options,
         collect_statistics(ir, config_options, parquet_stats_executor),
     )
+    lowered_ir = lowering.lowered
+    partition_info = lowering.partition_info
 
     # Cache should preserve partitioning on 'key'
     cache_partitioning = [

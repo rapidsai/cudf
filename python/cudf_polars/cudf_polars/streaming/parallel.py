@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import operator
 from functools import partial, reduce
 from typing import TYPE_CHECKING
@@ -65,6 +66,44 @@ def _(
     )
 
 
+@dataclasses.dataclass
+class LoweringInfo:
+    """Information produced by optimizing and lowering an IR graph."""
+
+    optimized: IR  # IR after optimization
+    lowered: IR  # optimized IR after lowering
+    partition_info: MutableMapping[
+        IR, PartitionInfo
+    ]  # Partition mapping for nodes in the lowered IR.
+
+
+def optimize_with_stats(
+    ir: IR, config_options: ConfigOptions[StreamingExecutor], stats: StatsCollector
+) -> IR:
+    """
+    Optimize an IR graph given some statistics.
+
+    Parameters
+    ----------
+    ir
+        Root of the graph to optimize.
+    config_options
+        GPUEngine configuration options.
+    stats
+        Pre-computed statistics.
+
+    Returns
+    -------
+    IR
+        The optimized IR graph.
+    """
+    from cudf_polars.streaming.join_domain_prefilter import (
+        optimize_join_domain_prefilters,
+    )
+
+    return optimize_join_domain_prefilters(ir, stats, config_options)
+
+
 def _lower_ir_graph_impl(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
@@ -72,20 +111,19 @@ def _lower_ir_graph_impl(
     *,
     rank: int = 0,
     nranks: int = 1,
-) -> tuple[tuple[IR, MutableMapping[IR, PartitionInfo]], LowerIRTransformer]:
-    from cudf_polars.streaming.join_domain_prefilter import (
-        optimize_join_domain_prefilters,
-    )
-
-    ir = optimize_join_domain_prefilters(ir, stats, config_options)
+) -> tuple[LoweringInfo, LowerIRTransformer]:
     state: State = {
         "config_options": config_options,
         "stats": stats,
         "rank": rank,
         "nranks": nranks,
     }
+    optimized = optimize_with_stats(ir, config_options, stats)
     mapper: LowerIRTransformer = CachingVisitor(lower_ir_node, state=state)
-    return mapper(ir), mapper
+    lowered, partition_info = mapper(optimized)
+    return LoweringInfo(
+        optimized=optimized, lowered=lowered, partition_info=partition_info
+    ), mapper
 
 
 def lower_ir_graph(
@@ -95,7 +133,7 @@ def lower_ir_graph(
     *,
     rank: int = 0,
     nranks: int = 1,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:
+) -> LoweringInfo:
     """
     Rewrite an IR graph and extract partitioning information.
 
@@ -114,9 +152,7 @@ def lower_ir_graph(
 
     Returns
     -------
-    new_ir, partition_info
-        The rewritten graph and a mapping from unique nodes
-        in the new graph to associated partitioning information.
+    LoweringInfo
 
     Notes
     -----
@@ -137,7 +173,7 @@ def lower_ir_graph_with_node_map(
     *,
     rank: int = 0,
     nranks: int = 1,
-) -> tuple[IR, MutableMapping[IR, PartitionInfo], dict[str, list[str]]]:
+) -> tuple[LoweringInfo, dict[str, list[str]]]:
     """
     Lower an IR graph and return a mapping from physical to logical stable IDs.
 
@@ -160,10 +196,8 @@ def lower_ir_graph_with_node_map(
 
     Returns
     -------
-    new_ir
-        The rewritten IR graph.
-    partition_info
-        Mapping from unique nodes in the new graph to partitioning info.
+    LoweringInfo
+        Information about the lowered IR graph.
     node_map
         Mapping ``{physical_stable_id: [logical_stable_id, ...]}`` built
         from the internal :class:`CachingVisitor` cache. Nodes inserted
@@ -178,7 +212,7 @@ def lower_ir_graph_with_node_map(
         old_key = str(old_node.get_stable_id())
         node_map.setdefault(new_key, []).append(old_key)
 
-    return *result, node_map
+    return result, node_map
 
 
 def evaluate_streaming(
