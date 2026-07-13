@@ -2198,15 +2198,14 @@ aggregate_reader_metadata::select_columns(
             cuda::counting_iterator{static_cast<size_t>(1)},
             cuda::counting_iterator{per_file_metadata.size()},
             [&](auto const src_idx) {
-              // Ensure that each top level column exists in the destination schema
-              // tree. An out_of_range error is thrown otherwise.
+              // Ensure that each top level column exists in the destination schema tree.
               auto const dst_col_schema_idx =
                 schema_lookup.find_target_schema_child(root_idx, root_idx, col.name, src_idx);
               CUDF_EXPECTS(
                 dst_col_schema_idx != -1,
                 std::format("Encountered missing top-level column '{}' across Parquet sources",
                             col.name),
-                std::out_of_range);
+                std::invalid_argument);
               map_column(&col, top_level_col_schema_idx, dst_col_schema_idx, src_idx);
             });
         }

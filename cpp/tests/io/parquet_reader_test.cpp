@@ -5366,28 +5366,24 @@ TEST_F(ParquetReaderTest, ColumnSelectionWithMismatchedSchemas)
     auto const path1  = write_parquet_temp_file(
       cudf::table_view{{id1, price1}}, "IdAndPrice.parquet", {"id", "price"}, {1, 2});
 
-    // Selected column `price` is missing from the first source
+    // Selected column `price` is missing from either source
     {
-      auto const opts =
-        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
-          .allow_mismatched_pq_schemas(true)
-          .ignore_missing_columns(true)
-          .column_names({"id", "price"})
-          .build();
+      auto opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+                    .allow_mismatched_pq_schemas(true)
+                    .ignore_missing_columns(true)
+                    .column_names({"id", "price"})
+                    .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+
+      opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path1, path0}})
+               .allow_mismatched_pq_schemas(true)
+               .ignore_missing_columns(true)
+               .column_names({"id", "price"})
+               .build();
       EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
     }
-    // Selected column `price` is missing from the second source
-    {
-      auto const opts =
-        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path1, path0}})
-          .allow_mismatched_pq_schemas(true)
-          .ignore_missing_columns(true)
-          .column_names({"id", "price"})
-          .build();
-      EXPECT_THROW(cudf::io::read_parquet(opts), std::out_of_range);
-    }
 
-    // Filter-only column `price` is missing from first source
+    // Filter-only column `price` is missing from either source
     {
       // Filter: `price < 100.0`
       auto value  = cudf::numeric_scalar<double>(100.0);
@@ -5395,36 +5391,38 @@ TEST_F(ParquetReaderTest, ColumnSelectionWithMismatchedSchemas)
       auto col    = cudf::ast::column_name_reference("price");
       auto filter = cudf::ast::operation(cudf::ast::ast_operator::LESS, col, lit);
 
-      auto const opts =
-        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
-          .allow_mismatched_pq_schemas(true)
-          .ignore_missing_columns(true)
-          .column_names({"id"})
-          .filter(filter)
-          .build();
+      auto opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+                    .allow_mismatched_pq_schemas(true)
+                    .ignore_missing_columns(true)
+                    .column_names({"id"})
+                    .filter(filter)
+                    .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+
+      opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path1, path0}})
+               .allow_mismatched_pq_schemas(true)
+               .ignore_missing_columns(true)
+               .column_names({"id"})
+               .filter(filter)
+               .build();
       EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
     }
 
-    // Selected field ID 2 (`price`) is missing from first source
+    // Selected field ID 2 (`price`) is missing from either
     {
-      auto const opts =
-        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
-          .allow_mismatched_pq_schemas(true)
-          .ignore_missing_columns(true)
-          .column_field_ids({1, 2})
-          .build();
+      auto opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+                    .allow_mismatched_pq_schemas(true)
+                    .ignore_missing_columns(true)
+                    .column_field_ids({1, 2})
+                    .build();
       EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
-    }
 
-    // Selected field ID 2 (`price`) is missing from second source
-    {
-      auto const opts =
-        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path1, path0}})
-          .allow_mismatched_pq_schemas(true)
-          .ignore_missing_columns(true)
-          .column_field_ids({1, 2})
-          .build();
-      EXPECT_THROW(cudf::io::read_parquet(opts), std::out_of_range);
+      opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path1, path0}})
+               .allow_mismatched_pq_schemas(true)
+               .ignore_missing_columns(true)
+               .column_field_ids({1, 2})
+               .build();
+      EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
     }
   }
 
