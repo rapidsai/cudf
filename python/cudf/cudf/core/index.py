@@ -2806,31 +2806,38 @@ class RangeIndex(Index):
             self._validate_index_level(level)
         return self.copy()
 
-    @_performance_tracking
-    def __mul__(self, other):
-        # Multiplication by raw ints must return a RangeIndex to match pandas.
-        if (
-            isinstance(other, (np.ndarray, cupy.ndarray))
-            and other.ndim == 0
-            and other.dtype.kind in "iu"
-        ):
-            other = other.item()
-        if isinstance(other, (int, np.integer)):
-            return RangeIndex(
-                self.start * other,
-                self.stop * other,
-                self.step * other,
-                name=self.name,
-            )
-        return self._as_int_index().__mul__(other)
-
-    @_performance_tracking
-    def __rmul__(self, other):
-        # Multiplication is commutative.
-        return self.__mul__(other)
+    _UFUNC_DUNDER_OPS = {
+        "add": ("__add__", "__radd__"),
+        "subtract": ("__sub__", "__rsub__"),
+        "multiply": ("__mul__", "__rmul__"),
+        "floor_divide": ("__floordiv__", "__rfloordiv__"),
+    }
 
     @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # numpy operands enter through the ufunc protocol rather than the
+        # (reflected) dunder, e.g. ``np.int32(2) * RangeIndex``. Like pandas
+        # (``maybe_dispatch_ufunc_to_dunder_op``), route the shift/rescale
+        # ufuncs on a raw int through the regular binop path first so they
+        # preserve a range where possible.
+        if (
+            method == "__call__"
+            and not kwargs
+            and len(inputs) == 2
+            and (ops := self._UFUNC_DUNDER_OPS.get(ufunc.__name__)) is not None
+        ):
+            reflected = inputs[0] is not self
+            other = inputs[0] if reflected else inputs[1]
+            if (
+                isinstance(other, (int, np.integer))
+                # np.timedelta64 subclasses np.integer but is not a raw int
+                and not isinstance(other, np.timedelta64)
+            ) or (
+                isinstance(other, np.ndarray)
+                and other.ndim == 0
+                and other.dtype.kind in "iu"
+            ):
+                return self._binaryop(other, ops[reflected])
         return self._as_int_index().__array_ufunc__(
             ufunc, method, *inputs, **kwargs
         )
@@ -3075,40 +3082,58 @@ class RangeIndex(Index):
         ):
             other = other.item()
         if isinstance(other, (int, np.integer)) and not isinstance(
-            other, (bool, np.bool_)
+            # np.timedelta64 subclasses np.integer but is not a raw int
+            other,
+            np.timedelta64,
         ):
-            other = int(other)
+            # The shift/rescale ops accept bools as 0/1, like pandas (whose
+            # fastpath only checks that the op *result* is integral, which a
+            # bool operand satisfies); ``__floordiv__`` matches pandas'
+            # ``is_integer`` check in rejecting them.
+            is_bool = isinstance(other, (bool, np.bool_))
+            other_int = int(other)
             if op in {"__add__", "__radd__"}:
                 return RangeIndex(
-                    self.start + other,
-                    self.stop + other,
+                    self.start + other_int,
+                    self.stop + other_int,
                     self.step,
                     name=self.name,
                 )
             elif op == "__sub__":
                 return RangeIndex(
-                    self.start - other,
-                    self.stop - other,
+                    self.start - other_int,
+                    self.stop - other_int,
                     self.step,
                     name=self.name,
                 )
             elif op == "__rsub__":
                 return RangeIndex(
-                    other - self.start,
-                    other - self.stop,
+                    other_int - self.start,
+                    other_int - self.stop,
                     -self.step,
                     name=self.name,
                 )
-            elif op == "__floordiv__" and other != 0:
+            elif op in {"__mul__", "__rmul__"}:
+                if other_int != 0:
+                    return RangeIndex(
+                        self.start * other_int,
+                        self.stop * other_int,
+                        self.step * other_int,
+                        name=self.name,
+                    )
+                # Rescaling by 0 (or False) would collapse the step; match
+                # pandas by materializing to an int64 index of zeros.
+                other = other_int
+            elif op == "__floordiv__" and other_int != 0 and not is_bool:
                 if len(self) == 0 or (
-                    self.start % other == 0 and self.step % other == 0
+                    self.start % other_int == 0 and self.step % other_int == 0
                 ):
-                    start = self.start // other
-                    step = self.step // other
+                    start = self.start // other_int
+                    step = self.step // other_int
                     stop = start + len(self) * step
                     return RangeIndex(start, stop, step or 1, name=self.name)
                 elif len(self) == 1:
-                    start = self.start // other
+                    start = self.start // other_int
                     return RangeIndex(start, start + 1, 1, name=self.name)
         return self._as_int_index()._binaryop(other, op=op)
 
