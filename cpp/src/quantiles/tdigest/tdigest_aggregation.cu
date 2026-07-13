@@ -1056,13 +1056,13 @@ std::unique_ptr<column> compute_tdigests(int delta,
     cuda::std::execution::prop{cuda::get_stream_t{}, cuda::stream_ref{stream.value()}},
     cuda::std::execution::prop{cuda::mr::get_memory_resource_t{},
                                cudf::get_current_device_resource_ref()}};
-  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(keys,
-                                               cuda::make_discard_iterator(),
-                                               centroids_begin,
-                                               output,
-                                               cuda::make_discard_iterator(),
-                                               merge_centroids{},
-                                               num_values,
+  CUDF_CUDA_TRY(cub::DeviceReduce::ReduceByKey(keys,                           // keys in
+                                               cuda::make_discard_iterator(),  // unique keys out
+                                               centroids_begin,                // values in
+                                               output,                         // reduced values out
+                                               cuda::make_discard_iterator(),  // number of runs out
+                                               merge_centroids{},              // reduction op
+                                               num_values,                     // number of items
                                                env));
 
   // generate offsets column. if we are running in the simple case, cinfo.cluster_start will not
