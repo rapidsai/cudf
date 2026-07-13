@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -286,7 +286,8 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
 
   // in the trim pass, for anything with lists, we only need to fully process bounding pages (those
   // at the beginning or the end of the row bounds)
-  if (!is_base_pass && !is_bounds_page(s, min_row, num_rows, has_repetition)) {
+  if (!is_base_pass &&
+      !is_bounds_page(s->page, s->col.start_row, min_row, num_rows, has_repetition)) {
     int depth = 0;
     while (depth < s->page.num_output_nesting_levels) {
       auto const thread_depth = depth + t;
@@ -294,7 +295,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
         // if we are not a bounding page (as checked above) then we are either
         // returning all rows/values from this page, or 0 of them
         pp->nesting[thread_depth].batch_size =
-          (s->num_rows == 0 && !is_page_contained(s, min_row, num_rows))
+          (s->num_rows == 0 && !is_page_contained(s->page, s->col.start_row, min_row, num_rows))
             ? 0
             : pp->nesting[thread_depth].size;
       }

@@ -5,6 +5,7 @@
 
 #include "error.hpp"
 #include "io/comp/common.hpp"
+#include "page_decode.cuh"
 #include "reader_impl.hpp"
 #include "reader_impl_chunking_utils.cuh"
 #include "reader_impl_preprocess_utils.cuh"
@@ -375,30 +376,13 @@ struct compute_page_offset_count {
     // Fixed length byte array: Offsets are fixed, no need to preprocess
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
-    auto const page_start_row    = chunk.start_row + page.chunk_row;
-    auto const page_end_row      = page_start_row + page.num_rows;
-    auto const subpass_start_row = skip_rows;
-    auto const subpass_end_row   = subpass_start_row + num_rows;
+    auto const page_start_row = chunk.start_row + page.chunk_row;
+    auto const page_end_row   = page_start_row + page.num_rows;
 
-    bool const is_list_col  = chunk.max_level[level_type::REPETITION] > 0;
-    auto const process_page = [&] {
-      // A page has rows to read when its row range intersects the subpass (matches s->num_rows >
-      // 0).
-      bool const has_rows = (page.num_rows > 0) && (page_start_row < subpass_end_row) &&
-                            (page_end_row > subpass_start_row);
-      if (has_rows || !is_list_col) { return has_rows; }
-
-      // A single list row can span pages, so a list page can carry values (and offsets) with 0
-      // rows; such a trailing page's page_start_row is already incremented past its spanning last
-      // row, so match the decode path's inclusive bounds/contained tests to keep it.
-      bool const is_bounds_page =
-        (page_start_row <= subpass_start_row && page_end_row >= subpass_start_row) ||
-        (page_start_row <= subpass_end_row && page_end_row >= subpass_end_row);
-      bool const is_contained =
-        (page_start_row >= subpass_start_row && page_end_row <= subpass_end_row);
-      return is_bounds_page || is_contained;
-    }();
-    if (!process_page) { return 0; }
+    bool const is_list_col = chunk.max_level[level_type::REPETITION] > 0;
+    if (!page_has_rows_to_process(page, chunk.start_row, skip_rows, num_rows, is_list_col)) {
+      return 0;
+    }
 
     size_t page_num_values;
     if (is_list_col) {
@@ -409,7 +393,7 @@ struct compute_page_offset_count {
     } else {
       // For non-list columns, we don't know how many values we'll read, because we don't know
       // how many nulls we'll skip. So we have to read through the skipped rows on the page.
-      auto const read_end_row = min(page_end_row, subpass_end_row);
+      auto const read_end_row = min(page_end_row, skip_rows + num_rows);
       page_num_values         = read_end_row - page_start_row;
     }
 
