@@ -1101,7 +1101,7 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
 
 std::unique_ptr<cudf::column> create_ascii_string_column(data_profile const& profile,
                                                          cudf::size_type num_rows,
-                                                         unsigned seed = 1)
+                                                         unsigned seed)
 {
   auto engine = deterministic_engine(seed);
   return create_random_utf8_string_column<string_encoding::ASCII>(profile, engine, num_rows);
