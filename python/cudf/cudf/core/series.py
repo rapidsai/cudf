@@ -3312,14 +3312,40 @@ class Series(SingleColumnFrame, IndexedFrame):
         if bins is not None:
             res = self.groupby(series_bins, dropna=dropna).count(dropna=dropna)
             res = res[res.index.notna()]
+        elif not isinstance(self.dtype, CategoricalDtype):
+            # pandas returns the groups in order of first appearance and a
+            # sort by count keeps that order for equal counts
+            grouped = (
+                cudf.DataFrame._from_data(
+                    {
+                        "__value": self._column,
+                        "__pos": as_column(range(len(self))),
+                    }
+                )
+                .groupby("__value", dropna=dropna)
+                .agg({"__pos": ["count", "min"]})
+            )
+            grouped.columns = ["__count", "__first"]
+            if dropna:
+                grouped = grouped[grouped.index.notna()]
+            if sort:
+                grouped = grouped.sort_values(
+                    ["__count", "__first"], ascending=[ascending, True]
+                )
+            else:
+                grouped = grouped.sort_values("__first")
+            # the count column is built from a plain integer position
+            # column; produce counts of the same kind as the values
+            # (e.g. masked ``Int64`` for masked inputs) like pandas
+            res = grouped["__count"].astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
+            )
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
             if dropna:
                 res = res[res.index.notna()]
 
-            if isinstance(self.dtype, CategoricalDtype) and len(res) != len(
-                self.dtype.categories
-            ):
+            if len(res) != len(self.dtype.categories):
                 # For categorical dtypes: When there exists
                 # categories in dtypes and they are missing in the
                 # column, `value_counts` will have to return
@@ -3353,7 +3379,11 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         res.index.name = self.name
 
-        if sort:
+        if sort and (
+            bins is not None or isinstance(self.dtype, CategoricalDtype)
+        ):
+            # the non-categorical path is already sorted with a stable
+            # first-appearance tiebreak
             res = res.sort_values(ascending=ascending)
 
         if normalize:

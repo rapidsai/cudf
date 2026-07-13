@@ -91,7 +91,6 @@ struct [[nodiscard]] transform_args {
   std::string udf                                          = {};
   udf_source_type source_type                              = cudf::udf_source_type::CUDA;
   null_aware is_null_aware                                 = null_aware::NO;
-  fallible is_fallible                                     = fallible::NO;
   std::optional<void*> user_data                           = std::nullopt;
   std::vector<transform_input> inputs                      = {};
   std::vector<transform_output> outputs                    = {};
@@ -364,13 +363,6 @@ struct [[nodiscard]] node {
   [[nodiscard]] bool is_null_aware() const;
 
   /**
-   * @brief Returns `true` if this node can produce an error during execution.
-   * e.g. `ADD_OVERFLOW` operator can produce an error if the result of the addition overflows the
-   * range of the data type.
-   */
-  [[nodiscard]] bool is_fallible() const;
-
-  /**
    * @brief Returns `true` if this node always produces a valid output even if its inputs are
    * nullable, e.g., `IS_NULL` operator produces a valid boolean output regardless of the
    * nullability of its input.
@@ -447,7 +439,7 @@ struct [[nodiscard]] ast_converter {
 
   [[nodiscard]] std::unique_ptr<row_ir::node> add_ir_node(ast::jit::detail::operation const& expr);
 
-  [[nodiscard]] std::tuple<std::string, null_aware, fallible, output_nullability> generate_code(
+  [[nodiscard]] std::tuple<std::string, null_aware, output_nullability> generate_code(
     target target, ast::expression const& expr, std::string_view function_name);
 
   /**

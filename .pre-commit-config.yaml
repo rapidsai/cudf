@@ -220,7 +220,7 @@ repos:
         args: ["--fix"]
       - id: ruff-format
   - repo: https://github.com/rapidsai/pre-commit-hooks
-    rev: v1.5.1
+    rev: v1.6.0
     hooks:
       - id: verify-copyright
         name: verify-copyright-cudf
@@ -242,6 +242,7 @@ repos:
             recipe[.]yaml$|
             dependencies[.]yaml$|
             pytest[.]ini$|
+            ^[.]clang-format$|
             ^[.]pre-commit-config[.]yaml$|
             Makefile$
         # TODO: Remove FindCUDAToolkit once we require CMake 4.4

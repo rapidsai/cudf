@@ -39,10 +39,18 @@ using parquet::detail::PageNestingDecodeInfo;
 using text::byte_range_info;
 
 namespace {
-// Tests the passed in logical type for a FIXED_LENGTH_BYTE_ARRAY column to see if it should
-// be treated as a string. Currently the only logical type that has special handling is DECIMAL.
-// Other valid types in the future would be UUID (still treated as string) and FLOAT16 (which
-// for now would also be treated as a string).
+
+/**
+ * @brief Tests the logical type for a fixed length byte array column to see if it should be
+ * treated as a string.
+ *
+ * Currently the only logical type that has special handling is DECIMAL. Other valid types in the
+ * future would be UUID (still treated as string) and FLOAT16 (which for now would also be treated
+ * as a string).
+ *
+ * @param logical_type The logical type to test
+ * @return Boolean indicating if the logical type should be treated as a string
+ */
 [[maybe_unused]] inline bool is_treat_fixed_length_as_string(
   cuda::std::optional<LogicalType> const& logical_type)
 {
@@ -50,6 +58,12 @@ namespace {
   return logical_type->type != LogicalType::DECIMAL;
 }
 
+/**
+ * @brief Get the output types from the output buffer template
+ *
+ * @param output_buffer_template Output buffer template
+ * @return Output types
+ */
 [[nodiscard]] std::vector<cudf::data_type> get_output_types(
   std::span<inline_column_buffer const> output_buffer_template)
 {
@@ -62,6 +76,22 @@ namespace {
   return output_dtypes;
 }
 
+/**
+ * @brief Count the number of row groups in the input
+ *
+ * @param row_group_indices Row group indices
+ * @return Number of row groups
+ */
+[[nodiscard]] inline size_type count_row_groups(
+  std::span<std::vector<size_type> const> row_group_indices)
+{
+  return std::accumulate(
+    row_group_indices.begin(),
+    row_group_indices.end(),
+    size_type{0},
+    [](auto sum, auto const& rgs) { return sum + static_cast<size_type>(rgs.size()); });
+}
+
 }  // namespace
 
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(
@@ -69,9 +99,7 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   parquet_reader_options const& options)
 {
   _metadata = std::make_unique<aggregate_reader_metadata>(
-    footer_bytes,
-    options.is_enabled_use_arrow_schema(),
-    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+    footer_bytes, options.is_enabled_use_arrow_schema(), has_cols_from_mismatched_sources(options));
 
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
@@ -79,10 +107,10 @@ hybrid_scan_reader_impl::hybrid_scan_reader_impl(
 hybrid_scan_reader_impl::hybrid_scan_reader_impl(
   cudf::host_span<FileMetaData const> parquet_metadatas, parquet_reader_options const& options)
 {
-  _metadata = std::make_unique<aggregate_reader_metadata>(
-    parquet_metadatas,
-    options.is_enabled_use_arrow_schema(),
-    options.get_column_names().has_value() and options.is_enabled_allow_mismatched_pq_schemas());
+  _metadata =
+    std::make_unique<aggregate_reader_metadata>(parquet_metadatas,
+                                                options.is_enabled_use_arrow_schema(),
+                                                has_cols_from_mismatched_sources(options));
   _extended_metadata = static_cast<aggregate_reader_metadata*>(_metadata.get());
 }
 
@@ -105,15 +133,18 @@ void hybrid_scan_reader_impl::setup_page_indexes(
 void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode,
                                              parquet_reader_options const& options)
 {
+  // Initialize reader configuration.
+  initialize_reader_config(options);
+
+  // Build column selection options directly from the user options.
+  auto selection_options = make_column_selection_options(options);
+
   if (read_columns_mode == read_columns_mode::ALL_COLUMNS) {
     if (_is_all_columns_selected) { return; }
 
     // Select only columns required by the options and filter
     auto const select_column_names =
       get_column_projection(options, options.is_enabled_ignore_missing_columns());
-
-    // Initialize column selection related options
-    initialize_column_selection_options(options);
 
     // Select only columns required by the options and filter.
     // Using as is from:
@@ -125,39 +156,21 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
       _num_filter_only_columns = filter_only_columns_names->size();
     }
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _metadata->select_columns(select_column_names,
-                                filter_only_columns_names,
-                                options.is_enabled_use_pandas_metadata(),
-                                _strings_to_categorical,
-                                options.is_enabled_ignore_missing_columns(),
-                                _options.timestamp_type.id(),
-                                _options.decimal_width,
-                                _options.case_sensitive_names);
+      _metadata->select_columns(select_column_names, filter_only_columns_names, selection_options);
 
     _is_all_columns_selected     = true;
     _is_filter_columns_selected  = false;
     _is_payload_columns_selected = false;
   } else if (read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
     if (_is_filter_columns_selected) { return; }
-
     // Must not ignore missing filter columns
-    auto constexpr ignore_missing_columns = false;
-
-    // Initialize column selection related options
-    initialize_column_selection_options(options);
+    selection_options.ignore_missing_columns = false;
 
     _filter_columns_names = cudf::io::parquet::detail::get_column_names_in_expression(
       options.get_filter(), {}, options, _extended_metadata->get_schema_tree());
     // Select only filter columns using the base `select_columns` method
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _extended_metadata->select_columns(_filter_columns_names,
-                                         {},
-                                         _use_pandas_metadata,
-                                         _strings_to_categorical,
-                                         ignore_missing_columns,
-                                         _options.timestamp_type.id(),
-                                         _options.decimal_width,
-                                         _options.case_sensitive_names);
+      _extended_metadata->select_columns(_filter_columns_names, {}, selection_options);
 
     _is_filter_columns_selected  = true;
     _is_payload_columns_selected = false;
@@ -165,20 +178,11 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   } else {
     if (_is_payload_columns_selected) { return; }
 
-    // Initialize column selection related options
-    initialize_column_selection_options(options);
-
     auto select_column_names =
       get_column_projection(options, options.is_enabled_ignore_missing_columns());
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-      _extended_metadata->select_payload_columns(select_column_names,
-                                                 _filter_columns_names,
-                                                 _use_pandas_metadata,
-                                                 _strings_to_categorical,
-                                                 options.is_enabled_ignore_missing_columns(),
-                                                 _options.timestamp_type.id(),
-                                                 _options.decimal_width,
-                                                 _options.case_sensitive_names);
+      _extended_metadata->select_payload_columns(
+        select_column_names, _filter_columns_names, selection_options);
 
     _is_payload_columns_selected = true;
     _is_filter_columns_selected  = false;
@@ -511,6 +515,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_filter_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::FILTER_COLUMNS, row_mask);
   }
 
@@ -547,6 +553,8 @@ table_with_metadata hybrid_scan_reader_impl::materialize_payload_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::READ_ALL, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return read_chunk_internal(read_mode::READ_ALL, read_columns_mode::PAYLOAD_COLUMNS, row_mask);
   }
 
@@ -616,6 +624,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_filter_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return;
   }
 
@@ -674,6 +684,8 @@ void hybrid_scan_reader_impl::setup_chunking_for_payload_columns(
     auto const empty_row_groups =
       std::vector<std::vector<size_type>>(row_group_indices.size(), std::vector<size_type>{});
     prepare_data(read_mode::CHUNKED_READ, empty_row_groups, {}, {});
+    // Set correct number of input row groups to the output metadata
+    _file_itm_data.num_input_row_groups = count_row_groups(row_group_indices);
     return;
   }
 
@@ -871,8 +883,7 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _mr        = cudf::get_current_device_resource_ref();
 }
 
-void hybrid_scan_reader_impl::initialize_column_selection_options(
-  parquet_reader_options const& options)
+void hybrid_scan_reader_impl::initialize_reader_config(parquet_reader_options const& options)
 {
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -881,8 +892,6 @@ void hybrid_scan_reader_impl::initialize_column_selection_options(
   _options.decimal_width        = options.get_decimal_width();
   _options.use_jit_filter       = options.is_enabled_use_jit_filter();
   _options.case_sensitive_names = options.is_enabled_case_sensitive_names();
-
-  _use_pandas_metadata = options.is_enabled_use_pandas_metadata();
 }
 
 void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& options,
@@ -890,9 +899,6 @@ void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& o
                                                  rmm::cuda_stream_view stream,
                                                  rmm::device_async_resource_ref mr)
 {
-  // Initialize column selection related options
-  initialize_column_selection_options(options);
-
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
 
