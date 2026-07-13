@@ -2211,16 +2211,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::column_view* original_column = reinterpret_cast<cudf::column_view*>(base_column);
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
 
-    // If we have no columns to merge, drop the top-level null mask.
-    if (n_cudf_columns.size() == 0) {
-      // if the original column already has no null mask, we leave it unchanged.
-      // 0 signals to the caller that this was a no-op.
-      if (!original_column->nullable()) { return 0; }
-      // otherwise, return a bare copy.
-      auto copy = std::make_unique<cudf::column>(*original_column);
-      copy->set_null_mask({}, 0);
-      return release_as_jlong(copy);
-    }
+    // If we have no columns to merge, return the original column unchanged.
+    // 0 signals to the caller that this was a no-op.
+    if (n_cudf_columns.size() == 0) { return 0; }
 
     auto const op = static_cast<cudf::binary_operator>(bin_op);
     if (op != cudf::binary_operator::BITWISE_AND && op != cudf::binary_operator::BITWISE_OR) {

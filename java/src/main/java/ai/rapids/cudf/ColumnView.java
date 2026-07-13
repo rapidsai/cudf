@@ -891,8 +891,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * stay consistent with the parent. For LIST/STRING columns the resultant offsets are
    * sanitized to not contain any non-empty nulls.
    *
-   * If {@code columns} is empty, this column's null mask is dropped entirely (every row is
-   * treated as valid).
+   * If {@code columns} is empty, the column is returned unchanged (no-op).
    *
    * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
