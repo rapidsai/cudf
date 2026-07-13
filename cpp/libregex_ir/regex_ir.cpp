@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <fmt/format.h>
-#include <regex_ir.hpp>
+#include <format>
+#include <regex_ir_detail.hpp>
 
 #include <algorithm>
 #include <array>
@@ -27,7 +27,579 @@
 namespace regex_ir {
 namespace {
 
-#include "regex_unicode_data.inc"
+/*
+ * Derived from NVIDIA RAPIDS cuDF's Apache-2.0-licensed char_flags.h and the
+ * Unicode character database shipped with Python. The generated tables are
+ * embedded here so this implementation has no generated-file dependency.
+ */
+
+struct unicode_data_range {
+  std::uint32_t first;
+  std::uint32_t last;
+};
+
+inline constexpr unicode_data_range cudf_unicode_word_ranges[] = {
+  {0x000030U, 0x000039U},
+  {0x000041U, 0x00005aU},
+  {0x000061U, 0x00007aU},
+  {0x0000aaU, 0x0000aaU},
+  {0x0000b2U, 0x0000b3U},
+  {0x0000b5U, 0x0000b5U},
+  {0x0000b9U, 0x0000baU},
+  {0x0000bcU, 0x0000beU},
+  {0x0000c0U, 0x0000d6U},
+  {0x0000d8U, 0x0000f6U},
+  {0x0000f8U, 0x0002c1U},
+  {0x0002c6U, 0x0002d1U},
+  {0x0002e0U, 0x0002e4U},
+  {0x0002ecU, 0x0002ecU},
+  {0x0002eeU, 0x0002eeU},
+  {0x000370U, 0x000374U},
+  {0x000376U, 0x000377U},
+  {0x00037aU, 0x00037dU},
+  {0x00037fU, 0x00037fU},
+  {0x000386U, 0x000386U},
+  {0x000388U, 0x00038aU},
+  {0x00038cU, 0x00038cU},
+  {0x00038eU, 0x0003a1U},
+  {0x0003a3U, 0x0003f5U},
+  {0x0003f7U, 0x000481U},
+  {0x00048aU, 0x00052fU},
+  {0x000531U, 0x000556U},
+  {0x000559U, 0x000559U},
+  {0x000561U, 0x000587U},
+  {0x0005d0U, 0x0005eaU},
+  {0x0005f0U, 0x0005f2U},
+  {0x000620U, 0x00064aU},
+  {0x000660U, 0x000669U},
+  {0x00066eU, 0x00066fU},
+  {0x000671U, 0x0006d3U},
+  {0x0006d5U, 0x0006d5U},
+  {0x0006e5U, 0x0006e6U},
+  {0x0006eeU, 0x0006fcU},
+  {0x0006ffU, 0x0006ffU},
+  {0x000710U, 0x000710U},
+  {0x000712U, 0x00072fU},
+  {0x00074dU, 0x0007a5U},
+  {0x0007b1U, 0x0007b1U},
+  {0x0007c0U, 0x0007eaU},
+  {0x0007f4U, 0x0007f5U},
+  {0x0007faU, 0x0007faU},
+  {0x000800U, 0x000815U},
+  {0x00081aU, 0x00081aU},
+  {0x000824U, 0x000824U},
+  {0x000828U, 0x000828U},
+  {0x000840U, 0x000858U},
+  {0x0008a0U, 0x0008b4U},
+  {0x0008b6U, 0x0008bdU},
+  {0x000904U, 0x000939U},
+  {0x00093dU, 0x00093dU},
+  {0x000950U, 0x000950U},
+  {0x000958U, 0x000961U},
+  {0x000966U, 0x00096fU},
+  {0x000971U, 0x000980U},
+  {0x000985U, 0x00098cU},
+  {0x00098fU, 0x000990U},
+  {0x000993U, 0x0009a8U},
+  {0x0009aaU, 0x0009b0U},
+  {0x0009b2U, 0x0009b2U},
+  {0x0009b6U, 0x0009b9U},
+  {0x0009bdU, 0x0009bdU},
+  {0x0009ceU, 0x0009ceU},
+  {0x0009dcU, 0x0009ddU},
+  {0x0009dfU, 0x0009e1U},
+  {0x0009e6U, 0x0009f1U},
+  {0x0009f4U, 0x0009f9U},
+  {0x000a05U, 0x000a0aU},
+  {0x000a0fU, 0x000a10U},
+  {0x000a13U, 0x000a28U},
+  {0x000a2aU, 0x000a30U},
+  {0x000a32U, 0x000a33U},
+  {0x000a35U, 0x000a36U},
+  {0x000a38U, 0x000a39U},
+  {0x000a59U, 0x000a5cU},
+  {0x000a5eU, 0x000a5eU},
+  {0x000a66U, 0x000a6fU},
+  {0x000a72U, 0x000a74U},
+  {0x000a85U, 0x000a8dU},
+  {0x000a8fU, 0x000a91U},
+  {0x000a93U, 0x000aa8U},
+  {0x000aaaU, 0x000ab0U},
+  {0x000ab2U, 0x000ab3U},
+  {0x000ab5U, 0x000ab9U},
+  {0x000abdU, 0x000abdU},
+  {0x000ad0U, 0x000ad0U},
+  {0x000ae0U, 0x000ae1U},
+  {0x000ae6U, 0x000aefU},
+  {0x000af9U, 0x000af9U},
+  {0x000b05U, 0x000b0cU},
+  {0x000b0fU, 0x000b10U},
+  {0x000b13U, 0x000b28U},
+  {0x000b2aU, 0x000b30U},
+  {0x000b32U, 0x000b33U},
+  {0x000b35U, 0x000b39U},
+  {0x000b3dU, 0x000b3dU},
+  {0x000b5cU, 0x000b5dU},
+  {0x000b5fU, 0x000b61U},
+  {0x000b66U, 0x000b6fU},
+  {0x000b71U, 0x000b77U},
+  {0x000b83U, 0x000b83U},
+  {0x000b85U, 0x000b8aU},
+  {0x000b8eU, 0x000b90U},
+  {0x000b92U, 0x000b95U},
+  {0x000b99U, 0x000b9aU},
+  {0x000b9cU, 0x000b9cU},
+  {0x000b9eU, 0x000b9fU},
+  {0x000ba3U, 0x000ba4U},
+  {0x000ba8U, 0x000baaU},
+  {0x000baeU, 0x000bb9U},
+  {0x000bd0U, 0x000bd0U},
+  {0x000be6U, 0x000bf2U},
+  {0x000c05U, 0x000c0cU},
+  {0x000c0eU, 0x000c10U},
+  {0x000c12U, 0x000c28U},
+  {0x000c2aU, 0x000c39U},
+  {0x000c3dU, 0x000c3dU},
+  {0x000c58U, 0x000c5aU},
+  {0x000c60U, 0x000c61U},
+  {0x000c66U, 0x000c6fU},
+  {0x000c78U, 0x000c7eU},
+  {0x000c80U, 0x000c80U},
+  {0x000c85U, 0x000c8cU},
+  {0x000c8eU, 0x000c90U},
+  {0x000c92U, 0x000ca8U},
+  {0x000caaU, 0x000cb3U},
+  {0x000cb5U, 0x000cb9U},
+  {0x000cbdU, 0x000cbdU},
+  {0x000cdeU, 0x000cdeU},
+  {0x000ce0U, 0x000ce1U},
+  {0x000ce6U, 0x000cefU},
+  {0x000cf1U, 0x000cf2U},
+  {0x000d05U, 0x000d0cU},
+  {0x000d0eU, 0x000d10U},
+  {0x000d12U, 0x000d3aU},
+  {0x000d3dU, 0x000d3dU},
+  {0x000d4eU, 0x000d4eU},
+  {0x000d54U, 0x000d56U},
+  {0x000d58U, 0x000d61U},
+  {0x000d66U, 0x000d78U},
+  {0x000d7aU, 0x000d7fU},
+  {0x000d85U, 0x000d96U},
+  {0x000d9aU, 0x000db1U},
+  {0x000db3U, 0x000dbbU},
+  {0x000dbdU, 0x000dbdU},
+  {0x000dc0U, 0x000dc6U},
+  {0x000de6U, 0x000defU},
+  {0x000e01U, 0x000e30U},
+  {0x000e32U, 0x000e33U},
+  {0x000e40U, 0x000e46U},
+  {0x000e50U, 0x000e59U},
+  {0x000e81U, 0x000e82U},
+  {0x000e84U, 0x000e84U},
+  {0x000e87U, 0x000e88U},
+  {0x000e8aU, 0x000e8aU},
+  {0x000e8dU, 0x000e8dU},
+  {0x000e94U, 0x000e97U},
+  {0x000e99U, 0x000e9fU},
+  {0x000ea1U, 0x000ea3U},
+  {0x000ea5U, 0x000ea5U},
+  {0x000ea7U, 0x000ea7U},
+  {0x000eaaU, 0x000eabU},
+  {0x000eadU, 0x000eb0U},
+  {0x000eb2U, 0x000eb3U},
+  {0x000ebdU, 0x000ebdU},
+  {0x000ec0U, 0x000ec4U},
+  {0x000ec6U, 0x000ec6U},
+  {0x000ed0U, 0x000ed9U},
+  {0x000edcU, 0x000edfU},
+  {0x000f00U, 0x000f00U},
+  {0x000f20U, 0x000f33U},
+  {0x000f40U, 0x000f47U},
+  {0x000f49U, 0x000f6cU},
+  {0x000f88U, 0x000f8cU},
+  {0x001000U, 0x00102aU},
+  {0x00103fU, 0x001049U},
+  {0x001050U, 0x001055U},
+  {0x00105aU, 0x00105dU},
+  {0x001061U, 0x001061U},
+  {0x001065U, 0x001066U},
+  {0x00106eU, 0x001070U},
+  {0x001075U, 0x001081U},
+  {0x00108eU, 0x00108eU},
+  {0x001090U, 0x001099U},
+  {0x0010a0U, 0x0010c5U},
+  {0x0010c7U, 0x0010c7U},
+  {0x0010cdU, 0x0010cdU},
+  {0x0010d0U, 0x0010faU},
+  {0x0010fcU, 0x001248U},
+  {0x00124aU, 0x00124dU},
+  {0x001250U, 0x001256U},
+  {0x001258U, 0x001258U},
+  {0x00125aU, 0x00125dU},
+  {0x001260U, 0x001288U},
+  {0x00128aU, 0x00128dU},
+  {0x001290U, 0x0012b0U},
+  {0x0012b2U, 0x0012b5U},
+  {0x0012b8U, 0x0012beU},
+  {0x0012c0U, 0x0012c0U},
+  {0x0012c2U, 0x0012c5U},
+  {0x0012c8U, 0x0012d6U},
+  {0x0012d8U, 0x001310U},
+  {0x001312U, 0x001315U},
+  {0x001318U, 0x00135aU},
+  {0x001369U, 0x00137cU},
+  {0x001380U, 0x00138fU},
+  {0x0013a0U, 0x0013f5U},
+  {0x0013f8U, 0x0013fdU},
+  {0x001401U, 0x00166cU},
+  {0x00166fU, 0x00167fU},
+  {0x001681U, 0x00169aU},
+  {0x0016a0U, 0x0016eaU},
+  {0x0016eeU, 0x0016f8U},
+  {0x001700U, 0x00170cU},
+  {0x00170eU, 0x001711U},
+  {0x001720U, 0x001731U},
+  {0x001740U, 0x001751U},
+  {0x001760U, 0x00176cU},
+  {0x00176eU, 0x001770U},
+  {0x001780U, 0x0017b3U},
+  {0x0017d7U, 0x0017d7U},
+  {0x0017dcU, 0x0017dcU},
+  {0x0017e0U, 0x0017e9U},
+  {0x0017f0U, 0x0017f9U},
+  {0x001810U, 0x001819U},
+  {0x001820U, 0x001877U},
+  {0x001880U, 0x001884U},
+  {0x001887U, 0x0018a8U},
+  {0x0018aaU, 0x0018aaU},
+  {0x0018b0U, 0x0018f5U},
+  {0x001900U, 0x00191eU},
+  {0x001946U, 0x00196dU},
+  {0x001970U, 0x001974U},
+  {0x001980U, 0x0019abU},
+  {0x0019b0U, 0x0019c9U},
+  {0x0019d0U, 0x0019daU},
+  {0x001a00U, 0x001a16U},
+  {0x001a20U, 0x001a54U},
+  {0x001a80U, 0x001a89U},
+  {0x001a90U, 0x001a99U},
+  {0x001aa7U, 0x001aa7U},
+  {0x001b05U, 0x001b33U},
+  {0x001b45U, 0x001b4bU},
+  {0x001b50U, 0x001b59U},
+  {0x001b83U, 0x001ba0U},
+  {0x001baeU, 0x001be5U},
+  {0x001c00U, 0x001c23U},
+  {0x001c40U, 0x001c49U},
+  {0x001c4dU, 0x001c7dU},
+  {0x001c80U, 0x001c88U},
+  {0x001c90U, 0x001cbaU},
+  {0x001cbdU, 0x001cbfU},
+  {0x001ce9U, 0x001cecU},
+  {0x001ceeU, 0x001cf1U},
+  {0x001cf5U, 0x001cf6U},
+  {0x001d00U, 0x001dbfU},
+  {0x001e00U, 0x001f15U},
+  {0x001f18U, 0x001f1dU},
+  {0x001f20U, 0x001f45U},
+  {0x001f48U, 0x001f4dU},
+  {0x001f50U, 0x001f57U},
+  {0x001f59U, 0x001f59U},
+  {0x001f5bU, 0x001f5bU},
+  {0x001f5dU, 0x001f5dU},
+  {0x001f5fU, 0x001f7dU},
+  {0x001f80U, 0x001fb4U},
+  {0x001fb6U, 0x001fbcU},
+  {0x001fbeU, 0x001fbeU},
+  {0x001fc2U, 0x001fc4U},
+  {0x001fc6U, 0x001fccU},
+  {0x001fd0U, 0x001fd3U},
+  {0x001fd6U, 0x001fdbU},
+  {0x001fe0U, 0x001fecU},
+  {0x001ff2U, 0x001ff4U},
+  {0x001ff6U, 0x001ffcU},
+  {0x002070U, 0x002071U},
+  {0x002074U, 0x002079U},
+  {0x00207fU, 0x002089U},
+  {0x002090U, 0x00209cU},
+  {0x002102U, 0x002102U},
+  {0x002107U, 0x002107U},
+  {0x00210aU, 0x002113U},
+  {0x002115U, 0x002115U},
+  {0x002119U, 0x00211dU},
+  {0x002124U, 0x002124U},
+  {0x002126U, 0x002126U},
+  {0x002128U, 0x002128U},
+  {0x00212aU, 0x00212dU},
+  {0x00212fU, 0x002139U},
+  {0x00213cU, 0x00213fU},
+  {0x002145U, 0x002149U},
+  {0x00214eU, 0x00214eU},
+  {0x002150U, 0x002189U},
+  {0x002460U, 0x00249bU},
+  {0x0024eaU, 0x0024ffU},
+  {0x002776U, 0x002793U},
+  {0x002c00U, 0x002c2eU},
+  {0x002c30U, 0x002c5eU},
+  {0x002c60U, 0x002ce4U},
+  {0x002cebU, 0x002ceeU},
+  {0x002cf2U, 0x002cf3U},
+  {0x002cfdU, 0x002cfdU},
+  {0x002d00U, 0x002d25U},
+  {0x002d27U, 0x002d27U},
+  {0x002d2dU, 0x002d2dU},
+  {0x002d30U, 0x002d67U},
+  {0x002d6fU, 0x002d6fU},
+  {0x002d80U, 0x002d96U},
+  {0x002da0U, 0x002da6U},
+  {0x002da8U, 0x002daeU},
+  {0x002db0U, 0x002db6U},
+  {0x002db8U, 0x002dbeU},
+  {0x002dc0U, 0x002dc6U},
+  {0x002dc8U, 0x002dceU},
+  {0x002dd0U, 0x002dd6U},
+  {0x002dd8U, 0x002ddeU},
+  {0x002e2fU, 0x002e2fU},
+  {0x003005U, 0x003007U},
+  {0x003021U, 0x003029U},
+  {0x003031U, 0x003035U},
+  {0x003038U, 0x00303cU},
+  {0x003041U, 0x003096U},
+  {0x00309dU, 0x00309fU},
+  {0x0030a1U, 0x0030faU},
+  {0x0030fcU, 0x0030ffU},
+  {0x003105U, 0x00312dU},
+  {0x003131U, 0x00318eU},
+  {0x003192U, 0x003195U},
+  {0x0031a0U, 0x0031baU},
+  {0x0031f0U, 0x0031ffU},
+  {0x003220U, 0x003229U},
+  {0x003248U, 0x00324fU},
+  {0x003251U, 0x00325fU},
+  {0x003280U, 0x003289U},
+  {0x0032b1U, 0x0032bfU},
+  {0x003400U, 0x004db5U},
+  {0x004e00U, 0x009fd5U},
+  {0x00a000U, 0x00a48cU},
+  {0x00a4d0U, 0x00a4fdU},
+  {0x00a500U, 0x00a60cU},
+  {0x00a610U, 0x00a62bU},
+  {0x00a640U, 0x00a66eU},
+  {0x00a67fU, 0x00a69dU},
+  {0x00a6a0U, 0x00a6efU},
+  {0x00a717U, 0x00a71fU},
+  {0x00a722U, 0x00a788U},
+  {0x00a78bU, 0x00a7aeU},
+  {0x00a7b0U, 0x00a7bfU},
+  {0x00a7c2U, 0x00a7c6U},
+  {0x00a7f7U, 0x00a801U},
+  {0x00a803U, 0x00a805U},
+  {0x00a807U, 0x00a80aU},
+  {0x00a80cU, 0x00a822U},
+  {0x00a830U, 0x00a835U},
+  {0x00a840U, 0x00a873U},
+  {0x00a882U, 0x00a8b3U},
+  {0x00a8d0U, 0x00a8d9U},
+  {0x00a8f2U, 0x00a8f7U},
+  {0x00a8fbU, 0x00a8fbU},
+  {0x00a8fdU, 0x00a8fdU},
+  {0x00a900U, 0x00a925U},
+  {0x00a930U, 0x00a946U},
+  {0x00a960U, 0x00a97cU},
+  {0x00a984U, 0x00a9b2U},
+  {0x00a9cfU, 0x00a9d9U},
+  {0x00a9e0U, 0x00a9e4U},
+  {0x00a9e6U, 0x00a9feU},
+  {0x00aa00U, 0x00aa28U},
+  {0x00aa40U, 0x00aa42U},
+  {0x00aa44U, 0x00aa4bU},
+  {0x00aa50U, 0x00aa59U},
+  {0x00aa60U, 0x00aa76U},
+  {0x00aa7aU, 0x00aa7aU},
+  {0x00aa7eU, 0x00aaafU},
+  {0x00aab1U, 0x00aab1U},
+  {0x00aab5U, 0x00aab6U},
+  {0x00aab9U, 0x00aabdU},
+  {0x00aac0U, 0x00aac0U},
+  {0x00aac2U, 0x00aac2U},
+  {0x00aadbU, 0x00aaddU},
+  {0x00aae0U, 0x00aaeaU},
+  {0x00aaf2U, 0x00aaf4U},
+  {0x00ab01U, 0x00ab06U},
+  {0x00ab09U, 0x00ab0eU},
+  {0x00ab11U, 0x00ab16U},
+  {0x00ab20U, 0x00ab26U},
+  {0x00ab28U, 0x00ab2eU},
+  {0x00ab30U, 0x00ab5aU},
+  {0x00ab5cU, 0x00ab65U},
+  {0x00ab70U, 0x00abe2U},
+  {0x00abf0U, 0x00abf9U},
+  {0x00ac00U, 0x00d7a3U},
+  {0x00d7b0U, 0x00d7c6U},
+  {0x00d7cbU, 0x00d7fbU},
+  {0x00f900U, 0x00fa6dU},
+  {0x00fa70U, 0x00fad9U},
+  {0x00fb00U, 0x00fb06U},
+  {0x00fb09U, 0x00fb0dU},
+  {0x00fb13U, 0x00fb17U},
+  {0x00fb1dU, 0x00fb1dU},
+  {0x00fb1fU, 0x00fb28U},
+  {0x00fb2aU, 0x00fb36U},
+  {0x00fb38U, 0x00fb3cU},
+  {0x00fb3eU, 0x00fb3eU},
+  {0x00fb40U, 0x00fb41U},
+  {0x00fb43U, 0x00fb44U},
+  {0x00fb46U, 0x00fbb1U},
+  {0x00fbd3U, 0x00fd3dU},
+  {0x00fd50U, 0x00fd8fU},
+  {0x00fd92U, 0x00fdc7U},
+  {0x00fdf0U, 0x00fdfbU},
+  {0x00fe70U, 0x00fe74U},
+  {0x00fe76U, 0x00fefcU},
+  {0x00ff10U, 0x00ff19U},
+  {0x00ff21U, 0x00ff3aU},
+  {0x00ff41U, 0x00ff5aU},
+  {0x00ff66U, 0x00ffbeU},
+  {0x00ffc2U, 0x00ffc7U},
+  {0x00ffcaU, 0x00ffcfU},
+  {0x00ffd2U, 0x00ffd7U},
+  {0x00ffdaU, 0x00ffdcU},
+};
+
+inline constexpr unicode_data_range cudf_unicode_digit_ranges[] = {
+  {0x000030U, 0x000039U},
+  {0x0000b2U, 0x0000b3U},
+  {0x0000b9U, 0x0000b9U},
+  {0x000660U, 0x000669U},
+  {0x0006f0U, 0x0006f9U},
+  {0x0007c0U, 0x0007c9U},
+  {0x000966U, 0x00096fU},
+  {0x0009e6U, 0x0009efU},
+  {0x000a66U, 0x000a6fU},
+  {0x000ae6U, 0x000aefU},
+  {0x000b66U, 0x000b6fU},
+  {0x000be6U, 0x000befU},
+  {0x000c66U, 0x000c6fU},
+  {0x000ce6U, 0x000cefU},
+  {0x000d66U, 0x000d6fU},
+  {0x000de6U, 0x000defU},
+  {0x000e50U, 0x000e59U},
+  {0x000ed0U, 0x000ed9U},
+  {0x000f20U, 0x000f29U},
+  {0x001040U, 0x001049U},
+  {0x001090U, 0x001099U},
+  {0x001369U, 0x001371U},
+  {0x0017e0U, 0x0017e9U},
+  {0x001810U, 0x001819U},
+  {0x001946U, 0x00194fU},
+  {0x0019d0U, 0x0019daU},
+  {0x001a80U, 0x001a89U},
+  {0x001a90U, 0x001a99U},
+  {0x001b50U, 0x001b59U},
+  {0x001bb0U, 0x001bb9U},
+  {0x001c40U, 0x001c49U},
+  {0x001c50U, 0x001c59U},
+  {0x002070U, 0x002070U},
+  {0x002074U, 0x002079U},
+  {0x002080U, 0x002089U},
+  {0x002460U, 0x002468U},
+  {0x002474U, 0x00247cU},
+  {0x002488U, 0x002490U},
+  {0x0024eaU, 0x0024eaU},
+  {0x0024f5U, 0x0024fdU},
+  {0x0024ffU, 0x0024ffU},
+  {0x002776U, 0x00277eU},
+  {0x002780U, 0x002788U},
+  {0x00278aU, 0x002792U},
+  {0x00a620U, 0x00a629U},
+  {0x00a8d0U, 0x00a8d9U},
+  {0x00a900U, 0x00a909U},
+  {0x00a9d0U, 0x00a9d9U},
+  {0x00a9f0U, 0x00a9f9U},
+  {0x00aa50U, 0x00aa59U},
+  {0x00abf0U, 0x00abf9U},
+  {0x00ff10U, 0x00ff19U},
+};
+
+inline constexpr unicode_data_range cudf_unicode_space_ranges[] = {
+  {0x000009U, 0x00000dU},
+  {0x00001cU, 0x000020U},
+  {0x000085U, 0x000085U},
+  {0x0000a0U, 0x0000a0U},
+  {0x001680U, 0x001680U},
+  {0x002000U, 0x00200aU},
+  {0x002028U, 0x002029U},
+  {0x00202fU, 0x00202fU},
+  {0x00205fU, 0x00205fU},
+  {0x003000U, 0x003000U},
+};
+
+inline constexpr unicode_data_range unicode_math_symbol_ranges[] = {
+  {0x00002bU, 0x00002bU},
+  {0x00003cU, 0x00003eU},
+  {0x00007cU, 0x00007cU},
+  {0x00007eU, 0x00007eU},
+  {0x0000acU, 0x0000acU},
+  {0x0000b1U, 0x0000b1U},
+  {0x0000d7U, 0x0000d7U},
+  {0x0000f7U, 0x0000f7U},
+  {0x0003f6U, 0x0003f6U},
+  {0x000606U, 0x000608U},
+  {0x002044U, 0x002044U},
+  {0x002052U, 0x002052U},
+  {0x00207aU, 0x00207cU},
+  {0x00208aU, 0x00208cU},
+  {0x002118U, 0x002118U},
+  {0x002140U, 0x002144U},
+  {0x00214bU, 0x00214bU},
+  {0x002190U, 0x002194U},
+  {0x00219aU, 0x00219bU},
+  {0x0021a0U, 0x0021a0U},
+  {0x0021a3U, 0x0021a3U},
+  {0x0021a6U, 0x0021a6U},
+  {0x0021aeU, 0x0021aeU},
+  {0x0021ceU, 0x0021cfU},
+  {0x0021d2U, 0x0021d2U},
+  {0x0021d4U, 0x0021d4U},
+  {0x0021f4U, 0x0022ffU},
+  {0x002320U, 0x002321U},
+  {0x00237cU, 0x00237cU},
+  {0x00239bU, 0x0023b3U},
+  {0x0023dcU, 0x0023e1U},
+  {0x0025b7U, 0x0025b7U},
+  {0x0025c1U, 0x0025c1U},
+  {0x0025f8U, 0x0025ffU},
+  {0x00266fU, 0x00266fU},
+  {0x0027c0U, 0x0027c4U},
+  {0x0027c7U, 0x0027e5U},
+  {0x0027f0U, 0x0027ffU},
+  {0x002900U, 0x002982U},
+  {0x002999U, 0x0029d7U},
+  {0x0029dcU, 0x0029fbU},
+  {0x0029feU, 0x002affU},
+  {0x002b30U, 0x002b44U},
+  {0x002b47U, 0x002b4cU},
+  {0x00fb29U, 0x00fb29U},
+  {0x00fe62U, 0x00fe62U},
+  {0x00fe64U, 0x00fe66U},
+  {0x00ff0bU, 0x00ff0bU},
+  {0x00ff1cU, 0x00ff1eU},
+  {0x00ff5cU, 0x00ff5cU},
+  {0x00ff5eU, 0x00ff5eU},
+  {0x00ffe2U, 0x00ffe2U},
+  {0x00ffe9U, 0x00ffecU},
+  {0x01d6c1U, 0x01d6c1U},
+  {0x01d6dbU, 0x01d6dbU},
+  {0x01d6fbU, 0x01d6fbU},
+  {0x01d715U, 0x01d715U},
+  {0x01d735U, 0x01d735U},
+  {0x01d74fU, 0x01d74fU},
+  {0x01d76fU, 0x01d76fU},
+  {0x01d789U, 0x01d789U},
+  {0x01d7a9U, 0x01d7a9U},
+  {0x01d7c3U, 0x01d7c3U},
+  {0x01eef0U, 0x01eef1U},
+};
 
 struct parse_failure : std::exception {};
 
@@ -950,31 +1522,6 @@ class thompson_builder {
   std::size_t transition_count_ = 0;
 };
 
-char const* state_name(automata_state_kind kind)
-{
-  switch (kind) {
-    case automata_state_kind::JUMP: return "jump";
-    case automata_state_kind::BRANCH: return "branch";
-    case automata_state_kind::CONSUME: return "consume";
-    case automata_state_kind::ASSERTION: return "assertion";
-    case automata_state_kind::CAPTURE: return "capture";
-    case automata_state_kind::ACCEPT: return "accept";
-  }
-  return "unknown";
-}
-
-char const* assertion_name(assertion_kind kind)
-{
-  switch (kind) {
-    case assertion_kind::BEGIN_INPUT: return "begin_input";
-    case assertion_kind::END_INPUT: return "end_input";
-    case assertion_kind::WORD_BOUNDARY: return "word_boundary";
-    case assertion_kind::NOT_WORD_BOUNDARY: return "not_word_boundary";
-    case assertion_kind::BEGIN_LINE: return "begin_line";
-    case assertion_kind::END_LINE: return "end_line";
-  }
-  return "unknown";
-}
 
 }  // namespace
 
@@ -1048,42 +1595,6 @@ std::vector<diagnostic> verify(automata_ir const& ir)
   return result;
 }
 
-std::string to_string(automata_ir const& ir)
-{
-  auto result = fmt::format("automata pattern={:?} entry={} accept={} captures={}\n",
-                            ir.pattern,
-                            ir.entry,
-                            ir.accept,
-                            ir.capture_count);
-
-  for (auto& state : ir.states) {
-    fmt::format_to(std::back_inserter(result), "%{} {}", state.id, state_name(state.kind));
-    if (state.kind == automata_state_kind::CONSUME) {
-      if (state.predicate.is_singleton()) {
-        fmt::format_to(std::back_inserter(result),
-                       " U+{:X}",
-                       static_cast<std::uint32_t>(state.predicate.singleton()));
-      } else {
-        fmt::format_to(std::back_inserter(result), " ranges={}", state.predicate.ranges.size());
-        if (state.predicate.negated) result += " negated";
-      }
-    } else if (state.kind == automata_state_kind::CAPTURE) {
-      fmt::format_to(std::back_inserter(result),
-                     " {}[{}]",
-                     state.capture == capture_action::BEGIN ? "begin" : "end",
-                     state.capture_index);
-    } else if (state.kind == automata_state_kind::ASSERTION) {
-      fmt::format_to(std::back_inserter(result), " {}", assertion_name(state.assertion));
-    }
-
-    for (auto edge : state.edges) {
-      fmt::format_to(std::back_inserter(result), " -> %{}(p{})", edge.target, edge.priority);
-    }
-    result += '\n';
-  }
-
-  return result;
-}
 
 automata_result compile_automata(std::string_view pattern, compile_options const& options)
 {
@@ -1112,394 +1623,6 @@ automata_result compile_automata(std::string_view pattern, compile_options const
 }
 
 }  // namespace regex_ir
-
-/*
- * test-only CPU interpreter for Regex IR Instruction IR.
- * SPDX-License-Identifier: Apache-2.0
- */
-
-namespace regex_ir::testing {
-namespace {
-
-struct decoded {
-  char32_t value     = U'\0';
-  std::size_t length = 0;
-};
-
-std::optional<decoded> decode(std::string_view input, std::size_t position, character_mode mode)
-{
-  if (position >= input.size()) return std::nullopt;
-  auto first = static_cast<unsigned char>(input[position]);
-  if (mode == character_mode::BYTES || first < 0x80U) return decoded{first, 1};
-
-  std::size_t count = first < 0xE0U ? 2 : (first < 0xF0U ? 3 : 4);
-  if (first < 0xC2U || first > 0xF4U || position + count > input.size()) {
-    return decoded{first, 1};
-  }
-  char32_t value = first & (count == 2 ? 0x1FU : (count == 3 ? 0x0FU : 0x07U));
-  for (std::size_t index = 1; index < count; ++index) {
-    auto next = static_cast<unsigned char>(input[position + index]);
-    if ((next & 0xC0U) != 0x80U) return decoded{first, 1};
-    value = static_cast<char32_t>((value << 6U) | (next & 0x3FU));
-  }
-  if ((count == 3 && value < 0x800U) || (count == 4 && value < 0x10000U) || value > 0x10FFFFU ||
-      (value >= 0xD800U && value <= 0xDFFFU)) {
-    return decoded{first, 1};
-  }
-  return decoded{value, count};
-}
-
-std::size_t advance(std::string_view input,
-                    std::size_t position,
-                    std::uint32_t count,
-                    character_mode mode)
-{
-  for (std::uint32_t index = 0; index < count && position < input.size(); ++index) {
-    position += decode(input, position, mode)->length;
-  }
-  return position;
-}
-
-bool can_peek_count(std::string_view input,
-                    std::size_t position,
-                    std::uint32_t count,
-                    character_mode mode)
-{
-  for (std::uint32_t index = 0; index < count; ++index) {
-    auto current = decode(input, position, mode);
-    if (!current) return false;
-    position += current->length;
-  }
-  return true;
-}
-
-bool is_word(char32_t value, compile_options const& options)
-{
-  if (value == U'_') return true;
-  if (options.ascii_classes || options.characters == character_mode::BYTES) {
-    return (value >= U'a' && value <= U'z') || (value >= U'A' && value <= U'Z') ||
-           (value >= U'0' && value <= U'9');
-  }
-  return std::any_of(std::begin(cudf_unicode_word_ranges),
-                     std::end(cudf_unicode_word_ranges),
-                     [value](unicode_data_range range) {
-                       auto codepoint = static_cast<std::uint32_t>(value);
-                       return codepoint >= range.first && codepoint <= range.last;
-                     });
-}
-
-bool is_newline(char32_t value, compile_options const& options)
-{
-  if (!options.extended_newline) return value == U'\n';
-  return value == U'\n' || value == U'\r' || value == static_cast<char32_t>(0x85) ||
-         value == static_cast<char32_t>(0x2028) || value == static_cast<char32_t>(0x2029);
-}
-
-bool assertion_matches(assertion_kind kind,
-                       std::string_view input,
-                       std::size_t position,
-                       compile_options const& options)
-{
-  auto current            = decode(input, position, options.characters);
-  char32_t previous_value = U'\0';
-  bool previous_word{};
-  if (position > 0) {
-    std::size_t previous = position - 1;
-    while (previous > 0 && (static_cast<unsigned char>(input[previous]) & 0xC0U) == 0x80U) {
-      --previous;
-    }
-    auto value     = decode(input, previous, options.characters);
-    previous_value = value ? value->value : U'\0';
-    previous_word  = value && is_word(value->value, options);
-  }
-  auto current_value   = current ? current->value : U'\0';
-  bool current_newline = current && is_newline(current_value, options);
-  bool current_word    = current && is_word(current_value, options);
-
-  switch (kind) {
-    case assertion_kind::BEGIN_INPUT: return position == 0;
-    case assertion_kind::END_INPUT: return position == input.size();
-    case assertion_kind::WORD_BOUNDARY: return previous_word != current_word;
-    case assertion_kind::NOT_WORD_BOUNDARY: return previous_word == current_word;
-    case assertion_kind::BEGIN_LINE:
-      return position == 0 ||
-             (options.multiline && is_newline(previous_value, options) &&
-              !(options.extended_newline && previous_value == U'\r' && current_value == U'\n'));
-    case assertion_kind::END_LINE:
-      if (position == input.size()) return true;
-      if (!current_newline) return false;
-      if (options.extended_newline && current_value == U'\n' && previous_value == U'\r') {
-        return false;
-      }
-      if (options.multiline) return true;
-      if (current_value == U'\r' && options.extended_newline) {
-        if (position + current->length == input.size()) return true;
-        auto next = decode(input, position + current->length, options.characters);
-        return next && next->value == U'\n' &&
-               position + current->length + next->length == input.size();
-      }
-      return position + current->length == input.size();
-  }
-  return false;
-}
-
-struct capture_value {
-  std::optional<std::size_t> begin = std::nullopt;
-  std::optional<std::size_t> end   = std::nullopt;
-};
-
-struct found_match {
-  std::size_t begin                   = 0;
-  std::size_t end                     = 0;
-  std::vector<capture_value> captures = std::vector<capture_value>{};
-};
-
-bool run_block(instruction_ir const& ir,
-               std::string_view input,
-               block_id block_id_value,
-               std::size_t position,
-               std::vector<capture_value> captures,
-               bool require_end,
-               std::unordered_set<std::uint64_t>& active,
-               found_match& result,
-               std::size_t& steps)
-{
-  if (++steps > 1000000U || block_id_value >= ir.blocks.size()) return false;
-  auto key =
-    (static_cast<std::uint64_t>(block_id_value) << 32U) ^ static_cast<std::uint64_t>(position);
-  if (!active.insert(key).second) return false;
-
-  auto local_position = position;
-  auto local_captures = std::move(captures);
-  bool accepted{};
-  for (auto& item : ir.blocks[block_id_value].instructions) {
-    if (auto* peek_op = std::get_if<can_peek>(&item)) {
-      if (!can_peek_count(input, local_position, peek_op->characters, ir.options.characters)) {
-        active.erase(key);
-        return false;
-      }
-    } else if (auto* character_op = std::get_if<match_character>(&item)) {
-      auto current = decode(input, local_position, ir.options.characters);
-      if (!current || !character_op->predicate.matches(current->value)) {
-        active.erase(key);
-        return false;
-      }
-    } else if (auto* literal_op = std::get_if<match_literal>(&item)) {
-      auto cursor  = local_position;
-      bool matches = true;
-      for (auto expected : literal_op->value) {
-        auto current = decode(input, cursor, ir.options.characters);
-        if (!current || current->value != expected) {
-          matches = false;
-          break;
-        }
-        cursor += current->length;
-      }
-      if (!matches) {
-        active.erase(key);
-        return false;
-      }
-    } else if (auto* advance_op = std::get_if<advance_cursor>(&item)) {
-      local_position =
-        advance(input, local_position, advance_op->characters, ir.options.characters);
-    } else if (auto* assertion_op = std::get_if<test_assertion>(&item)) {
-      if (!assertion_matches(assertion_op->kind, input, local_position, ir.options)) {
-        active.erase(key);
-        return false;
-      }
-    } else if (auto* capture_op = std::get_if<write_capture>(&item)) {
-      if (capture_op->capture_index >= local_captures.size()) {
-        active.erase(key);
-        return false;
-      }
-      if (capture_op->action == capture_action::BEGIN) {
-        local_captures[capture_op->capture_index].begin = local_position;
-        local_captures[capture_op->capture_index].end.reset();
-      } else {
-        local_captures[capture_op->capture_index].end = local_position;
-      }
-    } else if (std::holds_alternative<emit_accept>(item)) {
-      accepted = true;
-    }
-  }
-
-  if (accepted) {
-    active.erase(key);
-    if (require_end && local_position != input.size()) return false;
-    result.end      = local_position;
-    result.captures = std::move(local_captures);
-    return true;
-  }
-
-  auto successors = ir.blocks[block_id_value].successors;
-  std::stable_sort(successors.begin(), successors.end(), [](auto& lhs, auto& rhs) {
-    return lhs.priority < rhs.priority;
-  });
-  for (auto edge : successors) {
-    if (run_block(ir,
-                  input,
-                  edge.target,
-                  local_position,
-                  local_captures,
-                  require_end,
-                  active,
-                  result,
-                  steps)) {
-      active.erase(key);
-      return true;
-    }
-  }
-  active.erase(key);
-  return false;
-}
-
-std::optional<found_match> find_first(instruction_ir const& ir,
-                                      std::string_view input,
-                                      std::size_t search_start,
-                                      bool only_start,
-                                      bool require_end)
-{
-  auto start = search_start;
-  while (start <= input.size()) {
-    found_match match;
-    match.begin = start;
-    std::vector<capture_value> captures(ir.capture_count + 1U);
-    captures[0].begin = start;
-    std::unordered_set<std::uint64_t> active;
-    std::size_t steps{};
-    if (run_block(ir, input, ir.entry, start, captures, require_end, active, match, steps)) {
-      match.captures[0].end = match.end;
-      return match;
-    }
-    if (only_start || start == input.size()) break;
-    start = advance(input, start, 1, ir.options.characters);
-  }
-  return std::nullopt;
-}
-
-std::size_t next_search(std::string_view input, found_match const& match, character_mode mode)
-{
-  if (match.end != match.begin) return match.end;
-  return match.end == input.size() ? input.size() + 1U : advance(input, match.end, 1, mode);
-}
-
-std::vector<std::optional<match_span>> public_captures(found_match const& match)
-{
-  std::vector<std::optional<match_span>> result;
-  result.reserve(match.captures.size());
-  for (auto& capture : match.captures) {
-    if (capture.begin && capture.end) {
-      result.push_back(match_span{*capture.begin, *capture.end});
-    } else {
-      result.push_back(std::nullopt);
-    }
-  }
-  return result;
-}
-
-void append_replacement(std::string& output,
-                        instruction_ir const& ir,
-                        std::string_view input,
-                        found_match const& match)
-{
-  for (auto& token : ir.replacement) {
-    if (token.type == replacement_token::kind::LITERAL) {
-      output += token.literal;
-    } else if (token.capture_index < match.captures.size()) {
-      auto& capture = match.captures[token.capture_index];
-      if (capture.begin && capture.end) {
-        output.append(input.substr(*capture.begin, *capture.end - *capture.begin));
-      }
-    }
-  }
-}
-
-}  // namespace
-
-execution_result execute(instruction_ir const& ir, std::string_view input)
-{
-  auto diagnostics = verify(ir);
-  if (!diagnostics.empty()) throw std::invalid_argument("cannot execute invalid Instruction IR");
-
-  execution_result output;
-  auto kind = ir.selected_operation.kind;
-  if (kind == operation_kind::MATCHES) {
-    auto match     = find_first(ir, input, 0, true, true);
-    output.matched = match.has_value();
-    if (match) {
-      output.count = 1;
-      output.matches.push_back({match->begin, match->end});
-      output.captures = public_captures(*match);
-    }
-    return output;
-  }
-
-  if (kind == operation_kind::CONTAINS || kind == operation_kind::FIND ||
-      kind == operation_kind::EXTRACT) {
-    auto match     = find_first(ir, input, 0, false, false);
-    output.matched = match.has_value();
-    if (match) {
-      output.count = 1;
-      output.matches.push_back({match->begin, match->end});
-      if (kind == operation_kind::EXTRACT) output.captures = public_captures(*match);
-    }
-    return output;
-  }
-
-  std::size_t search{};
-  std::size_t copied{};
-  while (search <= input.size()) {
-    auto match = find_first(ir, input, search, false, false);
-    if (!match) break;
-    output.matched = true;
-    ++output.count;
-    output.matches.push_back({match->begin, match->end});
-
-    if (kind == operation_kind::REPLACE) {
-      output.replaced.append(input.substr(copied, match->begin - copied));
-      append_replacement(output.replaced, ir, input, *match);
-      copied = match->end;
-    } else if (kind == operation_kind::SPLIT) {
-      output.pieces.emplace_back(input.substr(copied, match->begin - copied));
-      copied = match->end;
-    }
-
-    auto next = next_search(input, *match, ir.options.characters);
-    if (next > input.size()) break;
-    search = next;
-  }
-
-  if (kind == operation_kind::REPLACE) {
-    output.replaced.append(input.substr(copied));
-  } else if (kind == operation_kind::SPLIT) {
-    output.pieces.emplace_back(input.substr(copied));
-  }
-  return output;
-}
-
-execution_result enumerate(instruction_ir const& ir, std::string_view input)
-{
-  auto diagnostics = verify(ir);
-  if (!diagnostics.empty()) throw std::invalid_argument("cannot execute invalid Instruction IR");
-
-  execution_result output;
-  std::size_t search = 0;
-  while (search <= input.size()) {
-    auto match = find_first(ir, input, search, false, false);
-    if (!match) break;
-    output.matched = true;
-    ++output.count;
-    output.matches.push_back({match->begin, match->end});
-    output.capture_matches.push_back(public_captures(*match));
-    auto next = next_search(input, *match, ir.options.characters);
-    if (next > input.size()) break;
-    search = next;
-  }
-  if (!output.capture_matches.empty()) output.captures = output.capture_matches.front();
-  return output;
-}
-
-}  // namespace regex_ir::testing
 
 // instruction IR lowering
 
@@ -1555,84 +1678,9 @@ std::vector<diagnostic> parse_replacement(std::string const& replacement,
   return diagnostics;
 }
 
-char const* operation_name(operation_kind kind)
-{
-  switch (kind) {
-    case operation_kind::CONTAINS: return "contains";
-    case operation_kind::MATCHES: return "matches";
-    case operation_kind::COUNT: return "count";
-    case operation_kind::EXTRACT: return "extract";
-    case operation_kind::FIND: return "find";
-    case operation_kind::REPLACE: return "replace";
-    case operation_kind::SPLIT: return "split";
-  }
-  return "unknown";
-}
-
-std::string instruction_name(instruction const& value)
-{
-  return std::visit(
-    [](auto& item) {
-      using type = std::decay_t<decltype(item)>;
-      if constexpr (std::is_same_v<type, can_peek>) {
-        return fmt::format("can_peek {}", item.characters);
-      } else if constexpr (std::is_same_v<type, read_character>) {
-        return std::string{"read_character"};
-      } else if constexpr (std::is_same_v<type, match_character>) {
-        if (item.predicate.is_singleton()) {
-          return fmt::format("match U+{:X}",
-                             static_cast<std::uint32_t>(item.predicate.singleton()));
-        }
-        return fmt::format("match_class ranges={}{}",
-                           item.predicate.ranges.size(),
-                           item.predicate.negated ? " negated" : "");
-      } else if constexpr (std::is_same_v<type, match_literal>) {
-        return fmt::format("match_literal length={}", item.value.size());
-      } else if constexpr (std::is_same_v<type, advance_cursor>) {
-        return fmt::format("advance {}", item.characters);
-      } else if constexpr (std::is_same_v<type, test_assertion>) {
-        return fmt::format("assert {}", assertion_name(item.kind));
-      } else if constexpr (std::is_same_v<type, write_capture>) {
-        return fmt::format("capture {} {}",
-                           item.action == capture_action::BEGIN ? "begin" : "end",
-                           item.capture_index);
-      } else if constexpr (std::is_same_v<type, emit_accept>) {
-        return std::string{"accept"};
-      }
-    },
-    value);
-}
 
 }  // namespace
 
-ir_metrics measure(instruction_ir const& ir)
-{
-  ir_metrics result;
-  result.blocks = ir.blocks.size();
-  for (auto& block : ir.blocks) {
-    if (block.successors.size() > 1) ++result.branches;
-    for (auto& item : block.instructions) {
-      std::visit(
-        [&](auto& instruction_value) {
-          using type = std::decay_t<decltype(instruction_value)>;
-          if constexpr (std::is_same_v<type, read_character>) {
-            ++result.stream_reads;
-          } else if constexpr (std::is_same_v<type, match_character>) {
-            ++result.predicates;
-          } else if constexpr (std::is_same_v<type, match_literal>) {
-            ++result.predicates;
-            ++result.stream_reads;
-            result.literal_codepoints += instruction_value.value.size();
-          } else if constexpr (std::is_same_v<type, write_capture>) {
-            ++result.capture_writes;
-          }
-        },
-        item);
-    }
-  }
-
-  return result;
-}
 
 std::vector<diagnostic> verify(instruction_ir const& ir)
 {
@@ -1678,50 +1726,6 @@ std::vector<diagnostic> verify(instruction_ir const& ir)
   return result;
 }
 
-std::string to_string(instruction_ir const& ir)
-{
-  auto result = fmt::format(
-    R"IR(instruction_ir operation={operation} pattern={pattern:?} entry=^{entry} accept=^{accept} captures={captures} scan={scan} require_end={require_end} first_only={first_only}
-)IR",
-    fmt::arg("operation", operation_name(ir.selected_operation.kind)),
-    fmt::arg("pattern", ir.pattern),
-    fmt::arg("entry", ir.entry),
-    fmt::arg("accept", ir.accept),
-    fmt::arg("captures", ir.capture_count),
-    fmt::arg("scan", static_cast<int>(ir.control.scan_input)),
-    fmt::arg("require_end", static_cast<int>(ir.control.require_end)),
-    fmt::arg("first_only", static_cast<int>(ir.control.first_only)));
-
-  for (auto& block : ir.blocks) {
-    fmt::format_to(std::back_inserter(result), "^{}:", block.id);
-    if (block.instructions.empty()) result += " nop";
-    for (auto& item : block.instructions) {
-      fmt::format_to(std::back_inserter(result), " {};", instruction_name(item));
-    }
-
-    auto edges = block.successors;
-    std::stable_sort(
-      edges.begin(), edges.end(), [](auto& lhs, auto& rhs) { return lhs.priority < rhs.priority; });
-    for (auto edge : edges) {
-      fmt::format_to(std::back_inserter(result), " -> ^{}(p{})", edge.target, edge.priority);
-    }
-    result += '\n';
-  }
-
-  auto metrics = measure(ir);
-  fmt::format_to(
-    std::back_inserter(result),
-    R"IR(metrics blocks={blocks} branches={branches} predicates={predicates} reads={reads} captures={captures} literal_codepoints={literal_codepoints}
-)IR",
-    fmt::arg("blocks", metrics.blocks),
-    fmt::arg("branches", metrics.branches),
-    fmt::arg("predicates", metrics.predicates),
-    fmt::arg("reads", metrics.stream_reads),
-    fmt::arg("captures", metrics.capture_writes),
-    fmt::arg("literal_codepoints", metrics.literal_codepoints));
-
-  return result;
-}
 
 instruction_result lower(automata_ir const& automata, operation const& selected)
 {
@@ -1797,16 +1801,15 @@ instruction_result lower(automata_ir const& automata, operation const& selected)
   }
 
   if (!diagnostics.empty()) return {std::nullopt, std::move(diagnostics)};
-  result.metrics = measure(result);
-  diagnostics    = verify(result);
+  diagnostics = verify(result);
   if (!diagnostics.empty()) return {std::nullopt, std::move(diagnostics)};
   return {std::move(result), {}};
 }
 
-instruction_result compile(std::string_view pattern,
-                           operation const& selected,
-                           compile_options const& options,
-                           optimization_options const& optimization)
+instruction_result compile_instruction_ir(std::string_view pattern,
+                                          operation const& selected,
+                                          compile_options const& options,
+                                          optimization_options const& optimization)
 {
   auto automata = compile_automata(pattern, options);
   if (!automata) return {std::nullopt, std::move(automata.diagnostics)};
@@ -1964,7 +1967,6 @@ instruction_result optimize(instruction_ir ir, optimization_options const& optio
   if (options.fold_epsilon_jumps) fold_empty_jumps(ir);
   if (options.remove_unreachable) remove_unreachable(ir);
 
-  ir.metrics  = measure(ir);
   diagnostics = verify(ir);
   if (!diagnostics.empty()) return {std::nullopt, std::move(diagnostics)};
   return {std::move(ir), {}};
@@ -1980,9 +1982,9 @@ namespace {
 class source_buffer {
  public:
   template <typename... Args>
-  void emit(fmt::format_string<Args...> format, Args&&... args)
+  void emit(std::format_string<Args...> format, Args&&... args)
   {
-    fmt::format_to(std::back_inserter(value_), format, std::forward<Args>(args)...);
+    std::format_to(std::back_inserter(value_), format, std::forward<Args>(args)...);
     value_ += '\n';
   }
 
@@ -2005,10 +2007,10 @@ void require_identifier(std::string_view value, std::string_view field)
       !std::all_of(value.begin() + 1, value.end(), [&](char character) {
         return rest_is_valid(static_cast<unsigned char>(character));
       })) {
-    throw std::invalid_argument(fmt::format("{} must be a valid source identifier", field));
+    throw std::invalid_argument(std::format("{} must be a valid source identifier", field));
   }
   if (value.starts_with("llvm.") || value.starts_with("nvvm.")) {
-    throw std::invalid_argument(fmt::format("{} uses a reserved identifier", field));
+    throw std::invalid_argument(std::format("{} uses a reserved identifier", field));
   }
 }
 
@@ -2020,7 +2022,7 @@ void require_codegen_ir(instruction_ir const& ir)
 
 std::string nvvm_symbol(std::string_view prefix, std::string_view suffix)
 {
-  return fmt::format("{}_{}", prefix, suffix);
+  return std::format("{}_{}", prefix, suffix);
 }
 
 struct deterministic_nfa_node {
@@ -3068,13 +3070,13 @@ class nvvm_ir_renderer {
                                                  : "prioritized deterministic table";
     }
     output_.emit("{}",
-                 fmt::format(R"NVVM(; NVVM IR generated by Regex IR
-; pattern: {pattern}
+                 std::format(R"NVVM(; NVVM IR generated by Regex IR
+; pattern: {0}
 target triple = "nvptx64-nvidia-cuda"
 target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i128:128:128-f32:32:32-f64:64:64-v16:16:16-v32:32:32-v64:64:64-v128:128:128-n16:32:64"
-; executor: {executor})NVVM",
-                             fmt::arg("pattern", escaped_comment(ir_.pattern)),
-                             fmt::arg("executor", executor)));
+; executor: {1})NVVM",
+                             escaped_comment(ir_.pattern),
+                             executor));
     if (glushkov_.has_value()) {
       output_.emit("; glushkov positions: {}, alphabet classes: {}, shifts: {}, exceptions: {}",
                    glushkov_->position_count,
@@ -3366,7 +3368,7 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     result.reserve(values.size() * 8);
     for (std::size_t index = 0; index < values.size(); ++index) {
       if (index != 0) result += ", ";
-      fmt::format_to(std::back_inserter(result), "i16 {}", llvm_i16(values[index]));
+      std::format_to(std::back_inserter(result), "i16 {}", llvm_i16(values[index]));
     }
     return result;
   }
@@ -3377,7 +3379,7 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     result.reserve(values.size() * 24U);
     for (std::size_t index = 0; index < values.size(); ++index) {
       if (index != 0) result += ", ";
-      fmt::format_to(std::back_inserter(result), "i64 {}", llvm_i64(values[index]));
+      std::format_to(std::back_inserter(result), "i64 {}", llvm_i64(values[index]));
     }
     return result;
   }
@@ -3390,7 +3392,7 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     std::size_t index = 0;
     for (auto value : values) {
       if (index++ != 0) result += ", ";
-      fmt::format_to(std::back_inserter(result), "i8 {}", value);
+      std::format_to(std::back_inserter(result), "i8 {}", value);
     }
     return result;
   }
@@ -3400,7 +3402,7 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
     std::string result;
     result.reserve(value.size() * 3U);
     for (auto byte : value) {
-      fmt::format_to(std::back_inserter(result), R"(\{:02X})", static_cast<unsigned char>(byte));
+      std::format_to(std::back_inserter(result), R"(\{:02X})", static_cast<unsigned char>(byte));
     }
     return result;
   }
@@ -3414,11 +3416,11 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
   {
     std::vector<std::uint16_t> byte_classes(machine.alphabet.byte_classes.begin(),
                                             machine.alphabet.byte_classes.end());
-    auto globals = fmt::format("@{} = internal addrspace(4) constant [256 x i16] [{}], align 2",
+    auto globals = std::format("@{} = internal addrspace(4) constant [256 x i16] [{}], align 2",
                                name("dfa_byte_classes"),
                                format_i16_array(byte_classes));
     if (machine.reach_masks.size() > 8U) {
-      fmt::format_to(std::back_inserter(globals),
+      std::format_to(std::back_inserter(globals),
                      "\n@{} = internal addrspace(4) constant [{} x i64] [{}], align 8",
                      name("glushkov_reach_masks"),
                      machine.reach_masks.size(),
@@ -3449,17 +3451,17 @@ entry:
     }
 
     if (machine.reach_masks.size() <= 8U) {
-      auto result = fmt::format("{}", llvm_i64(machine.reach_masks.front()));
+      auto result = std::format("{}", llvm_i64(machine.reach_masks.front()));
       std::string body;
       for (std::size_t index = 1; index < machine.reach_masks.size(); ++index) {
-        fmt::format_to(std::back_inserter(body),
-                       R"NVVM(  %reach_is_{index} = icmp eq i32 %character_class, {index}
-  %reach_{index} = select i1 %reach_is_{index}, i64 {mask}, i64 {fallback}
+        std::format_to(std::back_inserter(body),
+                       R"NVVM(  %reach_is_{0} = icmp eq i32 %character_class, {0}
+  %reach_{0} = select i1 %reach_is_{0}, i64 {1}, i64 {2}
 )NVVM",
-                       fmt::arg("index", index),
-                       fmt::arg("mask", llvm_i64(machine.reach_masks[index])),
-                       fmt::arg("fallback", result));
-        result = fmt::format("%reach_{}", index);
+                       index,
+                       llvm_i64(machine.reach_masks[index]),
+                       result);
+        result = std::format("%reach_{}", index);
       }
       output_.emit(
         R"NVVM(define internal i64 @{}(i32 %character_class) alwaysinline nounwind readnone {{
@@ -3474,16 +3476,16 @@ entry:
     }
 
     output_.emit(
-      R"NVVM(define internal i64 @{function}(i32 %character_class) alwaysinline nounwind readonly {{
+      R"NVVM(define internal i64 @{0}(i32 %character_class) alwaysinline nounwind readonly {{
 entry:
   %reach_index = zext i32 %character_class to i64
-  %reach_ptr = getelementptr [{count} x i64], [{count} x i64] addrspace(4)* @{table}, i64 0, i64 %reach_index
+  %reach_ptr = getelementptr [{1} x i64], [{1} x i64] addrspace(4)* @{2}, i64 0, i64 %reach_index
   %reach = load i64, i64 addrspace(4)* %reach_ptr, align 8
   ret i64 %reach
 }})NVVM",
-      fmt::arg("function", function),
-      fmt::arg("count", machine.reach_masks.size()),
-      fmt::arg("table", name("glushkov_reach_masks")));
+      function,
+      machine.reach_masks.size(),
+      name("glushkov_reach_masks"));
     output_.blank();
   }
 
@@ -3502,36 +3504,36 @@ entry:
         result = value;
         return;
       }
-      fmt::format_to(
+      std::format_to(
         std::back_inserter(body), "  %follow_{} = or i64 {}, {}\n", combined_index, result, value);
-      result = fmt::format("%follow_{}", combined_index++);
+      result = std::format("%follow_{}", combined_index++);
     };
 
     for (std::size_t index = 0; index < machine.shifts.size(); ++index) {
       auto shift = machine.shifts[index];
-      fmt::format_to(std::back_inserter(body),
-                     R"NVVM(  %shift_source_{index} = and i64 %state, {sources}
-  %shift_value_{index} = shl i64 %shift_source_{index}, {amount}
+      std::format_to(std::back_inserter(body),
+                     R"NVVM(  %shift_source_{0} = and i64 %state, {1}
+  %shift_value_{0} = shl i64 %shift_source_{0}, {2}
 )NVVM",
-                     fmt::arg("index", index),
-                     fmt::arg("sources", llvm_i64(shift.sources)),
-                     fmt::arg("amount", shift.amount));
-      append(fmt::format("%shift_value_{}", index));
+                     index,
+                     llvm_i64(shift.sources),
+                     shift.amount);
+      append(std::format("%shift_value_{}", index));
     }
 
     for (std::size_t position = 0; position < machine.exception_successors.size(); ++position) {
       auto successors = machine.exception_successors[position];
       if (successors == 0U) continue;
       auto bit = std::uint64_t{1} << position;
-      fmt::format_to(std::back_inserter(body),
-                     R"NVVM(  %exception_bit_{position} = and i64 %state, {bit}
-  %exception_active_{position} = icmp ne i64 %exception_bit_{position}, 0
-  %exception_value_{position} = select i1 %exception_active_{position}, i64 {successors}, i64 0
+      std::format_to(std::back_inserter(body),
+                     R"NVVM(  %exception_bit_{0} = and i64 %state, {1}
+  %exception_active_{0} = icmp ne i64 %exception_bit_{0}, 0
+  %exception_value_{0} = select i1 %exception_active_{0}, i64 {2}, i64 0
 )NVVM",
-                     fmt::arg("position", position),
-                     fmt::arg("bit", llvm_i64(bit)),
-                     fmt::arg("successors", llvm_i64(successors)));
-      append(fmt::format("%exception_value_{}", position));
+                     position,
+                     llvm_i64(bit),
+                     llvm_i64(successors));
+      append(std::format("%exception_value_{}", position));
     }
 
     output_.emit(
@@ -3554,24 +3556,24 @@ entry:
   {
     std::vector<std::uint16_t> byte_classes(machine.byte_classes.begin(),
                                             machine.byte_classes.end());
-    auto common = fmt::format(
-      R"NVVM(@{classes} = internal addrspace(4) constant [256 x i16] [{class_values}], align 2
-@{transitions} = internal addrspace({transition_address_space}) constant [{transition_count} x i16] [{transition_values}], align 2)NVVM",
-      fmt::arg("classes", name("dfa_byte_classes")),
-      fmt::arg("class_values", format_i16_array(byte_classes)),
-      fmt::arg("transitions", name("dfa_transitions")),
-      fmt::arg("transition_address_space", machine.transition_address_space),
-      fmt::arg("transition_count", machine.transitions.size()),
-      fmt::arg("transition_values", format_i16_array(machine.transitions)));
+    auto common = std::format(
+      R"NVVM(@{0} = internal addrspace(4) constant [256 x i16] [{1}], align 2
+@{2} = internal addrspace({3}) constant [{4} x i16] [{5}], align 2)NVVM",
+      name("dfa_byte_classes"),
+      format_i16_array(byte_classes),
+      name("dfa_transitions"),
+      machine.transition_address_space,
+      machine.transitions.size(),
+      format_i16_array(machine.transitions));
     if (machine.assertion_aware) {
       output_.emit("{}",
-                   fmt::format(
-                     R"NVVM({common}
-@{boundary_accepts} = internal addrspace(4) constant [{accept_count} x i8] [{accept_values}], align 1)NVVM",
-                     fmt::arg("common", common),
-                     fmt::arg("boundary_accepts", name("dfa_boundary_accepts")),
-                     fmt::arg("accept_count", machine.boundary_accepts.size()),
-                     fmt::arg("accept_values", format_i8_array(machine.boundary_accepts))));
+                   std::format(
+                     R"NVVM({0}
+@{1} = internal addrspace(4) constant [{2} x i8] [{3}], align 1)NVVM",
+                     common,
+                     name("dfa_boundary_accepts"),
+                     machine.boundary_accepts.size(),
+                     format_i8_array(machine.boundary_accepts)));
     } else {
       output_.emit("{}", common);
     }
@@ -3611,16 +3613,16 @@ entry:
     auto inline_byte_classes = !byte_intervals.empty() && byte_intervals.size() <= 2U;
     std::string byte_classifier;
     if (inline_byte_classes) {
-      auto result = fmt::format("{}", default_class);
+      auto result = std::format("{}", default_class);
       for (std::size_t index = 0; index < byte_intervals.size(); ++index) {
         auto interval = byte_intervals[index];
         if (interval.first == interval.last) {
-          fmt::format_to(std::back_inserter(byte_classifier),
+          std::format_to(std::back_inserter(byte_classifier),
                          "  %byte_in_{} = icmp eq i32 %cp, {}\n",
                          index,
                          interval.first);
         } else {
-          fmt::format_to(std::back_inserter(byte_classifier),
+          std::format_to(std::back_inserter(byte_classifier),
                          R"NVVM(  %byte_offset_{} = sub i32 %cp, {}
   %byte_in_{} = icmp ule i32 %byte_offset_{}, {}
 )NVVM",
@@ -3630,53 +3632,53 @@ entry:
                          index,
                          interval.last - interval.first);
         }
-        fmt::format_to(std::back_inserter(byte_classifier),
+        std::format_to(std::back_inserter(byte_classifier),
                        "  %byte_class_{} = select i1 %byte_in_{}, i32 {}, i32 {}\n",
                        index,
                        index,
                        interval.class_id,
                        result);
-        result = fmt::format("%byte_class_{}", index);
+        result = std::format("%byte_class_{}", index);
       }
-      fmt::format_to(std::back_inserter(byte_classifier), "  ret i32 {}", result);
+      std::format_to(std::back_inserter(byte_classifier), "  ret i32 {}", result);
     } else {
-      byte_classifier = fmt::format(
+      byte_classifier = std::format(
         R"NVVM(  %byte_index = zext i32 %cp to i64
-  %byte_class_ptr = getelementptr [256 x i16], [256 x i16] addrspace(4)* @{table}, i64 0, i64 %byte_index
+  %byte_class_ptr = getelementptr [256 x i16], [256 x i16] addrspace(4)* @{0}, i64 0, i64 %byte_index
   %byte_class_i16 = load i16, i16 addrspace(4)* %byte_class_ptr, align 2
   %byte_class = zext i16 %byte_class_i16 to i32
   ret i32 %byte_class)NVVM",
-        fmt::arg("table", table));
+        table);
     }
     output_.emit("{}",
-                 fmt::format(
-                   R"NVVM(define internal i32 @{function}(i32 %cp) alwaysinline nounwind readonly {{
+                 std::format(
+                   R"NVVM(define internal i32 @{0}(i32 %cp) alwaysinline nounwind readonly {{
 entry:
   %is_byte = icmp ult i32 %cp, 256
   br i1 %is_byte, label %byte, label %unicode
 byte:
-{byte_classifier}
+{1}
 unicode:)NVVM",
-                   fmt::arg("function", function),
-                   fmt::arg("byte_classifier", byte_classifier)));
+                   function,
+                   byte_classifier));
 
     if (machine.unicode_intervals.empty()) {
       output_.emit("  ret i32 0");
     } else if (machine.unicode_intervals.size() == 1) {
       output_.emit("  ret i32 {}", machine.unicode_intervals.front().class_id);
     } else {
-      auto result = fmt::format("{}", machine.unicode_intervals.back().class_id);
+      auto result = std::format("{}", machine.unicode_intervals.back().class_id);
       for (std::size_t reverse = machine.unicode_intervals.size() - 1; reverse > 0; --reverse) {
         auto index     = reverse - 1;
         auto& interval = machine.unicode_intervals[index];
         output_.emit("{}",
-                     fmt::format(R"NVVM(  %unicode_le_{index} = icmp ule i32 %cp, {last}
-  %unicode_class_{index} = select i1 %unicode_le_{index}, i32 {class_id}, i32 {fallback})NVVM",
-                                 fmt::arg("index", index),
-                                 fmt::arg("last", interval.last),
-                                 fmt::arg("class_id", interval.class_id),
-                                 fmt::arg("fallback", result)));
-        result = fmt::format("%unicode_class_{}", index);
+                     std::format(R"NVVM(  %unicode_le_{0} = icmp ule i32 %cp, {1}
+  %unicode_class_{0} = select i1 %unicode_le_{0}, i32 {2}, i32 {3})NVVM",
+                                 index,
+                                 interval.last,
+                                 interval.class_id,
+                                 result));
+        result = std::format("%unicode_class_{}", index);
       }
       output_.emit("  ret i32 {}", result);
     }
@@ -3705,11 +3707,11 @@ entry:)NVVM",
       auto bit = std::uint32_t{1} << mask_index;
       output_.emit("  %boundary_bit_{} = select i1 {}, i32 {}, i32 0", mask_index, condition, bit);
       if (mask_value == "0") {
-        mask_value = fmt::format("%boundary_bit_{}", mask_index);
+        mask_value = std::format("%boundary_bit_{}", mask_index);
       } else {
         output_.emit(
           "  %boundary_mask_{} = or i32 {}, %boundary_bit_{}", mask_index, mask_value, mask_index);
-        mask_value = fmt::format("%boundary_mask_{}", mask_index);
+        mask_value = std::format("%boundary_mask_{}", mask_index);
       }
       ++mask_index;
     };
@@ -3733,16 +3735,16 @@ entry:)NVVM",
 
     if ((machine.assertion_mask & word_bits) != 0) {
       output_.emit("{}",
-                   fmt::format(
+                   std::format(
                      R"NVVM(  %has_previous = icmp ne i64 %position, 0
   %has_current = icmp ult i64 %position, %size
-  %previous_word_raw = call i1 @{is_word}(i32 %previous_cp)
-  %current_word_raw = call i1 @{is_word}(i32 %current_cp)
+  %previous_word_raw = call i1 @{0}(i32 %previous_cp)
+  %current_word_raw = call i1 @{0}(i32 %current_cp)
   %previous_word = and i1 %has_previous, %previous_word_raw
   %current_word = and i1 %has_current, %current_word_raw
   %word_boundary = xor i1 %previous_word, %current_word
   %not_word_boundary = xor i1 %word_boundary, true)NVVM",
-                     fmt::arg("is_word", is_word)));
+                     is_word));
       if ((machine.assertion_mask & assertion_bit(assertion_kind::WORD_BOUNDARY)) != 0) {
         append_bit("%word_boundary");
       }
@@ -3803,24 +3805,24 @@ entry:)NVVM",
           if (ir_.options.extended_newline) {
             output_.emit(
               "{}",
-              fmt::format(
-                R"NVVM(  %next_cp = call i32 @{decode}(i8* %data, i64 %size, i64 %next_position)
-  %next_width = call i64 @{width}(i8* %data, i64 %size, i64 %next_position)
+              std::format(
+                R"NVVM(  %next_cp = call i32 @{0}(i8* %data, i64 %size, i64 %next_position)
+  %next_width = call i64 @{1}(i8* %data, i64 %size, i64 %next_position)
   %after_next = add i64 %next_position, %next_width
   %next_lf = icmp eq i32 %next_cp, 10
   %after_next_is_end = icmp eq i64 %after_next, %size
   %crlf_tail_0 = and i1 %current_cr, %next_lf
   %crlf_tail = and i1 %crlf_tail_0, %after_next_is_end
   %final_sequence = or i1 %current_is_final, %crlf_tail)NVVM",
-                fmt::arg("decode", decode),
-                fmt::arg("width", name("decode_width"))));
+                decode,
+                name("decode_width")));
             final_sequence = "%final_sequence";
           }
           output_.emit(
             R"NVVM(  %end_final_newline_0 = and i1 %current_newline, %not_mid_crlf
-  %end_final_newline = and i1 %end_final_newline_0, {final_sequence}
+  %end_final_newline = and i1 %end_final_newline_0, {0}
   %end_line = or i1 %at_end, %end_final_newline)NVVM",
-            fmt::arg("final_sequence", final_sequence));
+            final_sequence);
         }
         append_bit("%end_line");
       }
@@ -3843,11 +3845,11 @@ entry:)NVVM",
     auto load_byte   = name("load_byte");
     auto reach       = name("glushkov_reach");
     auto width       = name("decode_width");
-    auto ascii_block = fmt::format(
+    auto ascii_block = std::format(
       R"NVVM(ascii:
-  %ascii_class = call i32 @{classify}(i32 %first)
+  %ascii_class = call i32 @{0}(i32 %first)
   br label %transition)NVVM",
-      fmt::arg("classify", classify));
+      classify);
     auto ascii_predecessor    = std::string{"%ascii"};
     auto prefix_loop_position = std::string{};
     auto prefix_loop_state    = std::string{};
@@ -3855,71 +3857,71 @@ entry:)NVVM",
       ascii_predecessor    = "%ascii_classify";
       prefix_loop_position = ", [ %prefix_next_position, %prefix_skip ]";
       prefix_loop_state    = ", [ 0, %prefix_skip ]";
-      ascii_block          = fmt::format(
+      ascii_block          = std::format(
         R"NVVM(ascii:
   %prefix_state_empty = icmp eq i64 %state, 0
-  %prefix_equal = icmp eq i32 %first, {prefix}
+  %prefix_equal = icmp eq i32 %first, {0}
   %prefix_mismatch = xor i1 %prefix_equal, true
   %prefix_skip_candidate = and i1 %prefix_state_empty, %prefix_mismatch
   br i1 %prefix_skip_candidate, label %prefix_skip, label %ascii_classify
 ascii_classify:
-  %ascii_class = call i32 @{classify}(i32 %first)
+  %ascii_class = call i32 @{1}(i32 %first)
   br label %transition
 prefix_skip:
   %prefix_next_position = add nuw i64 %position, 1
   br label %loop)NVVM",
-        fmt::arg("prefix", *machine.start_byte),
-        fmt::arg("classify", classify));
+        *machine.start_byte,
+        classify);
     }
 
     auto inject =
       machine.scan_input
-        ? fmt::format("  %candidates = or i64 %follow, {}\n", llvm_i64(machine.first_set))
-        : fmt::format(R"NVVM(  %at_start = icmp eq i64 %position, 0
-  %initial_positions = select i1 %at_start, i64 {first_set}, i64 0
+        ? std::format("  %candidates = or i64 %follow, {}\n", llvm_i64(machine.first_set))
+        : std::format(R"NVVM(  %at_start = icmp eq i64 %position, 0
+  %initial_positions = select i1 %at_start, i64 {0}, i64 0
   %candidates = or i64 %follow, %initial_positions
 )NVVM",
-                      fmt::arg("first_set", llvm_i64(machine.first_set)));
+                      llvm_i64(machine.first_set));
 
     output_.emit(
-      R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+      R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   br label %loop
 loop:
-  %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]{prefix_loop_position}
-  %state = phi i64 [ 0, %entry ], [ %next_state, %continue ]{prefix_loop_state}
+  %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]{1}
+  %state = phi i64 [ 0, %entry ], [ %next_state, %continue ]{2}
   %at_end = icmp eq i64 %position, %size
   br i1 %at_end, label %done, label %load
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %first = call i32 @{3}(i8* %input_ptr)
   %is_ascii = icmp ult i32 %first, 128
   br i1 %is_ascii, label %ascii, label %unicode
-{ascii_block}
+{4}
 unicode:
-  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
-  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
-  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  %codepoint = call i32 @{5}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{6}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{7}(i32 %codepoint)
   br label %transition
 transition:
-  %character_class = phi i32 [ %ascii_class, {ascii_predecessor} ], [ %unicode_class, %unicode ]
-  %character_width = phi i64 [ 1, {ascii_predecessor} ], [ %unicode_width, %unicode ]
-  %reach = call i64 @{reach}(i32 %character_class)
-  %follow = call i64 @{follow}(i64 %state)
-{inject}  %next_state = and i64 %candidates, %reach
+  %character_class = phi i32 [ %ascii_class, {8} ], [ %unicode_class, %unicode ]
+  %character_width = phi i64 [ 1, {8} ], [ %unicode_width, %unicode ]
+  %reach = call i64 @{9}(i32 %character_class)
+  %follow = call i64 @{10}(i64 %state)
+{11}  %next_state = and i64 %candidates, %reach
   %next_position = add nuw i64 %position, %character_width)NVVM",
-      fmt::arg("execute", options_.execute_function),
-      fmt::arg("prefix_loop_position", prefix_loop_position),
-      fmt::arg("prefix_loop_state", prefix_loop_state),
-      fmt::arg("load_byte", load_byte),
-      fmt::arg("ascii_block", ascii_block),
-      fmt::arg("decode", decode),
-      fmt::arg("width", width),
-      fmt::arg("classify", classify),
-      fmt::arg("ascii_predecessor", ascii_predecessor),
-      fmt::arg("reach", reach),
-      fmt::arg("follow", follow),
-      fmt::arg("inject", inject));
+      options_.execute_function,
+      prefix_loop_position,
+      prefix_loop_state,
+      load_byte,
+      ascii_block,
+      decode,
+      width,
+      classify,
+      ascii_predecessor,
+      reach,
+      follow,
+      inject);
 
     if (machine.accept_at_end) {
       output_.emit(
@@ -3928,16 +3930,16 @@ transition:
 continue:
   br label %loop
 done:
-  %accept_bits = and i64 %state, {accept_mask}
+  %accept_bits = and i64 %state, {0}
   %accepted = icmp ne i64 %accept_bits, 0
   ret i1 %accepted
 reject:
   ret i1 false
 }})NVVM",
-        fmt::arg("accept_mask", llvm_i64(machine.accept_mask)));
+        llvm_i64(machine.accept_mask));
     } else {
       output_.emit(
-        R"NVVM(  %accept_bits = and i64 %next_state, {accept_mask}
+        R"NVVM(  %accept_bits = and i64 %next_state, {0}
   %accepted = icmp ne i64 %accept_bits, 0
   br i1 %accepted, label %yes, label %continue
 continue:
@@ -3947,7 +3949,7 @@ done:
 yes:
   ret i1 true
 }})NVVM",
-        fmt::arg("accept_mask", llvm_i64(machine.accept_mask)));
+        llvm_i64(machine.accept_mask));
     }
     output_.blank();
   }
@@ -3980,124 +3982,124 @@ entry:
     auto reject               = std::string{};
     auto prefix_loop_position = std::string{};
     auto prefix_loop_state    = std::string{};
-    auto ascii_block          = fmt::format(
+    auto ascii_block          = std::format(
       R"NVVM(ascii:
-  %ascii_class = call i32 @{classify}(i32 %first)
+  %ascii_class = call i32 @{0}(i32 %first)
   br label %transition)NVVM",
-      fmt::arg("classify", classify));
+      classify);
     auto ascii_predecessor = std::string{"%ascii"};
     auto prefix            = machine.scan_input ? required_ascii_prefix() : std::nullopt;
     if (prefix.has_value()) {
       prefix_loop_position = ", [ %prefix_next_position, %prefix_skip ]";
       prefix_loop_state    = ", [ " + std::to_string(machine.initial_state) + ", %prefix_skip ]";
       ascii_predecessor    = "%ascii_classify";
-      ascii_block          = fmt::format(
+      ascii_block          = std::format(
         R"NVVM(ascii:
-  %prefix_state_index = and i32 %state, {state_mask}
-  %prefix_at_initial = icmp eq i32 %prefix_state_index, {initial_state_index}
-  %prefix_equal = icmp eq i32 %first, {prefix}
+  %prefix_state_index = and i32 %state, {0}
+  %prefix_at_initial = icmp eq i32 %prefix_state_index, {1}
+  %prefix_equal = icmp eq i32 %first, {2}
   %prefix_mismatch = xor i1 %prefix_equal, true
   %prefix_skip_candidate = and i1 %prefix_at_initial, %prefix_mismatch
   br i1 %prefix_skip_candidate, label %prefix_skip, label %ascii_classify
 ascii_classify:
-  %ascii_class = call i32 @{classify}(i32 %first)
+  %ascii_class = call i32 @{3}(i32 %first)
   br label %transition
 prefix_skip:
   %prefix_next_position = add nuw i64 %position, 1
   br label %loop)NVVM",
-        fmt::arg("state_mask", machine.state_mask),
-        fmt::arg("initial_state_index", machine.initial_state & machine.state_mask),
-        fmt::arg("prefix", static_cast<std::uint32_t>(*prefix)),
-        fmt::arg("classify", classify));
+        machine.state_mask,
+        machine.initial_state & machine.state_mask,
+        static_cast<std::uint32_t>(*prefix),
+        classify);
     }
     if (!machine.scan_input && machine.dead_state <= machine.state_mask) {
-      dead_guard = fmt::format(
-        R"NVVM(  %next_state_index = and i32 %next_state, {state_mask}
-  %dead = icmp eq i32 %next_state_index, {dead_state}
+      dead_guard = std::format(
+        R"NVVM(  %next_state_index = and i32 %next_state, {0}
+  %dead = icmp eq i32 %next_state_index, {1}
   br i1 %dead, label %reject, label %transition_live
 transition_live:)NVVM",
-        fmt::arg("state_mask", machine.state_mask),
-        fmt::arg("dead_state", machine.dead_state));
+        machine.state_mask,
+        machine.dead_state);
       reject = R"NVVM(reject:
   ret i1 false
 )NVVM";
     }
     output_.emit("{}",
-                 fmt::format(
-                   R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+                 std::format(
+                   R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   br label %loop
 loop:
-  %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]{prefix_loop_position}
-  %state = phi i32 [ {initial_state}, %entry ], [ %next_state, %continue ]{prefix_loop_state}
+  %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]{12}
+  %state = phi i32 [ {1}, %entry ], [ %next_state, %continue ]{13}
   %at_end = icmp eq i64 %position, %size
   br i1 %at_end, label %done, label %load
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %first = call i32 @{2}(i8* %input_ptr)
   %is_ascii = icmp ult i32 %first, 128
   br i1 %is_ascii, label %ascii, label %unicode
-{ascii_block}
+{14}
 unicode:
-  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
-  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
-  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  %codepoint = call i32 @{4}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{5}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{3}(i32 %codepoint)
   br label %transition
 transition:
-  %character_class = phi i32 [ %ascii_class, {ascii_predecessor} ], [ %unicode_class, %unicode ]
-  %character_width = phi i64 [ 1, {ascii_predecessor} ], [ %unicode_width, %unicode ]
-  %state_index = and i32 %state, {state_mask}
-  %state_offset = mul nuw i32 %state_index, {class_count}
+  %character_class = phi i32 [ %ascii_class, {15} ], [ %unicode_class, %unicode ]
+  %character_width = phi i64 [ 1, {15} ], [ %unicode_width, %unicode ]
+  %state_index = and i32 %state, {7}
+  %state_offset = mul nuw i32 %state_index, {6}
   %transition_index = add nuw i32 %state_offset, %character_class
   %transition_index_i64 = zext i32 %transition_index to i64
-  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
-  %next_state_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
+  %transition_ptr = getelementptr [{8} x i16], [{8} x i16] addrspace({9})* @{10}, i64 0, i64 %transition_index_i64
+  %next_state_i16 = load i16, i16 addrspace({9})* %transition_ptr, align 2
   %next_state = zext i16 %next_state_i16 to i32
   %next_position = add i64 %position, %character_width
-{dead_guard})NVVM",
-                   fmt::arg("execute", options_.execute_function),
-                   fmt::arg("initial_state", machine.initial_state),
-                   fmt::arg("load_byte", load_byte),
-                   fmt::arg("classify", classify),
-                   fmt::arg("decode", decode),
-                   fmt::arg("width", width),
-                   fmt::arg("class_count", machine.class_count),
-                   fmt::arg("state_mask", machine.state_mask),
-                   fmt::arg("transition_count", machine.transitions.size()),
-                   fmt::arg("transition_address_space", machine.transition_address_space),
-                   fmt::arg("transitions", transitions),
-                   fmt::arg("dead_guard", dead_guard),
-                   fmt::arg("prefix_loop_position", prefix_loop_position),
-                   fmt::arg("prefix_loop_state", prefix_loop_state),
-                   fmt::arg("ascii_block", ascii_block),
-                   fmt::arg("ascii_predecessor", ascii_predecessor)));
+{11})NVVM",
+                   options_.execute_function,
+                   machine.initial_state,
+                   load_byte,
+                   classify,
+                   decode,
+                   width,
+                   machine.class_count,
+                   machine.state_mask,
+                   machine.transitions.size(),
+                   machine.transition_address_space,
+                   transitions,
+                   dead_guard,
+                   prefix_loop_position,
+                   prefix_loop_state,
+                   ascii_block,
+                   ascii_predecessor));
     if (!machine.accept_at_end && machine.accept_assertion.has_value()) {
       output_.emit("{}",
-                   fmt::format(
+                   std::format(
                      R"NVVM(  %accept_bits = and i32 %next_state, 32768
   %accepted = icmp ne i32 %accept_bits, 0
   br i1 %accepted, label %check_accept, label %continue
 check_accept:
-  %accept_assertion = call i1 @{assertion}(i8* %data, i64 %size, i64 %next_position, i32 {kind})
+  %accept_assertion = call i1 @{0}(i8* %data, i64 %size, i64 %next_position, i32 {1})
   br i1 %accept_assertion, label %yes, label %continue
 continue:
   br label %loop
 done:
   %done_accept_bits = and i32 %state, 32768
   %done_accepted = icmp ne i32 %done_accept_bits, 0
-  %done_assertion = call i1 @{assertion}(i8* %data, i64 %size, i64 %position, i32 {kind})
+  %done_assertion = call i1 @{0}(i8* %data, i64 %size, i64 %position, i32 {1})
   %done_result = and i1 %done_accepted, %done_assertion
   ret i1 %done_result
 yes:
   ret i1 true
-{reject}
+{2}
 }})NVVM",
-                     fmt::arg("assertion", name("assertion")),
-                     fmt::arg("kind", static_cast<std::uint32_t>(*machine.accept_assertion)),
-                     fmt::arg("reject", reject)));
+                     name("assertion"),
+                     static_cast<std::uint32_t>(*machine.accept_assertion),
+                     reject));
     } else if (!machine.accept_at_end) {
       output_.emit("{}",
-                   fmt::format(R"NVVM(  %accept_bits = and i32 %next_state, 32768
+                   std::format(R"NVVM(  %accept_bits = and i32 %next_state, 32768
   %accepted = icmp ne i32 %accept_bits, 0
   br i1 %accepted, label %yes, label %continue
 continue:
@@ -4106,35 +4108,35 @@ done:
   ret i1 false
 yes:
   ret i1 true
-{reject}
+{0}
 }})NVVM",
-                               fmt::arg("reject", reject)));
+                               reject));
     } else {
       auto assertion = std::string{};
       auto result    = std::string{"%accepted"};
       if (machine.accept_assertion.has_value()) {
-        assertion = fmt::format(
-          R"NVVM(  %done_assertion = call i1 @{assertion}(i8* %data, i64 %size, i64 %position, i32 {kind})
+        assertion = std::format(
+          R"NVVM(  %done_assertion = call i1 @{0}(i8* %data, i64 %size, i64 %position, i32 {1})
   %done_result = and i1 %accepted, %done_assertion
 )NVVM",
-          fmt::arg("assertion", name("assertion")),
-          fmt::arg("kind", static_cast<std::uint32_t>(*machine.accept_assertion)));
+          name("assertion"),
+          static_cast<std::uint32_t>(*machine.accept_assertion));
         result = "%done_result";
       }
       output_.emit("{}",
-                   fmt::format(
+                   std::format(
                      R"NVVM(  br label %continue
 continue:
   br label %loop
 done:
   %accept_bits = and i32 %state, 32768
   %accepted = icmp ne i32 %accept_bits, 0
-{assertion}  ret i1 {result}
-{reject}
+{0}  ret i1 {1}
+{2}
 }})NVVM",
-                     fmt::arg("assertion", assertion),
-                     fmt::arg("result", result),
-                     fmt::arg("reject", reject)));
+                     assertion,
+                     result,
+                     reject));
     }
     output_.blank();
   }
@@ -4154,87 +4156,87 @@ done:
     auto transitions      = name("dfa_transitions");
     auto boundary_accepts = name("dfa_boundary_accepts");
     output_.emit("{}",
-                 fmt::format(
-                   R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+                 std::format(
+                   R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   br label %loop
 loop:
   %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]
-  %state = phi i32 [ {initial_state}, %entry ], [ %next_state, %continue ]
+  %state = phi i32 [ {1}, %entry ], [ %next_state, %continue ]
   %previous_cp = phi i32 [ 0, %entry ], [ %current_cp, %continue ]
   %at_end = icmp eq i64 %position, %size
   br i1 %at_end, label %finish, label %load
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %first = call i32 @{2}(i8* %input_ptr)
   %is_ascii = icmp ult i32 %first, 128
   br i1 %is_ascii, label %ascii, label %unicode
 ascii:
-  %ascii_class = call i32 @{classify}(i32 %first)
+  %ascii_class = call i32 @{3}(i32 %first)
   br label %boundary
 unicode:
-  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
-  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
-  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  %codepoint = call i32 @{4}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{5}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{3}(i32 %codepoint)
   br label %boundary
 boundary:
   %current_cp = phi i32 [ %first, %ascii ], [ %codepoint, %unicode ]
   %character_class = phi i32 [ %ascii_class, %ascii ], [ %unicode_class, %unicode ]
   %character_width = phi i64 [ 1, %ascii ], [ %unicode_width, %unicode ]
-  %boundary_class = call i32 @{boundary}(i8* %data, i64 %size, i64 %position, i32 %previous_cp, i32 %current_cp, i64 %character_width)
+  %boundary_class = call i32 @{6}(i8* %data, i64 %size, i64 %position, i32 %previous_cp, i32 %current_cp, i64 %character_width)
   br label %transition)NVVM",
-                   fmt::arg("execute", options_.execute_function),
-                   fmt::arg("initial_state", machine.initial_state),
-                   fmt::arg("load_byte", load_byte),
-                   fmt::arg("classify", classify),
-                   fmt::arg("decode", decode),
-                   fmt::arg("width", width),
-                   fmt::arg("boundary", boundary)));
+                   options_.execute_function,
+                   machine.initial_state,
+                   load_byte,
+                   classify,
+                   decode,
+                   width,
+                   boundary));
     output_.emit("{}",
-                 fmt::format(
+                 std::format(
                    R"NVVM(transition:
-  %transition_state_offset = mul nuw i32 %state, {boundary_class_count}
+  %transition_state_offset = mul nuw i32 %state, {0}
   %transition_context_index = add nuw i32 %transition_state_offset, %boundary_class
-  %transition_context_offset = mul nuw i32 %transition_context_index, {class_count}
+  %transition_context_offset = mul nuw i32 %transition_context_index, {1}
   %transition_index = add nuw i32 %transition_context_offset, %character_class
   %transition_index_i64 = zext i32 %transition_index to i64
-  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
-  %next_state_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
+  %transition_ptr = getelementptr [{2} x i16], [{2} x i16] addrspace({3})* @{4}, i64 0, i64 %transition_index_i64
+  %next_state_i16 = load i16, i16 addrspace({3})* %transition_ptr, align 2
   %next_state_raw = zext i16 %next_state_i16 to i32
   %accept_bits = and i32 %next_state_raw, 32768
   %accepted = icmp ne i32 %accept_bits, 0
   %next_state = and i32 %next_state_raw, 32767
   %next_position = add i64 %position, %character_width)NVVM",
-                   fmt::arg("boundary_class_count", machine.boundary_class_count),
-                   fmt::arg("class_count", machine.class_count),
-                   fmt::arg("transition_count", machine.transitions.size()),
-                   fmt::arg("transition_address_space", machine.transition_address_space),
-                   fmt::arg("transitions", transitions)));
+                   machine.boundary_class_count,
+                   machine.class_count,
+                   machine.transitions.size(),
+                   machine.transition_address_space,
+                   transitions));
     if (machine.accept_at_end) {
       output_.emit("  br label %continue");
     } else {
       output_.emit("  br i1 %accepted, label %yes, label %continue");
     }
     output_.emit("{}",
-                 fmt::format(
+                 std::format(
                    R"NVVM(continue:
   br label %loop
 finish:
-  %finish_boundary_class = call i32 @{boundary}(i8* %data, i64 %size, i64 %position, i32 %previous_cp, i32 0, i64 0)
-  %finish_state_offset = mul nuw i32 %state, {boundary_class_count}
+  %finish_boundary_class = call i32 @{1}(i8* %data, i64 %size, i64 %position, i32 %previous_cp, i32 0, i64 0)
+  %finish_state_offset = mul nuw i32 %state, {0}
   %finish_accept_index = add nuw i32 %finish_state_offset, %finish_boundary_class
   %finish_accept_index_i64 = zext i32 %finish_accept_index to i64
-  %finish_accept_ptr = getelementptr [{accept_count} x i8], [{accept_count} x i8] addrspace(4)* @{boundary_accepts}, i64 0, i64 %finish_accept_index_i64
+  %finish_accept_ptr = getelementptr [{2} x i8], [{2} x i8] addrspace(4)* @{3}, i64 0, i64 %finish_accept_index_i64
   %finish_accept_i8 = load i8, i8 addrspace(4)* %finish_accept_ptr, align 1
   %finish_accepted = icmp ne i8 %finish_accept_i8, 0
   ret i1 %finish_accepted
 yes:
   ret i1 true
 }})NVVM",
-                   fmt::arg("boundary_class_count", machine.boundary_class_count),
-                   fmt::arg("boundary", boundary),
-                   fmt::arg("accept_count", machine.boundary_accepts.size()),
-                   fmt::arg("boundary_accepts", boundary_accepts)));
+                   machine.boundary_class_count,
+                   boundary,
+                   machine.boundary_accepts.size(),
+                   boundary_accepts));
     output_.blank();
   }
 
@@ -4419,8 +4421,8 @@ exit:
     auto width    = name("decode_width");
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i64 @{function}(i8* %data, i64 %size, i64 %pos, i64 %count) alwaysinline nounwind readonly {{
+      std::format(
+        R"NVVM(define internal i64 @{0}(i8* %data, i64 %size, i64 %pos, i64 %count) alwaysinline nounwind readonly {{
 entry:
   br label %loop
 loop:
@@ -4429,7 +4431,7 @@ loop:
   %done = icmp uge i64 %index, %count
   br i1 %done, label %exit, label %check
 check:
-  %width = call i64 @{width}(i8* %data, i64 %size, i64 %cursor)
+  %width = call i64 @{1}(i8* %data, i64 %size, i64 %cursor)
   %missing = icmp eq i64 %width, 0
   br i1 %missing, label %exit, label %step
 step:
@@ -4439,8 +4441,8 @@ step:
 exit:
   ret i64 %cursor
 }})NVVM",
-        fmt::arg("function", function),
-        fmt::arg("width", width)));
+        function,
+        width));
     output_.blank();
   }
 
@@ -4453,8 +4455,8 @@ exit:
     auto width    = name("decode_width");
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos, i64 %count) alwaysinline nounwind readonly {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %pos, i64 %count) alwaysinline nounwind readonly {{
 entry:
   br label %loop
 loop:
@@ -4463,7 +4465,7 @@ loop:
   %done = icmp uge i64 %index, %count
   br i1 %done, label %yes, label %check
 check:
-  %width = call i64 @{width}(i8* %data, i64 %size, i64 %cursor)
+  %width = call i64 @{1}(i8* %data, i64 %size, i64 %cursor)
   %missing = icmp eq i64 %width, 0
   br i1 %missing, label %no, label %step
 step:
@@ -4475,8 +4477,8 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-        fmt::arg("function", function),
-        fmt::arg("width", width)));
+        function,
+        width));
     output_.blank();
   }
 
@@ -4515,25 +4517,25 @@ entry:)NVVM",
       for (std::size_t index = 0; index < std::size(cudf_unicode_word_ranges); ++index) {
         unicode_data_range range = cudf_unicode_word_ranges[index];
         output_.emit("{}",
-                     fmt::format(R"NVVM(  %word_ge_{index} = icmp uge i32 %cp, {first}
-  %word_le_{index} = icmp ule i32 %cp, {last}
-  %word_in_{index} = and i1 %word_ge_{index}, %word_le_{index})NVVM",
-                                 fmt::arg("index", index),
-                                 fmt::arg("first", range.first),
-                                 fmt::arg("last", range.last)));
+                     std::format(R"NVVM(  %word_ge_{0} = icmp uge i32 %cp, {1}
+  %word_le_{0} = icmp ule i32 %cp, {2}
+  %word_in_{0} = and i1 %word_ge_{0}, %word_le_{0})NVVM",
+                                 index,
+                                 range.first,
+                                 range.last));
         if (index == 0) {
           combined = "%word_in_0";
         } else {
           output_.emit("  %word_combined_{} = or i1 {}, %word_in_{}", index, combined, index);
-          combined = fmt::format("%word_combined_{}", index);
+          combined = std::format("%word_combined_{}", index);
         }
       }
       output_.emit("{}",
-                   fmt::format(R"NVVM(  %word_underscore = icmp eq i32 %cp, 95
-  %word_result = or i1 {combined}, %word_underscore
+                   std::format(R"NVVM(  %word_underscore = icmp eq i32 %cp, 95
+  %word_result = or i1 {0}, %word_underscore
   ret i1 %word_result
 }})NVVM",
-                               fmt::arg("combined", combined)));
+                               combined));
       output_.blank();
       return;
     }
@@ -4582,8 +4584,8 @@ entry:
     auto load_byte = name("load_byte");
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i64 @{function}(i8* %data, i64 %size, i64 %target) alwaysinline nounwind readonly {{
+      std::format(
+        R"NVVM(define internal i64 @{0}(i8* %data, i64 %size, i64 %target) alwaysinline nounwind readonly {{
 entry:
   %at_begin = icmp eq i64 %target, 0
   br i1 %at_begin, label %zero, label %start
@@ -4595,7 +4597,7 @@ start:
 loop:
   %cursor = phi i64 [ %initial, %start ], [ %previous, %continue ]
   %pointer = getelementptr i8, i8* %data, i64 %cursor
-  %byte = call i32 @{load_byte}(i8* %pointer)
+  %byte = call i32 @{1}(i8* %pointer)
   %prefix = and i32 %byte, 192
   %continuation = icmp eq i32 %prefix, 128
   %at_zero = icmp eq i64 %cursor, 0
@@ -4608,8 +4610,8 @@ continue:
 found:
   ret i64 %cursor
 }})NVVM",
-        fmt::arg("function", function),
-        fmt::arg("load_byte", load_byte)));
+        function,
+        load_byte));
     output_.blank();
   }
 
@@ -4625,8 +4627,8 @@ found:
     auto advance  = name("advance");
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos, i32 %kind) inlinehint nounwind readonly {{
+      std::format(
+        R"NVVM(define internal i1 @{3}(i8* %data, i64 %size, i64 %pos, i32 %kind) inlinehint nounwind readonly {{
 entry:
   switch i32 %kind, label %not_boundary [
     i32 0, label %begin_input
@@ -4645,10 +4647,10 @@ begin_line:
   %is_begin_line_input = icmp eq i64 %pos, 0
   br i1 %is_begin_line_input, label %true, label %begin_line_nonzero
 begin_line_nonzero:
-  br i1 {multiline}, label %begin_line_previous, label %false
+  br i1 {5}, label %begin_line_previous, label %false
 begin_line_previous:
-  %begin_prev_pos = call i64 @{previous}(i8* %data, i64 %size, i64 %pos)
-  %begin_prev = call i32 @{decode}(i8* %data, i64 %size, i64 %begin_prev_pos)
+  %begin_prev_pos = call i64 @{2}(i8* %data, i64 %size, i64 %pos)
+  %begin_prev = call i32 @{0}(i8* %data, i64 %size, i64 %begin_prev_pos)
   %begin_prev_lf = icmp eq i32 %begin_prev, 10
   %begin_prev_cr = icmp eq i32 %begin_prev, 13
   %begin_prev_nel = icmp eq i32 %begin_prev, 133
@@ -4658,11 +4660,11 @@ begin_line_previous:
   %begin_prev_extended_0 = or i1 %begin_prev_crlf, %begin_prev_nel
   %begin_prev_extended_1 = or i1 %begin_prev_ls, %begin_prev_ps
   %begin_prev_extended = or i1 %begin_prev_extended_0, %begin_prev_extended_1
-  %begin_prev_newline = select i1 {extended}, i1 %begin_prev_extended, i1 %begin_prev_lf
-  %begin_current = call i32 @{decode}(i8* %data, i64 %size, i64 %pos)
+  %begin_prev_newline = select i1 {6}, i1 %begin_prev_extended, i1 %begin_prev_lf
+  %begin_current = call i32 @{0}(i8* %data, i64 %size, i64 %pos)
   %begin_current_lf = icmp eq i32 %begin_current, 10
   %begin_mid_crlf_0 = and i1 %begin_prev_cr, %begin_current_lf
-  %begin_mid_crlf = and i1 {extended}, %begin_mid_crlf_0
+  %begin_mid_crlf = and i1 {6}, %begin_mid_crlf_0
   %begin_not_mid_crlf = xor i1 %begin_mid_crlf, true
   %begin_line_result = and i1 %begin_prev_newline, %begin_not_mid_crlf
   ret i1 %begin_line_result
@@ -4670,7 +4672,7 @@ end_line:
   %is_end_line_input = icmp eq i64 %pos, %size
   br i1 %is_end_line_input, label %true, label %end_line_current
 end_line_current:
-  %end_cp = call i32 @{decode}(i8* %data, i64 %size, i64 %pos)
+  %end_cp = call i32 @{0}(i8* %data, i64 %size, i64 %pos)
   %end_lf = icmp eq i32 %end_cp, 10
   %end_cr = icmp eq i32 %end_cp, 13
   %end_nel = icmp eq i32 %end_cp, 133
@@ -4680,28 +4682,28 @@ end_line_current:
   %end_extended_0 = or i1 %end_crlf, %end_nel
   %end_extended_1 = or i1 %end_ls, %end_ps
   %end_extended = or i1 %end_extended_0, %end_extended_1
-  %end_newline = select i1 {extended}, i1 %end_extended, i1 %end_lf
+  %end_newline = select i1 {6}, i1 %end_extended, i1 %end_lf
   br i1 %end_newline, label %end_line_newline, label %false
 end_line_newline:
-  %end_prev_pos = call i64 @{previous}(i8* %data, i64 %size, i64 %pos)
-  %end_prev = call i32 @{decode}(i8* %data, i64 %size, i64 %end_prev_pos)
+  %end_prev_pos = call i64 @{2}(i8* %data, i64 %size, i64 %pos)
+  %end_prev = call i32 @{0}(i8* %data, i64 %size, i64 %end_prev_pos)
   %end_prev_cr = icmp eq i32 %end_prev, 13
   %end_mid_crlf_0 = and i1 %end_prev_cr, %end_lf
-  %end_mid_crlf = and i1 {extended}, %end_mid_crlf_0
+  %end_mid_crlf = and i1 {6}, %end_mid_crlf_0
   br i1 %end_mid_crlf, label %false, label %end_line_not_mid
 end_line_not_mid:
-  br i1 {multiline}, label %true, label %end_line_final
+  br i1 {5}, label %true, label %end_line_final
 end_line_final:
-  %end_next = call i64 @{advance}(i8* %data, i64 %size, i64 %pos, i64 1)
+  %end_next = call i64 @{4}(i8* %data, i64 %size, i64 %pos, i64 1)
   %end_is_final = icmp eq i64 %end_next, %size
   br i1 %end_is_final, label %true, label %end_line_possible_crlf
 end_line_possible_crlf:
-  %end_can_be_crlf = and i1 {extended}, %end_cr
+  %end_can_be_crlf = and i1 {6}, %end_cr
   br i1 %end_can_be_crlf, label %end_line_after_cr, label %false
 end_line_after_cr:
-  %end_next_cp = call i32 @{decode}(i8* %data, i64 %size, i64 %end_next)
+  %end_next_cp = call i32 @{0}(i8* %data, i64 %size, i64 %end_next)
   %end_next_lf = icmp eq i32 %end_next_cp, 10
-  %end_after_lf = call i64 @{advance}(i8* %data, i64 %size, i64 %end_next, i64 1)
+  %end_after_lf = call i64 @{4}(i8* %data, i64 %size, i64 %end_next, i64 1)
   %end_lf_is_final = icmp eq i64 %end_after_lf, %size
   %end_final_crlf = and i1 %end_next_lf, %end_lf_is_final
   ret i1 %end_final_crlf
@@ -4709,8 +4711,8 @@ boundary:
   %current_in_bounds = icmp ult i64 %pos, %size
   br i1 %current_in_bounds, label %current_decode, label %current_missing
 current_decode:
-  %current_cp = call i32 @{decode}(i8* %data, i64 %size, i64 %pos)
-  %current_word_value = call i1 @{is_word}(i32 %current_cp)
+  %current_cp = call i32 @{0}(i8* %data, i64 %size, i64 %pos)
+  %current_word_value = call i1 @{1}(i32 %current_cp)
   br label %current_join
 current_missing:
   br label %current_join
@@ -4719,9 +4721,9 @@ current_join:
   %has_previous = icmp ugt i64 %pos, 0
   br i1 %has_previous, label %previous_decode, label %previous_missing
 previous_decode:
-  %previous_pos = call i64 @{previous}(i8* %data, i64 %size, i64 %pos)
-  %previous_cp = call i32 @{decode}(i8* %data, i64 %size, i64 %previous_pos)
-  %previous_word_value = call i1 @{is_word}(i32 %previous_cp)
+  %previous_pos = call i64 @{2}(i8* %data, i64 %size, i64 %pos)
+  %previous_cp = call i32 @{0}(i8* %data, i64 %size, i64 %previous_pos)
+  %previous_word_value = call i1 @{1}(i32 %previous_cp)
   br label %previous_join
 previous_missing:
   br label %previous_join
@@ -4730,7 +4732,7 @@ previous_join:
   %is_boundary = xor i1 %previous_word, %current_word
   ret i1 %is_boundary
 not_boundary:
-  %boundary_value = call i1 @{function}(i8* %data, i64 %size, i64 %pos, i32 2)
+  %boundary_value = call i1 @{3}(i8* %data, i64 %size, i64 %pos, i32 2)
   %not_boundary_value = xor i1 %boundary_value, true
   ret i1 %not_boundary_value
 true:
@@ -4738,13 +4740,13 @@ true:
 false:
   ret i1 false
 }})NVVM",
-        fmt::arg("decode", decode),
-        fmt::arg("is_word", is_word),
-        fmt::arg("previous", previous),
-        fmt::arg("function", function),
-        fmt::arg("advance", advance),
-        fmt::arg("multiline", ir_.options.multiline ? "true" : "false"),
-        fmt::arg("extended", ir_.options.extended_newline ? "true" : "false")));
+        decode,
+        is_word,
+        previous,
+        function,
+        advance,
+        ir_.options.multiline ? "true" : "false",
+        ir_.options.extended_newline ? "true" : "false"));
     output_.blank();
   }
 
@@ -4757,16 +4759,16 @@ false:
       for (auto& instruction : block.instructions) {
         auto* match = std::get_if<match_character>(&instruction);
         if (match == nullptr) continue;
-        auto function = name(fmt::format("predicate_{}", block.id));
+        auto function = name(std::format("predicate_{}", block.id));
         auto decode   = name("decode_codepoint");
         output_.emit(
           "{}",
-          fmt::format(
-            R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
+          std::format(
+            R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
 entry:
-  %cp = call i32 @{decode}(i8* %data, i64 %size, i64 %pos))NVVM",
-            fmt::arg("function", function),
-            fmt::arg("decode", decode)));
+  %cp = call i32 @{1}(i8* %data, i64 %size, i64 %pos))NVVM",
+            function,
+            decode));
         if (match->predicate.recognized == predicate_class::ANY) {
           if (match->predicate.matches_newline) {
             output_.emit("  ret i1 true");
@@ -4792,23 +4794,23 @@ entry:
           for (std::size_t index = 0; index < match->predicate.ranges.size(); ++index) {
             auto range = match->predicate.ranges[index];
             if (range.first == range.last) {
-              auto comparison = fmt::format("equal_{}", index);
+              auto comparison = std::format("equal_{}", index);
               output_.emit(
                 "  %{} = icmp eq i32 %cp, {}", comparison, static_cast<std::uint32_t>(range.first));
               comparisons.push_back(comparison);
             } else {
-              auto ge     = fmt::format("ge_{}", index);
-              auto le     = fmt::format("le_{}", index);
-              auto inside = fmt::format("inside_{}", index);
+              auto ge     = std::format("ge_{}", index);
+              auto le     = std::format("le_{}", index);
+              auto inside = std::format("inside_{}", index);
               output_.emit("{}",
-                           fmt::format(R"NVVM(  %{ge} = icmp uge i32 %cp, {first}
-  %{le} = icmp ule i32 %cp, {last}
-  %{inside} = and i1 %{ge}, %{le})NVVM",
-                                       fmt::arg("ge", ge),
-                                       fmt::arg("le", le),
-                                       fmt::arg("inside", inside),
-                                       fmt::arg("first", static_cast<std::uint32_t>(range.first)),
-                                       fmt::arg("last", static_cast<std::uint32_t>(range.last))));
+                           std::format(R"NVVM(  %{0} = icmp uge i32 %cp, {3}
+  %{1} = icmp ule i32 %cp, {4}
+  %{2} = and i1 %{0}, %{1})NVVM",
+                                       ge,
+                                       le,
+                                       inside,
+                                       static_cast<std::uint32_t>(range.first),
+                                       static_cast<std::uint32_t>(range.last)));
               comparisons.push_back(inside);
             }
           }
@@ -4817,7 +4819,7 @@ entry:
           } else {
             auto combined = comparisons.front();
             for (std::size_t index = 1; index < comparisons.size(); ++index) {
-              auto next = fmt::format("combined_{}", index);
+              auto next = std::format("combined_{}", index);
               output_.emit("  %{} = or i1 %{}, %{}", next, combined, comparisons[index]);
               combined = next;
             }
@@ -4850,7 +4852,7 @@ entry:
       for (auto& instruction : block.instructions) {
         auto* literal = std::get_if<match_literal>(&instruction);
         if (literal == nullptr) continue;
-        auto function = name(fmt::format("literal_{}", block.id));
+        auto function = name(std::format("literal_{}", block.id));
         auto ascii    = !literal->value.empty() &&
                      std::all_of(literal->value.begin(), literal->value.end(), [](char32_t value) {
                        return value <= 0x7f;
@@ -4858,31 +4860,31 @@ entry:
         if (ascii) {
           output_.emit(
             "{}",
-            fmt::format(
-              R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
+            std::format(
+              R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
 entry:
   %in_bounds = icmp ule i64 %pos, %size
   %remaining = sub i64 %size, %pos
-  %enough = icmp uge i64 %remaining, {size}
+  %enough = icmp uge i64 %remaining, {1}
   %available = and i1 %in_bounds, %enough
   br i1 %available, label %check_0, label %fail)NVVM",
-              fmt::arg("function", function),
-              fmt::arg("size", literal->value.size())));
+              function,
+              literal->value.size()));
           for (std::size_t index = 0; index < literal->value.size(); ++index) {
             auto success =
-              index + 1 == literal->value.size() ? "success" : fmt::format("check_{}", index + 1);
+              index + 1 == literal->value.size() ? "success" : std::format("check_{}", index + 1);
             output_.emit(
               "{}",
-              fmt::format(R"NVVM(check_{index}:
-  %byte_pos_{index} = add i64 %pos, {index}
-  %byte_ptr_{index} = getelementptr i8, i8* %data, i64 %byte_pos_{index}
-  %byte_{index} = call i32 @{load_byte}(i8* %byte_ptr_{index})
-  %matches_{index} = icmp eq i32 %byte_{index}, {value}
-  br i1 %matches_{index}, label %{success}, label %fail)NVVM",
-                          fmt::arg("index", index),
-                          fmt::arg("load_byte", load_byte),
-                          fmt::arg("value", static_cast<std::uint32_t>(literal->value[index])),
-                          fmt::arg("success", success)));
+              std::format(R"NVVM(check_{0}:
+  %byte_pos_{0} = add i64 %pos, {0}
+  %byte_ptr_{0} = getelementptr i8, i8* %data, i64 %byte_pos_{0}
+  %byte_{0} = call i32 @{1}(i8* %byte_ptr_{0})
+  %matches_{0} = icmp eq i32 %byte_{0}, {2}
+  br i1 %matches_{0}, label %{3}, label %fail)NVVM",
+                          index,
+                          load_byte,
+                          static_cast<std::uint32_t>(literal->value[index]),
+                          success));
           }
           output_.emit(
             R"NVVM(success:
@@ -4896,38 +4898,38 @@ fail:
 
         output_.emit(
           "{}",
-          fmt::format(
-            R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
+          std::format(
+            R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %pos) alwaysinline nounwind readonly {{
 entry:
-  %available = call i1 @{can_peek}(i8* %data, i64 %size, i64 %pos, i64 {size})
+  %available = call i1 @{1}(i8* %data, i64 %size, i64 %pos, i64 {2})
   br i1 %available, label %check_0, label %fail)NVVM",
-            fmt::arg("function", function),
-            fmt::arg("can_peek", can_peek),
-            fmt::arg("size", literal->value.size())));
+            function,
+            can_peek,
+            literal->value.size()));
         for (std::size_t index = 0; index < literal->value.size(); ++index) {
-          auto position = index == 0 ? "%pos" : fmt::format("%pos_{}", index);
+          auto position = index == 0 ? "%pos" : std::format("%pos_{}", index);
           output_.emit(
             "{}",
-            fmt::format(R"NVVM(check_{index}:
-  %cp_{index} = call i32 @{decode}(i8* %data, i64 %size, i64 {position})
-  %matches_{index} = icmp eq i32 %cp_{index}, {codepoint})NVVM",
-                        fmt::arg("index", index),
-                        fmt::arg("decode", decode),
-                        fmt::arg("position", position),
-                        fmt::arg("codepoint", static_cast<std::uint32_t>(literal->value[index]))));
+            std::format(R"NVVM(check_{0}:
+  %cp_{0} = call i32 @{1}(i8* %data, i64 %size, i64 {2})
+  %matches_{0} = icmp eq i32 %cp_{0}, {3})NVVM",
+                        index,
+                        decode,
+                        position,
+                        static_cast<std::uint32_t>(literal->value[index])));
           if (index + 1 == literal->value.size()) {
             output_.emit("  br i1 %matches_{}, label %success, label %fail", index);
           } else {
             output_.emit(
               "{}",
-              fmt::format(
-                R"NVVM(  %width_{index} = call i64 @{width}(i8* %data, i64 %size, i64 {position})
-  %pos_{next} = add i64 {position}, %width_{index}
-  br i1 %matches_{index}, label %check_{next}, label %fail)NVVM",
-                fmt::arg("index", index),
-                fmt::arg("next", index + 1),
-                fmt::arg("width", width),
-                fmt::arg("position", position)));
+              std::format(
+                R"NVVM(  %width_{0} = call i64 @{2}(i8* %data, i64 %size, i64 {3})
+  %pos_{1} = add i64 {3}, %width_{0}
+  br i1 %matches_{0}, label %check_{1}, label %fail)NVVM",
+                index,
+                index + 1,
+                width,
+                position));
           }
         }
         output_.emit(
@@ -4951,7 +4953,7 @@ fail:
       auto& token = ir_.replacement[index];
       if (token.type != replacement_token::kind::LITERAL || token.literal.empty()) continue;
       output_.emit(R"NVVM(@{} = internal addrspace(4) constant [{} x i8] c"{}", align 1)NVVM",
-                   name(fmt::format("replacement_{}", index)),
+                   name(std::format("replacement_{}", index)),
                    token.literal.size(),
                    format_byte_array(token.literal));
     }
@@ -4967,22 +4969,22 @@ fail:
     auto function = name("run_block");
     std::string cases;
     for (auto& block : ir_.blocks) {
-      fmt::format_to(
+      std::format_to(
         std::back_inserter(cases), "    i32 {}, label %b{}_op_0\n", block.id, block.id);
     }
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i32 %block, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %steps) nounwind {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i32 %block, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %steps) nounwind {{
 entry:
   %exhausted = icmp eq i64 %steps, 0
   %next_steps = sub i64 %steps, 1
   br i1 %exhausted, label %return_fail, label %dispatch
 dispatch:
   switch i32 %block, label %return_fail [
-{cases}  ])NVVM",
-        fmt::arg("function", function),
-        fmt::arg("cases", cases)));
+{1}  ])NVVM",
+        function,
+        cases));
     for (auto& block : ir_.blocks)
       emit_block(block);
     output_.emit(
@@ -5001,12 +5003,12 @@ return_fail:
    */
   void emit_block(instruction_block const& block)
   {
-    auto prefix                 = fmt::format("b{}", block.id);
+    auto prefix                 = std::format("b{}", block.id);
     std::size_t operation_index = 0;
     bool returned               = false;
     for (auto& item : block.instructions) {
       output_.emit("{}_op_{}:", prefix, operation_index);
-      auto next = fmt::format("{}_op_{}", prefix, operation_index + 1);
+      auto next = std::format("{}_op_{}", prefix, operation_index + 1);
       if (auto* peek = std::get_if<can_peek>(&item)) {
         auto* next_literal =
           operation_index + 1 < block.instructions.size()
@@ -5023,14 +5025,14 @@ return_fail:
         } else {
           output_.emit(
             "{}",
-            fmt::format(R"NVVM(  %{prefix}_pos_{index} = load i64, i64* %position, align 8
-  %{prefix}_peek_{index} = call i1 @{can_peek}(i8* %data, i64 %size, i64 %{prefix}_pos_{index}, i64 {characters})
-  br i1 %{prefix}_peek_{index}, label %{next}, label %return_fail)NVVM",
-                        fmt::arg("prefix", prefix),
-                        fmt::arg("index", operation_index),
-                        fmt::arg("can_peek", name("can_peek")),
-                        fmt::arg("characters", peek->characters),
-                        fmt::arg("next", next)));
+            std::format(R"NVVM(  %{0}_pos_{1} = load i64, i64* %position, align 8
+  %{0}_peek_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_pos_{1}, i64 {3})
+  br i1 %{0}_peek_{1}, label %{4}, label %return_fail)NVVM",
+                        prefix,
+                        operation_index,
+                        name("can_peek"),
+                        peek->characters,
+                        next));
         }
       } else if (std::holds_alternative<read_character>(item)) {
         output_.emit("  br label %{}", next);
@@ -5044,45 +5046,45 @@ return_fail:
         }
         auto reset = std::string{};
         if (capture->action == capture_action::BEGIN) {
-          reset = fmt::format(
-            R"NVVM(  %{prefix}_capture_end_ptr_{index} = getelementptr i64, i64* %captures, i64 {end_slot}
-  store i64 -1, i64* %{prefix}_capture_end_ptr_{index}, align 8
+          reset = std::format(
+            R"NVVM(  %{0}_capture_end_ptr_{1} = getelementptr i64, i64* %captures, i64 {2}
+  store i64 -1, i64* %{0}_capture_end_ptr_{1}, align 8
 )NVVM",
-            fmt::arg("prefix", prefix),
-            fmt::arg("index", operation_index),
-            fmt::arg("end_slot", slot + 1U));
+            prefix,
+            operation_index,
+            slot + 1U);
         }
         output_.emit("{}",
-                     fmt::format(
-                       R"NVVM(  %{prefix}_capture_pos_{index} = load i64, i64* %position, align 8
-  %{prefix}_capture_ptr_{index} = getelementptr i64, i64* %captures, i64 {slot}
-  store i64 %{prefix}_capture_pos_{index}, i64* %{prefix}_capture_ptr_{index}, align 8
-{reset}  br label %{next})NVVM",
-                       fmt::arg("prefix", prefix),
-                       fmt::arg("index", operation_index),
-                       fmt::arg("slot", slot),
-                       fmt::arg("reset", reset),
-                       fmt::arg("next", next)));
+                     std::format(
+                       R"NVVM(  %{0}_capture_pos_{1} = load i64, i64* %position, align 8
+  %{0}_capture_ptr_{1} = getelementptr i64, i64* %captures, i64 {2}
+  store i64 %{0}_capture_pos_{1}, i64* %{0}_capture_ptr_{1}, align 8
+{3}  br label %{4})NVVM",
+                       prefix,
+                       operation_index,
+                       slot,
+                       reset,
+                       next));
       } else if (std::holds_alternative<match_character>(item)) {
         output_.emit(
           "{}",
-          fmt::format(R"NVVM(  %{prefix}_match_pos_{index} = load i64, i64* %position, align 8
-  %{prefix}_match_{index} = call i1 @{predicate}(i8* %data, i64 %size, i64 %{prefix}_match_pos_{index})
-  br i1 %{prefix}_match_{index}, label %{next}, label %return_fail)NVVM",
-                      fmt::arg("prefix", prefix),
-                      fmt::arg("index", operation_index),
-                      fmt::arg("predicate", name(fmt::format("predicate_{}", block.id))),
-                      fmt::arg("next", next)));
+          std::format(R"NVVM(  %{0}_match_pos_{1} = load i64, i64* %position, align 8
+  %{0}_match_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_match_pos_{1})
+  br i1 %{0}_match_{1}, label %{3}, label %return_fail)NVVM",
+                      prefix,
+                      operation_index,
+                      name(std::format("predicate_{}", block.id)),
+                      next));
       } else if (std::holds_alternative<match_literal>(item)) {
         output_.emit(
           "{}",
-          fmt::format(R"NVVM(  %{prefix}_literal_pos_{index} = load i64, i64* %position, align 8
-  %{prefix}_literal_{index} = call i1 @{literal}(i8* %data, i64 %size, i64 %{prefix}_literal_pos_{index})
-  br i1 %{prefix}_literal_{index}, label %{next}, label %return_fail)NVVM",
-                      fmt::arg("prefix", prefix),
-                      fmt::arg("index", operation_index),
-                      fmt::arg("literal", name(fmt::format("literal_{}", block.id))),
-                      fmt::arg("next", next)));
+          std::format(R"NVVM(  %{0}_literal_pos_{1} = load i64, i64* %position, align 8
+  %{0}_literal_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_literal_pos_{1})
+  br i1 %{0}_literal_{1}, label %{3}, label %return_fail)NVVM",
+                      prefix,
+                      operation_index,
+                      name(std::format("literal_{}", block.id)),
+                      next));
       } else if (auto* advance = std::get_if<advance_cursor>(&item)) {
         auto* previous_literal =
           operation_index > 0 ? std::get_if<match_literal>(&block.instructions[operation_index - 1])
@@ -5095,38 +5097,38 @@ return_fail:
         if (matched_ascii_literal) {
           output_.emit(
             "{}",
-            fmt::format(R"NVVM(  %{prefix}_advance_pos_{index} = load i64, i64* %position, align 8
-  %{prefix}_advanced_{index} = add i64 %{prefix}_advance_pos_{index}, {characters}
-  store i64 %{prefix}_advanced_{index}, i64* %position, align 8
-  br label %{next})NVVM",
-                        fmt::arg("prefix", prefix),
-                        fmt::arg("index", operation_index),
-                        fmt::arg("characters", advance->characters),
-                        fmt::arg("next", next)));
+            std::format(R"NVVM(  %{0}_advance_pos_{1} = load i64, i64* %position, align 8
+  %{0}_advanced_{1} = add i64 %{0}_advance_pos_{1}, {2}
+  store i64 %{0}_advanced_{1}, i64* %position, align 8
+  br label %{3})NVVM",
+                        prefix,
+                        operation_index,
+                        advance->characters,
+                        next));
         } else {
           output_.emit("{}",
-                       fmt::format(
-                         R"NVVM(  %{prefix}_advance_pos_{index} = load i64, i64* %position, align 8
-  %{prefix}_advanced_{index} = call i64 @{advance}(i8* %data, i64 %size, i64 %{prefix}_advance_pos_{index}, i64 {characters})
-  store i64 %{prefix}_advanced_{index}, i64* %position, align 8
-  br label %{next})NVVM",
-                         fmt::arg("prefix", prefix),
-                         fmt::arg("index", operation_index),
-                         fmt::arg("advance", name("advance")),
-                         fmt::arg("characters", advance->characters),
-                         fmt::arg("next", next)));
+                       std::format(
+                         R"NVVM(  %{0}_advance_pos_{1} = load i64, i64* %position, align 8
+  %{0}_advanced_{1} = call i64 @{2}(i8* %data, i64 %size, i64 %{0}_advance_pos_{1}, i64 {3})
+  store i64 %{0}_advanced_{1}, i64* %position, align 8
+  br label %{4})NVVM",
+                         prefix,
+                         operation_index,
+                         name("advance"),
+                         advance->characters,
+                         next));
         }
       } else if (auto* assertion = std::get_if<test_assertion>(&item)) {
         output_.emit(
           "{}",
-          fmt::format(R"NVVM(  %{prefix}_assert_pos_{index} = load i64, i64* %position, align 8
-  %{prefix}_assert_{index} = call i1 @{assertion}(i8* %data, i64 %size, i64 %{prefix}_assert_pos_{index}, i32 {kind})
-  br i1 %{prefix}_assert_{index}, label %{next}, label %return_fail)NVVM",
-                      fmt::arg("prefix", prefix),
-                      fmt::arg("index", operation_index),
-                      fmt::arg("assertion", name("assertion")),
-                      fmt::arg("kind", static_cast<std::uint32_t>(assertion->kind)),
-                      fmt::arg("next", next)));
+          std::format(R"NVVM(  %{0}_assert_pos_{1} = load i64, i64* %position, align 8
+  %{0}_assert_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_assert_pos_{1}, i32 {3})
+  br i1 %{0}_assert_{1}, label %{4}, label %return_fail)NVVM",
+                      prefix,
+                      operation_index,
+                      name("assertion"),
+                      static_cast<std::uint32_t>(assertion->kind),
+                      next));
       } else if (std::holds_alternative<emit_accept>(item)) {
         if (ir_.control.require_end) {
           output_.emit(
@@ -5159,28 +5161,28 @@ return_fail:
     for (auto slot : capture_slots_) {
       output_.emit(
         "{}",
-        fmt::format(
-          R"NVVM(  %{prefix}_saved_capture_{slot} = getelementptr i64, i64* %captures, i64 {slot}
-  %{prefix}_saved_capture_value_{slot} = load i64, i64* %{prefix}_saved_capture_{slot}, align 8)NVVM",
-          fmt::arg("prefix", prefix),
-          fmt::arg("slot", slot)));
+        std::format(
+          R"NVVM(  %{0}_saved_capture_{1} = getelementptr i64, i64* %captures, i64 {1}
+  %{0}_saved_capture_value_{1} = load i64, i64* %{0}_saved_capture_{1}, align 8)NVVM",
+          prefix,
+          slot));
     }
     output_.emit("  br label %{}_attempt_0", prefix);
     for (std::size_t index = 0; index < edges.size(); ++index) {
-      auto failure = index + 1 < edges.size() ? fmt::format("{}_attempt_{}", prefix, index + 1)
+      auto failure = index + 1 < edges.size() ? std::format("{}_attempt_{}", prefix, index + 1)
                                               : std::string{"return_fail"};
       output_.emit("{}",
-                   fmt::format(
-                     R"NVVM({prefix}_attempt_{index}:
-  %{prefix}_child_{index} = call i1 @{run_block}(i32 {target}, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %next_steps)
-  br i1 %{prefix}_child_{index}, label %return_success, label %{prefix}_restore_{index}
-{prefix}_restore_{index}:
-  store i64 %{prefix}_saved, i64* %position, align 8)NVVM",
-                     fmt::arg("prefix", prefix),
-                     fmt::arg("index", index),
-                     fmt::arg("run_block", name("run_block")),
-                     fmt::arg("target", edges[index].target),
-                     fmt::arg("failure", failure)));
+                   std::format(
+                     R"NVVM({0}_attempt_{1}:
+  %{0}_child_{1} = call i1 @{2}(i32 {3}, i8* %data, i64 %size, i64* %position, i64* %captures, i64 %next_steps)
+  br i1 %{0}_child_{1}, label %return_success, label %{0}_restore_{1}
+{0}_restore_{1}:
+  store i64 %{0}_saved, i64* %position, align 8)NVVM",
+                     prefix,
+                     index,
+                     name("run_block"),
+                     edges[index].target,
+                     failure));
       for (auto slot : capture_slots_) {
         output_.emit("  store i64 %{}_saved_capture_value_{}, i64* %{}_saved_capture_{}, align 8",
                      prefix,
@@ -5202,21 +5204,21 @@ return_fail:
     auto multiplier = static_cast<std::uint64_t>(ir_.blocks.size()) * 8U + 32U;
     output_.emit(
       "{}",
-      fmt::format(R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+      std::format(R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   %position = alloca i64, align 8
   %size_plus_one = add i64 %size, 1
-  %step_limit = mul i64 %size_plus_one, {multiplier})NVVM",
-                  fmt::arg("execute", options_.execute_function),
-                  fmt::arg("multiplier", multiplier)));
+  %step_limit = mul i64 %size_plus_one, {1})NVVM",
+                  options_.execute_function,
+                  multiplier));
     if (!ir_.control.scan_input || begins_at_input_start()) {
       output_.emit("{}",
-                   fmt::format(R"NVVM(  store i64 0, i64* %position, align 8
-  %matched = call i1 @{run_block}(i32 {entry}, i8* %data, i64 %size, i64* %position, i64* null, i64 %step_limit)
+                   std::format(R"NVVM(  store i64 0, i64* %position, align 8
+  %matched = call i1 @{0}(i32 {1}, i8* %data, i64 %size, i64* %position, i64* null, i64 %step_limit)
   ret i1 %matched
 }})NVVM",
-                               fmt::arg("run_block", run_block),
-                               fmt::arg("entry", ir_.entry)));
+                               run_block,
+                               ir_.entry));
       output_.blank();
       return;
     }
@@ -5230,7 +5232,7 @@ entry:
       }
       auto condition = options_.branch_hints ? "%candidate_likely" : "%candidate";
       output_.emit("{}",
-                   fmt::format(
+                   std::format(
                      R"NVVM(  br label %search
 search:
   %start = phi i64 [ 0, %entry ], [ %next_start, %next ]
@@ -5238,15 +5240,15 @@ search:
   br i1 %at_end, label %attempt, label %filter
 filter:
   %start_ptr = getelementptr i8, i8* %data, i64 %start
-  %start_byte = call i32 @{load_byte}(i8* %start_ptr)
-  %candidate = icmp eq i32 %start_byte, {prefix}
-{hint}  br i1 {condition}, label %attempt, label %skip
+  %start_byte = call i32 @{0}(i8* %start_ptr)
+  %candidate = icmp eq i32 %start_byte, {1}
+{2}  br i1 {3}, label %attempt, label %skip
 skip:
   %is_ascii = icmp ult i32 %start_byte, 128
   br i1 %is_ascii, label %continue_ascii, label %continue_utf8
 attempt:
   store i64 %start, i64* %position, align 8
-  %matched = call i1 @{run_block}(i32 {entry}, i8* %data, i64 %size, i64* %position, i64* null, i64 %step_limit)
+  %matched = call i1 @{4}(i32 {5}, i8* %data, i64 %size, i64* %position, i64* null, i64 %step_limit)
   br i1 %matched, label %yes, label %check_end
 check_end:
   br i1 %at_end, label %no, label %continue_ascii
@@ -5254,7 +5256,7 @@ continue_ascii:
   %ascii_next = add i64 %start, 1
   br label %next
 continue_utf8:
-  %utf8_next = call i64 @{advance}(i8* %data, i64 %size, i64 %start, i64 1)
+  %utf8_next = call i64 @{6}(i8* %data, i64 %size, i64 %start, i64 1)
   br label %next
 next:
   %next_start = phi i64 [ %ascii_next, %continue_ascii ], [ %utf8_next, %continue_utf8 ]
@@ -5264,38 +5266,38 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-                     fmt::arg("load_byte", name("load_byte")),
-                     fmt::arg("prefix", static_cast<std::uint32_t>(*prefix)),
-                     fmt::arg("hint", hint),
-                     fmt::arg("condition", condition),
-                     fmt::arg("run_block", run_block),
-                     fmt::arg("entry", ir_.entry),
-                     fmt::arg("advance", advance)));
+                     name("load_byte"),
+                     static_cast<std::uint32_t>(*prefix),
+                     hint,
+                     condition,
+                     run_block,
+                     ir_.entry,
+                     advance));
       output_.blank();
       return;
     }
 
     output_.emit("{}",
-                 fmt::format(R"NVVM(  br label %search
+                 std::format(R"NVVM(  br label %search
 search:
   %start = phi i64 [ 0, %entry ], [ %next_start, %continue ]
   store i64 %start, i64* %position, align 8
-  %matched = call i1 @{run_block}(i32 {entry}, i8* %data, i64 %size, i64* %position, i64* null, i64 %step_limit)
+  %matched = call i1 @{0}(i32 {1}, i8* %data, i64 %size, i64* %position, i64* null, i64 %step_limit)
   br i1 %matched, label %yes, label %check_end
 check_end:
   %at_end = icmp eq i64 %start, %size
   br i1 %at_end, label %no, label %continue
 continue:
-  %next_start = call i64 @{advance}(i8* %data, i64 %size, i64 %start, i64 1)
+  %next_start = call i64 @{2}(i8* %data, i64 %size, i64 %start, i64 1)
   br label %search
 yes:
   ret i1 true
 no:
   ret i1 false
 }})NVVM",
-                             fmt::arg("run_block", run_block),
-                             fmt::arg("entry", ir_.entry),
-                             fmt::arg("advance", advance)));
+                             run_block,
+                             ir_.entry,
+                             advance));
     output_.blank();
   }
 
@@ -5323,42 +5325,42 @@ no:
     }
 
     std::string source;
-    fmt::format_to(
+    std::format_to(
       std::back_inserter(source), "  switch i32 %transition_index, label %{}_done [\n", prefix);
     for (auto index : active) {
-      fmt::format_to(
+      std::format_to(
         std::back_inserter(source), "    i32 {}, label %{}_{}\n", index, prefix, index);
     }
-    fmt::format_to(std::back_inserter(source), "  ]\n");
+    std::format_to(std::back_inserter(source), "  ]\n");
     for (auto index : active) {
-      fmt::format_to(std::back_inserter(source), "{}_{}:\n", prefix, index);
+      std::format_to(std::back_inserter(source), "{}_{}:\n", prefix, index);
       for (std::size_t action_index = 0; action_index < programs[index].size(); ++action_index) {
         auto action = programs[index][action_index];
-        fmt::format_to(
+        std::format_to(
           std::back_inserter(source),
-          R"NVVM(  %{prefix}_{transition}_{action}_ptr = getelementptr i64, i64* %captures, i64 {slot}
-  store i64 {position}, i64* %{prefix}_{transition}_{action}_ptr, align 8
+          R"NVVM(  %{0}_{1}_{2}_ptr = getelementptr i64, i64* %captures, i64 {3}
+  store i64 {4}, i64* %{0}_{1}_{2}_ptr, align 8
 )NVVM",
-          fmt::arg("prefix", prefix),
-          fmt::arg("transition", index),
-          fmt::arg("action", action_index),
-          fmt::arg("slot", action.slot),
-          fmt::arg("position", position));
+          prefix,
+          index,
+          action_index,
+          action.slot,
+          position);
         if (action.reset_end) {
-          fmt::format_to(
+          std::format_to(
             std::back_inserter(source),
-            R"NVVM(  %{prefix}_{transition}_{action}_end_ptr = getelementptr i64, i64* %captures, i64 {slot}
-  store i64 -1, i64* %{prefix}_{transition}_{action}_end_ptr, align 8
+            R"NVVM(  %{0}_{1}_{2}_end_ptr = getelementptr i64, i64* %captures, i64 {3}
+  store i64 -1, i64* %{0}_{1}_{2}_end_ptr, align 8
 )NVVM",
-            fmt::arg("prefix", prefix),
-            fmt::arg("transition", index),
-            fmt::arg("action", action_index),
-            fmt::arg("slot", action.slot + 1U));
+            prefix,
+            index,
+            action_index,
+            action.slot + 1U);
         }
       }
-      fmt::format_to(std::back_inserter(source), "  br label %{}_done\n", prefix);
+      std::format_to(std::back_inserter(source), "  br label %{}_done\n", prefix);
     }
-    fmt::format_to(std::back_inserter(source), "{}_done:\n  br label %{}", prefix, continuation);
+    std::format_to(std::back_inserter(source), "{}_done:\n  br label %{}", prefix, continuation);
     output_.emit("{}", source);
   }
 
@@ -5389,14 +5391,14 @@ no:
     std::string predicate = "false";
     for (std::size_t index = 0; index < ranges.size(); ++index) {
       auto [first, last] = ranges[index];
-      auto range_value   = fmt::format("%start_filter_range_{}", index);
+      auto range_value   = std::format("%start_filter_range_{}", index);
       if (first == last) {
-        fmt::format_to(std::back_inserter(checks),
+        std::format_to(std::back_inserter(checks),
                        "  {} = icmp eq i32 %start_filter_byte, {}\n",
                        range_value,
                        first);
       } else {
-        fmt::format_to(std::back_inserter(checks),
+        std::format_to(std::back_inserter(checks),
                        R"NVVM(  %start_filter_offset_{} = sub i32 %start_filter_byte, {}
   {} = icmp ule i32 %start_filter_offset_{}, {}
 )NVVM",
@@ -5409,8 +5411,8 @@ no:
       if (index == 0U) {
         predicate = range_value;
       } else {
-        auto any_value = fmt::format("%start_filter_any_{}", index);
-        fmt::format_to(
+        auto any_value = std::format("%start_filter_any_{}", index);
+        std::format_to(
           std::back_inserter(checks), "  {} = or i1 {}, {}\n", any_value, predicate, range_value);
         predicate = std::move(any_value);
       }
@@ -5422,25 +5424,25 @@ no:
   br label %search
 )NVVM"}
                                        : std::string{};
-    return fmt::format(
+    return std::format(
       R"NVVM(start_filter:
   %filter_at_end = icmp eq i64 %start, %size
-  br i1 %filter_at_end, label %{candidate_target}, label %start_filter_load
+  br i1 %filter_at_end, label %{0}, label %start_filter_load
 start_filter_load:
   %start_filter_ptr = getelementptr i8, i8* %data, i64 %start
-  %start_filter_byte = call i32 @{load_byte}(i8* %start_filter_ptr)
+  %start_filter_byte = call i32 @{1}(i8* %start_filter_ptr)
   %start_filter_ascii = icmp ult i32 %start_filter_byte, 128
-  br i1 %start_filter_ascii, label %start_filter_ascii_byte, label %{candidate_target}
+  br i1 %start_filter_ascii, label %start_filter_ascii_byte, label %{0}
 start_filter_ascii_byte:
-{checks}  br i1 {predicate}, label %{candidate_target}, label %{miss_target}
-{direct_block}
+{2}  br i1 {3}, label %{0}, label %{4}
+{5}
 )NVVM",
-      fmt::arg("candidate_target", candidate_target),
-      fmt::arg("load_byte", name("load_byte")),
-      fmt::arg("checks", checks),
-      fmt::arg("predicate", predicate),
-      fmt::arg("miss_target", miss_target),
-      fmt::arg("direct_block", direct_block));
+      candidate_target,
+      name("load_byte"),
+      checks,
+      predicate,
+      miss_target,
+      direct_block);
   }
 
   /**
@@ -5453,15 +5455,15 @@ start_filter_ascii_byte:
     auto search_target = machine.start_byte_filter ? "start_filter" : "initialize";
     auto start_filter  = render_start_byte_filter(machine, "initialize", false);
     auto restart       = machine.restart_state <= machine.state_mask
-                           ? fmt::format(
-                         R"NVVM(  %restart_state_match = icmp eq i32 %state, {restart_state}
+                           ? std::format(
+                         R"NVVM(  %restart_state_match = icmp eq i32 %state, {0}
   %restart_consumed = icmp ugt i64 %position, %start
   %restart_before_end = icmp ult i64 %position, %size
   %restart_prefix_candidate = and i1 %restart_state_match, %restart_consumed
   %restart_prefix = and i1 %restart_prefix_candidate, %restart_before_end
   %restart_base = select i1 %restart_prefix, i64 %position, i64 %start
 )NVVM",
-                         fmt::arg("restart_state", machine.restart_state))
+                         machine.restart_state)
                            : std::string{};
     auto advance_phi =
       machine.restart_state <= machine.state_mask && machine.start_byte_filter
@@ -5474,72 +5476,72 @@ start_filter_ascii_byte:
                           : "%start";
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
 entry:
   br label %search
 search:
   %start = phi i64 [ %search_start, %entry ], [ %next_start, %advance_start ]
   %in_range = icmp ule i64 %start, %size
-  br i1 %in_range, label %{search_target}, label %no
-{start_filter}
+  br i1 %in_range, label %{1}, label %no
+{2}
 initialize:)NVVM",
-        fmt::arg("function", name("find_from")),
-        fmt::arg("search_target", search_target),
-        fmt::arg("start_filter", start_filter)));
+        name("find_from"),
+        search_target,
+        start_filter));
     for (auto slot : capture_slots_) {
       output_.emit(
         "{}",
-        fmt::format(R"NVVM(  %capture_{slot}_ptr = getelementptr i64, i64* %captures, i64 {slot}
-  store i64 -1, i64* %capture_{slot}_ptr, align 8)NVVM",
-                    fmt::arg("slot", slot)));
+        std::format(R"NVVM(  %capture_{0}_ptr = getelementptr i64, i64* %captures, i64 {0}
+  store i64 -1, i64* %capture_{0}_ptr, align 8)NVVM",
+                    slot));
     }
     output_.emit("{}",
-                 fmt::format(
+                 std::format(
                    R"NVVM(  store i64 %start, i64* %match_begin, align 8
   br label %loop
 loop:
   %position = phi i64 [ %start, %initialize ], [ %next_position, %continue ]
-  %state = phi i32 [ {initial_state}, %initialize ], [ %next_state, %continue ]
+  %state = phi i32 [ {0}, %initialize ], [ %next_state, %continue ]
   %at_end = icmp eq i64 %position, %size
   br i1 %at_end, label %candidate_fail, label %load
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %first = call i32 @{1}(i8* %input_ptr)
   %is_ascii = icmp ult i32 %first, 128
   br i1 %is_ascii, label %ascii, label %unicode
 ascii:
-  %ascii_class = call i32 @{classify}(i32 %first)
+  %ascii_class = call i32 @{2}(i32 %first)
   br label %transition
 unicode:
-  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
-  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
-  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  %codepoint = call i32 @{3}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{4}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{2}(i32 %codepoint)
   br label %transition
 transition:
   %character_class = phi i32 [ %ascii_class, %ascii ], [ %unicode_class, %unicode ]
   %character_width = phi i64 [ 1, %ascii ], [ %unicode_width, %unicode ]
   %state_index = and i32 %state, 16383
-  %state_offset = mul nuw i32 %state_index, {class_count}
+  %state_offset = mul nuw i32 %state_index, {5}
   %transition_index = add nuw i32 %state_offset, %character_class
   %transition_index_i64 = zext i32 %transition_index to i64
-  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
-  %encoded_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
+  %transition_ptr = getelementptr [{6} x i16], [{6} x i16] addrspace({7})* @{8}, i64 0, i64 %transition_index_i64
+  %encoded_i16 = load i16, i16 addrspace({7})* %transition_ptr, align 2
   %encoded = zext i16 %encoded_i16 to i32
   %next_state = and i32 %encoded, 16383
-  %dead = icmp eq i32 %next_state, {dead_state}
+  %dead = icmp eq i32 %next_state, {9}
   br i1 %dead, label %candidate_fail, label %capture_transition
 capture_transition:)NVVM",
-                   fmt::arg("initial_state", machine.initial_state),
-                   fmt::arg("load_byte", name("load_byte")),
-                   fmt::arg("classify", name("dfa_classify")),
-                   fmt::arg("decode", name("decode_codepoint")),
-                   fmt::arg("width", name("decode_width")),
-                   fmt::arg("class_count", machine.class_count),
-                   fmt::arg("transition_count", machine.transitions.size()),
-                   fmt::arg("transition_address_space", machine.transition_address_space),
-                   fmt::arg("transitions", name("dfa_transitions")),
-                   fmt::arg("dead_state", machine.dead_state)));
+                   machine.initial_state,
+                   name("load_byte"),
+                   name("dfa_classify"),
+                   name("decode_codepoint"),
+                   name("decode_width"),
+                   machine.class_count,
+                   machine.transitions.size(),
+                   machine.transition_address_space,
+                   name("dfa_transitions"),
+                   machine.dead_state));
     emit_capture_action_dispatch(
       "transition_capture", machine.transition_capture_actions, "%position", "consume");
     output_.emit(
@@ -5554,12 +5556,12 @@ capture_accept:)NVVM");
     emit_capture_action_dispatch(
       "accept_capture", machine.accept_capture_actions, "%next_position", "yes");
     output_.emit("{}",
-                 fmt::format(
+                 std::format(
                    R"NVVM(candidate_fail:
-{restart}  %at_input_end = icmp eq i64 %start, %size
+{0}  %at_input_end = icmp eq i64 %start, %size
   br i1 %at_input_end, label %no, label %advance_start
 advance_start:
-{advance_phi}  %next_start = call i64 @{advance}(i8* %data, i64 %size, i64 {advance_base}, i64 1)
+{1}  %next_start = call i64 @{2}(i8* %data, i64 %size, i64 {3}, i64 1)
   br label %search
 yes:
   store i64 %next_position, i64* %match_end, align 8
@@ -5567,10 +5569,10 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-                   fmt::arg("restart", restart),
-                   fmt::arg("advance_phi", advance_phi),
-                   fmt::arg("advance", name("advance")),
-                   fmt::arg("advance_base", advance_base)));
+                   restart,
+                   advance_phi,
+                   name("advance"),
+                   advance_base));
     output_.blank();
   }
 
@@ -5594,18 +5596,18 @@ no:
                  << (byte * 8U);
       }
       auto bits = width * 8U;
-      fmt::format_to(
+      std::format_to(
         std::back_inserter(comparisons),
         "  %literal_byte_ptr_{} = getelementptr i8, i8* %data, i64 %literal_offset_{}\n",
         index,
         index);
       if (width == 1U) {
-        fmt::format_to(std::back_inserter(comparisons),
+        std::format_to(std::back_inserter(comparisons),
                        "  %literal_chunk_{} = load i8, i8* %literal_byte_ptr_{}, align 1\n",
                        index,
                        index);
       } else {
-        fmt::format_to(std::back_inserter(comparisons),
+        std::format_to(std::back_inserter(comparisons),
                        R"NVVM(  %literal_chunk_ptr_{} = bitcast i8* %literal_byte_ptr_{} to i{}*
   %literal_chunk_{} = load i{}, i{}* %literal_chunk_ptr_{}, align 1
 )NVVM",
@@ -5617,21 +5619,21 @@ no:
                        bits,
                        index);
       }
-      fmt::format_to(std::back_inserter(comparisons),
+      std::format_to(std::back_inserter(comparisons),
                      "  %literal_equal_{} = icmp eq i{} %literal_chunk_{}, {}\n",
                      index,
                      bits,
                      index,
                      value);
       if (matched.empty()) {
-        matched = fmt::format("%literal_equal_{}", index);
+        matched = std::format("%literal_equal_{}", index);
       } else {
-        fmt::format_to(std::back_inserter(comparisons),
+        std::format_to(std::back_inserter(comparisons),
                        "  %literal_equal_through_{} = and i1 {}, %literal_equal_{}\n",
                        index,
                        matched,
                        index);
-        matched = fmt::format("%literal_equal_through_{}", index);
+        matched = std::format("%literal_equal_through_{}", index);
       }
       offset += width;
       ++index;
@@ -5640,7 +5642,7 @@ no:
     std::string offsets;
     offset = 0;
     for (std::size_t chunk = 0; chunk < index; ++chunk) {
-      fmt::format_to(std::back_inserter(offsets),
+      std::format_to(std::back_inserter(offsets),
                      "  %literal_offset_{} = add i64 %position, {}\n",
                      chunk,
                      offset);
@@ -5650,24 +5652,24 @@ no:
 
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %position) alwaysinline nounwind readonly {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %position) alwaysinline nounwind readonly {{
 entry:
   %position_valid = icmp ule i64 %position, %size
   %remaining = sub i64 %size, %position
-  %enough_bytes = icmp uge i64 %remaining, {literal_size}
+  %enough_bytes = icmp uge i64 %remaining, {1}
   %in_bounds = and i1 %position_valid, %enough_bytes
   br i1 %in_bounds, label %compare, label %no
 compare:
-{offsets}{comparisons}  ret i1 {matched}
+{2}{3}  ret i1 {4}
 no:
   ret i1 false
 }})NVVM",
-        fmt::arg("function", name("ascii_literal_at")),
-        fmt::arg("literal_size", literal.size()),
-        fmt::arg("offsets", offsets),
-        fmt::arg("comparisons", comparisons),
-        fmt::arg("matched", matched)));
+        name("ascii_literal_at"),
+        literal.size(),
+        offsets,
+        comparisons,
+        matched));
     output_.blank();
   }
 
@@ -5682,19 +5684,19 @@ no:
     if (!ir_.control.scan_input) {
       auto required_size =
         ir_.control.require_end
-          ? fmt::format("  %required_size = icmp eq i64 %size, {}\n", literal.size())
+          ? std::format("  %required_size = icmp eq i64 %size, {}\n", literal.size())
           : std::string{"  %required_size = icmp uge i64 %size, 0\n"};
       output_.emit("{}",
-                   fmt::format(
-                     R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+                   std::format(
+                     R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
-{required_size}  %literal_match = call i1 @{literal_at}(i8* %data, i64 %size, i64 0)
+{1}  %literal_match = call i1 @{2}(i8* %data, i64 %size, i64 0)
   %matched = and i1 %required_size, %literal_match
   ret i1 %matched
 }})NVVM",
-                     fmt::arg("execute", options_.execute_function),
-                     fmt::arg("required_size", required_size),
-                     fmt::arg("literal_at", name("ascii_literal_at"))));
+                     options_.execute_function,
+                     required_size,
+                     name("ascii_literal_at")));
       output_.blank();
       return;
     }
@@ -5707,22 +5709,22 @@ entry:
                           << (byte * 8U);
       }
       output_.emit("{}",
-                   fmt::format(
+                   std::format(
                      R"NVVM(declare i64 @llvm.cttz.i64(i64, i1)
 
-define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   br label %search
 search:
   %position = phi i64 [ 0, %entry ], [ %next_chunk, %chunk_continue ]
-  %candidate_end = add i64 %position, {literal_size}
+  %candidate_end = add i64 %position, {1}
   %in_range = icmp ule i64 %candidate_end, %size
   br i1 %in_range, label %load_chunk, label %no
 load_chunk:
   %chunk_byte_ptr = getelementptr i8, i8* %data, i64 %position
   %chunk_ptr = bitcast i8* %chunk_byte_ptr to i64*
   %chunk = load i64, i64* %chunk_ptr, align 1
-  %candidate_x = xor i64 %chunk, {repeated_first}
+  %candidate_x = xor i64 %chunk, {2}
   %candidate_minus_ones = sub i64 %candidate_x, 72340172838076673
   %candidate_not = xor i64 %candidate_x, -1
   %candidate_zero_bytes = and i64 %candidate_minus_ones, %candidate_not
@@ -5734,7 +5736,7 @@ candidate:
   %candidate_bit = call i64 @llvm.cttz.i64(i64 %remaining_candidates, i1 false)
   %candidate_byte = lshr i64 %candidate_bit, 3
   %candidate_position = add i64 %position, %candidate_byte
-  %matched = call i1 @{literal_at}(i8* %data, i64 %size, i64 %candidate_position)
+  %matched = call i1 @{3}(i8* %data, i64 %size, i64 %candidate_position)
   br i1 %matched, label %yes, label %verify_continue
 verify_continue:
   %candidate_mask_minus_one = sub i64 %remaining_candidates, 1
@@ -5749,39 +5751,39 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-                     fmt::arg("execute", options_.execute_function),
-                     fmt::arg("literal_size", literal.size()),
-                     fmt::arg("repeated_first", repeated_first),
-                     fmt::arg("literal_at", name("ascii_literal_at"))));
+                     options_.execute_function,
+                     literal.size(),
+                     repeated_first,
+                     name("ascii_literal_at")));
       output_.blank();
       return;
     }
 
     auto verify = literal.size() == 1U
                     ? std::string{"  br i1 %candidate, label %yes, label %continue\n"}
-                    : fmt::format(
+                    : std::format(
                         R"NVVM(  br i1 %candidate, label %verify, label %continue
 verify:
-  %matched = call i1 @{literal_at}(i8* %data, i64 %size, i64 %position)
+  %matched = call i1 @{0}(i8* %data, i64 %size, i64 %position)
   br i1 %matched, label %yes, label %continue
 )NVVM",
-                        fmt::arg("literal_at", name("ascii_literal_at")));
+                        name("ascii_literal_at"));
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+      std::format(
+        R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   br label %search
 search:
   %position = phi i64 [ 0, %entry ], [ %next_position, %continue ]
-  %candidate_end = add i64 %position, {literal_size}
+  %candidate_end = add i64 %position, {1}
   %in_range = icmp ule i64 %candidate_end, %size
   br i1 %in_range, label %load, label %no
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %first = call i32 @{load_byte}(i8* %input_ptr)
-  %candidate = icmp eq i32 %first, {first}
-{verify}continue:
+  %first = call i32 @{2}(i8* %input_ptr)
+  %candidate = icmp eq i32 %first, {3}
+{4}continue:
   %next_position = add nuw i64 %position, 1
   br label %search
 yes:
@@ -5789,11 +5791,11 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-        fmt::arg("execute", options_.execute_function),
-        fmt::arg("literal_size", literal.size()),
-        fmt::arg("load_byte", name("load_byte")),
-        fmt::arg("first", static_cast<std::uint32_t>(static_cast<std::uint8_t>(literal.front()))),
-        fmt::arg("verify", verify)));
+        options_.execute_function,
+        literal.size(),
+        name("load_byte"),
+        static_cast<std::uint32_t>(static_cast<std::uint8_t>(literal.front())),
+        verify));
     output_.blank();
   }
 
@@ -5806,22 +5808,22 @@ no:
   {
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) alwaysinline nounwind {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) alwaysinline nounwind {{
 entry:
   br label %search
 search:
   %position = phi i64 [ %search_start, %entry ], [ %next_position, %continue ]
-  %candidate_end = add i64 %position, {literal_size}
+  %candidate_end = add i64 %position, {1}
   %in_range = icmp ule i64 %candidate_end, %size
   br i1 %in_range, label %load, label %no
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %first = call i32 @{load_byte}(i8* %input_ptr)
-  %candidate = icmp eq i32 %first, {first}
+  %first = call i32 @{2}(i8* %input_ptr)
+  %candidate = icmp eq i32 %first, {3}
   br i1 %candidate, label %verify, label %continue
 verify:
-  %matched = call i1 @{literal_at}(i8* %data, i64 %size, i64 %position)
+  %matched = call i1 @{4}(i8* %data, i64 %size, i64 %position)
   br i1 %matched, label %yes, label %continue
 continue:
   %next_position = add nuw i64 %position, 1
@@ -5833,11 +5835,11 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-        fmt::arg("function", name("find_from")),
-        fmt::arg("literal_size", literal.size()),
-        fmt::arg("load_byte", name("load_byte")),
-        fmt::arg("first", static_cast<std::uint32_t>(static_cast<std::uint8_t>(literal.front()))),
-        fmt::arg("literal_at", name("ascii_literal_at"))));
+        name("find_from"),
+        literal.size(),
+        name("load_byte"),
+        static_cast<std::uint32_t>(static_cast<std::uint8_t>(literal.front())),
+        name("ascii_literal_at")));
     output_.blank();
   }
 
@@ -5850,8 +5852,8 @@ no:
   {
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) alwaysinline nounwind {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) alwaysinline nounwind {{
 entry:
   br label %search
 search:
@@ -5860,8 +5862,8 @@ search:
   br i1 %in_range, label %load, label %no
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %value = call i32 @{load_byte}(i8* %input_ptr)
-  %matched = icmp eq i32 %value, {byte}
+  %value = call i32 @{1}(i8* %input_ptr)
+  %matched = icmp eq i32 %value, {2}
   br i1 %matched, label %yes, label %continue
 continue:
   %next_position = add nuw i64 %position, 1
@@ -5874,9 +5876,9 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-        fmt::arg("function", name("find_from")),
-        fmt::arg("load_byte", name("load_byte")),
-        fmt::arg("byte", static_cast<std::uint32_t>(byte))));
+        name("find_from"),
+        name("load_byte"),
+        static_cast<std::uint32_t>(byte)));
     output_.blank();
   }
 
@@ -5896,15 +5898,15 @@ no:
                                ? ", [ %start_filter_next, %start_filter_advance ]"
                                : "";
     auto restart           = machine.restart_state <= machine.state_mask
-                               ? fmt::format(
-                         R"NVVM(  %restart_state_match = icmp eq i32 %state, {restart_state}
+                               ? std::format(
+                         R"NVVM(  %restart_state_match = icmp eq i32 %state, {0}
   %restart_consumed = icmp ugt i64 %position, %start
   %restart_before_end = icmp ult i64 %position, %size
   %restart_prefix_candidate = and i1 %restart_state_match, %restart_consumed
   %restart_prefix = and i1 %restart_prefix_candidate, %restart_before_end
   %restart_base = select i1 %restart_prefix, i64 %position, i64 %start
 )NVVM",
-                         fmt::arg("restart_state", machine.restart_state))
+                         machine.restart_state)
                                : std::string{};
     auto advance_phi =
       machine.restart_state <= machine.state_mask && machine.start_byte_filter &&
@@ -5920,52 +5922,52 @@ no:
         : "%start";
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
 entry:
   br label %search
 search:
-  %start = phi i64 [ %search_start, %entry ], [ %next_start, %advance_start ]{filter_search_phi}
+  %start = phi i64 [ %search_start, %entry ], [ %next_start, %advance_start ]{3}
   %in_range = icmp ule i64 %start, %size
-  br i1 %in_range, label %{search_target}, label %no
-{start_filter}
+  br i1 %in_range, label %{1}, label %no
+{2}
 candidate:
   br label %loop
 loop:
   %position = phi i64 [ %start, %candidate ], [ %next_position, %continue ]
-  %state = phi i32 [ {initial_state}, %candidate ], [ %next_state, %continue ]
-  %last_accept = phi i64 [ {initial_accept}, %candidate ], [ %next_accept, %continue ]
+  %state = phi i32 [ {4}, %candidate ], [ %next_state, %continue ]
+  %last_accept = phi i64 [ {5}, %candidate ], [ %next_accept, %continue ]
   %at_end = icmp eq i64 %position, %size
   br i1 %at_end, label %candidate_done, label %load
 load:
   %input_ptr = getelementptr i8, i8* %data, i64 %position
-  %first = call i32 @{load_byte}(i8* %input_ptr)
+  %first = call i32 @{6}(i8* %input_ptr)
   %is_ascii = icmp ult i32 %first, 128
   br i1 %is_ascii, label %ascii, label %unicode
 ascii:
-  %ascii_class = call i32 @{classify}(i32 %first)
+  %ascii_class = call i32 @{7}(i32 %first)
   br label %transition
 unicode:
-  %codepoint = call i32 @{decode}(i8* %data, i64 %size, i64 %position)
-  %unicode_width = call i64 @{width}(i8* %data, i64 %size, i64 %position)
-  %unicode_class = call i32 @{classify}(i32 %codepoint)
+  %codepoint = call i32 @{8}(i8* %data, i64 %size, i64 %position)
+  %unicode_width = call i64 @{9}(i8* %data, i64 %size, i64 %position)
+  %unicode_class = call i32 @{7}(i32 %codepoint)
   br label %transition
 transition:
   %character_class = phi i32 [ %ascii_class, %ascii ], [ %unicode_class, %unicode ]
   %character_width = phi i64 [ 1, %ascii ], [ %unicode_width, %unicode ]
   %state_index = and i32 %state, 16383
-  %state_offset = mul nuw i32 %state_index, {class_count}
+  %state_offset = mul nuw i32 %state_index, {10}
   %transition_index = add nuw i32 %state_offset, %character_class
   %transition_index_i64 = zext i32 %transition_index to i64
-  %transition_ptr = getelementptr [{transition_count} x i16], [{transition_count} x i16] addrspace({transition_address_space})* @{transitions}, i64 0, i64 %transition_index_i64
-  %encoded_i16 = load i16, i16 addrspace({transition_address_space})* %transition_ptr, align 2
+  %transition_ptr = getelementptr [{11} x i16], [{11} x i16] addrspace({12})* @{13}, i64 0, i64 %transition_index_i64
+  %encoded_i16 = load i16, i16 addrspace({12})* %transition_ptr, align 2
   %encoded = zext i16 %encoded_i16 to i32
   %stop_bits = and i32 %encoded, 16384
   %stop_before = icmp ne i32 %stop_bits, 0
   br i1 %stop_before, label %candidate_done, label %check_transition
 check_transition:
   %next_state = and i32 %encoded, 16383
-  %dead = icmp eq i32 %next_state, {dead_state}
+  %dead = icmp eq i32 %next_state, {14}
   br i1 %dead, label %candidate_done, label %consume
 consume:
   %next_position = add i64 %position, %character_width
@@ -5980,10 +5982,10 @@ candidate_done:
   %matched = icmp ne i64 %accepted_end, -1
   br i1 %matched, label %yes, label %candidate_fail
 candidate_fail:
-{restart}  %at_input_end = icmp eq i64 %start, %size
+{15}  %at_input_end = icmp eq i64 %start, %size
   br i1 %at_input_end, label %no, label %advance_start
 advance_start:
-{advance_phi}  %next_start = call i64 @{advance}(i8* %data, i64 %size, i64 {advance_base}, i64 1)
+{16}  %next_start = call i64 @{17}(i8* %data, i64 %size, i64 {18}, i64 1)
   br label %search
 yes:
   store i64 %start, i64* %match_begin, align 8
@@ -5992,25 +5994,25 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-        fmt::arg("function", name("find_from")),
-        fmt::arg("search_target", search_target),
-        fmt::arg("start_filter", start_filter),
-        fmt::arg("filter_search_phi", filter_search_phi),
-        fmt::arg("initial_state", machine.initial_state),
-        fmt::arg("initial_accept", initial_accept),
-        fmt::arg("load_byte", name("load_byte")),
-        fmt::arg("classify", name("dfa_classify")),
-        fmt::arg("decode", name("decode_codepoint")),
-        fmt::arg("width", name("decode_width")),
-        fmt::arg("class_count", machine.class_count),
-        fmt::arg("transition_count", machine.transitions.size()),
-        fmt::arg("transition_address_space", machine.transition_address_space),
-        fmt::arg("transitions", name("dfa_transitions")),
-        fmt::arg("dead_state", machine.dead_state),
-        fmt::arg("restart", restart),
-        fmt::arg("advance_phi", advance_phi),
-        fmt::arg("advance", name("advance")),
-        fmt::arg("advance_base", advance_base)));
+        name("find_from"),
+        search_target,
+        start_filter,
+        filter_search_phi,
+        machine.initial_state,
+        initial_accept,
+        name("load_byte"),
+        name("dfa_classify"),
+        name("decode_codepoint"),
+        name("decode_width"),
+        machine.class_count,
+        machine.transitions.size(),
+        machine.transition_address_space,
+        name("dfa_transitions"),
+        machine.dead_state,
+        restart,
+        advance_phi,
+        name("advance"),
+        advance_base));
     output_.blank();
   }
 
@@ -6025,18 +6027,18 @@ no:
     auto multiplier = static_cast<std::uint64_t>(ir_.blocks.size()) * 8U + 32U;
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i1 @{function}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
+      std::format(
+        R"NVVM(define internal i1 @{0}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures) nounwind {{
 entry:
   %position = alloca i64, align 8
   %size_plus_one = add i64 %size, 1
-  %step_limit = mul i64 %size_plus_one, {multiplier}
+  %step_limit = mul i64 %size_plus_one, {1}
   br label %search
 search:
   %start = phi i64 [ %search_start, %entry ], [ %next_start, %continue ]
   %in_range = icmp ule i64 %start, %size)NVVM",
-        fmt::arg("function", function),
-        fmt::arg("multiplier", multiplier)));
+        function,
+        multiplier));
 
     auto prefix = required_ascii_prefix();
     if (prefix.has_value()) {
@@ -6047,19 +6049,19 @@ search:
       }
       auto condition = options_.branch_hints ? "%prefix_likely" : "%prefix_candidate";
       output_.emit("{}",
-                   fmt::format(R"NVVM(  br i1 %in_range, label %prefix_end, label %no
+                   std::format(R"NVVM(  br i1 %in_range, label %prefix_end, label %no
 prefix_end:
   %at_end = icmp eq i64 %start, %size
   br i1 %at_end, label %initialize, label %prefix_filter
 prefix_filter:
   %prefix_ptr = getelementptr i8, i8* %data, i64 %start
-  %prefix_byte = call i32 @{load_byte}(i8* %prefix_ptr)
-  %prefix_candidate = icmp eq i32 %prefix_byte, {prefix}
-{hint}  br i1 {condition}, label %initialize, label %continue)NVVM",
-                               fmt::arg("load_byte", name("load_byte")),
-                               fmt::arg("prefix", static_cast<std::uint32_t>(*prefix)),
-                               fmt::arg("hint", hint),
-                               fmt::arg("condition", condition)));
+  %prefix_byte = call i32 @{0}(i8* %prefix_ptr)
+  %prefix_candidate = icmp eq i32 %prefix_byte, {1}
+{2}  br i1 {3}, label %initialize, label %continue)NVVM",
+                               name("load_byte"),
+                               static_cast<std::uint32_t>(*prefix),
+                               hint,
+                               condition));
     } else {
       output_.emit("  br i1 %in_range, label %initialize, label %no");
     }
@@ -6068,23 +6070,23 @@ prefix_filter:
     for (auto slot : capture_slots_) {
       output_.emit(
         "{}",
-        fmt::format(
-          R"NVVM(  %find_capture_ptr_{slot} = getelementptr i64, i64* %captures, i64 {slot}
-  store i64 -1, i64* %find_capture_ptr_{slot}, align 8)NVVM",
-          fmt::arg("slot", slot)));
+        std::format(
+          R"NVVM(  %find_capture_ptr_{0} = getelementptr i64, i64* %captures, i64 {0}
+  store i64 -1, i64* %find_capture_ptr_{0}, align 8)NVVM",
+          slot));
     }
     if (ir_.control.result == result_shape::CAPTURES) {
       output_.emit("  store i64 %start, i64* %find_capture_ptr_0, align 8");
     }
     auto captures = uses_capture_buffer() ? "%captures" : "null";
     output_.emit("{}",
-                 fmt::format(R"NVVM(  store i64 %start, i64* %position, align 8
-  %matched = call i1 @{run_block}(i32 {entry}, i8* %data, i64 %size, i64* %position, i64* {captures}, i64 %step_limit)
+                 std::format(R"NVVM(  store i64 %start, i64* %position, align 8
+  %matched = call i1 @{0}(i32 {1}, i8* %data, i64 %size, i64* %position, i64* {2}, i64 %step_limit)
   br i1 %matched, label %yes, label %check_end
 check_end:)NVVM",
-                             fmt::arg("run_block", run_block),
-                             fmt::arg("entry", ir_.entry),
-                             fmt::arg("captures", captures)));
+                             run_block,
+                             ir_.entry,
+                             captures));
     if (prefix.has_value()) {
       output_.emit("  br i1 %at_end, label %no, label %continue");
     } else {
@@ -6092,14 +6094,14 @@ check_end:)NVVM",
   br i1 %at_end, label %no, label %continue)NVVM");
     }
     output_.emit("{}",
-                 fmt::format(R"NVVM(continue:
-  %next_start = call i64 @{advance}(i8* %data, i64 %size, i64 %start, i64 1)
+                 std::format(R"NVVM(continue:
+  %next_start = call i64 @{0}(i8* %data, i64 %size, i64 %start, i64 1)
   br label %search
 yes:
   %accepted_end = load i64, i64* %position, align 8
   store i64 %start, i64* %match_begin, align 8
   store i64 %accepted_end, i64* %match_end, align 8)NVVM",
-                             fmt::arg("advance", advance)));
+                             advance));
     if (ir_.control.result == result_shape::CAPTURES) {
       output_.emit("  store i64 %accepted_end, i64* %find_capture_ptr_1, align 8");
     }
@@ -6117,15 +6119,15 @@ no:
   {
     output_.emit(
       "{}",
-      fmt::format(R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size, i64* %span) nounwind {{
+      std::format(R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size, i64* %span) nounwind {{
 entry:
   %match_begin = getelementptr i64, i64* %span, i64 0
   %match_end = getelementptr i64, i64* %span, i64 1
-  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 0, i64* %match_begin, i64* %match_end, i64* null)
+  %matched = call i1 @{1}(i8* %data, i64 %size, i64 0, i64* %match_begin, i64* %match_end, i64* null)
   ret i1 %matched
 }})NVVM",
-                  fmt::arg("execute", options_.execute_function),
-                  fmt::arg("find_from", name("find_from"))));
+                  options_.execute_function,
+                  name("find_from")));
     output_.blank();
   }
 
@@ -6136,16 +6138,16 @@ entry:
   {
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define zeroext i1 @{execute}(i8* %data, i64 %size, i64 %search_start, i64* %captures) nounwind {{
+      std::format(
+        R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size, i64 %search_start, i64* %captures) nounwind {{
 entry:
   %match_begin = getelementptr i64, i64* %captures, i64 0
   %match_end = getelementptr i64, i64* %captures, i64 1
-  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures)
+  %matched = call i1 @{1}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* %captures)
   ret i1 %matched
 }})NVVM",
-        fmt::arg("execute", options_.execute_function),
-        fmt::arg("find_from", name("find_from"))));
+        options_.execute_function,
+        name("find_from")));
     output_.blank();
   }
 
@@ -6155,7 +6157,7 @@ entry:
   void emit_count_execute()
   {
     output_.emit("{}",
-                 fmt::format(R"NVVM(define i64 @{execute}(i8* %data, i64 %size) nounwind readonly {{
+                 std::format(R"NVVM(define i64 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   %match_begin = alloca i64, align 8
   %match_end = alloca i64, align 8
@@ -6163,7 +6165,7 @@ entry:
 loop:
   %search_start = phi i64 [ 0, %entry ], [ %end_value, %nonempty ], [ %empty_next, %advance_empty ]
   %count = phi i64 [ 0, %entry ], [ %next_count, %nonempty ], [ %next_count, %advance_empty ]
-  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* null)
+  %matched = call i1 @{1}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* null)
   br i1 %matched, label %found, label %done
 found:
   %begin_value = load i64, i64* %match_begin, align 8
@@ -6177,16 +6179,16 @@ empty:
   %empty_at_end = icmp eq i64 %end_value, %size
   br i1 %empty_at_end, label %done_after_match, label %advance_empty
 advance_empty:
-  %empty_next = call i64 @{advance}(i8* %data, i64 %size, i64 %end_value, i64 1)
+  %empty_next = call i64 @{2}(i8* %data, i64 %size, i64 %end_value, i64 1)
   br label %loop
 done_after_match:
   ret i64 %next_count
 done:
   ret i64 %count
 }})NVVM",
-                             fmt::arg("execute", options_.execute_function),
-                             fmt::arg("find_from", name("find_from")),
-                             fmt::arg("advance", name("advance"))));
+                             options_.execute_function,
+                             name("find_from"),
+                             name("advance")));
     output_.blank();
   }
 
@@ -6197,8 +6199,8 @@ done:
   {
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal i64 @{function}(i8* %source, i64 %begin, i64 %end, i8* %output, i64 %cursor) alwaysinline nounwind {{
+      std::format(
+        R"NVVM(define internal i64 @{0}(i8* %source, i64 %begin, i64 %end, i8* %output, i64 %cursor) alwaysinline nounwind {{
 entry:
   %length = sub i64 %end, %begin
   %next_cursor = add i64 %cursor, %length
@@ -6214,7 +6216,7 @@ copy:
 done:
   ret i64 %next_cursor
 }})NVVM",
-        fmt::arg("function", name("append_range"))));
+        name("append_range")));
     output_.blank();
   }
 
@@ -6228,34 +6230,34 @@ done:
     auto capture_declaration = std::string{};
     if (uses_capture_buffer()) {
       auto slots          = static_cast<std::size_t>(ir_.capture_count + 1U) * 2U;
-      capture_declaration = fmt::format(R"NVVM(  %capture_array = alloca [{slots} x i64], align 8
-  %captures = getelementptr [{slots} x i64], [{slots} x i64]* %capture_array, i64 0, i64 0)NVVM",
-                                        fmt::arg("slots", slots));
+      capture_declaration = std::format(R"NVVM(  %capture_array = alloca [{0} x i64], align 8
+  %captures = getelementptr [{0} x i64], [{0} x i64]* %capture_array, i64 0, i64 0)NVVM",
+                                        slots);
       capture_argument    = "%captures";
     }
     output_.emit("{}",
-                 fmt::format(
-                   R"NVVM(define i64 @{execute}(i8* %data, i64 %size, i8* %output) nounwind {{
+                 std::format(
+                   R"NVVM(define i64 @{0}(i8* %data, i64 %size, i8* %output) nounwind {{
 entry:
   %match_begin = alloca i64, align 8
   %match_end = alloca i64, align 8
-{capture_declaration}
+{1}
   br label %loop
 loop:
   %search_start = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %advanced_start, %advance_empty ]
   %copied = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %match_end_value, %advance_empty ]
   %cursor = phi i64 [ 0, %entry ], [ %replacement_cursor, %nonempty ], [ %replacement_cursor, %advance_empty ]
-  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* {captures})
+  %matched = call i1 @{2}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* {3})
   br i1 %matched, label %found, label %no_match
 found:
   %match_begin_value = load i64, i64* %match_begin, align 8
   %match_end_value = load i64, i64* %match_end, align 8
-  %unmatched_cursor = call i64 @{append}(i8* %data, i64 %copied, i64 %match_begin_value, i8* %output, i64 %cursor))NVVM",
-                   fmt::arg("execute", options_.execute_function),
-                   fmt::arg("capture_declaration", capture_declaration),
-                   fmt::arg("find_from", name("find_from")),
-                   fmt::arg("captures", capture_argument),
-                   fmt::arg("append", name("append_range"))));
+  %unmatched_cursor = call i64 @{4}(i8* %data, i64 %copied, i64 %match_begin_value, i8* %output, i64 %cursor))NVVM",
+                   options_.execute_function,
+                   capture_declaration,
+                   name("find_from"),
+                   capture_argument,
+                   name("append_range")));
     std::string cursor = "%unmatched_cursor";
     for (std::size_t index = 0; index < ir_.replacement.size(); ++index) {
       auto& token = ir_.replacement[index];
@@ -6263,48 +6265,48 @@ found:
         if (token.literal.empty()) continue;
         output_.emit(
           "{}",
-          fmt::format(
-            R"NVVM(  %replacement_constant_{index} = getelementptr [{size} x i8], [{size} x i8] addrspace(4)* @{constant}, i64 0, i64 0
-  %replacement_literal_{index} = addrspacecast i8 addrspace(4)* %replacement_constant_{index} to i8*
-  %replacement_cursor_{index} = call i64 @{append}(i8* %replacement_literal_{index}, i64 0, i64 {size}, i8* %output, i64 {cursor}))NVVM",
-            fmt::arg("index", index),
-            fmt::arg("size", token.literal.size()),
-            fmt::arg("constant", name(fmt::format("replacement_{}", index))),
-            fmt::arg("append", name("append_range")),
-            fmt::arg("cursor", cursor)));
+          std::format(
+            R"NVVM(  %replacement_constant_{0} = getelementptr [{1} x i8], [{1} x i8] addrspace(4)* @{2}, i64 0, i64 0
+  %replacement_literal_{0} = addrspacecast i8 addrspace(4)* %replacement_constant_{0} to i8*
+  %replacement_cursor_{0} = call i64 @{3}(i8* %replacement_literal_{0}, i64 0, i64 {1}, i8* %output, i64 {4}))NVVM",
+            index,
+            token.literal.size(),
+            name(std::format("replacement_{}", index)),
+            name("append_range"),
+            cursor));
       } else if (token.capture_index == 0 || is_whole_match_capture(token.capture_index)) {
         output_.emit(
           "{}",
-          fmt::format(
-            R"NVVM(  %replacement_cursor_{index} = call i64 @{append}(i8* %data, i64 %match_begin_value, i64 %match_end_value, i8* %output, i64 {cursor}))NVVM",
-            fmt::arg("index", index),
-            fmt::arg("append", name("append_range")),
-            fmt::arg("cursor", cursor)));
+          std::format(
+            R"NVVM(  %replacement_cursor_{0} = call i64 @{1}(i8* %data, i64 %match_begin_value, i64 %match_end_value, i8* %output, i64 {2}))NVVM",
+            index,
+            name("append_range"),
+            cursor));
       } else {
         auto slot = static_cast<std::size_t>(token.capture_index) * 2U;
         output_.emit(
           "{}",
-          fmt::format(
-            R"NVVM(  %replacement_capture_begin_ptr_{index} = getelementptr i64, i64* %captures, i64 {slot}
-  %replacement_capture_end_ptr_{index} = getelementptr i64, i64* %captures, i64 {end_slot}
-  %replacement_capture_begin_{index} = load i64, i64* %replacement_capture_begin_ptr_{index}, align 8
-  %replacement_capture_end_{index} = load i64, i64* %replacement_capture_end_ptr_{index}, align 8
-  %replacement_capture_has_begin_{index} = icmp ne i64 %replacement_capture_begin_{index}, -1
-  %replacement_capture_has_end_{index} = icmp ne i64 %replacement_capture_end_{index}, -1
-  %replacement_capture_valid_{index} = and i1 %replacement_capture_has_begin_{index}, %replacement_capture_has_end_{index}
-  %replacement_capture_safe_begin_{index} = select i1 %replacement_capture_valid_{index}, i64 %replacement_capture_begin_{index}, i64 0
-  %replacement_capture_safe_end_{index} = select i1 %replacement_capture_valid_{index}, i64 %replacement_capture_end_{index}, i64 0
-  %replacement_cursor_{index} = call i64 @{append}(i8* %data, i64 %replacement_capture_safe_begin_{index}, i64 %replacement_capture_safe_end_{index}, i8* %output, i64 {cursor}))NVVM",
-            fmt::arg("index", index),
-            fmt::arg("slot", slot),
-            fmt::arg("end_slot", slot + 1U),
-            fmt::arg("append", name("append_range")),
-            fmt::arg("cursor", cursor)));
+          std::format(
+            R"NVVM(  %replacement_capture_begin_ptr_{0} = getelementptr i64, i64* %captures, i64 {1}
+  %replacement_capture_end_ptr_{0} = getelementptr i64, i64* %captures, i64 {2}
+  %replacement_capture_begin_{0} = load i64, i64* %replacement_capture_begin_ptr_{0}, align 8
+  %replacement_capture_end_{0} = load i64, i64* %replacement_capture_end_ptr_{0}, align 8
+  %replacement_capture_has_begin_{0} = icmp ne i64 %replacement_capture_begin_{0}, -1
+  %replacement_capture_has_end_{0} = icmp ne i64 %replacement_capture_end_{0}, -1
+  %replacement_capture_valid_{0} = and i1 %replacement_capture_has_begin_{0}, %replacement_capture_has_end_{0}
+  %replacement_capture_safe_begin_{0} = select i1 %replacement_capture_valid_{0}, i64 %replacement_capture_begin_{0}, i64 0
+  %replacement_capture_safe_end_{0} = select i1 %replacement_capture_valid_{0}, i64 %replacement_capture_end_{0}, i64 0
+  %replacement_cursor_{0} = call i64 @{3}(i8* %data, i64 %replacement_capture_safe_begin_{0}, i64 %replacement_capture_safe_end_{0}, i8* %output, i64 {4}))NVVM",
+            index,
+            slot,
+            slot + 1U,
+            name("append_range"),
+            cursor));
       }
-      cursor = fmt::format("%replacement_cursor_{}", index);
+      cursor = std::format("%replacement_cursor_{}", index);
     }
     output_.emit("{}",
-                 fmt::format(R"NVVM(  %replacement_cursor = add i64 {cursor}, 0
+                 std::format(R"NVVM(  %replacement_cursor = add i64 {0}, 0
   %nonempty_match = icmp ne i64 %match_begin_value, %match_end_value
   br i1 %nonempty_match, label %nonempty, label %empty
 nonempty:
@@ -6313,7 +6315,7 @@ empty:
   %empty_at_end = icmp eq i64 %match_end_value, %size
   br i1 %empty_at_end, label %empty_finish, label %advance_empty
 advance_empty:
-  %advanced_start = call i64 @{advance}(i8* %data, i64 %size, i64 %match_end_value, i64 1)
+  %advanced_start = call i64 @{1}(i8* %data, i64 %size, i64 %match_end_value, i64 1)
   br label %loop
 no_match:
   br label %finish
@@ -6322,12 +6324,12 @@ empty_finish:
 finish:
   %tail_begin = phi i64 [ %copied, %no_match ], [ %match_end_value, %empty_finish ]
   %tail_cursor = phi i64 [ %cursor, %no_match ], [ %replacement_cursor, %empty_finish ]
-  %result_size = call i64 @{append}(i8* %data, i64 %tail_begin, i64 %size, i8* %output, i64 %tail_cursor)
+  %result_size = call i64 @{2}(i8* %data, i64 %tail_begin, i64 %size, i8* %output, i64 %tail_cursor)
   ret i64 %result_size
 }})NVVM",
-                             fmt::arg("cursor", cursor),
-                             fmt::arg("advance", name("advance")),
-                             fmt::arg("append", name("append_range"))));
+                             cursor,
+                             name("advance"),
+                             name("append_range")));
     output_.blank();
   }
 
@@ -6338,8 +6340,8 @@ finish:
   {
     output_.emit(
       "{}",
-      fmt::format(
-        R"NVVM(define internal void @{function}(i64* %spans, i64 %index, i64 %begin, i64 %end) alwaysinline nounwind {{
+      std::format(
+        R"NVVM(define internal void @{0}(i64* %spans, i64 %index, i64 %begin, i64 %end) alwaysinline nounwind {{
 entry:
   %missing = icmp eq i64* %spans, null
   br i1 %missing, label %done, label %write
@@ -6354,7 +6356,7 @@ write:
 done:
   ret void
 }})NVVM",
-        fmt::arg("function", name("write_span"))));
+        name("write_span")));
     output_.blank();
   }
 
@@ -6366,7 +6368,7 @@ done:
     emit_write_span();
     output_.emit(
       "{}",
-      fmt::format(R"NVVM(define i64 @{execute}(i8* %data, i64 %size, i64* %spans) nounwind {{
+      std::format(R"NVVM(define i64 @{0}(i8* %data, i64 %size, i64* %spans) nounwind {{
 entry:
   %match_begin = alloca i64, align 8
   %match_end = alloca i64, align 8
@@ -6375,12 +6377,12 @@ loop:
   %search_start = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %advanced_start, %advance_empty ]
   %copied = phi i64 [ 0, %entry ], [ %match_end_value, %nonempty ], [ %match_end_value, %advance_empty ]
   %field_count = phi i64 [ 0, %entry ], [ %next_count, %nonempty ], [ %next_count, %advance_empty ]
-  %matched = call i1 @{find_from}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* null)
+  %matched = call i1 @{1}(i8* %data, i64 %size, i64 %search_start, i64* %match_begin, i64* %match_end, i64* null)
   br i1 %matched, label %found, label %no_match
 found:
   %match_begin_value = load i64, i64* %match_begin, align 8
   %match_end_value = load i64, i64* %match_end, align 8
-  call void @{write_span}(i64* %spans, i64 %field_count, i64 %copied, i64 %match_begin_value)
+  call void @{2}(i64* %spans, i64 %field_count, i64 %copied, i64 %match_begin_value)
   %next_count = add i64 %field_count, 1
   %nonempty_match = icmp ne i64 %match_begin_value, %match_end_value
   br i1 %nonempty_match, label %nonempty, label %empty
@@ -6390,7 +6392,7 @@ empty:
   %empty_at_end = icmp eq i64 %match_end_value, %size
   br i1 %empty_at_end, label %empty_finish, label %advance_empty
 advance_empty:
-  %advanced_start = call i64 @{advance}(i8* %data, i64 %size, i64 %match_end_value, i64 1)
+  %advanced_start = call i64 @{3}(i8* %data, i64 %size, i64 %match_end_value, i64 1)
   br label %loop
 no_match:
   br label %finish
@@ -6399,14 +6401,14 @@ empty_finish:
 finish:
   %tail_begin = phi i64 [ %copied, %no_match ], [ %match_end_value, %empty_finish ]
   %tail_index = phi i64 [ %field_count, %no_match ], [ %next_count, %empty_finish ]
-  call void @{write_span}(i64* %spans, i64 %tail_index, i64 %tail_begin, i64 %size)
+  call void @{2}(i64* %spans, i64 %tail_index, i64 %tail_begin, i64 %size)
   %result_count = add i64 %tail_index, 1
   ret i64 %result_count
 }})NVVM",
-                  fmt::arg("execute", options_.execute_function),
-                  fmt::arg("find_from", name("find_from")),
-                  fmt::arg("write_span", name("write_span")),
-                  fmt::arg("advance", name("advance"))));
+                  options_.execute_function,
+                  name("find_from"),
+                  name("write_span"),
+                  name("advance")));
     output_.blank();
   }
 
@@ -6465,8 +6467,8 @@ std::optional<std::string> render_large_boolean_alternation(instruction_ir const
   functions.reserve(alternatives.size());
   for (std::size_t index = 0; index < alternatives.size(); ++index) {
     auto branch_options = options;
-    branch_options.symbol_prefix += fmt::format("_alternative_{}", index);
-    branch_options.execute_function += fmt::format("_alternative_{}", index);
+    branch_options.symbol_prefix += std::format("_alternative_{}", index);
+    branch_options.execute_function += std::format("_alternative_{}", index);
     functions.push_back(branch_options.execute_function);
     auto nested = render_large_boolean_alternation(alternatives[index], branch_options);
     auto module = nested.has_value()
@@ -6482,17 +6484,17 @@ std::optional<std::string> render_large_boolean_alternation(instruction_ir const
 
   std::string branches;
   for (std::size_t index = 0; index < functions.size(); ++index) {
-    auto label = index == 0 ? std::string{"entry"} : fmt::format("alternative_{}", index);
-    branches += fmt::format(
+    auto label = index == 0 ? std::string{"entry"} : std::format("alternative_{}", index);
+    branches += std::format(
       "{}:\n  %matched_{} = call i1 @{}(i8* %data, i64 %size)\n", label, index, functions[index]);
     if (index + 1U < functions.size()) {
       branches +=
-        fmt::format("  br i1 %matched_{}, label %yes, label %alternative_{}\n", index, index + 1U);
+        std::format("  br i1 %matched_{}, label %yes, label %alternative_{}\n", index, index + 1U);
     } else {
-      branches += fmt::format("  ret i1 %matched_{}\n", index);
+      branches += std::format("  ret i1 %matched_{}\n", index);
     }
   }
-  result += fmt::format(
+  result += std::format(
     R"NVVM(
 define zeroext i1 @{}(i8* %data, i64 %size) nounwind readonly {{
 {}yes:
@@ -6513,6 +6515,46 @@ std::string generate_nvvm_ir(instruction_ir const& ir, nvvm_ir_codegen_options c
     return std::move(*alternatives);
   }
   return nvvm_ir_renderer(ir, options).render();
+}
+
+}  // namespace regex_ir
+
+namespace regex_ir {
+
+std::string compile(std::string_view pattern,
+                    operation_kind operation_kind_value,
+                    std::optional<std::string> replacement,
+                    compile_options const& options)
+{
+  switch (operation_kind_value) {
+    case operation_kind::CONTAINS:
+    case operation_kind::MATCHES:
+    case operation_kind::COUNT:
+    case operation_kind::EXTRACT:
+    case operation_kind::FIND:
+    case operation_kind::SPLIT:
+      if (replacement.has_value()) {
+        throw std::invalid_argument("replacement is only valid for the REPLACE operation");
+      }
+      break;
+    case operation_kind::REPLACE:
+      if (!replacement.has_value()) {
+        throw std::invalid_argument("replacement is required for the REPLACE operation");
+      }
+      break;
+    default: throw std::invalid_argument("invalid regex operation");
+  }
+
+  auto compiled = compile_instruction_ir(
+    pattern, operation{operation_kind_value, replacement.value_or("")}, options);
+  if (!compiled) {
+    if (compiled.diagnostics.empty()) { throw std::invalid_argument("regex compilation failed"); }
+    auto const& diagnostic = compiled.diagnostics.front();
+    throw std::invalid_argument(std::format("regex compilation failed at byte {}: {}",
+                                            diagnostic.span.offset,
+                                            diagnostic.message));
+  }
+  return generate_nvvm_ir(*compiled.value);
 }
 
 }  // namespace regex_ir

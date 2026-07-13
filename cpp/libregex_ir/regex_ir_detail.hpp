@@ -4,6 +4,8 @@
  */
 #pragma once
 
+#include <regex_ir.hpp>
+
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -59,110 +61,11 @@ struct diagnostic {
 namespace regex_ir {
 
 /**
- * @brief Unit used to decode and advance through input text
- */
-enum class character_mode : std::uint8_t {
-  UTF8  = 0,  ///< Decode UTF-8 and advance by Unicode code point
-  BYTES = 1,  ///< Treat every input byte as one character
-};
-
-/**
- * @brief Resource limits applied while compiling a regular expression
- */
-struct compile_limits {
-  std::size_t max_pattern_bytes = 1U << 20U;  ///< Maximum pattern size in bytes
-  std::size_t max_nesting       = 256;        ///< Maximum parser nesting depth
-  std::size_t max_states        = 1U << 18U;  ///< Maximum number of automata states
-  std::size_t max_transitions   = 1U << 20U;  ///< Maximum number of automata edges
-  std::size_t max_captures      = 256;        ///< Maximum number of capture groups
-  std::uint32_t max_repeat      = 1000;       ///< Maximum finite repetition bound
-};
-
-/**
- * @brief Syntax, text-decoding, and resource options for regex compilation
- */
-struct compile_options {
-  bool case_insensitive : 1 = false;  ///< Enable Unicode case-insensitive matching
-  bool multiline        : 1 = false;  ///< Make input anchors recognize line boundaries
-  bool dot_all          : 1 = false;  ///< Make dot match every configured line terminator
-  bool ascii_classes    : 1 = true;   ///< Restrict predefined classes to ASCII characters
-  bool extended_newline : 1 = false;  ///< Recognize CR, NEL, LS, and PS as line terminators
-  character_mode characters = character_mode::UTF8;  ///< Input character decoding mode
-  compile_limits limits     = compile_limits{};      ///< Compilation resource limits
-};
-
-/**
- * @brief Operation encoded by Instruction IR
- */
-enum class operation_kind : std::uint8_t {
-  CONTAINS = 0,  ///< Return whether the input contains a match
-  MATCHES  = 1,  ///< Return whether the complete input matches
-  COUNT    = 2,  ///< Count non-overlapping matches
-  EXTRACT  = 3,  ///< Return captures for the first match
-  FIND     = 4,  ///< Return the span of the first match
-  REPLACE  = 5,  ///< Replace non-overlapping matches
-  SPLIT    = 6,  ///< Split the input around non-overlapping matches
-};
-
-/**
  * @brief Requested regex operation and its operation-specific data
  */
 struct operation {
   operation_kind kind     = operation_kind::MATCHES;  ///< Selected operation
   std::string replacement = "";                       ///< Replacement template for `REPLACE`
-
-  /**
-   * @brief Create a boolean operation that searches for the first match
-   *
-   * @return Contains operation
-   */
-  static operation contains() { return {operation_kind::CONTAINS, {}}; }
-
-  /**
-   * @brief Create a boolean operation that requires a full-input match
-   *
-   * @return Matches operation
-   */
-  static operation matches() { return {operation_kind::MATCHES, {}}; }
-
-  /**
-   * @brief Create an operation that counts non-overlapping matches
-   *
-   * @return Count operation
-   */
-  static operation count() { return {operation_kind::COUNT, {}}; }
-
-  /**
-   * @brief Create an operation that returns capture spans for the first match
-   *
-   * @return Extract operation
-   */
-  static operation extract() { return {operation_kind::EXTRACT, {}}; }
-
-  /**
-   * @brief Create an operation that returns the span of the first match
-   *
-   * @return Find operation
-   */
-  static operation find() { return {operation_kind::FIND, {}}; }
-
-  /**
-   * @brief Create an operation that replaces non-overlapping matches
-   *
-   * @param value Replacement template using `$N` capture references
-   * @return Replace operation
-   */
-  static operation replace(std::string value)
-  {
-    return {operation_kind::REPLACE, std::move(value)};
-  }
-
-  /**
-   * @brief Create an operation that splits input around non-overlapping matches
-   *
-   * @return Split operation
-   */
-  static operation split() { return {operation_kind::SPLIT, {}}; }
 };
 
 /**
@@ -326,16 +229,6 @@ struct automata_ir {
  */
 [[nodiscard]] std::vector<diagnostic> verify(automata_ir const& ir);
 
-/**
- * @brief Render Automata IR as deterministic diagnostic text
- *
- * the returned text is intended for inspection and is not a serialization format.
- *
- * @param ir Automata IR to render
- * @return Human-readable Automata IR
- */
-[[nodiscard]] std::string to_string(automata_ir const& ir);
-
 }  // namespace regex_ir
 
 // instruction IR
@@ -476,18 +369,6 @@ struct operation_control {
 };
 
 /**
- * @brief Static complexity metrics for an Instruction IR graph
- */
-struct ir_metrics {
-  std::size_t blocks             = 0;  ///< Number of blocks
-  std::size_t branches           = 0;  ///< Number of blocks with multiple successors
-  std::size_t predicates         = 0;  ///< Number of character predicate tests
-  std::size_t stream_reads       = 0;  ///< Number of character-read operations
-  std::size_t capture_writes     = 0;  ///< Number of capture-boundary writes
-  std::size_t literal_codepoints = 0;  ///< Number of code points in fused literals
-};
-
-/**
  * @brief Typed operation-specialized control-flow IR
  */
 struct instruction_ir {
@@ -500,7 +381,6 @@ struct instruction_ir {
   block_id accept                            = invalid_block;  ///< Block containing acceptance
   std::uint32_t capture_count                = 0;              ///< Explicit capture count
   std::vector<replacement_token> replacement = std::vector<replacement_token>{};  ///< Template
-  ir_metrics metrics                         = ir_metrics{};  ///< Static graph metrics
 };
 
 /**
@@ -520,24 +400,6 @@ struct nvvm_ir_codegen_options {
  * @return Diagnostics describing every detected invariant violation
  */
 [[nodiscard]] std::vector<diagnostic> verify(instruction_ir const& ir);
-
-/**
- * @brief Render Instruction IR as deterministic diagnostic text
- *
- * the returned text is intended for inspection and is not a serialization format.
- *
- * @param ir Instruction IR to render
- * @return Human-readable Instruction IR
- */
-[[nodiscard]] std::string to_string(instruction_ir const& ir);
-
-/**
- * @brief Measure static properties of an Instruction IR graph
- *
- * @param ir Instruction IR to inspect
- * @return Block, branch, predicate, read, capture, and literal metrics
- */
-[[nodiscard]] ir_metrics measure(instruction_ir const& ir);
 
 /**
  * @brief Generate operation-specialized NVVM IR for a regex operation
@@ -646,77 +508,10 @@ using instruction_result = result<instruction_ir>;
  * @param optimization Optimization-pass configuration
  * @return Optimized Instruction IR on success, otherwise structured diagnostics
  */
-[[nodiscard]] instruction_result compile(std::string_view pattern,
-                                         operation const& selected,
-                                         compile_options const& options           = {},
-                                         optimization_options const& optimization = {});
+[[nodiscard]] instruction_result compile_instruction_ir(
+  std::string_view pattern,
+  operation const& selected,
+  compile_options const& options           = {},
+  optimization_options const& optimization = {});
 
 }  // namespace regex_ir
-
-// host interpreter used by tests and CPU benchmarks
-
-namespace regex_ir::testing {
-
-/**
- * @brief Half-open byte span produced by the host interpreter
- */
-struct match_span {
-  std::size_t begin = 0;  ///< Inclusive first byte
-  std::size_t end   = 0;  ///< Exclusive final byte
-
-  /**
-   * @brief Compare two byte spans
-   *
-   * @param lhs Left span
-   * @param rhs Right span
-   * @return true when both endpoints are equal
-   */
-  friend bool operator==(match_span const& lhs, match_span const& rhs)
-  {
-    return lhs.begin == rhs.begin && lhs.end == rhs.end;
-  }
-};
-
-/**
- * @brief Operation result materialized by the host interpreter
- *
- * this type exists for correctness tests, fuzzing, and CPU comparisons. It is
- * not a production host regex runtime.
- */
-struct execution_result {
-  bool matched                    = false;                      ///< Any match
-  std::size_t count               = 0;                          ///< Match count
-  std::vector<match_span> matches = std::vector<match_span>{};  ///< Match spans
-  std::vector<std::optional<match_span>> captures =
-    std::vector<std::optional<match_span>>{};  ///< First captures
-  std::vector<std::vector<std::optional<match_span>>> capture_matches =
-    std::vector<std::vector<std::optional<match_span>>>{};       ///< All captures
-  std::vector<std::string> pieces = std::vector<std::string>{};  ///< Split fields
-  std::string replaced            = "";                          ///< Replacement result
-};
-
-/**
- * @brief Execute operation-specialized Instruction IR on the host
- *
- * @param ir Instruction IR to interpret
- * @param input UTF-8 or byte input selected by `ir.options`
- * @return Materialized operation result
- */
-[[nodiscard]] execution_result execute(instruction_ir const& ir, std::string_view input);
-
-/**
- * @brief Enumerate ordered non-overlapping matches and captures on the host
- *
- * @param ir Capture-preserving Instruction IR
- * @param input UTF-8 or byte input selected by `ir.options`
- * @return Every match and its capture spans
- */
-[[nodiscard]] execution_result enumerate(instruction_ir const& ir, std::string_view input);
-
-}  // namespace regex_ir::testing
-
-// version
-
-#define REGEX_IR_VERSION_MAJOR 0
-#define REGEX_IR_VERSION_MINOR 1
-#define REGEX_IR_VERSION_PATCH 0

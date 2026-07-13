@@ -1,8 +1,0 @@
-@PACKAGE_INIT@
-
-include(CMakeFindDependencyMacro)
-find_dependency(fmt CONFIG)
-
-include("${CMAKE_CURRENT_LIST_DIR}/regex_ir-targets.cmake")
-
-check_required_components(regex_ir)

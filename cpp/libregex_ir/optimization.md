@@ -43,7 +43,7 @@ observable.
 
 ## Instruction IR passes
 
-`regex_ir::optimize` applies these passes in order and verifies the graph before
+The internal optimizer applies these passes in order and verifies the graph before
 and after the sequence:
 
 | Pass | Current action | Performance purpose | Semantic constraint |
