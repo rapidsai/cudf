@@ -498,10 +498,7 @@ std::unique_ptr<datasource> datasource::create(datasource* source)
 std::future<std::unique_ptr<datasource::buffer>> datasource::host_read_async(size_t offset,
                                                                              size_t size)
 {
-  // Execute the synchronous read on the host worker pool so that fanned-out reads on sources
-  // that don't provide a native async implementation run in parallel instead of serially at
-  // future.get() time. Concurrent host_read() calls are already required of datasources by the
-  // multi-threaded Parquet reader.
+  // Run on the host worker pool so fanned-out reads execute in parallel instead of serially.
   return cudf::detail::host_worker_pool().submit_task(
     [this, offset, size] { return host_read(offset, size); });
 }

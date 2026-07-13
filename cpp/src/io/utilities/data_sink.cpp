@@ -67,9 +67,7 @@ class file_sink : public data_sink {
     _bytes_written += size;
     stream.synchronize();
 
-    // KvikIO's `pwrite()` initiates the write immediately and returns a `std::future<size_t>`.
-    // The capture-initializer starts the write here, at call time; the deferred wrapper only
-    // converts the result to `std::future<void>`, so waiting is deferred but the I/O is not.
+    // Start the write now via the capture-initializer; only the `.get()` wait is deferred.
     return std::async(std::launch::deferred,
                       [fut = _kvikio_file.pwrite(gpu_data, size, offset)]() mutable { fut.get(); });
   }
