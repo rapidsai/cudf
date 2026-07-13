@@ -42,7 +42,6 @@ if TYPE_CHECKING:
 
 _PID_DTYPE = DataType(pl.Int32())
 _PID_PLC_DTYPE = plc.DataType(plc.TypeId.INT32)
-_MARKER_PLC_DTYPE = plc.DataType(plc.TypeId.BOOL8)
 
 
 @dataclass(frozen=True)
@@ -111,29 +110,14 @@ def _split_points(
     )
 
 
-def _append_remote_control_columns(
-    table: plc.Table,
-    pid: int,
-    stream: Stream,
-    *,
-    is_marker: bool,
-    nrows: int | None = None,
-) -> plc.Table:
-    """Append temporary pid and marker columns to one remote message."""
-    nrows = table.num_rows() if nrows is None else nrows
-    # The marker column keeps empty-control messages distinct from future
-    # zero-column payloads.
+def _append_partition_id(table: plc.Table, pid: int, stream: Stream) -> plc.Table:
+    """Append a temporary target-partition-id column to one remote piece."""
     pid_col = plc.Column.from_scalar(
         plc.Scalar.from_py(pid, _PID_PLC_DTYPE, stream=stream),
-        nrows,
+        table.num_rows(),
         stream=stream,
     )
-    marker_col = plc.Column.from_scalar(
-        plc.Scalar.from_py(is_marker, _MARKER_PLC_DTYPE, stream=stream),
-        nrows,
-        stream=stream,
-    )
-    return plc.Table([*table.columns(), pid_col, marker_col])
+    return plc.Table([*table.columns(), pid_col])
 
 
 def _boundary_search_positions(
@@ -224,22 +208,20 @@ def _unpack_remote_piece(
     packed: PackedData,
     stream: Stream,
     br: BufferResource,
-) -> tuple[int, TableChunk] | None:
+) -> tuple[int, TableChunk]:
     """Unpack one remote piece and recover its temporary target partition ID."""
     table = unpack_and_concat([packed], stream=stream, br=br)
-    if table.num_rows() == 0:
-        return None
-    *payload_cols, pid_col, marker_col = table.columns()
-    control = DataFrame.from_table(
-        plc.Table([pid_col, marker_col]),
-        ["pid", "is_marker"],
-        [_PID_DTYPE, DataType(pl.Boolean())],
-        stream,
-    ).to_polars()
-    pid = int(control["pid"].item(0))
-    is_marker = bool(control["is_marker"].item(0))
-    if is_marker:
-        return None
+    *payload_cols, pid_col = table.columns()
+    pid = int(
+        DataFrame.from_table(
+            plc.Table([pid_col]),
+            ["pid"],
+            [_PID_DTYPE],
+            stream,
+        )
+        .to_polars()
+        .item(0, 0)
+    )
     payload = plc.Table(payload_cols).copy(stream=stream, mr=br.device_mr)
     return pid, TableChunk.from_pylibcudf_table(
         payload,
@@ -380,9 +362,7 @@ async def _send_remote_piece(
             _contiguous_owner(pid, comm.nranks, npartitions),
             packed_data_from_cudf_packed_columns(
                 pack(
-                    _append_remote_control_columns(
-                        chunk.table_view(), pid, stream, is_marker=False
-                    ),
+                    _append_partition_id(chunk.table_view(), pid, stream),
                     stream,
                     mr=context.br().device_mr,
                 ),
@@ -390,48 +370,6 @@ async def _send_remote_piece(
                 context.br(),
             ),
         )
-
-
-async def _send_remote_marker(
-    context: Context,
-    comm: Communicator,
-    exchange: SparseAlltoall,
-    npartitions: int,
-    pid: int,
-) -> None:
-    """Send a no-payload marker for an empty remote-owned partition."""
-    with stream_ordered_after(
-        context.br().stream_pool.get_stream,
-        upstreams=(),
-    ) as stream:
-        exchange.insert(
-            _contiguous_owner(pid, comm.nranks, npartitions),
-            packed_data_from_cudf_packed_columns(
-                pack(
-                    _append_remote_control_columns(
-                        plc.Table([]), pid, stream, is_marker=True, nrows=1
-                    ),
-                    stream,
-                    mr=context.br().device_mr,
-                ),
-                stream,
-                context.br(),
-            ),
-        )
-
-
-async def _send_missing_remote_markers(
-    context: Context,
-    comm: Communicator,
-    exchange: SparseAlltoall,
-    npartitions: int,
-    owed_remote_pids: list[int],
-    sent_remote_pids: set[int],
-) -> None:
-    """Send empty markers for remote-owned partitions with no payload."""
-    for pid in owed_remote_pids:
-        if pid not in sent_remote_pids:
-            await _send_remote_marker(context, comm, exchange, npartitions, pid)
 
 
 async def _emit_partition(
@@ -547,7 +485,6 @@ async def _adjust_ordering_impl(
             dsts=plan.remote_destinations,
         )
     local_pieces: dict[int, ChunkStore] = {}
-    sent_remote_pids: set[int] = set()
     first_blocked_pid = next(
         (
             pid
@@ -571,7 +508,6 @@ async def _adjust_ordering_impl(
         pieces = await reader.collect_window(pid, pid + 1)
         owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
         if exchange is not None and owner != comm.rank and pid in pieces:
-            sent_remote_pids.add(pid)
             await _send_remote_store(
                 context,
                 comm,
@@ -593,14 +529,6 @@ async def _adjust_ordering_impl(
             )
 
     if exchange is not None:
-        await _send_missing_remote_markers(
-            context,
-            comm,
-            exchange,
-            plan.npartitions,
-            plan.owed_remote_pids,
-            sent_remote_pids,
-        )
         await exchange.insert_finished(context)
 
     pieces_by_source: dict[int, dict[int, ChunkStore]] = {}
@@ -610,10 +538,7 @@ async def _adjust_ordering_impl(
             remote_pieces: dict[int, ChunkStore] = {}
             stream = context.br().stream_pool.get_stream()
             for packed in exchange.extract(source_rank):
-                remote_piece = _unpack_remote_piece(packed, stream, context.br())
-                if remote_piece is None:
-                    continue
-                pid, chunk = remote_piece
+                pid, chunk = _unpack_remote_piece(packed, stream, context.br())
                 _store_chunk(context, remote_pieces, pid, chunk)
             pieces_by_source[source_rank] = remote_pieces
 
