@@ -410,20 +410,21 @@ data_type get_return_type(opcode op,
     }
   }
 
-  if (auto* ref = std::get_if<arg_ref>(&op_info.output_type)) {
-    auto arg_index = static_cast<size_t>(*ref);
-    auto type      = args[arg_index].id();
-    return is_fixed_point(data_type{type}) ? data_type{type, numeric::scale_type{rescaled}}
-                                           : data_type{type};
-  } else {
-    auto required_type = std::get<types>(op_info.output_type);
-    CUDF_EXPECTS(required_type != types::NONE,
-                 std::format("Invalid type match rule for operator `{}` return type", op_info.name),
-                 std::runtime_error);
-    auto type = as_type_id(required_type);
-    return is_fixed_point(data_type{type}) ? data_type{type, numeric::scale_type{rescaled}}
-                                           : data_type{type};
-  }
+  auto type = [&] {
+    if (auto* ref = std::get_if<arg_ref>(&op_info.output_type)) {
+      auto arg_index = static_cast<size_t>(*ref);
+      return args[arg_index].id();
+    } else {
+      auto required_type = std::get<types>(op_info.output_type);
+      CUDF_EXPECTS(
+        required_type != types::NONE,
+        std::format("Invalid type match rule for operator `{}` return type", op_info.name),
+        std::runtime_error);
+      return as_type_id(required_type);
+    }
+  }();
+  return is_fixed_point(data_type{type}) ? data_type{type, numeric::scale_type{rescaled}}
+                                         : data_type{type};
 }
 
 int32_t instance_context::add_output()
