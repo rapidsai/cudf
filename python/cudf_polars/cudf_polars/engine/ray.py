@@ -33,6 +33,7 @@ from cudf_polars.engine.core import (
     StreamingEngine,
     check_reserved_keys,
     evaluate_on_rank,
+    reset_statistics_from_options,
     resolve_rapidsmpf_options,
 )
 from cudf_polars.engine.hardware_binding import (
@@ -251,7 +252,7 @@ class RankActor:
             ucx_worker=None,
             root_ucxx_address=None,
             options=self._rapidsmpf_options,
-            progress_thread=ProgressThread(),
+            progress_thread=ProgressThread(self._rapidsmpf_statistics),
         )
         return get_root_ucxx_address(self._comm)
 
@@ -278,9 +279,10 @@ class RankActor:
                 ucx_worker=None,
                 root_ucxx_address=root_ucxx_address,
                 options=self._rapidsmpf_options,
-                progress_thread=ProgressThread(),
+                progress_thread=ProgressThread(self._rapidsmpf_statistics),
             )
         barrier(self._comm)
+        assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
             self._base_mr,
@@ -316,7 +318,10 @@ class RankActor:
         self._ctx.shutdown()
         self._ctx = None
         self._rapidsmpf_options = Options.deserialize(rapidsmpf_options_as_bytes)
-        self._rapidsmpf_statistics = Statistics.from_options(self._rapidsmpf_options)
+        self._rapidsmpf_statistics = reset_statistics_from_options(
+            self._rapidsmpf_statistics, self._rapidsmpf_options
+        )
+        self._rapidsmpf_statistics.clear()
         assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
