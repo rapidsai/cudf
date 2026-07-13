@@ -37,6 +37,7 @@ from cudf_polars.engine.core import (
     all_gather_host_data,
     check_reserved_keys,
     evaluate_on_rank,
+    reset_statistics_from_options,
     resolve_rapidsmpf_options,
 )
 from cudf_polars.engine.hardware_binding import (
@@ -368,6 +369,10 @@ class SPMDEngine(StreamingEngine):
     binding is skipped under ``rrun`` (which already performs its own binding),
     see ``HardwareBindingPolicy.skip_under_rrun``.
 
+    If a bootstrapped communicator is provided, the attached statistics
+    object is used for all statistics logging, and enabled/disabled
+    according to any options provided in ``rapidsmpf_options``.
+
     Examples
     --------
     Context-manager style (recommended for scripts):
@@ -416,17 +421,22 @@ class SPMDEngine(StreamingEngine):
         )
         base_mr = mr_config.create_memory_resource()
         if comm is None:
+            statistics = Statistics.from_options(self.rapidsmpf_options)
             if bootstrap.is_running_with_rrun():
                 comm = bootstrap.create_ucxx_comm(
-                    progress_thread=ProgressThread(),
+                    progress_thread=ProgressThread(statistics),
                     type=bootstrap.BackendType.AUTO,
                     options=self.rapidsmpf_options,
                 )
             else:
                 comm = single_communicator(
-                    progress_thread=ProgressThread(),
+                    progress_thread=ProgressThread(statistics),
                     options=self.rapidsmpf_options,
                 )
+        else:
+            statistics = reset_statistics_from_options(
+                comm.progress_thread.statistics, self.rapidsmpf_options
+            )
         # else: caller-provided comm; the caller retains ownership
 
         self._base_mr: rmm.mr.DeviceMemoryResource = base_mr
@@ -442,11 +452,6 @@ class SPMDEngine(StreamingEngine):
         try:
             # Register `_cleanup_ctx`, which shuts down whatever `self._ctx` points
             # to at engine shutdown time, i.e. the `Context` from the latest reset.
-            if self.rapidsmpf_options is not None:
-                statistics = Statistics.from_options(self.rapidsmpf_options)
-            else:
-                statistics = None
-
             self._ctx = Context.from_options(
                 comm.logger, base_mr, self.rapidsmpf_options, statistics
             )
@@ -596,10 +601,10 @@ class SPMDEngine(StreamingEngine):
         # resource is kept alive across resets, see :meth:`_cleanup_ctx`.
         self._ctx.shutdown()
 
-        if rapidsmpf_options is not None:
-            statistics = Statistics.from_options(rapidsmpf_options)
-        else:
-            statistics = None
+        statistics = reset_statistics_from_options(
+            self._comm.progress_thread.statistics, rapidsmpf_options
+        )
+        statistics.clear()
 
         self._ctx = Context.from_options(
             self._comm.logger, self._base_mr, rapidsmpf_options, statistics

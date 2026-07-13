@@ -1,8 +1,9 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -159,3 +160,98 @@ def test_isin_categorical(data, values):
     got = gsr.isin(values)
     expected = psr.isin(values)
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        np.dtype("object"),
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+        pd.ArrowDtype(pa.string()),
+        pd.ArrowDtype(pa.large_string()),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        ["b", "x"],
+        np.array(["b", "x"], dtype=object),
+        pd.array(
+            ["b", "x"], dtype=pd.StringDtype(storage="python", na_value=pd.NA)
+        ),
+        pd.array(
+            ["b", "x"],
+            dtype=pd.StringDtype(storage="python", na_value=np.nan),
+        ),
+        pd.array(
+            ["b", "x"],
+            dtype=pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        ),
+        pd.array(
+            ["b", "x"],
+            dtype=pd.StringDtype(storage="pyarrow", na_value=np.nan),
+        ),
+        pd.array(["b", "x"], dtype=pd.ArrowDtype(pa.string())),
+        pa.array(["b", "x"]),
+    ],
+)
+def test_isin_string_dtype_flavors(dtype, values):
+    # isin must match on element values regardless of which string dtype
+    # flavor the series and the values use (object, pd.StringDtype with
+    # python/pyarrow storage and NaN/NA na_value, pd.ArrowDtype string).
+    data = ["a", "b", "c"]
+    psr = pd.Series(data, dtype=dtype)
+    gsr = cudf.Series(data, dtype=dtype)
+
+    got = gsr.isin(values)
+    if isinstance(values, pa.Array) and (
+        dtype == np.dtype("object")
+        or (isinstance(dtype, pd.StringDtype) and dtype.storage == "python")
+    ):
+        # pandas does not match pyarrow.Array values against
+        # object/python-storage series (returns all-False); cudf matches
+        # on element values.
+        assert got.to_pandas().tolist() == [False, True, False]
+    else:
+        expected = psr.isin(values)
+        assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        np.dtype("object"),
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+        pd.ArrowDtype(pa.string()),
+        pd.ArrowDtype(pa.large_string()),
+    ],
+)
+def test_isin_string_null_values(dtype):
+    # cudf treats every NA-like value in ``values`` (None, pd.NA) as a
+    # match for nulls in the series. Results are compared with pandas
+    # except where pandas diverges: object dtype distinguishes the
+    # stored None from pd.NA, and ArrowDtype raises ArrowTypeError when
+    # the value set contains nulls.
+    data = ["a", "b", None]
+    psr = pd.Series(data, dtype=dtype)
+    gsr = cudf.Series(data, dtype=dtype)
+
+    got = gsr.isin([None])
+    if isinstance(dtype, pd.ArrowDtype):
+        assert got.to_pandas().tolist() == [False, False, True]
+    else:
+        assert_eq(got, psr.isin([None]))
+
+    got = gsr.isin(["a", pd.NA])
+    if isinstance(dtype, pd.ArrowDtype) or dtype == np.dtype("object"):
+        assert got.to_pandas().tolist() == [True, False, True]
+    else:
+        assert_eq(got, psr.isin(["a", pd.NA]))
+
+    assert_eq(gsr.isin([]), psr.isin([]))

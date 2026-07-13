@@ -681,7 +681,10 @@ async def groupby_actor(
             metadata_out = ChannelMetadata(
                 local_count=metadata_in.local_count,
                 partitioning=maybe_remap_partitioning(
-                    ir, metadata_in.partitioning, child_ir=ir.children[0]
+                    ir,
+                    metadata_in.partitioning,
+                    child_ir=ir.children[0],
+                    context=context,
                 ),
                 duplicated=metadata_in.duplicated,
             )
