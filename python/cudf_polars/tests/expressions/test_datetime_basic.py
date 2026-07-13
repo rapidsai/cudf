@@ -532,6 +532,27 @@ def test_datetime_truncate_unsupported(engine: pl.GPUEngine, every: str):
 @pytest.mark.parametrize(
     "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
 )
+def test_datetime_quarter(engine: pl.GPUEngine, dtype):
+    data = pl.Series(
+        [
+            datetime.date(2001, 1, 1),
+            datetime.date(2001, 3, 31),
+            datetime.date(2001, 4, 1),
+            datetime.date(2001, 6, 30),
+            datetime.date(2001, 9, 15),
+            datetime.date(2001, 12, 27),
+            None,
+        ],
+        dtype=pl.Date(),
+    ).cast(dtype)
+    ldf = pl.LazyFrame({"dates": data})
+    q = ldf.select(pl.col("dates").dt.quarter())
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "dtype", [pl.Date(), pl.Datetime("ms"), pl.Datetime("us"), pl.Datetime("ns")]
+)
 def test_datetime_days_in_month(engine: pl.GPUEngine, dtype):
     data = pl.Series(
         [
