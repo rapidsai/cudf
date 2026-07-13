@@ -12,9 +12,6 @@ from cudf_polars.testing.asserts import (
 )
 
 
-@pytest.mark.skip_on_streaming_engine(
-    reason="global unique_counts across partitions are not implemented"
-)
 def test_unique_counts(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 2, None, 3]})
     q = df.select(pl.col("a").unique_counts())

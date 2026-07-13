@@ -273,43 +273,39 @@ class UnaryFunction(Expr):
             if not plc.traits.is_floating_point(out_type):
                 return column
             (decimals,) = self.options
-            operand = column.obj
-            scale: plc.Scalar | None = None
-            if decimals != 0:
-                scale = plc.Scalar.from_py(10.0**decimals, out_type, stream=df.stream)
-                operand = plc.binaryop.binary_operation(
-                    operand,
-                    scale,
-                    plc.binaryop.BinaryOperator.MUL,
-                    out_type,
-                    stream=df.stream,
-                )
-            nonneg = plc.binaryop.binary_operation(
-                operand,
-                plc.Scalar.from_py(0.0, out_type, stream=df.stream),
-                plc.binaryop.BinaryOperator.GREATER_EQUAL,
-                plc.DataType(plc.TypeId.BOOL8),
-                stream=df.stream,
+            col_ref = plc.expressions.ColumnReference(0)
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
             )
-            truncated = plc.copying.copy_if_else(
-                plc.unary.unary_operation(
-                    operand, plc.unary.UnaryOperator.FLOOR, stream=df.stream
-                ),
-                plc.unary.unary_operation(
-                    operand, plc.unary.UnaryOperator.CEIL, stream=df.stream
-                ),
-                nonneg,
-                stream=df.stream,
-            )
-            if scale is not None:
-                truncated = plc.binaryop.binary_operation(
-                    truncated,
-                    scale,
-                    plc.binaryop.BinaryOperator.DIV,
-                    out_type,
-                    stream=df.stream,
+            if decimals == 0:
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, col_ref, one
                 )
-            return Column(truncated, dtype=self.dtype)
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, col_ref, frac
+                )
+            else:
+                scale = plc.expressions.Literal(
+                    plc.Scalar.from_py(10.0**decimals, out_type, stream=df.stream)
+                )
+                scaled = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MUL, col_ref, scale
+                )
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, scaled, one
+                )
+                truncated = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, scaled, frac
+                )
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV, truncated, scale
+                )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([column.obj]), truncate_expr, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
@@ -344,57 +340,36 @@ class UnaryFunction(Expr):
                 column = column.sorted_like(values)
             return column
         elif self.name == "unique_counts":
-            (values,) = (child.evaluate(df, context=context) for child in self.children)
-            stable_keys = plc.stream_compaction.stable_distinct(
-                plc.Table([values.obj]),
-                [0],
-                plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
-                plc.types.NullEquality.EQUAL,
-                plc.types.NanEquality.ALL_EQUAL,
+            values = self.children[0].evaluate(df, context=context)
+            iota = plc.filling.sequence(
+                values.size,
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
                 stream=df.stream,
-            ).columns()[0]
-            (keys_table, (counts_table,)) = plc.groupby.GroupBy(
+            )
+            (_, (counts_table, first_index_table)) = plc.groupby.GroupBy(
                 plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
             ).aggregate(
                 [
                     plc.groupby.GroupByRequest(
                         values.obj,
                         [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
-                    )
+                    ),
+                    plc.groupby.GroupByRequest(iota, [plc.aggregation.min()]),
                 ],
                 stream=df.stream,
             )
-            keys_col = keys_table.columns()[0]
             counts_col = counts_table.columns()[0]
             if counts_col.type() != self.dtype.plc_type:
                 counts_col = plc.unary.cast(
                     counts_col, self.dtype.plc_type, stream=df.stream
                 )
-            sorted_counts_table = plc.sorting.sort_by_key(
-                plc.Table([counts_col]),
-                keys_table,
-                [plc.types.Order.ASCENDING],
-                [plc.types.NullOrder.BEFORE],
-                stream=df.stream,
-            )
-            sorted_keys_table = plc.sorting.sort(
-                keys_table,
-                [plc.types.Order.ASCENDING],
-                [plc.types.NullOrder.BEFORE],
-                stream=df.stream,
-            )
-            gather_map = plc.search.lower_bound(
-                sorted_keys_table,
-                plc.Table([stable_keys]),
-                [plc.types.Order.ASCENDING],
-                [plc.types.NullOrder.BEFORE],
-                stream=df.stream,
-            )
             return Column(
-                plc.copying.gather(
-                    sorted_counts_table,
-                    gather_map,
-                    plc.copying.OutOfBoundsPolicy.DONT_CHECK,
+                plc.sorting.sort_by_key(
+                    plc.Table([counts_col]),
+                    first_index_table,
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
                     stream=df.stream,
                 ).columns()[0],
                 dtype=self.dtype,
