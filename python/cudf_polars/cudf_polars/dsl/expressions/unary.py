@@ -393,7 +393,17 @@ class UnaryFunction(Expr):
             return Column(plc_column, dtype=self.dtype)
         elif self.name == "index_of":
             column = self.children[0].evaluate(df, context=context)
+            if column.size == 0:
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
             value_expr = self.children[1]
+            is_float = plc.traits.is_floating_point(column.dtype.plc_type)
             if isinstance(value_expr, Literal):
                 py_value = value_expr.value
                 value = plc.Scalar.from_py(
@@ -403,12 +413,8 @@ class UnaryFunction(Expr):
                 value = value_expr.evaluate(df, context=context).obj_scalar(
                     stream=df.stream
                 )
-                py_value = value.to_py(stream=df.stream)
-            if (
-                plc.traits.is_floating_point(column.obj.type())
-                and isinstance(py_value, float)
-                and math.isnan(py_value)
-            ):
+                py_value = value.to_py(stream=df.stream) if is_float else None
+            if is_float and isinstance(py_value, float) and math.isnan(py_value):
                 mask = plc.unary.is_nan(column.obj, stream=df.stream)
             else:
                 mask = plc.binaryop.binary_operation(
@@ -419,26 +425,27 @@ class UnaryFunction(Expr):
                     stream=df.stream,
                 )
             indices = plc.filling.sequence(
-                column.obj.size(),
-                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
-                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                column.size,
+                plc.Scalar.from_py(0, self.dtype.plc_type, stream=df.stream),
+                plc.Scalar.from_py(1, self.dtype.plc_type, stream=df.stream),
                 stream=df.stream,
             )
             matched = plc.stream_compaction.apply_boolean_mask(
                 plc.Table([indices]), mask, stream=df.stream
             ).columns()[0]
             if matched.size() == 0:
-                result = plc.Column.from_scalar(
-                    plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
-                    1,
-                    stream=df.stream,
+                return Column(
+                    plc.Column.from_scalar(
+                        plc.Scalar.from_py(None, self.dtype.plc_type, stream=df.stream),
+                        1,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
                 )
-            else:
-                (first,) = plc.copying.slice(
-                    plc.Table([matched]), [0, 1], stream=df.stream
-                )[0].columns()
-                result = plc.unary.cast(first, self.dtype.plc_type, stream=df.stream)
-            return Column(result, dtype=self.dtype)
+            (first,) = plc.copying.slice(
+                plc.Table([matched]), [0, 1], stream=df.stream
+            )[0].columns()
+            return Column(first, dtype=self.dtype)
         elif self.name == "drop_nans":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if not plc.traits.is_floating_point(column.obj.type()):
