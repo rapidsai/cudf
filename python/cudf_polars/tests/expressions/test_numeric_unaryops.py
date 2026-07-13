@@ -39,6 +39,10 @@ if TYPE_CHECKING:
         "floor",
         "abs",
         "sign",
+        "cot",
+        "log1p",
+        "degrees",
+        "radians",
     ]
 )
 def op(request):
@@ -181,17 +185,9 @@ def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> No
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "expr",
-    [
-        pl.col("a").clip(0, 2),
-        pl.col("a").hash(),
-    ],
-    ids=["clip", "hash"],
-)
-def test_unary_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+def test_hash_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3]})
-    q = df.select(expr)
+    q = df.select(pl.col("a").hash())
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
