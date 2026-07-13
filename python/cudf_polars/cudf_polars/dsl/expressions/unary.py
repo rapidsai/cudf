@@ -138,6 +138,7 @@ class UnaryFunction(Expr):
     )
     _supported_math_fns = frozenset(
         {
+            "cot",
             "degrees",
             "log1p",
             "radians",
