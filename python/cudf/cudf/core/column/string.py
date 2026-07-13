@@ -340,10 +340,13 @@ class StringColumn(ColumnBase, Scannable):
                 target_unit = dtype.pyarrow_dtype.unit
             if target_unit != "s" and len(without_nat):
                 # libcudf parses directly into int64 values of the
-                # target unit and silently wraps on overflow. Parse to
-                # seconds first (which cannot realistically overflow)
-                # and reject values whose whole-second part falls
-                # outside the target unit's range, like pandas does.
+                # target unit and silently wraps on overflow
+                # (see https://github.com/rapidsai/cudf/issues/23247).
+                # Parse to seconds first (which cannot realistically
+                # overflow) and reject values whose whole-second part
+                # falls outside the target unit's range, like pandas
+                # does. This double parse can be removed once libcudf
+                # detects the overflow itself.
                 with without_nat.access(mode="read", scope="internal"):
                     seconds = ColumnBase.create(
                         plc.strings.convert.convert_datetime.to_timestamps(
