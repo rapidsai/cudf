@@ -70,11 +70,14 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
+  // Column selection options. At most one of these may be set at a time.
+
   // Path in schema of column names to read; `nullopt` is all
   std::optional<std::vector<std::string>> _column_names;
-  // Indices of top-level columns to read; `nullopt` is all (cannot be used alongside
-  // `_column_names`)
+  // Indices of top-level columns to read; `nullopt` is all
   std::optional<std::vector<cudf::size_type>> _column_indices;
+  // Parquet field IDs of columns/fields to read; `nullopt` is all
+  std::optional<std::vector<int32_t>> _column_field_ids;
 
   // List of individual row groups to read (ignored if empty)
   std::vector<std::vector<size_type>> _row_groups;
@@ -262,6 +265,13 @@ class parquet_reader_options {
   [[nodiscard]] auto const& get_column_indices() const { return _column_indices; }
 
   /**
+   * @brief Returns Parquet field IDs of columns/fields to be read, if set.
+   *
+   * @return Parquet field IDs of columns/fields to be read; `nullopt` if the option is not set
+   */
+  [[nodiscard]] auto const& get_column_field_ids() const { return _column_field_ids; }
+
+  /**
    * @brief Returns list of individual row groups to be read.
    *
    * @return List of individual row groups to be read
@@ -389,6 +399,8 @@ class parquet_reader_options {
   {
     CUDF_EXPECTS(not _column_indices.has_value(),
                  "Cannot select columns by indices and names simultaneously");
+    CUDF_EXPECTS(not _column_field_ids.has_value(),
+                 "Cannot select columns by field IDs and names simultaneously");
     _column_names = std::move(column_names);
   }
 
@@ -407,7 +419,24 @@ class parquet_reader_options {
   {
     CUDF_EXPECTS(not _column_names.has_value(),
                  "Cannot select columns by indices and names simultaneously");
+    CUDF_EXPECTS(not _column_field_ids.has_value(),
+                 "Cannot select columns by field IDs and indices simultaneously");
     _column_indices = std::move(col_indices);
+  }
+
+  /**
+   * @brief Sets the Parquet field IDs of columns/fields to be read from all input sources.
+   *
+   * @param column_field_ids A vector of Parquet field IDs to attempt to read from each input
+   * source.
+   */
+  void set_column_field_ids(std::vector<int32_t> column_field_ids)
+  {
+    CUDF_EXPECTS(not _column_names.has_value(),
+                 "Cannot select columns by field IDs and names simultaneously");
+    CUDF_EXPECTS(not _column_indices.has_value(),
+                 "Cannot select columns by field IDs and indices simultaneously");
+    _column_field_ids = std::move(column_field_ids);
   }
 
   /**
@@ -647,6 +676,19 @@ class parquet_reader_options_builder {
   parquet_reader_options_builder& column_indices(std::vector<cudf::size_type> col_indices)
   {
     options.set_column_indices(std::move(col_indices));
+    return *this;
+  }
+
+  /**
+   * @brief Sets the Parquet field IDs of columns/fields to be read from all input sources.
+   *
+   * @param column_field_ids A vector of Parquet field IDs to attempt to read from each input
+   * source.
+   * @return this for chaining
+   */
+  parquet_reader_options_builder& column_field_ids(std::vector<int32_t> column_field_ids)
+  {
+    options.set_column_field_ids(std::move(column_field_ids));
     return *this;
   }
 

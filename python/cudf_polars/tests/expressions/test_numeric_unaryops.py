@@ -38,6 +38,8 @@ if TYPE_CHECKING:
         "ceil",
         "floor",
         "abs",
+        "degrees",
+        "radians",
     ]
 )
 def op(request):
