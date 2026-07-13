@@ -366,10 +366,10 @@ __device__ __forceinline__ uint64_t calculate_carry_64(uint64_t old_val,
  */
 __forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t val)
 {
-  // CUDA 13.0 miscompiles the native 128-bit CAS on Blackwell. See
-  // https://github.com/rapidsai/cudf/issues/23150.
+  // CUDA 13.0 miscompiles the native 128-bit CAS on Blackwell; the fix is confirmed in 13.3, so
+  // gate off all 13.x before 13.3. See https://github.com/rapidsai/cudf/issues/23150.
 #if __CUDA_ARCH__ >= 900 && \
-  !(__CUDA_ARCH__ >= 1000 && __CUDACC_VER_MAJOR__ == 13 && __CUDACC_VER_MINOR__ == 0)
+  !(__CUDA_ARCH__ >= 1000 && __CUDACC_VER_MAJOR__ == 13 && __CUDACC_VER_MINOR__ < 3)
   __int128_t expected, desired;
 
   do {
@@ -383,16 +383,15 @@ __forceinline__ __device__ __int128_t atomic_add(__int128_t* address, __int128_t
   __uint128_t const add_val_unsigned = static_cast<__uint128_t>(val);
 
   // Split the 128-bit add value into two 64-bit parts
-  uint64_t const add_low  = static_cast<uint64_t>(add_val_unsigned);
-  uint64_t const add_high = static_cast<uint64_t>(add_val_unsigned >> 64);
+  auto const add_low  = static_cast<uint64_t>(add_val_unsigned);
+  auto const add_high = static_cast<uint64_t>(add_val_unsigned >> 64);
 
   uint64_t old_parts[2];
   old_parts[0]     = atomicAdd(reinterpret_cast<unsigned long long*>(target_ptr), add_low);
   auto const carry = calculate_carry_64(old_parts[0], add_low, 0);
   old_parts[1] = atomicAdd(reinterpret_cast<unsigned long long*>(target_ptr + 1), add_high + carry);
 
-  __uint128_t const old_val_unsigned =
-    (static_cast<__uint128_t>(old_parts[1]) << 64) | old_parts[0];
+  auto const old_val_unsigned = (static_cast<__uint128_t>(old_parts[1]) << 64) | old_parts[0];
   return static_cast<__int128_t>(old_val_unsigned);
 #endif
 }
