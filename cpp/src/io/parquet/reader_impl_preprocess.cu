@@ -366,10 +366,6 @@ struct compute_page_offset_count {
             decode_kernel_mask::STRING_STREAM_SPLIT_NESTED,
             decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
 
-    // Mask for pages with lists (repetition levels)
-    constexpr uint32_t STRINGS_WITH_LISTS_MASK =
-      BitOr(decode_kernel_mask::STRING_LIST, decode_kernel_mask::STRING_STREAM_SPLIT_LIST);
-
     auto const& page  = pages[page_idx];
     auto const& chunk = chunks[page.chunk_idx];
 
@@ -379,22 +375,30 @@ struct compute_page_offset_count {
     // Fixed length byte array: Offsets are fixed, no need to preprocess
     if (chunk.physical_type == Type::FIXED_LEN_BYTE_ARRAY) { return 0; }
 
-    // page_end_row and subpass_end_row are sentinel bounds: they are the first row of the next
-    // page and the first row of the next subpass, respectively. 
-    // However, a list row can span page boundaries, so a page can contain data but have 0 rows. 
-    // That collapses page_end_row onto page_start_row and defeats the sentinel boundaries. 
-    // Treat a 0-row page/subpass as occupying a single row so the sentinels still work.
     auto const page_start_row    = chunk.start_row + page.chunk_row;
-    auto const page_end_row      = page_start_row + (page.num_rows == 0 ? 1 : page.num_rows);
+    auto const page_end_row      = page_start_row + page.num_rows;
     auto const subpass_start_row = skip_rows;
-    auto const subpass_end_row   = subpass_start_row + (num_rows == 0 ? 1 : num_rows);
+    auto const subpass_end_row   = subpass_start_row + num_rows;
 
-    if ((page_end_row <= subpass_start_row) || (page_start_row >= subpass_end_row)) {
-      return 0;  // will skip the page
-    }
+    bool const is_list_col  = chunk.max_level[level_type::REPETITION] > 0;
+    auto const process_page = [&] {
+      // A page has rows to read when its row range intersects the subpass (matches s->num_rows >
+      // 0).
+      bool const has_rows = (page.num_rows > 0) && (page_start_row < subpass_end_row) &&
+                            (page_end_row > subpass_start_row);
+      if (has_rows || !is_list_col) { return has_rows; }
 
-    // Check if this column is a list type
-    bool const is_list_col = BitAnd(page.kernel_mask, STRINGS_WITH_LISTS_MASK) != 0;
+      // A single list row can span pages, so a list page can carry values (and offsets) with 0
+      // rows; such a trailing page's page_start_row is already incremented past its spanning last
+      // row, so match the decode path's inclusive bounds/contained tests to keep it.
+      bool const is_bounds_page =
+        (page_start_row <= subpass_start_row && page_end_row >= subpass_start_row) ||
+        (page_start_row <= subpass_end_row && page_end_row >= subpass_end_row);
+      bool const is_contained =
+        (page_start_row >= subpass_start_row && page_end_row <= subpass_end_row);
+      return is_bounds_page || is_contained;
+    }();
+    if (!process_page) { return 0; }
 
     size_t page_num_values;
     if (is_list_col) {
