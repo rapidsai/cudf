@@ -603,7 +603,7 @@ class UnaryFunction(Expr):
                 dtype=self.dtype,
             )
         elif self.name == "reverse":
-            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            column = self.children[0].evaluate(df, context=context)
             return Column(
                 plc.copying.reverse(column.obj, stream=df.stream),
                 dtype=self.dtype,
