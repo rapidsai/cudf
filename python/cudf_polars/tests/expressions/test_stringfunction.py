@@ -901,15 +901,15 @@ def ldf_extract():
     return pl.LazyFrame({"a": ["?!. 123 foo", None]})
 
 
-@pytest.mark.parametrize("group_index", [1, 2])
+@pytest.mark.parametrize("group_index", [0, 1, 2])
 def test_extract(engine: pl.GPUEngine, ldf_extract, group_index):
     q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", group_index))
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_extract_group_index_0_unsupported(engine: pl.GPUEngine, ldf_extract):
-    q = ldf_extract.select(pl.col("a").str.extract(r"(\S+) (\d+) (.+)", 0))
-    assert_ir_translation_raises(q, engine, NotImplementedError)
+def test_extract_group_index_0_no_capture_group(engine: pl.GPUEngine, ldf_extract):
+    q = ldf_extract.select(pl.col("a").str.extract(r"\d+", 0))
+    assert_gpu_result_equal(q, engine=engine)
 
 
 def test_extract_groups(engine: pl.GPUEngine, ldf_extract):
