@@ -300,34 +300,41 @@ def log_do_evaluate(
     func
         The ``IR.do_evaluate`` method to wrap.
     """
+    if not LOG_TRACES:
+        return func
+    else:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
 
-    @functools.wraps(func)
-    def wrapper(
-        cls: type[ir.IR],
-        *args: P.args,
-        **kwargs: P.kwargs,
-    ) -> cudf_polars.containers.DataFrame:
-        ir_execution_context: IRExecutionContext | None = kwargs.get("context")  # type: ignore[assignment]
-
-        frames: list[cudf_polars.containers.DataFrame] = (
-            list(args) + [v for k, v in kwargs.items() if k != "context"]
-        )[cls._n_non_child_args :]  # type: ignore[assignment]
-
-        quent_task = None
-        if ir_execution_context is not None:
-            quent_task = _begin_quent_do_evaluate_events(cls, ir_execution_context)
-
-        if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
+        @functools.wraps(func)
+        def wrapper(
+            cls: type[ir.IR],
+            *args: P.args,
+            **kwargs: P.kwargs,
+        ) -> cudf_polars.containers.DataFrame:
             pynvml.nvmlInit()
             maybe_handle = get_device_handle()
             pid = _getpid()
             log = structlog.get_logger()
+
+            # By convention, all non-dataframe arguments (non-child) come first.
+            # Anything remaining is a dataframe, except for 'context' kwarg.
+            frames: list[cudf_polars.containers.DataFrame] = (
+                list(args) + [v for k, v in kwargs.items() if k != "context"]
+            )[cls._n_non_child_args :]  # type: ignore[assignment]
+
+            # And the kwonly 'context' argument has the IR execution context.
+            ir_execution_context: IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
+            quent_task = _begin_quent_do_evaluate_events(cls, ir_execution_context)
 
             before_start = time.monotonic_ns()
             before = make_snapshot(
                 cls, frames, phase="input", device_handle=maybe_handle, pid=pid
             )
             before_end = time.monotonic_ns()
+
+            # The decorator preserves the exact signature of the original do_evaluate method.
+            # Each IR.do_evaluate method is a classmethod that takes the IR class as first
+            # argument, followed by the method-specific arguments, and returns a DataFrame.
+
             start = time.monotonic_ns()
             result = func(cls, *args, **kwargs)
             stop = time.monotonic_ns()
@@ -351,17 +358,17 @@ def log_do_evaluate(
                 }
             )
             log.info("Execute IR", **record)
-        else:
+
             result = func(cls, *args, **kwargs)
 
-        if ir_execution_context is not None and quent_task is not None:
-            _end_quent_do_evaluate_events(
-                cls, frames, result, ir_execution_context, quent_task
-            )
+            if quent_task is not None:
+                _end_quent_do_evaluate_events(
+                    cls, frames, result, ir_execution_context, quent_task
+                )
 
-        return result
+            return result
 
-    return wrapper
+        return wrapper
 
 
 @contextlib.contextmanager
