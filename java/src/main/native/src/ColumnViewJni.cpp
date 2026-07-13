@@ -2211,14 +2211,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     cudf::column_view* original_column = reinterpret_cast<cudf::column_view*>(base_column);
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
 
-    // If we have no columns to merge, return the original column unchanged.
-    // 0 signals to the caller that this was a no-op.
-    if (n_cudf_columns.size() == 0) { return 0; }
-
     auto const op = static_cast<cudf::binary_operator>(bin_op);
     if (op != cudf::binary_operator::BITWISE_AND && op != cudf::binary_operator::BITWISE_OR) {
       JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_EXCEPTION_CLASS, "Unsupported merge operation", 0);
     }
+
+    // If we have no columns to merge, return the original column unchanged.
+    // 0 signals to the caller that this was a no-op.
+    if (n_cudf_columns.size() == 0) { return 0; }
 
     // Merge the null masks of the provided columns using the binary op.
     auto const cudf_columns             = n_cudf_columns.get_dereferenced();
