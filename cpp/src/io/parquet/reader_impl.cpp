@@ -542,11 +542,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
   // Binary columns can be read as binary or strings
   _reader_column_schema = options.get_column_schema();
 
-  // Build effective `ignore_missing_columns` value
-  auto const effective_ignore_missing_columns_value = effective_ignore_missing_columns(options);
-
   // Select only columns required by the options and filter
-  auto select_column_names = get_column_projection(options, effective_ignore_missing_columns_value);
+  auto select_column_names = get_column_projection(options);
 
   std::optional<std::vector<std::string>> filter_only_columns_names;
   auto const has_column_selection = options.get_column_names().has_value() or
@@ -559,11 +556,8 @@ reader_impl::reader_impl(std::size_t chunk_read_limit,
       options.get_filter(), *select_column_names, options, _metadata->get_schema_tree());
     _num_filter_only_columns = filter_only_columns_names->size();
   }
-  std::tie(_input_columns, _output_buffers, _output_column_schemas) =
-    _metadata->select_columns(select_column_names,
-                              filter_only_columns_names,
-                              make_column_selection_options(options,
-                                                            effective_ignore_missing_columns_value));
+  std::tie(_input_columns, _output_buffers, _output_column_schemas) = _metadata->select_columns(
+    select_column_names, filter_only_columns_names, make_column_selection_options(options));
 
   // Save the states of the output buffers for reuse in `chunk_read()`.
   std::transform(
@@ -809,8 +803,10 @@ std::vector<size_t> reader_impl::calculate_output_num_rows_per_source(size_t con
 }
 
 std::optional<std::vector<std::string>> reader_impl::get_column_projection(
-  parquet_reader_options const& options, bool ignore_missing_columns) const
+  parquet_reader_options const& options) const
 {
+  auto const ignore_missing_columns = compute_ignore_missing_columns(options);
+
   auto const has_column_names     = options.get_column_names().has_value();
   auto const has_column_indices   = options.get_column_indices().has_value();
   auto const has_column_field_ids = options.get_column_field_ids().has_value();
@@ -870,7 +866,7 @@ void reader_impl::apply_decimal_width_cast(std::vector<std::unique_ptr<column>>&
 }
 
 column_selection_options reader_impl::make_column_selection_options(
-  parquet_reader_options const& options, bool ignore_missing_columns) const
+  parquet_reader_options const& options) const
 {
   auto const selection_mode = [&]() {
     if (options.get_column_names().has_value()) {
@@ -888,7 +884,7 @@ column_selection_options reader_impl::make_column_selection_options(
     .selection_mode         = selection_mode,
     .include_index          = options.is_enabled_use_pandas_metadata(),
     .strings_to_categorical = options.is_enabled_convert_strings_to_categories(),
-    .ignore_missing_columns = ignore_missing_columns,
+    .ignore_missing_columns = compute_ignore_missing_columns(options),
     .timestamp_type_id      = options.get_timestamp_type().id(),
     .decimal_type_id        = options.get_decimal_width(),
     .case_sensitive_names   = options.is_enabled_case_sensitive_names()};

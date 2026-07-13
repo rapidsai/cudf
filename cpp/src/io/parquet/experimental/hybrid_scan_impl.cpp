@@ -137,16 +137,13 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   initialize_reader_config(options);
 
   // Build column selection options directly from the user options.
-  auto const effective_ignore_missing_columns_value = effective_ignore_missing_columns(options);
-  auto selection_options =
-    make_column_selection_options(options, effective_ignore_missing_columns_value);
+  auto selection_options = make_column_selection_options(options);
 
   if (read_columns_mode == read_columns_mode::ALL_COLUMNS) {
     if (_is_all_columns_selected) { return; }
 
     // Select only columns required by the options and filter
-    auto const select_column_names =
-      get_column_projection(options, effective_ignore_missing_columns_value);
+    auto const select_column_names = get_column_projection(options);
 
     // Select only columns required by the options and filter.
     // Using as is from:
@@ -180,7 +177,7 @@ void hybrid_scan_reader_impl::select_columns(read_columns_mode read_columns_mode
   } else {
     if (_is_payload_columns_selected) { return; }
 
-    auto select_column_names = get_column_projection(options, effective_ignore_missing_columns_value);
+    auto select_column_names = get_column_projection(options);
     std::tie(_input_columns, _output_buffers, _output_column_schemas) =
       _extended_metadata->select_payload_columns(
         select_column_names, _filter_columns_names, selection_options);

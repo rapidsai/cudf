@@ -1968,11 +1968,12 @@ aggregate_reader_metadata::select_columns(
       // Check the schema elements to be equal except their number of children as we only care about
       // the specific column paths in the schema trees. Raise an invalid_argument error if the
       // schema elements don't match.
-      CUDF_EXPECTS(equal_to_except_num_children(src_schema_elem, dst_schema_elem),
-                   std::format("Column '{}' has an incompatible data type or schema (SchemaElement "
-                               "properties) across the Parquet sources",
-                               src_schema_elem.name),
-                   std::invalid_argument);
+      CUDF_EXPECTS(
+        equal_to_except_num_children(src_schema_elem, dst_schema_elem),
+        std::format(
+          "Encountered mismatching data type or schema across the Parquet sources for column '{}'",
+          src_schema_elem.name),
+        std::invalid_argument);
 
       // Get the schema_idx_map for this data source (pfm)
       auto& schema_idx_map = schema_idx_maps[src_idx - 1];
@@ -1987,7 +1988,7 @@ aggregate_reader_metadata::select_columns(
         CUDF_EXPECTS(
           dst_schema_elem.is_stub(),
           std::format(
-            "Stub column '{}' has an incompatible nested structure across the Parquet sources",
+            "Encountered mismatching nested structure across the Parquet sources for column '{}'",
             src_schema_elem.name),
           std::invalid_argument);
         auto const child_col_name_info = col_name_info ? &col_name_info->children[0] : nullptr;
@@ -2005,18 +2006,20 @@ aggregate_reader_metadata::select_columns(
         CUDF_EXPECTS(
           src_schema_elem.num_children == dst_schema_elem.num_children,
           std::format(
-            "Column '{}' has a different number of child columns across the Parquet sources",
+            "Encountered mismatching number of children across Parquet sources for column '{}'",
             src_schema_elem.name),
           std::out_of_range);
 
         for (auto const& child_idx : src_schema_elem.children_idx) {
           auto const dst_child_idx = schema_lookup.find_target_schema_child(
             src_schema_idx, dst_schema_idx, get_schema(child_idx).name, src_idx);
-          CUDF_EXPECTS(dst_child_idx != -1,
-                       std::format("Nested column '{}' is present in the first Parquet source but "
-                                   "missing from another source",
-                                   get_schema(child_idx).name),
-                       std::out_of_range);
+          CUDF_EXPECTS(
+            dst_child_idx != -1,
+            std::format(
+              "Encountered missing nested column '{}' across Parquet sources for column '{}'",
+              get_schema(child_idx).name,
+              src_schema_elem.name),
+            std::out_of_range);
           map_column(nullptr, child_idx, dst_child_idx, src_idx);
         }
       }
@@ -2033,9 +2036,9 @@ aggregate_reader_metadata::select_columns(
           CUDF_EXPECTS(
             dst_child_idx != -1,
             std::format(
-              "Nested column '{}' is present in the first Parquet source but missing from "
-              "another source",
-              child_col_name_info.name),
+              "Encountered missing nested column '{}' across Parquet sources for column '{}'",
+              child_col_name_info.name,
+              src_schema_elem.name),
             std::out_of_range);
           map_column(&child_col_name_info, src_child_idx, dst_child_idx, src_idx);
         }
@@ -2199,11 +2202,11 @@ aggregate_reader_metadata::select_columns(
               // tree. An out_of_range error is thrown otherwise.
               auto const dst_col_schema_idx =
                 schema_lookup.find_target_schema_child(root_idx, root_idx, col.name, src_idx);
-              CUDF_EXPECTS(dst_col_schema_idx != -1,
-                           std::format("Column '{}' is present in the first Parquet source but "
-                                       "missing from another source",
-                                       col.name),
-                           std::out_of_range);
+              CUDF_EXPECTS(
+                dst_col_schema_idx != -1,
+                std::format("Encountered missing top-level column '{}' across Parquet sources",
+                            col.name),
+                std::out_of_range);
               map_column(&col, top_level_col_schema_idx, dst_col_schema_idx, src_idx);
             });
         }
