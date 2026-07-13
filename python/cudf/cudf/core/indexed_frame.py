@@ -6010,8 +6010,8 @@ class IndexedFrame(Frame):
                 """
                 >>> a.pow(b)
                 a       1
-                b    <NA>
-                c    <NA>
+                b       1
+                c       1
                 d    <NA>
                 e    <NA>
                 dtype: int64
@@ -6053,7 +6053,7 @@ class IndexedFrame(Frame):
                 a       1
                 b    <NA>
                 c    <NA>
-                d    <NA>
+                d       1
                 e    <NA>
                 dtype: int64
                 >>> a.rpow(b, fill_value=0)
