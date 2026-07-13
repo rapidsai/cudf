@@ -373,8 +373,7 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
 // exact width types (not e.g. __int128) since those are the only variant primitive int headers.
 template <typename T>
 constexpr bool is_variant_int =
-  cuda::std::is_same_v<T, int8_t> || cuda::std::is_same_v<T, int16_t> ||
-  cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
+  cudf::is_integral_not_bool<T>() && cudf::is_signed<T>() && !cuda::std::is_same_v<T, __int128_t>;
 
 // The fixed-width primitive types (signed integers and floats) a VARIANT value can be decoded into.
 template <typename T>
@@ -391,6 +390,8 @@ template <typename T>
 __device__ constexpr primitive_type primitive_type_for()
 {
   using enum primitive_type;
+  static_assert(is_variant_primitive<T>, "primitive_type_for: no VARIANT primitive type for T");
+
   if constexpr (cuda::std::is_same_v<T, int8_t>) {
     return int8;
   } else if constexpr (cuda::std::is_same_v<T, int16_t>) {
@@ -404,7 +405,7 @@ __device__ constexpr primitive_type primitive_type_for()
   } else if constexpr (cuda::std::is_same_v<T, double>) {
     return float64;
   } else {
-    static_assert(is_variant_primitive<T>, "primitive_type_for: no VARIANT primitive type for T");
+    CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
     return null;
   }
 }
