@@ -51,6 +51,8 @@ def _make_ordering(
     boundary: _Boundary | list[_Boundary],
     *,
     key_indices: tuple[int, ...] = (0,),
+    order: plc.types.Order = plc.types.Order.ASCENDING,
+    null_order: plc.types.NullOrder = plc.types.NullOrder.BEFORE,
     strict: bool = True,
     stream: Stream,
 ) -> Ordering:
@@ -73,8 +75,8 @@ def _make_ordering(
         [
             OrderKey(
                 index,
-                plc.types.Order.ASCENDING,
-                plc.types.NullOrder.BEFORE,
+                order,
+                null_order,
             )
             for index in key_indices
         ],
@@ -267,10 +269,12 @@ def test_adjust_ordering_requires_collective_id(
         (5, {0: {0: [0, 1, 2, 3, 4]}, 1: {1: [5, 6, 7]}}),
     ],
 )
+@pytest.mark.parametrize("input_strict", [True, False])
 def test_adjust_ordering_sparse_boundary_shift(
     spmd_engine: SPMDEngine,
     target_boundary: int,
     expected: _ExpectedByRank,
+    input_strict: bool,  # noqa: FBT001
 ) -> None:
     context = spmd_engine.context
     comm = spmd_engine.comm
@@ -280,7 +284,13 @@ def test_adjust_ordering_sparse_boundary_shift(
     keys = list(range(4)) if comm.rank == 0 else list(range(4, 8))
     stream = context.br().stream_pool.get_stream()
     # Input sorted on (key, val) is also sorted on the target key prefix.
-    input_ordering = _make_ordering(context, (4, 4), key_indices=(0, 1), stream=stream)
+    input_ordering = _make_ordering(
+        context,
+        (4, 4),
+        key_indices=(0, 1),
+        strict=input_strict,
+        stream=stream,
+    )
     output_ordering = _make_ordering(context, target_boundary, stream=stream)
 
     with reserve_op_id() as op_id:
@@ -496,3 +506,61 @@ def test_adjust_ordering_multi_chunk_input(spmd_engine: SPMDEngine) -> None:
     )
 
     _assert_partition_output(output, {0: [0, 1, 2, 3], 1: [4, 5, 6, 7]})
+
+
+@pytest.mark.spmd
+@pytest.mark.parametrize(
+    "order,null_order,keys,expected",
+    [
+        (
+            plc.types.Order.DESCENDING,
+            plc.types.NullOrder.BEFORE,
+            list(range(7, -1, -1)),
+            {0: [7, 6, 5], 1: [4, 3, 2, 1, 0]},
+        ),
+        (
+            plc.types.Order.ASCENDING,
+            plc.types.NullOrder.AFTER,
+            list(range(8)),
+            {0: [0, 1, 2, 3], 1: [4, 5, 6, 7]},
+        ),
+    ],
+)
+def test_adjust_ordering_respects_order_key_metadata(
+    spmd_engine: SPMDEngine,
+    order: plc.types.Order,
+    null_order: plc.types.NullOrder,
+    keys: list[int],
+    expected: _ExpectedPartitions,
+) -> None:
+    context = spmd_engine.context
+    comm = spmd_engine.comm
+    if comm.nranks != 1:
+        pytest.skip("This test covers local order-key metadata variants.")
+
+    stream = context.br().stream_pool.get_stream()
+    input_ordering = _make_ordering(
+        context,
+        4,
+        order=order,
+        null_order=null_order,
+        stream=stream,
+    )
+    output_ordering = _make_ordering(
+        context,
+        4,
+        order=order,
+        null_order=null_order,
+        stream=stream,
+    )
+    output_by_pid = asyncio.run(
+        _adjust_and_collect(
+            context,
+            comm,
+            _frame(keys),
+            input_ordering,
+            output_ordering,
+        )
+    )
+
+    _assert_partition_output(output_by_pid, expected)

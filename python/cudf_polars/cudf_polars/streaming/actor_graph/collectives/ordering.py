@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
 _PID_DTYPE = DataType(pl.Int32())
 _PID_PLC_DTYPE = plc.DataType(plc.TypeId.INT32)
+_MARKER_PLC_DTYPE = plc.DataType(plc.TypeId.BOOL8)
 
 
 @dataclass(frozen=True)
@@ -110,14 +111,29 @@ def _split_points(
     )
 
 
-def _append_partition_id(table: plc.Table, pid: int, stream: Stream) -> plc.Table:
-    """Append a temporary target-partition-id column to *table*."""
+def _append_remote_control_columns(
+    table: plc.Table,
+    pid: int,
+    stream: Stream,
+    *,
+    is_marker: bool,
+    nrows: int | None = None,
+) -> plc.Table:
+    """Append temporary pid and marker columns to one remote message."""
+    nrows = table.num_rows() if nrows is None else nrows
+    # The marker column keeps empty-control messages distinct from future
+    # zero-column payloads.
     pid_col = plc.Column.from_scalar(
         plc.Scalar.from_py(pid, _PID_PLC_DTYPE, stream=stream),
-        table.num_rows(),
+        nrows,
         stream=stream,
     )
-    return plc.Table([*table.columns(), pid_col])
+    marker_col = plc.Column.from_scalar(
+        plc.Scalar.from_py(is_marker, _MARKER_PLC_DTYPE, stream=stream),
+        nrows,
+        stream=stream,
+    )
+    return plc.Table([*table.columns(), pid_col, marker_col])
 
 
 def _boundary_search_positions(
@@ -213,18 +229,16 @@ def _unpack_remote_piece(
     table = unpack_and_concat([packed], stream=stream, br=br)
     if table.num_rows() == 0:
         return None
-    *payload_cols, pid_col = table.columns()
-    pid = int(
-        DataFrame.from_table(
-            plc.Table([pid_col]),
-            ["pid"],
-            [_PID_DTYPE],
-            stream,
-        )
-        .to_polars()
-        .item(0, 0)
-    )
-    if not payload_cols:
+    *payload_cols, pid_col, marker_col = table.columns()
+    control = DataFrame.from_table(
+        plc.Table([pid_col, marker_col]),
+        ["pid", "is_marker"],
+        [_PID_DTYPE, DataType(pl.Boolean())],
+        stream,
+    ).to_polars()
+    pid = int(control["pid"].item(0))
+    is_marker = bool(control["is_marker"].item(0))
+    if is_marker:
         return None
     payload = plc.Table(payload_cols).copy(stream=stream, mr=br.device_mr)
     return pid, TableChunk.from_pylibcudf_table(
@@ -366,7 +380,9 @@ async def _send_remote_piece(
             _contiguous_owner(pid, comm.nranks, npartitions),
             packed_data_from_cudf_packed_columns(
                 pack(
-                    _append_partition_id(chunk.table_view(), pid, stream),
+                    _append_remote_control_columns(
+                        chunk.table_view(), pid, stream, is_marker=False
+                    ),
                     stream,
                     mr=context.br().device_mr,
                 ),
@@ -388,15 +404,16 @@ async def _send_remote_marker(
         context.br().stream_pool.get_stream,
         upstreams=(),
     ) as stream:
-        pid_col = plc.Column.from_scalar(
-            plc.Scalar.from_py(pid, _PID_PLC_DTYPE, stream=stream),
-            1,
-            stream=stream,
-        )
         exchange.insert(
             _contiguous_owner(pid, comm.nranks, npartitions),
             packed_data_from_cudf_packed_columns(
-                pack(plc.Table([pid_col]), stream, mr=context.br().device_mr),
+                pack(
+                    _append_remote_control_columns(
+                        plc.Table([]), pid, stream, is_marker=True, nrows=1
+                    ),
+                    stream,
+                    mr=context.br().device_mr,
+                ),
                 stream,
                 context.br(),
             ),
