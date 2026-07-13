@@ -13,20 +13,11 @@ enable_testing()
 include(rapids-test)
 rapids_test_init()
 
-file(WRITE "${CUDF_STREAMING_BINARY_DIR}/CTestTestfile.cmake" "subdirs(\"tests\")\n")
-
-set(_cudf_streaming_gtests_link "${CMAKE_CURRENT_BINARY_DIR}/gtests")
-if(NOT EXISTS "${_cudf_streaming_gtests_link}")
-  file(CREATE_LINK "${CUDF_STREAMING_BINARY_DIR}/gtests" "${_cudf_streaming_gtests_link}" SYMBOLIC)
-endif()
-
 # Create a separate test case for each of these n_ranks.
 set(nranks_to_run 1 2 5)
 
-# A helper function to create a test case for each parallelism (defined by nranks_to_run).
-# TEST_TARGET is the name of the test target (required). This adds len(nranks_to_run) test cases
-# identified by <TEST_TARGET>_<n_ranks>. NOTE: When running ctest, the TEST_TARGET executable should
-# be located in the ./gtests/ directory relative to the PWD.
+# Register an mpirun-launched test for TEST_TARGET, creating one test case per parallelism in
+# nranks_to_run identified by <TEST_TARGET>_<n_ranks>.
 function(libcudf_streaming_mpirun_test_add)
   set(options) # no options
   set(one_value TEST_TARGET)
@@ -38,12 +29,14 @@ function(libcudf_streaming_mpirun_test_add)
   endif()
 
   message(STATUS "Adding mpirun test: ${_MPIRUN_TEST_TEST_TARGET} nranks: ${nranks_to_run}")
-  foreach(np IN ITEMS ${nranks_to_run})
-    # add the test using the relative path of the target
-    add_test(
-      NAME "${_MPIRUN_TEST_TEST_TARGET}_${np}" COMMAND mpirun --map-by node --bind-to none -np
-                                                       ${np} "gtests/${_MPIRUN_TEST_TEST_TARGET}"
+  foreach(np IN LISTS nranks_to_run)
+    rapids_test_add(
+      NAME "${_MPIRUN_TEST_TEST_TARGET}_${np}"
+      COMMAND mpirun --oversubscribe --map-by node --bind-to none -np ${np}
+              "$<TARGET_FILE:${_MPIRUN_TEST_TEST_TARGET}>"
+      INSTALL_COMPONENT_SET testing INSTALL_TARGET ${_MPIRUN_TEST_TEST_TARGET}
     )
+    set_tests_properties("${_MPIRUN_TEST_TEST_TARGET}_${np}" PROPERTIES RUN_SERIAL TRUE)
   endforeach(np)
 endfunction(libcudf_streaming_mpirun_test_add)
 
@@ -98,6 +91,8 @@ set_target_properties(
              CXX_EXTENSIONS ON
              CUDA_STANDARD 20
              CUDA_STANDARD_REQUIRED ON
+             # Custom marker property so this target can be discovered and installed below.
+             COMPONENT testing
 )
 target_include_directories(
   libcudf_streaming_single_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
@@ -111,10 +106,9 @@ target_link_libraries(
 rapids_test_add(
   NAME libcudf_streaming_single_tests
   COMMAND libcudf_streaming_single_tests
-  GPUS 1
-  PERCENT 100
   INSTALL_COMPONENT_SET testing
 )
+set_tests_properties(libcudf_streaming_single_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ##################################################################################################
 # MPI and UCXX based tests -------------------------------------------------------------------------
@@ -131,6 +125,8 @@ if(CUDF_STREAMING_HAVE_MPI)
                CXX_EXTENSIONS ON
                CUDA_STANDARD 20
                CUDA_STANDARD_REQUIRED ON
+               # Custom marker property so this target can be discovered and installed below.
+               COMPONENT testing
   )
   target_include_directories(
     libcudf_streaming_mpi_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"
@@ -154,6 +150,8 @@ if(CUDF_STREAMING_HAVE_MPI)
                  CXX_EXTENSIONS ON
                  CUDA_STANDARD 20
                  CUDA_STANDARD_REQUIRED ON
+                 # Custom marker property so this target can be discovered and installed below.
+                 COMPONENT testing
     )
     target_include_directories(
       libcudf_streaming_ucxx_tests PRIVATE "${CUDF_STREAMING_SOURCE_DIR}/include"

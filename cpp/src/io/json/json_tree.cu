@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -767,7 +767,9 @@ get_array_children_indices(TreeDepthT row_array_children_level,
     cuda::counting_iterator{num_nodes},
     node_levels.begin(),
     level2_nodes.begin(),
-    [row_array_children_level] __device__(auto level) { return level == row_array_children_level; },
+    [row_array_children_level] __device__(auto level) -> bool {
+      return level == row_array_children_level;
+    },
     stream);
   auto level2_parent_nodes =
     thrust::make_permutation_iterator(parent_node_ids.begin(), level2_nodes.cbegin());

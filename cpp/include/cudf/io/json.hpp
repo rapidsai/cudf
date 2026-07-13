@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -26,6 +26,7 @@ namespace io {
  * @addtogroup io_readers
  * @{
  * @file
+ * @brief APIs for reading and writing JSON files.
  */
 
 class json_reader_options_builder;
@@ -956,6 +957,50 @@ struct json_reader_result {
 };
 
 /**
+ * @brief Optional row-level diagnostics produced by `read_json_with_row_diagnostics`.
+ *
+ * Reserved for reader-specific diagnostics whose collection has additional cost and whose payload
+ * is not part of the ABI of `json_reader_diagnostics`.
+ */
+struct json_reader_row_diagnostics {
+  /**
+   * @brief Top-level column names whose value tree contained at least one JSON node
+   * whose category (`NC_STRUCT` / `NC_LIST` / `NC_VAL`) did not match the requested
+   * schema type. Empty when the reader is invoked without a user-supplied schema or
+   * when no mismatches were observed.
+   */
+  std::vector<std::string> top_level_columns_with_schema_mismatch;
+
+  /**
+   * @brief Row indices for one top-level column that had schema mismatches.
+   */
+  struct schema_mismatch_rows {
+    std::string column_name;             ///< Top-level output column name
+    std::vector<size_type> row_indices;  ///< Rows whose depth-1 ancestor should be nulled
+  };
+
+  /**
+   * @brief Row indices grouped by top-level output column for schema mismatches.
+   *
+   * Each entry names a top-level output column and lists the rows in that column
+   * where at least one descendant JSON node's category did not match the requested
+   * schema type. The indices are sorted, unique, and relative to the final
+   * returned table, not to an internal reader batch. Entries are ordered consistently
+   * with `top_level_columns_with_schema_mismatch`.
+   */
+  std::vector<schema_mismatch_rows> top_level_columns_with_schema_mismatch_rows;
+};
+
+/**
+ * @brief Result of `read_json_with_row_diagnostics`: the parsed table together with
+ * reader-specific row-level diagnostics.
+ */
+struct json_reader_result_with_row_diagnostics {
+  table_with_metadata data;                 ///< Parsed table and standard table metadata
+  json_reader_row_diagnostics diagnostics;  ///< Reader-specific row-level diagnostics
+};
+
+/**
  * @brief Reads a JSON dataset into a set of columns, additionally reporting reader
  * diagnostics that do not belong on the standard `table_metadata`.
  *
@@ -971,6 +1016,26 @@ struct json_reader_result {
  * @return The parsed table, its metadata, and reader diagnostics
  */
 json_reader_result read_json_with_diagnostics(
+  json_reader_options options,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
+ * @brief Reads a JSON dataset into a set of columns, additionally reporting reader
+ * diagnostics with row-level schema mismatch details.
+ *
+ * Behaves identically to `read_json` for column construction. The additional
+ * `diagnostics` field carries reader-specific observations such as
+ * `top_level_columns_with_schema_mismatch_rows`.
+ *
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate device memory of the table in the returned
+ * result.
+ *
+ * @return The parsed table, its metadata, and reader diagnostics with row-level details
+ */
+json_reader_result_with_row_diagnostics read_json_with_row_diagnostics(
   json_reader_options options,
   rmm::cuda_stream_view stream      = cudf::get_default_stream(),
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
