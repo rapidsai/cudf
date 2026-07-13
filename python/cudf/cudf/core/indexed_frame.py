@@ -2921,7 +2921,30 @@ class IndexedFrame(Frame):
             if ignore_index:
                 out = out.reset_index(drop=True)
         else:
-            labels = sorted(self._column_names, reverse=not ascending)
+            if level is not None and self._data.multiindex:
+                if not is_list_like(level):
+                    level = [level]
+                nlevels = self._data.nlevels
+                level_names = list(self._data.level_names)
+
+                def _level_number(lvl):
+                    if isinstance(lvl, int):
+                        return lvl + nlevels if lvl < 0 else lvl
+                    return level_names.index(lvl)
+
+                key_order = [_level_number(lvl) for lvl in level]
+                if sort_remaining:
+                    seen = set(key_order)
+                    key_order.extend(
+                        i for i in range(nlevels) if i not in seen
+                    )
+                labels = sorted(
+                    self._column_names,
+                    key=lambda label: tuple(label[i] for i in key_order),
+                    reverse=not ascending,
+                )
+            else:
+                labels = sorted(self._column_names, reverse=not ascending)
             result_columns = (self._data[label] for label in labels)
             if ignore_index:
                 ca = ColumnAccessor(
