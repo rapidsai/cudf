@@ -63,7 +63,6 @@ def _begin_quent_do_evaluate_events(
     ir_execution_context: IRExecutionContext,
 ) -> tuple[Any, Any, bool] | None:
     import cudf_polars.quent
-    from cudf_polars.dsl.ir import DataFrameScan, Scan
 
     quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
     if quent_ir_execution_context is None:
@@ -80,13 +79,12 @@ def _begin_quent_do_evaluate_events(
     quent_processor = quent_ir_execution_context.get_or_declare_processor(
         thread_ident=threading.get_ident(),
     )
-    is_io_node = issubclass(cls, (Scan, DataFrameScan))
     quent_ir_execution_context.logger.emit(quent_task.queueing())
-    if not is_io_node:
+    if not cls.is_io_node:
         quent_ir_execution_context.logger.emit(
             quent_task.allocating(resource_id=quent_processor.id)
         )
-    return quent_task, quent_processor, is_io_node
+    return quent_task, quent_processor, cls.is_io_node
 
 
 def _end_quent_do_evaluate_events(

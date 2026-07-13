@@ -248,6 +248,9 @@ class IR(Node["IR"]):
     schema: Schema
     """Mapping from column names to their data types."""
 
+    is_io_node: bool = False
+    """Whether the node is an IO node."""
+
     def get_hashable(self) -> Hashable:
         """
         Hashable representation of node, treating schema dictionary.
@@ -700,6 +703,8 @@ class Scan(IR):
 
     PARQUET_DEFAULT_CHUNK_SIZE: int = 0  # unlimited
     PARQUET_DEFAULT_PASS_LIMIT: int = 16 * 1024**3  # 16GiB
+
+    is_io_node: bool = True
 
     def __init__(
         self,
@@ -1634,6 +1639,8 @@ class DataFrameScan(IR):
     """Polars internal PyDataFrame object."""
     projection: tuple[str, ...] | None
     """List of columns to project out."""
+
+    is_io_node: bool = True
 
     def __init__(
         self,
