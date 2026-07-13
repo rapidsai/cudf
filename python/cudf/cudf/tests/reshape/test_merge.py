@@ -1520,3 +1520,21 @@ def test_merge_invalid_input(param):
         left.merge(param)
     with pytest.raises(TypeError):
         cudf.merge(left["a"], param)
+
+
+@pytest.mark.parametrize("left_cols", [True, False])
+@pytest.mark.parametrize("right_cols", [True, False])
+def test_cross_merge_zero_column_operand(left_cols, right_cols):
+    # A cross merge where one or both operands have no columns must still
+    # produce ``len(left) * len(right)`` rows (matching pandas), rather than
+    # dropping the row count of the column-less operand.
+    ldata = {"x": [1, 2, 3]} if left_cols else {}
+    rdata = {"y": [10, 20, 30, 40]} if right_cols else {}
+    pleft = pd.DataFrame(ldata, index=range(3))
+    pright = pd.DataFrame(rdata, index=range(4))
+    gleft = cudf.DataFrame(ldata, index=range(3))
+    gright = cudf.DataFrame(rdata, index=range(4))
+
+    expected = pleft.merge(pright, how="cross")
+    result = gleft.merge(gright, how="cross")
+    assert_eq(result, expected)
