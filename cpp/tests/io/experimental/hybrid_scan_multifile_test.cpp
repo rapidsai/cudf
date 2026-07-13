@@ -233,35 +233,33 @@ TEST_F(HybridScanMultifileTest, PrependIndexColumns)
   auto row_mask                = reader.build_all_true_row_mask(row_group_indices, stream, mr);
 
   // Materialize filter column prepended with index columns
-  {
-    auto filter_column_chunks = fetch_multisource_device_data(
-      inputs, reader.filter_column_chunks_byte_ranges(row_group_indices, options), stream, mr);
-    auto row_mask_view = row_mask->mutable_view();
-    auto filter_result = reader.materialize_filter_columns(row_group_indices,
-                                                           filter_column_chunks.flat_spans,
-                                                           row_mask_view,
+  auto filter_column_chunks = fetch_multisource_device_data(
+    inputs, reader.filter_column_chunks_byte_ranges(row_group_indices, options), stream, mr);
+  auto row_mask_view = row_mask->mutable_view();
+  auto filter_result = reader.materialize_filter_columns(row_group_indices,
+                                                         filter_column_chunks.flat_spans,
+                                                         row_mask_view,
+                                                         use_data_page_mask::NO,
+                                                         options,
+                                                         stream,
+                                                         mr);
+
+  ASSERT_EQ(filter_result.tbl->num_columns(), 3);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table, filter_result.tbl->view());
+
+  // Materialize payload column (no prepended index columns)
+  auto payload_column_chunks = fetch_multisource_device_data(
+    inputs, reader.payload_column_chunks_byte_ranges(row_group_indices, options), stream, mr);
+  auto payload_result = reader.materialize_payload_columns(row_group_indices,
+                                                           payload_column_chunks.flat_spans,
+                                                           row_mask->view(),
                                                            use_data_page_mask::NO,
                                                            options,
                                                            stream,
                                                            mr);
-
-    ASSERT_EQ(filter_result.tbl->num_columns(), 3);
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table, filter_result.tbl->view());
-
-    // Materialize payload column (no prepended index columns)
-    auto payload_column_chunks = fetch_multisource_device_data(
-      inputs, reader.payload_column_chunks_byte_ranges(row_group_indices, options), stream, mr);
-    auto payload_result = reader.materialize_payload_columns(row_group_indices,
-                                                             payload_column_chunks.flat_spans,
-                                                             row_mask->view(),
-                                                             use_data_page_mask::NO,
-                                                             options,
-                                                             stream,
-                                                             mr);
-    ASSERT_EQ(payload_result.tbl->num_columns(), 1);
-    // col1 (payload) must be identical to col0 (filter) with the same row_mask
-    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table.select({2}), payload_result.tbl->view());
-  }
+  ASSERT_EQ(payload_result.tbl->num_columns(), 1);
+  // col1 (payload) must be identical to col0 (filter) with the same row_mask
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_table.select({2}), payload_result.tbl->view());
 }
 
 TEST_F(HybridScanMultifileTest, MaterializeStructs)
