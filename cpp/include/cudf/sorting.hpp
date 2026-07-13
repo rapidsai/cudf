@@ -254,6 +254,9 @@ std::unique_ptr<column> rank(
  * result is { 0,1,2, 6,5,4,3, 7,8,9 }
  * @endcode
  *
+ * A zero-column `keys` table is treated as empty, producing an empty column even when `keys` has a
+ * non-zero row count.
+ *
  * @param keys The table that determines the ordering of elements in each segment
  * @param segment_offsets The column of `size_type` type containing start offset index for each
  * contiguous segment.
@@ -266,6 +269,7 @@ std::unique_ptr<column> rank(
  * `null_order::BEFORE`.
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource to allocate any returned objects
+ *
  * @return sorted order of the segment sorted table
  *
  */
