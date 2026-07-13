@@ -143,6 +143,7 @@ class UnaryFunction(Expr):
             "degrees",
             "log1p",
             "radians",
+            "sign",
         }
     )
     _supported_fns = frozenset().union(
@@ -841,7 +842,7 @@ class UnaryFunction(Expr):
                     ),
                     dtype=self.dtype,
                 )
-            else:
+            elif self.name in ("degrees", "radians"):
                 if self.name == "degrees":
                     factor = 180.0 / math.pi
                 else:
@@ -858,6 +859,43 @@ class UnaryFunction(Expr):
                     ),
                     dtype=self.dtype,
                 )
+            else:
+                # sign
+                operand = column.obj
+                out_type = self.dtype.plc_type
+                is_float = plc.traits.is_floating_point(out_type)
+                zero_py = 0.0 if is_float else 0
+                one_py = zero_py + 1
+                neg_one_py = -one_py
+                zero = plc.Scalar.from_py(zero_py, out_type, stream=df.stream)
+                positive = plc.binaryop.binary_operation(
+                    operand,
+                    zero,
+                    plc.binaryop.BinaryOperator.GREATER,
+                    plc.DataType(plc.TypeId.BOOL8),
+                    stream=df.stream,
+                )
+                signed = plc.copying.copy_if_else(
+                    plc.Scalar.from_py(one_py, out_type, stream=df.stream),
+                    operand,
+                    positive,
+                    stream=df.stream,
+                )
+                if not plc.traits.is_unsigned(out_type):
+                    negative = plc.binaryop.binary_operation(
+                        operand,
+                        zero,
+                        plc.binaryop.BinaryOperator.LESS,
+                        plc.DataType(plc.TypeId.BOOL8),
+                        stream=df.stream,
+                    )
+                    signed = plc.copying.copy_if_else(
+                        plc.Scalar.from_py(neg_one_py, out_type, stream=df.stream),
+                        signed,
+                        negative,
+                        stream=df.stream,
+                    )
+                return Column(signed, dtype=self.dtype)
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
