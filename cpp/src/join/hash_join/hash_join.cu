@@ -151,18 +151,20 @@ hash_join<Hasher>::hash_join(cudf::table_view const& right,
                                 stream);
 }
 
-template hash_join<hash_join_hasher>::hash_join(cudf::table_view const& right,
-                                                bool has_nulls,
-                                                cudf::null_equality compare_nulls,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
+template hash_join<hash_join_hasher>::hash_join(
+  cudf::table_view const& right,
+  bool has_nulls,
+  cudf::null_equality compare_nulls,
+  rmm::cuda_stream_view stream,
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr);
 
-template hash_join<hash_join_hasher>::hash_join(cudf::table_view const& right,
-                                                bool has_nulls,
-                                                cudf::null_equality compare_nulls,
-                                                double load_factor,
-                                                rmm::cuda_stream_view stream,
-                                                rmm::device_async_resource_ref mr);
+template hash_join<hash_join_hasher>::hash_join(
+  cudf::table_view const& right,
+  bool has_nulls,
+  cudf::null_equality compare_nulls,
+  double load_factor,
+  rmm::cuda_stream_view stream,
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr);
 
 template <typename Hasher>
 hash_join<Hasher>::~hash_join() = default;
