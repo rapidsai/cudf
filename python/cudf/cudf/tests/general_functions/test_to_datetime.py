@@ -12,6 +12,7 @@ from cudf.testing import assert_eq
 from cudf.testing._utils import (
     assert_exceptions_equal,
 )
+from cudf.utils.temporal import infer_format
 
 
 @pytest.mark.parametrize(
@@ -434,3 +435,21 @@ def test_datetime_index_tz_dtype_wall_time(data):
     )
     expected = pd.DatetimeIndex(data, dtype="datetime64[s, US/Eastern]")
     assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    "bad_input",
+    ["1.2", "9.9", "2078~1.15"],
+)
+def test_infer_format_rejects_non_datetime_dotted_strings(bad_input):
+    with pytest.raises(
+        ValueError, match="Unable to infer the timestamp format"
+    ):
+        infer_format(bad_input)
+
+
+def test_to_datetime_rejects_non_datetime_dotted_string():
+    with pytest.raises(
+        ValueError, match="Unable to infer the timestamp format"
+    ):
+        cudf.to_datetime(cudf.Series(["1.2"]))
