@@ -520,10 +520,18 @@ def test_string_to_float(engine: pl.GPUEngine, str_to_float_data, floating_type)
 
 
 @pytest.mark.parametrize("scale", [0, 1, 2, 4])
-def test_string_to_decimal(engine: pl.GPUEngine, scale):
-    ldf = pl.LazyFrame(
-        {"a": ["1.23", "-4.5", None, "0", "123456789.01", "abc", "1.234"]}
-    )
+@pytest.mark.parametrize(
+    "values",
+    [
+        ["1.23", "-4.5", None, "0", "123456789.01", "abc", "1.234"],
+        [],
+        [None, None],
+        ["1.23"],
+    ],
+    ids=["mixed", "empty", "all-null", "single-row"],
+)
+def test_string_to_decimal(engine: pl.GPUEngine, scale, values):
+    ldf = pl.LazyFrame({"a": pl.Series(values, dtype=pl.String)})
     q = ldf.select(pl.col("a").str.to_decimal(scale=scale))
     assert_gpu_result_equal(q, engine=engine)
 
