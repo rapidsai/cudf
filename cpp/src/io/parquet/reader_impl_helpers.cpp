@@ -622,19 +622,6 @@ aggregate_reader_metadata::collect_keyval_metadata() const
   return kv_maps;
 }
 
-bool has_mismatched_pq_schema_selection(cudf::io::parquet_reader_options const& options)
-{
-  return (options.get_column_names().has_value() or options.get_column_indices().has_value()) and
-         options.is_enabled_allow_mismatched_pq_schemas();
-}
-
-bool effective_ignore_missing_columns(cudf::io::parquet_reader_options const& options,
-                                      size_t num_sources)
-{
-  return options.is_enabled_ignore_missing_columns() and
-         not(has_mismatched_pq_schema_selection(options) and num_sources > 1);
-}
-
 std::vector<std::unordered_map<int32_t, int32_t>> aggregate_reader_metadata::init_schema_idx_maps(
   bool const has_cols_from_mismatched_srcs) const
 {
@@ -2026,7 +2013,9 @@ aggregate_reader_metadata::select_columns(
           auto const dst_child_idx = schema_lookup.find_target_schema_child(
             src_schema_idx, dst_schema_idx, get_schema(child_idx).name, src_idx);
           CUDF_EXPECTS(dst_child_idx != -1,
-                       "Encountered mismatching schema tree depths across data sources",
+                       std::format("Nested column '{}' is present in the first Parquet source but "
+                                   "missing from another source",
+                                   get_schema(child_idx).name),
                        std::out_of_range);
           map_column(nullptr, child_idx, dst_child_idx, src_idx);
         }
@@ -2041,12 +2030,13 @@ aggregate_reader_metadata::select_columns(
             schema_lookup.find_schema_child_by_name(src_schema_idx, child_col_name_info.name);
           auto const dst_child_idx = schema_lookup.find_target_schema_child(
             src_schema_idx, dst_schema_idx, child_col_name_info.name, src_idx);
-          CUDF_EXPECTS(dst_child_idx != -1,
-                       std::format(
-                "Nested column '{}' is present in the first Parquet source but missing from "
-                "another source",
-                         child_col_name_info.name),
-              std::out_of_range);
+          CUDF_EXPECTS(
+            dst_child_idx != -1,
+            std::format(
+              "Nested column '{}' is present in the first Parquet source but missing from "
+              "another source",
+              child_col_name_info.name),
+            std::out_of_range);
           map_column(&child_col_name_info, src_child_idx, dst_child_idx, src_idx);
         }
       }
@@ -2115,9 +2105,10 @@ aggregate_reader_metadata::select_columns(
               valid_path.full_path, selected_path, case_sensitive_names);
           });
         // Ensure that selected path matches a path in all_paths
-        CUDF_EXPECTS(found_path != all_paths.end() or ignore_missing_columns,
-                     "Encountered non-existent column in selected path",
-                     std::invalid_argument);
+        CUDF_EXPECTS(
+          found_path != all_paths.end() or ignore_missing_columns,
+          std::format("Encountered non-existent column '{}' in the selected path", selected_path),
+          std::invalid_argument);
         if (found_path != all_paths.end()) {
           // Use the file's actual path (preserving original case) for the valid_selected_paths
           valid_selected_paths.push_back({found_path->full_path, found_path->schema_idx});
@@ -2209,9 +2200,9 @@ aggregate_reader_metadata::select_columns(
               auto const dst_col_schema_idx =
                 schema_lookup.find_target_schema_child(root_idx, root_idx, col.name, src_idx);
               CUDF_EXPECTS(dst_col_schema_idx != -1,
-                            std::format("Column '{}' is present in the first Parquet source but "
+                           std::format("Column '{}' is present in the first Parquet source but "
                                        "missing from another source",
-                                        col.name),
+                                       col.name),
                            std::out_of_range);
               map_column(&col, top_level_col_schema_idx, dst_col_schema_idx, src_idx);
             });

@@ -173,27 +173,6 @@ struct column_selection_options {
   bool case_sensitive_names = true;
 };
 
-/**
- * @brief Whether columns are explicitly selected (by names or indices) with
- * `allow_mismatched_pq_schemas` enabled, requiring per-source schema index maps
- */
-[[nodiscard]] bool has_mismatched_pq_schema_selection(
-  cudf::io::parquet_reader_options const& options);
-
-/**
- * @brief Computes the effective `ignore_missing_columns` policy for column selection
- *
- * With multiple sources and `allow_mismatched_pq_schemas`, every selected or filter-only column
- * must be present and mappable in each source. Missing columns always throw in that mode,
- * regardless of `ignore_missing_columns`.
- *
- * @param options The reader options
- * @param num_sources Number of input Parquet sources
- * @return The effective `ignore_missing_columns` value to pass to column selection
- */
-[[nodiscard]] bool effective_ignore_missing_columns(cudf::io::parquet_reader_options const& options,
-                                                    size_t num_sources);
-
 class aggregate_reader_metadata {
  protected:
   std::vector<metadata> per_file_metadata;
