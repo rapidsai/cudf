@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -14,6 +14,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cooperative_groups.h>
+#include <cuda/barrier>
 #include <cuda/std/iterator>
 #include <cuda/std/limits>
 
@@ -378,6 +379,7 @@ CUDF_KERNEL void __launch_bounds__(preprocess_block_size)
  * @param min_row Minimum row index to read
  * @param num_rows Number of rows to read starting from min_row
  */
+#pragma nv_diag_suppress static_var_with_dynamic_init
 template <typename level_t, int level_decode_block_size>
 CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   preprocess_levels_kernel(PageInfo* pages,
@@ -418,6 +420,16 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
   rle_stream<level_t, level_decode_block_size, max_output_values>
     decoders[level_type::NUM_LEVEL_TYPES] = {{def_runs}, {rep_runs}};
 
+  // Shared-memory staging scratch for the encoded level streams. Level streams
+  // for a page are usually small (definition/repetition levels are dominated by
+  // short RLE runs), and their serial run-header parse is latency-bound on
+  // dependent global loads. Staging the bytes into shared memory once removes
+  // that latency from fill_run_batch(). Streams larger than the per-stream
+  // budget fall back to parsing from global with no behavior change.
+  using rle_stream_t = rle_stream<level_t, level_decode_block_size, max_output_values>;
+  __shared__ __align__(16) uint8_t stage[rle_stream_t::smem_stage_size];
+  __shared__ cuda::barrier<cuda::thread_scope_block> copy_barrier;
+
   // Get the level decode buffers for this page
   auto* const def = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::DEFINITION]);
   auto* const rep = reinterpret_cast<level_t*>(pp->lvl_decode_buf[level_type::REPETITION]);
@@ -429,33 +441,43 @@ CUDF_KERNEL void __launch_bounds__(level_decode_block_size)
 
   // Initialize the stream decoders
   bool const process_nulls = should_process_nulls(s);
-  if (process_nulls) {
-    decoders[level_type::DEFINITION].init(s->col.level_bits[level_type::DEFINITION],
-                                          s->abs_lvl_start[level_type::DEFINITION],
-                                          s->abs_lvl_end[level_type::DEFINITION],
-                                          def,
-                                          num_to_decode);
-  }
   if (has_repetition) {
-    decoders[level_type::REPETITION].init(s->col.level_bits[level_type::REPETITION],
+    cg::invoke_one(block, [&]() { init(&copy_barrier, block.size()); });
+    block.sync();
+    decoders[level_type::REPETITION].init(block,
+                                          s->col.level_bits[level_type::REPETITION],
                                           s->abs_lvl_start[level_type::REPETITION],
                                           s->abs_lvl_end[level_type::REPETITION],
                                           rep,
-                                          num_to_decode);
+                                          num_to_decode,
+                                          stage,
+                                          &copy_barrier);
+    copy_barrier.arrive_and_wait();
+    decoders[level_type::REPETITION].decode_next(t, num_to_decode);
   }
-  block.sync();
 
   // Decode levels for this page up to the last row needed.
   // If skipping the first rows, we still need to decode their levels.
   // This is because we need to determine the number of non-null values we skipped.
   // Note that for lists we haven't computed skipped_leaf_values yet; this is used as input for
   // that.
-  if (has_repetition) { decoders[level_type::REPETITION].decode_next(t, num_to_decode); }
-
   // Must sync as shared variables in decode_next() are shared between decoders!!
   block.sync();
 
-  if (process_nulls) { decoders[level_type::DEFINITION].decode_next(t, num_to_decode); }
+  if (process_nulls) {
+    cg::invoke_one(block, [&]() { init(&copy_barrier, block.size()); });
+    block.sync();
+    decoders[level_type::DEFINITION].init(block,
+                                          s->col.level_bits[level_type::DEFINITION],
+                                          s->abs_lvl_start[level_type::DEFINITION],
+                                          s->abs_lvl_end[level_type::DEFINITION],
+                                          def,
+                                          num_to_decode,
+                                          stage,
+                                          &copy_barrier);
+    copy_barrier.arrive_and_wait();
+    decoders[level_type::DEFINITION].decode_next(t, num_to_decode);
+  }
 }
 
 }  // anonymous namespace

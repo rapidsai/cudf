@@ -457,6 +457,8 @@ _names_to_skip_in_cpp = {
     "orc::column_statistics",
     # Span subclasses access base class members
     "base::",
+    # host_span defines member typedefs via its underlying cuda::std::span alias
+    "span_type",
 }
 
 _domain_objects = None
@@ -640,6 +642,8 @@ nitpick_ignore = [
     ("py:class", "polars.LazyFrame"),
     ("py:class", "polars.DataFrame"),
     ("py:class", "polars.dataframe.frame.DataFrame"),
+    # Sphinx isn't able to resolve this cudf-polars.quent type alias
+    ("py:class", "Value"),
 ]
 # Temporarily disable nitpick warnings for pandas: https://github.com/pandas-dev/pandas/issues/64584
 nitpick_ignore_regex = [

@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
@@ -38,6 +38,8 @@ if TYPE_CHECKING:
         "ceil",
         "floor",
         "abs",
+        "degrees",
+        "radians",
     ]
 )
 def op(request):
@@ -172,10 +174,9 @@ def test_round(engine: pl.GPUEngine, ldf: pl.LazyFrame, mode: RoundMethod) -> No
     "expr",
     [
         pl.col("a").sign(),
-        pl.col("a").clip(0, 2),
         pl.col("a").hash(),
     ],
-    ids=["sign", "clip", "hash"],
+    ids=["sign", "hash"],
 )
 def test_unary_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3]})
