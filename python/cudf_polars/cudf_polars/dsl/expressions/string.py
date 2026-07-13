@@ -610,8 +610,6 @@ class StringFunction(Expr):
                 plc_column, self.dtype.plc_type, stream=df.stream
             )
             if parse_ok.null_count() > 0:
-                # is_integer marks null inputs as null; treat them as
-                # non-parseable so they map to null in the output.
                 parse_ok = plc.replace.replace_nulls(
                     parse_ok,
                     plc.Scalar.from_py(
