@@ -3251,7 +3251,11 @@ class Projection(IR):
             target_length=df.num_rows,
             stream=df.stream,
         )
-        return DataFrame(columns, stream=df.stream)
+        return DataFrame(
+            columns,
+            stream=df.stream,
+            num_rows=df.num_rows if len(schema) == 0 else None,
+        )
 
 
 class MergeSorted(IR):
