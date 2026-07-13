@@ -25,6 +25,7 @@
 
 #include <limits>
 #include <memory>
+#include <utility>
 
 namespace cudf::detail {
 
@@ -103,8 +104,8 @@ hash_join<Hasher>::hash_join(cudf::table_view const& right,
                              bool has_nulls,
                              cudf::null_equality compare_nulls,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
-  : hash_join{right, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream, mr}
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : hash_join{right, has_nulls, compare_nulls, CUCO_DESIRED_LOAD_FACTOR, stream, std::move(mr)}
 {
 }
 
@@ -114,7 +115,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& right,
                              cudf::null_equality compare_nulls,
                              double load_factor,
                              rmm::cuda_stream_view stream,
-                             rmm::device_async_resource_ref mr)
+                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _has_nulls(has_nulls),
     _is_empty{right.num_rows() == 0},
     _nulls_equal{compare_nulls},
@@ -126,7 +127,7 @@ hash_join<Hasher>::hash_join(cudf::table_view const& right,
       {},
       {},
       {},
-      rmm::mr::polymorphic_allocator<char>{mr},
+      rmm::mr::polymorphic_allocator<char>{std::move(mr)},
       stream.value()}})},
     _right{right},
     _preprocessed_right{cudf::detail::row::equality::preprocessed_table::create(_right, stream)}
@@ -177,9 +178,13 @@ hash_join::~hash_join() = default;
 hash_join::hash_join(cudf::table_view const& right,
                      null_equality compare_nulls,
                      rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr)
-  : hash_join(
-      right, nullable_join::YES, compare_nulls, cudf::detail::CUCO_DESIRED_LOAD_FACTOR, stream, mr)
+                     cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : hash_join(right,
+              nullable_join::YES,
+              compare_nulls,
+              cudf::detail::CUCO_DESIRED_LOAD_FACTOR,
+              stream,
+              std::move(mr))
 {
 }
 
@@ -188,9 +193,9 @@ hash_join::hash_join(cudf::table_view const& right,
                      null_equality compare_nulls,
                      double load_factor,
                      rmm::cuda_stream_view stream,
-                     rmm::device_async_resource_ref mr)
+                     cuda::mr::any_resource<cuda::mr::device_accessible> mr)
   : _impl{std::make_unique<impl_type const>(
-      right, has_nulls == nullable_join::YES, compare_nulls, load_factor, stream, mr)}
+      right, has_nulls == nullable_join::YES, compare_nulls, load_factor, stream, std::move(mr))}
 {
 }
 
