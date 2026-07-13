@@ -29,6 +29,7 @@ from cudf.core.column.column import (
     pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -43,7 +44,7 @@ from cudf.utils.temporal import infer_format
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
     import cupy as cp
 
@@ -204,11 +205,11 @@ class StringColumn(ColumnBase, Scannable):
         if min_count > 0 and col.valid_count < min_count:
             return pd.NA
 
-        return (
-            0
-            if len(col) == 0
-            else col.join_strings("", None).element_indexing(0)
-        )
+        if len(col) == 0:
+            # pandas sums an empty/all-null object series to the numeric
+            # identity 0; genuine string dtypes concatenate to "".
+            return 0 if self.dtype == np.dtype("object") else ""
+        return col.join_strings("", None).element_indexing(0)
 
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
@@ -396,6 +397,18 @@ class StringColumn(ColumnBase, Scannable):
                 )
             return cast("Self", ColumnBase.create(self.plc_column, dtype))
         return self
+
+    def _process_values_for_isin(
+        self, values: Sequence | ColumnBase
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if lhs.dtype != rhs.dtype and is_dtype_obj_string(rhs.dtype):
+            # Strings of any dtype flavor (object, pd.StringDtype with
+            # python/pyarrow storage and NaN/NA na_value, pd.ArrowDtype
+            # string) hold comparable values; align rhs with lhs's dtype
+            # so ColumnBase.isin does not treat them as disjoint types.
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
 
     @property
     def values(self) -> cp.ndarray:
