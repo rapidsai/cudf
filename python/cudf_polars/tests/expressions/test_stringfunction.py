@@ -168,6 +168,11 @@ def test_contains_re_non_strict_invalid(engine: pl.GPUEngine, ldf):
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_contains_empty_regex_with_null(engine: pl.GPUEngine):
+    q = pl.LazyFrame({"a": ["abc", None, ""]}).select(pl.col("a").str.contains(""))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_contains_re_non_strict_libcudf_unsupported(engine: pl.GPUEngine, ldf):
     q = ldf.select(pl.col("a").str.contains("a{1000}", strict=False))
     assert_ir_translation_raises(q, engine, NotImplementedError)
