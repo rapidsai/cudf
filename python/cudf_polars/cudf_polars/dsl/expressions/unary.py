@@ -118,6 +118,7 @@ class UnaryFunction(Expr):
             "null_count",
             "rank",
             "reinterpret",
+            "reverse",
             "round",
             "set_sorted",
             "shift",
@@ -599,6 +600,12 @@ class UnaryFunction(Expr):
                     fill_scalar = fill_col.obj_scalar(stream=df.stream)
             return Column(
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
+                dtype=self.dtype,
+            )
+        elif self.name == "reverse":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            return Column(
+                plc.copying.reverse(column.obj, stream=df.stream),
                 dtype=self.dtype,
             )
         elif self.name == "reinterpret":
