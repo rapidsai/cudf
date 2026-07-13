@@ -63,6 +63,37 @@ def _begin_quent_do_evaluate_events(
     cls: type[ir.IR],
     ir_execution_context: IRExecutionContext,
 ) -> Task | None:
+    """
+    Build and emit Quent events for the start of an IR node's evaluation.
+
+    Parameters
+    ----------
+    cls
+        The IR node class.
+    ir_execution_context
+        The IR execution context. To emit any events, this must have a
+        quent_ir_execution_context bound.
+
+    Returns
+    -------
+    The Quent task instance, or None if no Quent IR execution context is bound.
+
+    Notes
+    -----
+    The following events are emitted:
+
+    - Queueing
+    - Loading (I/O nodes only)
+    - Allocating (non-I/O nodes only)
+    - Computing (non-I/O nodes only)
+
+    The Loading, Allocating, and Computing events will indicate the host CPU thread
+    and device memory that they're using.
+
+    See Also
+    --------
+    _end_quent_do_evaluate_events
+    """
     import cudf_polars.quent
 
     quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
@@ -89,7 +120,6 @@ def _begin_quent_do_evaluate_events(
             quent_task.computing(
                 use_thread=quent_processor,
                 use_memory=quent_ir_execution_context.device_memory,
-                # memory_capacity_bytes=output_capacity_bytes,
             )
         )
     else:
@@ -97,9 +127,7 @@ def _begin_quent_do_evaluate_events(
             quent_task.loading(
                 use_thread=quent_processor,
                 use_channel=quent_ir_execution_context.disk_to_device_channel,
-                # channel_capacity_bytes=output_capacity_bytes,
                 use_memory=quent_ir_execution_context.device_memory,
-                # memory_capacity_bytes=output_capacity_bytes,
             )
         )
 
@@ -113,6 +141,39 @@ def _end_quent_do_evaluate_events(
     ir_execution_context: IRExecutionContext,
     quent_task: Task,
 ) -> None:
+    """
+    Build and emit Quent events for the end of an IR node's evaluation.
+
+    Parameters
+    ----------
+    cls
+        The IR node class.
+    frames
+        The input dataframes passed to the IR node.
+    result
+        The output dataframe returned from the IR node.
+    ir_execution_context
+        The IR execution context. To emit any events, this must have a
+        quent_ir_execution_context bound.
+    quent_task
+        The Quent task instance created by ``_begin_quent_do_evaluate_events``.
+
+    Notes
+    -----
+    This method emits an ``Exit`` event for the Quent Task, whose timestamp represents
+    when the IR node completed host-side processing.
+
+    A ``Statistics`` record, associated with the Quent Operator bound to the IR execution context,
+    is also emitted. It includes
+
+    - input bytes: the total size of the input dataframes.
+    - output bytes: the size of the output dataframe.
+    - output rows: the number of rows in the output dataframe.
+
+    See Also
+    --------
+    _begin_quent_do_evaluate_events
+    """
     import cudf_polars.quent
 
     quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
