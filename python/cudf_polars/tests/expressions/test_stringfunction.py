@@ -789,8 +789,15 @@ def test_count_matches(engine: pl.GPUEngine, ldf):
     assert_gpu_result_equal(q, engine=engine)
 
 
-def test_count_matches_literal_unsupported(engine: pl.GPUEngine, ldf):
-    q = ldf.select(pl.col("a").str.count_matches("a", literal=True))
+@pytest.mark.parametrize("pattern", ["a", ".", "a+", "+", "L"])
+def test_count_matches_literal(engine: pl.GPUEngine, pattern):
+    df = pl.LazyFrame({"a": ["a.b.c", "a1b2", "...", "", None, "a+a+a", "kLm"]})
+    q = df.select(pl.col("a").str.count_matches(pattern, literal=True))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_count_matches_literal_empty_unsupported(engine: pl.GPUEngine, ldf):
+    q = ldf.select(pl.col("a").str.count_matches("", literal=True))
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
