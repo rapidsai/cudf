@@ -193,7 +193,7 @@ class UnaryFunction(Expr):
                     f"ranking with {method=} is not yet supported"
                 )
         if self.name == "replace" and not all(
-            isinstance(child, Literal | LiteralColumn) for child in self.children[1:]
+            isinstance(child, (Literal, LiteralColumn)) for child in self.children[1:]
         ):
             raise NotImplementedError(
                 "replace only supports literal old and new values"
@@ -204,7 +204,7 @@ class UnaryFunction(Expr):
                     "replace_strict only supports an explicit default"
                 )
             if not all(
-                isinstance(child, Literal | LiteralColumn)
+                isinstance(child, (Literal, LiteralColumn))
                 for child in self.children[1:]
             ):
                 raise NotImplementedError(

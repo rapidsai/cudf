@@ -6,7 +6,10 @@ import pytest
 
 import polars as pl
 
-from cudf_polars.testing.asserts import assert_gpu_result_equal
+from cudf_polars.testing.asserts import (
+    assert_gpu_result_equal,
+    assert_ir_translation_raises,
+)
 from cudf_polars.testing.engine_utils import is_streaming_engine
 
 
@@ -27,6 +30,24 @@ def test_replace_strict(engine: pl.GPUEngine) -> None:
         pl.col("a").replace_strict([1, 2], 99, default=-1).alias("broadcast_replace"),
     )
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_replace_non_literal_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3], "old": [1, 2, 3]})
+    q = df.select(pl.col("a").replace(pl.col("old"), 0))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_replace_strict_without_default_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3]})
+    q = df.select(pl.col("a").replace_strict([1, 2], [10, 20]))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_replace_strict_non_literal_unsupported(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3], "old": [1, 2, 3]})
+    q = df.select(pl.col("a").replace_strict(pl.col("old"), 0, default=-1))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
 @pytest.mark.parametrize("strict", [False, True])
