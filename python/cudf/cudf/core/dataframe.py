@@ -1608,7 +1608,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if is_list_like(mask):
                 dtype = None
                 mask = pd.Series(mask, dtype=dtype)
-            if mask.dtype == "bool":
+            if getattr(mask.dtype, "kind", None) == "b":
                 return self._apply_boolean_mask(BooleanMask(mask, len(self)))
             else:
                 return self._get_columns_by_label(mask)
