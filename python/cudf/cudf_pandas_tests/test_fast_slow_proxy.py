@@ -670,9 +670,27 @@ def _make_mirror_proxy():
     class Fast:
         pass
 
-    class Slow:
+    class SlowBase:
+        def inherited(self):
+            return "base"
+
+    class Slow(SlowBase):
+        const = 42
+
         def existing(self):
             return "slow original"
+
+        @property
+        def prop(self):
+            return "slow prop"
+
+        @staticmethod
+        def smethod(x):
+            return x + 1
+
+        @classmethod
+        def cmethod(cls):
+            return cls.__name__
 
     Pxy = make_final_proxy_type(
         "Pxy",
@@ -704,9 +722,9 @@ def test_class_attr_setattr_mirrored_to_slow():
     assert Slow.__dict__.get("new_method") is patched
 
 
-def test_class_attr_delattr_restores_slow():
-    # Deleting a previously-mirrored *new* attribute removes it from the slow
-    # type as well (the ``__delattr__`` path).
+def test_class_attr_delattr_mirrored_to_slow():
+    # Deleting a class-level attribute on the proxy mirrors the deletion
+    # onto the slow type (the ``__delattr__`` path).
     _, Slow, Pxy = _make_mirror_proxy()
 
     def patched(self):
@@ -720,10 +738,28 @@ def test_class_attr_delattr_restores_slow():
     assert "new_method" not in Slow.__dict__
 
 
+def test_class_attr_delattr_existing_removes_from_slow():
+    # Deleting is deleting, not restoring: patching an existing attribute
+    # and then deleting it removes it from both the proxy and the slow type,
+    # exactly as the same sequence would on a plain Python class.
+    _, Slow, Pxy = _make_mirror_proxy()
+
+    def patched(self):
+        return "patched"
+
+    Pxy.existing = patched
+    assert Slow.__dict__["existing"] is patched
+
+    del Pxy.existing
+    assert "existing" not in Pxy.__dict__
+    assert "existing" not in Slow.__dict__
+
+
 def test_class_attr_restore_existing_slow_attr():
-    # Patching an attribute that already exists on the slow type, then
-    # restoring the proxy's auto-generated ``_FastSlowAttribute`` (as
-    # ``monkeypatch`` teardown does), reverts the real implementation.
+    # Re-assigning the proxy's pristine class-dict entry (as ``monkeypatch``
+    # and ``mock.patch`` teardown do) restores the slow type's pristine
+    # attribute. Note: no prior class-level getattr — the saved descriptor
+    # is unresolved, as in the ``mock.patch.object`` flow.
     _, Slow, Pxy = _make_mirror_proxy()
     saved = Pxy.__dict__["existing"]
     assert isinstance(saved, _FastSlowAttribute)
@@ -739,9 +775,27 @@ def test_class_attr_restore_existing_slow_attr():
     assert Slow.__dict__["existing"] is original_slow
 
 
+def test_class_attr_restore_via_saved_method_proxy():
+    # Re-assigning a saved ``Pxy.method`` (a ``_MethodProxy`` over the
+    # resolved slow attribute, not the class-dict descriptor) also restores
+    # the slow type's pristine attribute.
+    _, Slow, Pxy = _make_mirror_proxy()
+    saved = getattr(Pxy, "existing")
+    original_slow = Slow.__dict__["existing"]
+
+    def patched(self):
+        return "patched"
+
+    Pxy.existing = patched
+    assert Slow.__dict__["existing"] is patched
+
+    Pxy.existing = saved
+    assert Slow.__dict__["existing"] is original_slow
+
+
 def test_class_attr_monkeypatch_roundtrip(monkeypatch):
     # End-to-end: ``monkeypatch`` of a brand-new attribute mirrors onto the
-    # slow type, and teardown (which deletes it) restores the slow type.
+    # slow type, and teardown (which deletes it) mirrors the deletion.
     _, Slow, Pxy = _make_mirror_proxy()
 
     def fake(self):
@@ -753,6 +807,160 @@ def test_class_attr_monkeypatch_roundtrip(monkeypatch):
     monkeypatch.undo()
     assert "brand_new" not in Pxy.__dict__
     assert "brand_new" not in Slow.__dict__
+
+
+def test_class_attr_monkeypatch_existing_roundtrip(monkeypatch):
+    # End-to-end: ``monkeypatch`` of a pre-existing method mirrors the patch
+    # onto the slow type, and teardown (which re-assigns the saved proxy
+    # descriptor) restores the slow type's original implementation.
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["existing"]
+
+    def fake(self):
+        return "fake"
+
+    monkeypatch.setattr(Pxy, "existing", fake)
+    assert Slow.__dict__["existing"] is fake
+
+    monkeypatch.undo()
+    assert isinstance(Pxy.__dict__["existing"], _FastSlowAttribute)
+    assert Slow.__dict__["existing"] is original_slow
+
+
+def test_class_attr_nested_monkeypatch_existing_roundtrip():
+    # Nested patches of the same pre-existing method unwind in order,
+    # each level restoring the slow type to the previous state.
+    from _pytest.monkeypatch import MonkeyPatch
+
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["existing"]
+
+    def fake1(self):
+        return "fake1"
+
+    def fake2(self):
+        return "fake2"
+
+    mp1, mp2 = MonkeyPatch(), MonkeyPatch()
+    mp1.setattr(Pxy, "existing", fake1)
+    assert Slow.__dict__["existing"] is fake1
+    mp2.setattr(Pxy, "existing", fake2)
+    assert Slow.__dict__["existing"] is fake2
+
+    mp2.undo()
+    assert Slow.__dict__["existing"] is fake1
+    mp1.undo()
+    assert Slow.__dict__["existing"] is original_slow
+
+
+def test_class_attr_mock_patch_object_roundtrip():
+    # ``unittest.mock.patch.object`` saves the raw class-dict entry without
+    # a prior getattr (so the saved descriptor is never resolved); undo must
+    # still restore the slow type's pristine attribute.
+    from unittest import mock
+
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["existing"]
+
+    def fake(self):
+        return "fake"
+
+    with mock.patch.object(Pxy, "existing", fake):
+        assert Slow.__dict__["existing"] is fake
+    assert Slow.__dict__["existing"] is original_slow
+
+
+def test_class_attr_property_monkeypatch_roundtrip(monkeypatch):
+    # Patching a property mirrors it onto the slow type; undo restores the
+    # slow type's pristine property object.
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["prop"]
+
+    fake = property(lambda self: "fake")
+    monkeypatch.setattr(Pxy, "prop", fake)
+    assert Slow.__dict__["prop"] is fake
+    assert Slow().prop == "fake"
+
+    monkeypatch.undo()
+    assert Slow.__dict__["prop"] is original_slow
+    assert Slow().prop == "slow prop"
+
+
+def test_class_attr_data_attr_monkeypatch_roundtrip(monkeypatch):
+    # Patching a plain class data attribute round-trips on the slow type.
+    _, Slow, Pxy = _make_mirror_proxy()
+
+    monkeypatch.setattr(Pxy, "const", 99)
+    assert Slow.const == 99
+
+    monkeypatch.undo()
+    assert Slow.const == 42
+
+
+def test_class_attr_staticmethod_monkeypatch_roundtrip(monkeypatch):
+    # Undo restores the slow type's pristine ``staticmethod`` descriptor,
+    # not the plain function it resolves to (which would break instance
+    # calls by receiving ``self``).
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["smethod"]
+    assert isinstance(original_slow, staticmethod)
+
+    monkeypatch.setattr(Pxy, "smethod", staticmethod(lambda x: x - 1))
+    assert Slow.smethod(1) == 0
+
+    monkeypatch.undo()
+    assert Slow.__dict__["smethod"] is original_slow
+    assert Slow().smethod(1) == 2
+
+
+def test_class_attr_classmethod_monkeypatch_roundtrip(monkeypatch):
+    # Undo restores the slow type's pristine ``classmethod`` descriptor,
+    # not the class-bound method it resolves to (which would pin ``cls``
+    # for subclasses).
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["cmethod"]
+    assert isinstance(original_slow, classmethod)
+
+    monkeypatch.setattr(Pxy, "cmethod", classmethod(lambda cls: "fake"))
+    assert Slow.cmethod() == "fake"
+
+    monkeypatch.undo()
+    assert Slow.__dict__["cmethod"] is original_slow
+    assert Slow.cmethod() == "Slow"
+
+
+def test_class_attr_inherited_method_monkeypatch_roundtrip(monkeypatch):
+    # Patching a method the slow type only inherits mirrors it into the slow
+    # type's own dict; undo removes that entry again (rather than copying
+    # the base-class implementation into the subclass), leaving the
+    # inherited implementation visible.
+    _, Slow, Pxy = _make_mirror_proxy()
+    assert "inherited" not in Slow.__dict__
+
+    def fake(self):
+        return "fake"
+
+    monkeypatch.setattr(Pxy, "inherited", fake)
+    assert Slow.__dict__["inherited"] is fake
+
+    monkeypatch.undo()
+    assert "inherited" not in Slow.__dict__
+    assert Slow().inherited() == "base"
+
+
+def test_class_attr_monkeypatch_delattr_roundtrip(monkeypatch):
+    # ``monkeypatch.delattr`` mirrors the deletion onto the slow type, and
+    # undo (which re-assigns the saved pristine descriptor) restores the
+    # slow type's pristine attribute.
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["existing"]
+
+    monkeypatch.delattr(Pxy, "existing")
+    assert "existing" not in Pxy.__dict__
+    assert "existing" not in Slow.__dict__
+
+    monkeypatch.undo()
+    assert Slow.__dict__["existing"] is original_slow
 
 
 def test_setattr_fsproxy_no_mirror_skips_slow():
@@ -767,3 +975,29 @@ def test_setattr_fsproxy_no_mirror_skips_slow():
     _setattr_fsproxy_no_mirror(Pxy, "custom_method", custom)
     assert Pxy.__dict__["custom_method"] is custom
     assert "custom_method" not in Slow.__dict__
+
+
+def test_setattr_fsproxy_no_mirror_monkeypatch_roundtrip(monkeypatch):
+    # A cudf-installed custom attribute (e.g. ``DataFrame.eval``/``query``)
+    # participates in the pristine state: monkeypatching it and undoing
+    # restores the proxy's custom object AND the slow type's own genuine
+    # implementation — the cudf-internal object is never forwarded to the
+    # slow type.
+    _, Slow, Pxy = _make_mirror_proxy()
+    original_slow = Slow.__dict__["existing"]
+
+    def custom(self):
+        return "cudf custom"
+
+    _setattr_fsproxy_no_mirror(Pxy, "existing", custom)
+    assert Slow.__dict__["existing"] is original_slow
+
+    def fake(self):
+        return "fake"
+
+    monkeypatch.setattr(Pxy, "existing", fake)
+    assert Slow.__dict__["existing"] is fake
+
+    monkeypatch.undo()
+    assert Pxy.__dict__["existing"] is custom
+    assert Slow.__dict__["existing"] is original_slow
