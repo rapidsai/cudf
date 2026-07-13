@@ -2001,14 +2001,13 @@ aggregate_reader_metadata::select_columns(
       // The path ends here. If this is a list/struct col (has children), then map all its children
       // which must be identical.
       if (col_name_info == nullptr or col_name_info->children.empty()) {
-        // Check the number of children to be equal to be mapped. An out_of_range error if the
-        // number of children isn't equal.
+        // Check the number of children to be equal to be mapped.
         CUDF_EXPECTS(
           src_schema_elem.num_children == dst_schema_elem.num_children,
           std::format(
             "Encountered mismatching number of children across Parquet sources for column '{}'",
             src_schema_elem.name),
-          std::out_of_range);
+          std::invalid_argument);
 
         for (auto const& child_idx : src_schema_elem.children_idx) {
           auto const dst_child_idx = schema_lookup.find_target_schema_child(
@@ -2019,7 +2018,7 @@ aggregate_reader_metadata::select_columns(
               "Encountered missing nested column '{}' across Parquet sources for column '{}'",
               get_schema(child_idx).name,
               src_schema_elem.name),
-            std::out_of_range);
+            std::invalid_argument);
           map_column(nullptr, child_idx, dst_child_idx, src_idx);
         }
       }
@@ -2028,7 +2027,7 @@ aggregate_reader_metadata::select_columns(
       else {
         for (auto const& child_col_name_info : col_name_info->children) {
           // Ensure that each named child column exists in the destination schema tree for the
-          // paths to align up. An out_of_range error otherwise.
+          // paths to align up.
           auto const src_child_idx =
             schema_lookup.find_schema_child_by_name(src_schema_idx, child_col_name_info.name);
           auto const dst_child_idx = schema_lookup.find_target_schema_child(
@@ -2039,7 +2038,7 @@ aggregate_reader_metadata::select_columns(
               "Encountered missing nested column '{}' across Parquet sources for column '{}'",
               child_col_name_info.name,
               src_schema_elem.name),
-            std::out_of_range);
+            std::invalid_argument);
           map_column(&child_col_name_info, src_child_idx, dst_child_idx, src_idx);
         }
       }

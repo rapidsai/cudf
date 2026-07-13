@@ -5348,7 +5348,7 @@ TEST_F(ParquetReaderTest, RowIndexSelectedRead)
   }
 }
 
-TEST_F(ParquetReaderTest, ColumnSelectionWithMismatchedSchemas)
+TEST_F(ParquetReaderTest, MismatchedSchemaColumnValidation)
 {
   // Every required column (selected or filter-referenced) must exist and be compatible across all
   // sources if mismatched schemas are allowed.
@@ -5442,6 +5442,70 @@ TEST_F(ParquetReaderTest, ColumnSelectionWithMismatchedSchemas)
         .allow_mismatched_pq_schemas(true)
         .column_names({"id", "price"})
         .build();
+    EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+  }
+}
+
+TEST_F(ParquetReaderTest, NestedMismatchedSchemaColumnValidation)
+{
+  auto const write_record = [](std::unique_ptr<cudf::column> record,
+                               std::string const& filename,
+                               std::vector<std::string> const& child_names) {
+    cudf::table_view const table{{*record}};
+    auto const path = temp_env->get_temp_filepath(filename);
+    cudf::io::table_input_metadata metadata(table);
+    metadata.column_metadata[0].set_name("record");
+    for (size_t idx = 0; idx < child_names.size(); ++idx) {
+      metadata.column_metadata[0].child(idx).set_name(child_names[idx]);
+    }
+    cudf::io::write_parquet(
+      cudf::io::parquet_writer_options::builder(cudf::io::sink_info{path}, table)
+        .metadata(std::move(metadata)));
+    return path;
+  };
+
+  // Selected nested child must be present in every source
+  {
+    auto a0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+    auto b1 = cudf::test::fixed_width_column_wrapper<int32_t>{4, 5, 6};
+    auto const path0 =
+      write_record(cudf::test::structs_column_wrapper{{a0}}.release(), "RecordA.parquet", {"a"});
+    auto const path1 =
+      write_record(cudf::test::structs_column_wrapper{{b1}}.release(), "RecordB.parquet", {"b"});
+
+    auto opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+                  .allow_mismatched_pq_schemas(true)
+                  .column_names({"record.a"})
+                  .build();
+    EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+
+    opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path1, path0}})
+             .allow_mismatched_pq_schemas(true)
+             .column_names({"record.a"})
+             .build();
+    EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+  }
+
+  // Selected struct must have the same children in every source
+  {
+    auto a0 = cudf::test::fixed_width_column_wrapper<int32_t>{1, 2, 3};
+    auto a1 = cudf::test::fixed_width_column_wrapper<int32_t>{4, 5, 6};
+    auto b1 = cudf::test::fixed_width_column_wrapper<int32_t>{7, 8, 9};
+    auto const path0 =
+      write_record(cudf::test::structs_column_wrapper{{a0}}.release(), "RecordA.parquet", {"a"});
+    auto const path1 = write_record(
+      cudf::test::structs_column_wrapper{{a1, b1}}.release(), "RecordAB.parquet", {"a", "b"});
+
+    auto opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
+                  .allow_mismatched_pq_schemas(true)
+                  .column_names({"record"})
+                  .build();
+    EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
+
+    opts = cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path1, path0}})
+             .allow_mismatched_pq_schemas(true)
+             .column_names({"record"})
+             .build();
     EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
   }
 }
