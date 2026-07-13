@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cudf/column/column.hpp>
