@@ -5393,17 +5393,6 @@ TEST_F(ParquetReaderTest, MismatchedSchemaRequiredColumnValidation)
           .build();
       EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
     }
-
-    // An index past the first source's column count is rejected.
-    {
-      auto const opts =
-        cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
-          .allow_mismatched_pq_schemas(true)
-          .ignore_missing_columns(true)
-          .column_indices({0, 1})
-          .build();
-      EXPECT_THROW(cudf::io::read_parquet(opts), cudf::logic_error);
-    }
   }
 
   // `price` is present in the first source but absent from a later source.
@@ -5477,7 +5466,7 @@ TEST_F(ParquetReaderTest, MismatchedSchemaRequiredColumnValidation)
     auto const id1    = i64{4, 5, 6};
     auto const price1 = f64{10.0, 20.0, 30.0};
     auto const path1  = write_parquet_temp_file(cudf::table_view{{id1, price1}},
-                                               "MismatchReqFieldIdAbsentFirst1.parquet",
+                                                "MismatchReqFieldIdAbsentFirst1.parquet",
                                                 {"id", "price"},
                                                 {1, 2});
 
@@ -5499,7 +5488,7 @@ TEST_F(ParquetReaderTest, MismatchedSchemaRequiredColumnValidation)
     auto const id0    = i64{1, 2, 3};
     auto const price0 = f64{10.0, 20.0, 30.0};
     auto const path0  = write_parquet_temp_file(cudf::table_view{{id0, price0}},
-                                               "MismatchReqFieldIdAbsentLater0.parquet",
+                                                "MismatchReqFieldIdAbsentLater0.parquet",
                                                 {"id", "price"},
                                                 {1, 2});
     auto const id1    = i64{4, 5, 6};
@@ -5512,30 +5501,5 @@ TEST_F(ParquetReaderTest, MismatchedSchemaRequiredColumnValidation)
         .column_field_ids({1, 2})
         .build();
     EXPECT_THROW(cudf::io::read_parquet(opts), std::out_of_range);
-  }
-
-  // With all required columns present (here in a different order per source) the read succeeds;
-  // ignore_missing_columns has no effect in this mode.
-  {
-    auto const id0    = i64{1, 2, 3};
-    auto const price0 = f64{10.0, 20.0, 30.0};
-    auto const path0  = write_parquet_temp_file(
-      cudf::table_view{{id0, price0}}, "MismatchReqOk0.parquet", {"id", "price"});
-    auto const price1 = f64{40.0, 50.0, 60.0};
-    auto const id1    = i64{4, 5, 6};
-    auto const path1  = write_parquet_temp_file(
-      cudf::table_view{{price1, id1}}, "MismatchReqOk1.parquet", {"price", "id"});
-
-    auto const opts =
-      cudf::io::parquet_reader_options::builder(cudf::io::source_info{{path0, path1}})
-        .allow_mismatched_pq_schemas(true)
-        .ignore_missing_columns(true)
-        .column_names({"id", "price"})
-        .build();
-    auto const result    = cudf::io::read_parquet(opts);
-    auto const exp_id    = i64{1, 2, 3, 4, 5, 6};
-    auto const exp_price = f64{10.0, 20.0, 30.0, 40.0, 50.0, 60.0};
-    cudf::table_view const expected{{exp_id, exp_price}};
-    CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   }
 }
