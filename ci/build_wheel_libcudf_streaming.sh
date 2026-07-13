@@ -17,6 +17,9 @@ RAPIDS_PY_CUDA_SUFFIX="$(rapids-wheel-ctk-name-gen "${RAPIDS_CUDA_VERSION}")"
 LIBCUDF_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name wheel_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
 
+# TODO: Remove before merging. Use rapidsmpf wheels from rapidsai/rapidsmpf#1106.
+source ./ci/use_wheels_from_prs.sh
+
 rapids-logger "Generating build requirements"
 
 rapids-dependency-file-generator \

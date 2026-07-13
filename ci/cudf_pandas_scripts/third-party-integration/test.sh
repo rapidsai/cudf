@@ -1,5 +1,5 @@
 #!/bin/bash
-# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2023-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 # Common setup steps shared by Python test jobs
@@ -27,6 +27,9 @@ main() {
         CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --stable --cuda "$RAPIDS_CUDA_VERSION")")
         PYTHON_NOARCH_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_python cudf cudf --pure --cuda "$RAPIDS_CUDA_VERSION" --arch any)")
+
+        # TODO: Remove before merging. Use conda packages from rapidsai/rapidsmpf#1106.
+        source ./ci/use_conda_packages_from_prs.sh
     fi
 
     ANY_FAILURES=0
@@ -46,7 +49,8 @@ main() {
                 --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch);py=${RAPIDS_PY_VERSION}" \
                 --prepend-channel "${CPP_CHANNEL}" \
                 --prepend-channel "${PYTHON_CHANNEL}" \
-                --prepend-channel "${PYTHON_NOARCH_CHANNEL}" | tee env.yaml
+                --prepend-channel "${PYTHON_NOARCH_CHANNEL}" \
+                "${RAPIDS_PREPENDED_CHANNEL_ARGS[@]}" | tee env.yaml
         else
             rapids-logger "Generate Python testing dependencies"
             rapids-dependency-file-generator \

@@ -9,6 +9,9 @@ set -euo pipefail
 rapids-logger "Configuring conda strict channel priority"
 conda config --set channel_priority strict
 
+# TODO: Remove before merging. Use conda packages from rapidsai/rapidsmpf#1106.
+source ./ci/use_conda_packages_from_prs.sh
+
 rapids-logger "Downloading artifacts from previous jobs"
 CPP_CHANNEL=$(rapids-download-from-github "$(rapids-artifact-name conda_cpp libcudf cudf --cuda "$RAPIDS_CUDA_VERSION")")
 
@@ -20,6 +23,7 @@ rapids-dependency-file-generator \
   --output conda \
   --file-key test_java \
   --prepend-channel "${CPP_CHANNEL}" \
+  "${RAPIDS_PREPENDED_CHANNEL_ARGS[@]}" \
   --matrix "cuda=${RAPIDS_CUDA_VERSION%.*};arch=$(arch)" | tee "${ENV_YAML_DIR}/env.yaml"
 
 rapids-mamba-retry env create --yes -f "${ENV_YAML_DIR}/env.yaml" -n test

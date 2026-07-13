@@ -21,6 +21,9 @@ echo "libcudf-streaming-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_STRE
 echo "libcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${LIBCUDF_WHEELHOUSE}"/libcudf_*.whl)" >> "${PIP_CONSTRAINT}"
 echo "pylibcudf-${RAPIDS_PY_CUDA_SUFFIX} @ file://$(echo "${PYLIBCUDF_WHEELHOUSE}"/pylibcudf_*.whl)" >> "${PIP_CONSTRAINT}"
 
+# TODO: Remove before merging. Use rapidsmpf wheels from rapidsai/rapidsmpf#1106.
+source ./ci/use_wheels_from_prs.sh
+
 rapids-logger "Generating build requirements"
 
 rapids-dependency-file-generator \

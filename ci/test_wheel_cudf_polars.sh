@@ -20,6 +20,9 @@ CUDF_STREAMING_WHEELHOUSE=$(rapids-download-from-github "$(rapids-artifact-name 
 # generate constraints (possibly pinning to oldest support versions of dependencies)
 rapids-generate-pip-constraints py_test_cudf_polars "${PIP_CONSTRAINT}"
 
+# TODO: Remove before merging. Use rapidsmpf wheels from rapidsai/rapidsmpf#1106.
+source ./ci/use_wheels_from_prs.sh
+
 read -r -a VERSIONS <<< "$(python ci/utils/get_matrix_values.py dependencies.yaml test_cudf_polars_compat polars_compat_version)"
 
 if [[ "${POLARS_VERSIONS:-all}" == "endpoints" ]] && [[ ${#VERSIONS[@]} -ge 2 ]]; then
