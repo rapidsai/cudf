@@ -30,6 +30,7 @@ import os
 from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 if TYPE_CHECKING:
+    import uuid
     from collections.abc import Callable
     from concurrent.futures import ThreadPoolExecutor
 
@@ -43,6 +44,8 @@ if TYPE_CHECKING:
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.engine.ray import RankActor
+    from cudf_polars.quent._context import QuentContext
+    from cudf_polars.quent._logging import QuentLogger
 
 
 __all__ = [
@@ -160,9 +163,9 @@ def _make_default_factory(
 
 def _bool_converter(v: str) -> bool:
     lowered = v.lower()
-    if lowered in {"1", "true", "yes", "y"}:
+    if lowered in {"true", "yes", "y", "1"}:
         return True
-    elif lowered in {"0", "false", "no", "n"}:
+    elif lowered in {"false", "no", "n", "0"}:
         return False
     else:
         raise ValueError(f"Invalid boolean value: '{v}'")
@@ -176,6 +179,20 @@ def _optional_converter(v: str, parse: Callable[[str], T]) -> T | None:
 
 def _optional_int_converter(v: str) -> int | None:
     return _optional_converter(v, int)
+
+
+def _quent_context_converter(v: str) -> QuentContext | None:
+    from cudf_polars.quent._context import QuentContext
+
+    try:
+        enabled = _bool_converter(v)
+    except ValueError as e:
+        raise ValueError(f"Invalid value for quent_context: '{v}'") from e
+    else:
+        if enabled:
+            return QuentContext()
+        else:
+            return None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -215,6 +232,14 @@ class ParquetOptions:
     use_rapidsmpf_native
         Whether to use the native rapidsmpf node for parquet reading.
         This option is only used by the streaming executor.
+        Default is False.
+    prefetch_file_metadata
+        Whether to prefetch parquet file metadata and pass it through
+        `parquet_metadatas` to avoid rereading file footers.
+    use_jit_filter
+        Whether to use JIT compilation for post-read filtering in Parquet scans.
+        When enabled, filter predicates are JIT-compiled to CUDA kernels for
+        improved performance on large datasets with complex filters.
         Default is False.
     """
 
@@ -257,6 +282,20 @@ class ParquetOptions:
             default=False,
         )
     )
+    prefetch_file_metadata: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__PREFETCH_FILE_METADATA",
+            _bool_converter,
+            default=False,
+        )
+    )
+    use_jit_filter: bool = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__USE_JIT_FILTER",
+            _bool_converter,
+            default=False,
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if not isinstance(self.chunked, bool):
@@ -273,6 +312,15 @@ class ParquetOptions:
             raise TypeError("max_row_group_samples must be an int")
         if not isinstance(self.use_rapidsmpf_native, bool):
             raise TypeError("use_rapidsmpf_native must be a bool")
+        if not isinstance(self.prefetch_file_metadata, bool):
+            raise TypeError("prefetch_file_metadata must be a bool")
+
+        if self.use_rapidsmpf_native and self.prefetch_file_metadata:
+            raise NotImplementedError(
+                "'use_rapidsmpf_native=True' does not currently support 'prefetch_file_metadata=True'"
+            )
+        if not isinstance(self.use_jit_filter, bool):
+            raise TypeError("use_jit_filter must be a bool")
 
 
 def default_target_partition_size(min_device_size: int | None) -> int:
@@ -574,6 +622,9 @@ class SPMDContext:
     comm: Communicator
     context: Context
     py_executor: ThreadPoolExecutor
+    engine_id: uuid.UUID
+    worker_id: uuid.UUID
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -596,6 +647,7 @@ class RayContext:
     """
 
     rank_actors: list[ActorHandle[RankActor]]
+    quent_logger: QuentLogger | None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -625,6 +677,7 @@ class DaskContext:
 
     client: distributed.Client
     rapidsmpf_id: str
+    quent_logger: QuentLogger | None
     owned_client: distributed.Client | None = None
     owned_cluster: Any | None = None
 
@@ -702,6 +755,12 @@ class StreamingExecutor:
     num_py_executors
         Maximum number of workers for the Python ThreadPoolExecutor.
         Default is 8.
+    quent_context
+        Quent tracing context. When ``None`` (default), Quent tracing is disabled.
+        Pass a :class:`~cudf_polars.quent.QuentContext` instance to enable tracing.
+        Can be set via the ``CUDF_POLARS__EXECUTOR__QUENT_CONTEXT`` environment
+        variable (``true`` enables tracing with a default context, ``false``
+        disables it).
 
     Notes
     -----
@@ -772,10 +831,16 @@ class StreamingExecutor:
             f"{_env_prefix}__NUM_PY_EXECUTORS", int, default=8
         )
     )
+
     min_device_size: int | None = None
     spmd_context: SPMDContext | None = None
     ray_context: RayContext | None = None
     dask_context: DaskContext | None = None
+    quent_context: QuentContext | None = dataclasses.field(
+        default_factory=_make_default_factory(
+            f"{_env_prefix}__QUENT_CONTEXT", _quent_context_converter, default=None
+        )
+    )
 
     def __post_init__(self) -> None:  # noqa: D105
         if self.cluster is None:
@@ -859,6 +924,13 @@ class StreamingExecutor:
         d = dataclasses.asdict(self)
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
         d["join_domain_prefilter"] = json.dumps(d["join_domain_prefilter"])
+
+        # Hash the quent context UUIDs as ints
+        quent_context = d["quent_context"]
+        if quent_context is not None:
+            for key in ["engine", "query_group", "query"]:
+                quent_context[key]["id"] = int(quent_context[key]["id"])
+            d["quent_context"] = json.dumps(quent_context)
         return hash(tuple(sorted(d.items())))
 
 
@@ -935,6 +1007,11 @@ class ConfigOptions(Generic[ExecutorType]):
         user_parquet_options = engine.config.get("parquet_options", {})
         if user_parquet_options is None:
             user_parquet_options = {}
+
+        if isinstance(user_parquet_options, dict):
+            parquet_options = ParquetOptions(**user_parquet_options)
+        else:
+            parquet_options = user_parquet_options
         # This is set in polars, and so can't be overridden by the environment
         user_raise_on_fail = engine.config.get("raise_on_fail", False)
         user_memory_resource_config = engine.config.get("memory_resource_config", None)
@@ -962,6 +1039,10 @@ class ConfigOptions(Generic[ExecutorType]):
         match user_executor:
             case "in-memory":
                 executor = InMemoryExecutor(**user_executor_options)
+                if parquet_options.prefetch_file_metadata:
+                    raise NotImplementedError(
+                        "Prefetching is not supported for the in-memory executor."
+                    )
             case "streaming":
                 user_executor_options = user_executor_options.copy()
                 if "min_device_size" not in user_executor_options:
@@ -995,7 +1076,7 @@ class ConfigOptions(Generic[ExecutorType]):
 
         kwargs = {
             "raise_on_fail": user_raise_on_fail,
-            "parquet_options": ParquetOptions(**user_parquet_options),
+            "parquet_options": parquet_options,
             "executor": executor,
             "device": engine.device,
             "memory_resource_config": user_memory_resource_config,

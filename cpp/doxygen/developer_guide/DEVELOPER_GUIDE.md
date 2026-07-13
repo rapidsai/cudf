@@ -38,8 +38,10 @@ A type representing a single element of a data type.
 
 ### Table
 
-A table is a collection of columns with equal number of elements. A table is the C++ equivalent to
-a cuDF Python [DataFrame](https://docs.rapids.ai/api/cudf/stable/api_docs/dataframe.html).
+A table is a collection of columns that all have the same number of elements (rows). A table may
+also have zero columns while still carrying a row count, mirroring an `(N, 0)` DataFrame. A table is
+the C++ equivalent to a cuDF Python
+[DataFrame](https://docs.rapids.ai/api/cudf/stable/api_docs/dataframe.html).
 
 ### View
 
@@ -485,8 +487,14 @@ examples.
 
 **Things that libcudf should not validate**:
 - Integer overflow
-- Ensuring that outputs will not exceed the [2GB size](#cudfsize_type) limit for a given set of
-  inputs
+- Ensuring that outputs will not exceed the [`size_type`](#cudfsize_type) row count limit for a
+  given set of inputs
+
+This policy describes libcudf's default behavior. Some APIs offer opt-in overflow-aware variants for
+callers that need strict semantics, such as the `SUM_OVERFLOW` aggregation, which reports
+overflow through an output flag, and the overflow-checking AST arithmetic operators
+(`ADD_OVERFLOW`, `SUB_OVERFLOW`, and similar) that raise on overflow.
+These are explicit, caller-selected behaviors rather than validation performed on every API.
 
 
 ## libcudf expects nested types to have sanitized null masks
