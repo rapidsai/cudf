@@ -843,8 +843,16 @@ def ldf_find():
     )
 
 
-def test_find_literal_false_strict_false_unsupported(engine: pl.GPUEngine, ldf_find):
-    q = ldf_find.select(pl.col("a").str.find("a", literal=False, strict=False))
+@pytest.mark.parametrize("pattern", ["a", "[", ""])
+def test_find_literal_false_strict_false(engine: pl.GPUEngine, ldf_find, pattern):
+    q = ldf_find.select(pl.col("a").str.find(pattern, literal=False, strict=False))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_find_literal_false_strict_false_libcudf_unsupported(
+    engine: pl.GPUEngine, ldf_find
+):
+    q = ldf_find.select(pl.col("a").str.find("a{1000}", literal=False, strict=False))
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 
