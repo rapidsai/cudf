@@ -24,11 +24,11 @@ from cudf_polars.dsl.ir import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterator, Mapping
 
     from cudf_polars.dsl.ir import IR
 
-__all__ = ["ColumnRef", "column_domain_bindings"]
+__all__ = ["ColumnLineage", "ColumnRef", "column_domain_bindings"]
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,21 @@ class ColumnRef:
 
     node: IR
     name: str
+
+
+@dataclass(frozen=True)
+class ColumnLineage:
+    """Persistent value-domain lineage, sharing suffixes across DAG branches."""
+
+    column: ColumnRef
+    source: ColumnLineage | None = None
+
+    def __iter__(self) -> Iterator[ColumnRef]:
+        """Iterate from the output column towards its furthest known source."""
+        lineage: ColumnLineage | None = self
+        while lineage is not None:
+            yield lineage.column
+            lineage = lineage.source
 
 
 @singledispatch

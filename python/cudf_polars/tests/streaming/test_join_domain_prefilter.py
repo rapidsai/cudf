@@ -12,13 +12,17 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Join, Scan, Select
+from cudf_polars.dsl.ir import Join, Scan, Select, Slice
 from cudf_polars.dsl.traversal import traversal
+from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.default_singleton_engine import DefaultSingletonEngine
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.join_domain_prefilter import (
+    PlanFacts,
     _smallest_node_containing_all,
+    analyze_plan,
     optimize_join_domain_prefilters,
+    prefilter_lineage,
 )
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -409,15 +413,67 @@ def test_composite_domain_columns_follow_renames() -> None:
         domain_constraint="raw_constraint",
     )
 
+    analyzed = analyze_plan(renamed, _stats(source=(source, 10)))
+    facts = PlanFacts(
+        row_estimates={renamed: 20, source: 10},
+        selective_nodes=analyzed.selective_nodes,
+        column_lineages=analyzed.column_lineages,
+    )
     producer = _smallest_node_containing_all(
-        renamed,
-        ("domain_key", "domain_constraint"),
-        {renamed: 20, source: 10},
+        renamed, ("domain_key", "domain_constraint"), facts
     )
 
     assert producer is not None
     assert producer.node is source
     assert producer.columns == ("raw_key", "raw_constraint")
+
+
+def test_plan_facts_share_lineage_suffixes_across_shared_dag() -> None:
+    source = _scan("source", ("raw_key",))
+    left = _select(source, left_key="raw_key")
+    right = _select(source, right_key="raw_key")
+    root = _join(left, right, ("left_key",), ("right_key",))
+
+    facts = analyze_plan(root, _stats(source=(source, 10)))
+    left_lineage = facts.column_lineages[ColumnRef(left, "left_key")]
+    right_lineage = facts.column_lineages[ColumnRef(right, "right_key")]
+
+    assert left_lineage.source is right_lineage.source
+    assert tuple(left_lineage) == (
+        ColumnRef(left, "left_key"),
+        ColumnRef(source, "raw_key"),
+    )
+    assert tuple(right_lineage) == (
+        ColumnRef(right, "right_key"),
+        ColumnRef(source, "raw_key"),
+    )
+
+
+def test_target_prefilter_does_not_move_below_slice() -> None:
+    target = _scan("target", ("target_key",))
+    sliced = Slice(target.schema, 0, 100, target)
+    domain = _scan("domain", ("domain_key",), predicate=True)
+    root = _join(sliced, domain, ("target_key",), ("domain_key",))
+
+    stats = _stats(target=(target, 1_000), domain=(domain, 5))
+    facts = analyze_plan(root, stats)
+    assert tuple(facts.column_lineages[ColumnRef(sliced, "target_key")]) == (
+        ColumnRef(sliced, "target_key"),
+        ColumnRef(target, "target_key"),
+    )
+    assert tuple(prefilter_lineage(facts, sliced, "target_key")) == (
+        ColumnRef(sliced, "target_key"),
+    )
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        stats,
+        _config(),
+    )
+
+    semis = _joins(optimized, "Semi")
+    assert any(semi.children[0] is sliced for semi in semis)
+    assert not any(semi.children[0] is target for semi in semis)
 
 
 def test_target_replacement_does_not_rewrite_shared_domain_side() -> None:
