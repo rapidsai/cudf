@@ -35,6 +35,7 @@ from cudf_polars.engine.core import (
     StreamingEngine,
     check_reserved_keys,
     evaluate_on_rank,
+    reset_statistics_from_options,
     resolve_rapidsmpf_options,
 )
 from cudf_polars.engine.hardware_binding import (
@@ -119,6 +120,7 @@ class _WorkerContext:
     base_mr: rmm.mr.DeviceMemoryResource | None
     quent_logger: cudf_polars.quent._logging.QuentLogger | None
     quent_worker: cudf_polars.quent._types.Worker
+    statistics: Statistics
     mr: RmmResourceAdaptor | None = None  # set after `Context` is built (below).
 
 
@@ -173,12 +175,13 @@ def _setup_root(
     bind_to_gpu(hardware_binding)
     memory_resource_config = memory_resource_config or MemoryResourceConfig.default()
     base_mr = memory_resource_config.create_memory_resource()
+    statistics = Statistics.from_options(options)
     comm = new_communicator(
         nranks=nranks,
         ucx_worker=None,
         root_ucxx_address=None,
         options=options,
-        progress_thread=ProgressThread(),
+        progress_thread=ProgressThread(statistics),
     )
 
     quent_worker = cudf_polars.quent._types.Worker(
@@ -204,6 +207,7 @@ def _setup_root(
             base_mr=base_mr,
             quent_worker=quent_worker,
             quent_logger=quent_logger,
+            statistics=statistics,
         ),
     )
     return get_root_ucxx_address(comm)
@@ -272,12 +276,13 @@ def _setup_worker(
         )
         base_mr = memory_resource_config.create_memory_resource()
         root_addr = ucx_api.UCXAddress.create_from_buffer(root_ucxx_address_as_bytes)
+        statistics = Statistics.from_options(options)
         comm = new_communicator(
             nranks=nranks,
             ucx_worker=None,
             root_ucxx_address=root_addr,
             options=options,
-            progress_thread=ProgressThread(),
+            progress_thread=ProgressThread(statistics),
         )
     else:
         # Root worker: comm and mr were created in _setup_root.
@@ -285,6 +290,7 @@ def _setup_worker(
         assert mp_ctx.comm is not None
         base_mr = mp_ctx.base_mr
         comm = mp_ctx.comm
+        statistics = mp_ctx.statistics
 
     barrier(comm)
     worker_id = worker_ids[comm.rank]
@@ -293,7 +299,6 @@ def _setup_worker(
         engine=cudf_polars.quent.Engine(id=engine_id),
         instance_name=f"rank-{comm.rank}",
     )
-    statistics = Statistics.from_options(options)
     ctx = Context.from_options(comm.logger, base_mr, options, statistics)
     # Set the current RMM device resource so all temporary allocations
     # in libcudf also use the same memory resource.
@@ -319,6 +324,7 @@ def _setup_worker(
         mr=mr,
         quent_worker=quent_worker,
         quent_logger=quent_logger,
+        statistics=statistics,
     )
     setattr(dask_worker, attr, mp_ctx)
     if mp_ctx.quent_logger is not None:
@@ -405,9 +411,10 @@ def _reset_worker(
     mp_ctx.ctx.shutdown()
     mp_ctx.ctx = None
     options = Options.deserialize(rapidsmpf_options_as_bytes)
-    statistics = Statistics.from_options(options)
+    mp_ctx.statistics = reset_statistics_from_options(mp_ctx.statistics, options)
+    mp_ctx.statistics.clear()
     mp_ctx.ctx = Context.from_options(
-        mp_ctx.comm.logger, mp_ctx.base_mr, options, statistics
+        mp_ctx.comm.logger, mp_ctx.base_mr, options, mp_ctx.statistics
     )
     mp_ctx.mr = mp_ctx.ctx.br().device_mr_adaptor()
     rmm.mr.set_current_device_resource(mp_ctx.mr)
@@ -438,7 +445,7 @@ def _get_statistics(
     mp_ctx: _WorkerContext = getattr(dask_worker, f"_cudf_polars_mp_context_{uid}")
     assert mp_ctx.comm is not None
     assert mp_ctx.ctx is not None
-    stats = mp_ctx.ctx.statistics()
+    stats = mp_ctx.statistics
     if clear:
         # Return a deep copy so it survives the in-place clear of `stats`.
         detached = stats.copy()
