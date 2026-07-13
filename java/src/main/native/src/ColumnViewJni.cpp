@@ -2227,9 +2227,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
                                             ? cudf::bitmask_and(input_table)
                                             : cudf::bitmask_or(input_table);
 
-    // bitmask_and / bitmask_or can return an empty mask, meaning the merged mask is all-valid.
-    // If so, we do not need to touch the original mask.
-    if (merge_mask.is_empty()) { return 0; }
+    // If the merge null count is 0, the merged mask is all-valid - either the binop returned
+    // an empty mask or the mask was allocated but had no nulls.
+    // in either case this is a no-op on the original mask and we can return as-is.
+    if (merge_null_count == 0) { return 0; }
 
     auto copy = std::make_unique<cudf::column>(*original_column);
 
