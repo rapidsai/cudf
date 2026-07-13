@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -7,6 +7,7 @@ from decimal import Decimal
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 
 import cudf
@@ -944,6 +945,109 @@ def test_string_reduction():
     # any/all(skipna=False) return True (not TypeError) on null-only string series.
     assert s.any(skipna=False) == ps.any(skipna=False)
     assert s.all(skipna=False) == ps.all(skipna=False)
+
+
+@pytest.mark.parametrize("min_count", [0, 1])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        np.dtype("object"),
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+        pd.ArrowDtype(pa.string()),
+        pd.ArrowDtype(pa.large_string()),
+    ],
+)
+def test_string_sum_empty_and_all_null(dtype, skipna, min_count):
+    # Summing no elements returns the additive identity (0 for object
+    # dtype, "" for string dtypes, matching pandas
+    # tests/arrays/string_/test_string.py::test_reduce_empty); once
+    # min_count is not met the result is a missing value. cudf's missing
+    # sentinel is pd.NA where pandas uses np.nan for object dtype and
+    # "str" dtypes, so missing results are compared via pd.isna.
+    expected = pd.Series([], dtype=dtype).sum(
+        skipna=skipna, min_count=min_count
+    )
+    result = cudf.Series([], dtype=dtype).sum(
+        skipna=skipna, min_count=min_count
+    )
+    if pd.isna(expected):
+        assert pd.isna(result)
+    else:
+        assert result == expected
+
+    # All-null input: nulls are skipped down to an empty sum.
+    result = cudf.Series([None, None], dtype=dtype).sum(
+        skipna=skipna, min_count=min_count
+    )
+    if dtype == np.dtype("object") and not skipna:
+        # pandas raises TypeError (None + None); cudf treats the values
+        # as nulls and returns a missing value instead.
+        with pytest.raises(TypeError):
+            pd.Series([None, None], dtype=dtype).sum(
+                skipna=skipna, min_count=min_count
+            )
+        assert pd.isna(result)
+    else:
+        expected = pd.Series([None, None], dtype=dtype).sum(
+            skipna=skipna, min_count=min_count
+        )
+        if pd.isna(expected):
+            assert pd.isna(result)
+        else:
+            assert result == expected
+
+
+@pytest.mark.parametrize("method", ["min", "max"])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        pd.StringDtype(storage="python", na_value=pd.NA),
+        pd.StringDtype(storage="python", na_value=np.nan),
+        pd.StringDtype(storage="pyarrow", na_value=pd.NA),
+        pd.StringDtype(storage="pyarrow", na_value=np.nan),
+        pd.ArrowDtype(pa.string()),
+        pd.ArrowDtype(pa.large_string()),
+    ],
+)
+def test_string_min_max_null_identity(dtype, method, skipna):
+    # Matches pandas tests/arrays/string_/test_string.py::test_min_max:
+    # with skipna=False the result must be the dtype's exact na_value
+    # singleton (pd.NA for "string" dtypes and ArrowDtype, the np.nan
+    # float singleton for "str" dtypes).
+    data = ["a", "b", "c", None]
+    psr = pd.Series(data, dtype=dtype)
+    gsr = cudf.Series(data, dtype=dtype)
+
+    expected = getattr(psr, method)(skipna=skipna)
+    result = getattr(gsr, method)(skipna=skipna)
+
+    if skipna:
+        assert result == expected
+    else:
+        assert expected is dtype.na_value
+        assert result is expected
+
+
+@pytest.mark.parametrize("method", ["min", "max"])
+def test_object_min_max_with_null(method, skipna):
+    # pandas raises TypeError here (comparing str with the missing
+    # value); cudf treats None as a null: skipped when skipna=True,
+    # otherwise the result is a missing value.
+    data = ["a", "b", "c", None]
+    with pytest.raises(TypeError):
+        getattr(pd.Series(data, dtype=np.dtype("object")), method)(
+            skipna=skipna
+        )
+
+    sr = cudf.Series(data, dtype=np.dtype("object"))
+    result = getattr(sr, method)(skipna=skipna)
+    if skipna:
+        assert result == ("a" if method == "min" else "c")
+    else:
+        assert pd.isna(result)
 
 
 @pytest.mark.parametrize("data", [[1, 2, 3], [], [1, 20, 1000, None]])
