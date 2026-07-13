@@ -926,6 +926,19 @@ class Scan(IR):
             num_rows = min(num_rows, n_rows)
         return max(num_rows, 0)
 
+    @staticmethod
+    def _apply_parquet_projection(
+        table: plc.Table, names: Sequence[str], with_columns: Sequence[str] | None
+    ) -> tuple[plc.Table, list[str]]:
+        # `set_column_names` may leave pandas-indices in the table.
+        # Here we ensure that the table only contains the projection.
+        if with_columns is None:
+            return table, list(names)
+        names = list(names)
+        with_columns = list(with_columns)
+        columns = dict(zip(names, table.columns(), strict=True))
+        return plc.Table([columns[name] for name in with_columns]), with_columns
+
     @classmethod
     @log_do_evaluate
     @nvtx_annotate_cudf_polars(message="Scan")
@@ -1120,6 +1133,9 @@ class Scan(IR):
                         concatenated_columns[i] = plc.concatenate.concatenate(
                             [concatenated_columns[i], columns.pop()], stream=stream
                         )
+                table, names = cls._apply_parquet_projection(
+                    plc.Table(concatenated_columns), names, with_columns
+                )
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(
                         paths, skip_rows, n_rows, parquet_options, cached_parquet_info
@@ -1128,7 +1144,7 @@ class Scan(IR):
                     else None
                 )
                 df = DataFrame.from_table(
-                    plc.Table(concatenated_columns),
+                    table,
                     names=names,
                     dtypes=[schema[name] for name in names],
                     stream=stream,
@@ -1146,6 +1162,9 @@ class Scan(IR):
                 )
                 # TODO: consider nested column names?
                 col_names = tbl_w_meta.column_names(include_children=False)
+                table, col_names = cls._apply_parquet_projection(
+                    tbl_w_meta.tbl, col_names, with_columns
+                )
                 num_rows = (
                     cls._get_parquet_row_count_from_metadata(
                         paths, skip_rows, n_rows, parquet_options, cached_parquet_info
@@ -1154,7 +1173,7 @@ class Scan(IR):
                     else None
                 )
                 df = DataFrame.from_table(
-                    tbl_w_meta.tbl,
+                    table,
                     col_names,
                     [schema[name] for name in col_names],
                     stream=stream,

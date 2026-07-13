@@ -44,7 +44,7 @@ class CachedParquetInfo:
     """
 
     path: str
-    size: int
+    size: int | None
     file_metadata: plc.io.parquet_metadata.FileMetaData
 
 
@@ -70,7 +70,7 @@ def _prefetch_parquet_footers_for_paths(paths: list[str]) -> list[CachedParquetI
     """
     # TODO: https://github.com/rapidsai/cudf/issues/22734, use object metadata from polars
     # For now, we'll just use kvikio to explicitly get the size.
-    sizes = []
+    sizes: list[int | None] = []
 
     try:  # pragma: no cover; kvikio is optional
         import kvikio
