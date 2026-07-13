@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     import cudf_polars.containers
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IRExecutionContext
+    from cudf_polars.quent import Task
 
 
 def _dataframe_size_bytes(frame: cudf_polars.containers.DataFrame) -> int:
@@ -61,7 +62,7 @@ def _dataframe_size_bytes(frame: cudf_polars.containers.DataFrame) -> int:
 def _begin_quent_do_evaluate_events(
     cls: type[ir.IR],
     ir_execution_context: IRExecutionContext,
-) -> tuple[Any, Any, bool] | None:
+) -> Task | None:
     import cudf_polars.quent
 
     quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
@@ -84,7 +85,25 @@ def _begin_quent_do_evaluate_events(
         quent_ir_execution_context.logger.emit(
             quent_task.allocating(resource_id=quent_processor.id)
         )
-    return quent_task, quent_processor, cls.is_io_node
+        quent_ir_execution_context.logger.emit(
+            quent_task.computing(
+                use_thread=quent_processor,
+                use_memory=quent_ir_execution_context.device_memory,
+                # memory_capacity_bytes=output_capacity_bytes,
+            )
+        )
+    else:
+        quent_ir_execution_context.logger.emit(
+            quent_task.loading(
+                use_thread=quent_processor,
+                use_channel=quent_ir_execution_context.disk_to_device_channel,
+                # channel_capacity_bytes=output_capacity_bytes,
+                use_memory=quent_ir_execution_context.device_memory,
+                # memory_capacity_bytes=output_capacity_bytes,
+            )
+        )
+
+    return quent_task
 
 
 def _end_quent_do_evaluate_events(
@@ -92,34 +111,15 @@ def _end_quent_do_evaluate_events(
     frames: Sequence[cudf_polars.containers.DataFrame],
     result: cudf_polars.containers.DataFrame,
     ir_execution_context: IRExecutionContext,
-    quent_state: tuple[Any, Any, bool],
+    quent_task: Task,
 ) -> None:
     import cudf_polars.quent
 
-    quent_task, quent_processor, is_io_node = quent_state
     quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
     if quent_ir_execution_context is None:
         return
 
     output_capacity_bytes = _dataframe_size_bytes(result)
-    if is_io_node:
-        quent_ir_execution_context.logger.emit(
-            quent_task.loading(
-                use_thread=quent_processor,
-                use_channel=quent_ir_execution_context.disk_to_device_channel,
-                channel_capacity_bytes=output_capacity_bytes,
-                use_memory=quent_ir_execution_context.device_memory,
-                memory_capacity_bytes=output_capacity_bytes,
-            )
-        )
-    else:
-        quent_ir_execution_context.logger.emit(
-            quent_task.computing(
-                use_thread=quent_processor,
-                use_memory=quent_ir_execution_context.device_memory,
-                memory_capacity_bytes=output_capacity_bytes,
-            )
-        )
     quent_ir_execution_context.logger.emit(
         quent_ir_execution_context.quent_operator.statistics(
             statistics=cudf_polars.quent.Statistics(
@@ -252,9 +252,9 @@ def log_do_evaluate(
             list(args) + [v for k, v in kwargs.items() if k != "context"]
         )[cls._n_non_child_args :]  # type: ignore[assignment]
 
-        quent_state = None
+        quent_task = None
         if ir_execution_context is not None:
-            quent_state = _begin_quent_do_evaluate_events(cls, ir_execution_context)
+            quent_task = _begin_quent_do_evaluate_events(cls, ir_execution_context)
 
         if LOG_TRACES:  # pragma: no cover; requires CUDF_POLARS_LOG_TRACES=1
             pynvml.nvmlInit()
@@ -293,9 +293,9 @@ def log_do_evaluate(
         else:
             result = func(cls, *args, **kwargs)
 
-        if ir_execution_context is not None and quent_state is not None:
+        if ir_execution_context is not None and quent_task is not None:
             _end_quent_do_evaluate_events(
-                cls, frames, result, ir_execution_context, quent_state
+                cls, frames, result, ir_execution_context, quent_task
             )
 
         return result
