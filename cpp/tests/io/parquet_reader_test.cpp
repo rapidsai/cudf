@@ -5455,9 +5455,7 @@ TEST_F(ParquetReaderTest, MismatchedSchemaRequiredColumnValidation)
         .build();
     EXPECT_THROW(cudf::io::read_parquet(opts), std::invalid_argument);
   }
-
-  // Selection by Parquet field ID follows the same required-column rules as names and indices.
-
+  
   // Field ID 2 (`price`) is absent from the first source.
   {
     auto const id0   = i64{1, 2, 3};
