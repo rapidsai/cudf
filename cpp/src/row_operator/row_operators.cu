@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -854,8 +854,11 @@ std::shared_ptr<preprocessed_table> preprocessed_table::create(table_view const&
     std::get<0>(decompose_structs(struct_offset_removed_table, decompose_lists_column::YES));
 
   auto d_t = table_device_view_owner(table_device_view::create(verticalized_t, stream));
-  return std::shared_ptr<preprocessed_table>(new preprocessed_table(
-    std::move(d_t), std::move(nullable_data.new_null_masks), std::move(nullable_data.new_columns)));
+  return std::shared_ptr<preprocessed_table>(
+    new preprocessed_table(std::move(d_t),
+                           std::move(nullable_data.new_null_masks),
+                           std::move(nullable_data.new_columns),
+                           t.num_columns()));
 }
 
 two_table_comparator::two_table_comparator(table_view const& left,
