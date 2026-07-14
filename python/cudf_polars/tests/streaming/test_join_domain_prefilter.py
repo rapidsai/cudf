@@ -12,17 +12,17 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Join, Scan, Select, Slice
+from cudf_polars.dsl.ir import Distinct, Join, Scan, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
-from cudf_polars.engine.default_singleton_engine import DefaultSingletonEngine
+from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.join_domain_prefilter import (
     PlanFacts,
     _smallest_node_containing_all,
     analyze_plan,
     optimize_join_domain_prefilters,
-    prefilter_lineage,
+    semijoin_pushdown_candidates,
 )
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
@@ -32,10 +32,22 @@ if TYPE_CHECKING:
     import concurrent.futures
 
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.engine.spmd import SPMDEngine
     from cudf_polars.streaming.base import SerializedDataSourceInfo
 
 I64 = DataType(pl.Int64())
 BOOL = DataType(pl.Boolean())
+
+
+@pytest.fixture
+def engine(spmd_engine_factory) -> SPMDEngine:
+    """Return an SPMD engine configured for join-domain prefilter tests."""
+    return spmd_engine_factory(
+        StreamingOptions(
+            join_domain_prefilter={"threshold": 0.5},
+            raise_on_fail=True,
+        )
+    )
 
 
 class _SourceInfo:
@@ -200,6 +212,7 @@ def test_domain_prefilter_can_be_disabled() -> None:
 )
 def test_nullable_join_keys_preserve_results(
     nulls_equal: bool,  # noqa: FBT001
+    engine: SPMDEngine,
     parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ) -> None:
     domain = pl.LazyFrame(
@@ -215,11 +228,6 @@ def test_nullable_join_keys_preserve_results(
         }
     )
     query = domain.join(target, on="key", nulls_equal=nulls_equal)
-    engine = pl.GPUEngine(
-        executor="streaming",
-        raise_on_fail=True,
-        executor_options={"join_domain_prefilter": {"threshold": 0.5}},
-    )
 
     ir = Translator(query._ldf.visit(), engine).translate_ir()
     config = ConfigOptions.from_polars_engine(engine)
@@ -232,10 +240,38 @@ def test_nullable_join_keys_preserve_results(
     semi_joins = _joins(optimized, "Semi")
     assert semi_joins
     assert all(join.options[1] is nulls_equal for join in semi_joins)
-    try:
-        assert_gpu_result_equal(query, engine=engine, check_row_order=False)
-    finally:
-        DefaultSingletonEngine.shutdown()
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+
+
+def test_prefilter_does_not_move_below_distinct_on_non_subset_column(
+    engine: SPMDEngine,
+    parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
+) -> None:
+    target = pl.LazyFrame(
+        {
+            "group": [1, 1] * 100,
+            "key": [0, 1] * 100,
+        }
+    ).unique(subset="group", keep="first", maintain_order=True)
+    domain = pl.LazyFrame(
+        {
+            "key": [1, 2],
+            "active": [True, False],
+        }
+    ).filter("active")
+    query = target.join(domain, on="key")
+
+    ir = Translator(query._ldf.visit(), engine).translate_ir()
+    config = ConfigOptions.from_polars_engine(engine)
+    optimized = optimize_join_domain_prefilters(
+        ir,
+        collect_statistics(ir, config, parquet_stats_executor),
+        config,
+    )
+
+    semis = _joins(optimized, "Semi")
+    assert any(isinstance(semi.children[0], Distinct) for semi in semis)
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:
@@ -461,7 +497,7 @@ def test_target_prefilter_does_not_move_below_slice() -> None:
         ColumnRef(sliced, "target_key"),
         ColumnRef(target, "target_key"),
     )
-    assert tuple(prefilter_lineage(facts, sliced, "target_key")) == (
+    assert tuple(semijoin_pushdown_candidates(facts, sliced, "target_key")) == (
         ColumnRef(sliced, "target_key"),
     )
 

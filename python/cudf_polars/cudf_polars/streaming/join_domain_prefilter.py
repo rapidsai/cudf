@@ -12,6 +12,7 @@ from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
     Cache,
+    ConditionalJoin,
     DataFrameScan,
     Distinct,
     Filter,
@@ -19,10 +20,12 @@ from cudf_polars.dsl.ir import (
     HStack,
     Join,
     Projection,
+    Rolling,
     Scan,
     Select,
     Slice,
     Sort,
+    Union,
 )
 from cudf_polars.dsl.tracing import Scope, log
 from cudf_polars.dsl.traversal import (
@@ -165,19 +168,63 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
     )
 
 
-def prefilter_lineage(facts: PlanFacts, root: IR, column: str) -> Iterator[ColumnRef]:
-    """Iterate over column-domain lineage valid for prefilter insertion."""
-    lineage = facts.column_lineages.get(ColumnRef(root, column))
-    if lineage is None:
+def blocks_pushdown(node: IR) -> bool:
+    """
+    Return whether a node blocks filter pushdown.
+
+    Parameters
+    ----------
+    node
+        Node to check
+
+    Returns
+    -------
+    bool
+        True if a semijoin cannot be pushed past this node, otherwise False.
+    """
+    return (
+        # TODO: Distinct and Rolling only block pushdown in some
+        # circumstances, but we'd need to make the logic more complicated:
+        # - We can push through distinct if the filter applies to the columns
+        #   that are being used to determine distinct rows
+        # - We can push through rolling if the filter applies to the
+        #   groupby keys.
+        # TODO: We can push through an unsliced Union, but need to
+        # distribute the filter onto every child.
+        isinstance(node, (Distinct, Rolling, Slice, Union))
+        # Can't push through anything that is sliced.
+        or (isinstance(node, (GroupBy, Sort)) and node.zlice is not None)
+        or (isinstance(node, (ConditionalJoin, Join)) and node.options[2] is not None)
+    )
+
+
+def semijoin_pushdown_candidates(
+    facts: PlanFacts, root: IR, column: str
+) -> Iterator[ColumnRef]:
+    """
+    Yield column domain lineage providing valid locations for semijoin pushdown.
+
+    Parameters
+    ----------
+    facts
+        Gathered facts about the plan
+    root
+        Root node to search from
+    column
+        Name of column we're finding the lineage of.
+
+    Returns
+    -------
+    Iterator
+        Of valid insertion points for a semijoin filter on the given column name.
+    """
+    try:
+        lineage = facts.column_lineages[ColumnRef(root, column)]
+    except KeyError:
         return
     for reference in lineage:
         yield reference
-        node = reference.node
-        if isinstance(node, Slice):
-            return
-        if isinstance(node, (Distinct, GroupBy, Sort)) and node.zlice is not None:
-            return
-        if isinstance(node, Join) and node.options[2] is not None:
+        if blocks_pushdown(reference.node):
             return
 
 
@@ -506,7 +553,7 @@ def _smallest_key_producer(
     exclude: IR | None = None,
 ) -> _Producer | None:
     candidates = []
-    for reference in prefilter_lineage(facts, root, column):
+    for reference in semijoin_pushdown_candidates(facts, root, column):
         node, bound_column = reference.node, reference.name
         if node is exclude:
             continue
@@ -530,7 +577,7 @@ def _smallest_node_containing_all(
     lineages = [
         {
             id(reference.node): reference
-            for reference in prefilter_lineage(facts, root, column)
+            for reference in semijoin_pushdown_candidates(facts, root, column)
         }
         for column in columns
     ]
@@ -562,7 +609,7 @@ def _smallest_node_containing_all(
 def _largest_key_source(root: IR, column: str, facts: PlanFacts) -> _Producer | None:
     source_candidates = []
     fallback_candidates = []
-    for reference in prefilter_lineage(facts, root, column):
+    for reference in semijoin_pushdown_candidates(facts, root, column):
         node, bound_column = reference.node, reference.name
         rows = facts.row_estimates.get(node)
         if rows is None or rows <= 0:
