@@ -4410,7 +4410,7 @@ def test_parquet_reader_with_mismatched_schemas_error():
 
     with pytest.raises(
         ValueError,
-        match="Encountered mismatching SchemaElement properties for a column in the selected path",
+        match="Encountered mismatching data type or schema across the Parquet sources",
     ):
         cudf.read_parquet(
             [buf1, buf2], columns=["millis"], allow_mismatched_pq_schemas=True
@@ -4438,8 +4438,8 @@ def test_parquet_reader_with_mismatched_schemas_error():
     df2.to_parquet(buf2)
 
     with pytest.raises(
-        IndexError,
-        match="Encountered mismatching number of children for a column in the selected path",
+        ValueError,
+        match="Encountered mismatching number of children across Parquet sources",
     ):
         cudf.read_parquet(
             [buf1, buf2],
@@ -4448,8 +4448,8 @@ def test_parquet_reader_with_mismatched_schemas_error():
         )
 
     with pytest.raises(
-        IndexError,
-        match="Encountered mismatching schema tree depths across data sources",
+        ValueError,
+        match="Encountered missing nested column",
     ):
         cudf.read_parquet(
             [buf1, buf2],
