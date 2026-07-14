@@ -1592,6 +1592,29 @@ def test_merge_natural_join_key_order_matches_left_frame():
     assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))
 
 
+@pytest.mark.parametrize("how", ["inner", "left", "right", "outer"])
+@pytest.mark.parametrize("sort", [True, False])
+def test_merge_natural_join_left_frame_order_any_how(how, sort):
+    # The inferred keys follow left-frame column order for every ``how``,
+    # including "right", which cuDF implements by swapping the operands:
+    # both the key column order and the multi-key sort priority must still
+    # come from the original left frame.
+    pl = pd.DataFrame({"v": [5, 6, 9], "b": [2, 1, 9], "a": [1, 2, 9]})
+    pr = pd.DataFrame({"w": [7, 8], "a": [2, 1], "b": [1, 2]})
+    gl = cudf.from_pandas(pl)
+    gr = cudf.from_pandas(pr)
+
+    expect = pl.merge(pr, how=how, sort=sort)
+    got = gl.merge(gr, how=how, sort=sort)
+    if not sort:
+        # unsorted row order is not guaranteed to match pandas
+        expect = expect.sort_values(list(expect.columns)).reset_index(
+            drop=True
+        )
+        got = got.sort_values(list(got.columns)).reset_index(drop=True)
+    assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))
+
+
 @pytest.mark.parametrize("how", ["left", "inner"])
 def test_merge_on_index_level_keeps_right_key_column(how):
     # When ``on`` names an index level on the left but a column on the

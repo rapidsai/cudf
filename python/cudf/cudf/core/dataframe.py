@@ -4915,6 +4915,24 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
+            if (
+                orig_on is None
+                and orig_left_on is None
+                and orig_right_on is None
+                and not orig_left_index
+                and not orig_right_index
+            ):
+                # Merge infers the common key columns from its (post-swap)
+                # left frame, but pandas keys an inferred merge by the
+                # *original* left frame's column order regardless of ``how``.
+                # Pass the keys explicitly to preserve that order (it decides
+                # both the key column order and the sort priority).
+                right_names = set(right._column_names)
+                inferred_on = [
+                    name for name in self._column_names if name in right_names
+                ]
+                if inferred_on:
+                    on = inferred_on
         elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
 
@@ -4973,8 +4991,28 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 and not orig_left_index
                 and not orig_right_index
             ):
-                # Auto-detect: intersection of column names are the keys.
-                k = len(set(self._column_names) & set(right._column_names))
+                # Auto-detected keys sit wherever they appear within each
+                # frame, so a segment swap cannot reproduce pandas' layout
+                # (the original left frame's columns in their own order,
+                # then the right frame's non-key columns). No suffixing can
+                # occur here -- any label shared by both frames is a key --
+                # so the result labels are unchanged and a label-based
+                # reorder is exact.
+                common = set(self._column_names) & set(right._column_names)
+                expected = list(self._column_names) + [
+                    name for name in right._column_names if name not in common
+                ]
+                positions = {
+                    label: i for i, label in enumerate(result._column_names)
+                }
+                if len(expected) == n_result and all(
+                    label in positions for label in expected
+                ):
+                    result = result.iloc[
+                        :, [positions[label] for label in expected]
+                    ]
+                # skip the positional segment swap below
+                k = n_result
             else:
                 k = 0
             # Only reorder when there are both right non-key cols and self

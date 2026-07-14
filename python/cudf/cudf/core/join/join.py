@@ -7,6 +7,7 @@ import itertools
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from pandas.errors import MergeError
 
 import pylibcudf as plc
 
@@ -178,8 +179,8 @@ class Merge:
         # (and coalesces the opposite key into it) only when that frame joined
         # via the ``*_index`` flag; an index level used as a key via ``on=`` is
         # treated like a column and yields a default RangeIndex.
-        self._left_index_flag = bool(left_index)
-        self._right_index_flag = bool(right_index)
+        self._left_index_flag = left_index
+        self._right_index_flag = right_index
 
         # At this point validation guarantees that if on is not None we
         # don't have any other args, so we can apply it directly to left_on and
@@ -231,8 +232,10 @@ class Merge:
             # column order like pandas (a set here would make the key
             # order -- and hence the sorted output of an outer merge --
             # vary with the process hash seed).
-            right_names = set(rhs._data)
-            on_names = [name for name in lhs._data if name in right_names]
+            right_names = set(rhs._column_names)
+            on_names = [
+                name for name in lhs._column_names if name in right_names
+            ]
             self._left_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._right_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._using_left_index = False
@@ -318,12 +321,14 @@ class Merge:
                 # (a numeric-looking string is NOT silently parsed). Empty
                 # keys are inferred as ``empty`` rather than ``string`` by
                 # pandas and so are exempt from this check.
-                l_num = is_dtype_obj_numeric(
-                    lcol.dtype
-                ) and lcol.dtype.kind in ("iuf")
-                r_num = is_dtype_obj_numeric(
-                    rcol.dtype
-                ) and rcol.dtype.kind in ("iuf")
+                l_num = (
+                    is_dtype_obj_numeric(lcol.dtype)
+                    and lcol.dtype.kind in "iuf"
+                )
+                r_num = (
+                    is_dtype_obj_numeric(rcol.dtype)
+                    and rcol.dtype.kind in "iuf"
+                )
                 l_str = is_dtype_obj_string(lcol.dtype)
                 r_str = is_dtype_obj_string(rcol.dtype)
                 if (l_str and r_num) or (r_str and l_num):
@@ -488,8 +493,6 @@ class Merge:
             label for label in set(rlabels) if label in left_not_renamed
         )
         if dups:
-            from pandas.errors import MergeError
-
             raise MergeError(
                 f"Passing 'suffixes' which cause duplicate columns "
                 f"{set(dups)} is not allowed."
