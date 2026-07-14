@@ -876,8 +876,26 @@ class GroupBy(Serializable, Reducible, Scannable):
 
         result = self.agg(rank)
 
-        # pandas always returns floats:
-        return result.astype(np.dtype(np.float64))
+        # pandas always returns floats, staying within the value column's
+        # dtype family: numpy -> float64, masked (Int64/Float32/...) ->
+        # Float64, arrow -> double[pyarrow]
+        target = np.dtype(np.float64)
+        if result.ndim == 1:
+            source_dtype = (
+                self.obj.dtype if self.obj.ndim == 1 else result.dtype
+            )
+            return result.astype(get_dtype_of_same_kind(source_dtype, target))
+        return result.astype(
+            {
+                label: get_dtype_of_same_kind(
+                    self.obj._data[label].dtype
+                    if self.obj.ndim == 2 and label in self.obj._data
+                    else result._data[label].dtype,
+                    target,
+                )
+                for label in result._column_names
+            }
+        )
 
     @property
     def _groupby(self):
