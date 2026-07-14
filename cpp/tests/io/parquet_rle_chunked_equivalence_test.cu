@@ -13,6 +13,7 @@
 
 #include <rmm/device_uvector.hpp>
 
+#include <cooperative_groups.h>
 #include <cuda_runtime_api.h>
 
 #include <cstdint>
@@ -40,9 +41,11 @@ __global__ void decode_compare_kernel(uint8_t const* encoded,
   rle_stream<level_t, decode_threads, max_values> ring{ring_runs};
   rle_stream_chunked<level_t, decode_threads, max_values> chunked{chunked_runs};
 
-  int const t = threadIdx.x;
-  ring.init(level_bits, encoded, encoded + encoded_size, ring_output, total_values);
-  chunked.init(level_bits, encoded, encoded + encoded_size, chunked_output, total_values);
+  namespace cg     = cooperative_groups;
+  auto const block = cg::this_thread_block();
+  int const t      = threadIdx.x;
+  ring.init(block, level_bits, encoded, encoded + encoded_size, ring_output, total_values);
+  chunked.init(block, level_bits, encoded, encoded + encoded_size, chunked_output, total_values);
 
   int ring_decoded    = ring.decode_next(t, first_count);
   int chunked_decoded = chunked.decode_next(t, first_count);
