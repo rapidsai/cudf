@@ -20,14 +20,17 @@
 #include <optional>
 #include <utility>
 
+/**
+ * @file
+ * @brief Class definition for hash join, which builds a hash table with the right table and
+ * probes it with left tables.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
- * @brief Class definition for hash join, which builds a hash table with the right table and
- * probes it with left tables.
  */
 
 // forward declaration

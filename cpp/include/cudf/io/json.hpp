@@ -20,13 +20,16 @@
 #include <variant>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for reading and writing JSON files.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief APIs for reading and writing JSON files.
  */
 
 class json_reader_options_builder;
@@ -1045,7 +1048,6 @@ json_reader_result_with_row_diagnostics read_json_with_row_diagnostics(
 /**
  * @addtogroup io_writers
  * @{
- * @file
  */
 
 /**
