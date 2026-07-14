@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, assert_never, cast
+import math
+from typing import TYPE_CHECKING, Any, ClassVar, TypeGuard, assert_never, cast
 
 import polars as pl
 
@@ -107,6 +108,7 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "clip",
             "drop_nans",
             "drop_nulls",
             "extend_constant",
@@ -116,12 +118,15 @@ class UnaryFunction(Expr):
             "mask_nans",
             "null_count",
             "rank",
+            "reinterpret",
             "round",
             "set_sorted",
             "shift",
             "shift_and_fill",
             "top_k",
+            "truncate",
             "unique",
+            "unique_counts",
             "value_counts",
         }
     )
@@ -134,26 +139,37 @@ class UnaryFunction(Expr):
             "cum_sum",
         }
     )
-    # Horizontal folds elementwise across the child columns. All are pointwise.
     _horizontal_fold_ops: ClassVar[dict[str, plc.binaryop.BinaryOperator]] = {
         "max_horizontal": plc.binaryop.BinaryOperator.NULL_MAX,
     }
     _supported_horizontal_fns = frozenset({"max_horizontal"})
+    _supported_math_fns = frozenset(
+        {
+            "cot",
+            "degrees",
+            "log1p",
+            "radians",
+        }
+    )
     _supported_fns = frozenset().union(
         _supported_misc_fns,
         _supported_cum_aggs,
+        _supported_math_fns,
         _supported_horizontal_fns,
         _OP_MAPPING.keys(),
     )
     _pointwise_fns = frozenset(
         {
+            "clip",
             "fill_null",
             "fill_null_with_strategy",
             "mask_nans",
+            "reinterpret",
             "round",
             "set_sorted",
+            "truncate",
         }
-    ).union(_supported_horizontal_fns, _OP_MAPPING.keys())
+    ).union(_supported_horizontal_fns, _supported_math_fns, _OP_MAPPING.keys())
 
     def __init__(
         self, dtype: DataType, name: str, options: tuple[Any, ...], *children: Expr
@@ -176,12 +192,6 @@ class UnaryFunction(Expr):
             raise NotImplementedError(
                 "Filling null values with limit specified is not yet supported."
             )
-        if self.name == "rank":
-            method, _, _ = self.options
-            if method not in {"average", "min", "max", "dense", "ordinal"}:
-                raise NotImplementedError(
-                    f"ranking with {method=} is not yet supported"
-                )
         if self.name == "max_horizontal":
             op = UnaryFunction._horizontal_fold_ops[self.name]
             if not plc.binaryop.is_supported_operation(
@@ -193,6 +203,49 @@ class UnaryFunction(Expr):
                 raise NotImplementedError(
                     f"{self.name} is not supported for dtype {self.dtype.id().name}"
                 )
+        if self.name == "rank":
+            method, _, _ = self.options
+            if method not in {"average", "min", "max", "dense", "ordinal"}:
+                raise NotImplementedError(
+                    f"ranking with {method=} is not yet supported"
+                )
+        if self.name == "reinterpret":
+            source = children[0].dtype.plc_type
+            target = self.dtype.plc_type
+            if plc.traits.is_floating_point(source) != plc.traits.is_floating_point(
+                target
+            ):
+                raise NotImplementedError(
+                    "reinterpret between integer and floating-point types is not "
+                    "supported"
+                )
+
+    @staticmethod
+    def _bound_clip_operand(
+        expr: Expr,
+        out_type: DataType,
+        df: DataFrame,
+        context: ExecutionContext,
+    ) -> plc.Column | plc.Scalar:
+        """Evaluate a ``clip`` bound as a scalar or column in ``out_type``."""
+        if isinstance(expr, Literal):
+            casted_literal = expr.astype(out_type)
+            return plc.Scalar.from_py(
+                casted_literal.value, out_type.plc_type, stream=df.stream
+            )
+        evaluated = expr.evaluate(df, context=context).astype(
+            out_type, stream=df.stream
+        )
+        if evaluated.is_scalar:
+            return evaluated.obj_scalar(stream=df.stream)
+        return evaluated.obj
+
+    @staticmethod
+    def _is_clamp_scalar(
+        operand: plc.Column | plc.Scalar | None,
+    ) -> TypeGuard[plc.Scalar | None]:
+        """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
+        return operand is None or isinstance(operand, plc.Scalar)
 
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
@@ -233,6 +286,45 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             ).sorted_like(values)  # pragma: no cover
+        elif self.name == "truncate":
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            if not plc.traits.is_floating_point(out_type):
+                return column
+            (decimals,) = self.options
+            col_ref = plc.expressions.ColumnReference(0)
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+            )
+            if decimals == 0:
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, col_ref, one
+                )
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, col_ref, frac
+                )
+            else:
+                scale = plc.expressions.Literal(
+                    plc.Scalar.from_py(10.0**decimals, out_type, stream=df.stream)
+                )
+                scaled = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MUL, col_ref, scale
+                )
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, scaled, one
+                )
+                truncated = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, scaled, frac
+                )
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV, truncated, scale
+                )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([column.obj]), truncate_expr, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
@@ -266,6 +358,41 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
+        elif self.name == "unique_counts":
+            values = self.children[0].evaluate(df, context=context)
+            iota = plc.filling.sequence(
+                values.size,
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            (_, (counts_table, first_index_table)) = plc.groupby.GroupBy(
+                plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        values.obj,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    ),
+                    plc.groupby.GroupByRequest(iota, [plc.aggregation.min()]),
+                ],
+                stream=df.stream,
+            )
+            counts_col = counts_table.columns()[0]
+            if counts_col.type() != self.dtype.plc_type:
+                counts_col = plc.unary.cast(
+                    counts_col, self.dtype.plc_type, stream=df.stream
+                )
+            return Column(
+                plc.sorting.sort_by_key(
+                    plc.Table([counts_col]),
+                    first_index_table,
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if isinstance(self.options[0], str):
@@ -574,6 +701,75 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
+        elif self.name == "reinterpret":
+            column = self.children[0].evaluate(df, context=context)
+            return column.astype(self.dtype, stream=df.stream)
+        elif self.name == "clip":
+            column = self.children[0].evaluate(df, context=context)
+            has_min, has_max = self.options
+            bound_children = iter(self.children[1:])
+            lower = (
+                self._bound_clip_operand(next(bound_children), self.dtype, df, context)
+                if has_min
+                else None
+            )
+            upper = (
+                self._bound_clip_operand(next(bound_children), self.dtype, df, context)
+                if has_max
+                else None
+            )
+            out_type = self.dtype.plc_type
+            if self._is_clamp_scalar(lower) and self._is_clamp_scalar(upper):
+                null_bound = plc.Scalar.from_py(None, out_type, stream=df.stream)
+                return Column(
+                    plc.replace.clamp(
+                        column.obj,
+                        lower if lower is not None else null_bound,
+                        upper if upper is not None else null_bound,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
+            clamped = column.obj
+            if lower is not None:
+                clamped = plc.binaryop.binary_operation(
+                    clamped,
+                    lower,
+                    plc.binaryop.BinaryOperator.NULL_MAX,
+                    out_type,
+                    stream=df.stream,
+                )
+            if upper is not None:
+                clamped = plc.binaryop.binary_operation(
+                    clamped,
+                    upper,
+                    plc.binaryop.BinaryOperator.NULL_MIN,
+                    out_type,
+                    stream=df.stream,
+                )
+            is_float = plc.traits.is_floating_point(out_type)
+            if column.null_count > 0 or is_float:
+                clampable = plc.unary.is_valid(column.obj, stream=df.stream)
+                if is_float:
+                    not_nan = plc.unary.unary_operation(
+                        plc.unary.is_nan(column.obj, stream=df.stream),
+                        plc.unary.UnaryOperator.NOT,
+                        stream=df.stream,
+                    )
+                    clampable = plc.binaryop.binary_operation(
+                        clampable,
+                        not_nan,
+                        plc.binaryop.BinaryOperator.LOGICAL_AND,
+                        plc.DataType(plc.TypeId.BOOL8),
+                        stream=df.stream,
+                    )
+                clamped = plc.copying.copy_if_else(
+                    clamped,
+                    column.obj,
+                    clampable,
+                    stream=df.stream,
+                )
+            return Column(clamped, dtype=self.dtype)
         elif self.name == "max_horizontal":
             op = UnaryFunction._horizontal_fold_ops[self.name]
             columns = [
@@ -654,6 +850,56 @@ class UnaryFunction(Expr):
                 ).columns()[0],
                 dtype=self.dtype,
             )
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
+            if self.name in ("log1p", "cot"):
+                column_ref = plc.expressions.ColumnReference(0)
+                one = plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, self.dtype.plc_type, stream=df.stream)
+                )
+                if self.name == "log1p":
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.LOG,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.ADD, column_ref, one
+                        ),
+                    )
+                else:
+                    # cot
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.DIV,
+                        one,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.TAN, column_ref
+                        ),
+                    )
+                return Column(
+                    plc.transform.compute_column(
+                        plc.Table([column.obj]), expression, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            else:
+                if self.name == "degrees":
+                    factor = 180.0 / math.pi
+                else:
+                    # radians
+                    factor = math.pi / 180.0
+                out_type = self.dtype.plc_type
+                return Column(
+                    plc.binaryop.binary_operation(
+                        column.obj,
+                        plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                        plc.binaryop.BinaryOperator.MUL,
+                        out_type,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():

@@ -11,13 +11,16 @@
 #include <string>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for converting strings columns to and from timestamp values
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace strings {
 /**
  * @addtogroup strings_convert
  * @{
- * @file
- * @brief APIs for converting strings columns to and from timestamp values
  */
 
 /**
