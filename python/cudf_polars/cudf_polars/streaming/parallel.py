@@ -36,7 +36,7 @@ from cudf_polars.dsl.ir import (
     Slice,
     Union,
 )
-from cudf_polars.dsl.traversal import CachingVisitor, traversal
+from cudf_polars.dsl.traversal import CachingVisitor, reuse_if_unchanged, traversal
 from cudf_polars.dsl.utils.naming import unique_names
 from cudf_polars.streaming.base import PartitionInfo
 from cudf_polars.streaming.dispatch import lower_ir_node
@@ -53,6 +53,7 @@ if TYPE_CHECKING:
 
     from cudf_polars.streaming.base import StatsCollector
     from cudf_polars.streaming.dispatch import LowerIRTransformer, State
+    from cudf_polars.typing import GenericTransformer
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
 
 
@@ -75,6 +76,18 @@ class LoweringInfo:
     partition_info: MutableMapping[
         IR, PartitionInfo
     ]  # Partition mapping for nodes in the lowered IR.
+
+
+def remove_cache_nodes(ir: IR) -> IR:
+    """Remove logical cache nodes while preserving shared DAG structure."""
+
+    def rewrite(node: IR, rec: GenericTransformer[IR, IR, None]) -> IR:
+        if isinstance(node, Cache):
+            return rec(node.children[0])
+        return reuse_if_unchanged(node, rec)
+
+    mapper: GenericTransformer[IR, IR, None] = CachingVisitor(rewrite, state=None)
+    return mapper(ir)
 
 
 def optimize_with_stats(
@@ -101,6 +114,7 @@ def optimize_with_stats(
         optimize_join_domain_prefilters,
     )
 
+    ir = remove_cache_nodes(ir)
     return optimize_join_domain_prefilters(ir, stats, config_options)
 
 

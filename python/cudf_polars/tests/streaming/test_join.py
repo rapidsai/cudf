@@ -516,7 +516,7 @@ def test_broadcast_limit(
         assert len(shuffle_nodes) == 0
 
 
-def test_cache_preserves_partitioning_join(
+def test_shared_join_preserves_partitioning(
     parquet_stats_executor: concurrent.futures.ThreadPoolExecutor,
 ):
     engine = pl.GPUEngine(
@@ -550,14 +550,16 @@ def test_cache_preserves_partitioning_join(
     lowered_ir = lowering.lowered
     partition_info = lowering.partition_info
 
-    # Cache should preserve partitioning on 'key'
-    cache_partitioning = [
+    assert not any(isinstance(node, Cache) for node in traversal([lowered_ir]))
+
+    # Removing Cache should preserve the shared join's partitioning on 'key'.
+    join_partitioning = [
         [ne.name for ne in partition_info[node].partitioned_on]
         for node in traversal([lowered_ir])
-        if isinstance(node, Cache)
+        if isinstance(node, Join)
     ]
-    assert cache_partitioning == [["key"]], (
-        f"Cache should preserve partitioning on 'key', got {cache_partitioning}"
+    assert join_partitioning == [["key"]], (
+        f"Shared join should be partitioned on 'key', got {join_partitioning}"
     )
 
     # Only 2 shuffles needed (for join sides, not for groupby)
