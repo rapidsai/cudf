@@ -3133,10 +3133,8 @@ class Series(SingleColumnFrame, IndexedFrame):
                 f"to isin(), you passed a [{type(values).__name__}]"
             )
 
-        result_col = self._column.isin(values)
-
         return Series._from_column(
-            result_col,
+            self._column.isin(values),
             name=self.name,
             index=self.index,
             attrs=self.attrs,

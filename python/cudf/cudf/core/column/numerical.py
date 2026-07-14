@@ -40,7 +40,6 @@ from cudf.utils.dtypes import (
     find_common_type,
     get_dtype_of_same_kind,
     is_pandas_nullable_extension_dtype,
-    is_pandas_nullable_numpy_dtype,
     min_signed_type,
     min_unsigned_type,
 )
@@ -928,9 +927,7 @@ class NumericalColumn(NumericalBaseColumn):
         return self.isnan().sum()
 
     def isin(self, values: Sequence | ColumnBase) -> ColumnBase:
-        if isinstance(self.dtype, np.dtype) or not (
-            is_pandas_nullable_numpy_dtype(self.dtype)
-        ):
+        if isinstance(self.dtype, (np.dtype, pd.ArrowDtype)):
             return super().isin(values)
         # Mirror pandas' BaseMaskedArray.isin for masked (nullable
         # integer/float/boolean) dtypes:
