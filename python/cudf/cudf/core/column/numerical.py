@@ -664,14 +664,35 @@ class NumericalColumn(NumericalBaseColumn):
             res = res.astype(
                 get_dtype_of_same_kind(out_dtype, np.dtype(np.int8))
             )
-        elif op == "INT_POW" and res.null_count:
-            if (
-                isinstance(lhs_binaryop, plc.Scalar)
-                and lhs_binaryop.to_py() == 1
-                and isinstance(rhs_binaryop, ColumnBase)
-                and rhs_binaryop.null_count > 0
-            ):
-                res = res.fillna(lhs_binaryop.to_py())
+        elif (
+            op in {"__pow__", "INT_POW"}
+            and res.null_count
+            and not (self_is_arrow or other_is_arrow)
+        ):
+            # pandas: ``1 ** x == 1`` and ``x ** 0 == 1`` hold even when
+            # ``x`` is missing, for both NaN (numpy semantics) and NA
+            # (masked semantics). libcudf propagates nulls unconditionally,
+            # so patch the positions covered by these identities. pandas'
+            # ArrowDtype follows pyarrow and propagates nulls, hence the
+            # arrow exclusion.
+            fix_mask = None
+            if isinstance(lhs, pa.Scalar):
+                if lhs.is_valid and lhs.as_py() == 1:
+                    res = res.fillna(1)
+            else:
+                fix_mask = lhs._binaryop(1, "__eq__").fillna(False)
+            if isinstance(rhs, pa.Scalar):
+                if rhs.is_valid and rhs.as_py() == 0:
+                    res = res.fillna(1)
+            else:
+                exp_is_zero = rhs._binaryop(0, "__eq__").fillna(False)
+                fix_mask = (
+                    exp_is_zero
+                    if fix_mask is None
+                    else fix_mask._binaryop(exp_is_zero, "__or__")
+                )
+            if fix_mask is not None and res.null_count:
+                res = res.fillna(1).copy_if_else(res, fix_mask)
         elif (
             cudf.get_option("mode.pandas_compatible")
             and op in cmp_ops
