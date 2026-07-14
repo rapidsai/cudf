@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2025, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -15,12 +15,16 @@
 #include <string>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for reading Avro files into a table.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
  * @{
- * @file
  */
 
 class avro_reader_options_builder;

@@ -149,19 +149,20 @@ ConfigureNVBench(
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureNVBench(
   JOIN_NVBENCH
-  join/left_join.cu
-  join/conditional_join.cu
-  join/join.cu
-  join/mixed_join.cu
-  join/distinct_join.cu
-  join/filter_join_indices.cu
-  join/generate_input_tables.cu
+  join/conditional_join.cpp
+  join/distinct_join.cpp
+  join/filter_join_indices.cpp
   join/filter_join_indices_jit.cu
-  join/multiplicity_join.cu
-  join/sort_merge_join.cu
-  join/join_heuristics.cu
-  join/key_remap_build.cu
+  join/generate_input_tables.cu
+  join/join.cpp
+  join/join_dictionary.cpp
+  join/join_heuristics.cpp
   join/join_on_int32.cu
+  join/key_remap_build.cpp
+  join/left_join.cpp
+  join/mixed_join.cpp
+  join/multiplicity_join.cpp
+  join/sort_merge_join.cpp
 )
 
 # ##################################################################################################
@@ -512,7 +513,7 @@ ConfigureNVBench(
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
   DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
-  dictionary/concatenate.cpp
+  dictionary/concatenate.cpp dictionary/match_keys.cpp
 )
 
 add_custom_target(

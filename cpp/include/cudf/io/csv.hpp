@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -19,13 +19,17 @@
 #include <variant>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for reading and writing CSV files.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
  * @addtogroup io_readers
  * @{
- * @file
  */
 
 /**
@@ -1353,7 +1357,6 @@ table_with_metadata read_csv(
 /**
  * @addtogroup io_writers
  * @{
- * @file
  */
 
 /**

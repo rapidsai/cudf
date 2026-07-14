@@ -19,6 +19,11 @@
 #include <optional>
 #include <vector>
 
+/**
+ * @file
+ * @brief Class definitions for building and evaluating abstract syntax tree expressions.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 namespace detail {
@@ -47,7 +52,6 @@ namespace ast {
 /**
  * @addtogroup expressions
  * @{
- * @file
  */
 
 // Forward declaration.

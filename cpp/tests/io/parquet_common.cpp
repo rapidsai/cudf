@@ -27,11 +27,15 @@ cudf::test::TempDirTestEnvironment* const temp_env =
 
 std::string write_parquet_temp_file(cudf::table_view const& tbl,
                                     std::string_view const filename,
-                                    std::vector<std::string> const& column_names)
+                                    std::vector<std::string> column_names,
+                                    std::vector<int> field_ids)
 {
   cudf::io::table_input_metadata md{tbl};
   for (std::size_t i = 0; i < column_names.size(); ++i) {
     md.column_metadata[i].set_name(column_names[i]);
+  }
+  for (std::size_t i = 0; i < field_ids.size(); ++i) {
+    md.column_metadata[i].set_parquet_field_id(field_ids[i]);
   }
   auto const path = temp_env->get_temp_filepath(std::string{filename});
   cudf::io::parquet_writer_options opts =
