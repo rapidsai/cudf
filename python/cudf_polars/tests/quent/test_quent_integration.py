@@ -11,6 +11,8 @@ import pytest
 
 import polars as pl
 
+from cudf_polars.dsl.tracing import LOG_TRACES
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -171,6 +173,7 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
     check_processor_lifecycle(quent_events)
 
 
+@pytest.mark.skipif(not LOG_TRACES, reason="requires CUDF_POLARS_LOG_TRACES=1")
 def test_quent_events_multiple_collects(
     engine_with_quent_context: StreamingEngine, quent_context: QuentContext
 ) -> None:
