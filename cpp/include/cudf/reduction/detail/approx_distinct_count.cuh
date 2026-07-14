@@ -134,8 +134,7 @@ class approx_distinct_count {
                         std::int32_t precision,
                         null_policy null_handling,
                         nan_policy nan_handling,
-                        cuda::mr::any_resource<cuda::mr::device_accessible> mr =
-                          cudf::get_current_device_resource_ref());
+                        cuda::mr::any_resource<cuda::mr::device_accessible> mr);
 
   approx_distinct_count()                                        = delete;
   ~approx_distinct_count()                                       = default;

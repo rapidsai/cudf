@@ -396,7 +396,8 @@ approx_distinct_count::approx_distinct_count(cuda::std::span<cuda::std::byte> sk
                                              std::int32_t precision,
                                              null_policy null_handling,
                                              nan_policy nan_handling)
-  : _impl(std::make_unique<impl_type>(sketch_span, precision, null_handling, nan_handling))
+  : _impl(std::make_unique<impl_type>(
+      sketch_span, precision, null_handling, nan_handling, cudf::get_current_device_resource_ref()))
 {
 }
 
