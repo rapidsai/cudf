@@ -17,13 +17,16 @@
 
 #include <memory>
 
+/**
+ * @file
+ * @brief Class for mark-based hash joins used to implement semi/anti joins
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
- * @brief Class for mark-based hash joins used to implement semi/anti joins
  */
 
 namespace detail {
