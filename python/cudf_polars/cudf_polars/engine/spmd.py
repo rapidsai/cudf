@@ -48,7 +48,9 @@ from cudf_polars.quent._context import (
     LocalQuentContext,
     ProcessorRegistry,
     QuentContext,
+    declare_network_channels,
     declare_worker_resources,
+    finalize_network_channels,
     finalize_worker_resources,
 )
 from cudf_polars.quent._types import Worker
@@ -73,7 +75,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
-    from cudf_polars.quent._types import Channel, Memory, ThreadPool
+    from cudf_polars.quent._types import Channel, Memory, Network, ThreadPool
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -148,6 +150,8 @@ def evaluate_pipeline_spmd_mode(
             processor_registry=spmd_context.processor_registry,
             device_memory=spmd_context.device_memory,
             disk_to_device_channel=spmd_context.disk_to_device_channel,
+            network=spmd_context.network,
+            link_channels=spmd_context.link_channels,
         )
 
     df, metadata = evaluate_on_rank(
@@ -468,6 +472,8 @@ class SPMDEngine(StreamingEngine):
         self._quent_thread_pool: ThreadPool | None = None
         self._device_memory: Memory | None = None
         self._disk_to_device_channel: Channel | None = None
+        self._network: Network | None = None
+        self._link_channels: dict[int, Channel] = {}
 
         exit_stack = contextlib.ExitStack()
 
@@ -520,6 +526,12 @@ class SPMDEngine(StreamingEngine):
                     engine_id=engine_id,
                     worker_id=self._quent_worker.id,
                 )
+                self._network, self._link_channels = declare_network_channels(
+                    self._quent_logger,
+                    comm=comm,
+                    engine_id=engine_id,
+                    device_memory=self._device_memory,
+                )
 
             # Register after `_cleanup_ctx` so on teardown (LIFO) the
             # executor shuts down first. `wait=True` is safe because
@@ -554,6 +566,8 @@ class SPMDEngine(StreamingEngine):
                         ),
                         device_memory=self._device_memory,
                         disk_to_device_channel=self._disk_to_device_channel,
+                        network=self._network,
+                        link_channels=self._link_channels,
                     ),
                 },
                 engine_options={
@@ -840,6 +854,9 @@ class SPMDEngine(StreamingEngine):
             if quent_context is not None:
                 assert self._processor_registry is not None
                 self._processor_registry._emit_processor_exit_events(self._quent_logger)
+                finalize_network_channels(
+                    self._quent_logger, link_channels=self._link_channels
+                )
                 if self._device_memory is not None:
                     finalize_worker_resources(
                         self._quent_logger,

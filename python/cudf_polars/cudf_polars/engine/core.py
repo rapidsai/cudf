@@ -747,7 +747,6 @@ def evaluate_on_rank(
     quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
-        local_quent_context._declare_network_channels(comm)
         # ``get_stable_plan_id`` is a deterministic function of the IR
         # structure, so every rank derives the same logical plan ID for a
         # given query (only rank 0 emits the declaration, but physical plans
@@ -807,7 +806,7 @@ def evaluate_on_rank(
         attach_cached_parquet_metadata(ir, cached_parquet_info_map)
 
     with ReserveOpIDs(ir, config_options) as collective_id_map:
-        result = execute_ir_on_rank(
+        return execute_ir_on_rank(
             ctx,
             comm,
             ir,
@@ -819,10 +818,3 @@ def evaluate_on_rank(
             quent_operator_map=quent_operator_map,
             local_quent_context=local_quent_context,
         )
-
-    if local_quent_context is not None:
-        for link in local_quent_context.link_channels.values():
-            local_quent_context.logger.emit(link.finalizing())
-            local_quent_context.logger.emit(link.exit())
-
-    return result

@@ -45,7 +45,9 @@ from cudf_polars.engine.hardware_binding import (
 from cudf_polars.quent._context import (
     LocalQuentContext,
     ProcessorRegistry,
+    declare_network_channels,
     declare_worker_resources,
+    finalize_network_channels,
     finalize_worker_resources,
 )
 from cudf_polars.utils.config import DaskContext, MemoryResourceConfig
@@ -132,6 +134,10 @@ class _WorkerContext:
     disk_to_device_channel: cudf_polars.quent._types.Channel | None = None
     thread_pool: cudf_polars.quent._types.ThreadPool | None = None
     processor_registry: ProcessorRegistry | None = None
+    network: cudf_polars.quent._types.Network | None = None
+    link_channels: dict[int, cudf_polars.quent._types.Channel] = dataclasses.field(
+        default_factory=dict
+    )
 
 
 def _setup_root(
@@ -328,6 +334,8 @@ def _setup_worker(
     disk_to_device_channel = None
     thread_pool = None
     processor_registry = None
+    network = None
+    link_channels: dict[int, cudf_polars.quent._types.Channel] = {}
     if quent_logger is not None:
         processor_registry = ProcessorRegistry()
         device_memory, disk_to_device_channel, thread_pool = declare_worker_resources(
@@ -335,6 +343,14 @@ def _setup_worker(
             instance_suffix=f"rank-{comm.rank}",
             engine_id=engine_id,
             worker_id=worker_id,
+        )
+        # Inter-rank network topology is engine-scoped: declare it once here
+        # alongside the other worker resources (a no-op for single-rank runs).
+        network, link_channels = declare_network_channels(
+            quent_logger,
+            comm=comm,
+            engine_id=engine_id,
+            device_memory=device_memory,
         )
 
     mp_ctx = _WorkerContext(
@@ -349,6 +365,8 @@ def _setup_worker(
         disk_to_device_channel=disk_to_device_channel,
         thread_pool=thread_pool,
         processor_registry=processor_registry,
+        network=network,
+        link_channels=link_channels,
         statistics=statistics,
     )
     setattr(dask_worker, attr, mp_ctx)
@@ -382,6 +400,9 @@ def _teardown_worker(
                 mp_ctx.processor_registry._emit_processor_exit_events(
                     mp_ctx.quent_logger
                 )
+            finalize_network_channels(
+                mp_ctx.quent_logger, link_channels=mp_ctx.link_channels
+            )
             if mp_ctx.device_memory is not None:
                 finalize_worker_resources(
                     mp_ctx.quent_logger,
@@ -551,6 +572,8 @@ def _worker_evaluate(
             processor_registry=mp_ctx.processor_registry,
             device_memory=mp_ctx.device_memory,
             disk_to_device_channel=mp_ctx.disk_to_device_channel,
+            network=mp_ctx.network,
+            link_channels=mp_ctx.link_channels,
         )
     # evaluate_on_rank always collects metadata internally so we can read
     # metadata[-1].duplicated to decide whether to suppress this rank's output.

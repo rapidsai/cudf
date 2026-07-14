@@ -43,7 +43,9 @@ from cudf_polars.engine.hardware_binding import (
 from cudf_polars.quent._context import (
     LocalQuentContext,
     ProcessorRegistry,
+    declare_network_channels,
     declare_worker_resources,
+    finalize_network_channels,
     finalize_worker_resources,
 )
 from cudf_polars.quent._types import Worker
@@ -62,6 +64,7 @@ if TYPE_CHECKING:
     from cudf_polars.engine.core import T
     from cudf_polars.engine.options import StreamingOptions
     from cudf_polars.quent._context import QuentContext
+    from cudf_polars.quent._types import Channel
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
@@ -242,6 +245,10 @@ class RankActor:
         self._device_memory = None
         self._disk_to_device_channel = None
         self._quent_thread_pool = None
+        # Network topology is engine-scoped, but ``comm`` is not available until
+        # ``setup_worker``; declare it there and store the results here.
+        self._network: cudf_polars.quent._types.Network | None = None
+        self._link_channels: dict[int, Channel] = {}
         self._processor_registry: ProcessorRegistry | None = None
         if self._quent_logger is not None:
             self._processor_registry = ProcessorRegistry()
@@ -304,6 +311,15 @@ class RankActor:
                 progress_thread=ProgressThread(self._rapidsmpf_statistics),
             )
         barrier(self._comm)
+        # Now that ``comm`` exists, declare the engine-scoped inter-rank network
+        # topology once (a no-op for single-rank runs).
+        if self._quent_logger is not None and self._device_memory is not None:
+            self._network, self._link_channels = declare_network_channels(
+                self._quent_logger,
+                comm=self._comm,
+                engine_id=self._quent_worker.engine.id,
+                device_memory=self._device_memory,
+            )
         assert self._base_mr is not None
         self._ctx = Context.from_options(
             self._comm.logger,
@@ -364,6 +380,9 @@ class RankActor:
         if self._quent_worker is not None and self._quent_logger is not None:
             if self._processor_registry is not None:
                 self._processor_registry._emit_processor_exit_events(self._quent_logger)
+            finalize_network_channels(
+                self._quent_logger, link_channels=self._link_channels
+            )
             if (
                 self._device_memory is not None
                 and self._disk_to_device_channel is not None
@@ -496,6 +515,8 @@ class RankActor:
                 processor_registry=self._processor_registry,
                 device_memory=self._device_memory,
                 disk_to_device_channel=self._disk_to_device_channel,
+                network=self._network,
+                link_channels=self._link_channels,
             )
         # evaluate_on_rank always collects metadata internally so we can read
         # metadata[-1].duplicated to decide whether to suppress this rank's

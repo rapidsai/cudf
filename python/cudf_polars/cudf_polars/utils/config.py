@@ -46,7 +46,7 @@ if TYPE_CHECKING:
     from cudf_polars.engine.ray import RankActor
     from cudf_polars.quent._context import ProcessorRegistry, QuentContext
     from cudf_polars.quent._logging import QuentLogger
-    from cudf_polars.quent._types import Channel, Memory
+    from cudf_polars.quent._types import Channel, Memory, Network
 
 
 __all__ = [
@@ -579,6 +579,11 @@ class SPMDContext:
         The engine-scoped Quent device Memory resource.
     disk_to_device_channel
         The engine-scoped Quent disk-to-device Channel resource.
+    network
+        The engine-scoped Quent Network resource group (``None`` for
+        single-rank runs).
+    link_channels
+        The engine-scoped Quent inter-rank Link channels, keyed by target rank.
     """
 
     comm: Communicator
@@ -591,6 +596,8 @@ class SPMDContext:
     thread_pool_id: uuid.UUID | None = None
     device_memory: Memory | None = None
     disk_to_device_channel: Channel | None = None
+    network: Network | None = None
+    link_channels: dict[int, Channel] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(frozen=True)

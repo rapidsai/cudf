@@ -21,6 +21,7 @@ from cudf_polars.quent._types import (
     Engine,
     Implementation,
     Memory,
+    Network,
     Processor,
     Query,
     QueryGroup,
@@ -35,7 +36,6 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._logging import QuentLogger
     from cudf_polars.quent._types import (
-        Network,
         Operator,
         Plan,
         Port,
@@ -431,6 +431,59 @@ def finalize_worker_resources(
     logger.emit(device_memory.exit())
 
 
+def declare_network_channels(
+    logger: QuentLogger,
+    *,
+    comm: Communicator,
+    engine_id: uuid.UUID,
+    device_memory: Memory,
+) -> tuple[Network | None, dict[int, Channel]]:
+    """
+    Declare engine-scoped network link channels for inter-rank communication.
+
+    Creates a Network resource group and one Channel per remote rank, emitting
+    their lifecycle events to the quent logger. This is engine/worker-scoped:
+    the inter-rank topology is fixed for the lifetime of the engine, so it is
+    declared once at worker setup rather than per query.
+
+    Returns ``(None, {})`` for single-rank runs, which have no inter-rank
+    communication.
+    """
+    if comm.nranks <= 1:
+        return None, {}
+
+    network = Network(engine_id=engine_id)
+    logger.emit(network.declare())
+
+    link_channels: dict[int, Channel] = {}
+    for target_rank in range(comm.nranks):
+        if target_rank == comm.rank:
+            continue
+        link = Channel(
+            instance_name=f"rank-{comm.rank} -> rank-{target_rank}",
+            resource_type_name="Link",
+            parent_group_id=network.id,
+            source=device_memory,
+            target=device_memory,
+        )
+        logger.emit(link.initializing())
+        logger.emit(link.operating())
+        link_channels[target_rank] = link
+
+    return network, link_channels
+
+
+def finalize_network_channels(
+    logger: QuentLogger,
+    *,
+    link_channels: dict[int, Channel],
+) -> None:
+    """Emit finalizing/exit events for engine-scoped network link channels."""
+    for link in link_channels.values():
+        logger.emit(link.finalizing())
+        logger.emit(link.exit())
+
+
 @dataclasses.dataclass(kw_only=True)
 class LocalQuentContext:
     """
@@ -447,6 +500,12 @@ class LocalQuentContext:
     :class:`Query` from its unique ``query_id`` (see
     :meth:`QuentContext.query_for`), rather than reusing the shared
     ``context.query``.
+
+    The ``device_memory``, ``disk_to_device_channel``, ``network``, and
+    ``link_channels`` resources are all engine/worker-scoped: they are declared
+    once at worker setup (see :func:`declare_worker_resources` and
+    :func:`declare_network_channels`) and injected into each per-collect
+    context, rather than being declared per query.
     """
 
     context: QuentContext
@@ -470,42 +529,6 @@ class LocalQuentContext:
             thread_ident=thread_ident,
             pool_id=self.thread_pool_id,
         )
-
-    def _declare_network_channels(
-        self,
-        comm: Communicator,
-    ) -> None:
-        """
-        Declare network link channels for inter-rank communication.
-
-        Creates a Network resource group and one Channel per remote rank,
-        emitting their lifecycle events to the quent logger.
-        """
-        if comm.nranks <= 1:
-            return
-
-        from cudf_polars.quent._types import Channel, Network
-
-        network = Network(engine_id=self.context.engine.id)
-        self.logger.emit(network.declare())
-        self.network = network
-
-        link_channels: dict[int, Channel] = {}
-        for target_rank in range(comm.nranks):
-            if target_rank == comm.rank:
-                continue
-            link = Channel(
-                instance_name=f"rank-{comm.rank} -> rank-{target_rank}",
-                resource_type_name="Link",
-                parent_group_id=network.id,
-                source=self.device_memory,
-                target=self.device_memory,
-            )
-            self.logger.emit(link.initializing())
-            self.logger.emit(link.operating())
-            link_channels[target_rank] = link
-
-        self.link_channels = link_channels
 
 
 @dataclasses.dataclass(kw_only=True)
