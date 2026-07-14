@@ -133,9 +133,6 @@ def test_product(engine: pl.GPUEngine, data, dtype):
     assert_gpu_result_equal(q, engine=engine, check_exact=False)
 
 
-@pytest.mark.skip_on_streaming_engine(
-    reason="global hist across partitions is not implemented"
-)
 @pytest.mark.parametrize("bin_count", [1, 3, 10])
 @pytest.mark.parametrize(
     "data",
