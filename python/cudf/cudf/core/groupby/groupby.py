@@ -791,8 +791,14 @@ class GroupBy(Serializable, Reducible, Scannable):
             isinstance(obj_dtype, pd.StringDtype)
             and obj_dtype.storage == "pyarrow"
             and obj_dtype.na_value is pd.NA
+        ) or (
+            self.obj.ndim == 1
+            and not isinstance(obj_dtype, pd.StringDtype)
+            and is_pandas_nullable_extension_dtype(obj_dtype)
         ):
-            # Series.groupby.size() on ``string[pyarrow]`` returns Int64.
+            # Series.groupby.size() returns Int64 for ``string[pyarrow]``
+            # and for masked (Int*/UInt*/Float*/boolean) dtypes
+            # (pandas GH#54132).
             int64_dtype = pd.Int64Dtype()
             if isinstance(result, Series):
                 result = Series._from_column(
@@ -2484,6 +2490,34 @@ class GroupBy(Serializable, Reducible, Scannable):
         group_names, offsets, group_keys, grouped_values = self._grouped(
             include_groups=include_groups
         )
+
+        if not self._sort and len(offsets) > 2:
+            # libcudf returns groups sorted by key, but with ``sort=False``
+            # pandas processes groups in order of first appearance. Permute
+            # the grouped layout accordingly so both engines and the result
+            # assembly see pandas' iteration order.
+            pos_offsets, _, (positions,) = self._groups(
+                [self._range_column_from_obj]
+            )
+            first_pos = positions.take(as_column(pos_offsets[:-1]))
+            group_order = first_pos.argsort().to_numpy()
+            sizes = np.diff(np.asarray(offsets, dtype=SIZE_TYPE_DTYPE))
+            row_order = as_column(
+                np.concatenate(
+                    [
+                        np.arange(
+                            offsets[i], offsets[i + 1], dtype=SIZE_TYPE_DTYPE
+                        )
+                        for i in group_order
+                    ]
+                )
+            )
+            group_names = group_names.take(group_order)
+            group_keys = group_keys.take(row_order)
+            grouped_values = grouped_values.take(row_order)
+            new_offsets = np.zeros(len(sizes) + 1, dtype=SIZE_TYPE_DTYPE)
+            np.cumsum(sizes[group_order], out=new_offsets[1:])
+            offsets = new_offsets.tolist()
 
         if engine == "auto":
             if _can_be_jitted(grouped_values, func, args):
