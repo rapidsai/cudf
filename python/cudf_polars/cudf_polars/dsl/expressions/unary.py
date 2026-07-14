@@ -125,7 +125,9 @@ class UnaryFunction(Expr):
             "shift",
             "shift_and_fill",
             "top_k",
+            "truncate",
             "unique",
+            "unique_counts",
             "value_counts",
         }
     )
@@ -140,7 +142,9 @@ class UnaryFunction(Expr):
     )
     _supported_math_fns = frozenset(
         {
+            "cot",
             "degrees",
+            "log1p",
             "radians",
         }
     )
@@ -159,6 +163,7 @@ class UnaryFunction(Expr):
             "reinterpret",
             "round",
             "set_sorted",
+            "truncate",
         }
     ).union(_supported_math_fns, _OP_MAPPING.keys())
 
@@ -280,6 +285,104 @@ class UnaryFunction(Expr):
                 ),
                 dtype=self.dtype,
             ).sorted_like(values)  # pragma: no cover
+        elif self.name == "truncate":
+            column = self.children[0].evaluate(df, context=context)
+            out_type = self.dtype.plc_type
+            if not plc.traits.is_floating_point(out_type):
+                return column
+            (decimals,) = self.options
+            col_ref = plc.expressions.ColumnReference(0)
+            one = plc.expressions.Literal(
+                plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+            )
+            if decimals == 0:
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, col_ref, one
+                )
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, col_ref, frac
+                )
+            else:
+                scale = plc.expressions.Literal(
+                    plc.Scalar.from_py(10.0**decimals, out_type, stream=df.stream)
+                )
+                scaled = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MUL, col_ref, scale
+                )
+                frac = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.MOD, scaled, one
+                )
+                truncated = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.SUB, scaled, frac
+                )
+                truncate_expr = plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV, truncated, scale
+                )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([column.obj]), truncate_expr, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
+        elif self.name == "diff":
+            column = self.children[0].evaluate(df, context=context)
+            (null_behavior,) = self.options
+            offset = self._evaluate_n(self.children[1], df, context)
+            shifted = plc.copying.shift(
+                column.obj,
+                offset,
+                plc.Scalar.from_py(None, column.dtype.plc_type, stream=df.stream),
+                stream=df.stream,
+            )
+            diffed = Column(
+                plc.binaryop.binary_operation(
+                    column.obj,
+                    shifted,
+                    plc.binaryop.BinaryOperator.SUB,
+                    self.dtype.plc_type,
+                    stream=df.stream,
+                ),
+                dtype=self.dtype,
+            )
+            if null_behavior == "drop":
+                if offset >= 0:
+                    diffed = diffed.slice((offset, None), stream=df.stream)
+                else:
+                    diffed = diffed.slice(
+                        (0, column.obj.size() + offset), stream=df.stream
+                    )
+            return diffed
+        elif self.name == "pct_change":
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
+            offset = self._evaluate_n(self.children[1], df, context)
+            out_type = self.dtype.plc_type
+            shifted = plc.copying.shift(
+                column.obj,
+                offset,
+                plc.Scalar.from_py(None, out_type, stream=df.stream),
+                stream=df.stream,
+            )
+            expression = plc.expressions.Operation(
+                plc.expressions.ASTOperator.SUB,
+                plc.expressions.Operation(
+                    plc.expressions.ASTOperator.DIV,
+                    plc.expressions.ColumnReference(0),
+                    plc.expressions.ColumnReference(1),
+                ),
+                plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, out_type, stream=df.stream)
+                ),
+            )
+            return Column(
+                plc.transform.compute_column(
+                    plc.Table([column.obj, shifted]), expression, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
         elif self.name == "unique":
             (maintain_order,) = self.options
             (values,) = (child.evaluate(df, context=context) for child in self.children)
@@ -313,6 +416,41 @@ class UnaryFunction(Expr):
             if maintain_order:
                 column = column.sorted_like(values)
             return column
+        elif self.name == "unique_counts":
+            values = self.children[0].evaluate(df, context=context)
+            iota = plc.filling.sequence(
+                values.size,
+                plc.Scalar.from_py(0, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                plc.Scalar.from_py(1, plc.DataType(plc.TypeId.INT32), stream=df.stream),
+                stream=df.stream,
+            )
+            (_, (counts_table, first_index_table)) = plc.groupby.GroupBy(
+                plc.Table([values.obj]), null_handling=plc.types.NullPolicy.INCLUDE
+            ).aggregate(
+                [
+                    plc.groupby.GroupByRequest(
+                        values.obj,
+                        [plc.aggregation.count(plc.types.NullPolicy.INCLUDE)],
+                    ),
+                    plc.groupby.GroupByRequest(iota, [plc.aggregation.min()]),
+                ],
+                stream=df.stream,
+            )
+            counts_col = counts_table.columns()[0]
+            if counts_col.type() != self.dtype.plc_type:
+                counts_col = plc.unary.cast(
+                    counts_col, self.dtype.plc_type, stream=df.stream
+                )
+            return Column(
+                plc.sorting.sort_by_key(
+                    plc.Table([counts_col]),
+                    first_index_table,
+                    [plc.types.Order.ASCENDING],
+                    [plc.types.NullOrder.BEFORE],
+                    stream=df.stream,
+                ).columns()[0],
+                dtype=self.dtype,
+            )
         elif self.name == "set_sorted":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             if isinstance(self.options[0], str):
@@ -621,87 +759,6 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
-        elif self.name == "diff":
-            column = self.children[0].evaluate(df, context=context)
-            (null_behavior,) = self.options
-            offset = self._evaluate_n(self.children[1], df, context)
-            shifted = plc.copying.shift(
-                column.obj,
-                offset,
-                plc.Scalar.from_py(None, column.dtype.plc_type, stream=df.stream),
-                stream=df.stream,
-            )
-            diffed = Column(
-                plc.binaryop.binary_operation(
-                    column.obj,
-                    shifted,
-                    plc.binaryop.BinaryOperator.SUB,
-                    self.dtype.plc_type,
-                    stream=df.stream,
-                ),
-                dtype=self.dtype,
-            )
-            if null_behavior == "drop":
-                if offset >= 0:
-                    diffed = diffed.slice((offset, None), stream=df.stream)
-                else:
-                    diffed = diffed.slice(
-                        (0, column.obj.size() + offset), stream=df.stream
-                    )
-            return diffed
-        elif self.name == "pct_change":
-            column = (
-                self.children[0]
-                .evaluate(df, context=context)
-                .astype(self.dtype, stream=df.stream)
-            )
-            offset = self._evaluate_n(self.children[1], df, context)
-            out_type = self.dtype.plc_type
-            shifted = plc.copying.shift(
-                column.obj,
-                offset,
-                plc.Scalar.from_py(None, out_type, stream=df.stream),
-                stream=df.stream,
-            )
-            expression = plc.expressions.Operation(
-                plc.expressions.ASTOperator.SUB,
-                plc.expressions.Operation(
-                    plc.expressions.ASTOperator.DIV,
-                    plc.expressions.ColumnReference(0),
-                    plc.expressions.ColumnReference(1),
-                ),
-                plc.expressions.Literal(
-                    plc.Scalar.from_py(1.0, out_type, stream=df.stream)
-                ),
-            )
-            return Column(
-                plc.transform.compute_column(
-                    plc.Table([column.obj, shifted]), expression, stream=df.stream
-                ),
-                dtype=self.dtype,
-            )
-        elif self.name in UnaryFunction._supported_math_fns:
-            column = (
-                self.children[0]
-                .evaluate(df, context=context)
-                .astype(self.dtype, stream=df.stream)
-            )
-            if self.name == "degrees":
-                factor = 180.0 / math.pi
-            else:
-                # radians
-                factor = math.pi / 180.0
-            out_type = self.dtype.plc_type
-            return Column(
-                plc.binaryop.binary_operation(
-                    column.obj,
-                    plc.Scalar.from_py(factor, out_type, stream=df.stream),
-                    plc.binaryop.BinaryOperator.MUL,
-                    out_type,
-                    stream=df.stream,
-                ),
-                dtype=self.dtype,
-            )
         elif self.name == "reinterpret":
             column = self.children[0].evaluate(df, context=context)
             return column.astype(self.dtype, stream=df.stream)
@@ -830,6 +887,56 @@ class UnaryFunction(Expr):
                 ).columns()[0],
                 dtype=self.dtype,
             )
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
+            if self.name in ("log1p", "cot"):
+                column_ref = plc.expressions.ColumnReference(0)
+                one = plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, self.dtype.plc_type, stream=df.stream)
+                )
+                if self.name == "log1p":
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.LOG,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.ADD, column_ref, one
+                        ),
+                    )
+                else:
+                    # cot
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.DIV,
+                        one,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.TAN, column_ref
+                        ),
+                    )
+                return Column(
+                    plc.transform.compute_column(
+                        plc.Table([column.obj]), expression, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            else:
+                if self.name == "degrees":
+                    factor = 180.0 / math.pi
+                else:
+                    # radians
+                    factor = math.pi / 180.0
+                out_type = self.dtype.plc_type
+                return Column(
+                    plc.binaryop.binary_operation(
+                        column.obj,
+                        plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                        plc.binaryop.BinaryOperator.MUL,
+                        out_type,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
