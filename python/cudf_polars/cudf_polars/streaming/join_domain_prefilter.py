@@ -118,7 +118,7 @@ class _RewriteState(TypedDict):
 
 def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
     """
-    Derive row, selectivity, and column-domain facts for an IR DAG
+    Derive row, selectivity, and column-domain facts for an IR DAG.
 
     Parameters
     ----------
