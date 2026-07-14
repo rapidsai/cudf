@@ -81,7 +81,22 @@ class GenState(TypedDict):
 
 
 def ir_context_for_node(rec: SubNetGenerator, ir: IR) -> IRExecutionContext:
-    """Return ``ir_context`` with the physical Quent operator bound when tracing."""
+    """
+    Return ``ir_context`` with the physical Quent operator bound when tracing.
+
+    Parameters
+    ----------
+    rec
+        The recursive SubNetGenerator callable.
+    ir
+        The IR node to return the execution context for.
+
+    Returns
+    -------
+    ir_context
+        A clone of rec.state["ir_context"] with ``quent_ir_execution_context``
+        bound to the physical Quent operator for the given IR node.
+    """
     import cudf_polars.quent._context
 
     ir_context = rec.state["ir_context"]
