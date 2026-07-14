@@ -157,8 +157,24 @@ struct rle_run {
 };
 
 // Chunked-expand path: number of run headers parsed per chunk.
-// Chosen to fit preprocess_levels_kernel SMEM budget on V100 (adds 4100 B).
+//
+// SMEM cost is (2 * kGenRuns + 1) * 4 bytes. Increasing kGenRuns reduces the
+// number of outer-loop iterations in decode_next_chunked (each with a serial
+// header-parse phase and a __syncthreads()), but competes with occupancy in
+// preprocess_levels_kernel.
+//
+// Tuning (nvbench PARQUET_READER_NVBENCH parquet_read_decode -a
+// data_type=[LIST,STRUCT,STRING]):
+//   V100 (sm_70): 512 chosen to fit preprocess_levels_kernel SMEM budget.
+//   A100 (sm_80): 1024 is optimal (80-95% faster than 512 on chunked path).
+//                 2048 saturates or regresses ~10% on LIST (occupancy).
+//   H100 (sm_90): TODO, expected ~1024 based on saturation of the A100 curve.
+//   Blackwell:    TODO, inherits sm_80+ tier until measured.
+#if __CUDA_ARCH__ >= 800
+static constexpr int kGenRuns = 1024;
+#else
 static constexpr int kGenRuns = 512;
+#endif
 
 // a stream of rle_runs
 template <typename level_t,
