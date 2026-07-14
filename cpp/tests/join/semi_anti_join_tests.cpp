@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2021-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -22,6 +22,7 @@
 #include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/statistics_resource_adaptor.hpp>
 #include <rmm/resource_ref.hpp>
 
 #include <thrust/iterator/transform_iterator.h>
@@ -505,6 +506,37 @@ TEST_F(SemiAntiJoinTest, MarkJoinPrefilterLoadFactorOverload)
   auto result       = cudf::gather(left_selected, indices_col);
 
   column_wrapper<int32_t> expected_column{1, 1, 3};
+  auto expected = cudf::table_view{{expected_column}};
+
+  auto result_sort_order   = cudf::sorted_order(result->view());
+  auto sorted_result       = cudf::gather(result->view(), *result_sort_order);
+  auto expected_sort_order = cudf::sorted_order(expected);
+  auto sorted_expected     = cudf::gather(expected, *expected_sort_order);
+
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*sorted_expected, *sorted_result);
+}
+
+TEST_F(SemiAntiJoinTest, FilteredJoinMemoryResource)
+{
+  column_wrapper<int32_t> left_col0{0, 1, 2};
+  column_wrapper<int32_t> right_col0{0, 1, 3};
+
+  auto left  = cudf::table_view{{left_col0}};
+  auto right = cudf::table_view{{right_col0}};
+
+  auto mr = rmm::mr::statistics_resource_adaptor(cudf::get_current_device_resource_ref());
+
+  cudf::filtered_join obj(right, cudf::null_equality::EQUAL, cudf::get_default_stream(), mr);
+
+  EXPECT_GT(mr.get_bytes_counter().peak, 0);
+
+  auto const join_indices =
+    obj.semi_join(left, cudf::get_default_stream(), cudf::get_current_device_resource_ref());
+  auto indices_span = cudf::device_span<cudf::size_type const>{*join_indices};
+  auto indices_col  = cudf::column_view{indices_span};
+  auto result       = cudf::gather(left, indices_col);
+
+  column_wrapper<int32_t> expected_column{0, 1};
   auto expected = cudf::table_view{{expected_column}};
 
   auto result_sort_order   = cudf::sorted_order(result->view());
