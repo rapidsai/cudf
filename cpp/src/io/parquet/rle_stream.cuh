@@ -539,6 +539,12 @@ struct rle_stream {
           //   bit 0 = 1  -> literal (bit-packed) run of `groups*8` values
           //   bit 0 = 0  -> RLE run of `level_run >> 1` copies of one value
           // The high bit of `meta` distinguishes the two at expand time.
+          //
+          // Assumption: (cur - s_start) fits in 31 bits, i.e. the encoded
+          // level stream for a single Parquet page is < 2 GiB. This is
+          // guaranteed by the Parquet format in practice (page payloads are
+          // orders of magnitude smaller than 2 GiB) and is independent of
+          // kGenRuns.
           if (level_run & 1u) {
             int const groups = level_run >> 1;
             cnt              = groups * 8;
