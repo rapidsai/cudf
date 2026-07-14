@@ -830,4 +830,4 @@ def test_dask_sink_to_directory_false_raises() -> None:
 
 def test_in_memory_executor_drop_unserializable() -> None:
     executor = InMemoryExecutor()
-    assert isinstance(executor.drop_unserializable(), InMemoryExecutor)
+    assert executor.drop_unserializable() is executor
