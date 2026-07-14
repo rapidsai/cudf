@@ -184,7 +184,13 @@ def log_do_evaluate(
 
             # And the kwonly 'context' argument has the IR execution context.
             ir_execution_context: IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
-            quent_task = Task.from_ir(cls, ir_execution_context)
+            if ir_execution_context.quent_ir_execution_context is not None:
+                quent_task = Task.from_ir(
+                    cls, ir_execution_context.quent_ir_execution_context
+                )
+            else:
+                quent_task = None
+
             if (
                 quent_task is not None
                 and ir_execution_context.quent_ir_execution_context is not None

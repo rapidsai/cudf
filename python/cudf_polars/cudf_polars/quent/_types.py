@@ -17,7 +17,8 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypeAlias
 from cudf_polars import __version__
 
 if TYPE_CHECKING:
-    from cudf_polars.dsl.ir import IR, IRExecutionContext
+    from cudf_polars.dsl.ir import IR
+    from cudf_polars.quent._context import QuentIRExecutionContext
 
 QUENT_SCOPE = "QUENT"
 
@@ -810,17 +811,17 @@ class Task:
 
     @classmethod
     def from_ir(
-        cls, ir_type: type[IR], ir_execution_context: IRExecutionContext
+        cls, ir_type: type[IR], quent_ir_execution_context: QuentIRExecutionContext
     ) -> Self | None:
         """
-        Maybe build an operator-scoped Quent Task from an IR execution context.
+        Build an operator-scoped Quent Task from an IR execution context.
 
         Parameters
         ----------
         ir_type
             The IR type of the operator.
-        ir_execution_context
-            The IR execution context.
+        quent_ir_execution_context
+            The Quent IR execution context, which is used to get the operator ID.
 
         Returns
         -------
@@ -828,10 +829,6 @@ class Task:
             The operator-scoped Quent Task, or ``None`` if the IR execution context
             is not bound to a Quent operator.
         """
-        quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
-        if quent_ir_execution_context is None:
-            return None
-
         token = uuid.uuid4()
         return cls(
             instance_name=(
