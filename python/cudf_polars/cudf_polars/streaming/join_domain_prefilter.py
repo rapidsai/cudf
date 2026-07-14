@@ -1,6 +1,69 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-"""Generic derived key-domain prefilters for streaming joins."""
+"""
+Insert derived key-domain prefilters for streaming joins.
+
+For a supported inner equijoin, this optimization tries to use the join-key
+values produced by one input to reduce the other input before the original
+join. In relational notation, a simple rewrite is::
+
+    left join[left.key = right.key] right
+
+        ->
+
+    (left semijoin[left.key = right.key] project(right.key))
+       join[left.key = right.key] right
+
+In this example, the right hand table is selected to pre-filter the left
+table before performing the inner join. The inserted semi-join is therefore
+an exact filter: it only removes target rows that could not match the
+domain input.
+
+The implementation uses the following terms:
+
+``column lineage``
+    A chain from a named output column towards columns in its input subplan.
+    Each step guarantees that every value in the output column also appears in
+    the referenced child column, although row order and multiplicity are not
+    preserved and the child may contain additional values. Candidate traversal
+    does not cross an operator with which a semi-join cannot safely commute.
+``child edge``
+    One particular parent-to-child position in the IR DAG. The same child node
+    may occur on more than one edge, so a lineage records child indices and a
+    rewrite follows the resulting edge path to change only the chosen
+    occurrence.
+``producer``
+    A node on a column lineage, together with the column name at that node and
+    its edge path from the join input. Producers are possible locations for
+    inserting a target semi-join or projecting a domain key.
+``target``
+    The join input to reduce. A semi-join is inserted at a producer in this
+    input's column lineage and replaces only the selected child-edge
+    occurrence.
+``domain``
+    The other join input, whose join-key values provide the semi-join domain.
+    The domain producer may be below projections, renames, or other operators
+    through which the semi-join can safely be pushed.
+``constraint domain``
+    Selective values of another join key from the target input, used to reduce
+    the domain before deriving the values that will filter the target.
+``simple candidate``
+    A rewrite that projects one domain join key and uses it to filter the
+    corresponding target key directly.
+``composite candidate``
+    For a multi-key join, a rewrite that first semi-joins the domain using the
+    constraint domain, then projects the reduced domain's key used to filter
+    the target.
+
+Plan rewrite has three stages. ``analyze_plan`` gathers row estimates,
+selective nodes, and column value-domain lineages. Candidate selection
+consumes those facts and returns a decision. ``apply_candidate`` then
+constructs the selected semi-join rewrite.
+
+Row estimates, selectivity propagation, thresholds, and candidate scores are
+only heuristics for deciding whether a safe rewrite is likely to improve
+execution. Poor estimates can choose an unprofitable rewrite.
+"""
 
 from __future__ import annotations
 
