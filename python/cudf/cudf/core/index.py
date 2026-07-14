@@ -85,7 +85,7 @@ if TYPE_CHECKING:
     from cudf.core.dataframe import DataFrame
     from cudf.core.multiindex import MultiIndex
     from cudf.core.series import Series
-    from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
+    from cudf.core.tools.datetimes import DateOffset
 
 
 def ensure_index(index_like: Any, nan_as_null=no_default) -> Index:
@@ -2040,9 +2040,7 @@ class Index(SingleColumnFrame):
             and isinstance(self, DatetimeIndex)
             and self._freq is not None
         ):
-            keywords.append(
-                f"freq={self._freq._maybe_as_fast_pandas_offset().freqstr!r}"
-            )
+            keywords.append(f"freq={self._freq.freqstr!r}")
         joined_keywords = ", ".join(keywords)
         lines.append(f"{prior_to_dtype} {joined_keywords})")
         return "\n".join(lines)
@@ -2823,28 +2821,38 @@ class RangeIndex(Index):
             self._validate_index_level(level)
         return self.copy()
 
-    @_performance_tracking
-    def __mul__(self, other):
-        # Multiplication by raw ints must return a RangeIndex to match pandas.
-        if (
-            isinstance(other, (np.ndarray, cupy.ndarray))
-            and other.ndim == 0
-            and other.dtype.kind in "iu"
-        ):
-            other = other.item()
-        if isinstance(other, (int, np.integer)):
-            return RangeIndex(
-                self.start * other, self.stop * other, self.step * other
-            )
-        return self._as_int_index().__mul__(other)
-
-    @_performance_tracking
-    def __rmul__(self, other):
-        # Multiplication is commutative.
-        return self.__mul__(other)
+    _UFUNC_DUNDER_OPS = {
+        "add": ("__add__", "__radd__"),
+        "subtract": ("__sub__", "__rsub__"),
+        "multiply": ("__mul__", "__rmul__"),
+        "floor_divide": ("__floordiv__", "__rfloordiv__"),
+    }
 
     @_performance_tracking
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        # numpy operands enter through the ufunc protocol rather than the
+        # (reflected) dunder, e.g. ``np.int32(2) * RangeIndex``. Like pandas
+        # (``maybe_dispatch_ufunc_to_dunder_op``), route the shift/rescale
+        # ufuncs on a raw int through the regular binop path first so they
+        # preserve a range where possible.
+        if (
+            method == "__call__"
+            and not kwargs
+            and len(inputs) == 2
+            and (ops := self._UFUNC_DUNDER_OPS.get(ufunc.__name__)) is not None
+        ):
+            reflected = inputs[0] is not self
+            other = inputs[0] if reflected else inputs[1]
+            if (
+                isinstance(other, (int, np.integer))
+                # np.timedelta64 subclasses np.integer but is not a raw int
+                and not isinstance(other, np.timedelta64)
+            ) or (
+                isinstance(other, np.ndarray)
+                and other.ndim == 0
+                and other.dtype.kind in "iu"
+            ):
+                return self._binaryop(other, ops[reflected])
         return self._as_int_index().__array_ufunc__(
             ufunc, method, *inputs, **kwargs
         )
@@ -3079,8 +3087,69 @@ class RangeIndex(Index):
         return self._as_int_index()._split(splits)
 
     def _binaryop(self, other, op: str):  # type: ignore[override]
-        # TODO: certain binops don't require materializing range index and
-        # could use some optimization.
+        # Ops with a raw int that shift or exactly rescale the range return
+        # a RangeIndex to match pandas (RangeIndex._arith_method and
+        # RangeIndex.__floordiv__); everything else materializes.
+        if (
+            isinstance(other, (np.ndarray, cupy.ndarray))
+            and other.ndim == 0
+            and other.dtype.kind in "iu"
+        ):
+            other = other.item()
+        if isinstance(other, (int, np.integer)) and not isinstance(
+            # np.timedelta64 subclasses np.integer but is not a raw int
+            other,
+            np.timedelta64,
+        ):
+            # The shift/rescale ops accept bools as 0/1, like pandas (whose
+            # fastpath only checks that the op *result* is integral, which a
+            # bool operand satisfies); ``__floordiv__`` matches pandas'
+            # ``is_integer`` check in rejecting them.
+            is_bool = isinstance(other, (bool, np.bool_))
+            other_int = int(other)
+            if op in {"__add__", "__radd__"}:
+                return RangeIndex(
+                    self.start + other_int,
+                    self.stop + other_int,
+                    self.step,
+                    name=self.name,
+                )
+            elif op == "__sub__":
+                return RangeIndex(
+                    self.start - other_int,
+                    self.stop - other_int,
+                    self.step,
+                    name=self.name,
+                )
+            elif op == "__rsub__":
+                return RangeIndex(
+                    other_int - self.start,
+                    other_int - self.stop,
+                    -self.step,
+                    name=self.name,
+                )
+            elif op in {"__mul__", "__rmul__"}:
+                if other_int != 0:
+                    return RangeIndex(
+                        self.start * other_int,
+                        self.stop * other_int,
+                        self.step * other_int,
+                        name=self.name,
+                    )
+                # Rescaling by 0 (or False) would collapse the step; match
+                # pandas by materializing to an int64 index of zeros.
+                other = other_int
+            elif op == "__floordiv__" and other_int != 0 and not is_bool:
+                if len(self) == 0 or (
+                    self.start % other_int == 0 and self.step % other_int == 0
+                ):
+                    start = self.start // other_int
+                    step = self.step // other_int
+                    stop = start + len(self) * step
+                    return RangeIndex(start, stop, step or 1, name=self.name)
+                elif len(self) == 1:
+                    start = self.start // other_int
+                    return RangeIndex(start, start + 1, 1, name=self.name)
         return self._as_int_index()._binaryop(other, op=op)
 
     def join(
@@ -3396,11 +3465,8 @@ class DatetimeIndex(Index):
         if yearfirst is not False:
             raise NotImplementedError("yearfirst == True is not yet supported")
 
-        if freq is None:
-            if isinstance(data, type(self)):
-                freq = data.freq
-            if was_pd_index and data.freq is not None:
-                freq = data.freq.freqstr
+        if freq is None and isinstance(data, (type(self), pd.DatetimeIndex)):
+            freq = data.freq
 
         name = _getdefault_name(data, name=name)
 
@@ -3414,7 +3480,18 @@ class DatetimeIndex(Index):
             if dtype.kind != "M":
                 raise TypeError("dtype must be a datetime type")
             elif not isinstance(data.dtype, pd.DatetimeTZDtype):
-                data = data.astype(dtype)
+                if (
+                    isinstance(dtype, pd.DatetimeTZDtype)
+                    and data.dtype.kind not in "iuf"
+                ):
+                    # pandas interprets timezone-naive strings/datetimes as
+                    # wall time in the target timezone (numeric data stays
+                    # interpreted as UTC epoch values)
+                    data = data.astype(
+                        np.dtype(f"datetime64[{dtype.unit}]")
+                    ).tz_localize(str(dtype.tz))
+                else:
+                    data = data.astype(dtype)
         elif data.dtype.kind != "M":
             if is_dtype_obj_string(data.dtype):
                 # Pandas's array_to_datetime falls back to [s] when no
@@ -3443,22 +3520,32 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def serialize(self):
         header, frames = super().serialize()
-        if self.freq is not None:
+        if self._freq is None:
+            header["freq"] = None
+        elif type(self._freq) is pd.DateOffset:
+            # generic offsets have no parseable freqstr; store the kwds
+            # plus n/normalize, which .kwds omits
             header["freq"] = {
-                "kwds": self.freq.kwds,
+                "kwds": self._freq.kwds,
+                "n": self._freq.n,
+                "normalize": self._freq.normalize,
             }
         else:
-            header["freq"] = None
+            header["freq"] = self._freq.freqstr
         return header, frames
 
     @classmethod
     @_performance_tracking
     def deserialize(cls, header, frames):
         obj = super().deserialize(header, frames)
-        if (header_payload := header.get("freq")) is not None:
-            freq = cudf.DateOffset(**header_payload["kwds"])
+        if isinstance(header_payload := header.get("freq"), dict):
+            freq = pd.DateOffset(
+                n=header_payload.get("n", 1),
+                normalize=header_payload.get("normalize", False),
+                **header_payload["kwds"],
+            )
         else:
-            freq = None
+            freq = header_payload
 
         obj._freq = _validate_freq(freq)
         return obj
@@ -3526,7 +3613,7 @@ class DatetimeIndex(Index):
     @_performance_tracking
     def copy(self, name=None, deep=False):
         idx_copy = super().copy(name=name, deep=deep)
-        idx_copy._freq = _validate_freq(self._freq)
+        idx_copy._freq = self._freq
         return idx_copy
 
     def as_unit(self, unit: str, round_ok: bool = True) -> Self:
@@ -3582,8 +3669,8 @@ class DatetimeIndex(Index):
         return self._column.astype(np.dtype(np.int64)).values
 
     @property
-    def inferred_freq(self) -> DateOffset | MonthEnd | YearEnd | None:
-        if self._freq:
+    def inferred_freq(self):
+        if self._freq is not None:
             return self._freq
 
         plc_col = self._column.plc_column
@@ -3639,7 +3726,12 @@ class DatetimeIndex(Index):
                 if (c := getattr(cmps, component)) != 0:
                     kwds[component] = c
 
-            return cudf.DateOffset(**kwds)
+            # not pd.DateOffset(**kwds): a generic pd.DateOffset never
+            # compares equal to the fast offsets pandas infers (e.g.
+            # pd.DateOffset(days=1) != pd.offsets.Day()) and its freqstr
+            # is not parseable, so single-unit offsets must be converted
+            # to their fast pandas equivalents
+            return cudf.DateOffset(**kwds)._maybe_as_fast_pandas_offset()
 
         # maximum unique count supported is months with 4 unique lengths
         # bail above that for now
@@ -3648,12 +3740,12 @@ class DatetimeIndex(Index):
             if all(x in self.YEARLY_PERIODS for x in uniques_host):
                 # Could be year end or could be an anchored year end
                 if self.is_year_end.all():
-                    return cudf.DateOffset._from_freqstr("YE-DEC")
+                    return pd.tseries.frequencies.to_offset("YE-DEC")
                 else:
                     raise NotImplementedError()
             elif all(x in self.MONTHLY_PERIODS for x in uniques_host):
                 if self.is_month_end.all():
-                    return cudf.DateOffset._from_freqstr("ME")
+                    return pd.tseries.frequencies.to_offset("ME")
             else:
                 raise NotImplementedError
         else:
@@ -3661,6 +3753,10 @@ class DatetimeIndex(Index):
         return None
 
     def _get_slice_frequency(self, slc=None):
+        if self._freq is None:
+            # match pandas: slicing an index without a cached freq
+            # produces a result with freq=None
+            return None
         if slc.step in (1, None):
             # no change in freq
             return self._freq
@@ -3669,12 +3765,7 @@ class DatetimeIndex(Index):
         else:
             if slc:
                 # fastpath: dont introspect
-                # Multiply the pandas offset directly (pd.Timedelta(offset)
-                # fails for calendar-based offsets like Day in pandas 3).
-                new_freq = slc.step * self._freq._maybe_as_fast_pandas_offset()
-                return cudf.DateOffset._from_freqstr(
-                    pd.tseries.frequencies.to_offset(new_freq).freqstr
-                )
+                return slc.step * self._freq
             else:
                 return self.inferred_freq
 
@@ -3684,37 +3775,32 @@ class DatetimeIndex(Index):
         unique_vals = cudf.Series._from_column(
             self.to_series().diff()._column.unique()
         )
-        if freq == cudf.DateOffset(months=1):
+        if freq == pd.DateOffset(months=1):
             possible = pd.Series(list(self.MONTHLY_PERIODS | {pd.NaT}))
             if unique_vals.isin(possible).sum() != len(unique_vals):
                 raise ValueError(
                     f"Inferred frequency from passed values does not "
-                    f"conform to passed frequency "
-                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                    f"conform to passed frequency {freq.freqstr}"
                 )
-        elif freq == cudf.DateOffset(years=1):
+        elif freq == pd.DateOffset(years=1):
             possible = pd.Series(list(self.YEARLY_PERIODS | {pd.NaT}))
             if unique_vals.isin(possible).sum() != len(unique_vals):
                 raise ValueError(
                     f"Inferred frequency from passed values does not "
-                    f"conform to passed frequency "
-                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                    f"conform to passed frequency {freq.freqstr}"
                 )
         else:
             if len(unique_vals) > 2 or (
-                len(unique_vals) == 2
-                and unique_vals[1].value
-                != freq._maybe_as_fast_pandas_offset().nanos
+                len(unique_vals) == 2 and unique_vals[1].value != freq.nanos
             ):
                 raise ValueError(
                     f"Inferred frequency from passed values does not "
-                    f"conform to passed frequency "
-                    f"{freq._maybe_as_fast_pandas_offset().freqstr}"
+                    f"conform to passed frequency {freq.freqstr}"
                 )
 
     @property
-    def freq(self) -> DateOffset | None:
-        return self._freq  # type: ignore[return-value]  # (validated setter stores DateOffset-compatible value)
+    def freq(self) -> pd.tseries.offsets.BaseOffset | None:
+        return self._freq
 
     @freq.setter
     def freq(self, value) -> None:
@@ -4032,8 +4118,14 @@ class DatetimeIndex(Index):
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
         """
-        # .microsecond is already a cached_property
-        return Index._from_column(self._column.microsecond, name=self.name)
+        # libcudf's MICROSECOND component excludes the millisecond
+        # component, but pandas folds milliseconds into microsecond. Match
+        # pandas (and Series.dt.microsecond) by adding millisecond * 1000.
+        micro = self._column.microsecond
+        extra = self._column.millisecond.astype(np.dtype(np.int32)) * np.int32(
+            1000
+        )
+        return Index._from_column(micro + extra, name=self.name)
 
     @property
     @_performance_tracking
@@ -4279,7 +4371,7 @@ class DatetimeIndex(Index):
             inferred = result.inferred_freq
             if inferred is None:
                 try:
-                    result.freq = self._freq._maybe_as_fast_pandas_offset()
+                    result.freq = self._freq
                 except ValueError:
                     pass
             else:
@@ -5783,11 +5875,28 @@ def _get_nearest_indexer(
     return indexer
 
 
-def _validate_freq(freq: Any) -> DateOffset | MonthEnd | YearEnd | None:
+def _validate_freq(freq: Any) -> pd.tseries.offsets.BaseOffset | None:
+    """Normalize ``freq`` to a canonical pandas offset.
+
+    Accepts freq strings, pandas offsets and cudf's own offset classes,
+    rejecting frequencies that cudf cannot represent.
+    """
+    from cudf.core.tools.datetimes import DateOffset, MonthEnd, YearEnd
+
+    if freq is None:
+        return None
+    if isinstance(freq, (DateOffset, MonthEnd, YearEnd)):
+        return freq._maybe_as_fast_pandas_offset()
     if isinstance(freq, str):
-        return cudf.DateOffset._from_freqstr(freq)
-    elif freq is None:
-        return freq
-    elif freq is not None and not isinstance(freq, cudf.DateOffset):
+        # cudf supports a subset of pandas frequency strings; parse with
+        # cudf's DateOffset (which raises for unsupported ones) and store
+        # the equivalent pandas offset.
+        return DateOffset._from_freqstr(freq)._maybe_as_fast_pandas_offset()
+    if not isinstance(freq, pd.tseries.offsets.BaseOffset):
         raise ValueError(f"Invalid frequency: {freq}")
-    return cast("cudf.DateOffset", freq)
+    # gate pandas offsets on the same supported subset
+    if type(freq) is pd.DateOffset:
+        DateOffset(**freq.kwds)
+    else:
+        DateOffset._from_freqstr(freq.freqstr)
+    return freq

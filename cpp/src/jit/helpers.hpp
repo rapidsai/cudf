@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 #pragma once
@@ -72,12 +72,13 @@ column_views_to_device(std::span<ColumnView const> views,
   return std::make_tuple(std::move(handles), std::move(device_array));
 }
 
-std::vector<std::string> input_type_names(
-  std::span<std::variant<column_view, scalar_column_view> const> views);
-
 kernel get_udf_kernel(std::string const& source_file,
                       std::string const& kernel_name,
                       std::string const& cuda_source);
+
+rtcx::blob get_udf_kernel_fragment(std::string const& source_file,
+                                   std::string const& kernel_name,
+                                   std::string const& udf_type);
 
 }  // namespace jit
 }  // namespace cudf

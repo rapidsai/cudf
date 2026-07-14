@@ -106,7 +106,6 @@ from cudf.utils import docutils, ioutils, queryutils
 from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
-    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
     dtype_from_pylibcudf_column,
     find_common_type,
@@ -159,6 +158,17 @@ def _shape_mismatch_error(x, y):
     )
 
 
+class _RowLabelKeyError(KeyError):
+    """Marks a ``KeyError`` raised while looking up a *row* label.
+
+    ``_DataFrameLocIndexer.__getitem__`` retries a failed lookup as
+    ``(arg, slice(None))`` to support pandas-like tuple indexing. That retry
+    must only fire when *column* gathering failed, not when the row label
+    itself is genuinely missing (otherwise a bare scalar row miss is silently
+    reinterpreted positionally instead of raising ``KeyError``).
+    """
+
+
 class _DataFrameIndexer(_FrameIndexer):
     def __setitem__(self, key, value):
         indexing_utils.check_dict_or_set_indexers(key)
@@ -180,8 +190,19 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             # tuple arguments to index into MultiIndex dataframes.
             try:
                 return self._getitem_tuple_arg(arg)
+            except _RowLabelKeyError as e:
+                # A genuine row-label miss must raise, not retry positionally.
+                raise KeyError(*e.args) from None
             except (TypeError, KeyError, IndexError, ValueError):
-                return self._getitem_tuple_arg((arg, slice(None)))
+                # Retry treating ``arg`` as a row-only key that selects across
+                # the MultiIndex levels (e.g. ``df.loc[("a", "b")]`` matching
+                # the first two index levels), with all columns selected via
+                # ``slice(None)``. ``per_level=True`` applies the per-level
+                # lookup and drops the scalar-selected index levels from the
+                # result.
+                return self._getitem_tuple_arg(
+                    (arg, slice(None)), per_level=True
+                )
         else:
             (
                 row_key,
@@ -200,7 +221,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             )
 
     @_performance_tracking
-    def _getitem_tuple_arg(self, arg):
+    def _getitem_tuple_arg(self, arg, per_level=False):
         # Step 1: Gather columns
         if isinstance(arg, tuple):
             columns_df = self._frame._get_columns_by_label(arg[1])
@@ -256,14 +277,52 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         # downcast the result to a Series.
                         return result[arg[1]]
                     return result
-                result = columns_df.index._get_row_major(columns_df, row_arg)
-                if (
-                    len(result) == 1
-                    and isinstance(arg, tuple)
-                    and len(arg) > 1
-                    and is_scalar(arg[1])
-                ):
-                    return result._columns[0].element_indexing(0)
+                try:
+                    result = columns_df.index._get_row_major(
+                        columns_df, row_arg, per_level=per_level
+                    )
+                except KeyError as e:
+                    # Tag a row-label miss so __getitem__ raises instead of
+                    # retrying it as a positional/column lookup.
+                    raise _RowLabelKeyError(*e.args) from None
+                # A column key that selects a single complete column (a scalar
+                # label for single-level columns, or a full-length tuple for
+                # MultiIndex columns) yields a Series, collapsing to a scalar
+                # only when the row key is itself a full scalar label.
+                col_key = (
+                    arg[1]
+                    if (isinstance(arg, tuple) and len(arg) > 1)
+                    else None
+                )
+                if col_key is not None:
+                    col_nlevels = self._frame._data.nlevels
+                    col_is_single_label = (
+                        is_scalar(col_key)
+                        if col_nlevels == 1
+                        # A full-length all-scalar tuple is one complete
+                        # column label; a tuple containing a slice/list is a
+                        # column *slicer* selecting multiple columns.
+                        else (
+                            isinstance(col_key, tuple)
+                            and len(col_key) == col_nlevels
+                            and all(is_scalar(x) for x in col_key)
+                        )
+                    )
+                else:
+                    col_is_single_label = False
+                if col_is_single_label:
+                    row_is_full_label = (
+                        columns_df.index.nlevels == 1 and is_scalar(row_arg)
+                    ) or (
+                        isinstance(row_arg, tuple)
+                        and len(row_arg) == columns_df.index.nlevels
+                        and all(is_scalar(x) for x in row_arg)
+                    )
+                    if isinstance(result, cudf.DataFrame):
+                        result = result[result._column_names[0]]
+                    if len(result) == 1 and row_is_full_label:
+                        return result._column.element_indexing(0)
+                    return result
                 return result
         else:
             raise RuntimeError(
@@ -790,6 +849,7 @@ def _array_to_column_accessor(
         multiindex=isinstance(columns_labels, pd.MultiIndex),
         label_dtype=columns_labels.dtype,
         level_names=tuple(columns_labels.names),
+        level_dtypes=_pd_index_level_dtypes(columns_labels),
     )
 
 
@@ -1208,6 +1268,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 rangeindex=isinstance(columns, pd.RangeIndex),
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(columns),
             )
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
@@ -1609,7 +1670,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if is_list_like(mask):
                 dtype = None
                 mask = pd.Series(mask, dtype=dtype)
-            if mask.dtype == "bool":
+            if getattr(mask.dtype, "kind", None) == "b":
                 return self._apply_boolean_mask(BooleanMask(mask, len(self)))
             else:
                 return self._get_columns_by_label(mask)
@@ -3232,6 +3293,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             rangeindex=other.rangeindex,
             level_names=other.level_names,
             label_dtype=other.label_dtype,
+            level_dtypes=other._level_dtypes,
             verify=False,
         )
 
@@ -3366,6 +3428,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if columns is None:
             df = self
         else:
+            if (
+                not isinstance(columns, (pd.Index, Index))
+                and len(columns) == 0
+            ):
+                # pandas' Index.reindex treats an empty non-Index target as
+                # ``columns[:0]``, preserving the columns' metadata.
+                columns = self._data.to_pandas_index[:0]
             columns = Index(columns)
             intersection = self._data.to_pandas_index.intersection(
                 columns.to_pandas()
@@ -7533,32 +7602,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         5  False  2.0
         """
 
-        # code modified from:
-        # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
+        # Mirrors pandas.DataFrame.select_dtypes:
+        # https://github.com/pandas-dev/pandas/blob/main/pandas/core/frame.py
 
         if not isinstance(include, (list, tuple)):
             include = (include,) if include is not None else ()
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        def cudf_dtype_from_pydata_dtype(dtype):
-            """Given a numpy or pandas dtype, converts it into the equivalent cuDF
-            Python dtype.
-            """
-            if _is_categorical_dtype(dtype):
-                return CategoricalDtype
-            elif is_decimal32_dtype(dtype):
-                return Decimal32Dtype
-            elif is_decimal64_dtype(dtype):
-                return Decimal64Dtype
-            elif is_decimal128_dtype(dtype):
-                return Decimal128Dtype
-            elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
-                return dtype.type
-            return pd.core.dtypes.common.infer_dtype_from_object(dtype)
-
-        # cudf_dtype_from_pydata_dtype can distinguish between
-        # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
 
         if not any(selection):
@@ -7566,10 +7617,42 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "at least one of include or exclude must be nonempty"
             )
 
-        include, exclude = map(
-            lambda x: frozenset(map(cudf_dtype_from_pydata_dtype, x)),
-            selection,
+        def convert_dtype_entry(entry):
+            """Convert an include/exclude entry to the generic type(s) used
+            for matching, like pandas' ``check_int_infer_dtype``.
+            """
+            if _is_categorical_dtype(entry):
+                return (pd.core.dtypes.dtypes.CategoricalDtypeType,)
+            elif is_decimal32_dtype(entry):
+                return (Decimal32Dtype,)
+            elif is_decimal64_dtype(entry):
+                return (Decimal64Dtype,)
+            elif is_decimal128_dtype(entry):
+                return (Decimal128Dtype,)
+            elif (isinstance(entry, str) and entry == "int") or entry is int:
+                # Numpy maps int to different types (int32, int64) on Windows
+                # and Linux
+                return (np.int32, np.int64)
+            elif (
+                isinstance(entry, str) and entry == "float"
+            ) or entry is float:
+                # np.dtype("float") coerces to np.float64 from Numpy 1.20
+                return (np.float64, np.float32)
+            return (pd.core.dtypes.common.infer_dtype_from_object(entry),)
+
+        include, exclude = (
+            frozenset(
+                itertools.chain.from_iterable(map(convert_dtype_entry, x))
+            )
+            for x in selection
         )
+
+        for dtypes_set in (include, exclude):
+            if dtypes_set & {np.dtype("S").type, np.dtype("<U").type}:
+                raise TypeError(
+                    "numpy string dtypes are not allowed, use 'str' or "
+                    "'object' instead"
+                )
 
         # can't both include AND exclude!
         if not include.isdisjoint(exclude):
@@ -7577,47 +7660,62 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 f"include and exclude overlap on {(include & exclude)}"
             )
 
-        # include all subtypes
-        include_subtypes = set()
-        for _, dtype in self._dtypes:
-            for i_dtype in include:
-                # category handling
-                if i_dtype == CategoricalDtype:
-                    # Matches cudf & pandas dtype objects
-                    include_subtypes.add(i_dtype)
-                elif inspect.isclass(dtype.type):
-                    if issubclass(dtype.type, i_dtype):
-                        include_subtypes.add(dtype.type)
+        def dtype_predicate(dtype, dtypes_set):
+            if _is_categorical_dtype(dtype):
+                # cudf's CategoricalDtype.type is the categories' scalar
+                # type, so it must not participate in the generic matching
+                return pd.core.dtypes.dtypes.CategoricalDtypeType in dtypes_set
+            if isinstance(
+                dtype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)
+            ):
+                return type(dtype) in dtypes_set
+            if isinstance(dtype, pd.ArrowDtype):
+                dtype = dtype.numpy_dtype
+            classes = tuple(t for t in dtypes_set if inspect.isclass(t))
+            return (
+                (
+                    inspect.isclass(dtype.type)
+                    and issubclass(dtype.type, classes)
+                )
+                # BooleanDtype._is_numeric == True but should be excluded
+                or (
+                    np.number in dtypes_set
+                    and getattr(dtype, "_is_numeric", False)
+                    and dtype.kind != "b"
+                )
+                # backwards compat for the default `str` dtype being
+                # selected by object
+                or (
+                    isinstance(dtype, pd.StringDtype)
+                    and dtype.na_value is np.nan
+                    and np.object_ in dtypes_set
+                )
+            )
 
-        # exclude all subtypes
-        exclude_subtypes = set()
-        for _, dtype in self._dtypes:
-            for e_dtype in exclude:
-                # category handling
-                if e_dtype == CategoricalDtype:
-                    # Matches cudf & pandas dtype objects
-                    exclude_subtypes.add(e_dtype)
-                elif inspect.isclass(dtype.type):
-                    if issubclass(dtype.type, e_dtype):
-                        exclude_subtypes.add(dtype.type)
-
-        include_all = {
-            cudf_dtype_from_pydata_dtype(dtype) for _, dtype in self._dtypes
-        }
-
-        if include:
-            inclusion = include_all & include_subtypes
-        elif exclude:
-            inclusion = include_all
-        else:
-            inclusion = set()
-        # remove all exclude types
-        inclusion = inclusion - exclude_subtypes
+        if (
+            np.object_ in include
+            and str not in include
+            and str not in exclude
+            and any(
+                isinstance(dtype, pd.StringDtype) and dtype.na_value is np.nan
+                for _, dtype in self._dtypes
+            )
+        ):
+            warnings.warn(
+                "For backward compatibility, 'str' dtypes are included by "
+                "select_dtypes when 'object' dtype is specified. "
+                "This behavior is deprecated and will be removed in a future "
+                "version. Explicitly pass 'str' to `include` to select them, "
+                "or to `exclude` to remove them and silence this warning.",
+                FutureWarning,
+                stacklevel=2,
+            )
 
         to_select = [
             label
             for label, dtype in self._dtypes
-            if cudf_dtype_from_pydata_dtype(dtype) in inclusion
+            if (not include or dtype_predicate(dtype, include))
+            and (not exclude or not dtype_predicate(dtype, exclude))
         ]
         result = self.loc[:, to_select]
         if not to_select and self._data.rangeindex:
@@ -7999,6 +8097,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
         new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
+        # Materialize the levels in order of first appearance (rather than the
+        # default sorted order) so that converting the result to pandas keeps
+        # the level order pandas' own ``stack`` produces. Otherwise a later
+        # ``unstack``/``to_pandas`` would lexicographically reorder the pivoted
+        # axis (e.g. ``"foo_10"`` before ``"foo_2"``).
+        new_index._maybe_materialize_codes_and_levels(sort=False)
         new_index.names = index_names
 
         # Compute the column indices that serves as the input for

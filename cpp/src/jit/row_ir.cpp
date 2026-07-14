@@ -551,20 +551,6 @@ bool node::is_null_aware() const
   return std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_null_aware(); });
 }
 
-bool node::is_fallible() const
-{
-  if (op_ == opcode::GET_INPUT) { return false; }
-
-  if (get_op_info(op_, error_policy_).is_fallible) { return true; }
-
-  CUDF_EXPECTS(!args_.empty(),
-               "Unexpectedly found an operator node with no arguments. All operator nodes should "
-               "have at least one argument.",
-               std::runtime_error);
-
-  return std::any_of(args_.begin(), args_.end(), [](auto& a) { return a->is_fallible(); });
-}
-
 bool node::is_always_valid() const
 {
   if (op_ == opcode::GET_INPUT) { return false; }
@@ -789,7 +775,7 @@ bool is_nullable(scalar_input const& in) { return in.scalar_column->view().nulla
 
 bool is_nullable(column_input const& in) { return in.column.nullable(); }
 
-std::tuple<std::string, null_aware, fallible, output_nullability> ast_converter::generate_code(
+std::tuple<std::string, null_aware, output_nullability> ast_converter::generate_code(
   target target_id, ast::expression const& expr, std::string_view function_name)
 {
   // add 1 auto-deduced output variable
@@ -804,9 +790,6 @@ std::tuple<std::string, null_aware, fallible, output_nullability> ast_converter:
 
   bool is_null_aware = std::any_of(
     output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_null_aware(); });
-
-  bool is_fallible = std::any_of(
-    output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_fallible(); });
 
   bool output_is_always_valid = std::all_of(
     output_irs_.cbegin(), output_irs_.cend(), [](auto& ir) { return ir->is_always_valid(); });
@@ -870,10 +853,7 @@ std::tuple<std::string, null_aware, fallible, output_nullability> ast_converter:
     ir->emit_code(instance_, target, sink);
   }
   sink.emit("return cudf::errc::SUCCESS;\n}");
-  return {sink.get_code(),
-          is_null_aware ? null_aware::YES : null_aware::NO,
-          is_fallible ? fallible::YES : fallible::NO,
-          null_policy};
+  return {sink.get_code(), is_null_aware ? null_aware::YES : null_aware::NO, null_policy};
 }
 
 std::variant<column_view, scalar_column_view> get_column_view(scalar_input const& in)
@@ -901,7 +881,7 @@ transform_args ast_converter::compute_column(target target_id,
   // TODO(lamarrr): consider deduplicating ast expression's input column references. See
   // TransformTest/1.DeeplyNestedArithmeticLogicalExpression for reference
 
-  auto [code, is_null_aware, is_fallible, output_nullability] =
+  auto [code, is_null_aware, output_nullability] =
     converter.generate_code(target_id, expr, function_name);
   std::vector<std::variant<column_view, scalar_column_view>> inputs;
   std::vector<std::unique_ptr<column>> scalar_columns;
@@ -937,7 +917,6 @@ transform_args ast_converter::compute_column(target target_id,
                                  .udf                  = std::move(code),
                                  .source_type          = cudf::udf_source_type::CUDA,
                                  .is_null_aware        = is_null_aware,
-                                 .is_fallible          = is_fallible,
                                  .user_data            = std::nullopt,
                                  .inputs               = inputs,
                                  .outputs{output},
