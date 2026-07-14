@@ -1120,16 +1120,13 @@ class _FastSlowAttribute:
                     raise e
 
             if _is_function_or_method(slow_attr):
-                # Do NOT bake ``instance.get_transfer_blocking()`` into the
-                # _MethodProxy: ``self._attr`` is cached on the descriptor and
-                # shared by every instance of the proxy class, so a blocking
-                # state captured from whichever instance happens to resolve
-                # the attribute first would leak into every later call on any
-                # instance. Per-instance blocking is still enforced at call
-                # time: ``_fsproxy_fast`` raises RuntimeError for a blocked
-                # SLOW instance during ``_fast_arg`` conversion, forcing the
-                # slow path for that instance only.
-                self._attr = _MethodProxy(fast_attr, slow_attr)
+                self._attr = _MethodProxy(
+                    fast_attr,
+                    slow_attr,
+                    _fsproxy_transfer_block=instance.get_transfer_blocking()
+                    if instance is not None
+                    else None,
+                )
             else:
                 # for anything else, use a fast-slow attribute:
                 self._attr, _ = _fast_slow_function_call(

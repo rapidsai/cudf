@@ -123,9 +123,9 @@ def test_ufunc_dataframe(request, numpy_ufunc, has_nulls, indexed):
                 np.less_equal,
                 np.not_equal,
             ):
-                # cuDF .to_pandas represents missing values in bool
-                # columns as np.nan (upcast to object), like pandas
-                expect = expect.astype(object).mask(mask, np.nan)
+                # cuDF .to_pandas for bools with nulls represents missing as None,
+                # should this be np.nan?
+                expect = expect.astype(object).mask(mask, None)
             else:
                 expect[mask] = np.nan
         assert_eq(got, expect, check_exact=False)

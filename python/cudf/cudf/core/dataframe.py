@@ -2583,6 +2583,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 )
             elif self._data._level_names == other._data._level_names:
                 ca_attributes["level_names"] = self._data.level_names
+                if self._data.multiindex == other._data.multiindex:
+                    # equal labels can still fail the ``equals`` check above
+                    # on level-dtype differences (e.g. Int8 vs int64); the
+                    # result keeps hierarchical columns like pandas
+                    ca_attributes["multiindex"] = self._data.multiindex
         elif isinstance(other, (dict, Mapping)):
             # Need to fail early on host mapping types because we ultimately
             # convert everything to a dict.
@@ -8249,12 +8254,6 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
         new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
-        # Materialize the levels in order of first appearance (rather than the
-        # default sorted order) so that converting the result to pandas keeps
-        # the level order pandas' own ``stack`` produces. Otherwise a later
-        # ``unstack``/``to_pandas`` would lexicographically reorder the pivoted
-        # axis (e.g. ``"foo_10"`` before ``"foo_2"``).
-        new_index._maybe_materialize_codes_and_levels(sort=False)
         new_index.names = index_names
         # Attach codes/levels eagerly, matching how pandas' stack builds the
         # result MultiIndex, so a later unstack can restore the original
