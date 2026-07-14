@@ -136,9 +136,24 @@ def test_product(engine: pl.GPUEngine, data, dtype):
 @pytest.mark.skip_on_streaming_engine(
     reason="global hist across partitions is not implemented"
 )
-@pytest.mark.parametrize("bin_count", [3, 10])
-def test_hist(engine: pl.GPUEngine, bin_count: int) -> None:
-    df = pl.LazyFrame({"a": [1, 2, 2, None, 3, 1]})
+@pytest.mark.parametrize("bin_count", [1, 3, 10])
+@pytest.mark.parametrize(
+    "data",
+    [
+        pl.Series([1, 2, 2, None, 3, 1], dtype=pl.Int64),
+        pl.Series([17, 12, 10, 5, 6, 0, 1, 0, 3, 16], dtype=pl.Int64),
+        pl.Series([-3, -1, -2, 0, 2], dtype=pl.Int32),
+        pl.Series([1.5, 2.0, 3.0, 2.5, 3.0], dtype=pl.Float64),
+        pl.Series([1.0, 2.0, float("nan"), 3.0, None], dtype=pl.Float64),
+        pl.Series([5, 5, 5], dtype=pl.Int64),
+        pl.Series([7], dtype=pl.Int64),
+        pl.Series([], dtype=pl.Int64),
+        pl.Series([None, None], dtype=pl.Int64),
+        pl.Series([float("nan"), float("nan")], dtype=pl.Float64),
+    ],
+)
+def test_hist(engine: pl.GPUEngine, bin_count: int, data: pl.Series) -> None:
+    df = pl.LazyFrame({"a": data})
     q = df.select(pl.col("a").hist(bin_count=bin_count))
     assert_gpu_result_equal(q, engine=engine)
 

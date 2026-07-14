@@ -172,21 +172,21 @@ class BooleanFunction(Expr):
         f64 = plc.DataType(plc.TypeId.FLOAT64)
         stream = df.stream
 
-        # A scalar operand is broadcast to the size of the other (columnar)
-        # operand, which may be zero for empty partitions.
-        target = right.size if left.is_scalar and not right.is_scalar else left.size
+        table_columns: list[plc.Column] = []
+        both_scalar = left.is_scalar and right.is_scalar
 
-        def prep(col: Column) -> plc.Column:
+        def prep(col: Column) -> plc.expressions.Expression:
             obj = col.obj
             if obj.type().id() != plc.TypeId.FLOAT64:
                 obj = plc.unary.cast(obj, f64, stream=stream)
-            if col.is_scalar and col.size != target:
-                obj = plc.Column.from_scalar(
-                    obj.to_scalar(stream=stream), target, stream=stream
-                )
-            return obj
+            if col.is_scalar and not both_scalar:
+                return plc.expressions.Literal(obj.to_scalar(stream=stream))
+            table_columns.append(obj)
+            return plc.expressions.ColumnReference(len(table_columns) - 1)
 
-        table = plc.Table([prep(left), prep(right)])
+        x = prep(left)
+        y = prep(right)
+        table = plc.Table(table_columns)
 
         def maximum(
             lhs: plc.expressions.Expression, rhs: plc.expressions.Expression
@@ -210,8 +210,6 @@ class BooleanFunction(Expr):
                 plc.expressions.Literal(plc.Scalar.from_py(2.0, f64, stream=stream)),
             )
 
-        x = plc.expressions.ColumnReference(0)
-        y = plc.expressions.ColumnReference(1)
         inf = plc.expressions.Literal(
             plc.Scalar.from_py(float("inf"), f64, stream=stream)
         )

@@ -315,6 +315,13 @@ def test_boolean_is_close_scalar(engine: pl.GPUEngine):
     assert_gpu_result_equal(q, engine=engine)
 
 
+@pytest.mark.parametrize("kwargs", [{}, {"abs_tol": 0.1}])
+def test_boolean_is_close_both_scalar(engine: pl.GPUEngine, kwargs):
+    ldf = pl.LazyFrame({"a": [1.0]})
+    q = ldf.select(pl.lit(1.0).is_close(pl.lit(1.05), **kwargs).alias("r"))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize("dtype", [pl.Float32, pl.Int64])
 def test_boolean_is_close_dtypes(engine: pl.GPUEngine, dtype):
     ldf = pl.LazyFrame(
