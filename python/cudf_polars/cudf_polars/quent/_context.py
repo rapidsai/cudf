@@ -71,12 +71,12 @@ class ProcessorRegistry:
     ) -> Processor:
         """Get (or declare a new) Quent Processor for a CPU thread."""
         with self._lock:
+            if thread_ident in self._processors:
+                return self._processors[thread_ident]
             if self._closed:
                 raise RuntimeError(
                     "Cannot declare processors after registry has been closed"
                 )
-            if thread_ident in self._processors:
-                return self._processors[thread_ident]
 
             processor = Processor(pool_id=pool_id)
             self._processors[thread_ident] = processor
