@@ -67,6 +67,35 @@ if TYPE_CHECKING:
 T = TypeVar("T")
 
 
+def reset_statistics_from_options(
+    statistics: Statistics, options: Options
+) -> Statistics:
+    """
+    Reset the enabled state of a statistics object from options.
+
+    Parameters
+    ----------
+    statistics
+        Statistics to reset.
+    options
+        Options providing new enabled setting.
+
+    Returns
+    -------
+    Statistics
+        Reset statistics object.
+
+    Notes
+    -----
+    Does not clear the statistics.
+    """
+    if Statistics.from_options(options).enabled:
+        statistics.enable()
+    else:
+        statistics.disable()
+    return statistics
+
+
 def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
     """
     Resolve ``rapidsmpf_options`` and apply cross-frontend defaults.
