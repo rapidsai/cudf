@@ -17,22 +17,39 @@ __device__ int compute_request_line_sizes(int32_t* method_size,
                                           int32_t* version_size,
                                           cudf::string_view input)
 {
-  auto find_character = [&](char needle, int32_t begin) {
-    for (auto index = begin; index < input.size_bytes(); ++index) {
-      if (input.data()[index] == needle) { return index; }
+  // Initialize output sizes to zero in case of early return.
+  *method_size  = 0;
+  *path_size    = 0;
+  *version_size = 0;
+
+  auto n = input.size_bytes();
+
+  auto find_character = [&](int32_t begin, char needle) {
+    for (auto i = begin; i < n; ++i) {
+      if (input.data()[i] == needle) { return i; }
     }
-    return input.size_bytes();
+    return n;
   };
 
-  auto method_end  = find_character(' ', 0);
-  auto target_end  = find_character(' ', method_end + 1);
-  auto query_begin = find_character('?', method_end + 1);
-  // Strip the query string so the path matches the first regex capture workload.
+  auto method_end = find_character(0, ' ');
+  if (method_end == n) { return 0; }
+
+  auto target_end = find_character(method_end + 1, ' ');
+  if (target_end == n || n - target_end < 6) { return 0; }
+  if (input.data()[target_end + 1] != 'H' || input.data()[target_end + 2] != 'T' ||
+      input.data()[target_end + 3] != 'T' || input.data()[target_end + 4] != 'P' ||
+      input.data()[target_end + 5] != '/') {
+    return 0;
+  }
+
+  auto query_begin = find_character(method_end + 1, '?');
+
+  // The path ends at the query or the target, whichever comes first.
   auto path_end = query_begin < target_end ? query_begin : target_end;
 
   *method_size  = method_end;
   *path_size    = path_end - method_end - 1;
-  *version_size = input.size_bytes() - target_end - 6;
+  *version_size = n - target_end - 6;
 
   // return 0 to indicate success
   return 0;
@@ -45,11 +62,13 @@ __device__ int write_request_line(cuda::std::span<char>* method,
                                   cuda::std::span<char>* version,
                                   cudf::string_view input)
 {
-  auto find_character = [&](char needle, int32_t begin) {
-    for (auto index = begin; index < input.size_bytes(); ++index) {
-      if (input.data()[index] == needle) { return index; }
+  auto n = input.size_bytes();
+
+  auto find_character = [&](int32_t begin, char needle) {
+    for (auto i = begin; i < n; ++i) {
+      if (input.data()[i] == needle) { return i; }
     }
-    return input.size_bytes();
+    return n;
   };
 
   auto copy_field = [&](cuda::std::span<char> out, int32_t begin, int32_t end) {
@@ -58,14 +77,25 @@ __device__ int write_request_line(cuda::std::span<char>* method,
     }
   };
 
-  auto method_end  = find_character(' ', 0);
-  auto target_end  = find_character(' ', method_end + 1);
-  auto query_begin = find_character('?', method_end + 1);
-  auto path_end    = query_begin < target_end ? query_begin : target_end;
+  auto method_end = find_character(0, ' ');
+  if (method_end == n) { return 0; }
+
+  auto target_end = find_character(method_end + 1, ' ');
+  if (target_end == n || n - target_end < 6) { return 0; }
+  if (input.data()[target_end + 1] != 'H' || input.data()[target_end + 2] != 'T' ||
+      input.data()[target_end + 3] != 'T' || input.data()[target_end + 4] != 'P' ||
+      input.data()[target_end + 5] != '/') {
+    return 0;
+  }
+
+  auto query_begin = find_character(method_end + 1, '?');
+
+  // The path ends at the query or the target, whichever comes first.
+  auto path_end = query_begin < target_end ? query_begin : target_end;
 
   copy_field(*method, 0, method_end);
   copy_field(*path, method_end + 1, path_end);
-  copy_field(*version, target_end + 6, input.size_bytes());
+  copy_field(*version, target_end + 6, n);
 
   // return 0 to indicate success
   return 0;
