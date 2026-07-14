@@ -48,13 +48,7 @@ namespace {
 //
 // [1] https://github.com/apache/parquet-format/blob/master/VariantEncoding.md
 // ---------------------------------------------------------------------------
-enum class variant_basic_type : uint8_t {
-  primitive    = 0,
-  short_string = 1,
-  object       = 2,
-  array        = 3,
-};
-
+using cudf::io::parquet::experimental::variant_basic_type;
 using cudf::io::parquet::experimental::variant_primitive_type;
 
 // Compose a value-metadata header byte from a basic type and its 6-bit value_header.

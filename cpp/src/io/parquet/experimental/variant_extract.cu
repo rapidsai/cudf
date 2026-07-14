@@ -55,7 +55,7 @@ constexpr int variant_version_v1 = 1;
 constexpr size_type variant_header_bytes = 1;
 
 // Low 2 bits of a value's metadata byte: the basic type.
-enum class basic_type : uint8_t { primitive = 0, short_string = 1, object = 2, array = 3 };
+using basic_type = variant_basic_type;
 
 // For a primitive value, the value_header is the physical type id of the payload.
 using primitive_type = variant_primitive_type;
@@ -80,7 +80,7 @@ __device__ cuda::std::optional<size_type> narrow_cast(cuda::std::optional<uint64
   return static_cast<size_type>(value.value());
 }
 
-__device__ basic_type variant_basic_type(uint8_t value_metadata)
+__device__ basic_type decode_basic_type(uint8_t value_metadata)
 {
   return static_cast<basic_type>(value_metadata & 0x03);
 }
@@ -144,7 +144,7 @@ __device__ cuda::std::optional<uint64_t> variant_value_length(device_span<uint8_
 {
   if (enc.size() < 1) { return cuda::std::nullopt; }
   auto const value_metadata = enc[0];
-  auto const btype          = variant_basic_type(value_metadata);
+  auto const btype          = decode_basic_type(value_metadata);
   auto const value_header   = variant_value_header(value_metadata);
 
   if (btype == basic_type::primitive) {
@@ -300,7 +300,7 @@ __device__ device_span<uint8_t const> locate_object_field(device_span<uint8_t co
   auto const val_len = static_cast<size_type>(val.size());
   if (val_len < 1) { return {}; }
   auto const value_metadata = val[0];
-  if (variant_basic_type(value_metadata) != basic_type::object) { return {}; }
+  if (decode_basic_type(value_metadata) != basic_type::object) { return {}; }
 
   auto const [offset_size, id_size, num_elements_size] =
     decode_object_array_header(variant_value_header(value_metadata), true);
@@ -373,7 +373,7 @@ __device__ inline cuda::std::optional<T> decode_int(device_span<uint8_t const> e
                                       : cuda::std::is_same_v<T, int32_t> ? primitive_type::int32
                                                                          : primitive_type::int64;
   uint8_t const value_metadata      = enc[0];
-  if (variant_basic_type(value_metadata) != basic_type::primitive ||
+  if (decode_basic_type(value_metadata) != basic_type::primitive ||
       variant_value_header(value_metadata) != static_cast<uint8_t>(expected)) {
     return cuda::std::nullopt;
   }
@@ -403,7 +403,7 @@ __device__ cuda::std::optional<device_span<uint8_t const>> decode_string(
   auto const len = enc.size();
   if (len < 1) { return cuda::std::nullopt; }
   uint8_t const value_metadata = enc[0];
-  auto const btype             = variant_basic_type(value_metadata);
+  auto const btype             = decode_basic_type(value_metadata);
   auto const value_header      = variant_value_header(value_metadata);
 
   if (btype == basic_type::short_string) {

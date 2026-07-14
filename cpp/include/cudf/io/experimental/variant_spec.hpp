@@ -9,6 +9,14 @@
 
 namespace cudf::io::parquet::experimental {
 
+// Low 2 bits of a VARIANT value's metadata byte: the basic type.
+enum class variant_basic_type : uint8_t {
+  primitive    = 0,
+  short_string = 1,
+  object       = 2,
+  array        = 3,
+};
+
 // Physical type id carried in the value_header of a primitive VARIANT value.
 enum class variant_primitive_type : uint8_t {
   null                 = 0,
