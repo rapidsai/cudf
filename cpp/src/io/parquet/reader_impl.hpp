@@ -423,19 +423,22 @@ class reader_impl {
     return _file_itm_data._output_chunk_count == 0;
   }
 
-  /**
-   * @brief Check if number of rows per source should be included in output metadata.
-   *
-   * @return True if AST filter is not present
-   */
-  [[nodiscard]] bool include_output_num_rows_per_source() const
-  {
-    return not _expr_conv.get_converted_expr().has_value();
-  }
-
   [[nodiscard]] cudf::detail::hostdevice_span<bool> subpass_page_mask_span() const
   {
     return _subpass_page_mask ? *_subpass_page_mask : cudf::detail::hostdevice_span<bool>{};
+  }
+
+  /**
+   * @brief Offset the column references in `_expr_conv` by the number of columns prepended to
+   * the output
+   *
+   * @return Offsetted expression converter
+   */
+  [[nodiscard]] inline offset_column_references compute_offset_filter() const
+  {
+    auto const num_prepended_cols = static_cast<size_type>(_options.prepend_source_index_column) +
+                                    static_cast<size_type>(_options.prepend_row_index_column);
+    return offset_column_references(_expr_conv.get_converted_expr(), num_prepended_cols);
   }
 
   /**

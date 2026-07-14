@@ -18,13 +18,16 @@
 #include <cstdint>
 #include <memory>
 
+/**
+ * @file
+ * @brief Class for computing approximate distinct counts using a HyperLogLog sketch
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_reduction
  * @{
- * @file
- * @brief Class for computing approximate distinct counts using a HyperLogLog sketch
  */
 
 // Forward declarations
