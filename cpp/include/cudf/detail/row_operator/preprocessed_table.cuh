@@ -79,16 +79,19 @@ struct preprocessed_table {
 
   preprocessed_table(table_device_view_owner&& table,
                      std::vector<rmm::device_buffer>&& null_buffers,
-                     std::vector<std::unique_ptr<column>>&& tmp_columns)
+                     std::vector<std::unique_ptr<column>>&& tmp_columns,
+                     size_type num_input_columns)
     : _t(std::move(table)),
       _null_buffers(std::move(null_buffers)),
-      _tmp_columns(std::move(tmp_columns))
+      _tmp_columns(std::move(tmp_columns)),
+      _num_input_columns(num_input_columns)
   {
   }
 
   table_device_view_owner _t;
   std::vector<rmm::device_buffer> _null_buffers;
   std::vector<std::unique_ptr<column>> _tmp_columns;
+  size_type _num_input_columns;
 };
 
 }  // namespace equality
