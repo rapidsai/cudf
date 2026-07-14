@@ -10,7 +10,6 @@ import pylibcudf as plc
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
-    Cache,
     DataFrameScan,
     Distinct,
     Filter,
@@ -23,7 +22,7 @@ from cudf_polars.dsl.ir import (
     Sort,
 )
 from cudf_polars.dsl.utils.column_domain import (
-    ColumnRef,
+    ColumnBinding,
     column_domain_bindings,
 )
 
@@ -61,7 +60,7 @@ def test_select_binds_aliases_and_omits_derived_columns() -> None:
     )
 
     assert column_domain_bindings(node) == {
-        "renamed": ColumnRef(child, "a"),
+        "renamed": ColumnBinding(0, "a"),
     }
 
 
@@ -78,8 +77,8 @@ def test_hstack_binds_passthrough_alias_and_override() -> None:
     )
 
     assert column_domain_bindings(node) == {
-        "b": ColumnRef(child, "b"),
-        "alias": ColumnRef(child, "b"),
+        "b": ColumnBinding(0, "b"),
+        "alias": ColumnBinding(0, "b"),
     }
 
 
@@ -95,7 +94,7 @@ def test_groupby_binds_only_direct_keys() -> None:
     )
 
     assert column_domain_bindings(node) == {
-        "key": ColumnRef(child, "a"),
+        "key": ColumnBinding(0, "a"),
     }
 
 
@@ -117,10 +116,10 @@ def test_inner_join_binds_left_right_and_suffixed_columns() -> None:
     )
 
     assert column_domain_bindings(node) == {
-        "key": ColumnRef(left, "key"),
-        "left_value": ColumnRef(left, "left_value"),
-        "key_right": ColumnRef(right, "key"),
-        "right_value": ColumnRef(right, "right_value"),
+        "key": ColumnBinding(0, "key"),
+        "left_value": ColumnBinding(0, "left_value"),
+        "key_right": ColumnBinding(1, "key"),
+        "right_value": ColumnBinding(1, "right_value"),
     }
 
 
@@ -137,9 +136,9 @@ def test_inner_join_omits_coalesced_right_key() -> None:
     )
 
     assert column_domain_bindings(node) == {
-        "key": ColumnRef(left, "key"),
-        "left_value": ColumnRef(left, "left_value"),
-        "right_value": ColumnRef(right, "right_value"),
+        "key": ColumnBinding(0, "key"),
+        "left_value": ColumnBinding(0, "left_value"),
+        "right_value": ColumnBinding(1, "right_value"),
     }
 
 
@@ -156,8 +155,8 @@ def test_semi_join_binds_only_left_columns() -> None:
     )
 
     assert column_domain_bindings(node) == {
-        "key": ColumnRef(left, "key"),
-        "value": ColumnRef(left, "value"),
+        "key": ColumnBinding(0, "key"),
+        "value": ColumnBinding(0, "value"),
     }
 
 
@@ -180,7 +179,6 @@ def test_passthrough_nodes_bind_same_named_columns() -> None:
     child = make_scan("a", "b")
     mask = expr.NamedExpr("mask", expr.Literal(BOOL, True))  # noqa: FBT003
     nodes = (
-        Cache(child.schema, 1, None, child),
         Filter(child.schema, mask, child),
         Projection({"b": I64}, child),
         Slice(child.schema, 0, 1, child),
@@ -205,5 +203,5 @@ def test_passthrough_nodes_bind_same_named_columns() -> None:
 
     for node in nodes:
         assert column_domain_bindings(node) == {
-            name: ColumnRef(child, name) for name in node.schema
+            name: ColumnBinding(0, name) for name in node.schema
         }

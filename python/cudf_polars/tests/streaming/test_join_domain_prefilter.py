@@ -30,6 +30,7 @@ from cudf_polars.streaming.join_domain_prefilter import (
     optimize_join_domain_prefilters,
     semijoin_pushdown_candidates,
 )
+from cudf_polars.streaming.parallel import optimize_with_stats, remove_cache_nodes
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
 from cudf_polars.utils.config import ConfigOptions, ParquetOptions
@@ -489,12 +490,16 @@ def test_composite_domain_columns_do_not_reconverge_after_join(
     assert isinstance(joined, Join)
     assert isinstance(joined.children[0], Cache)
     assert joined.children[0] is joined.children[1]
+    joined = remove_cache_nodes(joined)
+    assert isinstance(joined, Join)
+    assert joined.children[0] is joined.children[1]
 
     facts = analyze_plan(joined, StatsCollector())
     producer = _smallest_node_containing_all(joined, ("value", "value_right"), facts)
 
     assert tuple(semijoin_pushdown_candidates(facts, joined, "value")) == (
-        ColumnRef(joined, "value"),
+        (ColumnRef(joined, "value"), ()),
+        (ColumnRef(joined.children[0], "value"), (0,)),
     )
     assert producer is not None
     assert producer.node is joined
@@ -520,16 +525,13 @@ def test_plan_facts_share_lineage_suffixes_across_shared_dag() -> None:
     facts = analyze_plan(root, _stats(source=(source, 10)))
     left_lineage = facts.column_lineages[ColumnRef(left, "left_key")]
     right_lineage = facts.column_lineages[ColumnRef(right, "right_key")]
+    source_lineage = facts.column_lineages[ColumnRef(source, "raw_key")]
 
-    assert left_lineage.source is right_lineage.source
-    assert tuple(left_lineage) == (
-        ColumnRef(left, "left_key"),
-        ColumnRef(source, "raw_key"),
-    )
-    assert tuple(right_lineage) == (
-        ColumnRef(right, "right_key"),
-        ColumnRef(source, "raw_key"),
-    )
+    assert left_lineage.column == ColumnRef(left, "left_key")
+    assert right_lineage.column == ColumnRef(right, "right_key")
+    assert left_lineage.source is source_lineage
+    assert right_lineage.source is source_lineage
+    assert source_lineage.source is None
 
 
 def test_target_prefilter_does_not_move_below_slice() -> None:
@@ -540,12 +542,12 @@ def test_target_prefilter_does_not_move_below_slice() -> None:
 
     stats = _stats(target=(target, 1_000), domain=(domain, 5))
     facts = analyze_plan(root, stats)
-    assert tuple(facts.column_lineages[ColumnRef(sliced, "target_key")]) == (
-        ColumnRef(sliced, "target_key"),
-        ColumnRef(target, "target_key"),
-    )
+    lineage = facts.column_lineages[ColumnRef(sliced, "target_key")]
+    assert lineage.column == ColumnRef(sliced, "target_key")
+    assert lineage.source is facts.column_lineages[ColumnRef(target, "target_key")]
+    assert lineage.source.source is None
     assert tuple(semijoin_pushdown_candidates(facts, sliced, "target_key")) == (
-        ColumnRef(sliced, "target_key"),
+        (ColumnRef(sliced, "target_key"), ()),
     )
 
     optimized = optimize_join_domain_prefilters(
@@ -583,6 +585,63 @@ def test_target_replacement_does_not_rewrite_shared_domain_side() -> None:
     assert optimized.children[0].children[0] is shared
     assert optimized.children[1] is domain
     assert domain.children[0] is shared
+
+
+def test_target_prefilter_rewrites_only_selected_self_join_edge(
+    engine: SPMDEngine,
+) -> None:
+    source = pl.LazyFrame(
+        {
+            "key": [1, 1, 2, 2],
+            "value": [10, 20, 30, 40],
+        }
+    )
+    domain = (
+        pl.LazyFrame(
+            {
+                "domain_value": [10, 999],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("domain_value")
+    )
+    query = source.join(source, on="key", suffix="_right").join(
+        domain,
+        left_on="value",
+        right_on="domain_value",
+    )
+    translated = Translator(query._ldf.visit(), engine).translate_ir()
+
+    assert isinstance(translated, Join)
+    translated_self_join = translated.children[0]
+    assert isinstance(translated_self_join, Join)
+    shared_cache = translated_self_join.children[0]
+    assert isinstance(shared_cache, Cache)
+    assert translated_self_join.children[1] is shared_cache
+    source_ir = shared_cache.children[0]
+
+    optimized = optimize_with_stats(
+        translated,
+        ConfigOptions.from_polars_engine(engine),
+        StatsCollector(),
+    )
+
+    assert isinstance(optimized, Join)
+    rewritten_self_join = optimized.children[0]
+    assert isinstance(rewritten_self_join, Join)
+    filtered, unfiltered = rewritten_self_join.children
+    assert isinstance(filtered, Join)
+    assert filtered.options[0] == "Semi"
+    assert filtered.children[0] is source_ir
+    assert unfiltered is source_ir
+
+    expected = query.collect()
+    assert sorted(expected.select("value", "value_right").rows()) == [
+        (10, 10),
+        (10, 20),
+    ]
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_no_domain_prefilter_for_outer_join() -> None:

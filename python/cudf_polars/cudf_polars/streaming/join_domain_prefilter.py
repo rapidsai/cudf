@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
     IR,
-    Cache,
     ConditionalJoin,
     DataFrameScan,
     Distinct,
@@ -39,7 +38,6 @@ from cudf_polars.dsl.utils.column_domain import (
     ColumnRef,
     column_domain_bindings,
 )
-from cudf_polars.dsl.utils.replace import replace
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -56,6 +54,8 @@ class _Producer:
     node: IR
     columns: tuple[str, ...]
     rows: int
+    path: tuple[int, ...] = ()
+    """Child-edge path from the candidate root to ``node``."""
 
     @property
     def column(self) -> str:
@@ -162,9 +162,7 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
             rows = None if source_info is None else source_info.row_count
             if rows is None and isinstance(node, DataFrameScan):
                 rows = node.df.shape()[0]
-        elif isinstance(
-            node, (Select, Projection, HStack, Cache, Filter, Distinct, GroupBy)
-        ):
+        elif isinstance(node, (Select, Projection, HStack, Filter, Distinct, GroupBy)):
             rows = row_estimates[node.children[0]]
         elif isinstance(node, Join):
             rows = _estimate_join_rows(
@@ -191,20 +189,17 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
         bindings = column_domain_bindings(node)
         for name in node.schema:
             column = ColumnRef(node, name)
-            source = bindings.get(name)
-            if source is None:
+            binding = bindings.get(name)
+            if binding is None:
                 source_lineage = None
                 source_child_index = None
             else:
+                source_child_index = binding.child_index
+                source = ColumnRef(
+                    node.children[source_child_index],
+                    binding.name,
+                )
                 source_lineage = column_lineages[source]
-                source_children = tuple(
-                    index
-                    for index, child in enumerate(node.children)
-                    if child == source.node
-                )
-                source_child_index = (
-                    source_children[0] if len(source_children) == 1 else None
-                )
             column_lineages[column] = ColumnLineage(
                 column, source_lineage, source_child_index
             )
@@ -248,7 +243,7 @@ def blocks_pushdown(node: IR) -> bool:
 
 def semijoin_pushdown_candidates(
     facts: PlanFacts, root: IR, column: str
-) -> Iterator[ColumnRef]:
+) -> Iterator[tuple[ColumnRef, tuple[int, ...]]]:
     """
     Yield column domain lineage providing valid locations for semijoin pushdown.
 
@@ -264,21 +259,22 @@ def semijoin_pushdown_candidates(
     Returns
     -------
     Iterator
-        Of valid insertion points for a semijoin filter on the given column name.
+        Of valid insertion points and their child-edge paths from ``root``.
     """
     try:
         lineage = facts.column_lineages[ColumnRef(root, column)]
     except KeyError:
         return
+    path: tuple[int, ...] = ()
     while True:
-        yield lineage.column
-        if (
-            blocks_pushdown(lineage.column.node)
-            or lineage.source is None
-            or lineage.source_child_index is None
-        ):
+        yield lineage.column, path
+        source = lineage.source
+        source_child_index = lineage.source_child_index
+        if blocks_pushdown(lineage.column.node) or source is None:
             return
-        lineage = lineage.source
+        assert source_child_index is not None
+        path = (*path, source_child_index)
+        lineage = source
 
 
 def optimize_join_domain_prefilters(
@@ -360,13 +356,44 @@ def apply_candidate(ir: Join, candidate: Candidate) -> IR:
         nulls_equal=ir.options[1],
         suffix=ir.options[3],
     )
-    # A DAG may share the target with the domain side, so only rewrite the
-    # side for which this candidate was selected.
     if candidate.target_side == "left":
-        (left,) = replace([left], {candidate.target.node: target_filter})
+        left = replace_at_path(left, target.path, target_filter)
     else:
-        (right,) = replace([right], {candidate.target.node: target_filter})
+        right = replace_at_path(right, target.path, target_filter)
     return ir.reconstruct((left, right))
+
+
+def replace_at_path(root: IR, path: Sequence[int], replacement: IR) -> IR:
+    """
+    Replace a specific child in a DAG starting at root.
+
+    Parameters
+    ----------
+    root
+        Root of DAG to carry out replacement.
+    path
+        Breadcrumb trail selecting which child at every level to recurse
+        into.
+    replacement
+        Replacement node to return when the path becomes empty.
+
+    Returns
+    -------
+    IR
+        New DAG with the selected child replaced with replacement.
+
+    Notes
+    -----
+    This specifically does not use replacement by equality so that we can
+    disambiguate between shared children in the DAG where we only want to
+    replace one.
+    """
+    if not path:
+        return replacement
+    index, *path = path
+    children = list(root.children)
+    children[index] = replace_at_path(children[index], path, replacement)
+    return root.reconstruct(children)
 
 
 def _select_candidate(
@@ -601,7 +628,7 @@ def _smallest_key_producer(
     exclude: IR | None = None,
 ) -> _Producer | None:
     candidates = []
-    for reference in semijoin_pushdown_candidates(facts, root, column):
+    for reference, path in semijoin_pushdown_candidates(facts, root, column):
         node, bound_column = reference.node, reference.name
         if node is exclude:
             continue
@@ -611,7 +638,7 @@ def _smallest_key_producer(
         if require_selective and node not in facts.selective_nodes:
             continue
         candidates.append(
-            (rows, len(node.schema), _Producer(node, (bound_column,), rows))
+            (rows, len(node.schema), _Producer(node, (bound_column,), rows, path))
         )
     if not candidates:
         return None
@@ -630,6 +657,7 @@ def _smallest_node_containing_all(
         lineages.append(lineage)
     if not lineages:
         return None
+    path: tuple[int, ...] = ()
     while True:
         node = lineages[0].column.node
         if any(lineage.column.node != node for lineage in lineages[1:]):
@@ -641,17 +669,20 @@ def _smallest_node_containing_all(
                 (
                     rows,
                     len(node.schema),
-                    _Producer(node, bound_columns, rows),
+                    _Producer(node, bound_columns, rows, path),
                 )
             )
         if blocks_pushdown(node):
             break
-        source_child_indices = {lineage.source_child_index for lineage in lineages}
-        if len(source_child_indices) != 1 or None in source_child_indices:
+        source_child_index = lineages[0].source_child_index
+        if source_child_index is None or any(
+            lineage.source_child_index != source_child_index for lineage in lineages[1:]
+        ):
             break
         sources = [lineage.source for lineage in lineages]
         if any(source is None for source in sources):
             break
+        path = (*path, source_child_index)
         lineages = [source for source in sources if source is not None]
     if not candidates:
         return None
@@ -661,12 +692,16 @@ def _smallest_node_containing_all(
 def _largest_key_source(root: IR, column: str, facts: PlanFacts) -> _Producer | None:
     source_candidates = []
     fallback_candidates = []
-    for reference in semijoin_pushdown_candidates(facts, root, column):
+    for reference, path in semijoin_pushdown_candidates(facts, root, column):
         node, bound_column = reference.node, reference.name
         rows = facts.row_estimates.get(node)
         if rows is None or rows <= 0:
             continue
-        item = (rows, len(node.schema), _Producer(node, (bound_column,), rows))
+        item = (
+            rows,
+            len(node.schema),
+            _Producer(node, (bound_column,), rows, path),
+        )
         if isinstance(node, (Scan, DataFrameScan)):
             source_candidates.append(item)
         else:
