@@ -40,17 +40,6 @@ void gpuinflate(device_span<device_span<uint8_t const> const> inputs,
                 rmm::cuda_stream_view stream);
 
 /**
- * @brief Interface for copying uncompressed byte blocks
- *
- * @param[in] inputs List of input buffers
- * @param[out] outputs List of output buffers
- * @param[in] stream CUDA stream to use
- */
-void gpu_copy_uncompressed_blocks(device_span<device_span<uint8_t const> const> inputs,
-                                  device_span<device_span<uint8_t> const> outputs,
-                                  rmm::cuda_stream_view stream);
-
-/**
  * @brief Interface for decompressing Snappy-compressed data
  *
  * Multiple, independent chunks of compressed data can be decompressed by using

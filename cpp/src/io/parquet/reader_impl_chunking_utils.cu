@@ -13,6 +13,7 @@
 #include <cudf/detail/algorithms/reduce.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/batched_memcpy.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/utilities/memory_resource.hpp>
@@ -622,7 +623,21 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
       copy_out, stream, cudf::get_current_device_resource_ref());
 
-    cudf::io::detail::gpu_copy_uncompressed_blocks(d_copy_in, d_copy_out, stream);
+    auto const src_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<uint8_t const*>(
+        [inputs = d_copy_in.data()] __device__(size_type i) { return inputs[i].data(); }));
+    auto const dst_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<uint8_t*>(
+        [outputs = d_copy_out.data()] __device__(size_type i) { return outputs[i].data(); }));
+    auto const size_iter = cudf::detail::make_counting_transform_iterator(
+      size_type{0},
+      cuda::proclaim_return_type<size_t>(
+        [inputs = d_copy_in.data(), outputs = d_copy_out.data()] __device__(size_type i) {
+          return inputs[i].size() < outputs[i].size() ? inputs[i].size() : outputs[i].size();
+        }));
+    cudf::detail::batched_memcpy_async(src_iter, dst_iter, size_iter, d_copy_in.size(), stream);
   }
 
   CUDF_EXPECTS(
