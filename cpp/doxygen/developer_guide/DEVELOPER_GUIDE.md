@@ -1161,7 +1161,7 @@ void isolated_helper_function(...);
 } // anonymous namespace
 ```
 
-[**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file)
+[**Anonymous namespaces should *never* be used in a header file.**](https://cmu-sei.github.io/secure-coding-standards/sei-cert-cpp-coding-standard/rules/declarations-and-initialization-dcl/dcl59-cpp/)
 
 # Deprecating and Removing Code
 

@@ -1926,8 +1926,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # https://doi.org/10.1016/j.ipl.2005.11.003, essentially,
             # do a segmented argsort sorting on weight-scaled
             # logarithmic deviates. See
-            # https://timvieira.github.io/blog/post/
-            # 2019/09/16/algorithms-for-sampling-without-replacement/
+            # https://timvieira.github.io/blog/algorithms-for-sampling-without-replacement/
             #
             # With replacement is trickier, one might be able to use
             # the alias method, otherwise we're back to bucketed

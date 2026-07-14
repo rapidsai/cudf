@@ -783,4 +783,4 @@ native Parquet reads.
 [ray-actors]: https://docs.ray.io/en/latest/ray-core/actors.html
 [rapidsmpf-communicator]: https://docs.rapids.ai/api/rapidsmpf/stable/api/communicator/
 [rapidsmpf-context]: https://docs.rapids.ai/api/rapidsmpf/stable/api/streaming/context/
-[polars-gpuengine]: https://docs.pola.rs/api/python/stable/reference/api/polars.GPUEngine.html
+[polars-gpuengine]: https://docs.pola.rs/api/python/stable/reference/lazyframe/gpu_engine.html
