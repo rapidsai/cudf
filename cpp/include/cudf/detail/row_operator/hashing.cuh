@@ -286,7 +286,13 @@ class row_hasher {
     Nullate nullate                                                  = {},
     cuda::std::invoke_result_t<hash_function<int32_t>, int32_t> seed = DEFAULT_HASH_SEED) const
   {
-    return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, d_t->_num_input_columns, seed);
+    using device_hasher_type = DeviceRowHasher<hash_function, Nullate>;
+    if constexpr (cuda::std::is_same_v<device_hasher_type,
+                                       device_row_hasher<hash_function, Nullate>>) {
+      return device_hasher_type(nullate, *d_t, d_t->_num_input_columns, seed);
+    } else {
+      return device_hasher_type(nullate, *d_t, seed);
+    }
   }
 
  private:

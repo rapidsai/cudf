@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2022-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -288,6 +288,28 @@ TYPED_TEST(NaNTableViewTest, TestEqualityComparatorTwoTableNaNCase)
 }
 
 struct RowOperatorTest : public cudf::test::BaseFixture {};
+
+template <template <typename> class hash_function, typename Nullate>
+struct legacy_device_row_hasher {
+  using result_type = cuda::std::invoke_result_t<hash_function<int32_t>, int32_t>;
+
+  CUDF_HOST_DEVICE legacy_device_row_hasher(Nullate,
+                                            cudf::table_device_view,
+                                            result_type = cudf::DEFAULT_HASH_SEED) noexcept
+  {
+  }
+};
+
+TEST_F(RowOperatorTest, TestCustomRowHasherConstructorCompatibility)
+{
+  auto const col = cudf::test::fixed_width_column_wrapper<int32_t>{{1, 2}};
+  auto const row_hasher =
+    cudf::detail::row::hash::row_hasher(cudf::table_view{{col}}, cudf::get_default_stream());
+
+  [[maybe_unused]] auto const custom_hasher =
+    row_hasher.device_hasher<cudf::hashing::detail::XXHash_64, legacy_device_row_hasher>(
+      cudf::nullate::NO{});
+}
 
 TEST_F(RowOperatorTest, TestTwoTableComparatorColumnCountCheck)
 {
