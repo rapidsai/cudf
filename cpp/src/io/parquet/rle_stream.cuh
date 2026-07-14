@@ -487,8 +487,12 @@ struct rle_stream {
     int const warp        = t >> 5;
     int constexpr kWarps  = num_rle_stream_decode_threads / cudf::detail::warp_size;
     int const value_width = (level_bits + 7) >> 3;
-    int out_pos_total     = cur_values;
-    int const out_end     = cur_values + output_count;
+    // Bit mask used to extract a single level from a bit-packed literal-run
+    // payload word. Invariant across the whole call; hoisted out of the
+    // phase-2 expand loop to keep it out of the hot register set.
+    uint32_t const level_mask = (level_bits == 32) ? 0xffffffffu : ((1u << level_bits) - 1);
+    int out_pos_total         = cur_values;
+    int const out_end         = cur_values + output_count;
 
     // ------------------------------------------------------------------
     // Outer loop: process the requested output range in chunks of up to
@@ -620,9 +624,8 @@ struct rle_stream {
           //   RLE    (bit 31 clear) -> single value read once, broadcast
           //     across [seg_lo, seg_hi) with warp_fill.
           if (meta & (1u << 31)) {
-            int const payload_off     = meta & 0x7fffffff;
-            uint8_t const* payload    = s_start + payload_off;
-            uint32_t const level_mask = (level_bits == 32) ? 0xffffffffu : ((1u << level_bits) - 1);
+            int const payload_off  = meta & 0x7fffffff;
+            uint8_t const* payload = s_start + payload_off;
             for (int p = seg_lo + lane; p < seg_hi; p += 32) {
               int const local       = (p - r_lo) + run_payload_off;
               int bitpos            = local * level_bits;
