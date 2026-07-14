@@ -85,7 +85,7 @@ std::unique_ptr<table> extract(strings_column_view const& input,
   auto const groups = d_prog->group_counts();
   CUDF_EXPECTS(groups > 0, "Group indicators not found in regex pattern");
 
-  auto indices   = rmm::device_uvector<string_index_pair>(input.size() * groups, stream);
+  auto indices   = rmm::device_uvector<string_index_pair>(input.size() * groups, stream, mr);
   auto d_indices = cudf::detail::device_2dspan<string_index_pair>(indices, groups);
 
   auto const d_strings = column_device_view::create(input.parent(), stream);

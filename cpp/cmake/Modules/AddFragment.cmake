@@ -17,6 +17,10 @@ macro(add_fragment)
   set(MULTI_VALUE_ARGS DEFINITIONS ARRAY_IDS ARRAY_VALUES INCLUDE_DIRS)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
+  if(NOT DEFINED ARG_LINK_CUDF_DEPS)
+    set(ARG_LINK_CUDF_DEPS ON)
+  endif()
+
   if(NOT ARG_FRAGMENT)
     message(FATAL_ERROR "add_fragment requires FRAGMENT argument")
   endif()
