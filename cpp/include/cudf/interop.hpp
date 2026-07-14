@@ -38,12 +38,16 @@ typedef int32_t ArrowDeviceType;  // NOLINT
 #define ARROW_DEVICE_CUDA 2  // NOLINT
 ///@endcond
 
+/**
+ * @file
+ * @brief APIs for converting between cudf tables/columns and DLPack tensors or Apache Arrow
+ * arrays.
+ */
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup interop_dlpack
  * @{
- * @file
- * @brief APIs for converting between cudf tables and DLPack tensors.
  */
 
 /**
@@ -98,8 +102,6 @@ DLManagedTensor* to_dlpack(
 /**
  * @addtogroup interop_arrow
  * @{
- * @file
- * @brief APIs for converting between cudf tables/columns and Apache Arrow arrays.
  */
 
 /**

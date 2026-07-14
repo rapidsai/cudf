@@ -29,6 +29,7 @@ from cudf.core.column.column import (
     pylibcudf_result_dtype_policy,
     same_dtype_policy,
 )
+from cudf.core.dtype.validators import is_dtype_obj_string
 from cudf.core.mixins import Scannable
 from cudf.errors import MixedTypeError
 from cudf.utils.dtypes import (
@@ -39,11 +40,14 @@ from cudf.utils.dtypes import (
     is_pandas_nullable_extension_dtype,
 )
 from cudf.utils.scalar import pa_scalar_to_plc_scalar
-from cudf.utils.temporal import infer_format
+from cudf.utils.temporal import (
+    infer_format,
+    raise_if_datetime_seconds_out_of_bounds,
+)
 from cudf.utils.utils import is_na_like
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping, Sequence
 
     import cupy as cp
 
@@ -204,11 +208,11 @@ class StringColumn(ColumnBase, Scannable):
         if min_count > 0 and col.valid_count < min_count:
             return pd.NA
 
-        return (
-            0
-            if len(col) == 0
-            else col.join_strings("", None).element_indexing(0)
-        )
+        if len(col) == 0:
+            # pandas sums an empty/all-null object series to the numeric
+            # identity 0; genuine string dtypes concatenate to "".
+            return 0 if self.dtype == np.dtype("object") else ""
+        return col.join_strings("", None).element_indexing(0)
 
     def any(
         self, skipna: bool = True, min_count: int = 0, **kwargs: Any
@@ -329,6 +333,33 @@ class StringColumn(ColumnBase, Scannable):
             if not valid.all():
                 raise ValueError(f"Column contains invalid data for {format=}")
 
+            if isinstance(dtype, np.dtype):
+                target_unit = np.datetime_data(dtype)[0]
+            elif isinstance(dtype, pd.DatetimeTZDtype):
+                target_unit = dtype.unit
+            else:
+                target_unit = dtype.pyarrow_dtype.unit
+            if target_unit != "s" and len(without_nat):
+                # libcudf parses directly into int64 values of the
+                # target unit and silently wraps on overflow
+                # (see https://github.com/rapidsai/cudf/issues/23247).
+                # Parse to seconds first (which cannot realistically
+                # overflow) and reject values whose whole-second part
+                # falls outside the target unit's range, like pandas
+                # does. This double parse can be removed once libcudf
+                # detects the overflow itself.
+                with without_nat.access(mode="read", scope="internal"):
+                    seconds = ColumnBase.create(
+                        plc.strings.convert.convert_datetime.to_timestamps(
+                            without_nat.plc_column,
+                            dtype_to_pylibcudf_type(np.dtype("datetime64[s]")),
+                            format,
+                        ),
+                        np.dtype("datetime64[s]"),
+                    )
+                lo, hi = seconds.minmax()
+                raise_if_datetime_seconds_out_of_bounds(lo, hi, target_unit)
+
             casting_func = plc.strings.convert.convert_datetime.to_timestamps
             add_back_nat = is_nat.any()
         elif dtype.kind == "m":
@@ -396,6 +427,18 @@ class StringColumn(ColumnBase, Scannable):
                 )
             return cast("Self", ColumnBase.create(self.plc_column, dtype))
         return self
+
+    def _process_values_for_isin(
+        self, values: Sequence | ColumnBase
+    ) -> tuple[ColumnBase, ColumnBase]:
+        lhs, rhs = super()._process_values_for_isin(values)
+        if lhs.dtype != rhs.dtype and is_dtype_obj_string(rhs.dtype):
+            # Strings of any dtype flavor (object, pd.StringDtype with
+            # python/pyarrow storage and NaN/NA na_value, pd.ArrowDtype
+            # string) hold comparable values; align rhs with lhs's dtype
+            # so ColumnBase.isin does not treat them as disjoint types.
+            rhs = rhs.astype(lhs.dtype)
+        return lhs, rhs
 
     @property
     def values(self) -> cp.ndarray:

@@ -18,6 +18,12 @@ def test_arg_unique(engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_unique_counts(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 2, None, 3]})
+    q = df.select(pl.col("a").unique_counts())
+    assert_gpu_result_equal(q, engine=engine)
+
+
 @pytest.mark.parametrize("maintain_order", [False, True], ids=["unstable", "stable"])
 @pytest.mark.parametrize("pre_sorted", [False, True], ids=["unsorted", "sorted"])
 def test_unique(engine: pl.GPUEngine, maintain_order, pre_sorted):
