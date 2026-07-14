@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
 import cupy as cp
@@ -438,3 +438,23 @@ def test_loc_wrong_type_slice_datetimeindex():
     )
     with pytest.raises(TypeError):
         ser_pd.loc[2:]
+
+
+def test_loc_datetime_key_out_of_bounds():
+    # A label beyond the index unit's range cannot be present: pandas
+    # raises KeyError for scalar lookups and OutOfBoundsDatetime for
+    # list keys.
+    index = np.array(["2000-01-01", "2000-01-02"], dtype="datetime64[ns]")
+    ser_pd = pd.Series([1, 2], index=pd.Index(index))
+    ser_cudf = cudf.Series([1, 2], index=cudf.Index(index))
+    key = np.datetime64("9999-01-01", "s")
+
+    with pytest.raises(KeyError):
+        ser_pd.loc[key]
+    with pytest.raises(KeyError):
+        ser_cudf.loc[key]
+
+    with pytest.raises(pd.errors.OutOfBoundsDatetime):
+        ser_pd.loc[[key]]
+    with pytest.raises(pd.errors.OutOfBoundsDatetime):
+        ser_cudf.loc[[key]]
