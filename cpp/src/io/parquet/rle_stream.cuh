@@ -234,8 +234,8 @@ struct rle_stream {
     // s_start is set below after any smem-staging rebase, so downstream code
     // that stores offsets relative to s_start (chunked-expand meta) works
     // uniformly whether cur points into global or shared memory.
-    cur        = _start;
-    end        = _end;
+    cur = _start;
+    end = _end;
 
     output = _output;
 
@@ -315,16 +315,6 @@ struct rle_stream {
       cur += run_bytes;
       output_pos += run.size;
       fill_index++;
-    }
-  }
-
-  __device__ __forceinline__ static void warp_fill(
-    level_t* __restrict__ out, int abs_lo, int abs_hi, level_t value, int lane)
-  {
-    if (abs_lo >= abs_hi) return;
-    // abs_lo and abs_hi are absolute indices; apply rolling_index at each write.
-    for (int q = abs_lo + lane; q < abs_hi; q += 32) {
-      out[rolling_index<max_output_values>(q)] = value;
     }
   }
 
@@ -443,10 +433,18 @@ struct rle_stream {
     return values_processed_shared;
   }
 
+  __device__ __forceinline__ static void warp_fill(
+    level_t* __restrict__ out, int abs_lo, int abs_hi, level_t value, int lane)
+  {
+    if (abs_lo >= abs_hi) return;
+    // abs_lo and abs_hi are absolute indices; apply rolling_index at each write.
+    for (int q = abs_lo + lane; q < abs_hi; q += 32) {
+      out[rolling_index<max_output_values>(q)] = value;
+    }
+  }
+
   __device__ inline int decode_next_chunked(int t, int count)
   {
-    static_assert(use_chunked_expand, "decode_next_chunked requires use_chunked_expand=true");
-
     int const output_count = min(count, total_values - cur_values);
 
     if (level_bits == 0) {
