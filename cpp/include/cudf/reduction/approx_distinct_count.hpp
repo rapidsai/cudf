@@ -121,16 +121,15 @@ class approx_distinct_count {
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the sketch storage, which must remain
-   *           valid for the lifetime of this object
+   * @param mr Device memory resource used to allocate the sketch storage
    */
-  approx_distinct_count(
-    table_view const& input,
-    std::int32_t precision            = 12,
-    null_policy null_handling         = null_policy::EXCLUDE,
-    nan_policy nan_handling           = nan_policy::NAN_IS_NULL,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  approx_distinct_count(table_view const& input,
+                        std::int32_t precision       = 12,
+                        null_policy null_handling    = null_policy::EXCLUDE,
+                        nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                        cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+                          cudf::get_current_device_resource_ref());
 
   /**
    * @brief Constructs an approximate distinct count sketch from a table with specified standard
@@ -149,18 +148,17 @@ class approx_distinct_count {
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls (default: `EXCLUDE`)
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL` (default: `NAN_IS_NULL`)
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the sketch storage, which must remain
-   *           valid for the lifetime of this object
+   * @param mr Device memory resource used to allocate the sketch storage
    *
    * @throws std::invalid_argument if standard_error value is not positive
    */
-  approx_distinct_count(
-    table_view const& input,
-    desired_standard_error error,
-    null_policy null_handling         = null_policy::EXCLUDE,
-    nan_policy nan_handling           = nan_policy::NAN_IS_NULL,
-    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
-    rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+  approx_distinct_count(table_view const& input,
+                        desired_standard_error error,
+                        null_policy null_handling    = null_policy::EXCLUDE,
+                        nan_policy nan_handling      = nan_policy::NAN_IS_NULL,
+                        rmm::cuda_stream_view stream = cudf::get_default_stream(),
+                        cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+                          cudf::get_current_device_resource_ref());
 
   /**
    * @brief Constructs a non-owning sketch that operates on user-allocated storage

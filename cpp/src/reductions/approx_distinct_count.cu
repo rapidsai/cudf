@@ -17,13 +17,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuda/functional>
 #include <cuda/iterator>
 #include <cuda/std/type_traits>
 
 #include <cmath>
+#include <utility>
 
 namespace cudf {
 namespace detail {
@@ -161,14 +161,16 @@ struct check_nans_predicate {
 }  // namespace
 
 template <template <typename> class Hasher>
-approx_distinct_count<Hasher>::approx_distinct_count(table_view const& input,
-                                                     std::int32_t precision,
-                                                     null_policy null_handling,
-                                                     nan_policy nan_handling,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::device_async_resource_ref mr)
-  : _storage{rmm::device_uvector<register_type>{
-      sketch_bytes(check_precision(precision)) / sizeof(register_type), stream, mr}},
+approx_distinct_count<Hasher>::approx_distinct_count(
+  table_view const& input,
+  std::int32_t precision,
+  null_policy null_handling,
+  nan_policy nan_handling,
+  rmm::cuda_stream_view stream,
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : _mr{std::move(mr)},
+    _storage{rmm::device_uvector<register_type>{
+      sketch_bytes(check_precision(precision)) / sizeof(register_type), stream, _mr}},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
@@ -186,18 +188,25 @@ approx_distinct_count<Hasher>::approx_distinct_count(
   null_policy null_handling,
   nan_policy nan_handling,
   rmm::cuda_stream_view stream,
-  rmm::device_async_resource_ref mr)
-  : approx_distinct_count{
-      input, precision_from_standard_error(error.value), null_handling, nan_handling, stream, mr}
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : approx_distinct_count{input,
+                          precision_from_standard_error(error.value),
+                          null_handling,
+                          nan_handling,
+                          stream,
+                          std::move(mr)}
 {
 }
 
 template <template <typename> class Hasher>
-approx_distinct_count<Hasher>::approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
-                                                     std::int32_t precision,
-                                                     null_policy null_handling,
-                                                     nan_policy nan_handling)
-  : _storage{check_sketch_span(sketch_span, check_precision(precision))},
+approx_distinct_count<Hasher>::approx_distinct_count(
+  cuda::std::span<cuda::std::byte> sketch_span,
+  std::int32_t precision,
+  null_policy null_handling,
+  nan_policy nan_handling,
+  cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : _mr{std::move(mr)},
+    _storage{check_sketch_span(sketch_span, check_precision(precision))},
     _precision{precision},
     _null_handling{null_handling},
     _nan_handling{nan_handling}
@@ -366,8 +375,9 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
-  : _impl(std::make_unique<impl_type>(input, precision, null_handling, nan_handling, stream, mr))
+                                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : _impl(std::make_unique<impl_type>(
+      input, precision, null_handling, nan_handling, stream, std::move(mr)))
 {
 }
 
@@ -376,8 +386,9 @@ approx_distinct_count::approx_distinct_count(table_view const& input,
                                              null_policy null_handling,
                                              nan_policy nan_handling,
                                              rmm::cuda_stream_view stream,
-                                             rmm::device_async_resource_ref mr)
-  : _impl(std::make_unique<impl_type>(input, error, null_handling, nan_handling, stream, mr))
+                                             cuda::mr::any_resource<cuda::mr::device_accessible> mr)
+  : _impl(
+      std::make_unique<impl_type>(input, error, null_handling, nan_handling, stream, std::move(mr)))
 {
 }
 

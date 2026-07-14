@@ -9,10 +9,10 @@
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/default_stream.hpp>
+#include <cudf/utilities/memory_resource.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
-#include <rmm/resource_ref.hpp>
 
 #include <cuco/hyperloglog_ref.cuh>
 #include <cuda/functional>
@@ -79,15 +79,14 @@ class approx_distinct_count {
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the sketch storage, which must remain
-   *           valid for the lifetime of this object
+   * @param mr Device memory resource used to allocate the sketch storage
    */
   approx_distinct_count(table_view const& input,
                         std::int32_t precision,
                         null_policy null_handling,
                         nan_policy nan_handling,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr);
+                        cuda::mr::any_resource<cuda::mr::device_accessible> mr);
 
   /**
    * @brief Constructs an owning approximate distinct count sketch from a table with standard
@@ -106,15 +105,14 @@ class approx_distinct_count {
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
    * @param stream CUDA stream used for device memory operations and kernel launches
-   * @param mr Device memory resource used to allocate the sketch storage, which must remain
-   *           valid for the lifetime of this object
+   * @param mr Device memory resource used to allocate the sketch storage
    */
   approx_distinct_count(table_view const& input,
                         cudf::approx_distinct_count::desired_standard_error error,
                         null_policy null_handling,
                         nan_policy nan_handling,
                         rmm::cuda_stream_view stream,
-                        rmm::device_async_resource_ref mr);
+                        cuda::mr::any_resource<cuda::mr::device_accessible> mr);
 
   /**
    * @brief Constructs a non-owning approximate distinct count sketch from user-allocated storage
@@ -130,11 +128,14 @@ class approx_distinct_count {
    * @param precision The precision parameter for the sketch (4-18)
    * @param null_handling `INCLUDE` or `EXCLUDE` rows with nulls
    * @param nan_handling `NAN_IS_VALID` or `NAN_IS_NULL`
+   * @param mr Device memory resource (unused in non-owning mode, retained for member consistency)
    */
   approx_distinct_count(cuda::std::span<cuda::std::byte> sketch_span,
                         std::int32_t precision,
                         null_policy null_handling,
-                        nan_policy nan_handling);
+                        nan_policy nan_handling,
+                        cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+                          cudf::get_current_device_resource_ref());
 
   approx_distinct_count()                                        = delete;
   ~approx_distinct_count()                                       = default;
@@ -270,6 +271,9 @@ class approx_distinct_count {
                  cuda::std::span<cuda::std::byte>     ///< Non-owning storage (user-provided)
                  >;
 
+  // Declared before `_storage` so it outlives the owning `device_uvector`, which only holds a
+  // reference to this resource. Unused in non-owning (span) mode.
+  cuda::mr::any_resource<cuda::mr::device_accessible> _mr;  ///< Owns the sketch storage resource
   storage_type _storage;       ///< Sketch register storage (owning or non-owning)
   std::int32_t _precision;     ///< HLL precision parameter (determines 2^p registers)
   null_policy _null_handling;  ///< Null handling policy (immutable after construction)
