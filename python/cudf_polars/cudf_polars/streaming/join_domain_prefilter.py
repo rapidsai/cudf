@@ -117,7 +117,20 @@ class _RewriteState(TypedDict):
 
 
 def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
-    """Derive row, selectivity, and column-domain facts in post-order."""
+    """
+    Derive row, selectivity, and column-domain facts for an IR DAG
+
+    Parameters
+    ----------
+    ir
+        Root node to gather facts for.
+    stats
+        Pre-populated statistics
+
+    Returns
+    -------
+    Gather facts about the plan.
+    """
     row_estimates: dict[IR, int | None] = {}
     selective_nodes: set[IR] = set()
     column_lineages: dict[ColumnRef, ColumnLineage] = {}
