@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2019-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -268,6 +268,60 @@ TYPED_TEST(StringsExtractTests, EmptyExtractTest)
   auto prog    = TypeParam::create(pattern);
   auto results = TypeParam::extract(strings_view, *prog);
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, table_expected);
+}
+
+TYPED_TEST(StringsExtractTests, NonParticipatingGroup)
+{
+  auto input = cudf::test::strings_column_wrapper({"A1", "B2", "C"});
+  auto sv    = cudf::strings_column_view(input);
+
+  // the optional group does not participate in the match for "C" and must
+  // result in null, not an empty string
+  auto prog    = TypeParam::create("(\\D)(\\d)?");
+  auto results = TypeParam::extract(sv, *prog);
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(cudf::test::strings_column_wrapper({"A", "B", "C"}).release());
+  columns.push_back(cudf::test::strings_column_wrapper({"1", "2", ""}, {1, 1, 0}).release());
+  auto expected = cudf::table(std::move(columns));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+
+  // a group that participates with an empty match remains an empty string
+  auto prog2    = TypeParam::create("(\\D)(\\d*)");
+  auto results2 = TypeParam::extract(sv, *prog2);
+
+  std::vector<std::unique_ptr<cudf::column>> columns2;
+  columns2.push_back(cudf::test::strings_column_wrapper({"A", "B", "C"}).release());
+  columns2.push_back(cudf::test::strings_column_wrapper({"1", "2", ""}).release());
+  auto expected2 = cudf::table(std::move(columns2));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results2, expected2);
+}
+
+TYPED_TEST(StringsExtractTests, NonParticipatingGroup)
+{
+  auto input = cudf::test::strings_column_wrapper({"A1", "B2", "C"});
+  auto sv    = cudf::strings_column_view(input);
+
+  // the optional group does not participate in the match for "C" and must
+  // result in null, not an empty string
+  auto prog    = TypeParam::create("(\\D)(\\d)?");
+  auto results = TypeParam::extract(sv, *prog);
+
+  std::vector<std::unique_ptr<cudf::column>> columns;
+  columns.push_back(cudf::test::strings_column_wrapper({"A", "B", "C"}).release());
+  columns.push_back(cudf::test::strings_column_wrapper({"1", "2", ""}, {1, 1, 0}).release());
+  auto expected = cudf::table(std::move(columns));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results, expected);
+
+  // a group that participates with an empty match remains an empty string
+  auto prog2    = TypeParam::create("(\\D)(\\d*)");
+  auto results2 = TypeParam::extract(sv, *prog2);
+
+  std::vector<std::unique_ptr<cudf::column>> columns2;
+  columns2.push_back(cudf::test::strings_column_wrapper({"A", "B", "C"}).release());
+  columns2.push_back(cudf::test::strings_column_wrapper({"1", "2", ""}).release());
+  auto expected2 = cudf::table(std::move(columns2));
+  CUDF_TEST_EXPECT_TABLES_EQUAL(*results2, expected2);
 }
 
 TYPED_TEST(StringsExtractTests, ExtractAllTest)

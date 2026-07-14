@@ -10,6 +10,7 @@ import json
 import os
 import socket
 import threading
+import uuid
 import weakref
 from typing import TYPE_CHECKING, Any, ClassVar, Self, TypeVar
 
@@ -30,19 +31,19 @@ from cudf_polars.dsl.utils.io import (
     attach_cached_parquet_metadata,
     prefetch_parquet_file_metadata_for_ir,
 )
+from cudf_polars.quent._plan import build_plan
 from cudf_polars.streaming.actor_graph.collectives import ReserveOpIDs
 from cudf_polars.streaming.actor_graph.collectives.common import reserve_op_id
 from cudf_polars.streaming.actor_graph.core import generate_network
 from cudf_polars.streaming.actor_graph.tracing import log_query_plan
 from cudf_polars.streaming.actor_graph.utils import empty_table_chunk
 from cudf_polars.streaming.base import StatsCollector
-from cudf_polars.streaming.parallel import lower_ir_graph
+from cudf_polars.streaming.parallel import lower_ir_graph_with_node_map
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.streaming.utils import _concat
 from cudf_polars.utils.config import get_total_device_memory
 
 if TYPE_CHECKING:
-    import uuid
     from collections.abc import Callable, MutableMapping
     from concurrent.futures import Executor, ThreadPoolExecutor
 
@@ -52,13 +53,45 @@ if TYPE_CHECKING:
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.context import Context
 
+    import cudf_polars.quent
+    import cudf_polars.quent._logging
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.quent._context import LocalQuentContext
     from cudf_polars.streaming.base import PartitionInfo
     from cudf_polars.streaming.parallel import ConfigOptions
     from cudf_polars.utils.config import StreamingExecutor
 
 
 T = TypeVar("T")
+
+
+def reset_statistics_from_options(
+    statistics: Statistics, options: Options
+) -> Statistics:
+    """
+    Reset the enabled state of a statistics object from options.
+
+    Parameters
+    ----------
+    statistics
+        Statistics to reset.
+    options
+        Options providing new enabled setting.
+
+    Returns
+    -------
+    Statistics
+        Reset statistics object.
+
+    Notes
+    -----
+    Does not clear the statistics.
+    """
+    if Statistics.from_options(options).enabled:
+        statistics.enable()
+    else:
+        statistics.disable()
+    return statistics
 
 
 def resolve_rapidsmpf_options(rapidsmpf_options: Options | None) -> Options:
@@ -164,6 +197,7 @@ class StreamingEngine(pl.GPUEngine):
         when :meth:`shutdown` is called. If ``None``, an empty stack is created.
     """
 
+    _quent_logger: cudf_polars.quent._logging.QuentLogger | None
     rapidsmpf_options: rapidsmpf.config.Options
     # Process-wide registry of every live :class:`StreamingEngine`. Used by
     # :class:`DefaultSingletonEngine` to enforce that no other engine is
@@ -187,6 +221,7 @@ class StreamingEngine(pl.GPUEngine):
 
         check_no_live_default_singleton(self)
         self._nranks = nranks
+        self._quent_events_raw: list[dict[str, Any]] = []  # populated on shutdown
         self._exit_stack: contextlib.ExitStack | None = (
             exit_stack or contextlib.ExitStack()
         )
@@ -377,6 +412,12 @@ class StreamingEngine(pl.GPUEngine):
     def __exit__(self, *_: object) -> None:
         """Exit the context manager, calling :meth:`shutdown`."""
         self.shutdown()
+
+    @property
+    def _quent_events(self) -> list[dict[str, Any]]:
+        """Return all Quent telemetry events collected during the engine's lifecycle."""
+        # Not ready to make this public yet.
+        return [x["event"] for x in self._quent_events_raw]
 
     def _run(self, func: Callable[..., T], *args: Any, **kwargs: Any) -> list[T]:
         """
@@ -647,6 +688,8 @@ def evaluate_on_rank(
     ir: IR,
     config_options: ConfigOptions[StreamingExecutor],
     *,
+    collect_metadata: bool = False,
+    local_quent_context: LocalQuentContext | None = None,
     query_id: uuid.UUID,
 ) -> tuple[pl.DataFrame, list[ChannelMetadata]]:
     """
@@ -672,8 +715,13 @@ def evaluate_on_rank(
         Root of the **pre-lowered** IR graph.
     config_options
         Executor configuration forwarded from the client.
+    collect_metadata
+        Whether to collect channel metadata during execution.
+    local_quent_context
+        The local Quent context for this rank, or ``None`` when tracing is
+        disabled.
     query_id
-        Unique identifier for the query, propagated into actor traces.
+        A unique identifier for the query.
 
     Returns
     -------
@@ -683,15 +731,45 @@ def evaluate_on_rank(
         Collected channel metadata.
     """
     stats = allgather_stats(comm, ctx.br(), ir, config_options, py_executor)
-    ir, partition_info = lower_ir_graph(
+
+    if config_options.executor.quent_context is not None:
+        assert local_quent_context is not None
+        logical_plan_id = ir.get_stable_plan_id()
+        plan, ops, ports, logical_op_by_id = build_plan(
+            ir,
+            config_options,
+            query=local_quent_context.context.query,
+            plan_id=logical_plan_id,
+            worker=local_quent_context.worker,
+            instance_name="logical",
+            parent_plan=None,
+            parent_operators_by_node_id=None,
+        )
+        if comm.rank == 0:
+            local_quent_context.context._emit_plan_declarations(
+                local_quent_context.logger, plan, ops, ports
+            )
+
+    ir, partition_info, node_map = lower_ir_graph_with_node_map(
         ir, config_options, stats, rank=comm.rank, nranks=comm.nranks
     )
 
     if comm.rank == 0:
-        # At least for now, the query plan is identical on all ranks,
-        # so we only log it once.
         log_query_plan(ir, config_options)
 
+    if config_options.executor.quent_context is not None:
+        assert local_quent_context is not None
+        physical_plan_id = uuid.uuid4()
+        local_quent_context.context._emit_physical_plan_events(
+            local_quent_context.logger,
+            ir,
+            config_options,
+            plan_id=physical_plan_id,
+            worker=local_quent_context.worker,
+            parent_plan=plan,
+            node_map=node_map,
+            logical_op_by_id=logical_op_by_id,
+        )
     ir_context = IRExecutionContext(
         py_executor, get_cuda_stream=ctx.br().stream_pool.get_stream, query_id=query_id
     )

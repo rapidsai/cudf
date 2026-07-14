@@ -967,6 +967,14 @@ def _(
         )
     elif isinstance(name, str):
         children = (translator.translate_expr(n=n, schema=schema) for n in node.input)
+        if name == "rechunk":
+            # Rechunking is a physical execution hint to Polars.
+            # cudf-polars has no concept of chunking, so we can just
+            # drop it.
+            # Note: This could be a plan hook for explicit repartition for streaming engines
+            # https://github.com/rapidsai/cudf/pull/23192#discussion_r3553113408
+            (child,) = children
+            return child
         if name == "fused":
             # TODO: fuse into a single kernel via JIT transform, see
             # https://github.com/rapidsai/cudf/issues/21456. We don't use
@@ -1002,6 +1010,8 @@ def _(
             )
         elif name == "pow":
             return expr.BinOp(dtype, plc.binaryop.BinaryOperator.POW, *children)
+        elif name == "product":
+            return expr.Agg(dtype, "product", None, translator._expr_context, *children)
         elif not POLARS_VERSION_LT_141 and name == "quantile":
             # polars >= 1.41 emits quantile as a string-named Function
             # expression (function_data=("quantile", interpolation)) with the
