@@ -15,7 +15,12 @@ import polars as pl
 from polars.testing.asserts import assert_frame_equal
 
 from cudf_polars.dsl.translate import Translator
-from cudf_polars.engine.persisted_result import PersistedSource
+from cudf_polars.engine import persisted_result, rank_local_store
+from cudf_polars.engine.persisted_result import (
+    PersistedHandle,
+    PersistedSource,
+    _PersistedLoader,
+)
 
 
 def _source_lf() -> pl.LazyFrame:
@@ -77,8 +82,6 @@ def test_evaluate_and_persist_deduplicate_replicated(
 ):
     """SPMD (dedup=False) stores a duplicated output whole and flags it as such;
     Dask/Ray (dedup=True) empty non-root ranks and store a non-duplicate."""
-    from cudf_polars.engine import persisted_result as pr
-
     evaluated = object()  # stand-in for this rank's GPU partition
     deduped = object()  # stand-in for the emptied non-root partition
     drop_calls = []
@@ -96,13 +99,15 @@ def test_evaluate_and_persist_deduplicate_replicated(
 
     # The query output is duplicated (metadata[-1].duplicated is True).
     metadata = [types.SimpleNamespace(duplicated=True)]
-    monkeypatch.setattr(pr, "evaluate_on_rank", lambda *a, **k: (evaluated, metadata))
-    monkeypatch.setattr(pr, "drop_if_replicated", _fake_drop)
-    monkeypatch.setattr(pr.rank_local_store, "open_store", lambda uid: _Store())
+    monkeypatch.setattr(
+        persisted_result, "evaluate_on_rank", lambda *a, **k: (evaluated, metadata)
+    )
+    monkeypatch.setattr(persisted_result, "drop_if_replicated", _fake_drop)
+    monkeypatch.setattr(rank_local_store, "open_store", lambda uid: _Store())
 
     # comm.rank != 0 is where drop_if_replicated would empty a duplicated output.
     comm = types.SimpleNamespace(rank=1)
-    pr.evaluate_and_persist(
+    persisted_result.evaluate_and_persist(
         "uid",
         None,
         comm,
@@ -131,13 +136,6 @@ def test_evaluate_and_persist_deduplicate_replicated(
 def test_persisted_source_output_duplicated_reflects_store(duplicated):
     """PersistedSource.output_duplicated() reports the stored duplicated flag so the
     scan node can re-advertise ``duplicated`` for a persisted duplicated output."""
-    from cudf_polars.engine import rank_local_store
-    from cudf_polars.engine.persisted_result import (
-        PersistedHandle,
-        PersistedSource,
-        _PersistedLoader,
-    )
-
     uid = "test-output-duplicated"
     query_id = uuid.uuid4()
     store = rank_local_store.open_store(uid)
@@ -252,12 +250,6 @@ def test_execute_default_engine_collect_raises(streaming_engine):
 
 def _stored_count(query_id, *, dask_worker=None):
     """Number of this query's persisted partitions across the process's stores."""
-    # Imported here, not at module top: this is shipped to the worker/actor
-    # process (Dask client.run / Ray _run) and must read *that* process's stores.
-    # A top-level import would let cloudpickle capture the client's (empty) dict
-    # by value. The dask_worker kwarg is injected by client.run and ignored.
-    from cudf_polars.engine import rank_local_store
-
     return sum(
         1
         for store in rank_local_store._stores.values()
@@ -276,8 +268,6 @@ def _install_evaluate_and_persist_fault(fail_rank):
     designated rank raises - reproducing "one rank fails after the others finished
     storing".
     """
-    from cudf_polars.engine import persisted_result
-
     orig = persisted_result.evaluate_and_persist
 
     def wrapper(*args, **kwargs):
@@ -293,8 +283,6 @@ def _install_evaluate_and_persist_fault(fail_rank):
 
 def _restore_evaluate_and_persist():
     """Undo :func:`_install_evaluate_and_persist_fault` on this worker (idempotent)."""
-    from cudf_polars.engine import persisted_result
-
     orig = getattr(persisted_result, "_test_orig_evaluate_and_persist", None)
     if orig is not None:
         persisted_result.evaluate_and_persist = orig
