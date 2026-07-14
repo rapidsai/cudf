@@ -15,13 +15,16 @@
 #include <string>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for reading Avro files into a table.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief APIs for reading Avro files into a table.
  */
 
 class avro_reader_options_builder;

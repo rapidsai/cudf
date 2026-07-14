@@ -38,6 +38,8 @@ if TYPE_CHECKING:
         "ceil",
         "floor",
         "abs",
+        "cot",
+        "log1p",
         "degrees",
         "radians",
     ]
