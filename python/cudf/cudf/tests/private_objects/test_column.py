@@ -507,6 +507,16 @@ def test_datetime_can_cast_safely():
 
     assert sr._column.can_cast_safely(np.dtype("datetime64[ns]")) is False
 
+    # Pre-epoch values below the target range are also unsafe.
+    sr = cudf.Series(["1600-01-01", "2000-01-31"], dtype="datetime64[ms]")
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]")) is False
+
+    # Casting to a coarser resolution truncates sub-resolution
+    # components, so it is not considered safe; equal resolution is.
+    sr = cudf.Series(["2000-01-31"], dtype="datetime64[ns]")
+    assert sr._column.can_cast_safely(np.dtype("datetime64[s]")) is False
+    assert sr._column.can_cast_safely(np.dtype("datetime64[ns]"))
+
 
 @pytest.mark.parametrize(
     "data_",
