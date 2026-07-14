@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import contextlib
-import dataclasses
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -82,12 +81,7 @@ class RayPersistedBackend(PersistedBackend):
         query_id: uuid.UUID,
     ) -> list[int]:
         """Run the query on every actor (see :class:`PersistedBackend`)."""
-        # Strip ray_context before pickling for the remote calls (actors don't
-        # need the actor list).
-        actor_config_options = dataclasses.replace(
-            config_options,
-            executor=dataclasses.replace(config_options.executor, ray_context=None),
-        )
+        actor_config_options = config_options.drop_unserializable()
         ir_ref = ray.put(ir)
         try:
             return ray.get(
@@ -163,15 +157,7 @@ def evaluate_pipeline_ray_mode(
     if config_options.executor.ray_context is None:
         raise RuntimeError("ray_context must be set when cluster='ray'")
     rank_actors = config_options.executor.ray_context.rank_actors
-
-    # Strip ray_context before pickling config_options for remote calls:
-    # actors don't need the full actor list, and sending actor handles to each
-    # actor is wasteful.
-    actor_config_options = dataclasses.replace(
-        config_options,
-        executor=dataclasses.replace(config_options.executor, ray_context=None),
-    )
-
+    actor_config_options = config_options.drop_unserializable()
     quent_context = config_options.executor.quent_context
     if quent_context is not None:
         quent_logger = config_options.executor.ray_context.quent_logger

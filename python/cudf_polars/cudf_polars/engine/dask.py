@@ -196,11 +196,7 @@ class DaskPersistedBackend(PersistedBackend):
         query_id: uuid.UUID,
     ) -> list[int]:
         """Run the query on every worker (see :class:`PersistedBackend`)."""
-        # Strip dask_context before pickling for the remote calls.
-        worker_config = dataclasses.replace(
-            config_options,
-            executor=dataclasses.replace(config_options.executor, dask_context=None),
-        )
+        worker_config = config_options.drop_unserializable()
         # {worker_address: rank}; the partition for that rank stays there.
         try:
             rank_map = self._client.run(
@@ -709,12 +705,7 @@ def evaluate_pipeline_dask_mode(
         quent_context._emit_query_group_events(quent_logger)
         quent_context._emit_query_events(quent_logger)
 
-    # Strip dask_context before pickling config_options for remote calls.
-    worker_config = dataclasses.replace(
-        config_options,
-        executor=dataclasses.replace(config_options.executor, dask_context=None),
-    )
-
+    worker_config = config_options.drop_unserializable()
     result_map = dask_context.client.run(
         functools.partial(_worker_evaluate, uid=dask_context.rapidsmpf_id),
         ir,
