@@ -17,14 +17,17 @@
 
 #include <utility>
 
+/**
+ * @file
+ * @brief Class definition for distinct hash join, a hash join optimized for tables with unique
+ * keys.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
- * @brief Class definition for distinct hash join, a hash join optimized for tables with unique
- * keys.
  */
 
 namespace detail {
