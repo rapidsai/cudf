@@ -331,11 +331,14 @@ int main(int argc, char** argv)
 
   auto stats = rapidsmpf::Statistics::create();
 
-  std::optional<rapidsmpf::PinnedPoolProperties> pinned_pool_properties =
+  RAPIDSMPF_EXPECTS(args.pinned_mem_disable || rapidsmpf::is_pinned_memory_resources_supported(),
+                    "pinned host memory is not supported on this system; pass `-L` to disable it.",
+                    std::runtime_error);
+  auto pinned_pool_properties =
     args.pinned_mem_disable ? rapidsmpf::PinnedMemoryDisabled : rapidsmpf::PinnedPoolProperties{};
   auto br = rapidsmpf::BufferResource::create(
     rmm_mr,
-    pinned_pool_properties,
+    std::move(pinned_pool_properties),
     std::move(memory_limits),
     std::nullopt,
     std::make_shared<rmm::cuda_stream_pool>(16, rmm::cuda_stream::flags::non_blocking),
