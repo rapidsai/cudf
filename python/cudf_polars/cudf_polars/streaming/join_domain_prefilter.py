@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import singledispatch
-from typing import TYPE_CHECKING, Any, Literal, TypedDict
+from typing import TYPE_CHECKING, Any, Literal, TypeAlias, TypedDict
 
 from cudf_polars.dsl import expr
 from cudf_polars.dsl.ir import (
@@ -64,38 +64,59 @@ class _Producer:
 
 
 @dataclass(frozen=True)
-class _Candidate:
-    """A derived key-domain prefilter candidate."""
+class SimpleCandidate:
+    """A direct key-domain prefilter candidate."""
 
-    mode: Literal["simple", "composite"]
+    mode = "simple"
     target_side: Literal["left", "right"]
     target: _Producer
     target_key: expr.Col
     domain: _Producer
     domain_key: expr.Col
-    target_rows: int
-    constraint_domain: _Producer | None = None
-    domain_constraint_key: expr.Col | None = None
-    target_constraint_key: expr.Col | None = None
-
-    @property
-    def domain_rows(self) -> int:
-        """Estimated rows in the domain input."""
-        return self.domain.rows
 
     @property
     def score(self) -> tuple[int, int, int]:
-        """Prefer composite filters, then smaller constraint/domain inputs."""
-        constraint_rows = (
-            self.constraint_domain.rows
-            if self.constraint_domain is not None
-            else self.domain.rows
-        )
-        return (
-            0 if self.mode == "composite" else 1,
-            constraint_rows,
-            self.domain.rows,
-        )
+        """Rank after composite candidates, then by domain size."""
+        return (1, self.domain.rows, self.domain.rows)
+
+
+@dataclass(frozen=True)
+class CompositeCandidate:
+    """A key-domain prefilter constrained by another join key."""
+
+    mode = "composite"
+    target_side: Literal["left", "right"]
+    target: _Producer
+    target_key: expr.Col
+    domain: _Producer
+    domain_key: expr.Col
+    constraint_domain: _Producer
+    domain_constraint_key: expr.Col
+    target_constraint_key: expr.Col
+
+    @property
+    def score(self) -> tuple[int, int, int]:
+        """Prefer smaller constraint and domain inputs."""
+        return (0, self.constraint_domain.rows, self.domain.rows)
+
+
+Candidate: TypeAlias = SimpleCandidate | CompositeCandidate
+DecisionReason: TypeAlias = Literal[
+    "applied",
+    "maintain_order",
+    "no_selective_domain",
+    "non_column_join_key",
+    "not_inner_join",
+    "sliced_join",
+]
+
+
+@dataclass(frozen=True)
+class Decision:
+    """Result of considering a join for a domain prefilter."""
+
+    reason: DecisionReason
+    candidate: Candidate | None = None
 
 
 @dataclass(frozen=True)
@@ -250,8 +271,7 @@ def optimize_join_domain_prefilters(
     Insert generic semi-join key-domain prefilters before streaming lowering.
 
     The rewrite is intentionally conservative: only inner joins with simple
-    column equality keys are considered, and the original full join remains
-    after every inserted row-reduction semi join.
+    column equality keys are considered.
     """
     options = config_options.executor.join_domain_prefilter
     if options is None:
@@ -296,26 +316,30 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
         # Re-analyze that current subtree so parent joins can use the derived
         # selectivity and cardinality when ranking their own candidates.
         facts = analyze_plan(node, rec.state["stats"])
-    candidate, reason = _select_candidate(
+    decision = _select_candidate(
         node,
         rec.state["threshold"],
         facts,
     )
     if rec.state["trace"]:
-        _trace_decision(node, rec.state["threshold"], candidate, reason)
-    if candidate is None:
+        _trace_decision(node, rec.state["threshold"], decision)
+    if decision.candidate is None:
         return node
+    return apply_candidate(node, decision.candidate)
 
-    left, right = node.children
-    domain = _make_domain(candidate, node)
+
+def apply_candidate(ir: Join, candidate: Candidate) -> IR:
+    """Apply a selected join-domain prefilter candidate to a join."""
+    left, right = ir.children
+    domain = _make_domain(candidate, ir)
     target = candidate.target
     target_filter = _make_semi_join(
         target.node,
         expr.Col(target.node.schema[target.column], target.column),
         domain,
         expr.Col(domain.schema[candidate.domain_key.name], candidate.domain_key.name),
-        nulls_equal=node.options[1],
-        suffix=node.options[3],
+        nulls_equal=ir.options[1],
+        suffix=ir.options[3],
     )
     # A DAG may share the target with the domain side, so only rewrite the
     # side for which this candidate was selected.
@@ -323,27 +347,27 @@ def _(node: Join, rec: GenericTransformer[IR, IR, _RewriteState]) -> IR:
         (left,) = replace([left], {candidate.target.node: target_filter})
     else:
         (right,) = replace([right], {candidate.target.node: target_filter})
-    return node.reconstruct((left, right))
+    return ir.reconstruct((left, right))
 
 
 def _select_candidate(
     ir: Join,
     threshold: float,
     facts: PlanFacts,
-) -> tuple[_Candidate | None, str]:
+) -> Decision:
     if ir.options[0] != "Inner":
-        return None, "not_inner_join"
+        return Decision(reason="not_inner_join")
     if ir.options[2] is not None:
-        return None, "sliced_join"
+        return Decision(reason="sliced_join")
     if ir.options[5] != "none":
-        return None, "maintain_order"
+        return Decision(reason="maintain_order")
 
     left_keys = _simple_keys(ir.left_on)
     right_keys = _simple_keys(ir.right_on)
     if len(left_keys) != len(ir.left_on) or len(right_keys) != len(ir.right_on):
-        return None, "non_column_join_key"
+        return Decision(reason="non_column_join_key")
 
-    candidates: list[_Candidate] = []
+    candidates: list[Candidate] = []
     left: tuple[Literal["left", "right"], IR, tuple[expr.Col, ...]] = (
         "left",
         ir.children[0],
@@ -383,8 +407,8 @@ def _select_candidate(
         )
 
     if not candidates:
-        return None, "no_selective_domain"
-    return min(candidates, key=lambda c: c.score), "applied"
+        return Decision(reason="no_selective_domain")
+    return Decision(reason="applied", candidate=min(candidates, key=lambda c: c.score))
 
 
 def _simple_keys(keys: Sequence[expr.NamedExpr]) -> tuple[expr.Col, ...]:
@@ -399,7 +423,7 @@ def _simple_candidates(
     domain_keys: tuple[expr.Col, ...],
     threshold: float,
     facts: PlanFacts,
-) -> Iterable[_Candidate]:
+) -> Iterable[SimpleCandidate]:
     for target_key, domain_key in zip(target_keys, domain_keys, strict=True):
         target = _largest_key_source(target_child, target_key.name, facts)
         if target is None:
@@ -416,14 +440,12 @@ def _simple_candidates(
             continue
         if _contains_identity(target.node, domain.node):
             continue
-        yield _Candidate(
-            mode="simple",
+        yield SimpleCandidate(
             target_side=target_side,
             target=target,
             target_key=target_key,
             domain=domain,
             domain_key=domain_key,
-            target_rows=target.rows,
         )
 
 
@@ -435,7 +457,7 @@ def _composite_candidates(
     domain_keys: tuple[expr.Col, ...],
     threshold: float,
     facts: PlanFacts,
-) -> Iterable[_Candidate]:
+) -> Iterable[CompositeCandidate]:
     if len(target_keys) < 2:
         return
 
@@ -476,31 +498,25 @@ def _composite_candidates(
                 target.node, constraint_domain.node
             ):
                 continue
-            yield _Candidate(
-                mode="composite",
+            yield CompositeCandidate(
                 target_side=target_side,
                 target=target,
                 target_key=target_key,
                 domain=domain,
                 domain_key=domain_key,
-                target_rows=target.rows,
                 constraint_domain=constraint_domain,
                 domain_constraint_key=domain_constraint_key,
                 target_constraint_key=target_constraint_key,
             )
 
 
-def _make_domain(candidate: _Candidate, ir: Join) -> IR:
-    if candidate.mode == "simple":
+def _make_domain(candidate: Candidate, ir: Join) -> IR:
+    if isinstance(candidate, SimpleCandidate):
         return _project_bound_key(
             candidate.domain.node,
             candidate.domain.column,
             candidate.domain_key,
         )
-
-    assert candidate.constraint_domain is not None
-    assert candidate.domain_constraint_key is not None
-    assert candidate.target_constraint_key is not None
 
     constraint_domain = _project_bound_key(
         candidate.constraint_domain.node,
@@ -660,13 +676,11 @@ def _contains_identity(root: IR, needle: IR) -> bool:
     return any(node is needle for node in traversal([root]))
 
 
-def _trace_decision(
-    ir: Join, threshold: float, candidate: _Candidate | None, reason: str
-) -> None:
+def _trace_decision(ir: Join, threshold: float, decision: Decision) -> None:
     join_domain_prefilter: dict[str, Any] = {
         "considered": True,
         "threshold": threshold,
-        "reason": reason,
+        "reason": decision.reason,
     }
     record = {
         "scope": Scope.PLAN.value,
@@ -674,25 +688,23 @@ def _trace_decision(
         "actor_ir_id": ir.get_stable_id(),
         "actor_ir_type": type(ir).__name__,
     }
-    if candidate is not None:
+    if (candidate := decision.candidate) is not None:
         join_domain_prefilter.update(
             {
                 "mode": candidate.mode,
                 "target_side": candidate.target_side,
                 "target_key": candidate.target_key.name,
                 "domain_key": candidate.domain_key.name,
-                "estimated_target_rows": candidate.target_rows,
-                "estimated_domain_rows": candidate.domain_rows,
+                "estimated_target_rows": candidate.target.rows,
+                "estimated_domain_rows": candidate.domain.rows,
                 "target_node_type": type(candidate.target.node).__name__,
                 "domain_node_type": type(candidate.domain.node).__name__,
             }
         )
-        if candidate.constraint_domain is not None:
+        if isinstance(candidate, CompositeCandidate):
             join_domain_prefilter.update(
                 {
-                    "constraint_key": candidate.target_constraint_key.name
-                    if candidate.target_constraint_key is not None
-                    else None,
+                    "constraint_key": candidate.target_constraint_key.name,
                     "estimated_constraint_rows": candidate.constraint_domain.rows,
                 }
             )

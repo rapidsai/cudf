@@ -18,9 +18,14 @@ from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import StatsCollector
 from cudf_polars.streaming.join_domain_prefilter import (
+    CompositeCandidate,
+    Decision,
     PlanFacts,
+    SimpleCandidate,
+    _select_candidate,
     _smallest_node_containing_all,
     analyze_plan,
+    apply_candidate,
     optimize_join_domain_prefilters,
     semijoin_pushdown_candidates,
 )
@@ -165,11 +170,12 @@ def test_simple_domain_prefilter_filters_large_side() -> None:
     lineitem = _scan("lineitem", ("l_partkey", "l_suppkey"))
     root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
 
-    optimized = optimize_join_domain_prefilters(
-        root,
-        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
-        _config(),
-    )
+    facts = analyze_plan(root, _stats(part=(part, 6), lineitem=(lineitem, 1_800)))
+    decision = _select_candidate(root, 0.5, facts)
+
+    assert decision.reason == "applied"
+    assert isinstance(decision.candidate, SimpleCandidate)
+    optimized = apply_candidate(root, decision.candidate)
 
     assert isinstance(optimized, Join)
     assert optimized.options[0] == "Inner"
@@ -278,13 +284,17 @@ def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:
     supplier = _scan("supplier", ("s_suppkey",))
     lineitem = _scan("lineitem", ("l_suppkey",))
     root = _join(supplier, lineitem, ("s_suppkey",), ("l_suppkey",))
+    stats = _stats(supplier=(supplier, 30), lineitem=(lineitem, 1_800))
+
+    decision = _select_candidate(root, 0.5, analyze_plan(root, stats))
 
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(supplier=(supplier, 30), lineitem=(lineitem, 1_800)),
+        stats,
         _config(),
     )
 
+    assert decision == Decision(reason="no_selective_domain")
     assert optimized is root
     assert not _joins(optimized, "Semi")
 
@@ -310,17 +320,21 @@ def test_composite_domain_prefilter_constrains_domain_first() -> None:
         ("s_suppkey", "s_nationkey"),
     )
 
+    stats = _stats(
+        nation=(nation, 5),
+        orders=(orders, 900),
+        lineitem=(lineitem, 1_800),
+        supplier=(supplier, 30),
+    )
+    decision = _select_candidate(root, 0.5, analyze_plan(root, stats))
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(
-            nation=(nation, 5),
-            orders=(orders, 900),
-            lineitem=(lineitem, 1_800),
-            supplier=(supplier, 30),
-        ),
+        stats,
         _config(),
     )
 
+    assert decision.reason == "applied"
+    assert isinstance(decision.candidate, CompositeCandidate)
     semis = _joins(optimized, "Semi")
     assert isinstance(optimized, Join)
     assert optimized.options[0] == "Inner"
