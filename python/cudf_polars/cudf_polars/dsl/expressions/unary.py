@@ -138,7 +138,9 @@ class UnaryFunction(Expr):
     )
     _supported_math_fns = frozenset(
         {
+            "cot",
             "degrees",
+            "log1p",
             "radians",
         }
     )
@@ -605,28 +607,6 @@ class UnaryFunction(Expr):
                 plc.copying.shift(column.obj, offset, fill_scalar, stream=df.stream),
                 dtype=self.dtype,
             )
-        elif self.name in UnaryFunction._supported_math_fns:
-            column = (
-                self.children[0]
-                .evaluate(df, context=context)
-                .astype(self.dtype, stream=df.stream)
-            )
-            if self.name == "degrees":
-                factor = 180.0 / math.pi
-            else:
-                # radians
-                factor = math.pi / 180.0
-            out_type = self.dtype.plc_type
-            return Column(
-                plc.binaryop.binary_operation(
-                    column.obj,
-                    plc.Scalar.from_py(factor, out_type, stream=df.stream),
-                    plc.binaryop.BinaryOperator.MUL,
-                    out_type,
-                    stream=df.stream,
-                ),
-                dtype=self.dtype,
-            )
         elif self.name == "reinterpret":
             column = self.children[0].evaluate(df, context=context)
             return column.astype(self.dtype, stream=df.stream)
@@ -755,6 +735,56 @@ class UnaryFunction(Expr):
                 ).columns()[0],
                 dtype=self.dtype,
             )
+        elif self.name in UnaryFunction._supported_math_fns:
+            column = (
+                self.children[0]
+                .evaluate(df, context=context)
+                .astype(self.dtype, stream=df.stream)
+            )
+            if self.name in ("log1p", "cot"):
+                column_ref = plc.expressions.ColumnReference(0)
+                one = plc.expressions.Literal(
+                    plc.Scalar.from_py(1.0, self.dtype.plc_type, stream=df.stream)
+                )
+                if self.name == "log1p":
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.LOG,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.ADD, column_ref, one
+                        ),
+                    )
+                else:
+                    # cot
+                    expression = plc.expressions.Operation(
+                        plc.expressions.ASTOperator.DIV,
+                        one,
+                        plc.expressions.Operation(
+                            plc.expressions.ASTOperator.TAN, column_ref
+                        ),
+                    )
+                return Column(
+                    plc.transform.compute_column(
+                        plc.Table([column.obj]), expression, stream=df.stream
+                    ),
+                    dtype=self.dtype,
+                )
+            else:
+                if self.name == "degrees":
+                    factor = 180.0 / math.pi
+                else:
+                    # radians
+                    factor = math.pi / 180.0
+                out_type = self.dtype.plc_type
+                return Column(
+                    plc.binaryop.binary_operation(
+                        column.obj,
+                        plc.Scalar.from_py(factor, out_type, stream=df.stream),
+                        plc.binaryop.BinaryOperator.MUL,
+                        out_type,
+                        stream=df.stream,
+                    ),
+                    dtype=self.dtype,
+                )
         elif self.name in self._OP_MAPPING:
             column = self.children[0].evaluate(df, context=context)
             if column.dtype.plc_type.id() != self.dtype.id():
