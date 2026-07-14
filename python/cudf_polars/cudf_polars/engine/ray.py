@@ -316,7 +316,8 @@ class RankActor:
         if self._quent_logger is not None and self._device_memory is not None:
             self._network, self._link_channels = declare_network_channels(
                 self._quent_logger,
-                comm=self._comm,
+                rank=self._comm.rank,
+                nranks=self._comm.nranks,
                 engine_id=self._quent_worker.engine.id,
                 device_memory=self._device_memory,
             )

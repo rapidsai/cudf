@@ -33,8 +33,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from typing import Self
 
-    from rapidsmpf.communicator.communicator import Communicator
-
     from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._logging import QuentLogger
@@ -61,8 +59,11 @@ class ProcessorRegistry:
 
     One registry is owned by the object that owns the Python
     :class:`~concurrent.futures.ThreadPoolExecutor` (e.g. ``SPMDEngine``,
-    a Dask worker, or a Ray actor). Processors are declared lazily on first
-    use by a thread-pool worker and finalized once at executor shutdown.
+    a Dask worker, or a Ray actor).
+
+    Processors (thread resources) are declared on-demand in ``get_or_declare_processor``.
+    Call ``_emit_processor_exit_events`` on engine shutdown to emit finalizing/exit events
+    for all declared processors.
     """
 
     def __init__(self) -> None:
@@ -77,11 +78,6 @@ class ProcessorRegistry:
         with self._lock:
             if thread_ident in self._processors:
                 return self._processors[thread_ident]
-            if self._closed:
-                raise RuntimeError(
-                    "Cannot declare processors after registry has been closed"
-                )
-
             processor = Processor(pool_id=pool_id)
             self._processors[thread_ident] = processor
 
@@ -92,9 +88,6 @@ class ProcessorRegistry:
     def _emit_processor_exit_events(self, logger: QuentLogger) -> None:
         """Emit finalizing/exit events for all declared processors."""
         with self._lock:
-            if self._closed:
-                return
-            self._closed = True
             processors = list(self._processors.values())
 
         for processor in processors:
@@ -548,7 +541,8 @@ def finalize_worker_resources(
 def declare_network_channels(
     logger: QuentLogger,
     *,
-    comm: Communicator,
+    rank: int,
+    nranks: int,
     engine_id: uuid.UUID,
     device_memory: Memory,
 ) -> tuple[Network | None, dict[int, Channel]]:
@@ -563,18 +557,18 @@ def declare_network_channels(
     Returns ``(None, {})`` for single-rank runs, which have no inter-rank
     communication.
     """
-    if comm.nranks <= 1:
+    if nranks <= 1:
         return None, {}
 
     network = Network(engine_id=engine_id)
     logger.emit(network.declare())
 
     link_channels: dict[int, Channel] = {}
-    for target_rank in range(comm.nranks):
-        if target_rank == comm.rank:
+    for target_rank in range(nranks):
+        if target_rank == rank:
             continue
         link = Channel(
-            instance_name=f"rank-{comm.rank} -> rank-{target_rank}",
+            instance_name=f"rank-{rank} -> rank-{target_rank}",
             resource_type_name="Link",
             parent_group_id=network.id,
             source=device_memory,

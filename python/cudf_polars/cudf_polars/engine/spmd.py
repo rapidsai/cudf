@@ -528,7 +528,8 @@ class SPMDEngine(StreamingEngine):
                 )
                 self._network, self._link_channels = declare_network_channels(
                     self._quent_logger,
-                    comm=comm,
+                    rank=comm.rank,
+                    nranks=comm.nranks,
                     engine_id=engine_id,
                     device_memory=self._device_memory,
                 )

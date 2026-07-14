@@ -15,21 +15,29 @@ import polars as pl
 
 import cudf_polars.quent
 import cudf_polars.quent._logging
+from cudf_polars.containers import DataFrame
+from cudf_polars.dsl.ir import DataFrameScan, Filter
 from cudf_polars.dsl.translate import Translator
 from cudf_polars.quent._context import (
     LocalQuentContext,
     ProcessorRegistry,
     QuentContext,
+    QuentIRExecutionContext,
+    declare_network_channels,
+    finalize_network_channels,
 )
 from cudf_polars.quent._plan import build_plan, port_names_for_node
 from cudf_polars.quent._types import (
     Attribute,
+    Channel,
     Engine,
     Implementation,
     Memory,
+    Network,
     Operator,
     Plan,
     Port,
+    Processor,
     Query,
     Statistics,
     Task,
@@ -37,10 +45,10 @@ from cudf_polars.quent._types import (
     _deserialize_value,
 )
 from cudf_polars.utils.config import ConfigOptions
+from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
-    from cudf_polars.quent._types import Processor
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -50,6 +58,58 @@ def _make_worker() -> Worker:
         engine=Engine(id=uuid.uuid4()),
         instance_name="test-worker",
     )
+
+
+def _make_dataframe(pl_df: pl.DataFrame) -> DataFrame:
+    return DataFrame.from_polars(pl_df, get_cuda_stream())
+
+
+def _make_quent_ir_execution_context(
+    *,
+    operator_id: uuid.UUID | None = None,
+    disk_to_device_channel: Channel | None = None,
+) -> tuple[cudf_polars.quent._logging.QuentLogger, QuentIRExecutionContext]:
+    pytest.importorskip("structlog")
+    logger = cudf_polars.quent._logging.QuentLogger()
+    context = QuentContext()
+    engine_id = context.engine.id
+    worker_id = uuid.uuid4()
+    pool_id = uuid.uuid4()
+    device_memory = Memory(
+        instance_name="device",
+        resource_type_name="memory",
+        parent_group_id=engine_id,
+    )
+    operator_id = operator_id or uuid.uuid4()
+    plan = Plan(
+        id=uuid.uuid4(),
+        query=Query(),
+        parent_plan=None,
+        instance_name="logical",
+        edges=[],
+        worker=None,
+    )
+    operator = Operator(
+        id=operator_id,
+        plan=plan,
+        parent_operators=[],
+        instance_name="Filter-NodeIndex(0)",
+        type_name="Filter",
+    )
+    local_context = LocalQuentContext(
+        context=context,
+        query=context.query_for(uuid.uuid4()),
+        worker=Worker(id=worker_id, engine=context.engine, instance_name="rank-0"),
+        logger=logger,
+        thread_pool_id=pool_id,
+        processor_registry=ProcessorRegistry(),
+        device_memory=device_memory,
+        disk_to_device_channel=disk_to_device_channel,
+    )
+    quent_ir_execution_context = QuentIRExecutionContext.from_execution_context(
+        local_context, operator
+    )
+    return logger, quent_ir_execution_context
 
 
 @pytest.mark.parametrize(
@@ -704,7 +764,7 @@ def test_processor_registry_reused_across_quent_contexts() -> None:
     assert len(processor_events) == 2
 
 
-def test_processor_registry_exit_events_idempotent() -> None:
+def test_processor_registry_exit_events() -> None:
     pytest.importorskip("structlog")
     from cudf_polars.quent._context import ProcessorRegistry
 
@@ -715,7 +775,6 @@ def test_processor_registry_exit_events_idempotent() -> None:
     registry.get_or_declare_processor(logger, thread_ident=1, pool_id=pool_id)
     registry.get_or_declare_processor(logger, thread_ident=2, pool_id=pool_id)
 
-    registry._emit_processor_exit_events(logger)
     registry._emit_processor_exit_events(logger)
 
     events = _drained_events(logger)
@@ -756,3 +815,358 @@ def test_quent_serialize_none():
         "key": "none",
         "value": None,
     }
+
+
+def test_task_from_ir() -> None:
+    operator_id = uuid.uuid4()
+    _logger, quent_ir_execution_context = _make_quent_ir_execution_context(
+        operator_id=operator_id
+    )
+
+    task = Task.from_ir(Filter, quent_ir_execution_context)
+
+    assert task is not None
+    assert task.operator_id == operator_id
+    assert task.instance_name is not None
+    assert task.instance_name.startswith("Filter-")
+    assert operator_id.hex[:8] in task.instance_name
+
+
+def test_task_loading_serialization() -> None:
+    operator_id = uuid.uuid4()
+    processor = Processor(pool_id=uuid.uuid4())
+    channel = Channel(
+        instance_name="disk -> device",
+        resource_type_name="DiskToDevice",
+        parent_group_id=uuid.uuid4(),
+        source=Memory(
+            instance_name="filesystem",
+            resource_type_name="filesystem",
+            parent_group_id=uuid.uuid4(),
+        ),
+        target=Memory(
+            instance_name="device",
+            resource_type_name="memory",
+            parent_group_id=uuid.uuid4(),
+        ),
+    )
+    memory = Memory(
+        instance_name="device",
+        resource_type_name="memory",
+        parent_group_id=uuid.uuid4(),
+    )
+    task = Task(operator_id=operator_id, instance_name="scan-task")
+
+    event = task.loading(
+        use_thread=processor,
+        use_channel=channel,
+        channel_capacity_bytes=4096,
+        use_memory=memory,
+        memory_capacity_bytes=8192,
+        timestamp=100,
+    )
+    d = event.to_dict()
+
+    assert d["id"] == str(task.id)
+    loading = d["data"]["Task"]["state"]["Loading"]
+    assert loading["use_thread"] == {
+        "resource_id": str(processor.id),
+        "capacity": None,
+    }
+    assert loading["use_fs_to_mem"] == {
+        "resource_id": str(channel.id),
+        "capacity": {"capacity_bytes": 4096},
+    }
+    assert loading["use_memory"] == {
+        "resource_id": str(memory.id),
+        "capacity": {"capacity_bytes": 8192},
+    }
+
+
+def test_task_computing_serialization() -> None:
+    operator_id = uuid.uuid4()
+    processor = Processor(pool_id=uuid.uuid4())
+    memory = Memory(
+        instance_name="device",
+        resource_type_name="memory",
+        parent_group_id=uuid.uuid4(),
+    )
+    task = Task(operator_id=operator_id, instance_name="filter-task")
+
+    event = task.computing(
+        use_thread=processor,
+        use_memory=memory,
+        memory_capacity_bytes=16384,
+        timestamp=101,
+    )
+    d = event.to_dict()
+
+    computing = d["data"]["Task"]["state"]["Computing"]
+    assert computing["use_thread"] == {
+        "resource_id": str(processor.id),
+        "capacity": None,
+    }
+    assert computing["use_memory"] == {
+        "resource_id": str(memory.id),
+        "capacity": {"capacity_bytes": 16384},
+    }
+
+
+def test_task_sending_serialization() -> None:
+    operator_id = uuid.uuid4()
+    processor = Processor(pool_id=uuid.uuid4())
+    link = Channel(
+        instance_name="rank-0 -> rank-1",
+        resource_type_name="Link",
+        parent_group_id=uuid.uuid4(),
+        source=Memory(
+            instance_name="device",
+            resource_type_name="memory",
+            parent_group_id=uuid.uuid4(),
+        ),
+        target=Memory(
+            instance_name="device",
+            resource_type_name="memory",
+            parent_group_id=uuid.uuid4(),
+        ),
+    )
+    task = Task(operator_id=operator_id, instance_name="shuffle-task")
+
+    event = task.sending(
+        use_thread=processor,
+        use_link=link,
+        link_capacity_bytes=2048,
+        timestamp=102,
+    )
+    d = event.to_dict()
+
+    sending = d["data"]["Task"]["state"]["Sending"]
+    assert sending["use_thread"] == {
+        "resource_id": str(processor.id),
+        "capacity": None,
+    }
+    assert sending["use_link"] == {
+        "resource_id": str(link.id),
+        "capacity": {"capacity_bytes": 2048},
+    }
+
+
+def test_network_declare_serialization() -> None:
+    engine_id = uuid.uuid4()
+    network = Network(engine_id=engine_id)
+
+    event = network.declare(timestamp=555)
+    d = event.to_dict()
+
+    assert d["id"] == str(network.id)
+    assert d["timestamp"] == 555
+    assert d["data"]["Network"]["Declaration"] == {
+        "instance_name": "Network",
+        "parent_group_id": str(engine_id),
+    }
+
+
+def test_declare_network_channels_single_rank() -> None:
+    pytest.importorskip("structlog")
+    logger = cudf_polars.quent._logging.QuentLogger()
+    device_memory = Memory(
+        instance_name="device",
+        resource_type_name="memory",
+        parent_group_id=uuid.uuid4(),
+    )
+
+    network, link_channels = declare_network_channels(
+        logger,
+        rank=0,
+        nranks=1,
+        engine_id=uuid.uuid4(),
+        device_memory=device_memory,
+    )
+
+    assert network is None
+    assert link_channels == {}
+    assert _drained_events(logger) == []
+
+
+@pytest.mark.parametrize(
+    "rank,nranks,expected_targets", [(0, 3, [1, 2]), (1, 3, [0, 2])]
+)
+def test_declare_network_channels_multi_rank(
+    rank: int, nranks: int, expected_targets: list[int]
+) -> None:
+    pytest.importorskip("structlog")
+    logger = cudf_polars.quent._logging.QuentLogger()
+    engine_id = uuid.uuid4()
+    device_memory = Memory(
+        instance_name="device",
+        resource_type_name="memory",
+        parent_group_id=engine_id,
+    )
+
+    network, link_channels = declare_network_channels(
+        logger,
+        rank=rank,
+        nranks=nranks,
+        engine_id=engine_id,
+        device_memory=device_memory,
+    )
+
+    assert network is not None
+    assert set(link_channels) == set(expected_targets)
+    for target_rank, link in link_channels.items():
+        assert link.instance_name == f"rank-{rank} -> rank-{target_rank}"
+        assert link.resource_type_name == "Link"
+        assert link.parent_group_id == network.id
+        assert link.source is device_memory
+        assert link.target is device_memory
+
+    events = _drained_events(logger)
+    network_events = [event for event in events if "Network" in event["data"]]
+    channel_events = [event for event in events if "Channel" in event["data"]]
+    assert len(network_events) == 1
+    assert network_events[0]["data"]["Network"]["Declaration"][
+        "parent_group_id"
+    ] == str(engine_id)
+    assert len(channel_events) == len(expected_targets) * 2
+
+
+def test_finalize_network_channels() -> None:
+    pytest.importorskip("structlog")
+    logger = cudf_polars.quent._logging.QuentLogger()
+    device_memory = Memory(
+        instance_name="device",
+        resource_type_name="memory",
+        parent_group_id=uuid.uuid4(),
+    )
+    link_channels = {
+        target_rank: Channel(
+            instance_name=f"rank-0 -> rank-{target_rank}",
+            resource_type_name="Link",
+            parent_group_id=uuid.uuid4(),
+            source=device_memory,
+            target=device_memory,
+        )
+        for target_rank in (1, 2)
+    }
+
+    finalize_network_channels(logger, link_channels=link_channels)
+
+    events = _drained_events(logger)
+    finalizing_events = [
+        event
+        for event in events
+        if event["data"]["Channel"]["state"] == {"ChannelFinalizing": None}
+    ]
+    exit_events = [
+        event for event in events if event["data"]["Channel"]["state"] == "Exit"
+    ]
+    assert len(finalizing_events) == 2
+    assert len(exit_events) == 2
+
+
+def test_emit_task_begin_events_computing_node() -> None:
+    logger, quent_ir_execution_context = _make_quent_ir_execution_context()
+    task = Task.from_ir(Filter, quent_ir_execution_context)
+    assert task is not None
+
+    quent_ir_execution_context.context._emit_task_begin_events(
+        Filter,
+        task,
+        quent_ir_execution_context,
+    )
+
+    events = _drained_events(logger)
+    task_events = [event for event in events if "Task" in event["data"]]
+    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 1, 3]
+    assert "Queueing" in task_events[0]["data"]["Task"]["state"]
+    assert "Allocating" in task_events[1]["data"]["Task"]["state"]
+    assert "Computing" in task_events[2]["data"]["Task"]["state"]
+    processor_events = [event for event in events if "Processor" in event["data"]]
+    assert len(processor_events) == 2
+
+
+def test_emit_task_begin_events_io_node() -> None:
+    channel = Channel(
+        instance_name="disk -> device",
+        resource_type_name="DiskToDevice",
+        parent_group_id=uuid.uuid4(),
+        source=Memory(
+            instance_name="filesystem",
+            resource_type_name="filesystem",
+            parent_group_id=uuid.uuid4(),
+        ),
+        target=Memory(
+            instance_name="device",
+            resource_type_name="memory",
+            parent_group_id=uuid.uuid4(),
+        ),
+    )
+    logger, quent_ir_execution_context = _make_quent_ir_execution_context(
+        disk_to_device_channel=channel
+    )
+    task = Task.from_ir(DataFrameScan, quent_ir_execution_context)
+    assert task is not None
+
+    quent_ir_execution_context.context._emit_task_begin_events(
+        DataFrameScan,
+        task,
+        quent_ir_execution_context,
+    )
+
+    events = _drained_events(logger)
+    task_events = [event for event in events if "Task" in event["data"]]
+    assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 2]
+    assert "Queueing" in task_events[0]["data"]["Task"]["state"]
+    loading = task_events[1]["data"]["Task"]["state"]["Loading"]
+    assert loading["use_fs_to_mem"]["resource_id"] == str(channel.id)
+    assert loading["use_memory"]["resource_id"] == str(
+        quent_ir_execution_context.device_memory.id
+    )
+
+
+def test_emit_task_end_events() -> None:
+    logger, quent_ir_execution_context = _make_quent_ir_execution_context()
+    task = Task(operator_id=quent_ir_execution_context.quent_operator.id)
+    input_frame = _make_dataframe(pl.DataFrame({"x": [1, 2, 3]}))
+    result = _make_dataframe(pl.DataFrame({"y": list(range(7))}))
+
+    quent_ir_execution_context.context._emit_task_end_events(
+        task,
+        quent_ir_execution_context,
+        [input_frame],
+        result,
+    )
+
+    events = _drained_events(logger)
+    operator_events = [event for event in events if "Operator" in event["data"]]
+    task_events = [event for event in events if "Task" in event["data"]]
+    assert len(operator_events) == 1
+    stats = operator_events[0]["data"]["Operator"]["Statistics"]["custom_attributes"]
+    assert stats == [
+        {"key": "input_bytes", "value": {"U64": input_frame._size_bytes()}},
+        {"key": "output_bytes", "value": {"U64": result._size_bytes()}},
+        {"key": "output_rows", "value": {"U64": result.num_rows}},
+    ]
+    assert task_events[0]["data"]["Task"]["state"] == "Exit"
+
+
+def test_emit_task_end_events_on_failure() -> None:
+    logger, quent_ir_execution_context = _make_quent_ir_execution_context()
+    task = Task(operator_id=quent_ir_execution_context.quent_operator.id)
+    input_frame = _make_dataframe(pl.DataFrame({"x": [10, 20]}))
+
+    quent_ir_execution_context.context._emit_task_end_events(
+        task,
+        quent_ir_execution_context,
+        [input_frame],
+        None,
+    )
+
+    events = _drained_events(logger)
+    operator_events = [event for event in events if "Operator" in event["data"]]
+    stats = operator_events[0]["data"]["Operator"]["Statistics"]["custom_attributes"]
+    assert stats == [
+        {"key": "input_bytes", "value": {"U64": input_frame._size_bytes()}},
+        {"key": "output_bytes", "value": {"U64": 0}},
+        {"key": "output_rows", "value": {"U64": 0}},
+    ]

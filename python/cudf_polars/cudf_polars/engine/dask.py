@@ -348,7 +348,8 @@ def _setup_worker(
         # alongside the other worker resources (a no-op for single-rank runs).
         network, link_channels = declare_network_channels(
             quent_logger,
-            comm=comm,
+            rank=comm.rank,
+            nranks=comm.nranks,
             engine_id=engine_id,
             device_memory=device_memory,
         )
