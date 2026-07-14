@@ -19,13 +19,16 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for reading and writing Parquet files.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief APIs for reading and writing Parquet files.
  */
 
 constexpr size_t default_row_group_size_bytes =
@@ -1139,7 +1142,6 @@ class chunked_parquet_reader {
 /**
  * @addtogroup io_writers
  * @{
- * @file
  */
 
 /**
