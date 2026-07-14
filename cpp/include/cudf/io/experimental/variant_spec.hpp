@@ -9,7 +9,9 @@
 
 namespace cudf::io::parquet::experimental {
 
-// Physical type id carried in the value_header of a primitive VARIANT value.
+/**
+ * `@brief` Physical type ID carried in the value_header of a primitive VARIANT value.
+ */
 enum class variant_primitive_type : uint8_t {
   null                 = 0,
   boolean_true         = 1,
