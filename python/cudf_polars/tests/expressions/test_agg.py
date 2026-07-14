@@ -156,6 +156,25 @@ def test_hist(engine: pl.GPUEngine, bin_count: int, data: pl.Series) -> None:
 
 
 @pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"include_category": True},
+        {"include_breakpoint": True},
+    ],
+)
+def test_hist_category_breakpoint_unsupported(engine: pl.GPUEngine, kwargs):
+    df = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64())})
+    q = df.select(pl.col("a").hist(bin_count=3, **kwargs))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+def test_hist_no_bin_count_unsupported(engine: pl.GPUEngine):
+    df = pl.LazyFrame({"a": pl.Series([1, 2, 3], dtype=pl.Int64())})
+    q = df.select(pl.col("a").hist(include_category=False, include_breakpoint=False))
+    assert_ir_translation_raises(q, engine, NotImplementedError)
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [1, None, 3, None, 5],

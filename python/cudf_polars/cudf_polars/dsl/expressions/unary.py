@@ -188,11 +188,13 @@ class UnaryFunction(Expr):
                 "Filling null values with limit specified is not yet supported."
             )
         if self.name == "hist":
-            _, include_category, include_breakpoint = self.options
+            bin_count, include_category, include_breakpoint = self.options
             if include_category or include_breakpoint:
                 raise NotImplementedError(
                     "hist with category or breakpoint output is not supported"
                 )
+            if bin_count is None:
+                raise NotImplementedError("hist without bin_count is not supported")
         if self.name == "rank":
             method, _, _ = self.options
             if method not in {"average", "min", "max", "dense", "ordinal"}:
