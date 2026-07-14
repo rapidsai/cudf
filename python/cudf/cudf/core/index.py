@@ -4103,8 +4103,14 @@ class DatetimeIndex(Index):
         >>> datetime_index.microsecond
         Index([0, 1, 2], dtype='int32')
         """
-        # .microsecond is already a cached_property
-        return Index._from_column(self._column.microsecond, name=self.name)
+        # libcudf's MICROSECOND component excludes the millisecond
+        # component, but pandas folds milliseconds into microsecond. Match
+        # pandas (and Series.dt.microsecond) by adding millisecond * 1000.
+        micro = self._column.microsecond
+        extra = self._column.millisecond.astype(np.dtype(np.int32)) * np.int32(
+            1000
+        )
+        return Index._from_column(micro + extra, name=self.name)
 
     @property
     @_performance_tracking
