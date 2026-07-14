@@ -137,7 +137,7 @@ def _begin_quent_do_evaluate_events(
 def _end_quent_do_evaluate_events(
     cls: type[ir.IR],
     frames: Sequence[cudf_polars.containers.DataFrame],
-    result: cudf_polars.containers.DataFrame,
+    result: cudf_polars.containers.DataFrame | None,
     ir_execution_context: IRExecutionContext,
     quent_task: Task,
 ) -> None:
@@ -151,7 +151,8 @@ def _end_quent_do_evaluate_events(
     frames
         The input dataframes passed to the IR node.
     result
-        The output dataframe returned from the IR node.
+        The output dataframe returned from the IR node. This will be ``None``
+        if an exception was raised while evaluating the IR node.
     ir_execution_context
         The IR execution context. To emit any events, this must have a
         quent_ir_execution_context bound.
@@ -180,13 +181,18 @@ def _end_quent_do_evaluate_events(
     if quent_ir_execution_context is None:
         return
 
-    output_capacity_bytes = _dataframe_size_bytes(result)
+    if result is not None:
+        output_rows = result.num_rows
+        output_capacity_bytes = _dataframe_size_bytes(result)
+    else:
+        output_rows = 0
+        output_capacity_bytes = 0
     quent_ir_execution_context.logger.emit(
         quent_ir_execution_context.quent_operator.statistics(
             statistics=cudf_polars.quent._types.Statistics(
                 input_bytes=sum(_dataframe_size_bytes(frame) for frame in frames),
                 output_bytes=output_capacity_bytes,
-                output_rows=result.num_rows,
+                output_rows=output_rows,
             )
         )
     )
@@ -336,7 +342,20 @@ def log_do_evaluate(
             # argument, followed by the method-specific arguments, and returns a DataFrame.
 
             start = time.monotonic_ns()
-            result = func(cls, *args, **kwargs)
+            try:
+                result = func(cls, *args, **kwargs)
+            except Exception:
+                if quent_task is not None:
+                    _end_quent_do_evaluate_events(
+                        cls, frames, None, ir_execution_context, quent_task
+                    )
+                raise
+            else:
+                if quent_task is not None:
+                    _end_quent_do_evaluate_events(
+                        cls, frames, result, ir_execution_context, quent_task
+                    )
+
             stop = time.monotonic_ns()
 
             after_start = time.monotonic_ns()
@@ -359,11 +378,6 @@ def log_do_evaluate(
                 }
             )
             log.info("Execute IR", **record)
-
-            if quent_task is not None:
-                _end_quent_do_evaluate_events(
-                    cls, frames, result, ir_execution_context, quent_task
-                )
 
             return result
 

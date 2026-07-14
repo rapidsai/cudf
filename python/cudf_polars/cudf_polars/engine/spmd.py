@@ -711,6 +711,10 @@ class SPMDEngine(StreamingEngine):
                         if self._quent_thread_pool is not None
                         else None
                     ),
+                    device_memory=self._device_memory,
+                    disk_to_device_channel=self._disk_to_device_channel,
+                    network=self._network,
+                    link_channels=self._link_channels,
                 ),
             },
             engine_options={
