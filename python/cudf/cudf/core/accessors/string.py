@@ -2556,11 +2556,11 @@ class StringMethods(BaseAccessor):
         --------
         >>> import cudf
         >>> data = ["this is a regular sentence",
-        ...     "https://docs.python.org/3/index.html", None]
+        ...     "https://docs.python.org/index.html", None]
         >>> s = cudf.Series(data)
         >>> s
         0            this is a regular sentence
-        1    https://docs.python.org/3/index.html
+        1    https://docs.python.org/index.html
         2                                   NaN
         dtype: str
 
@@ -2568,7 +2568,7 @@ class StringMethods(BaseAccessor):
 
         >>> s.str.split()
         0        [this, is, a, regular, sentence]
-        1    [https://docs.python.org/3/index.html]
+        1    [https://docs.python.org/index.html]
         2                                    None
         dtype: list
 
@@ -2577,7 +2577,7 @@ class StringMethods(BaseAccessor):
 
         >>> s.str.rsplit()
         0        [this, is, a, regular, sentence]
-        1    [https://docs.python.org/3/index.html]
+        1    [https://docs.python.org/index.html]
         2                                    None
         dtype: list
 
@@ -2586,7 +2586,7 @@ class StringMethods(BaseAccessor):
 
         >>> s.str.split(n=2)
         0          [this, is, a regular sentence]
-        1    [https://docs.python.org/3/index.html]
+        1    [https://docs.python.org/index.html]
         2                                    None
         dtype: list
 
@@ -2605,7 +2605,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.split(expand=True)
                                             0     1     2        3         4
         0                                this    is     a  regular  sentence
-        1  https://docs.python.org/3/index.html   NaN   NaN      NaN       NaN
+        1  https://docs.python.org/index.html   NaN   NaN      NaN       NaN
         2                                 NaN   NaN   NaN      NaN       NaN
         """
 
@@ -2791,7 +2791,7 @@ class StringMethods(BaseAccessor):
         >>> s.str.rsplit("/", n=1, expand=True)
                                             0           1
         0          this is a regular sentence         NaN
-        1  https://docs.python.org/3/tutorial/  index.html
+        1  https://docs.python.org/3/tutorial  index.html
         2                                 NaN         NaN
         """
 
@@ -4433,7 +4433,7 @@ class StringMethods(BaseAccessor):
         ...     "https%3A%2F%2Fmedium.com%2Frapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_decode()
-        0    https://docs.rapids.ai/install/
+        0    https://rapids.ai/start.html
         1    https://medium.com/rapids-ai
         dtype: str
         """
@@ -4460,7 +4460,7 @@ class StringMethods(BaseAccessor):
         1        e%20f.g
         2        4-5%2C6
         dtype: str
-        >>> data = ["https://docs.rapids.ai/install/",
+        >>> data = ["https://rapids.ai/start.html",
         ...     "https://medium.com/rapids-ai"]
         >>> s = cudf.Series(data)
         >>> s.str.url_encode()
