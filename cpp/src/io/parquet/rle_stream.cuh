@@ -321,18 +321,6 @@ struct rle_stream {
   __device__ inline int decode_next_ring(int t, int count)
   {
     int const output_count = min(count, total_values - cur_values);
-    // special case. if level_bits == 0, just return all zeros. this should tremendously speed up
-    // a very common case: columns with no nulls, especially if they are non-nested
-    if (level_bits == 0) {
-      int written = 0;
-      while (written < output_count) {
-        int const batch_size = min(num_rle_stream_decode_threads, output_count - written);
-        if (t < batch_size) { output[rolling_index<max_output_values>(written + t)] = 0; }
-        written += batch_size;
-      }
-      cur_values += output_count;
-      return output_count;
-    }
 
     // otherwise, full decode.
     int const warp_id        = t / cudf::detail::warp_size;
@@ -460,25 +448,6 @@ struct rle_stream {
   __device__ inline int decode_next_chunked(int t, int count)
   {
     int const output_count = min(count, total_values - cur_values);
-
-    // ------------------------------------------------------------------
-    // Fast path: level_bits == 0 means every level is implicitly 0 (no
-    // header or payload to parse). Just fill the output range with zeros
-    // in `num_rle_stream_decode_threads`-sized batches.
-    // ------------------------------------------------------------------
-    if (level_bits == 0) {
-      int written = 0;
-      while (written < output_count) {
-        int const batch_size = min(num_rle_stream_decode_threads, output_count - written);
-        if (t < batch_size) {
-          output[rolling_index<max_output_values>(cur_values + written + t)] = 0;
-        }
-        written += batch_size;
-        __syncthreads();
-      }
-      cur_values += output_count;
-      return output_count;
-    }
 
     // ------------------------------------------------------------------
     // Per-chunk shared-memory scratch. `gen_out_off[i]` is the exclusive
@@ -690,6 +659,24 @@ struct rle_stream {
 
   __device__ inline int decode_next(int t, int count)
   {
+    // Fast path: level_bits == 0 means every level is implicitly 0, so no
+    // headers or payloads need parsing. This is a very common case: columns
+    // with no nulls (especially non-nested ones) have all-zero definition
+    // levels. Handled here so both decode_next_ring and decode_next_chunked
+    // stay focused on the general RLE path.
+    int const output_count = min(count, total_values - cur_values);
+    if (level_bits == 0) {
+      int written = 0;
+      while (written < output_count) {
+        int const batch_size = min(num_rle_stream_decode_threads, output_count - written);
+        if (t < batch_size) {
+          output[rolling_index<max_output_values>(cur_values + written + t)] = 0;
+        }
+        written += batch_size;
+      }
+      cur_values += output_count;
+      return output_count;
+    }
     if constexpr (use_chunked_expand) {
       return decode_next_chunked(t, count);
     } else {
