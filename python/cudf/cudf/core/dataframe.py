@@ -6555,6 +6555,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             level_names=data_df._data.level_names,
             rangeindex=data_df._data.rangeindex,
             label_dtype=data_df._data.label_dtype,
+            level_dtypes=data_df._data.level_dtypes,
             verify=False,
         )
         result = DataFrame._from_data(result_ca, attrs=self.attrs)
@@ -6566,6 +6567,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 new_ser = Series._from_column(
                     column_empty(0, dtype=np.dtype(np.float64)),
                     name=q,
+                    index=ensure_index(result.keys()),
                     attrs=self.attrs,
                 )
             else:
@@ -6595,9 +6597,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                         [col.astype(common_dtype) for col in result._columns]
                     ),
                     name=q,
+                    index=ensure_index(result.keys()),
                     attrs=self.attrs,
                 )
-            new_ser.index = result.keys()
             return new_ser
 
         result.index = Index(list(map(float, qs)), dtype="float64")
