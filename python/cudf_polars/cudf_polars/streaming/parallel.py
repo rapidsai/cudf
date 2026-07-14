@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import dataclasses
 import operator
-from functools import partial, reduce
+from functools import reduce
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -65,6 +65,13 @@ def _(
     return _lower_ir_fallback(
         ir, rec, msg=f"Class {type(ir)} does not support multiple partitions."
     )
+
+
+@lower_ir_node.register(Cache)
+def _(
+    ir: Cache, rec: LowerIRTransformer
+) -> tuple[IR, MutableMapping[IR, PartitionInfo]]:  # pragma: no cover
+    raise AssertionError("Cache nodes should have been removed before lowering")
 
 
 @dataclasses.dataclass
@@ -335,8 +342,6 @@ def _lower_ir_pwise(
     return new_node, partition_info
 
 
-_lower_ir_pwise_preserve = partial(_lower_ir_pwise, preserve_partitioning=True)
-lower_ir_node.register(Cache, _lower_ir_pwise_preserve)
 lower_ir_node.register(HConcat, _lower_ir_pwise)
 
 
