@@ -34,7 +34,7 @@ Operating System, GPU driver, and supported CUDA version information can be foun
 
 A stable release of each cudf library is available on PyPI. You will need to match the major version number of your installed CUDA version with a `-cu##` suffix when installing from PyPI.
 
-A development version of each library is available as a nightly release by including the `-i https://pypi.anaconda.org/rapidsai-wheels-nightly/simple` index.
+A development version of each library is available as a nightly release by including the `-i https://pypi.anaconda.org/rapidsai-wheels-nightly/simple/` index.
 
 ```bash
 # CUDA 13
