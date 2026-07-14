@@ -293,7 +293,7 @@ class UnaryFunction(Expr):
                 dtype=replace_column.dtype,
             )
             if not is_strict:
-                return replaced.astype(self.dtype, stream=df.stream).sorted_like(column)
+                return replaced.astype(self.dtype, stream=df.stream)
             mask = plc.search.contains(old.obj, column.obj, stream=df.stream)
             return Column(
                 plc.copying.copy_if_else(
@@ -303,7 +303,7 @@ class UnaryFunction(Expr):
                     stream=df.stream,
                 ),
                 dtype=self.dtype,
-            ).sorted_like(column)
+            )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
