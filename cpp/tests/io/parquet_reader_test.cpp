@@ -4710,6 +4710,48 @@ TEST_F(ParquetReaderTest, InvalidFooterMagic)
   EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
 }
 
+TEST_F(ParquetReaderTest, CorruptPlainStringLengthThrows)
+{
+  // A PLAIN BYTE_ARRAY length that overruns the page must fail loudly instead of
+  // silently decoding the corrupt tail as empty strings.
+  auto const col = cudf::test::strings_column_wrapper{
+    "unique_string_aaa", "unique_string_bbb", "unique_string_ccc", "unique_string_ddd"};
+  auto const expected = table_view{{col}};
+
+  std::vector<char> buffer;
+  cudf::io::parquet_writer_options out_opts =
+    cudf::io::parquet_writer_options::builder(cudf::io::sink_info{&buffer}, expected)
+      .compression(cudf::io::compression_type::NONE)
+      .dictionary_policy(cudf::io::dictionary_policy::NEVER);
+  cudf::io::write_parquet(out_opts);
+
+  // PLAIN BYTE_ARRAY layout is [4-byte little-endian length][string bytes]... So the 4 bytes
+  // immediately preceding a known string value are that value's length prefix. Locate the third
+  // string's bytes, then step back sizeof(int32_t) to land on its length prefix.
+  std::string const target = "unique_string_ccc";
+  auto const it = std::search(buffer.begin(), buffer.end(), target.begin(), target.end());
+  ASSERT_NE(it, buffer.end());
+  auto const length_pos = static_cast<size_t>(std::distance(buffer.begin(), it) - sizeof(int32_t));
+
+  // Sanity check that we found the length prefix: it should hold the real string length.
+  int32_t orig_len{};
+  std::memcpy(&orig_len, buffer.data() + length_pos, sizeof(orig_len));
+  ASSERT_EQ(orig_len, static_cast<int32_t>(target.size()));
+
+  // Overwrite the length prefix with a value that runs past the end of the page. This mimics the
+  // real-world corruption where a stray byte shifts the length window, producing a bogus length.
+  // The offset preprocessor detects `string_offset + len > dict_size` and must raise
+  // decode_error::STRING_DATA_OVERRUN rather than truncating and back-filling empty strings.
+  int32_t const bad_len = 1'000'000;
+  std::memcpy(buffer.data() + length_pos, &bad_len, sizeof(bad_len));
+
+  auto const read_opts = cudf::io::parquet_reader_options::builder(
+                           cudf::io::source_info{cudf::host_span<std::byte const>{
+                             reinterpret_cast<std::byte const*>(buffer.data()), buffer.size()}})
+                           .build();
+  EXPECT_THROW(cudf::io::read_parquet(read_opts), cudf::logic_error);
+}
+
 TEST_F(ParquetReaderTest, DecimalTypeOption)
 {
   auto const data = std::vector<int32_t>{1000, 2000, 3000, 4000, 5000};
