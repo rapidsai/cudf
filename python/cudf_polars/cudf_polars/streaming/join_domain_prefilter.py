@@ -192,8 +192,22 @@ def analyze_plan(ir: IR, stats: StatsCollector) -> PlanFacts:
         for name in node.schema:
             column = ColumnRef(node, name)
             source = bindings.get(name)
-            source_lineage = None if source is None else column_lineages[source]
-            column_lineages[column] = ColumnLineage(column, source_lineage)
+            if source is None:
+                source_lineage = None
+                source_child_index = None
+            else:
+                source_lineage = column_lineages[source]
+                source_children = tuple(
+                    index
+                    for index, child in enumerate(node.children)
+                    if child == source.node
+                )
+                source_child_index = (
+                    source_children[0] if len(source_children) == 1 else None
+                )
+            column_lineages[column] = ColumnLineage(
+                column, source_lineage, source_child_index
+            )
 
     return PlanFacts(
         row_estimates=row_estimates,
@@ -256,10 +270,15 @@ def semijoin_pushdown_candidates(
         lineage = facts.column_lineages[ColumnRef(root, column)]
     except KeyError:
         return
-    for reference in lineage:
-        yield reference
-        if blocks_pushdown(reference.node):
+    while True:
+        yield lineage.column
+        if (
+            blocks_pushdown(lineage.column.node)
+            or lineage.source is None
+            or lineage.source_child_index is None
+        ):
             return
+        lineage = lineage.source
 
 
 def optimize_join_domain_prefilters(
@@ -438,7 +457,7 @@ def _simple_candidates(
             continue
         if domain.rows / target.rows > threshold:
             continue
-        if _contains_identity(target.node, domain.node):
+        if contains_node(target.node, domain.node):
             continue
         yield SimpleCandidate(
             target_side=target_side,
@@ -494,7 +513,7 @@ def _composite_candidates(
                 continue
             if constraint_domain.rows / domain.rows > threshold:
                 continue
-            if _contains_identity(target.node, domain.node) or _contains_identity(
+            if contains_node(target.node, domain.node) or contains_node(
                 target.node, constraint_domain.node
             ):
                 continue
@@ -603,33 +622,37 @@ def _smallest_node_containing_all(
     root: IR, columns: Sequence[str], facts: PlanFacts
 ) -> _Producer | None:
     candidates = []
-    lineages = [
-        {
-            id(reference.node): reference
-            for reference in semijoin_pushdown_candidates(facts, root, column)
-        }
-        for column in columns
-    ]
-    if not lineages or any(not lineage for lineage in lineages):
+    lineages: list[ColumnLineage] = []
+    for column in columns:
+        lineage = facts.column_lineages.get(ColumnRef(root, column))
+        if lineage is None:
+            return None
+        lineages.append(lineage)
+    if not lineages:
         return None
-    # A common producer must be the same node occurrence in the IR DAG, not
-    # merely an equal node, so index each lineage by object identity.
-    for node_id, first_reference in lineages[0].items():
-        node = first_reference.node
-        try:
-            bound_columns = tuple(lineage[node_id].name for lineage in lineages)
-        except KeyError:
-            continue
+    while True:
+        node = lineages[0].column.node
+        if any(lineage.column.node != node for lineage in lineages[1:]):
+            break
+        bound_columns = tuple(lineage.column.name for lineage in lineages)
         rows = facts.row_estimates.get(node)
-        if rows is None or rows <= 0:
-            continue
-        candidates.append(
-            (
-                rows,
-                len(node.schema),
-                _Producer(node, bound_columns, rows),
+        if rows is not None and rows > 0:
+            candidates.append(
+                (
+                    rows,
+                    len(node.schema),
+                    _Producer(node, bound_columns, rows),
+                )
             )
-        )
+        if blocks_pushdown(node):
+            break
+        source_child_indices = {lineage.source_child_index for lineage in lineages}
+        if len(source_child_indices) != 1 or None in source_child_indices:
+            break
+        sources = [lineage.source for lineage in lineages]
+        if any(source is None for source in sources):
+            break
+        lineages = [source for source in sources if source is not None]
     if not candidates:
         return None
     return min(candidates, key=lambda item: (item[0], item[1]))[2]
@@ -672,8 +695,9 @@ def _estimate_join_rows(
     return None
 
 
-def _contains_identity(root: IR, needle: IR) -> bool:
-    return any(node is needle for node in traversal([root]))
+def contains_node(root: IR, needle: IR) -> bool:
+    """Return whether an equal node occurs in a DAG rooted at ``root``."""
+    return needle in traversal([root])
 
 
 def _trace_decision(ir: Join, threshold: float, decision: Decision) -> None:

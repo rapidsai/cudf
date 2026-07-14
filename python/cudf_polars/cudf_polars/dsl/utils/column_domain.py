@@ -45,6 +45,8 @@ class ColumnLineage:
 
     column: ColumnRef
     source: ColumnLineage | None = None
+    source_child_index: int | None = None
+    """Unique child edge leading to ``source``, or None if absent or ambiguous."""
 
     def __iter__(self) -> Iterator[ColumnRef]:
         """Iterate from the output column towards its furthest known source."""

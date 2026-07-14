@@ -12,7 +12,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Distinct, Join, Scan, Select, Slice
+from cudf_polars.dsl.ir import Cache, Distinct, Join, Scan, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
@@ -26,6 +26,7 @@ from cudf_polars.streaming.join_domain_prefilter import (
     _smallest_node_containing_all,
     analyze_plan,
     apply_candidate,
+    contains_node,
     optimize_join_domain_prefilters,
     semijoin_pushdown_candidates,
 )
@@ -476,6 +477,38 @@ def test_composite_domain_columns_follow_renames() -> None:
     assert producer is not None
     assert producer.node is source
     assert producer.columns == ("raw_key", "raw_constraint")
+
+
+def test_composite_domain_columns_do_not_reconverge_after_join(
+    engine: SPMDEngine,
+) -> None:
+    source = pl.LazyFrame({"key": [1, 1, 2], "value": [10, 20, 30]})
+    query = source.join(source, on="key", suffix="_right")
+    joined = Translator(query._ldf.visit(), engine).translate_ir()
+
+    assert isinstance(joined, Join)
+    assert isinstance(joined.children[0], Cache)
+    assert joined.children[0] is joined.children[1]
+
+    facts = analyze_plan(joined, StatsCollector())
+    producer = _smallest_node_containing_all(joined, ("value", "value_right"), facts)
+
+    assert tuple(semijoin_pushdown_candidates(facts, joined, "value")) == (
+        ColumnRef(joined, "value"),
+    )
+    assert producer is not None
+    assert producer.node is joined
+    assert producer.columns == ("value", "value_right")
+
+
+def test_contains_node_uses_dag_equality() -> None:
+    source = _scan("source", ("key",))
+    equal_source = _scan("source", ("key",))
+    root = _select(source, key="key")
+
+    assert source is not equal_source
+    assert source == equal_source
+    assert contains_node(root, equal_source)
 
 
 def test_plan_facts_share_lineage_suffixes_across_shared_dag() -> None:
