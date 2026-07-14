@@ -22,9 +22,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 
@@ -117,16 +117,22 @@ class device_row_hasher {
    */
   __device__ result_type operator()(size_type row_index) const noexcept
   {
-    auto const hasher = [row_index, this](auto const& column) {
+    auto const hasher = [row_index, this](auto seed, auto const& column) {
       return cudf::type_dispatcher<dispatch_storage_type>(
-        column.type(), element_hasher_adapter{_check_nulls, _seed}, column, row_index);
+        column.type(), element_hasher_adapter{_check_nulls, seed}, column, row_index);
     };
 
+    if (_num_input_columns > 1) {
+      return detail::accumulate(_table.begin(), _table.end(), _seed, hasher);
+    }
+
     auto const has_columns = _table.num_columns() > 0;
-    auto const init        = has_columns ? hasher(_table.column(0)) : _seed;
+    auto const init        = has_columns ? hasher(_seed, _table.column(0)) : _seed;
     auto const start_col   = static_cast<size_type>(has_columns);
 
-    auto it = thrust::make_transform_iterator(_table.begin() + start_col, hasher);
+    auto it = cuda::transform_iterator{
+      _table.begin() + start_col,
+      [hasher, seed = _seed](auto const& column) { return hasher(seed, column); }};
     return detail::accumulate(
       it, it + (_table.num_columns() - start_col), init, [](auto hash, auto h) {
         return cudf::hashing::detail::hash_combine(hash, h);
@@ -217,13 +223,15 @@ class device_row_hasher {
 
   CUDF_HOST_DEVICE device_row_hasher(Nullate check_nulls,
                                      table_device_view t,
+                                     size_type num_input_columns,
                                      result_type seed = DEFAULT_HASH_SEED) noexcept
-    : _check_nulls{check_nulls}, _table{t}, _seed(seed)
+    : _check_nulls{check_nulls}, _table{t}, _num_input_columns{num_input_columns}, _seed(seed)
   {
   }
 
   Nullate const _check_nulls;
   table_device_view const _table;
+  size_type const _num_input_columns;
   // Assumes seeds are the same as the result type of the hash function
   result_type const _seed;
 };
@@ -278,7 +286,7 @@ class row_hasher {
     Nullate nullate                                                  = {},
     cuda::std::invoke_result_t<hash_function<int32_t>, int32_t> seed = DEFAULT_HASH_SEED) const
   {
-    return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, seed);
+    return DeviceRowHasher<hash_function, Nullate>(nullate, *d_t, d_t->_num_input_columns, seed);
   }
 
  private:
