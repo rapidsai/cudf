@@ -16,6 +16,7 @@
 #include <cudf/detail/utilities/grid_1d.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/io/experimental/variant.hpp>
+#include <cudf/io/experimental/variant_spec.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -57,29 +58,7 @@ constexpr size_type variant_header_bytes = 1;
 enum class basic_type : uint8_t { primitive = 0, short_string = 1, object = 2, array = 3 };
 
 // For a primitive value, the value_header is the physical type id of the payload.
-enum class primitive_type : uint8_t {
-  null                 = 0,
-  boolean_true         = 1,
-  boolean_false        = 2,
-  int8                 = 3,
-  int16                = 4,
-  int32                = 5,
-  int64                = 6,
-  float64              = 7,
-  decimal4             = 8,
-  decimal8             = 9,
-  decimal16            = 10,
-  date                 = 11,
-  timestamp_micros     = 12,
-  timestamp_ntz_micros = 13,
-  float32              = 14,
-  binary               = 15,
-  long_string          = 16,
-  time_ntz_micros      = 17,
-  timestamp_nanos      = 18,
-  timestamp_ntz_nanos  = 19,
-  uuid                 = 20,
-};
+using primitive_type = variant_primitive_type;
 
 __device__ cuda::std::optional<uint64_t> read_uint64(device_span<uint8_t const> data,
                                                      size_type pos,

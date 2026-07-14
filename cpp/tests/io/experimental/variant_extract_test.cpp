@@ -12,6 +12,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/io/experimental/variant.hpp>
+#include <cudf/io/experimental/variant_spec.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/utilities/span.hpp>
@@ -42,8 +43,7 @@ namespace {
 //       * short_string -> string length in bytes (0..63)
 //       * object/array -> field-id / field-offset size flags
 //
-// The enums below mirror the private `basic_type` / `primitive_type` definitions
-// in variant_extract.cu so tests can spell header bytes out by name (and avoid
+// The enums below let tests spell header bytes out by name (and avoid
 // endianness ambiguity in the bit layout) instead of using magic numbers.
 //
 // [1] https://github.com/apache/parquet-format/blob/master/VariantEncoding.md
@@ -55,30 +55,7 @@ enum class variant_basic_type : uint8_t {
   array        = 3,
 };
 
-// Physical type id carried in the value_header of a primitive value.
-enum class variant_primitive_type : uint8_t {
-  null                 = 0,
-  boolean_true         = 1,
-  boolean_false        = 2,
-  int8                 = 3,
-  int16                = 4,
-  int32                = 5,
-  int64                = 6,
-  float64              = 7,
-  decimal4             = 8,
-  decimal8             = 9,
-  decimal16            = 10,
-  date                 = 11,
-  timestamp_micros     = 12,
-  timestamp_ntz_micros = 13,
-  float32              = 14,
-  binary               = 15,
-  long_string          = 16,
-  time_ntz_micros      = 17,
-  timestamp_nanos      = 18,
-  timestamp_ntz_nanos  = 19,
-  uuid                 = 20,
-};
+using cudf::io::parquet::experimental::variant_primitive_type;
 
 // Compose a value-metadata header byte from a basic type and its 6-bit value_header.
 constexpr uint8_t make_variant_header(variant_basic_type basic, uint8_t value_header)
