@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include <format>
-#include <regex_ir_detail.hpp>
+#define REGEX_IR_IMPLEMENTATION
+#include <regex_ir.hpp>
 
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <cctype>
 #include <cstdint>
+#include <format>
 #include <iterator>
 #include <locale>
 #include <map>
@@ -38,567 +39,162 @@ struct unicode_data_range {
   std::uint32_t last;
 };
 
-inline constexpr unicode_data_range cudf_unicode_word_ranges[] = {
-  {0x000030U, 0x000039U},
-  {0x000041U, 0x00005aU},
-  {0x000061U, 0x00007aU},
-  {0x0000aaU, 0x0000aaU},
-  {0x0000b2U, 0x0000b3U},
-  {0x0000b5U, 0x0000b5U},
-  {0x0000b9U, 0x0000baU},
-  {0x0000bcU, 0x0000beU},
-  {0x0000c0U, 0x0000d6U},
-  {0x0000d8U, 0x0000f6U},
-  {0x0000f8U, 0x0002c1U},
-  {0x0002c6U, 0x0002d1U},
-  {0x0002e0U, 0x0002e4U},
-  {0x0002ecU, 0x0002ecU},
-  {0x0002eeU, 0x0002eeU},
-  {0x000370U, 0x000374U},
-  {0x000376U, 0x000377U},
-  {0x00037aU, 0x00037dU},
-  {0x00037fU, 0x00037fU},
-  {0x000386U, 0x000386U},
-  {0x000388U, 0x00038aU},
-  {0x00038cU, 0x00038cU},
-  {0x00038eU, 0x0003a1U},
-  {0x0003a3U, 0x0003f5U},
-  {0x0003f7U, 0x000481U},
-  {0x00048aU, 0x00052fU},
-  {0x000531U, 0x000556U},
-  {0x000559U, 0x000559U},
-  {0x000561U, 0x000587U},
-  {0x0005d0U, 0x0005eaU},
-  {0x0005f0U, 0x0005f2U},
-  {0x000620U, 0x00064aU},
-  {0x000660U, 0x000669U},
-  {0x00066eU, 0x00066fU},
-  {0x000671U, 0x0006d3U},
-  {0x0006d5U, 0x0006d5U},
-  {0x0006e5U, 0x0006e6U},
-  {0x0006eeU, 0x0006fcU},
-  {0x0006ffU, 0x0006ffU},
-  {0x000710U, 0x000710U},
-  {0x000712U, 0x00072fU},
-  {0x00074dU, 0x0007a5U},
-  {0x0007b1U, 0x0007b1U},
-  {0x0007c0U, 0x0007eaU},
-  {0x0007f4U, 0x0007f5U},
-  {0x0007faU, 0x0007faU},
-  {0x000800U, 0x000815U},
-  {0x00081aU, 0x00081aU},
-  {0x000824U, 0x000824U},
-  {0x000828U, 0x000828U},
-  {0x000840U, 0x000858U},
-  {0x0008a0U, 0x0008b4U},
-  {0x0008b6U, 0x0008bdU},
-  {0x000904U, 0x000939U},
-  {0x00093dU, 0x00093dU},
-  {0x000950U, 0x000950U},
-  {0x000958U, 0x000961U},
-  {0x000966U, 0x00096fU},
-  {0x000971U, 0x000980U},
-  {0x000985U, 0x00098cU},
-  {0x00098fU, 0x000990U},
-  {0x000993U, 0x0009a8U},
-  {0x0009aaU, 0x0009b0U},
-  {0x0009b2U, 0x0009b2U},
-  {0x0009b6U, 0x0009b9U},
-  {0x0009bdU, 0x0009bdU},
-  {0x0009ceU, 0x0009ceU},
-  {0x0009dcU, 0x0009ddU},
-  {0x0009dfU, 0x0009e1U},
-  {0x0009e6U, 0x0009f1U},
-  {0x0009f4U, 0x0009f9U},
-  {0x000a05U, 0x000a0aU},
-  {0x000a0fU, 0x000a10U},
-  {0x000a13U, 0x000a28U},
-  {0x000a2aU, 0x000a30U},
-  {0x000a32U, 0x000a33U},
-  {0x000a35U, 0x000a36U},
-  {0x000a38U, 0x000a39U},
-  {0x000a59U, 0x000a5cU},
-  {0x000a5eU, 0x000a5eU},
-  {0x000a66U, 0x000a6fU},
-  {0x000a72U, 0x000a74U},
-  {0x000a85U, 0x000a8dU},
-  {0x000a8fU, 0x000a91U},
-  {0x000a93U, 0x000aa8U},
-  {0x000aaaU, 0x000ab0U},
-  {0x000ab2U, 0x000ab3U},
-  {0x000ab5U, 0x000ab9U},
-  {0x000abdU, 0x000abdU},
-  {0x000ad0U, 0x000ad0U},
-  {0x000ae0U, 0x000ae1U},
-  {0x000ae6U, 0x000aefU},
-  {0x000af9U, 0x000af9U},
-  {0x000b05U, 0x000b0cU},
-  {0x000b0fU, 0x000b10U},
-  {0x000b13U, 0x000b28U},
-  {0x000b2aU, 0x000b30U},
-  {0x000b32U, 0x000b33U},
-  {0x000b35U, 0x000b39U},
-  {0x000b3dU, 0x000b3dU},
-  {0x000b5cU, 0x000b5dU},
-  {0x000b5fU, 0x000b61U},
-  {0x000b66U, 0x000b6fU},
-  {0x000b71U, 0x000b77U},
-  {0x000b83U, 0x000b83U},
-  {0x000b85U, 0x000b8aU},
-  {0x000b8eU, 0x000b90U},
-  {0x000b92U, 0x000b95U},
-  {0x000b99U, 0x000b9aU},
-  {0x000b9cU, 0x000b9cU},
-  {0x000b9eU, 0x000b9fU},
-  {0x000ba3U, 0x000ba4U},
-  {0x000ba8U, 0x000baaU},
-  {0x000baeU, 0x000bb9U},
-  {0x000bd0U, 0x000bd0U},
-  {0x000be6U, 0x000bf2U},
-  {0x000c05U, 0x000c0cU},
-  {0x000c0eU, 0x000c10U},
-  {0x000c12U, 0x000c28U},
-  {0x000c2aU, 0x000c39U},
-  {0x000c3dU, 0x000c3dU},
-  {0x000c58U, 0x000c5aU},
-  {0x000c60U, 0x000c61U},
-  {0x000c66U, 0x000c6fU},
-  {0x000c78U, 0x000c7eU},
-  {0x000c80U, 0x000c80U},
-  {0x000c85U, 0x000c8cU},
-  {0x000c8eU, 0x000c90U},
-  {0x000c92U, 0x000ca8U},
-  {0x000caaU, 0x000cb3U},
-  {0x000cb5U, 0x000cb9U},
-  {0x000cbdU, 0x000cbdU},
-  {0x000cdeU, 0x000cdeU},
-  {0x000ce0U, 0x000ce1U},
-  {0x000ce6U, 0x000cefU},
-  {0x000cf1U, 0x000cf2U},
-  {0x000d05U, 0x000d0cU},
-  {0x000d0eU, 0x000d10U},
-  {0x000d12U, 0x000d3aU},
-  {0x000d3dU, 0x000d3dU},
-  {0x000d4eU, 0x000d4eU},
-  {0x000d54U, 0x000d56U},
-  {0x000d58U, 0x000d61U},
-  {0x000d66U, 0x000d78U},
-  {0x000d7aU, 0x000d7fU},
-  {0x000d85U, 0x000d96U},
-  {0x000d9aU, 0x000db1U},
-  {0x000db3U, 0x000dbbU},
-  {0x000dbdU, 0x000dbdU},
-  {0x000dc0U, 0x000dc6U},
-  {0x000de6U, 0x000defU},
-  {0x000e01U, 0x000e30U},
-  {0x000e32U, 0x000e33U},
-  {0x000e40U, 0x000e46U},
-  {0x000e50U, 0x000e59U},
-  {0x000e81U, 0x000e82U},
-  {0x000e84U, 0x000e84U},
-  {0x000e87U, 0x000e88U},
-  {0x000e8aU, 0x000e8aU},
-  {0x000e8dU, 0x000e8dU},
-  {0x000e94U, 0x000e97U},
-  {0x000e99U, 0x000e9fU},
-  {0x000ea1U, 0x000ea3U},
-  {0x000ea5U, 0x000ea5U},
-  {0x000ea7U, 0x000ea7U},
-  {0x000eaaU, 0x000eabU},
-  {0x000eadU, 0x000eb0U},
-  {0x000eb2U, 0x000eb3U},
-  {0x000ebdU, 0x000ebdU},
-  {0x000ec0U, 0x000ec4U},
-  {0x000ec6U, 0x000ec6U},
-  {0x000ed0U, 0x000ed9U},
-  {0x000edcU, 0x000edfU},
-  {0x000f00U, 0x000f00U},
-  {0x000f20U, 0x000f33U},
-  {0x000f40U, 0x000f47U},
-  {0x000f49U, 0x000f6cU},
-  {0x000f88U, 0x000f8cU},
-  {0x001000U, 0x00102aU},
-  {0x00103fU, 0x001049U},
-  {0x001050U, 0x001055U},
-  {0x00105aU, 0x00105dU},
-  {0x001061U, 0x001061U},
-  {0x001065U, 0x001066U},
-  {0x00106eU, 0x001070U},
-  {0x001075U, 0x001081U},
-  {0x00108eU, 0x00108eU},
-  {0x001090U, 0x001099U},
-  {0x0010a0U, 0x0010c5U},
-  {0x0010c7U, 0x0010c7U},
-  {0x0010cdU, 0x0010cdU},
-  {0x0010d0U, 0x0010faU},
-  {0x0010fcU, 0x001248U},
-  {0x00124aU, 0x00124dU},
-  {0x001250U, 0x001256U},
-  {0x001258U, 0x001258U},
-  {0x00125aU, 0x00125dU},
-  {0x001260U, 0x001288U},
-  {0x00128aU, 0x00128dU},
-  {0x001290U, 0x0012b0U},
-  {0x0012b2U, 0x0012b5U},
-  {0x0012b8U, 0x0012beU},
-  {0x0012c0U, 0x0012c0U},
-  {0x0012c2U, 0x0012c5U},
-  {0x0012c8U, 0x0012d6U},
-  {0x0012d8U, 0x001310U},
-  {0x001312U, 0x001315U},
-  {0x001318U, 0x00135aU},
-  {0x001369U, 0x00137cU},
-  {0x001380U, 0x00138fU},
-  {0x0013a0U, 0x0013f5U},
-  {0x0013f8U, 0x0013fdU},
-  {0x001401U, 0x00166cU},
-  {0x00166fU, 0x00167fU},
-  {0x001681U, 0x00169aU},
-  {0x0016a0U, 0x0016eaU},
-  {0x0016eeU, 0x0016f8U},
-  {0x001700U, 0x00170cU},
-  {0x00170eU, 0x001711U},
-  {0x001720U, 0x001731U},
-  {0x001740U, 0x001751U},
-  {0x001760U, 0x00176cU},
-  {0x00176eU, 0x001770U},
-  {0x001780U, 0x0017b3U},
-  {0x0017d7U, 0x0017d7U},
-  {0x0017dcU, 0x0017dcU},
-  {0x0017e0U, 0x0017e9U},
-  {0x0017f0U, 0x0017f9U},
-  {0x001810U, 0x001819U},
-  {0x001820U, 0x001877U},
-  {0x001880U, 0x001884U},
-  {0x001887U, 0x0018a8U},
-  {0x0018aaU, 0x0018aaU},
-  {0x0018b0U, 0x0018f5U},
-  {0x001900U, 0x00191eU},
-  {0x001946U, 0x00196dU},
-  {0x001970U, 0x001974U},
-  {0x001980U, 0x0019abU},
-  {0x0019b0U, 0x0019c9U},
-  {0x0019d0U, 0x0019daU},
-  {0x001a00U, 0x001a16U},
-  {0x001a20U, 0x001a54U},
-  {0x001a80U, 0x001a89U},
-  {0x001a90U, 0x001a99U},
-  {0x001aa7U, 0x001aa7U},
-  {0x001b05U, 0x001b33U},
-  {0x001b45U, 0x001b4bU},
-  {0x001b50U, 0x001b59U},
-  {0x001b83U, 0x001ba0U},
-  {0x001baeU, 0x001be5U},
-  {0x001c00U, 0x001c23U},
-  {0x001c40U, 0x001c49U},
-  {0x001c4dU, 0x001c7dU},
-  {0x001c80U, 0x001c88U},
-  {0x001c90U, 0x001cbaU},
-  {0x001cbdU, 0x001cbfU},
-  {0x001ce9U, 0x001cecU},
-  {0x001ceeU, 0x001cf1U},
-  {0x001cf5U, 0x001cf6U},
-  {0x001d00U, 0x001dbfU},
-  {0x001e00U, 0x001f15U},
-  {0x001f18U, 0x001f1dU},
-  {0x001f20U, 0x001f45U},
-  {0x001f48U, 0x001f4dU},
-  {0x001f50U, 0x001f57U},
-  {0x001f59U, 0x001f59U},
-  {0x001f5bU, 0x001f5bU},
-  {0x001f5dU, 0x001f5dU},
-  {0x001f5fU, 0x001f7dU},
-  {0x001f80U, 0x001fb4U},
-  {0x001fb6U, 0x001fbcU},
-  {0x001fbeU, 0x001fbeU},
-  {0x001fc2U, 0x001fc4U},
-  {0x001fc6U, 0x001fccU},
-  {0x001fd0U, 0x001fd3U},
-  {0x001fd6U, 0x001fdbU},
-  {0x001fe0U, 0x001fecU},
-  {0x001ff2U, 0x001ff4U},
-  {0x001ff6U, 0x001ffcU},
-  {0x002070U, 0x002071U},
-  {0x002074U, 0x002079U},
-  {0x00207fU, 0x002089U},
-  {0x002090U, 0x00209cU},
-  {0x002102U, 0x002102U},
-  {0x002107U, 0x002107U},
-  {0x00210aU, 0x002113U},
-  {0x002115U, 0x002115U},
-  {0x002119U, 0x00211dU},
-  {0x002124U, 0x002124U},
-  {0x002126U, 0x002126U},
-  {0x002128U, 0x002128U},
-  {0x00212aU, 0x00212dU},
-  {0x00212fU, 0x002139U},
-  {0x00213cU, 0x00213fU},
-  {0x002145U, 0x002149U},
-  {0x00214eU, 0x00214eU},
-  {0x002150U, 0x002189U},
-  {0x002460U, 0x00249bU},
-  {0x0024eaU, 0x0024ffU},
-  {0x002776U, 0x002793U},
-  {0x002c00U, 0x002c2eU},
-  {0x002c30U, 0x002c5eU},
-  {0x002c60U, 0x002ce4U},
-  {0x002cebU, 0x002ceeU},
-  {0x002cf2U, 0x002cf3U},
-  {0x002cfdU, 0x002cfdU},
-  {0x002d00U, 0x002d25U},
-  {0x002d27U, 0x002d27U},
-  {0x002d2dU, 0x002d2dU},
-  {0x002d30U, 0x002d67U},
-  {0x002d6fU, 0x002d6fU},
-  {0x002d80U, 0x002d96U},
-  {0x002da0U, 0x002da6U},
-  {0x002da8U, 0x002daeU},
-  {0x002db0U, 0x002db6U},
-  {0x002db8U, 0x002dbeU},
-  {0x002dc0U, 0x002dc6U},
-  {0x002dc8U, 0x002dceU},
-  {0x002dd0U, 0x002dd6U},
-  {0x002dd8U, 0x002ddeU},
-  {0x002e2fU, 0x002e2fU},
-  {0x003005U, 0x003007U},
-  {0x003021U, 0x003029U},
-  {0x003031U, 0x003035U},
-  {0x003038U, 0x00303cU},
-  {0x003041U, 0x003096U},
-  {0x00309dU, 0x00309fU},
-  {0x0030a1U, 0x0030faU},
-  {0x0030fcU, 0x0030ffU},
-  {0x003105U, 0x00312dU},
-  {0x003131U, 0x00318eU},
-  {0x003192U, 0x003195U},
-  {0x0031a0U, 0x0031baU},
-  {0x0031f0U, 0x0031ffU},
-  {0x003220U, 0x003229U},
-  {0x003248U, 0x00324fU},
-  {0x003251U, 0x00325fU},
-  {0x003280U, 0x003289U},
-  {0x0032b1U, 0x0032bfU},
-  {0x003400U, 0x004db5U},
-  {0x004e00U, 0x009fd5U},
-  {0x00a000U, 0x00a48cU},
-  {0x00a4d0U, 0x00a4fdU},
-  {0x00a500U, 0x00a60cU},
-  {0x00a610U, 0x00a62bU},
-  {0x00a640U, 0x00a66eU},
-  {0x00a67fU, 0x00a69dU},
-  {0x00a6a0U, 0x00a6efU},
-  {0x00a717U, 0x00a71fU},
-  {0x00a722U, 0x00a788U},
-  {0x00a78bU, 0x00a7aeU},
-  {0x00a7b0U, 0x00a7bfU},
-  {0x00a7c2U, 0x00a7c6U},
-  {0x00a7f7U, 0x00a801U},
-  {0x00a803U, 0x00a805U},
-  {0x00a807U, 0x00a80aU},
-  {0x00a80cU, 0x00a822U},
-  {0x00a830U, 0x00a835U},
-  {0x00a840U, 0x00a873U},
-  {0x00a882U, 0x00a8b3U},
-  {0x00a8d0U, 0x00a8d9U},
-  {0x00a8f2U, 0x00a8f7U},
-  {0x00a8fbU, 0x00a8fbU},
-  {0x00a8fdU, 0x00a8fdU},
-  {0x00a900U, 0x00a925U},
-  {0x00a930U, 0x00a946U},
-  {0x00a960U, 0x00a97cU},
-  {0x00a984U, 0x00a9b2U},
-  {0x00a9cfU, 0x00a9d9U},
-  {0x00a9e0U, 0x00a9e4U},
-  {0x00a9e6U, 0x00a9feU},
-  {0x00aa00U, 0x00aa28U},
-  {0x00aa40U, 0x00aa42U},
-  {0x00aa44U, 0x00aa4bU},
-  {0x00aa50U, 0x00aa59U},
-  {0x00aa60U, 0x00aa76U},
-  {0x00aa7aU, 0x00aa7aU},
-  {0x00aa7eU, 0x00aaafU},
-  {0x00aab1U, 0x00aab1U},
-  {0x00aab5U, 0x00aab6U},
-  {0x00aab9U, 0x00aabdU},
-  {0x00aac0U, 0x00aac0U},
-  {0x00aac2U, 0x00aac2U},
-  {0x00aadbU, 0x00aaddU},
-  {0x00aae0U, 0x00aaeaU},
-  {0x00aaf2U, 0x00aaf4U},
-  {0x00ab01U, 0x00ab06U},
-  {0x00ab09U, 0x00ab0eU},
-  {0x00ab11U, 0x00ab16U},
-  {0x00ab20U, 0x00ab26U},
-  {0x00ab28U, 0x00ab2eU},
-  {0x00ab30U, 0x00ab5aU},
-  {0x00ab5cU, 0x00ab65U},
-  {0x00ab70U, 0x00abe2U},
-  {0x00abf0U, 0x00abf9U},
-  {0x00ac00U, 0x00d7a3U},
-  {0x00d7b0U, 0x00d7c6U},
-  {0x00d7cbU, 0x00d7fbU},
-  {0x00f900U, 0x00fa6dU},
-  {0x00fa70U, 0x00fad9U},
-  {0x00fb00U, 0x00fb06U},
-  {0x00fb09U, 0x00fb0dU},
-  {0x00fb13U, 0x00fb17U},
-  {0x00fb1dU, 0x00fb1dU},
-  {0x00fb1fU, 0x00fb28U},
-  {0x00fb2aU, 0x00fb36U},
-  {0x00fb38U, 0x00fb3cU},
-  {0x00fb3eU, 0x00fb3eU},
-  {0x00fb40U, 0x00fb41U},
-  {0x00fb43U, 0x00fb44U},
-  {0x00fb46U, 0x00fbb1U},
-  {0x00fbd3U, 0x00fd3dU},
-  {0x00fd50U, 0x00fd8fU},
-  {0x00fd92U, 0x00fdc7U},
-  {0x00fdf0U, 0x00fdfbU},
-  {0x00fe70U, 0x00fe74U},
-  {0x00fe76U, 0x00fefcU},
-  {0x00ff10U, 0x00ff19U},
-  {0x00ff21U, 0x00ff3aU},
-  {0x00ff41U, 0x00ff5aU},
-  {0x00ff66U, 0x00ffbeU},
-  {0x00ffc2U, 0x00ffc7U},
-  {0x00ffcaU, 0x00ffcfU},
-  {0x00ffd2U, 0x00ffd7U},
-  {0x00ffdaU, 0x00ffdcU},
+inline constexpr unicode_data_range unicode_word_ranges[] = {
+  {0x30U, 0x39U}, {0x41U, 0x5aU}, {0x61U, 0x7aU}, {0xaaU, 0xaaU},
+  {0xb2U, 0xb3U}, {0xb5U, 0xb5U}, {0xb9U, 0xbaU}, {0xbcU, 0xbeU},
+  {0xc0U, 0xd6U}, {0xd8U, 0xf6U}, {0xf8U, 0x2c1U}, {0x2c6U, 0x2d1U},
+  {0x2e0U, 0x2e4U}, {0x2ecU, 0x2ecU}, {0x2eeU, 0x2eeU}, {0x370U, 0x374U},
+  {0x376U, 0x377U}, {0x37aU, 0x37dU}, {0x37fU, 0x37fU}, {0x386U, 0x386U},
+  {0x388U, 0x38aU}, {0x38cU, 0x38cU}, {0x38eU, 0x3a1U}, {0x3a3U, 0x3f5U},
+  {0x3f7U, 0x481U}, {0x48aU, 0x52fU}, {0x531U, 0x556U}, {0x559U, 0x559U},
+  {0x561U, 0x587U}, {0x5d0U, 0x5eaU}, {0x5f0U, 0x5f2U}, {0x620U, 0x64aU},
+  {0x660U, 0x669U}, {0x66eU, 0x66fU}, {0x671U, 0x6d3U}, {0x6d5U, 0x6d5U},
+  {0x6e5U, 0x6e6U}, {0x6eeU, 0x6fcU}, {0x6ffU, 0x6ffU}, {0x710U, 0x710U},
+  {0x712U, 0x72fU}, {0x74dU, 0x7a5U}, {0x7b1U, 0x7b1U}, {0x7c0U, 0x7eaU},
+  {0x7f4U, 0x7f5U}, {0x7faU, 0x7faU}, {0x800U, 0x815U}, {0x81aU, 0x81aU},
+  {0x824U, 0x824U}, {0x828U, 0x828U}, {0x840U, 0x858U}, {0x8a0U, 0x8b4U},
+  {0x8b6U, 0x8bdU}, {0x904U, 0x939U}, {0x93dU, 0x93dU}, {0x950U, 0x950U},
+  {0x958U, 0x961U}, {0x966U, 0x96fU}, {0x971U, 0x980U}, {0x985U, 0x98cU},
+  {0x98fU, 0x990U}, {0x993U, 0x9a8U}, {0x9aaU, 0x9b0U}, {0x9b2U, 0x9b2U},
+  {0x9b6U, 0x9b9U}, {0x9bdU, 0x9bdU}, {0x9ceU, 0x9ceU}, {0x9dcU, 0x9ddU},
+  {0x9dfU, 0x9e1U}, {0x9e6U, 0x9f1U}, {0x9f4U, 0x9f9U}, {0xa05U, 0xa0aU},
+  {0xa0fU, 0xa10U}, {0xa13U, 0xa28U}, {0xa2aU, 0xa30U}, {0xa32U, 0xa33U},
+  {0xa35U, 0xa36U}, {0xa38U, 0xa39U}, {0xa59U, 0xa5cU}, {0xa5eU, 0xa5eU},
+  {0xa66U, 0xa6fU}, {0xa72U, 0xa74U}, {0xa85U, 0xa8dU}, {0xa8fU, 0xa91U},
+  {0xa93U, 0xaa8U}, {0xaaaU, 0xab0U}, {0xab2U, 0xab3U}, {0xab5U, 0xab9U},
+  {0xabdU, 0xabdU}, {0xad0U, 0xad0U}, {0xae0U, 0xae1U}, {0xae6U, 0xaefU},
+  {0xaf9U, 0xaf9U}, {0xb05U, 0xb0cU}, {0xb0fU, 0xb10U}, {0xb13U, 0xb28U},
+  {0xb2aU, 0xb30U}, {0xb32U, 0xb33U}, {0xb35U, 0xb39U}, {0xb3dU, 0xb3dU},
+  {0xb5cU, 0xb5dU}, {0xb5fU, 0xb61U}, {0xb66U, 0xb6fU}, {0xb71U, 0xb77U},
+  {0xb83U, 0xb83U}, {0xb85U, 0xb8aU}, {0xb8eU, 0xb90U}, {0xb92U, 0xb95U},
+  {0xb99U, 0xb9aU}, {0xb9cU, 0xb9cU}, {0xb9eU, 0xb9fU}, {0xba3U, 0xba4U},
+  {0xba8U, 0xbaaU}, {0xbaeU, 0xbb9U}, {0xbd0U, 0xbd0U}, {0xbe6U, 0xbf2U},
+  {0xc05U, 0xc0cU}, {0xc0eU, 0xc10U}, {0xc12U, 0xc28U}, {0xc2aU, 0xc39U},
+  {0xc3dU, 0xc3dU}, {0xc58U, 0xc5aU}, {0xc60U, 0xc61U}, {0xc66U, 0xc6fU},
+  {0xc78U, 0xc7eU}, {0xc80U, 0xc80U}, {0xc85U, 0xc8cU}, {0xc8eU, 0xc90U},
+  {0xc92U, 0xca8U}, {0xcaaU, 0xcb3U}, {0xcb5U, 0xcb9U}, {0xcbdU, 0xcbdU},
+  {0xcdeU, 0xcdeU}, {0xce0U, 0xce1U}, {0xce6U, 0xcefU}, {0xcf1U, 0xcf2U},
+  {0xd05U, 0xd0cU}, {0xd0eU, 0xd10U}, {0xd12U, 0xd3aU}, {0xd3dU, 0xd3dU},
+  {0xd4eU, 0xd4eU}, {0xd54U, 0xd56U}, {0xd58U, 0xd61U}, {0xd66U, 0xd78U},
+  {0xd7aU, 0xd7fU}, {0xd85U, 0xd96U}, {0xd9aU, 0xdb1U}, {0xdb3U, 0xdbbU},
+  {0xdbdU, 0xdbdU}, {0xdc0U, 0xdc6U}, {0xde6U, 0xdefU}, {0xe01U, 0xe30U},
+  {0xe32U, 0xe33U}, {0xe40U, 0xe46U}, {0xe50U, 0xe59U}, {0xe81U, 0xe82U},
+  {0xe84U, 0xe84U}, {0xe87U, 0xe88U}, {0xe8aU, 0xe8aU}, {0xe8dU, 0xe8dU},
+  {0xe94U, 0xe97U}, {0xe99U, 0xe9fU}, {0xea1U, 0xea3U}, {0xea5U, 0xea5U},
+  {0xea7U, 0xea7U}, {0xeaaU, 0xeabU}, {0xeadU, 0xeb0U}, {0xeb2U, 0xeb3U},
+  {0xebdU, 0xebdU}, {0xec0U, 0xec4U}, {0xec6U, 0xec6U}, {0xed0U, 0xed9U},
+  {0xedcU, 0xedfU}, {0xf00U, 0xf00U}, {0xf20U, 0xf33U}, {0xf40U, 0xf47U},
+  {0xf49U, 0xf6cU}, {0xf88U, 0xf8cU}, {0x1000U, 0x102aU}, {0x103fU, 0x1049U},
+  {0x1050U, 0x1055U}, {0x105aU, 0x105dU}, {0x1061U, 0x1061U}, {0x1065U, 0x1066U},
+  {0x106eU, 0x1070U}, {0x1075U, 0x1081U}, {0x108eU, 0x108eU}, {0x1090U, 0x1099U},
+  {0x10a0U, 0x10c5U}, {0x10c7U, 0x10c7U}, {0x10cdU, 0x10cdU}, {0x10d0U, 0x10faU},
+  {0x10fcU, 0x1248U}, {0x124aU, 0x124dU}, {0x1250U, 0x1256U}, {0x1258U, 0x1258U},
+  {0x125aU, 0x125dU}, {0x1260U, 0x1288U}, {0x128aU, 0x128dU}, {0x1290U, 0x12b0U},
+  {0x12b2U, 0x12b5U}, {0x12b8U, 0x12beU}, {0x12c0U, 0x12c0U}, {0x12c2U, 0x12c5U},
+  {0x12c8U, 0x12d6U}, {0x12d8U, 0x1310U}, {0x1312U, 0x1315U}, {0x1318U, 0x135aU},
+  {0x1369U, 0x137cU}, {0x1380U, 0x138fU}, {0x13a0U, 0x13f5U}, {0x13f8U, 0x13fdU},
+  {0x1401U, 0x166cU}, {0x166fU, 0x167fU}, {0x1681U, 0x169aU}, {0x16a0U, 0x16eaU},
+  {0x16eeU, 0x16f8U}, {0x1700U, 0x170cU}, {0x170eU, 0x1711U}, {0x1720U, 0x1731U},
+  {0x1740U, 0x1751U}, {0x1760U, 0x176cU}, {0x176eU, 0x1770U}, {0x1780U, 0x17b3U},
+  {0x17d7U, 0x17d7U}, {0x17dcU, 0x17dcU}, {0x17e0U, 0x17e9U}, {0x17f0U, 0x17f9U},
+  {0x1810U, 0x1819U}, {0x1820U, 0x1877U}, {0x1880U, 0x1884U}, {0x1887U, 0x18a8U},
+  {0x18aaU, 0x18aaU}, {0x18b0U, 0x18f5U}, {0x1900U, 0x191eU}, {0x1946U, 0x196dU},
+  {0x1970U, 0x1974U}, {0x1980U, 0x19abU}, {0x19b0U, 0x19c9U}, {0x19d0U, 0x19daU},
+  {0x1a00U, 0x1a16U}, {0x1a20U, 0x1a54U}, {0x1a80U, 0x1a89U}, {0x1a90U, 0x1a99U},
+  {0x1aa7U, 0x1aa7U}, {0x1b05U, 0x1b33U}, {0x1b45U, 0x1b4bU}, {0x1b50U, 0x1b59U},
+  {0x1b83U, 0x1ba0U}, {0x1baeU, 0x1be5U}, {0x1c00U, 0x1c23U}, {0x1c40U, 0x1c49U},
+  {0x1c4dU, 0x1c7dU}, {0x1c80U, 0x1c88U}, {0x1c90U, 0x1cbaU}, {0x1cbdU, 0x1cbfU},
+  {0x1ce9U, 0x1cecU}, {0x1ceeU, 0x1cf1U}, {0x1cf5U, 0x1cf6U}, {0x1d00U, 0x1dbfU},
+  {0x1e00U, 0x1f15U}, {0x1f18U, 0x1f1dU}, {0x1f20U, 0x1f45U}, {0x1f48U, 0x1f4dU},
+  {0x1f50U, 0x1f57U}, {0x1f59U, 0x1f59U}, {0x1f5bU, 0x1f5bU}, {0x1f5dU, 0x1f5dU},
+  {0x1f5fU, 0x1f7dU}, {0x1f80U, 0x1fb4U}, {0x1fb6U, 0x1fbcU}, {0x1fbeU, 0x1fbeU},
+  {0x1fc2U, 0x1fc4U}, {0x1fc6U, 0x1fccU}, {0x1fd0U, 0x1fd3U}, {0x1fd6U, 0x1fdbU},
+  {0x1fe0U, 0x1fecU}, {0x1ff2U, 0x1ff4U}, {0x1ff6U, 0x1ffcU}, {0x2070U, 0x2071U},
+  {0x2074U, 0x2079U}, {0x207fU, 0x2089U}, {0x2090U, 0x209cU}, {0x2102U, 0x2102U},
+  {0x2107U, 0x2107U}, {0x210aU, 0x2113U}, {0x2115U, 0x2115U}, {0x2119U, 0x211dU},
+  {0x2124U, 0x2124U}, {0x2126U, 0x2126U}, {0x2128U, 0x2128U}, {0x212aU, 0x212dU},
+  {0x212fU, 0x2139U}, {0x213cU, 0x213fU}, {0x2145U, 0x2149U}, {0x214eU, 0x214eU},
+  {0x2150U, 0x2189U}, {0x2460U, 0x249bU}, {0x24eaU, 0x24ffU}, {0x2776U, 0x2793U},
+  {0x2c00U, 0x2c2eU}, {0x2c30U, 0x2c5eU}, {0x2c60U, 0x2ce4U}, {0x2cebU, 0x2ceeU},
+  {0x2cf2U, 0x2cf3U}, {0x2cfdU, 0x2cfdU}, {0x2d00U, 0x2d25U}, {0x2d27U, 0x2d27U},
+  {0x2d2dU, 0x2d2dU}, {0x2d30U, 0x2d67U}, {0x2d6fU, 0x2d6fU}, {0x2d80U, 0x2d96U},
+  {0x2da0U, 0x2da6U}, {0x2da8U, 0x2daeU}, {0x2db0U, 0x2db6U}, {0x2db8U, 0x2dbeU},
+  {0x2dc0U, 0x2dc6U}, {0x2dc8U, 0x2dceU}, {0x2dd0U, 0x2dd6U}, {0x2dd8U, 0x2ddeU},
+  {0x2e2fU, 0x2e2fU}, {0x3005U, 0x3007U}, {0x3021U, 0x3029U}, {0x3031U, 0x3035U},
+  {0x3038U, 0x303cU}, {0x3041U, 0x3096U}, {0x309dU, 0x309fU}, {0x30a1U, 0x30faU},
+  {0x30fcU, 0x30ffU}, {0x3105U, 0x312dU}, {0x3131U, 0x318eU}, {0x3192U, 0x3195U},
+  {0x31a0U, 0x31baU}, {0x31f0U, 0x31ffU}, {0x3220U, 0x3229U}, {0x3248U, 0x324fU},
+  {0x3251U, 0x325fU}, {0x3280U, 0x3289U}, {0x32b1U, 0x32bfU}, {0x3400U, 0x4db5U},
+  {0x4e00U, 0x9fd5U}, {0xa000U, 0xa48cU}, {0xa4d0U, 0xa4fdU}, {0xa500U, 0xa60cU},
+  {0xa610U, 0xa62bU}, {0xa640U, 0xa66eU}, {0xa67fU, 0xa69dU}, {0xa6a0U, 0xa6efU},
+  {0xa717U, 0xa71fU}, {0xa722U, 0xa788U}, {0xa78bU, 0xa7aeU}, {0xa7b0U, 0xa7bfU},
+  {0xa7c2U, 0xa7c6U}, {0xa7f7U, 0xa801U}, {0xa803U, 0xa805U}, {0xa807U, 0xa80aU},
+  {0xa80cU, 0xa822U}, {0xa830U, 0xa835U}, {0xa840U, 0xa873U}, {0xa882U, 0xa8b3U},
+  {0xa8d0U, 0xa8d9U}, {0xa8f2U, 0xa8f7U}, {0xa8fbU, 0xa8fbU}, {0xa8fdU, 0xa8fdU},
+  {0xa900U, 0xa925U}, {0xa930U, 0xa946U}, {0xa960U, 0xa97cU}, {0xa984U, 0xa9b2U},
+  {0xa9cfU, 0xa9d9U}, {0xa9e0U, 0xa9e4U}, {0xa9e6U, 0xa9feU}, {0xaa00U, 0xaa28U},
+  {0xaa40U, 0xaa42U}, {0xaa44U, 0xaa4bU}, {0xaa50U, 0xaa59U}, {0xaa60U, 0xaa76U},
+  {0xaa7aU, 0xaa7aU}, {0xaa7eU, 0xaaafU}, {0xaab1U, 0xaab1U}, {0xaab5U, 0xaab6U},
+  {0xaab9U, 0xaabdU}, {0xaac0U, 0xaac0U}, {0xaac2U, 0xaac2U}, {0xaadbU, 0xaaddU},
+  {0xaae0U, 0xaaeaU}, {0xaaf2U, 0xaaf4U}, {0xab01U, 0xab06U}, {0xab09U, 0xab0eU},
+  {0xab11U, 0xab16U}, {0xab20U, 0xab26U}, {0xab28U, 0xab2eU}, {0xab30U, 0xab5aU},
+  {0xab5cU, 0xab65U}, {0xab70U, 0xabe2U}, {0xabf0U, 0xabf9U}, {0xac00U, 0xd7a3U},
+  {0xd7b0U, 0xd7c6U}, {0xd7cbU, 0xd7fbU}, {0xf900U, 0xfa6dU}, {0xfa70U, 0xfad9U},
+  {0xfb00U, 0xfb06U}, {0xfb09U, 0xfb0dU}, {0xfb13U, 0xfb17U}, {0xfb1dU, 0xfb1dU},
+  {0xfb1fU, 0xfb28U}, {0xfb2aU, 0xfb36U}, {0xfb38U, 0xfb3cU}, {0xfb3eU, 0xfb3eU},
+  {0xfb40U, 0xfb41U}, {0xfb43U, 0xfb44U}, {0xfb46U, 0xfbb1U}, {0xfbd3U, 0xfd3dU},
+  {0xfd50U, 0xfd8fU}, {0xfd92U, 0xfdc7U}, {0xfdf0U, 0xfdfbU}, {0xfe70U, 0xfe74U},
+  {0xfe76U, 0xfefcU}, {0xff10U, 0xff19U}, {0xff21U, 0xff3aU}, {0xff41U, 0xff5aU},
+  {0xff66U, 0xffbeU}, {0xffc2U, 0xffc7U}, {0xffcaU, 0xffcfU}, {0xffd2U, 0xffd7U},
+  {0xffdaU, 0xffdcU},
 };
 
-inline constexpr unicode_data_range cudf_unicode_digit_ranges[] = {
-  {0x000030U, 0x000039U},
-  {0x0000b2U, 0x0000b3U},
-  {0x0000b9U, 0x0000b9U},
-  {0x000660U, 0x000669U},
-  {0x0006f0U, 0x0006f9U},
-  {0x0007c0U, 0x0007c9U},
-  {0x000966U, 0x00096fU},
-  {0x0009e6U, 0x0009efU},
-  {0x000a66U, 0x000a6fU},
-  {0x000ae6U, 0x000aefU},
-  {0x000b66U, 0x000b6fU},
-  {0x000be6U, 0x000befU},
-  {0x000c66U, 0x000c6fU},
-  {0x000ce6U, 0x000cefU},
-  {0x000d66U, 0x000d6fU},
-  {0x000de6U, 0x000defU},
-  {0x000e50U, 0x000e59U},
-  {0x000ed0U, 0x000ed9U},
-  {0x000f20U, 0x000f29U},
-  {0x001040U, 0x001049U},
-  {0x001090U, 0x001099U},
-  {0x001369U, 0x001371U},
-  {0x0017e0U, 0x0017e9U},
-  {0x001810U, 0x001819U},
-  {0x001946U, 0x00194fU},
-  {0x0019d0U, 0x0019daU},
-  {0x001a80U, 0x001a89U},
-  {0x001a90U, 0x001a99U},
-  {0x001b50U, 0x001b59U},
-  {0x001bb0U, 0x001bb9U},
-  {0x001c40U, 0x001c49U},
-  {0x001c50U, 0x001c59U},
-  {0x002070U, 0x002070U},
-  {0x002074U, 0x002079U},
-  {0x002080U, 0x002089U},
-  {0x002460U, 0x002468U},
-  {0x002474U, 0x00247cU},
-  {0x002488U, 0x002490U},
-  {0x0024eaU, 0x0024eaU},
-  {0x0024f5U, 0x0024fdU},
-  {0x0024ffU, 0x0024ffU},
-  {0x002776U, 0x00277eU},
-  {0x002780U, 0x002788U},
-  {0x00278aU, 0x002792U},
-  {0x00a620U, 0x00a629U},
-  {0x00a8d0U, 0x00a8d9U},
-  {0x00a900U, 0x00a909U},
-  {0x00a9d0U, 0x00a9d9U},
-  {0x00a9f0U, 0x00a9f9U},
-  {0x00aa50U, 0x00aa59U},
-  {0x00abf0U, 0x00abf9U},
-  {0x00ff10U, 0x00ff19U},
+inline constexpr unicode_data_range unicode_digit_ranges[] = {
+  {0x30U, 0x39U}, {0xb2U, 0xb3U}, {0xb9U, 0xb9U}, {0x660U, 0x669U},
+  {0x6f0U, 0x6f9U}, {0x7c0U, 0x7c9U}, {0x966U, 0x96fU}, {0x9e6U, 0x9efU},
+  {0xa66U, 0xa6fU}, {0xae6U, 0xaefU}, {0xb66U, 0xb6fU}, {0xbe6U, 0xbefU},
+  {0xc66U, 0xc6fU}, {0xce6U, 0xcefU}, {0xd66U, 0xd6fU}, {0xde6U, 0xdefU},
+  {0xe50U, 0xe59U}, {0xed0U, 0xed9U}, {0xf20U, 0xf29U}, {0x1040U, 0x1049U},
+  {0x1090U, 0x1099U}, {0x1369U, 0x1371U}, {0x17e0U, 0x17e9U}, {0x1810U, 0x1819U},
+  {0x1946U, 0x194fU}, {0x19d0U, 0x19daU}, {0x1a80U, 0x1a89U}, {0x1a90U, 0x1a99U},
+  {0x1b50U, 0x1b59U}, {0x1bb0U, 0x1bb9U}, {0x1c40U, 0x1c49U}, {0x1c50U, 0x1c59U},
+  {0x2070U, 0x2070U}, {0x2074U, 0x2079U}, {0x2080U, 0x2089U}, {0x2460U, 0x2468U},
+  {0x2474U, 0x247cU}, {0x2488U, 0x2490U}, {0x24eaU, 0x24eaU}, {0x24f5U, 0x24fdU},
+  {0x24ffU, 0x24ffU}, {0x2776U, 0x277eU}, {0x2780U, 0x2788U}, {0x278aU, 0x2792U},
+  {0xa620U, 0xa629U}, {0xa8d0U, 0xa8d9U}, {0xa900U, 0xa909U}, {0xa9d0U, 0xa9d9U},
+  {0xa9f0U, 0xa9f9U}, {0xaa50U, 0xaa59U}, {0xabf0U, 0xabf9U}, {0xff10U, 0xff19U},
 };
 
-inline constexpr unicode_data_range cudf_unicode_space_ranges[] = {
-  {0x000009U, 0x00000dU},
-  {0x00001cU, 0x000020U},
-  {0x000085U, 0x000085U},
-  {0x0000a0U, 0x0000a0U},
-  {0x001680U, 0x001680U},
-  {0x002000U, 0x00200aU},
-  {0x002028U, 0x002029U},
-  {0x00202fU, 0x00202fU},
-  {0x00205fU, 0x00205fU},
-  {0x003000U, 0x003000U},
+inline constexpr unicode_data_range unicode_space_ranges[] = {
+  {0x9U, 0xdU},
+  {0x1cU, 0x20U},
+  {0x85U, 0x85U},
+  {0xa0U, 0xa0U},
+  {0x1680U, 0x1680U},
+  {0x2000U, 0x200aU},
+  {0x2028U, 0x2029U},
+  {0x202fU, 0x202fU},
+  {0x205fU, 0x205fU},
+  {0x3000U, 0x3000U},
 };
 
 inline constexpr unicode_data_range unicode_math_symbol_ranges[] = {
-  {0x00002bU, 0x00002bU},
-  {0x00003cU, 0x00003eU},
-  {0x00007cU, 0x00007cU},
-  {0x00007eU, 0x00007eU},
-  {0x0000acU, 0x0000acU},
-  {0x0000b1U, 0x0000b1U},
-  {0x0000d7U, 0x0000d7U},
-  {0x0000f7U, 0x0000f7U},
-  {0x0003f6U, 0x0003f6U},
-  {0x000606U, 0x000608U},
-  {0x002044U, 0x002044U},
-  {0x002052U, 0x002052U},
-  {0x00207aU, 0x00207cU},
-  {0x00208aU, 0x00208cU},
-  {0x002118U, 0x002118U},
-  {0x002140U, 0x002144U},
-  {0x00214bU, 0x00214bU},
-  {0x002190U, 0x002194U},
-  {0x00219aU, 0x00219bU},
-  {0x0021a0U, 0x0021a0U},
-  {0x0021a3U, 0x0021a3U},
-  {0x0021a6U, 0x0021a6U},
-  {0x0021aeU, 0x0021aeU},
-  {0x0021ceU, 0x0021cfU},
-  {0x0021d2U, 0x0021d2U},
-  {0x0021d4U, 0x0021d4U},
-  {0x0021f4U, 0x0022ffU},
-  {0x002320U, 0x002321U},
-  {0x00237cU, 0x00237cU},
-  {0x00239bU, 0x0023b3U},
-  {0x0023dcU, 0x0023e1U},
-  {0x0025b7U, 0x0025b7U},
-  {0x0025c1U, 0x0025c1U},
-  {0x0025f8U, 0x0025ffU},
-  {0x00266fU, 0x00266fU},
-  {0x0027c0U, 0x0027c4U},
-  {0x0027c7U, 0x0027e5U},
-  {0x0027f0U, 0x0027ffU},
-  {0x002900U, 0x002982U},
-  {0x002999U, 0x0029d7U},
-  {0x0029dcU, 0x0029fbU},
-  {0x0029feU, 0x002affU},
-  {0x002b30U, 0x002b44U},
-  {0x002b47U, 0x002b4cU},
-  {0x00fb29U, 0x00fb29U},
-  {0x00fe62U, 0x00fe62U},
-  {0x00fe64U, 0x00fe66U},
-  {0x00ff0bU, 0x00ff0bU},
-  {0x00ff1cU, 0x00ff1eU},
-  {0x00ff5cU, 0x00ff5cU},
-  {0x00ff5eU, 0x00ff5eU},
-  {0x00ffe2U, 0x00ffe2U},
-  {0x00ffe9U, 0x00ffecU},
-  {0x01d6c1U, 0x01d6c1U},
-  {0x01d6dbU, 0x01d6dbU},
-  {0x01d6fbU, 0x01d6fbU},
-  {0x01d715U, 0x01d715U},
-  {0x01d735U, 0x01d735U},
-  {0x01d74fU, 0x01d74fU},
-  {0x01d76fU, 0x01d76fU},
-  {0x01d789U, 0x01d789U},
-  {0x01d7a9U, 0x01d7a9U},
-  {0x01d7c3U, 0x01d7c3U},
-  {0x01eef0U, 0x01eef1U},
+  {0x00002bU, 0x00002bU}, {0x00003cU, 0x00003eU}, {0x00007cU, 0x00007cU}, {0x00007eU, 0x00007eU},
+  {0x0000acU, 0x0000acU}, {0x0000b1U, 0x0000b1U}, {0x0000d7U, 0x0000d7U}, {0x0000f7U, 0x0000f7U},
+  {0x0003f6U, 0x0003f6U}, {0x000606U, 0x000608U}, {0x002044U, 0x002044U}, {0x002052U, 0x002052U},
+  {0x00207aU, 0x00207cU}, {0x00208aU, 0x00208cU}, {0x002118U, 0x002118U}, {0x002140U, 0x002144U},
+  {0x00214bU, 0x00214bU}, {0x002190U, 0x002194U}, {0x00219aU, 0x00219bU}, {0x0021a0U, 0x0021a0U},
+  {0x0021a3U, 0x0021a3U}, {0x0021a6U, 0x0021a6U}, {0x0021aeU, 0x0021aeU}, {0x0021ceU, 0x0021cfU},
+  {0x0021d2U, 0x0021d2U}, {0x0021d4U, 0x0021d4U}, {0x0021f4U, 0x0022ffU}, {0x002320U, 0x002321U},
+  {0x00237cU, 0x00237cU}, {0x00239bU, 0x0023b3U}, {0x0023dcU, 0x0023e1U}, {0x0025b7U, 0x0025b7U},
+  {0x0025c1U, 0x0025c1U}, {0x0025f8U, 0x0025ffU}, {0x00266fU, 0x00266fU}, {0x0027c0U, 0x0027c4U},
+  {0x0027c7U, 0x0027e5U}, {0x0027f0U, 0x0027ffU}, {0x002900U, 0x002982U}, {0x002999U, 0x0029d7U},
+  {0x0029dcU, 0x0029fbU}, {0x0029feU, 0x002affU}, {0x002b30U, 0x002b44U}, {0x002b47U, 0x002b4cU},
+  {0x00fb29U, 0x00fb29U}, {0x00fe62U, 0x00fe62U}, {0x00fe64U, 0x00fe66U}, {0x00ff0bU, 0x00ff0bU},
+  {0x00ff1cU, 0x00ff1eU}, {0x00ff5cU, 0x00ff5cU}, {0x00ff5eU, 0x00ff5eU}, {0x00ffe2U, 0x00ffe2U},
+  {0x00ffe9U, 0x00ffecU}, {0x01d6c1U, 0x01d6c1U}, {0x01d6dbU, 0x01d6dbU}, {0x01d6fbU, 0x01d6fbU},
+  {0x01d715U, 0x01d715U}, {0x01d735U, 0x01d735U}, {0x01d74fU, 0x01d74fU}, {0x01d76fU, 0x01d76fU},
+  {0x01d789U, 0x01d789U}, {0x01d7a9U, 0x01d7a9U}, {0x01d7c3U, 0x01d7c3U}, {0x01eef0U, 0x01eef1U},
 };
 
 struct parse_failure : std::exception {};
@@ -1013,12 +609,12 @@ class parser {
       if (kind == 's') result.ranges = {{U'\t', U' '}};
     };
     auto append_unicode = [&](char kind) {
-      if (kind == 'd') append_unicode_ranges(result, cudf_unicode_digit_ranges);
+      if (kind == 'd') append_unicode_ranges(result, unicode_digit_ranges);
       if (kind == 'w') {
-        append_unicode_ranges(result, cudf_unicode_word_ranges);
+        append_unicode_ranges(result, unicode_word_ranges);
         result.ranges.push_back({U'_', U'_'});
       }
-      if (kind == 's') append_unicode_ranges(result, cudf_unicode_space_ranges);
+      if (kind == 's') append_unicode_ranges(result, unicode_space_ranges);
     };
     auto base = static_cast<char>(std::tolower(static_cast<unsigned char>(value)));
     if (options_.ascii_classes) {
@@ -1522,7 +1118,6 @@ class thompson_builder {
   std::size_t transition_count_ = 0;
 };
 
-
 }  // namespace
 
 bool character_predicate::matches(char32_t value) const noexcept
@@ -1595,7 +1190,6 @@ std::vector<diagnostic> verify(automata_ir const& ir)
   return result;
 }
 
-
 automata_result compile_automata(std::string_view pattern, compile_options const& options)
 {
   parser parse_pattern(pattern, options);
@@ -1623,6 +1217,960 @@ automata_result compile_automata(std::string_view pattern, compile_options const
 }
 
 }  // namespace regex_ir
+
+// cuDF NVVM kernel modules
+
+namespace regex_ir::nvvm {
+namespace {
+
+void replace_all(std::string& text, std::string_view from, std::string_view to)
+{
+  for (auto position = text.find(from); position != std::string::npos;
+       position      = text.find(from, position + to.size())) {
+    text.replace(position, from.size(), to);
+  }
+}
+
+std::string common_nvvm(bool offset64, bool pairs)
+{
+  std::string result = R"NVVM(
+declare i32 @llvm.nvvm.read.ptx.sreg.tid.x() nounwind readnone
+declare i32 @llvm.nvvm.read.ptx.sreg.ntid.x() nounwind readnone
+declare i32 @llvm.nvvm.read.ptx.sreg.ctaid.x() nounwind readnone
+
+define internal i32 @cudf_row_index() alwaysinline nounwind readnone {
+entry:
+  %thread = call i32 @llvm.nvvm.read.ptx.sreg.tid.x()
+  %width = call i32 @llvm.nvvm.read.ptx.sreg.ntid.x()
+  %block = call i32 @llvm.nvvm.read.ptx.sreg.ctaid.x()
+  %base = mul i32 %block, %width
+  %row = add i32 %base, %thread
+  ret i32 %row
+}
+
+define internal i1 @cudf_is_valid(i32* %mask, i32 %row) alwaysinline nounwind readonly {
+entry:
+  %all_valid = icmp eq i32* %mask, null
+  br i1 %all_valid, label %yes, label %check
+check:
+  %word_index = lshr i32 %row, 5
+  %word_ptr = getelementptr i32, i32* %mask, i32 %word_index
+  %word = load i32, i32* %word_ptr, align 4
+  %bit_index = and i32 %row, 31
+  %shifted = lshr i32 %word, %bit_index
+  %bit = and i32 %shifted, 1
+  %valid = icmp ne i32 %bit, 0
+  ret i1 %valid
+yes:
+  ret i1 true
+}
+
+define internal i64 @cudf_load_offset(i8* %offsets, i32 %index) alwaysinline nounwind readonly {
+entry:
+  %typed = bitcast i8* %offsets to @OFFSET_TYPE@*
+  %ptr = getelementptr @OFFSET_TYPE@, @OFFSET_TYPE@* %typed, i32 %index
+  %raw = load @OFFSET_TYPE@, @OFFSET_TYPE@* %ptr, align @OFFSET_ALIGN@
+  %value = @OFFSET_EXTEND@ @OFFSET_TYPE@ %raw to i64
+  ret i64 %value
+}
+
+define internal i64 @cudf_advance_utf8(i8* %data, i64 %size, i64 %position) alwaysinline nounwind readonly {
+entry:
+  %at_end = icmp uge i64 %position, %size
+  br i1 %at_end, label %done, label %read
+read:
+  %ptr = getelementptr i8, i8* %data, i64 %position
+  %byte = load i8, i8* %ptr, align 1
+  %unsigned = zext i8 %byte to i32
+  %ascii = icmp ult i32 %unsigned, 128
+  %two_test = and i32 %unsigned, 224
+  %is_two = icmp eq i32 %two_test, 192
+  %three_test = and i32 %unsigned, 240
+  %is_three = icmp eq i32 %three_test, 224
+  %wide = select i1 %is_three, i64 3, i64 4
+  %non_ascii = select i1 %is_two, i64 2, i64 %wide
+  %width = select i1 %ascii, i64 1, i64 %non_ascii
+  %advanced = add i64 %position, %width
+  %clamped_test = icmp ult i64 %advanced, %size
+  %clamped = select i1 %clamped_test, i64 %advanced, i64 %size
+  ret i64 %clamped
+done:
+  ret i64 %size
+}
+)NVVM";
+  replace_all(result, "@OFFSET_TYPE@", offset64 ? "i64" : "i32");
+  replace_all(result, "@OFFSET_ALIGN@", offset64 ? "8" : "4");
+  replace_all(result, "@OFFSET_EXTEND@", offset64 ? "add i64 0," : "sext");
+  if (offset64) {
+    replace_all(result, "%value = add i64 0, i64 %raw to i64", "%value = add i64 %raw, 0");
+  }
+  if (pairs) {
+    result += R"NVVM(
+%cudf_pair = type { i8*, i32 }
+
+define internal void @cudf_write_pair(%cudf_pair* %output, i64 %index, i8* %data, i8* %empty, i64 %begin, i64 %end, i1 %present) alwaysinline nounwind {
+entry:
+  %size64 = sub i64 %end, %begin
+  %size = trunc i64 %size64 to i32
+  %data_ptr = getelementptr i8, i8* %data, i64 %begin
+  %is_empty = icmp eq i64 %size64, 0
+  %empty_ptr = select i1 %is_empty, i8* %empty, i8* %data_ptr
+  %pointer = select i1 %present, i8* %empty_ptr, i8* null
+  %stored_size = select i1 %present, i32 %size, i32 0
+  %pair_ptr = getelementptr %cudf_pair, %cudf_pair* %output, i64 %index
+  %pointer_ptr = getelementptr %cudf_pair, %cudf_pair* %pair_ptr, i32 0, i32 0
+  %size_ptr = getelementptr %cudf_pair, %cudf_pair* %pair_ptr, i32 0, i32 1
+  store i8* %pointer, i8** %pointer_ptr, align 8
+  store i32 %stored_size, i32* %size_ptr, align 4
+  ret void
+}
+)NVVM";
+  }
+  return result;
+}
+
+std::string annotate_kernel(std::string module, std::string_view signature)
+{
+  module += std::format(
+    "\n@llvm.used = appending global [1 x i8*] [i8* bitcast (void ({})* "
+    "@cudf_kernel_entry to i8*)], section \"llvm.metadata\"\n",
+    signature);
+  module += "\n!nvvm.annotations = !{!900000}\n";
+  module +=
+    std::format("!900000 = !{{void ({})* @cudf_kernel_entry, !\"kernel\", i32 1}}\n", signature);
+  return module;
+}
+
+}  // namespace
+
+std::string assemble(std::string matcher, std::string wrapper)
+{
+  auto const metadata = matcher.find("\n!nvvmir.version");
+  if (metadata == std::string::npos) {
+    throw std::invalid_argument("generated regex NVVM IR has no version metadata");
+  }
+  matcher.insert(metadata, std::move(wrapper));
+  return matcher;
+}
+
+std::string make_fixed_kernel(bool offset64, regex_ir::operation_kind operation)
+{
+  auto result = common_nvvm(offset64, false);
+  if (operation == regex_ir::operation_kind::CONTAINS) {
+    result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %match, label %store_false
+match:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %matched = call i1 @regex_ir_execute(i8* %data, i64 %size)
+  %value = zext i1 %matched to i8
+  br label %store
+store_false:
+  br label %store
+store:
+  %result = phi i8 [ %value, %match ], [ 0, %store_false ]
+  %out = getelementptr i8, i8* %output, i32 %row
+  store i8 %result, i8* %out, align 1
+  br label %done
+done:
+  ret void
+}
+)NVVM";
+  } else if (operation == regex_ir::operation_kind::COUNT) {
+    result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %count, label %store_zero
+count:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %count64 = call i64 @regex_ir_execute(i8* %data, i64 %size)
+  %value = trunc i64 %count64 to i32
+  br label %store
+store_zero:
+  br label %store
+store:
+  %result = phi i32 [ %value, %count ], [ 0, %store_zero ]
+  %typed_output = bitcast i8* %output to i32*
+  %out = getelementptr i32, i32* %typed_output, i32 %row
+  store i32 %result, i32* %out, align 4
+  br label %done
+done:
+  ret void
+}
+)NVVM";
+  } else {
+    result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output) nounwind {
+entry:
+  %span = alloca [2 x i64], align 8
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %find, label %store_missing
+find:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %span_ptr = getelementptr [2 x i64], [2 x i64]* %span, i32 0, i32 0
+  %matched = call i1 @regex_ir_execute(i8* %data, i64 %size, i64* %span_ptr)
+  br i1 %matched, label %convert, label %store_missing
+convert:
+  %match_begin = load i64, i64* %span_ptr, align 8
+  br label %utf8_loop
+utf8_loop:
+  %position = phi i64 [ 0, %convert ], [ %advanced, %utf8_loop ]
+  %characters = phi i32 [ 0, %convert ], [ %next_characters, %utf8_loop ]
+  %at_match = icmp uge i64 %position, %match_begin
+  %advanced = call i64 @cudf_advance_utf8(i8* %data, i64 %size, i64 %position)
+  %next_characters = add i32 %characters, 1
+  br i1 %at_match, label %store_found, label %utf8_loop
+store_found:
+  br label %store
+store_missing:
+  br label %store
+store:
+  %result = phi i32 [ %characters, %store_found ], [ -1, %store_missing ]
+  %typed_output = bitcast i8* %output to i32*
+  %out = getelementptr i32, i32* %typed_output, i32 %row
+  store i32 %result, i32* %out, align 4
+  br label %done
+done:
+  ret void
+}
+)NVVM";
+  }
+  return annotate_kernel(std::move(result), "i8*, i8*, i32*, i32, i32, i8*");
+}
+
+std::string make_capture_kernel(bool offset64,
+                                std::int32_t capture_slots,
+                                std::int32_t first_group,
+                                std::int32_t output_groups,
+                                bool column_major)
+{
+  auto result = common_nvvm(offset64, true);
+  result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output) nounwind {
+entry:
+  %captures = alloca [@CAPTURE_SLOTS@ x i64], align 8
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %match, label %output_begin
+match:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %capture_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 0
+  %matched = call i1 @regex_ir_execute(i8* %data, i64 %size, i64 0, i64* %capture_ptr)
+  br label %output_begin
+output_begin:
+  %row_data = phi i8* [ %data, %match ], [ %chars, %work ]
+  %row_matched = phi i1 [ %matched, %match ], [ false, %work ]
+  %typed_output = bitcast i8* %output to %cudf_pair*
+  br label %group_loop
+group_loop:
+  %group = phi i32 [ 0, %output_begin ], [ %next_group, %group_done ]
+  br i1 %row_matched, label %group_found, label %group_missing
+group_found:
+  %capture_group = add i32 %group, @FIRST_GROUP@
+  %capture_plus_whole = add i32 %capture_group, 1
+  %capture_slot = shl i32 %capture_plus_whole, 1
+  %capture_begin_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 %capture_slot
+  %capture_end_slot = add i32 %capture_slot, 1
+  %capture_end_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 %capture_end_slot
+  %capture_begin = load i64, i64* %capture_begin_ptr, align 8
+  %capture_end = load i64, i64* %capture_end_ptr, align 8
+  %has_begin = icmp sge i64 %capture_begin, 0
+  %has_end = icmp sge i64 %capture_end, 0
+  %present = and i1 %has_begin, %has_end
+  br label %group_write
+group_missing:
+  br label %group_write
+group_write:
+  %stored_begin = phi i64 [ %capture_begin, %group_found ], [ 0, %group_missing ]
+  %stored_end = phi i64 [ %capture_end, %group_found ], [ 0, %group_missing ]
+  %stored_present = phi i1 [ %present, %group_found ], [ false, %group_missing ]
+  %group64 = sext i32 %group to i64
+  @PAIR_INDEX@
+  call void @cudf_write_pair(%cudf_pair* %typed_output, i64 %pair_index, i8* %row_data, i8* %offsets, i64 %stored_begin, i64 %stored_end, i1 %stored_present)
+  br label %group_done
+group_done:
+  %next_group = add i32 %group, 1
+  %finished = icmp eq i32 %next_group, @OUTPUT_GROUPS@
+  br i1 %finished, label %done, label %group_loop
+done:
+  ret void
+}
+)NVVM";
+  replace_all(result, "@CAPTURE_SLOTS@", std::to_string(capture_slots));
+  replace_all(result, "@FIRST_GROUP@", std::to_string(first_group));
+  replace_all(result, "@OUTPUT_GROUPS@", std::to_string(output_groups));
+  replace_all(result,
+              "@PAIR_INDEX@",
+              column_major ? "%group_base = mul i64 %group64, %rows64\n  %row64 = sext i32 %row to "
+                             "i64\n  %pair_index = add i64 %group_base, %row64"
+                           : "%pair_index = sext i32 %row to i64");
+  if (column_major) {
+    replace_all(
+      result,
+      "%typed_output = bitcast i8* %output to %cudf_pair*",
+      "%typed_output = bitcast i8* %output to %cudf_pair*\n  %rows64 = sext i32 %rows to i64");
+  }
+  return annotate_kernel(std::move(result), "i8*, i8*, i32*, i32, i32, i8*");
+}
+
+std::string make_enumeration_size_kernel(bool offset64,
+                                         std::int32_t capture_slots,
+                                         std::int32_t multiplier,
+                                         bool require_match)
+{
+  auto result = common_nvvm(offset64, false);
+  result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output, i8* %output_validity) nounwind {
+entry:
+  %captures = alloca [@CAPTURE_SLOTS@ x i64], align 8
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %setup, label %store_invalid
+setup:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %capture_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 0
+  br label %match_loop
+match_loop:
+  %search = phi i64 [ 0, %setup ], [ %match_end, %continue_nonempty ], [ %advanced, %continue_empty ]
+  %count = phi i64 [ 0, %setup ], [ %next_count, %continue_nonempty ], [ %next_count, %continue_empty ]
+  %matched = call i1 @regex_ir_execute(i8* %data, i64 %size, i64 %search, i64* %capture_ptr)
+  br i1 %matched, label %found, label %store_count
+found:
+  %match_begin_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 0
+  %match_end_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 1
+  %match_begin = load i64, i64* %match_begin_ptr, align 8
+  %match_end = load i64, i64* %match_end_ptr, align 8
+  %next_count = add i64 %count, 1
+  %nonempty = icmp ne i64 %match_begin, %match_end
+  br i1 %nonempty, label %continue_nonempty, label %empty
+continue_nonempty:
+  br label %match_loop
+empty:
+  %empty_at_end = icmp eq i64 %match_end, %size
+  br i1 %empty_at_end, label %store_after_match, label %continue_empty
+continue_empty:
+  %advanced = call i64 @cudf_advance_utf8(i8* %data, i64 %size, i64 %match_end)
+  br label %match_loop
+store_after_match:
+  br label %store
+store_count:
+  br label %store
+store_invalid:
+  br label %store
+store:
+  %matches = phi i64 [ %next_count, %store_after_match ], [ %count, %store_count ], [ 0, %store_invalid ]
+  %scaled = mul i64 %matches, @MULTIPLIER@
+  %stored_count = trunc i64 %scaled to i32
+  %typed_output = bitcast i8* %output to i32*
+  %out = getelementptr i32, i32* %typed_output, i32 %row
+  store i32 %stored_count, i32* %out, align 4
+  %has_match = icmp ne i64 %matches, 0
+  %row_valid = @ROW_VALID@
+  %valid_byte = zext i1 %row_valid to i8
+  %valid_out = getelementptr i8, i8* %output_validity, i32 %row
+  store i8 %valid_byte, i8* %valid_out, align 1
+  br label %done
+done:
+  ret void
+}
+)NVVM";
+  replace_all(result, "@CAPTURE_SLOTS@", std::to_string(capture_slots));
+  replace_all(result, "@MULTIPLIER@", std::to_string(multiplier));
+  replace_all(
+    result, "@ROW_VALID@", require_match ? "and i1 %valid, %has_match" : "and i1 %valid, true");
+  return annotate_kernel(std::move(result), "i8*, i8*, i32*, i32, i32, i8*, i8*");
+}
+
+std::string make_enumeration_emit_kernel(bool offset64,
+                                         std::int32_t capture_slots,
+                                         std::int32_t groups,
+                                         bool findall)
+{
+  auto result = common_nvvm(offset64, true);
+  result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output, i8* %output_offsets) nounwind {
+entry:
+  %captures = alloca [@CAPTURE_SLOTS@ x i64], align 8
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %setup, label %done
+setup:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %capture_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 0
+  %typed_offsets = bitcast i8* %output_offsets to i32*
+  %row_output_ptr = getelementptr i32, i32* %typed_offsets, i32 %row
+  %row_output = load i32, i32* %row_output_ptr, align 4
+  %row_output64 = sext i32 %row_output to i64
+  %typed_output = bitcast i8* %output to %cudf_pair*
+  br label %match_loop
+match_loop:
+  %search = phi i64 [ 0, %setup ], [ %match_end, %continue_nonempty ], [ %advanced, %continue_empty ]
+  %output_index = phi i64 [ 0, %setup ], [ %next_output_index, %continue_nonempty ], [ %next_output_index, %continue_empty ]
+  %matched = call i1 @regex_ir_execute(i8* %data, i64 %size, i64 %search, i64* %capture_ptr)
+  br i1 %matched, label %found, label %done
+found:
+  %match_begin_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 0
+  %match_end_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 1
+  %match_begin = load i64, i64* %match_begin_ptr, align 8
+  %match_end = load i64, i64* %match_end_ptr, align 8
+  @WRITE_MATCH@
+after_write:
+  %nonempty = icmp ne i64 %match_begin, %match_end
+  br i1 %nonempty, label %continue_nonempty, label %empty
+continue_nonempty:
+  br label %match_loop
+empty:
+  %empty_at_end = icmp eq i64 %match_end, %size
+  br i1 %empty_at_end, label %done, label %continue_empty
+continue_empty:
+  %advanced = call i64 @cudf_advance_utf8(i8* %data, i64 %size, i64 %match_end)
+  br label %match_loop
+done:
+  ret void
+}
+)NVVM";
+  auto write_findall =
+    groups == 0
+      ? R"NVVM(%selected_begin = add i64 %match_begin, 0
+  %selected_end = add i64 %match_end, 0
+  %present = icmp sge i64 %selected_begin, 0
+  %pair_index = add i64 %row_output64, %output_index
+  call void @cudf_write_pair(%cudf_pair* %typed_output, i64 %pair_index, i8* %data, i8* %offsets, i64 %selected_begin, i64 %selected_end, i1 %present)
+  %next_output_index = add i64 %output_index, 1
+  br label %after_write)NVVM"
+      : R"NVVM(%selected_begin_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 2
+  %selected_end_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 3
+  %selected_begin = load i64, i64* %selected_begin_ptr, align 8
+  %selected_end = load i64, i64* %selected_end_ptr, align 8
+  %has_begin = icmp sge i64 %selected_begin, 0
+  %has_end = icmp sge i64 %selected_end, 0
+  %present = and i1 %has_begin, %has_end
+  %pair_index = add i64 %row_output64, %output_index
+  call void @cudf_write_pair(%cudf_pair* %typed_output, i64 %pair_index, i8* %data, i8* %offsets, i64 %selected_begin, i64 %selected_end, i1 %present)
+  %next_output_index = add i64 %output_index, 1
+  br label %after_write)NVVM";
+  auto write_extract = R"NVVM(br label %group_loop
+group_loop:
+  %group = phi i32 [ 0, %found ], [ %next_group, %group_write ]
+  %capture_plus_whole = add i32 %group, 1
+  %capture_slot = shl i32 %capture_plus_whole, 1
+  %capture_begin_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 %capture_slot
+  %capture_end_slot = add i32 %capture_slot, 1
+  %capture_end_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %captures, i32 0, i32 %capture_end_slot
+  %capture_begin = load i64, i64* %capture_begin_ptr, align 8
+  %capture_end = load i64, i64* %capture_end_ptr, align 8
+  %has_begin = icmp sge i64 %capture_begin, 0
+  %has_end = icmp sge i64 %capture_end, 0
+  %present = and i1 %has_begin, %has_end
+  %group64 = sext i32 %group to i64
+  %group_output = add i64 %output_index, %group64
+  %pair_index = add i64 %row_output64, %group_output
+  call void @cudf_write_pair(%cudf_pair* %typed_output, i64 %pair_index, i8* %data, i8* %offsets, i64 %capture_begin, i64 %capture_end, i1 %present)
+  br label %group_write
+group_write:
+  %next_group = add i32 %group, 1
+  %groups_done = icmp eq i32 %next_group, @GROUPS@
+  br i1 %groups_done, label %groups_finished, label %group_loop
+groups_finished:
+  %next_output_index = add i64 %output_index, @GROUPS@
+  br label %after_write)NVVM";
+  replace_all(result, "@WRITE_MATCH@", findall ? write_findall : write_extract);
+  replace_all(result, "@CAPTURE_SLOTS@", std::to_string(capture_slots));
+  replace_all(result, "@GROUPS@", std::to_string(groups));
+  return annotate_kernel(std::move(result), "i8*, i8*, i32*, i32, i32, i8*, i8*");
+}
+
+namespace {
+
+std::string llvm_bytes(std::string_view value)
+{
+  std::string result;
+  result.reserve(value.size() * 3);
+  for (auto character : value) {
+    result += std::format("\\{:02X}", static_cast<unsigned char>(character));
+  }
+  return result;
+}
+
+}  // namespace
+
+std::string make_limited_replace_kernel(bool offset64,
+                                        bool emit,
+                                        std::span<replacement_piece const> replacement,
+                                        std::int32_t capture_slots,
+                                        std::int32_t max_replace_count)
+{
+  auto result = common_nvvm(offset64, false);
+  for (std::size_t index = 0; index < replacement.size(); ++index) {
+    auto const& literal = replacement[index].literal;
+    if (!literal.empty()) {
+      result += std::format("\n@cudf_replacement_{0} = private constant [{1} x i8] c\"{2}\"\n",
+                            index,
+                            literal.size(),
+                            llvm_bytes(literal));
+    }
+  }
+  result += R"NVVM(
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8*, i8*, i64, i1)
+
+define internal i64 @cudf_append_range(i8* %source, i64 %begin, i64 %end, i8* %output, i64 %cursor) alwaysinline nounwind {
+entry:
+  %length = sub i64 %end, %begin
+  %next_cursor = add i64 %cursor, %length
+  %output_missing = icmp eq i8* %output, null
+  %empty = icmp eq i64 %length, 0
+  %skip = or i1 %output_missing, %empty
+  br i1 %skip, label %done, label %copy
+copy:
+  %source_ptr = getelementptr i8, i8* %source, i64 %begin
+  %output_ptr = getelementptr i8, i8* %output, i64 %cursor
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 1 %output_ptr, i8* align 1 %source_ptr, i64 %length, i1 false)
+  br label %done
+done:
+  ret i64 %next_cursor
+}
+)NVVM";
+
+  std::string steps;
+  auto cursor = std::string{"%cursor_unmatched"};
+  for (std::size_t index = 0; index < replacement.size(); ++index) {
+    auto const& piece = replacement[index];
+    auto next_cursor  = std::format("%cursor_piece_{}", index);
+    if (piece.capture.has_value()) {
+      auto slot = static_cast<std::int64_t>(*piece.capture) * 2;
+      steps += std::format(
+        R"NVVM(  %capture_begin_ptr_{0} = getelementptr i64, i64* %captures, i64 {2}
+  %capture_end_ptr_{0} = getelementptr i64, i64* %captures, i64 {3}
+  %capture_begin_{0} = load i64, i64* %capture_begin_ptr_{0}, align 8
+  %capture_end_{0} = load i64, i64* %capture_end_ptr_{0}, align 8
+  %capture_has_begin_{0} = icmp sge i64 %capture_begin_{0}, 0
+  %capture_has_end_{0} = icmp sge i64 %capture_end_{0}, 0
+  %capture_present_{0} = and i1 %capture_has_begin_{0}, %capture_has_end_{0}
+  %capture_selected_begin_{0} = select i1 %capture_present_{0}, i64 %capture_begin_{0}, i64 0
+  %capture_selected_end_{0} = select i1 %capture_present_{0}, i64 %capture_end_{0}, i64 0
+  {4} = call i64 @cudf_append_range(i8* %data, i64 %capture_selected_begin_{0}, i64 %capture_selected_end_{0}, i8* %output, i64 {5})
+)NVVM",
+        index,
+        capture_slots,
+        slot,
+        slot + 1,
+        next_cursor,
+        cursor);
+    } else if (!piece.literal.empty()) {
+      steps += std::format(
+        R"NVVM(  %literal_{0} = getelementptr [{1} x i8], [{1} x i8]* @cudf_replacement_{0}, i32 0, i32 0
+  {2} = call i64 @cudf_append_range(i8* %literal_{0}, i64 0, i64 {1}, i8* %output, i64 {3})
+)NVVM",
+        index,
+        piece.literal.size(),
+        next_cursor,
+        cursor);
+    } else {
+      continue;
+    }
+    cursor = std::move(next_cursor);
+  }
+  steps += std::format("  %replacement_cursor = add i64 {}, 0\n", cursor);
+
+  result += R"NVVM(
+define internal i64 @cudf_replace_execute(i8* %data, i64 %size, i8* %output) nounwind {
+entry:
+  %capture_array = alloca [@CAPTURE_SLOTS@ x i64], align 8
+  %captures = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %capture_array, i32 0, i32 0
+  br label %loop
+loop:
+  %search_start = phi i64 [ 0, %entry ], [ %match_end, %continue_nonempty ], [ %advanced_start, %continue_empty ]
+  %copied = phi i64 [ 0, %entry ], [ %match_end, %continue_nonempty ], [ %match_end, %continue_empty ]
+  %cursor = phi i64 [ 0, %entry ], [ %replacement_cursor, %continue_nonempty ], [ %replacement_cursor, %continue_empty ]
+  %replacement_count = phi i64 [ 0, %entry ], [ %next_replacement_count, %continue_nonempty ], [ %next_replacement_count, %continue_empty ]
+  %limit_reached = @LIMIT_REACHED@
+  br i1 %limit_reached, label %finish_limit, label %search
+search:
+  %matched = call i1 @regex_ir_execute(i8* %data, i64 %size, i64 %search_start, i64* %captures)
+  br i1 %matched, label %found, label %no_match
+found:
+  %match_begin_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %capture_array, i32 0, i32 0
+  %match_end_ptr = getelementptr [@CAPTURE_SLOTS@ x i64], [@CAPTURE_SLOTS@ x i64]* %capture_array, i32 0, i32 1
+  %match_begin = load i64, i64* %match_begin_ptr, align 8
+  %match_end = load i64, i64* %match_end_ptr, align 8
+  %cursor_unmatched = call i64 @cudf_append_range(i8* %data, i64 %copied, i64 %match_begin, i8* %output, i64 %cursor)
+@REPLACEMENT_STEPS@  %next_replacement_count = add i64 %replacement_count, 1
+  %nonempty = icmp ne i64 %match_begin, %match_end
+  br i1 %nonempty, label %continue_nonempty, label %empty
+continue_nonempty:
+  br label %loop
+empty:
+  %empty_at_end = icmp eq i64 %match_end, %size
+  br i1 %empty_at_end, label %finish_empty, label %continue_empty
+continue_empty:
+  %advanced_start = call i64 @cudf_advance_utf8(i8* %data, i64 %size, i64 %match_end)
+  br label %loop
+finish_limit:
+  br label %finish
+no_match:
+  br label %finish
+finish_empty:
+  br label %finish
+finish:
+  %tail_begin = phi i64 [ %copied, %finish_limit ], [ %copied, %no_match ], [ %match_end, %finish_empty ]
+  %tail_cursor = phi i64 [ %cursor, %finish_limit ], [ %cursor, %no_match ], [ %replacement_cursor, %finish_empty ]
+  %final_cursor = call i64 @cudf_append_range(i8* %data, i64 %tail_begin, i64 %size, i8* %output, i64 %tail_cursor)
+  ret i64 %final_cursor
+}
+)NVVM";
+  replace_all(result, "@CAPTURE_SLOTS@", std::to_string(capture_slots));
+  replace_all(result, "@REPLACEMENT_STEPS@", steps);
+  replace_all(result,
+              "@LIMIT_REACHED@",
+              std::format("icmp uge i64 %replacement_count, {}", max_replace_count));
+
+  result += emit ? R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output, i8* %output_offsets) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %replace, label %done
+replace:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %typed_output_offsets = bitcast i8* %output_offsets to i32*
+  %output_offset_ptr = getelementptr i32, i32* %typed_output_offsets, i32 %row
+  %output_offset = load i32, i32* %output_offset_ptr, align 4
+  %output_offset64 = sext i32 %output_offset to i64
+  %output_ptr = getelementptr i8, i8* %output, i64 %output_offset64
+  %written = call i64 @cudf_replace_execute(i8* %data, i64 %size, i8* %output_ptr)
+  br label %done
+done:
+  ret void
+}
+)NVVM"
+                 : R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %replace, label %store_zero
+replace:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %result_size = call i64 @cudf_replace_execute(i8* %data, i64 %size, i8* null)
+  %stored_size = trunc i64 %result_size to i32
+  br label %store
+store_zero:
+  br label %store
+store:
+  %value = phi i32 [ %stored_size, %replace ], [ 0, %store_zero ]
+  %typed_output = bitcast i8* %output to i32*
+  %out = getelementptr i32, i32* %typed_output, i32 %row
+  store i32 %value, i32* %out, align 4
+  br label %done
+done:
+  ret void
+}
+)NVVM";
+  return annotate_kernel(
+    std::move(result),
+    emit ? "i8*, i8*, i32*, i32, i32, i8*, i8*" : "i8*, i8*, i32*, i32, i32, i8*");
+}
+
+std::string encode_replacement(std::span<replacement_piece const> replacement)
+{
+  std::string result;
+  for (auto const& piece : replacement) {
+    if (piece.capture.has_value()) {
+      result += std::format("${{{}}}", *piece.capture);
+      continue;
+    }
+    for (auto character : piece.literal) {
+      result.push_back(character);
+      if (character == '$') { result.push_back('$'); }
+    }
+  }
+  return result;
+}
+
+std::string make_replace_kernel(bool offset64, bool emit)
+{
+  auto result = common_nvvm(offset64, false);
+  result += emit ? R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output, i8* %output_offsets) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %replace, label %done
+replace:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %typed_output_offsets = bitcast i8* %output_offsets to i32*
+  %output_offset_ptr = getelementptr i32, i32* %typed_output_offsets, i32 %row
+  %output_offset = load i32, i32* %output_offset_ptr, align 4
+  %output_offset64 = sext i32 %output_offset to i64
+  %output_ptr = getelementptr i8, i8* %output, i64 %output_offset64
+  %written = call i64 @regex_ir_execute(i8* %data, i64 %size, i8* %output_ptr)
+  br label %done
+done:
+  ret void
+}
+)NVVM"
+                 : R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %replace, label %store_zero
+replace:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %result_size = call i64 @regex_ir_execute(i8* %data, i64 %size, i8* null)
+  %stored_size = trunc i64 %result_size to i32
+  br label %store
+store_zero:
+  br label %store
+store:
+  %value = phi i32 [ %stored_size, %replace ], [ 0, %store_zero ]
+  %typed_output = bitcast i8* %output to i32*
+  %out = getelementptr i32, i32* %typed_output, i32 %row
+  store i32 %value, i32* %out, align 4
+  br label %done
+done:
+  ret void
+}
+)NVVM";
+  return annotate_kernel(
+    std::move(result),
+    emit ? "i8*, i8*, i32*, i32, i32, i8*, i8*" : "i8*, i8*, i32*, i32, i32, i8*");
+}
+
+std::string make_split_size_kernel(bool offset64, std::int32_t maxsplit)
+{
+  auto result = common_nvvm(offset64, false);
+  result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output, i8* %full_output) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %split, label %store_zero
+split:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %full64 = call i64 @regex_ir_execute(i8* %data, i64 %size, i64* null)
+  %full = trunc i64 %full64 to i32
+  @EFFECTIVE@
+  br label %store
+store_zero:
+  br label %store
+store:
+  %stored_effective = phi i32 [ %effective, %split ], [ 0, %store_zero ]
+  %stored_full = phi i32 [ %full, %split ], [ 0, %store_zero ]
+  %typed_output = bitcast i8* %output to i32*
+  %out = getelementptr i32, i32* %typed_output, i32 %row
+  store i32 %stored_effective, i32* %out, align 4
+  %typed_full_output = bitcast i8* %full_output to i32*
+  %full_out = getelementptr i32, i32* %typed_full_output, i32 %row
+  store i32 %stored_full, i32* %full_out, align 4
+  br label %done
+done:
+  ret void
+}
+)NVVM";
+  if (maxsplit > 0) {
+    auto max_fields = static_cast<std::int64_t>(maxsplit) + 1;
+    replace_all(
+      result,
+      "@EFFECTIVE@",
+      std::format("%limited = icmp sgt i64 %full64, {0}\n  %effective64 = select i1 %limited, i64 "
+                  "{0}, i64 %full64\n  %effective = trunc i64 %effective64 to i32",
+                  max_fields));
+  } else {
+    replace_all(result, "@EFFECTIVE@", "%effective = add i32 %full, 0");
+  }
+  return annotate_kernel(std::move(result), "i8*, i8*, i32*, i32, i32, i8*, i8*");
+}
+
+std::string make_split_emit_kernel(bool offset64, bool reverse)
+{
+  auto result = common_nvvm(offset64, true);
+  result += R"NVVM(
+define void @cudf_kernel_entry(i8* %chars, i8* %offsets, i32* %validity, i32 %row_offset, i32 %rows, i8* %output, i8* %effective_offsets, i8* %full_offsets, i64* %spans) nounwind {
+entry:
+  %row = call i32 @cudf_row_index()
+  %in_bounds = icmp slt i32 %row, %rows
+  br i1 %in_bounds, label %work, label %done
+work:
+  %physical = add i32 %row_offset, %row
+  %valid = call i1 @cudf_is_valid(i32* %validity, i32 %physical)
+  br i1 %valid, label %setup, label %done
+setup:
+  %begin = call i64 @cudf_load_offset(i8* %offsets, i32 %physical)
+  %next = add i32 %physical, 1
+  %end = call i64 @cudf_load_offset(i8* %offsets, i32 %next)
+  %size = sub i64 %end, %begin
+  %data = getelementptr i8, i8* %chars, i64 %begin
+  %typed_effective_offsets = bitcast i8* %effective_offsets to i32*
+  %effective_begin_ptr = getelementptr i32, i32* %typed_effective_offsets, i32 %row
+  %effective_next = add i32 %row, 1
+  %effective_end_ptr = getelementptr i32, i32* %typed_effective_offsets, i32 %effective_next
+  %effective_begin = load i32, i32* %effective_begin_ptr, align 4
+  %effective_end = load i32, i32* %effective_end_ptr, align 4
+  %effective_count = sub i32 %effective_end, %effective_begin
+  %typed_full_offsets = bitcast i8* %full_offsets to i32*
+  %full_begin_ptr = getelementptr i32, i32* %typed_full_offsets, i32 %row
+  %full_next = add i32 %row, 1
+  %full_end_ptr = getelementptr i32, i32* %typed_full_offsets, i32 %full_next
+  %full_begin = load i32, i32* %full_begin_ptr, align 4
+  %full_end = load i32, i32* %full_end_ptr, align 4
+  %full_count = sub i32 %full_end, %full_begin
+  %full_begin64 = sext i32 %full_begin to i64
+  %span_base_index = shl i64 %full_begin64, 1
+  %row_spans = getelementptr i64, i64* %spans, i64 %span_base_index
+  %written_fields = call i64 @regex_ir_execute(i8* %data, i64 %size, i64* %row_spans)
+  %typed_output = bitcast i8* %output to %cudf_pair*
+  %effective_begin64 = sext i32 %effective_begin to i64
+  %truncated = icmp sgt i32 %full_count, %effective_count
+  br label %token_loop
+token_loop:
+  %token = phi i32 [ 0, %setup ], [ %next_token, %token_loop ]
+  @SOURCE_INDEX@
+  %source64 = sext i32 %source to i64
+  %source_base = shl i64 %source64, 1
+  %source_end_index = add i64 %source_base, 1
+  %source_begin_ptr = getelementptr i64, i64* %row_spans, i64 %source_base
+  %source_end_ptr = getelementptr i64, i64* %row_spans, i64 %source_end_index
+  %source_begin = load i64, i64* %source_begin_ptr, align 8
+  %source_end = load i64, i64* %source_end_ptr, align 8
+  @SELECT_SPAN@
+  %token64 = sext i32 %token to i64
+  %pair_index = add i64 %effective_begin64, %token64
+  call void @cudf_write_pair(%cudf_pair* %typed_output, i64 %pair_index, i8* %data, i8* %offsets, i64 %selected_begin, i64 %selected_end, i1 true)
+  %next_token = add i32 %token, 1
+  %finished = icmp eq i32 %next_token, %effective_count
+  br i1 %finished, label %done, label %token_loop
+done:
+  ret void
+}
+)NVVM";
+  if (reverse) {
+    replace_all(result,
+                "@SOURCE_INDEX@",
+                R"NVVM(%removed = sub i32 %full_count, %effective_count
+  %is_first = icmp eq i32 %token, 0
+  %shifted = add i32 %removed, %token
+  %truncated_source = select i1 %is_first, i32 0, i32 %shifted
+  %source = select i1 %truncated, i32 %truncated_source, i32 %token)NVVM");
+    replace_all(result,
+                "@SELECT_SPAN@",
+                R"NVVM(%merged_field = sub i32 %full_count, %effective_count
+  %merged_field64 = sext i32 %merged_field to i64
+  %merged_field_base = shl i64 %merged_field64, 1
+  %merged_end_index = add i64 %merged_field_base, 1
+  %merged_end_ptr = getelementptr i64, i64* %row_spans, i64 %merged_end_index
+  %merged_end = load i64, i64* %merged_end_ptr, align 8
+  %is_first_selected = and i1 %truncated, %is_first
+  %selected_begin = add i64 %source_begin, 0
+  %selected_end = select i1 %is_first_selected, i64 %merged_end, i64 %source_end)NVVM");
+  } else {
+    replace_all(result, "@SOURCE_INDEX@", "%source = add i32 %token, 0");
+    replace_all(result,
+                "@SELECT_SPAN@",
+                R"NVVM(%last_token = sub i32 %effective_count, 1
+  %is_last = icmp eq i32 %token, %last_token
+  %merge_tail = and i1 %truncated, %is_last
+  %selected_begin = add i64 %source_begin, 0
+  %selected_end = select i1 %merge_tail, i64 %size, i64 %source_end)NVVM");
+  }
+  return annotate_kernel(std::move(result), "i8*, i8*, i32*, i32, i32, i8*, i8*, i8*, i64*");
+}
+
+}  // namespace regex_ir::nvvm
 
 // instruction IR lowering
 
@@ -1653,10 +2201,12 @@ std::vector<diagnostic> parse_replacement(std::string const& replacement,
       ++position;
       continue;
     }
+    auto const braced = position < replacement.size() && replacement[position] == '{';
+    if (braced) { ++position; }
     if (position == replacement.size() ||
         std::isdigit(static_cast<unsigned char>(replacement[position])) == 0) {
       diagnostics.push_back({diagnostic_code::INVALID_REPLACEMENT,
-                             {start, 1},
+                             {start, position - start},
                              "dollar must be followed by a capture number or dollar"});
       return diagnostics;
     }
@@ -1671,6 +2221,15 @@ std::vector<diagnostic> parse_replacement(std::string const& replacement,
         return diagnostics;
       }
     }
+    if (braced) {
+      if (position == replacement.size() || replacement[position] != '}') {
+        diagnostics.push_back({diagnostic_code::INVALID_REPLACEMENT,
+                               {start, position - start},
+                               "braced replacement capture is not terminated"});
+        return diagnostics;
+      }
+      ++position;
+    }
     flush_literal();
     output.push_back({replacement_token::kind::CAPTURE, {}, static_cast<std::uint32_t>(capture)});
   }
@@ -1678,9 +2237,7 @@ std::vector<diagnostic> parse_replacement(std::string const& replacement,
   return diagnostics;
 }
 
-
 }  // namespace
-
 
 std::vector<diagnostic> verify(instruction_ir const& ir)
 {
@@ -1725,7 +2282,6 @@ std::vector<diagnostic> verify(instruction_ir const& ir)
 
   return result;
 }
-
 
 instruction_result lower(automata_ir const& automata, operation const& selected)
 {
@@ -3242,8 +3798,14 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-i1
   {
     std::string result;
     result.reserve(value.size());
-    for (auto character : value)
-      result += character == '\n' ? ' ' : character;
+    for (auto character : value) {
+      auto const byte = static_cast<std::uint8_t>(character);
+      if (byte < 0x20 || byte == 0x7f) {
+        std::format_to(std::back_inserter(result), "\\x{:02X}", byte);
+      } else {
+        result.push_back(character);
+      }
+    }
     return result;
   }
 
@@ -3874,14 +4436,13 @@ prefix_skip:
         classify);
     }
 
-    auto inject =
-      machine.scan_input
-        ? std::format("  %candidates = or i64 %follow, {}\n", llvm_i64(machine.first_set))
-        : std::format(R"NVVM(  %at_start = icmp eq i64 %position, 0
+    auto inject = machine.scan_input ? std::format("  %candidates = or i64 %follow, {}\n",
+                                                   llvm_i64(machine.first_set))
+                                     : std::format(R"NVVM(  %at_start = icmp eq i64 %position, 0
   %initial_positions = select i1 %at_start, i64 {0}, i64 0
   %candidates = or i64 %follow, %initial_positions
 )NVVM",
-                      llvm_i64(machine.first_set));
+                                                   llvm_i64(machine.first_set));
 
     output_.emit(
       R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
@@ -4514,8 +5075,8 @@ no:
 entry:)NVVM",
         function);
       std::string combined;
-      for (std::size_t index = 0; index < std::size(cudf_unicode_word_ranges); ++index) {
-        unicode_data_range range = cudf_unicode_word_ranges[index];
+      for (std::size_t index = 0; index < std::size(unicode_word_ranges); ++index) {
+        unicode_data_range range = unicode_word_ranges[index];
         output_.emit("{}",
                      std::format(R"NVVM(  %word_ge_{0} = icmp uge i32 %cp, {1}
   %word_le_{0} = icmp ule i32 %cp, {2}
@@ -4873,18 +5434,17 @@ entry:
           for (std::size_t index = 0; index < literal->value.size(); ++index) {
             auto success =
               index + 1 == literal->value.size() ? "success" : std::format("check_{}", index + 1);
-            output_.emit(
-              "{}",
-              std::format(R"NVVM(check_{0}:
+            output_.emit("{}",
+                         std::format(R"NVVM(check_{0}:
   %byte_pos_{0} = add i64 %pos, {0}
   %byte_ptr_{0} = getelementptr i8, i8* %data, i64 %byte_pos_{0}
   %byte_{0} = call i32 @{1}(i8* %byte_ptr_{0})
   %matches_{0} = icmp eq i32 %byte_{0}, {2}
   br i1 %matches_{0}, label %{3}, label %fail)NVVM",
-                          index,
-                          load_byte,
-                          static_cast<std::uint32_t>(literal->value[index]),
-                          success));
+                                     index,
+                                     load_byte,
+                                     static_cast<std::uint32_t>(literal->value[index]),
+                                     success));
           }
           output_.emit(
             R"NVVM(success:
@@ -4908,28 +5468,26 @@ entry:
             literal->value.size()));
         for (std::size_t index = 0; index < literal->value.size(); ++index) {
           auto position = index == 0 ? "%pos" : std::format("%pos_{}", index);
-          output_.emit(
-            "{}",
-            std::format(R"NVVM(check_{0}:
+          output_.emit("{}",
+                       std::format(R"NVVM(check_{0}:
   %cp_{0} = call i32 @{1}(i8* %data, i64 %size, i64 {2})
   %matches_{0} = icmp eq i32 %cp_{0}, {3})NVVM",
-                        index,
-                        decode,
-                        position,
-                        static_cast<std::uint32_t>(literal->value[index])));
+                                   index,
+                                   decode,
+                                   position,
+                                   static_cast<std::uint32_t>(literal->value[index])));
           if (index + 1 == literal->value.size()) {
             output_.emit("  br i1 %matches_{}, label %success, label %fail", index);
           } else {
-            output_.emit(
-              "{}",
-              std::format(
-                R"NVVM(  %width_{0} = call i64 @{2}(i8* %data, i64 %size, i64 {3})
+            output_.emit("{}",
+                         std::format(
+                           R"NVVM(  %width_{0} = call i64 @{2}(i8* %data, i64 %size, i64 {3})
   %pos_{1} = add i64 {3}, %width_{0}
   br i1 %matches_{0}, label %check_{1}, label %fail)NVVM",
-                index,
-                index + 1,
-                width,
-                position));
+                           index,
+                           index + 1,
+                           width,
+                           position));
           }
         }
         output_.emit(
@@ -5023,16 +5581,15 @@ return_fail:
           // the ASCII literal helper performs one byte-count bounds check for the fused sequence
           output_.emit("  br label %{}", next);
         } else {
-          output_.emit(
-            "{}",
-            std::format(R"NVVM(  %{0}_pos_{1} = load i64, i64* %position, align 8
+          output_.emit("{}",
+                       std::format(R"NVVM(  %{0}_pos_{1} = load i64, i64* %position, align 8
   %{0}_peek_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_pos_{1}, i64 {3})
   br i1 %{0}_peek_{1}, label %{4}, label %return_fail)NVVM",
-                        prefix,
-                        operation_index,
-                        name("can_peek"),
-                        peek->characters,
-                        next));
+                                   prefix,
+                                   operation_index,
+                                   name("can_peek"),
+                                   peek->characters,
+                                   next));
         }
       } else if (std::holds_alternative<read_character>(item)) {
         output_.emit("  br label %{}", next);
@@ -5066,25 +5623,23 @@ return_fail:
                        reset,
                        next));
       } else if (std::holds_alternative<match_character>(item)) {
-        output_.emit(
-          "{}",
-          std::format(R"NVVM(  %{0}_match_pos_{1} = load i64, i64* %position, align 8
+        output_.emit("{}",
+                     std::format(R"NVVM(  %{0}_match_pos_{1} = load i64, i64* %position, align 8
   %{0}_match_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_match_pos_{1})
   br i1 %{0}_match_{1}, label %{3}, label %return_fail)NVVM",
-                      prefix,
-                      operation_index,
-                      name(std::format("predicate_{}", block.id)),
-                      next));
+                                 prefix,
+                                 operation_index,
+                                 name(std::format("predicate_{}", block.id)),
+                                 next));
       } else if (std::holds_alternative<match_literal>(item)) {
-        output_.emit(
-          "{}",
-          std::format(R"NVVM(  %{0}_literal_pos_{1} = load i64, i64* %position, align 8
+        output_.emit("{}",
+                     std::format(R"NVVM(  %{0}_literal_pos_{1} = load i64, i64* %position, align 8
   %{0}_literal_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_literal_pos_{1})
   br i1 %{0}_literal_{1}, label %{3}, label %return_fail)NVVM",
-                      prefix,
-                      operation_index,
-                      name(std::format("literal_{}", block.id)),
-                      next));
+                                 prefix,
+                                 operation_index,
+                                 name(std::format("literal_{}", block.id)),
+                                 next));
       } else if (auto* advance = std::get_if<advance_cursor>(&item)) {
         auto* previous_literal =
           operation_index > 0 ? std::get_if<match_literal>(&block.instructions[operation_index - 1])
@@ -5095,16 +5650,15 @@ return_fail:
                                                  previous_literal->value.end(),
                                                  [](char32_t value) { return value <= 0x7f; });
         if (matched_ascii_literal) {
-          output_.emit(
-            "{}",
-            std::format(R"NVVM(  %{0}_advance_pos_{1} = load i64, i64* %position, align 8
+          output_.emit("{}",
+                       std::format(R"NVVM(  %{0}_advance_pos_{1} = load i64, i64* %position, align 8
   %{0}_advanced_{1} = add i64 %{0}_advance_pos_{1}, {2}
   store i64 %{0}_advanced_{1}, i64* %position, align 8
   br label %{3})NVVM",
-                        prefix,
-                        operation_index,
-                        advance->characters,
-                        next));
+                                   prefix,
+                                   operation_index,
+                                   advance->characters,
+                                   next));
         } else {
           output_.emit("{}",
                        std::format(
@@ -5119,16 +5673,15 @@ return_fail:
                          next));
         }
       } else if (auto* assertion = std::get_if<test_assertion>(&item)) {
-        output_.emit(
-          "{}",
-          std::format(R"NVVM(  %{0}_assert_pos_{1} = load i64, i64* %position, align 8
+        output_.emit("{}",
+                     std::format(R"NVVM(  %{0}_assert_pos_{1} = load i64, i64* %position, align 8
   %{0}_assert_{1} = call i1 @{2}(i8* %data, i64 %size, i64 %{0}_assert_pos_{1}, i32 {3})
   br i1 %{0}_assert_{1}, label %{4}, label %return_fail)NVVM",
-                      prefix,
-                      operation_index,
-                      name("assertion"),
-                      static_cast<std::uint32_t>(assertion->kind),
-                      next));
+                                 prefix,
+                                 operation_index,
+                                 name("assertion"),
+                                 static_cast<std::uint32_t>(assertion->kind),
+                                 next));
       } else if (std::holds_alternative<emit_accept>(item)) {
         if (ir_.control.require_end) {
           output_.emit(
@@ -5159,13 +5712,12 @@ return_fail:
     }
     output_.emit("  %{}_saved = load i64, i64* %position, align 8", prefix);
     for (auto slot : capture_slots_) {
-      output_.emit(
-        "{}",
-        std::format(
-          R"NVVM(  %{0}_saved_capture_{1} = getelementptr i64, i64* %captures, i64 {1}
+      output_.emit("{}",
+                   std::format(
+                     R"NVVM(  %{0}_saved_capture_{1} = getelementptr i64, i64* %captures, i64 {1}
   %{0}_saved_capture_value_{1} = load i64, i64* %{0}_saved_capture_{1}, align 8)NVVM",
-          prefix,
-          slot));
+                     prefix,
+                     slot));
     }
     output_.emit("  br label %{}_attempt_0", prefix);
     for (std::size_t index = 0; index < edges.size(); ++index) {
@@ -5336,26 +5888,24 @@ no:
       std::format_to(std::back_inserter(source), "{}_{}:\n", prefix, index);
       for (std::size_t action_index = 0; action_index < programs[index].size(); ++action_index) {
         auto action = programs[index][action_index];
-        std::format_to(
-          std::back_inserter(source),
-          R"NVVM(  %{0}_{1}_{2}_ptr = getelementptr i64, i64* %captures, i64 {3}
+        std::format_to(std::back_inserter(source),
+                       R"NVVM(  %{0}_{1}_{2}_ptr = getelementptr i64, i64* %captures, i64 {3}
   store i64 {4}, i64* %{0}_{1}_{2}_ptr, align 8
 )NVVM",
-          prefix,
-          index,
-          action_index,
-          action.slot,
-          position);
+                       prefix,
+                       index,
+                       action_index,
+                       action.slot,
+                       position);
         if (action.reset_end) {
-          std::format_to(
-            std::back_inserter(source),
-            R"NVVM(  %{0}_{1}_{2}_end_ptr = getelementptr i64, i64* %captures, i64 {3}
+          std::format_to(std::back_inserter(source),
+                         R"NVVM(  %{0}_{1}_{2}_end_ptr = getelementptr i64, i64* %captures, i64 {3}
   store i64 -1, i64* %{0}_{1}_{2}_end_ptr, align 8
 )NVVM",
-            prefix,
-            index,
-            action_index,
-            action.slot + 1U);
+                         prefix,
+                         index,
+                         action_index,
+                         action.slot + 1U);
         }
       }
       std::format_to(std::back_inserter(source), "  br label %{}_done\n", prefix);
@@ -5768,10 +6318,9 @@ verify:
   br i1 %matched, label %yes, label %continue
 )NVVM",
                         name("ascii_literal_at"));
-    output_.emit(
-      "{}",
-      std::format(
-        R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
+    output_.emit("{}",
+                 std::format(
+                   R"NVVM(define zeroext i1 @{0}(i8* %data, i64 %size) nounwind readonly {{
 entry:
   br label %search
 search:
@@ -5791,11 +6340,11 @@ yes:
 no:
   ret i1 false
 }})NVVM",
-        options_.execute_function,
-        literal.size(),
-        name("load_byte"),
-        static_cast<std::uint32_t>(static_cast<std::uint8_t>(literal.front())),
-        verify));
+                   options_.execute_function,
+                   literal.size(),
+                   name("load_byte"),
+                   static_cast<std::uint32_t>(static_cast<std::uint8_t>(literal.front())),
+                   verify));
     output_.blank();
   }
 
@@ -6068,12 +6617,11 @@ prefix_filter:
 
     output_.emit("initialize:");
     for (auto slot : capture_slots_) {
-      output_.emit(
-        "{}",
-        std::format(
-          R"NVVM(  %find_capture_ptr_{0} = getelementptr i64, i64* %captures, i64 {0}
+      output_.emit("{}",
+                   std::format(
+                     R"NVVM(  %find_capture_ptr_{0} = getelementptr i64, i64* %captures, i64 {0}
   store i64 -1, i64* %find_capture_ptr_{0}, align 8)NVVM",
-          slot));
+                     slot));
     }
     if (ir_.control.result == result_shape::CAPTURES) {
       output_.emit("  store i64 %start, i64* %find_capture_ptr_0, align 8");
@@ -6366,9 +6914,8 @@ done:
   void emit_split_execute()
   {
     emit_write_span();
-    output_.emit(
-      "{}",
-      std::format(R"NVVM(define i64 @{0}(i8* %data, i64 %size, i64* %spans) nounwind {{
+    output_.emit("{}",
+                 std::format(R"NVVM(define i64 @{0}(i8* %data, i64 %size, i64* %spans) nounwind {{
 entry:
   %match_begin = alloca i64, align 8
   %match_end = alloca i64, align 8
@@ -6405,10 +6952,10 @@ finish:
   %result_count = add i64 %tail_index, 1
   ret i64 %result_count
 }})NVVM",
-                  options_.execute_function,
-                  name("find_from"),
-                  name("write_span"),
-                  name("advance")));
+                             options_.execute_function,
+                             name("find_from"),
+                             name("write_span"),
+                             name("advance")));
     output_.blank();
   }
 
@@ -6550,9 +7097,8 @@ std::string compile(std::string_view pattern,
   if (!compiled) {
     if (compiled.diagnostics.empty()) { throw std::invalid_argument("regex compilation failed"); }
     auto const& diagnostic = compiled.diagnostics.front();
-    throw std::invalid_argument(std::format("regex compilation failed at byte {}: {}",
-                                            diagnostic.span.offset,
-                                            diagnostic.message));
+    throw std::invalid_argument(std::format(
+      "regex compilation failed at byte {}: {}", diagnostic.span.offset, diagnostic.message));
   }
   return generate_nvvm_ir(*compiled.value);
 }

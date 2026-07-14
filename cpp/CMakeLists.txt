@@ -1053,8 +1053,10 @@ add_library(
   src/strings/merge/merge.cu
   src/strings/padding.cu
   src/strings/positions.cu
+  libregex_ir/regex_ir.cpp
   src/strings/regex/regcomp.cpp
   src/strings/regex/regexec.cpp
+  src/strings/regex/jit/regex.cpp
   src/strings/regex/regex_program.cpp
   src/strings/repeat_strings.cu
   src/strings/replace/backref_re.cu
@@ -1212,6 +1214,8 @@ target_include_directories(
   PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/libregex_ir>"
+          "$<BUILD_INTERFACE:${CUDAToolkit_LIBRARY_ROOT}/nvvm/include>"
           "$<BUILD_INTERFACE:${nanoarrow_SOURCE_DIR}/src>"
           "$<BUILD_INTERFACE:${FlatBuffers_SOURCE_DIR}/include>"
           "$<BUILD_INTERFACE:${ZSTD_INCLUDE_DIR}>"
@@ -1267,6 +1271,7 @@ target_link_libraries(
           ${CUDF_nanoarrow_TARGET}
           zstd
           $<BUILD_LOCAL_INTERFACE:xxhash>
+          "${CUDAToolkit_LIBRARY_ROOT}/nvvm/lib64/libnvvm.so"
           rtcx::rtcx
 )
 
