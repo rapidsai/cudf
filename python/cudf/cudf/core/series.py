@@ -57,6 +57,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.mixins import NoNewAttributesMixin
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import SeriesApplyKernel
@@ -4019,13 +4020,14 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class BaseDatelikeProperties:
+class BaseDatelikeProperties(NoNewAttributesMixin):
     """
     Base accessor class for Series values.
     """
 
     def __init__(self, series: Series):
         self.series = series
+        self._freeze()
 
     def _return_result_like_self(self, column: ColumnBase) -> Series:
         """Return the method result like self.series"""
@@ -4393,10 +4395,14 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.weekday
-        # Pandas returns int64 for weekday
-        res = res.astype(
-            get_dtype_of_same_kind(self.series.dtype, np.dtype("int64"))
+        # Pandas returns int32 for numpy-backed dayofweek/day_of_week but
+        # int64 for the pyarrow-backed (ArrowDtype) variant.
+        target = (
+            np.dtype("int64")
+            if isinstance(self.series.dtype, pd.ArrowDtype)
+            else np.dtype("int32")
         )
+        res = res.astype(get_dtype_of_same_kind(self.series.dtype, target))
         return self._return_result_like_self(res)
 
     day_of_week = dayofweek
@@ -5327,7 +5333,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.seconds)
+        res = self.series._column.seconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
@@ -5359,7 +5368,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.microseconds)
+        res = self.series._column.microseconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
@@ -5391,7 +5403,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.nanoseconds)
+        res = self.series._column.nanoseconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
