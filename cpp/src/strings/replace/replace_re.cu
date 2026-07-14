@@ -11,6 +11,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/strings/detail/replace.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -96,13 +97,21 @@ std::unique_ptr<column> replace_re(strings_column_view const& input,
                                    rmm::cuda_stream_view stream,
                                    rmm::device_async_resource_ref mr)
 {
-  if (input.is_empty()) return make_empty_column(type_id::STRING);
+  if (input.is_empty()) { return make_empty_column(type_id::STRING); }
 
   CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
-  string_view d_repl(replacement.data(), replacement.size());
 
   auto const maxrepl = max_replace_count.value_or(-1);
 
+  auto [fp, literal] = prog.get_literal_fast_path();
+  if (fp == literal_fast_path::LITERAL_ONLY) {
+    auto const target =
+      cudf::string_scalar(literal, true, stream, cudf::get_current_device_resource_ref());
+    return replace(input, target, replacement, maxrepl, stream, mr);
+  }
+
+  auto const d_repl    = string_view(replacement.data(), replacement.size());
+  auto const d_prog    = regex_device_builder::create_prog_device(prog, stream);
   auto const d_strings = column_device_view::create(input.parent(), stream);
 
   auto [offsets_column, chars] = [&] {

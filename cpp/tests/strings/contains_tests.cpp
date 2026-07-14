@@ -373,7 +373,7 @@ TEST_F(StringsContainsTests, Errors)
 TEST_F(StringsContainsTests, CountTest)
 {
   std::vector<char const*> h_strings{
-    "The quick brown @fox jumps ovér the", "lazy @dog", "1:2:3:4", "00:0:00", nullptr, ""};
+    "The quick brown @fox jumps ovér the", "lazy @dog lazy", "1:2:3:4", "00:0:00", nullptr, ""};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(), h_strings.end(), cudf::test::iterators::nulls_from_nullptrs(h_strings));
 
@@ -398,6 +398,22 @@ TEST_F(StringsContainsTests, CountTest)
     auto pattern = std::string("\\d+:\\d+");
     cudf::test::fixed_width_column_wrapper<int32_t> expected(
       {0, 0, 2, 1, 0, 0}, cudf::test::iterators::nulls_from_nullptrs(h_strings));
+    auto prog    = cudf::strings::regex_program::create(pattern);
+    auto results = cudf::strings::count_re(strings_view, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto pattern = std::string("o");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected(
+      {3, 1, 0, 0, 0, 0}, cudf::test::iterators::nulls_from_nullptrs(h_strings));
+    auto prog    = cudf::strings::regex_program::create(pattern);
+    auto results = cudf::strings::count_re(strings_view, *prog);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+  }
+  {
+    auto pattern = std::string("\\blazy\\b");
+    cudf::test::fixed_width_column_wrapper<int32_t> expected(
+      {0, 2, 0, 0, 0, 0}, cudf::test::iterators::nulls_from_nullptrs(h_strings));
     auto prog    = cudf::strings::regex_program::create(pattern);
     auto results = cudf::strings::count_re(strings_view, *prog);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
@@ -813,6 +829,16 @@ TEST_F(StringsContainsTests, EndOfString)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
   results = cudf::strings::count_re(view, *prog_ml);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_count);
+
+  pattern  = std::string("abé$");
+  prog     = cudf::strings::regex_program::create(pattern);
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 1, 0, 1, 1});
+  results  = cudf::strings::contains_re(view, *prog);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  prog_ml  = cudf::strings::regex_program::create(pattern, cudf::strings::regex_flags::MULTILINE);
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 0, 1, 1});
+  results  = cudf::strings::contains_re(view, *prog_ml);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
 TEST_F(StringsContainsTests, DotAll)
