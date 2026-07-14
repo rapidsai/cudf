@@ -14,6 +14,9 @@
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 
+#include <limits>
+#include <stdexcept>
+
 template <typename T, typename SourceT = T>
 using column_wrapper = cudf::test::fixed_width_column_wrapper<T, SourceT>;
 
@@ -95,6 +98,19 @@ TEST_F(CrossJoinZeroColumnOperand, PreservesRowCount)
   auto join_ac = cudf::cross_join(table_a, table_c);
   EXPECT_EQ(join_ac->num_columns(), 0);
   EXPECT_EQ(join_ac->num_rows(), table_a.num_rows() * table_c.num_rows());
+}
+
+TEST_F(CrossJoinZeroColumnOperand, OverflowThrows)
+{
+  // A cross join whose row-count product exceeds size_type::max() throws
+  // std::overflow_error. Using zero-column operands makes the check happen
+  // before any output is allocated.
+  auto table_a =
+    cudf::table_view{std::vector<cudf::column_view>{}, std::numeric_limits<cudf::size_type>::max()};
+  auto table_b = cudf::table_view{std::vector<cudf::column_view>{}, 2};
+
+  EXPECT_THROW(cudf::cross_join(table_a, table_b), std::overflow_error);
+  EXPECT_THROW(cudf::cross_join(table_b, table_a), std::overflow_error);
 }
 
 class CrossJoinEmptyResult : public cudf::test::BaseFixture {};
