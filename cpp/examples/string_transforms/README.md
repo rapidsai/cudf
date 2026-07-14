@@ -23,10 +23,6 @@ The following examples are included:
    - `lto`: the same sizing and output transform ABI, AOT-compiled to embedded fatbins and JIT-linked
      with libcudf's precompiled transform kernels.
 
-The `request-line` operation extracts method, path, and HTTP version. The `combined-log` operation
-extracts client IP, timestamp, method, path, status, referer, and user agent. Both implement the same
-extraction groups as their comparative regex variant.
-
 ## Compile and execute
 
 ```bash

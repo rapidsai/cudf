@@ -14,7 +14,7 @@ include_guard(GLOBAL)
 macro(add_fragment)
   set(TARGET ${ARGV0})
   set(ONE_VALUE_ARGS FRAGMENT SOURCE KERNEL_ONLY KERNEL_INSTANCE UDF_TYPE)
-  set(MULTI_VALUE_ARGS DEFINITIONS ARRAY_IDS ARRAY_VALUES)
+  set(MULTI_VALUE_ARGS DEFINITIONS ARRAY_IDS ARRAY_VALUES INCLUDE_DIRS)
   cmake_parse_arguments(ARG "${OPTIONS}" "${ONE_VALUE_ARGS}" "${MULTI_VALUE_ARGS}" ${ARGN})
 
   if(NOT ARG_FRAGMENT)
@@ -54,6 +54,9 @@ macro(add_fragment)
   endif()
 
   target_compile_definitions(${OBJECT_ID} PRIVATE CUDF_DISABLE_EXPORTS ${ARG_DEFINITIONS})
+  if(ARG_INCLUDE_DIRS)
+    target_include_directories(${OBJECT_ID} PRIVATE ${ARG_INCLUDE_DIRS})
+  endif()
   set_target_properties(
     ${OBJECT_ID}
     PROPERTIES CUDA_SEPARABLE_COMPILATION ON

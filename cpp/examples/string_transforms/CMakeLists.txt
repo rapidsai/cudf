@@ -81,24 +81,13 @@ add_string_transforms_example(localize_phone_precompiled localize_phone_precompi
 
 rtcx_add_embed(http_log_fragments)
 add_fragment(http_log_fragments FRAGMENT request_line_sizes SOURCE
-             http_logs/fragments/request_line_sizes.cu)
+             http_logs/fragments.cu
+             DEFINITIONS UDF_COMPUTE_SIZES
+             INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs)
 add_fragment(http_log_fragments FRAGMENT request_line_output SOURCE
-             http_logs/fragments/request_line_output.cu)
-add_fragment(http_log_fragments FRAGMENT combined_log_sizes SOURCE
-             http_logs/fragments/combined_log_sizes.cu)
-add_fragment(http_log_fragments FRAGMENT combined_log_output SOURCE
-             http_logs/fragments/combined_log_output.cu)
-
-foreach(
-  fragment_target
-  http_log_fragments_request_line_sizes
-  http_log_fragments_request_line_output
-  http_log_fragments_combined_log_sizes
-  http_log_fragments_combined_log_output)
-  target_include_directories(${fragment_target}
-                             PRIVATE ${CMAKE_CURRENT_LIST_DIR}/http_logs)
-endforeach()
-
+             http_logs/fragments.cu
+             DEFINITIONS UDF_WRITE_OUTPUT
+             INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs)
 rtcx_embed(http_log_fragments COMPRESSION none OUTPUT_DIRECTORY
            "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
 
