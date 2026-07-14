@@ -12,9 +12,9 @@ raised as an error instead. See {doc}`options`.
 runs a query on the GPU and then copies the
 full result back to host memory as a `pl.DataFrame`. When you want to run
 several queries in sequence, or hand a result to another query, that host
-round-trip is pure overhead: the data leaves the GPU only to be uploaded again.
+round-trip is pure overhead: the data leaves the GPU only to be copied back again.
 
-`engine.execute()` avoids it. It runs the query and returns a
+`engine.execute()` avoids that overhead. It runs the query and returns a
 {class}`~cudf_polars.engine.persisted_result.PersistedQueryResult` whose
 partitions stay GPU-resident in the process that produced them. You can then
 chain further work through {meth}`~cudf_polars.engine.persisted_result.PersistedQueryResult.lazy`
