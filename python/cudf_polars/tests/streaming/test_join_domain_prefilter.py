@@ -301,48 +301,71 @@ def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:
     assert not _joins(optimized, "Semi")
 
 
-def test_composite_domain_prefilter_constrains_domain_first() -> None:
-    nation = _scan("nation", ("n_nationkey",), predicate=True)
-    orders = _scan("orders", ("o_orderkey", "n_nationkey"))
-    lineitem = _scan("lineitem", ("l_orderkey", "l_suppkey"))
-    supplier = _scan("supplier", ("s_suppkey", "s_nationkey"))
+def test_composite_domain_prefilter_constrains_domain_first(
+    engine: SPMDEngine,
+) -> None:
+    nation = (
+        pl.LazyFrame(
+            {
+                "n_nationkey": range(10),
+                "active": [True] * 5 + [False] * 5,
+            }
+        )
+        .filter("active")
+        .select("n_nationkey")
+    )
+    orders = pl.LazyFrame(
+        {
+            "o_orderkey": range(90),
+            "n_nationkey": [i % 10 for i in range(90)],
+        }
+    )
+    lineitem = pl.LazyFrame(
+        {
+            "l_orderkey": [i % 90 for i in range(180)],
+            "l_suppkey": [i % 30 for i in range(180)],
+        }
+    )
+    supplier = pl.LazyFrame(
+        {
+            "s_suppkey": range(30),
+            "s_nationkey": [i % 10 for i in range(30)],
+        }
+    )
+    query = (
+        nation.join(orders, on="n_nationkey")
+        .join(
+            lineitem,
+            left_on="o_orderkey",
+            right_on="l_orderkey",
+            maintain_order="left",
+        )
+        .join(
+            supplier,
+            left_on=("l_suppkey", "n_nationkey"),
+            right_on=("s_suppkey", "s_nationkey"),
+        )
+    )
+    root = remove_cache_nodes(Translator(query._ldf.visit(), engine).translate_ir())
+    config = ConfigOptions.from_polars_engine(engine)
+    stats = StatsCollector()
 
-    nation_orders = _join(nation, orders, ("n_nationkey",), ("n_nationkey",))
-    order_lineitem = _join(
-        nation_orders,
-        lineitem,
-        ("o_orderkey",),
-        ("l_orderkey",),
-        maintain_order="left",
-    )
-    root = _join(
-        order_lineitem,
-        supplier,
-        ("l_suppkey", "n_nationkey"),
-        ("s_suppkey", "s_nationkey"),
-    )
-
-    stats = _stats(
-        nation=(nation, 5),
-        orders=(orders, 900),
-        lineitem=(lineitem, 1_800),
-        supplier=(supplier, 30),
-    )
+    assert isinstance(root, Join)
+    order_lineitem, supplier_ir = root.children
+    assert isinstance(order_lineitem, Join)
+    lineitem_ir = order_lineitem.children[1]
     decision = _select_candidate(root, 0.5, analyze_plan(root, stats))
-    optimized = optimize_join_domain_prefilters(
-        root,
-        stats,
-        _config(),
-    )
+    optimized = optimize_join_domain_prefilters(root, stats, config)
 
     assert decision.reason == "applied"
     assert isinstance(decision.candidate, CompositeCandidate)
     semis = _joins(optimized, "Semi")
     assert isinstance(optimized, Join)
     assert optimized.options[0] == "Inner"
-    assert optimized.children[1] is supplier
-    assert any(semi.children[0] is supplier for semi in semis)
-    assert any(semi.children[0] is lineitem for semi in semis)
+    assert optimized.children[1] is supplier_ir
+    assert any(semi.children[0] is supplier_ir for semi in semis)
+    assert any(semi.children[0] is lineitem_ir for semi in semis)
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_derived_selectivity_propagates_through_rewritten_children() -> None:
@@ -400,61 +423,116 @@ def test_rewritten_domain_filters_other_side_instead_of_stacking() -> None:
     )
 
 
-def test_target_source_follows_join_key_through_rename() -> None:
-    big = _scan("big", ("left_key", "other"))
-    renamed_big = _select(big, foo="left_key", other="other")
-    small = _scan("small", ("left_key", "other2"))
-    joined = _join(
-        renamed_big,
-        small,
-        ("other",),
-        ("other2",),
-        maintain_order="left",
+def test_target_source_follows_join_key_through_rename(
+    engine: SPMDEngine,
+) -> None:
+    big = pl.LazyFrame(
+        {
+            "left_key": range(20),
+            "other": [i % 5 for i in range(20)],
+        }
     )
-    domain = _scan("domain", ("domain_key",), predicate=True)
-    root = _join(joined, domain, ("left_key",), ("domain_key",))
+    renamed_big = big.select(pl.col("left_key").alias("foo"), "other")
+    small = pl.LazyFrame(
+        {
+            "left_key": range(10),
+            "other2": [i % 5 for i in range(10)],
+        }
+    )
+    domain = (
+        pl.LazyFrame(
+            {
+                "domain_key": [1, 99],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("domain_key")
+    )
+    query = renamed_big.join(
+        small,
+        left_on="other",
+        right_on="other2",
+        maintain_order="left",
+    ).join(
+        domain,
+        left_on="left_key",
+        right_on="domain_key",
+    )
+    root = remove_cache_nodes(Translator(query._ldf.visit(), engine).translate_ir())
 
+    assert isinstance(root, Join)
+    joined = root.children[0]
+    assert isinstance(joined, Join)
+    renamed_big_ir, small_ir = joined.children
+    assert isinstance(renamed_big_ir, Select)
+    big_ir = renamed_big_ir.children[0]
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(big=(big, 1_000), small=(small, 100), domain=(domain, 5)),
-        _config(),
+        StatsCollector(),
+        ConfigOptions.from_polars_engine(engine),
     )
 
     semis = _joins(optimized, "Semi")
-    assert any(semi.children[0] is small for semi in semis)
-    assert not any(semi.children[0] is big for semi in semis)
+    assert any(semi.children[0] is small_ir for semi in semis)
+    assert not any(semi.children[0] is big_ir for semi in semis)
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_domain_source_follows_join_key_through_rename() -> None:
-    target = _scan("target", ("target_key",))
-    unrelated = _scan("unrelated", ("domain_key", "other"), predicate=True)
-    renamed_unrelated = _select(unrelated, foo="domain_key", other="other")
-    domain_source = _scan("domain_source", ("domain_key", "other2"), predicate=True)
-    domain = _join(
-        renamed_unrelated,
+def test_domain_source_follows_join_key_through_rename(
+    engine: SPMDEngine,
+) -> None:
+    target = pl.LazyFrame({"target_key": range(20)})
+    unrelated = pl.LazyFrame(
+        {
+            "domain_key": [100, 101],
+            "other": [0, 1],
+            "active": [True, False],
+        }
+    )
+    renamed_unrelated = unrelated.filter("active").select(
+        pl.col("domain_key").alias("foo"), "other"
+    )
+    domain_source = pl.LazyFrame(
+        {
+            "domain_key": range(1, 6),
+            "other2": range(5),
+        }
+    )
+    domain = renamed_unrelated.join(
         domain_source,
-        ("other",),
-        ("other2",),
+        left_on="other",
+        right_on="other2",
         maintain_order="left",
     )
-    root = _join(target, domain, ("target_key",), ("domain_key",))
+    query = target.join(
+        domain,
+        left_on="target_key",
+        right_on="domain_key",
+    )
+    root = remove_cache_nodes(Translator(query._ldf.visit(), engine).translate_ir())
 
+    assert isinstance(root, Join)
+    target_ir, domain_ir = root.children
+    assert isinstance(domain_ir, Join)
+    renamed_unrelated_ir, domain_source_ir = domain_ir.children
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(
-            target=(target, 1_000),
-            unrelated=(unrelated, 1),
-            domain_source=(domain_source, 5),
-        ),
-        _config(),
+        StatsCollector(),
+        ConfigOptions.from_polars_engine(engine),
     )
 
     semi = next(
-        semi for semi in _joins(optimized, "Semi") if semi.children[0] is target
+        semi for semi in _joins(optimized, "Semi") if semi.children[0] is target_ir
     )
     selected_domain = semi.children[1]
     assert isinstance(selected_domain, Select)
-    assert selected_domain.children[0] is domain
+    rewritten_domain_source = selected_domain.children[0]
+    assert isinstance(rewritten_domain_source, Join)
+    assert rewritten_domain_source.options[0] == "Semi"
+    assert rewritten_domain_source.children[0] is domain_source_ir
+    assert rewritten_domain_source.children[0] is not renamed_unrelated_ir
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_composite_domain_columns_follow_renames() -> None:
