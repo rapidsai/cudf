@@ -106,7 +106,6 @@ from cudf.utils import docutils, ioutils, queryutils
 from cudf.utils.dtypes import (
     DEFAULT_STRING_DTYPE,
     SIZE_TYPE_DTYPE,
-    SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES,
     can_convert_to_column,
     dtype_from_pylibcudf_column,
     find_common_type,
@@ -1671,7 +1670,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             if is_list_like(mask):
                 dtype = None
                 mask = pd.Series(mask, dtype=dtype)
-            if mask.dtype == "bool":
+            if getattr(mask.dtype, "kind", None) == "b":
                 return self._apply_boolean_mask(BooleanMask(mask, len(self)))
             else:
                 return self._get_columns_by_label(mask)
@@ -3429,6 +3428,13 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         if columns is None:
             df = self
         else:
+            if (
+                not isinstance(columns, (pd.Index, Index))
+                and len(columns) == 0
+            ):
+                # pandas' Index.reindex treats an empty non-Index target as
+                # ``columns[:0]``, preserving the columns' metadata.
+                columns = self._data.to_pandas_index[:0]
             columns = Index(columns)
             intersection = self._data.to_pandas_index.intersection(
                 columns.to_pandas()
@@ -7466,32 +7472,14 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         5  False  2.0
         """
 
-        # code modified from:
-        # https://github.com/pandas-dev/pandas/blob/master/pandas/core/frame.py#L3196
+        # Mirrors pandas.DataFrame.select_dtypes:
+        # https://github.com/pandas-dev/pandas/blob/main/pandas/core/frame.py
 
         if not isinstance(include, (list, tuple)):
             include = (include,) if include is not None else ()
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        def cudf_dtype_from_pydata_dtype(dtype):
-            """Given a numpy or pandas dtype, converts it into the equivalent cuDF
-            Python dtype.
-            """
-            if _is_categorical_dtype(dtype):
-                return CategoricalDtype
-            elif is_decimal32_dtype(dtype):
-                return Decimal32Dtype
-            elif is_decimal64_dtype(dtype):
-                return Decimal64Dtype
-            elif is_decimal128_dtype(dtype):
-                return Decimal128Dtype
-            elif dtype in SUPPORTED_NUMPY_TO_PYLIBCUDF_TYPES:
-                return dtype.type
-            return pd.core.dtypes.common.infer_dtype_from_object(dtype)
-
-        # cudf_dtype_from_pydata_dtype can distinguish between
-        # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
 
         if not any(selection):
@@ -7499,10 +7487,42 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 "at least one of include or exclude must be nonempty"
             )
 
-        include, exclude = map(
-            lambda x: frozenset(map(cudf_dtype_from_pydata_dtype, x)),
-            selection,
+        def convert_dtype_entry(entry):
+            """Convert an include/exclude entry to the generic type(s) used
+            for matching, like pandas' ``check_int_infer_dtype``.
+            """
+            if _is_categorical_dtype(entry):
+                return (pd.core.dtypes.dtypes.CategoricalDtypeType,)
+            elif is_decimal32_dtype(entry):
+                return (Decimal32Dtype,)
+            elif is_decimal64_dtype(entry):
+                return (Decimal64Dtype,)
+            elif is_decimal128_dtype(entry):
+                return (Decimal128Dtype,)
+            elif (isinstance(entry, str) and entry == "int") or entry is int:
+                # Numpy maps int to different types (int32, int64) on Windows
+                # and Linux
+                return (np.int32, np.int64)
+            elif (
+                isinstance(entry, str) and entry == "float"
+            ) or entry is float:
+                # np.dtype("float") coerces to np.float64 from Numpy 1.20
+                return (np.float64, np.float32)
+            return (pd.core.dtypes.common.infer_dtype_from_object(entry),)
+
+        include, exclude = (
+            frozenset(
+                itertools.chain.from_iterable(map(convert_dtype_entry, x))
+            )
+            for x in selection
         )
+
+        for dtypes_set in (include, exclude):
+            if dtypes_set & {np.dtype("S").type, np.dtype("<U").type}:
+                raise TypeError(
+                    "numpy string dtypes are not allowed, use 'str' or "
+                    "'object' instead"
+                )
 
         # can't both include AND exclude!
         if not include.isdisjoint(exclude):
@@ -7510,47 +7530,62 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 f"include and exclude overlap on {(include & exclude)}"
             )
 
-        # include all subtypes
-        include_subtypes = set()
-        for _, dtype in self._dtypes:
-            for i_dtype in include:
-                # category handling
-                if i_dtype == CategoricalDtype:
-                    # Matches cudf & pandas dtype objects
-                    include_subtypes.add(i_dtype)
-                elif inspect.isclass(dtype.type):
-                    if issubclass(dtype.type, i_dtype):
-                        include_subtypes.add(dtype.type)
+        def dtype_predicate(dtype, dtypes_set):
+            if _is_categorical_dtype(dtype):
+                # cudf's CategoricalDtype.type is the categories' scalar
+                # type, so it must not participate in the generic matching
+                return pd.core.dtypes.dtypes.CategoricalDtypeType in dtypes_set
+            if isinstance(
+                dtype, (Decimal32Dtype, Decimal64Dtype, Decimal128Dtype)
+            ):
+                return type(dtype) in dtypes_set
+            if isinstance(dtype, pd.ArrowDtype):
+                dtype = dtype.numpy_dtype
+            classes = tuple(t for t in dtypes_set if inspect.isclass(t))
+            return (
+                (
+                    inspect.isclass(dtype.type)
+                    and issubclass(dtype.type, classes)
+                )
+                # BooleanDtype._is_numeric == True but should be excluded
+                or (
+                    np.number in dtypes_set
+                    and getattr(dtype, "_is_numeric", False)
+                    and dtype.kind != "b"
+                )
+                # backwards compat for the default `str` dtype being
+                # selected by object
+                or (
+                    isinstance(dtype, pd.StringDtype)
+                    and dtype.na_value is np.nan
+                    and np.object_ in dtypes_set
+                )
+            )
 
-        # exclude all subtypes
-        exclude_subtypes = set()
-        for _, dtype in self._dtypes:
-            for e_dtype in exclude:
-                # category handling
-                if e_dtype == CategoricalDtype:
-                    # Matches cudf & pandas dtype objects
-                    exclude_subtypes.add(e_dtype)
-                elif inspect.isclass(dtype.type):
-                    if issubclass(dtype.type, e_dtype):
-                        exclude_subtypes.add(dtype.type)
-
-        include_all = {
-            cudf_dtype_from_pydata_dtype(dtype) for _, dtype in self._dtypes
-        }
-
-        if include:
-            inclusion = include_all & include_subtypes
-        elif exclude:
-            inclusion = include_all
-        else:
-            inclusion = set()
-        # remove all exclude types
-        inclusion = inclusion - exclude_subtypes
+        if (
+            np.object_ in include
+            and str not in include
+            and str not in exclude
+            and any(
+                isinstance(dtype, pd.StringDtype) and dtype.na_value is np.nan
+                for _, dtype in self._dtypes
+            )
+        ):
+            warnings.warn(
+                "For backward compatibility, 'str' dtypes are included by "
+                "select_dtypes when 'object' dtype is specified. "
+                "This behavior is deprecated and will be removed in a future "
+                "version. Explicitly pass 'str' to `include` to select them, "
+                "or to `exclude` to remove them and silence this warning.",
+                FutureWarning,
+                stacklevel=2,
+            )
 
         to_select = [
             label
             for label, dtype in self._dtypes
-            if cudf_dtype_from_pydata_dtype(dtype) in inclusion
+            if (not include or dtype_predicate(dtype, include))
+            and (not exclude or not dtype_predicate(dtype, exclude))
         ]
         result = self.loc[:, to_select]
         if not to_select and self._data.rangeindex:

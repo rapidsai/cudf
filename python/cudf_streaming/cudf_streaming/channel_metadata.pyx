@@ -127,23 +127,8 @@ cdef class OrderKey:
         return f"OrderKey({self.column_index}, {self.order!r}, {self.null_order!r})"
 
 
-cdef class OrderScheme:
-    """Order-based partitioning scheme for sorted/range-partitioned data.
-
-    Data is partitioned by value ranges based on predetermined boundaries.
-    For N partitions, there are N-1 boundary rows.
-
-    Parameters
-    ----------
-    keys
-        Sequence of ``OrderKey`` objects (one per sort column).
-    boundaries
-        Optional ``TableChunk`` of N-1 boundary rows for N partitions.
-    strict_boundaries
-        When true, every row in a chunk falls in a single partition's half-open key
-        range (keys do not straddle chunk interiors). See the C++ ``OrderScheme`` docs.
-        Default false.
-    """
+cdef class Ordering:
+    """A valid ordering description for sorted/range-partitioned data."""
 
     def __init__(
         self,
@@ -155,16 +140,14 @@ cdef class OrderScheme:
         cdef vector[cpp_OrderKey] cpp_keys
         for key in keys:
             cpp_keys.push_back((<OrderKey?>key)._handle)
-        if cpp_keys.empty():
-            raise ValueError("OrderScheme: keys must not be empty")
-        self._handle = cpp_OrderScheme(
+        self._handle = cpp_Ordering(
             move(cpp_keys), move(boundaries.release_handle()), strict_boundaries
         )
 
     @staticmethod
-    cdef OrderScheme from_cpp(cpp_OrderScheme scheme):
-        cdef OrderScheme ret = OrderScheme.__new__(OrderScheme)
-        ret._handle = move(scheme)
+    cdef Ordering from_cpp(cpp_Ordering ordering):
+        cdef Ordering ret = Ordering.__new__(Ordering)
+        ret._handle = move(ordering)
         return ret
 
     @property
@@ -175,8 +158,15 @@ cdef class OrderScheme:
         return tuple(OrderKey.from_cpp(self._handle.keys[i]) for i in range(n))
 
     @property
+    def column_indices(self) -> tuple:
+        """Column indices for the ordering keys."""
+        cdef int i
+        cdef int n = self._handle.keys.size()
+        return tuple(self._handle.keys[i].column_index for i in range(n))
+
+    @property
     def strict_boundaries(self) -> bool:
-        """Same semantics as the C++ ``OrderScheme::strict_boundaries`` field."""
+        """Whether chunks are strictly aligned to boundary ranges."""
         return self._handle.strict_boundaries
 
     @property
@@ -192,11 +182,6 @@ cdef class OrderScheme:
         ----------
         br
             Buffer resource to associate with the returned table chunk.
-
-        Returns
-        -------
-        TableChunk
-            A non-exclusive view of the boundary rows owned by this scheme.
         """
         cdef const cpp_TableChunk* chunk = self._handle.boundaries.get()
         cdef Stream stream = Stream._from_cudaStream_t(chunk.stream().value())
@@ -207,23 +192,23 @@ cdef class OrderScheme:
             tbl, stream, exclusive_view=False, br=br
         )
 
-    def with_keys(self, object new_keys) -> OrderScheme:
-        """Return a new ``OrderScheme`` with updated key column indices."""
+    def with_keys(self, object new_keys) -> Ordering:
+        """Return a new ``Ordering`` with updated key column indices."""
         cdef vector[cpp_OrderKey] cpp_keys
         for key in new_keys:
             cpp_keys.push_back((<OrderKey?>key)._handle)
-        return OrderScheme.from_cpp(self._handle.with_keys(move(cpp_keys)))
+        return Ordering.from_cpp(self._handle.with_keys(move(cpp_keys)))
 
     def boundaries_aligned_with(
-        self, OrderScheme other not None, BufferResource br not None
+        self, Ordering other not None, BufferResource br not None
     ) -> bool:
         """
-        Check whether boundary values are aligned with another scheme.
+        Check whether boundary values are aligned with another ordering.
 
         Parameters
         ----------
         other
-            The scheme to compare against.
+            The ordering to compare against.
         br
             Buffer resource for temporary allocations during comparison.
         """
@@ -231,9 +216,48 @@ cdef class OrderScheme:
 
     def __repr__(self):
         return (
-            f"OrderScheme({self.keys!r}, "
+            f"Ordering({self.keys!r}, "
             f"strict_boundaries={self.strict_boundaries})"
         )
+
+
+cdef class OrderScheme:
+    """Order-based partitioning scheme for sorted/range-partitioned data.
+
+    An OrderScheme advertises that the same stream is sorted/range-partitioned
+    with respect to any individual ``Ordering`` it contains. Consumers should
+    inspect the ``Ordering`` they intend to use for keys, boundaries, and
+    strictness.
+
+    Parameters
+    ----------
+    orderings
+        Non-empty sequence of ``Ordering`` objects valid for the stream.
+    """
+
+    def __init__(self, object orderings):
+        cdef vector[cpp_Ordering] cpp_orderings
+        for ordering in orderings:
+            cpp_orderings.push_back((<Ordering?>ordering)._handle)
+        self._handle = cpp_OrderScheme(move(cpp_orderings))
+
+    @staticmethod
+    cdef OrderScheme from_cpp(cpp_OrderScheme scheme):
+        cdef OrderScheme ret = OrderScheme.__new__(OrderScheme)
+        ret._handle = move(scheme)
+        return ret
+
+    @property
+    def orderings(self) -> tuple:
+        """Ordering descriptions valid for the stream."""
+        cdef int i
+        cdef int n = self._handle.orderings.size()
+        return tuple(
+            Ordering.from_cpp(self._handle.orderings[i]) for i in range(n)
+        )
+
+    def __repr__(self):
+        return f"OrderScheme({self.orderings!r})"
 
 
 cdef void _apply_spec(cpp_PartitioningSpec& spec, obj) except *:

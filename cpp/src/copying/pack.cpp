@@ -15,6 +15,7 @@
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <type_traits>
 #include <utility>
@@ -65,13 +66,22 @@ struct serialized_column {
 
 /**
  * @brief Table-level metadata stored before the serialized column entries.
+ *
+ * `num_rows` records the table's row count. For a zero-column table (which has no
+ * columns to derive it from) it is the only source of the count. For a table with
+ * columns it equals the columns' size and is validated against them on unpack.
  */
 struct alignas(8) serialized_table_header {
   serialized_table_header() = default;
-  explicit serialized_table_header(size_type _num_columns) : num_columns(_num_columns) {}
+  serialized_table_header(size_type _num_columns, size_type _num_rows)
+    : num_columns(_num_columns), num_rows(_num_rows)
+  {
+  }
 
   int32_t version{packed_metadata_version};
   size_type num_columns{};
+  size_type num_rows{};
+  int32_t pad{};  // Explicitly pad to avoid uninitialized padding bits
 };
 
 // The header is serialized with memcpy, so it must not contain padding bytes
@@ -98,6 +108,7 @@ serialized_table_header read_header(std::uint8_t const* ptr,
   CUDF_EXPECTS(header.version == packed_metadata_version,
                "packed metadata has an unsupported format version");
   CUDF_EXPECTS(header.num_columns >= 0, "packed metadata header has negative column count");
+  CUDF_EXPECTS(header.num_rows >= 0, "packed metadata header has negative row count");
   return header;
 }
 
@@ -224,6 +235,7 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
   uint8_t const* base_ptr = gpu_data;
   auto const header       = read_header(metadata);
   auto const num_columns  = header.num_columns;
+  auto const num_rows     = header.num_rows;
   // current_ptr tracks position in the metadata byte buffer
   auto const* current_ptr = metadata + sizeof(serialized_table_header);
 
@@ -242,7 +254,16 @@ table_view unpack(uint8_t const* metadata, uint8_t const* gpu_data)
     return cols;
   };
 
-  return table_view{get_columns(num_columns)};
+  auto const cols = get_columns(num_columns);
+  if (num_columns == 0) {
+    // A zero-column table has no columns to derive its row count from; use the
+    // count recorded in the table header.
+    return table_view{std::vector<column_view>{}, num_rows};
+  }
+  // For a table with columns the row count is derived from the columns.
+  CUDF_EXPECTS(num_rows == cols.front().size(),
+               "packed metadata row count does not match the columns");
+  return table_view{cols};
 }
 
 }  // anonymous namespace
@@ -275,7 +296,8 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
 
 class metadata_builder_impl {
  public:
-  metadata_builder_impl(size_type const num_root_columns) : _num_root_columns(num_root_columns)
+  metadata_builder_impl(size_type const num_root_columns, std::optional<size_type> const num_rows)
+    : _num_root_columns(num_root_columns), _num_rows(num_rows)
   {
     // Lower bound: exact for flat tables but nested children add more entries and grow the vector.
     _columns.reserve(num_root_columns);
@@ -288,14 +310,22 @@ class metadata_builder_impl {
                                int64_t const null_mask_offset,
                                size_type const num_children)
   {
+    if (_num_rows.has_value() && _columns.empty()) {
+      CUDF_EXPECTS(col_size == _num_rows.value(),
+                   "num_rows does not match the size of the table's columns",
+                   std::invalid_argument);
+    }
     _columns.emplace_back(
       col_type, col_size, col_null_count, data_offset, null_mask_offset, num_children);
   }
 
   [[nodiscard]] std::vector<uint8_t> build() const
   {
-    auto const header = serialized_table_header{_num_root_columns};
-    auto output       = std::vector<uint8_t>(sizeof(serialized_table_header) +
+    // The header always records the table row count. Either the first top-level column's
+    // size for a table with columns, or the explicit count for a zero-column table.
+    auto const num_rows = _columns.empty() ? _num_rows.value_or(0) : _columns.front().size;
+    auto const header   = serialized_table_header{_num_root_columns, num_rows};
+    auto output         = std::vector<uint8_t>(sizeof(serialized_table_header) +
                                        _columns.size() * sizeof(serialized_column));
     std::memcpy(output.data(), &header, sizeof(serialized_table_header));
     if (!_columns.empty()) {
@@ -311,12 +341,15 @@ class metadata_builder_impl {
  private:
   // Number of top-level columns (excludes nested children) stored in the header.
   size_type const _num_root_columns;
+  // Explicit table row count, recorded in the header only for a zero-column table.
+  std::optional<size_type> const _num_rows;
   // Serialized column entries, depth-first with each column written before its children.
   std::vector<serialized_column> _columns;
 };
 
-metadata_builder::metadata_builder(size_type const num_root_columns)
-  : impl(std::make_unique<metadata_builder_impl>(num_root_columns))
+metadata_builder::metadata_builder(size_type const num_root_columns,
+                                   std::optional<size_type> const num_rows)
+  : impl(std::make_unique<metadata_builder_impl>(num_root_columns, num_rows))
 {
 }
 
@@ -379,21 +412,22 @@ packed_metadata_view::packed_metadata_view(std::span<uint8_t const> buffer)
   auto const* entries = buffer.data() + sizeof(detail::serialized_table_header);
   auto const header   = detail::read_header(buffer.data(), end);
   _num_columns        = header.num_columns;
-  // Validate that the column tree exactly fills the buffer.
-  auto const* past_last = detail::skip_subtrees(entries, _num_columns, end);
-  CUDF_EXPECTS(past_last == end,
-               "packed metadata buffer size does not match the encoded column tree");
+  _num_rows           = header.num_rows;
+  // Walk the top-level columns once to validate two things: every top-level column's size agrees
+  // with the recorded row count and the column tree exactly fills the buffer.
+  auto const* ptr = entries;
+  for (size_type i = 0; i < _num_columns; ++i) {
+    auto const entry = detail::read_entry(ptr, end);
+    CUDF_EXPECTS(entry.size == _num_rows, "packed metadata row count does not match the columns");
+    ptr = detail::skip_subtrees(ptr, 1, end);
+  }
+  CUDF_EXPECTS(ptr == end, "packed metadata buffer size does not match the encoded column tree");
   _entries = {entries, end};
 }
 
 size_type packed_metadata_view::num_columns() const { return _num_columns; }
 
-size_type packed_metadata_view::num_rows() const
-{
-  if (_num_columns == 0) { return 0; }
-  return detail::read_entry(_entries.data(), _entries.data() + sizeof(detail::serialized_column))
-    .size;
-}
+size_type packed_metadata_view::num_rows() const { return _num_rows; }
 
 packed_metadata_view::column_view packed_metadata_view::column(size_type i) const
 {
@@ -422,9 +456,16 @@ std::vector<uint8_t> pack_metadata(table_view const& table,
                                    size_t buffer_size)
 {
   CUDF_FUNC_RANGE();
-  if (table.is_empty()) { return std::vector<uint8_t>{}; }
+  // A truly empty table (no columns and no rows) serializes to an empty buffer.
+  // A zero-column table with a non-zero row count still emits a metadata buffer
+  // whose table header records the row count, so the count round-trips.
+  if (table.num_columns() == 0 && table.num_rows() == 0) { return std::vector<uint8_t>{}; }
 
-  auto builder = cudf::detail::metadata_builder(table.num_columns());
+  // Only a zero-column table records a row count. For tables with columns the row count
+  // comes from the columns.
+  auto const num_rows =
+    table.num_columns() == 0 ? std::optional<size_type>{table.num_rows()} : std::nullopt;
+  auto builder = cudf::detail::metadata_builder(table.num_columns(), num_rows);
   return detail::pack_metadata(table, contiguous_buffer, buffer_size, builder);
 }
 

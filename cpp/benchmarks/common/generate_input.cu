@@ -242,6 +242,11 @@ struct bool_generator {
   __device__ bool operator()(size_t n)
   {
     engine.discard(n);
+    // Short-circuit the degenerate endpoints so that probability_true == 1.0 (null_probability ==
+    // 0) always yields all-valid and probability_true == 0.0 always yields all-null, independent of
+    // the float distribution's endpoint behavior (which can return exactly 1.0f).
+    if (probability_true >= 1.0) return true;
+    if (probability_true <= 0.0) return false;
     return dist(engine) < probability_true;
   }
 };
@@ -1096,7 +1101,7 @@ std::pair<rmm::device_buffer, cudf::size_type> create_random_null_mask(
 
 std::unique_ptr<cudf::column> create_ascii_string_column(data_profile const& profile,
                                                          cudf::size_type num_rows,
-                                                         unsigned seed = 1)
+                                                         unsigned seed)
 {
   auto engine = deterministic_engine(seed);
   return create_random_utf8_string_column<string_encoding::ASCII>(profile, engine, num_rows);

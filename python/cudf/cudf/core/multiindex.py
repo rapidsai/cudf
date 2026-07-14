@@ -1938,6 +1938,55 @@ class MultiIndex(Index):
         else:
             return self.get_level_values(level).unique()
 
+    def _factorize(
+        self, sort: bool, use_na_sentinel: bool
+    ) -> tuple[cp.ndarray, MultiIndex]:
+        if any(col.has_nulls() for col in self._columns):
+            raise NotImplementedError(
+                "factorize on a MultiIndex with missing values is not yet "
+                "supported"
+            )
+        if len(self) == 0:
+            return cp.empty(0, dtype=np.intp), self.copy()
+
+        level_labels = list(range(self.nlevels))
+        df = cudf.DataFrame._from_data(
+            dict(zip(level_labels, self._columns, strict=True))
+        )
+        pos_label = self.nlevels
+        df[pos_label] = range(len(df))
+
+        # the uniques are the distinct rows in order of first appearance
+        # (or sorted lexicographically when requested)
+        uniques = (
+            df.groupby(level_labels, sort=False)
+            .agg({pos_label: "min"})
+            .reset_index()
+        )
+        uniques = uniques.sort_values(
+            by=level_labels if sort else pos_label, ignore_index=True
+        )
+        uid_label = self.nlevels + 1
+        uniques[uid_label] = range(len(uniques))
+
+        # codes: map each row to its unique-row id, in the original order
+        merged = df.merge(
+            uniques[[*level_labels, uid_label]],
+            on=level_labels,
+            how="left",
+        )
+        codes = (
+            merged.sort_values(by=pos_label)[uid_label]
+            .astype(np.dtype(np.intp))
+            .values
+        )
+        # pandas does not propagate the level names to the uniques
+        uniques_mi = MultiIndex._from_data(
+            {label: uniques._data[label] for label in level_labels}
+        )
+        uniques_mi.names = [None] * self.nlevels
+        return codes, uniques_mi
+
     @_performance_tracking
     def nunique(self, dropna: bool = True) -> int:
         mi = self.dropna(how="all") if dropna else self

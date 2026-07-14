@@ -437,11 +437,6 @@ def test_loc_wrong_type_slice_datetimeindex():
         ser_pd.loc[2:]
 
 
-# ---------------------------------------------------------------------------
-# Series .loc on a MultiIndex (level-drop + scalar-collapse fixes)
-# ---------------------------------------------------------------------------
-
-
 def test_series_loc_multiindex_scalar_selection():
     mi = pd.MultiIndex.from_tuples([(0, 0), (1, 1), (2, 1)], names=["A", "B"])
     psr = pd.Series([1, 2, 3], index=mi)
@@ -477,3 +472,23 @@ def test_series_loc_tuple_of_lists_stays_series():
     expected = psr.loc[([10, 20], [2, 3])]
     assert_eq(result, expected)
     assert isinstance(result, cudf.Series)
+
+
+def test_loc_datetime_key_out_of_bounds():
+    # A label beyond the index unit's range cannot be present: pandas
+    # raises KeyError for scalar lookups and OutOfBoundsDatetime for
+    # list keys.
+    index = np.array(["2000-01-01", "2000-01-02"], dtype="datetime64[ns]")
+    ser_pd = pd.Series([1, 2], index=pd.Index(index))
+    ser_cudf = cudf.Series([1, 2], index=cudf.Index(index))
+    key = np.datetime64("9999-01-01", "s")
+
+    with pytest.raises(KeyError):
+        ser_pd.loc[key]
+    with pytest.raises(KeyError):
+        ser_cudf.loc[key]
+
+    with pytest.raises(pd.errors.OutOfBoundsDatetime):
+        ser_pd.loc[[key]]
+    with pytest.raises(pd.errors.OutOfBoundsDatetime):
+        ser_cudf.loc[[key]]
