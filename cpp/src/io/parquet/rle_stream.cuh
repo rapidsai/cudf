@@ -215,11 +215,6 @@ struct rle_stream {
 
   __device__ rle_stream(rle_run* _runs) : runs(_runs) {}
 
-  struct chunked_smem_t {
-    int gen_out_off[kGenRuns + 1];
-    int gen_meta[kGenRuns];
-  };
-
   __device__ inline bool is_last_decode_warp(int warp_id)
   {
     return warp_id == num_rle_stream_decode_warps;
