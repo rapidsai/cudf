@@ -12,8 +12,10 @@
 
 #include <cooperative_groups.h>
 #include <cuda/barrier>
+#include <cuda/std/algorithm>
 #include <cuda/std/iterator>
 #include <cuda/std/memory>
+#include <cuda/std/span>
 
 namespace cudf::io::parquet::detail {
 
@@ -468,6 +470,8 @@ struct rle_stream {
 
     __shared__ int gen_out_off[kGenRuns + 1];
     __shared__ int gen_meta[kGenRuns];
+    cuda::std::span<int> const gen_out_off_v{gen_out_off, kGenRuns + 1};
+    cuda::std::span<int> const gen_meta_v{gen_meta, kGenRuns};
     // Payload offset within run slot 0: non-zero only when continuing a run
     // that was split across two decode_next_chunked calls.
     __shared__ int s_run0_payload_offset;
@@ -487,7 +491,7 @@ struct rle_stream {
         int co                = 0;
         int n                 = 0;
         int out_base          = out_pos_total;
-        gen_out_off[0]        = 0;
+        gen_out_off_v[0]      = 0;
         s_run0_payload_offset = 0;
 
         // If a partial run was saved from the previous call, inject it as slot 0.
@@ -497,8 +501,8 @@ struct rle_stream {
           int const remaining   = partial_run_total - partial_run_done;
           int const room        = out_end - out_base;
           int const cnt         = min(remaining, room);
-          gen_meta[0]           = partial_run_meta;
-          gen_out_off[1]        = cnt;
+          gen_meta_v[0]         = partial_run_meta;
+          gen_out_off_v[1]      = cnt;
           s_run0_payload_offset = partial_run_done;
           n                     = 1;
           co                    = cnt;
@@ -536,8 +540,8 @@ struct rle_stream {
             cnt               = room;
           }
           co += cnt;
-          gen_meta[n]      = meta;
-          gen_out_off[++n] = co;
+          gen_meta_v[n]      = meta;
+          gen_out_off_v[++n] = co;
           if (partial_run_meta != -1) { break; }
         }
         s_chunk_runs  = n;
@@ -558,23 +562,18 @@ struct rle_stream {
       int const hi  = min(lo + per, chunk_total);
 
       if (lo < hi) {
-        int a = 0;
-        int b = chunk_runs;
-        while (a < b) {
-          int const mid = (a + b) >> 1;
-          if (gen_out_off[mid + 1] <= lo) {
-            a = mid + 1;
-          } else {
-            b = mid;
-          }
-        }
+        int const a =
+          static_cast<int>(cuda::std::upper_bound(
+                             gen_out_off_v.begin(), gen_out_off_v.begin() + chunk_runs + 1, lo) -
+                           gen_out_off_v.begin()) -
+          1;
 
-        for (int r = a; r < chunk_runs && gen_out_off[r] < hi; ++r) {
-          int const r_lo   = gen_out_off[r];
-          int const r_hi   = gen_out_off[r + 1];
+        for (int r = a; r < chunk_runs && gen_out_off_v[r] < hi; ++r) {
+          int const r_lo   = gen_out_off_v[r];
+          int const r_hi   = gen_out_off_v[r + 1];
           int const seg_lo = max(r_lo, lo);
           int const seg_hi = min(r_hi, hi);
-          int const meta   = gen_meta[r];
+          int const meta   = gen_meta_v[r];
           // For slot 0 of a resumed partial run add the already-emitted offset
           // so we read from the correct position in the payload.
           int const run_payload_off = (r == 0) ? run0_payload_offset : 0;
