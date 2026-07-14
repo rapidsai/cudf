@@ -1,5 +1,5 @@
 # cmake-format: off
-# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 # cmake-format: on
 
@@ -43,8 +43,9 @@ if(NOT TARGET xxhash)
   find_path(XXHASH_INCLUDE_DIR NAMES xxhash.h REQUIRED)
   add_library(xxhash UNKNOWN IMPORTED)
   set_target_properties(
-    xxhash PROPERTIES IMPORTED_LOCATION "${XXHASH_LIBRARY}"
-                      INTERFACE_INCLUDE_DIRECTORIES "${XXHASH_INCLUDE_DIR}")
+    xxhash PROPERTIES IMPORTED_LOCATION "${XXHASH_LIBRARY}" INTERFACE_INCLUDE_DIRECTORIES
+                                                            "${XXHASH_INCLUDE_DIR}"
+  )
 endif()
 
 include(${CMAKE_CURRENT_LIST_DIR}/../../librtcx/embed.cmake)
@@ -80,25 +81,23 @@ add_string_transforms_example(localize_phone_jit localize_phone_jit.cpp)
 add_string_transforms_example(localize_phone_precompiled localize_phone_precompiled.cpp)
 
 rtcx_add_embed(http_log_fragments)
-add_fragment(http_log_fragments FRAGMENT request_line_sizes SOURCE
-             http_logs/fragments.cu
-             DEFINITIONS UDF_COMPUTE_SIZES
-             INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs)
-add_fragment(http_log_fragments FRAGMENT request_line_output SOURCE
-             http_logs/fragments.cu
-             DEFINITIONS UDF_WRITE_OUTPUT
-             INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs)
-rtcx_embed(http_log_fragments COMPRESSION none OUTPUT_DIRECTORY
-           "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed")
+add_fragment(
+  http_log_fragments FRAGMENT request_line_sizes SOURCE http_logs/fragments.cu DEFINITIONS
+  UDF_COMPUTE_SIZES INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs
+)
+add_fragment(
+  http_log_fragments FRAGMENT request_line_output SOURCE http_logs/fragments.cu DEFINITIONS
+  UDF_WRITE_OUTPUT INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs
+)
+rtcx_embed(
+  http_log_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"
+)
 
 add_string_transforms_example(http_log_transforms http_logs/transforms.cpp)
-target_sources(
-  http_log_transforms PRIVATE ${http_log_fragments_SOURCE_DIR}/http_log_fragments.s
-)
-target_include_directories(http_log_transforms
-                           PRIVATE ${http_log_fragments_SOURCE_DIR})
+target_sources(http_log_transforms PRIVATE ${http_log_fragments_SOURCE_DIR}/http_log_fragments.s)
+target_include_directories(http_log_transforms PRIVATE ${http_log_fragments_SOURCE_DIR})
 add_dependencies(http_log_transforms http_log_fragments)
 
-install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv
-              ${CMAKE_CURRENT_LIST_DIR}/http_logs/logs.csv
-        DESTINATION bin/examples/libcudf/string_transformers)
+install(FILES ${CMAKE_CURRENT_LIST_DIR}/info.csv ${CMAKE_CURRENT_LIST_DIR}/http_logs/logs.csv
+        DESTINATION bin/examples/libcudf/string_transformers
+)
