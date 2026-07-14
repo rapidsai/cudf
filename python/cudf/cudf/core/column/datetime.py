@@ -515,7 +515,7 @@ class DatetimeColumn(TemporalBaseColumn):
         # pandas' isocalendar for datetime64 returns UInt32 with NA preserved.
         is_arrow = isinstance(self.dtype, pd.ArrowDtype)
         target_dtype: DtypeObj = (
-            np.dtype(np.int64) if is_arrow else np.dtype(np.uint32)
+            np.dtype(np.int64) if is_arrow else pd.UInt32Dtype()
         )
         result = {
             field: self.strftime(
@@ -1038,6 +1038,20 @@ class DatetimeColumn(TemporalBaseColumn):
 
 
 class DatetimeTZColumn(DatetimeColumn):
+    def _round_dt(
+        self,
+        round_func: Callable[
+            [plc.Column, plc.datetime.RoundingFrequency], plc.Column
+        ],
+        freq: str,
+    ) -> ColumnBase:
+        # Rounding must operate on the local wall-clock time and then be
+        # re-localized to the original timezone to match pandas semantics.
+        rounded_local = cast(
+            "DatetimeColumn", self._local_time._round_dt(round_func, freq)
+        )
+        return rounded_local.tz_localize(str(self.tz))
+
     def to_pandas(
         self,
         *,
