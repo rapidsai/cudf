@@ -2888,6 +2888,7 @@ class IndexedFrame(Frame):
                     multiindex=self._data.multiindex,
                     level_names=self._data.level_names,
                     label_dtype=self._data.label_dtype,
+                    level_dtypes=self._data._level_dtypes,
                     verify=False,
                 )
             out = self._from_data_like_self(ca)
@@ -6010,8 +6011,8 @@ class IndexedFrame(Frame):
                 """
                 >>> a.pow(b)
                 a       1
-                b    <NA>
-                c    <NA>
+                b       1
+                c       1
                 d    <NA>
                 e    <NA>
                 dtype: int64
@@ -6053,7 +6054,7 @@ class IndexedFrame(Frame):
                 a       1
                 b    <NA>
                 c    <NA>
-                d    <NA>
+                d       1
                 e    <NA>
                 dtype: int64
                 >>> a.rpow(b, fill_value=0)
