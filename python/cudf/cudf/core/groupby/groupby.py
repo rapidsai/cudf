@@ -1220,6 +1220,17 @@ class GroupBy(Serializable, Reducible, Scannable):
                     cast_dtype = orig_dtype
                 elif agg not in {list, "collect"}:
                     if (
+                        isinstance(orig_dtype, np.dtype)
+                        and orig_dtype.kind == "O"
+                        and isinstance(create_dtype, pd.StringDtype)
+                    ):
+                        # a string-producing aggregation (first/last/min/
+                        # max/nth) on an object-dtype column stays object,
+                        # matching pandas. Scoped here rather than in
+                        # get_dtype_of_same_kind: other callers (e.g. merge
+                        # key coalescing) re-infer str for object inputs.
+                        create_dtype = orig_dtype
+                    elif (
                         isinstance(orig_dtype, pd.DatetimeTZDtype)
                         and isinstance(create_dtype, np.dtype)
                         and create_dtype.kind == "M"
@@ -1794,7 +1805,7 @@ class GroupBy(Serializable, Reducible, Scannable):
         )
 
     @property
-    def nth(self) -> GroupByNthSelector:  # type: ignore[override]
+    def nth(self):
         """
         Take the nth row from each group if n is an int, otherwise a
         subset of rows.

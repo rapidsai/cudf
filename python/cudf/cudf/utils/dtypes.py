@@ -593,14 +593,6 @@ def get_dtype_of_same_kind(source_dtype: DtypeObj, target_dtype: DtypeObj):
         ):
             return dtype_to_pandas_arrowdtype(target_dtype)
         return dtype_to_pandas_nullable_extension_type(target_dtype)
-    elif (
-        isinstance(source_dtype, np.dtype)
-        and source_dtype.kind == "O"
-        and isinstance(target_dtype, pd.StringDtype)
-    ):
-        # a string-producing operation on an object-dtype column stays
-        # object, matching pandas
-        return source_dtype
     else:
         return target_dtype
 
