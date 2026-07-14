@@ -656,6 +656,125 @@ replacement gate used patterns 0 and 3, plain and backreference replacement,
 1,048,576–8,388,607 rows, and 256-byte rows. These temporary matrices are
 documented here but are not additional shipped benchmark registrations.
 
+## 2026-07-14 Glushkov comparison and launch PGO campaign
+
+This campaign compared the JIT at commit `8816f571fd` with
+`lingyany/glushkov-nfa` at `8eaf307991` on an RTX A6000 (SM 8.6). Normal
+NVBench timings exclude compilation. Nsight Compute 2026.1 full-set replays
+were used only to explain representative kernels; their replay durations are
+not mixed into the normal benchmark geomeans.
+
+The comparison intentionally profiled both a Glushkov-winning late-failure
+case and a JIT-winning negative control:
+
+- count with `.+[0-9]`, 262,144 rows, and widths from zero to 64; and
+- contains with `[A-Z ]+\d+ +\d+[A-Z]+\d+$`, 262,144 128-byte rows, and a
+  50% hit rate.
+
+Nsight embedded the final SASS but could not associate PTX or source with the
+runtime-linked JIT cubin. The JIT PTX was therefore captured separately by
+passing the same assembled NVVM module through libNVVM with
+`-arch=compute_86 -opt=3`, omitting only `-gen-lto`. The branch PTX was
+extracted from its SM 8.6 fatbin. This gives an exact view before their
+different link paths, while the NCU SASS and dynamic counters remain the
+authoritative comparison of executed code.
+
+### Late-failure count profile
+
+| Metric | JIT, 1,024 threads | JIT, 256 threads | Glushkov branch |
+|:---|---:|---:|---:|
+| NCU replay duration | 767.20 us | 597.15 us | 376.58 us |
+| executed SASS instructions | 182,884,681 | 182,884,681 | 139,648,028 |
+| static SASS instructions reported | 472 | 472 | 2,080 |
+| registers per thread | 39 | 39 | 40 |
+| theoretical occupancy | 66.67% | 100.00% | 100.00% |
+| achieved occupancy | 35.67% | 57.16% | 76.55% |
+| eligible warps per scheduler | 1.51 | 2.70 | 3.01 |
+| average active threads per warp | 6.87 | 6.87 | 15.12 |
+| branch efficiency | 96.66% | 96.66% | 93.97% |
+
+The launch-only JIT change leaves the SASS, instruction count, register count,
+branch efficiency, and active-lane count unchanged. Its gain comes from making
+more of that same work schedulable. In the hot JIT loop, a byte load,
+transition address arithmetic, and a constant-memory 16-bit transition load
+each execute about 3.11 million warp-times with only eight threads active. The
+Glushkov loop's corresponding byte-processing sequence executes about 490,000
+warp-times with 18 threads active. It wins this case despite having more than
+four times as much static SASS, because it executes 24% fewer dynamic
+instructions and keeps more than twice as many lanes useful.
+
+The PTX explains the code-shape difference. The JIT embeds the small DFA and
+its classes as pattern constants in a self-contained kernel. The branch uses a
+generic `gkprog_device`, loads program metadata, and performs cooperative
+setup and a block barrier. Final SASS register usage is nevertheless nearly
+identical, so static PTX size and virtual-register counts do not explain the
+timing; dynamic traversal does.
+
+### Contains negative control
+
+| Metric | Specialized JIT | Branch fallback (`reprog_device`) |
+|:---|---:|---:|
+| normal NVBench time | 0.307 ms | 6.618 ms |
+| NCU replay duration | 199.78 us | 6.33 ms |
+| executed SASS instructions | 44,140,370 | 1,269,388,949 |
+| static SASS instructions reported | 448 | 1,776 |
+| registers per thread | 38 | 56 |
+| achieved occupancy | 57.95% | 56.41% |
+| eligible warps per scheduler | 0.74 | 0.51 |
+| average active threads per warp | 24.77 | 18.25 |
+| branch efficiency | 98.48% | 87.56% |
+
+Here the JIT is 21.5x faster in normal timing and about 31.7x faster under NCU.
+The external branch does not select `gkprog_device` for this expression; its
+`reprog_device` fallback executes 28.8x as many instructions. The hottest SASS
+sequence executes about 7.10 million warp-times and repeatedly performs local
+loads, index arithmetic, and indirect transition loads. The JIT loop executes
+about 1.05 million warp-times with 28 active lanes. This negative control does
+not characterize Glushkov itself. It shows that adopting the branch wholesale
+would lose the JIT's specialized executor coverage, so plan selection matters
+as much as the best individual executor.
+
+### Accepted launch policy
+
+Complex ordered count, replacement, and split kernels now launch with 256
+threads. Boolean kernels, extract/find kernels, and the single-byte and packed
+ASCII literal executors retain 1,024 threads. The executor gate uses the
+generated module's executor annotation, so regex syntax is not parsed a second
+time in the cuDF integration.
+
+The final replay covered every affected parameterized state:
+
+| Suite | States | Before geomean | After geomean | Speedup | >5% wins / neutral / >5% regressions |
+|:---|---:|---:|---:|---:|---:|
+| count | 42 | 1,193.172 us | 1,004.524 us | 1.188x | 36 / 6 / 0 |
+| extract control | 36 | 436.848 us | 436.605 us | 1.001x | 0 / 36 / 0 |
+| replace | 84 | 3,726.696 us | 3,141.476 us | 1.186x | 72 / 12 / 0 |
+| split | 42 | 3,540.833 us | 3,059.631 us | 1.157x | 35 / 7 / 0 |
+| all affected states | 204 | 1,998.126 us | 1,744.145 us | 1.146x | 143 / 61 / 0 |
+
+A controlled replay of the profiled count case improved from 776.872 us to
+661.643 us, or 1.174x. The final 256-thread JIT remains slower than the branch
+on that particular late-failure expression because launch geometry cannot
+remove its extra transitions or ordered restart work.
+
+Applying 256 threads to every non-boolean executor was rejected. Although that
+experiment improved the 204-state geomean by 1.131x, the direct-literal
+256-byte cases regressed to 0.325x for count, 0.585x for replace, and 0.488x
+for split, and some large extract cases lost about 19%. These scans benefit
+from the lower cache pressure of a 1,024-thread block. Executor-aware gating
+keeps their original geometry and removed every greater-than-5% regression in
+the final replay.
+
+### Profile-derived opportunities
+
+| Priority | Opportunity | Evidence and constraint |
+|:---:|:---|:---|
+| 1 | Inline tiny DFA transitions as selects or immediate logic | The late-failure JIT spends about 3.11 million warp-times on per-byte address arithmetic and `LDC.U16`; its machine has only a few states and classes. Gate by generated code size because larger machines need compact tables. |
+| 2 | Build an ordered streaming or bit-parallel plan for capture-free span/global operations | The branch executes 24% fewer instructions and more than doubles active lanes for `.+[0-9]`. Any plan must still reproduce the exact leftmost start, greedy/lazy end, zero-length progress, and non-overlapping restart semantics used by count, replace, and split. |
+| 3 | Bin or persistently schedule skewed rows | Only 6.87 lanes are active in the JIT count loop. A coarse offset-derived length histogram or work queue could reduce tail effects, but its construction, indirect row access, and result scatter must be included in timing. |
+| 4 | Cache bounded match spans selectively between sizing and emission | Replacement and split benefit from the launch change but still rematch. Store spans only for expensive, sparse late-failure cases and retain an overflow/rematch path; unconditional staging has already lost to direct rematching. |
+| 5 | Add diagnostic line information without changing release cubins | Runtime-linked LTO cubins prevented NCU PTX/source correlation. A profiling-only cache option that retains line information would make future SASS attribution easier without burdening production code or cache keys. |
+
 ## Prioritized opportunities
 
 The following work is ordered by likely value for the current implementation.
@@ -714,6 +833,8 @@ traffic. The direct paths may remain faster when they rematch.
 
 Inline byte-class ranges are implemented. Remaining comparisons include:
 
+- replacing tiny DFA transition-table loads with bounded selects or immediate
+  logic when the state/class product is small;
 - specialized all-ASCII loops when column metadata or sampling justifies it;
 - processing 4, 8, or 16 input bytes per load for literal scans;
 - loop unrolling only when it does not worsen register pressure;
@@ -730,7 +851,9 @@ Start with coarse length bins rather than a full sort. Build a row-index
 permutation from the already-available offsets, launch a small number of bins,
 and write results to original row indices. Enable it only when length variance,
 mean width, and reuse predict that reduced idle lanes repay histogram,
-permutation, and launch costs.
+permutation, and launch costs. The late-failure count profile's 6.87 active
+threads per warp is a concrete target, but normal timing must include the bin
+construction.
 
 For extreme long tails, compare bins with a persistent queue or multi-lane
 segmentation of long rows. Segment boundaries need overlap or carried automaton

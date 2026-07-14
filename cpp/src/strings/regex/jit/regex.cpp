@@ -45,10 +45,21 @@ using pair_t = cuda::std::pair<char const*, size_type>;
 static_assert(sizeof(pair_t) == 16);
 static_assert(alignof(pair_t) == alignof(char const*));
 
-// A single large block limits resident warps enough to retain each thread's sequential input
-// window in L1. Smaller blocks over-occupy these memory-bound kernels and thrash that window.
-constexpr std::uint32_t block_size        = 1024;
 constexpr std::size_t required_stack_size = 64U * 1024U;
+
+std::uint32_t block_size(regex_ir::operation_kind operation, std::string_view matcher)
+{
+  auto literal = matcher.find("; executor: single-byte literal scan") != std::string_view::npos ||
+                 matcher.find("; executor: packed ASCII literal scan") != std::string_view::npos;
+  // Boolean and direct-literal scans benefit from retaining each thread's sequential input window
+  // in L1. Complex ordered span operations are divergence-limited and need smaller blocks for
+  // occupancy and scheduling.
+  return !literal && (operation == regex_ir::operation_kind::COUNT ||
+                      operation == regex_ir::operation_kind::REPLACE ||
+                      operation == regex_ir::operation_kind::SPLIT)
+           ? 256
+           : 1024;
+}
 
 struct input_data {
   char const* chars;
@@ -125,24 +136,25 @@ void ensure_stack_size()
   }
 }
 
-kernel prepare_kernel(std::string_view pattern,
-                      strings::regex_flags flags,
-                      regex_ir::operation_kind operation,
-                      std::optional<std::string> replacement,
-                      std::string wrapper,
-                      std::string_view name)
+std::pair<kernel, std::uint32_t> prepare_kernel(std::string_view pattern,
+                                                strings::regex_flags flags,
+                                                regex_ir::operation_kind operation,
+                                                std::optional<std::string> replacement,
+                                                std::string wrapper,
+                                                std::string_view name)
 {
   ensure_stack_size();
   auto matcher = regex_ir::compile(
     normalize_pattern(pattern), operation, std::move(replacement), make_compile_options(flags));
+  auto threads  = block_size(operation, matcher);
   auto module   = regex_ir::nvvm::assemble(std::move(matcher), std::move(wrapper));
   auto fragment = get_nvvm_fragment(std::string{name}, module);
   rtcx::memory_fragment fragments[] = {
     {.data = fragment->view(), .type = rtcx::binary_type::LTO_IR, .name = nullptr}};
-  return get_lto_linked_kernel(std::string{name}, {}, fragments);
+  return {get_lto_linked_kernel(std::string{name}, {}, fragments), threads};
 }
 
-void launch(kernel& prepared,
+void launch(std::pair<kernel, std::uint32_t>& prepared,
             input_data const& input,
             rmm::cuda_stream_view stream,
             void* output,
@@ -154,31 +166,24 @@ void launch(kernel& prepared,
   auto validity   = const_cast<bitmask_type*>(input.validity);
   auto row_offset = input.row_offset;
   auto rows       = input.rows;
+  auto threads    = prepared.second;
   auto grid =
-    static_cast<std::uint32_t>((static_cast<std::uint32_t>(rows) + block_size - 1) / block_size);
+    static_cast<std::uint32_t>((static_cast<std::uint32_t>(rows) + threads - 1) / threads);
   if (extra == nullptr) {
-    prepared.launch_with({grid, 1, 1},
-                         {block_size, 1, 1},
-                         0,
-                         stream,
-                         chars,
-                         offsets,
-                         validity,
-                         row_offset,
-                         rows,
-                         output);
+    prepared.first.launch_with(
+      {grid, 1, 1}, {threads, 1, 1}, 0, stream, chars, offsets, validity, row_offset, rows, output);
   } else {
-    prepared.launch_with({grid, 1, 1},
-                         {block_size, 1, 1},
-                         0,
-                         stream,
-                         chars,
-                         offsets,
-                         validity,
-                         row_offset,
-                         rows,
-                         output,
-                         extra);
+    prepared.first.launch_with({grid, 1, 1},
+                               {threads, 1, 1},
+                               0,
+                               stream,
+                               chars,
+                               offsets,
+                               validity,
+                               row_offset,
+                               rows,
+                               output,
+                               extra);
   }
 }
 
@@ -480,18 +485,20 @@ std::unique_ptr<column> replace_impl(strings_column_view const& input,
     capture_slots = (program->groups_count() + 1) * 2;
   }
 
+  auto operation =
+    native_replacement ? regex_ir::operation_kind::REPLACE : regex_ir::operation_kind::EXTRACT;
   auto sizes = make_numeric_column(
     data_type{type_id::INT32}, input.size(), mask_state::UNALLOCATED, stream, mr);
-  auto data        = get_input_data(input, stream);
-  auto size_kernel = prepare_kernel(
-    pattern,
-    flags,
-    native_replacement ? regex_ir::operation_kind::REPLACE : regex_ir::operation_kind::EXTRACT,
-    replacement_template,
-    native_replacement ? regex_ir::nvvm::make_replace_kernel(data.offset64, false)
-                       : regex_ir::nvvm::make_limited_replace_kernel(
-                           data.offset64, false, replacement, capture_slots, *limit),
-    "cudf.experimental.regex.replace_size");
+  auto data = get_input_data(input, stream);
+  auto size_kernel =
+    prepare_kernel(pattern,
+                   flags,
+                   operation,
+                   replacement_template,
+                   native_replacement ? regex_ir::nvvm::make_replace_kernel(data.offset64, false)
+                                      : regex_ir::nvvm::make_limited_replace_kernel(
+                                          data.offset64, false, replacement, capture_slots, *limit),
+                   "cudf.experimental.regex.replace_size");
   launch(size_kernel, data, stream, sizes->mutable_view().head<void>());
   auto offsets = sizes_to_offsets(sizes->view(), stream, mr);
   rmm::device_buffer chars(offsets.total, stream, mr);
@@ -499,7 +506,7 @@ std::unique_ptr<column> replace_impl(strings_column_view const& input,
     auto emit_kernel = prepare_kernel(
       pattern,
       flags,
-      native_replacement ? regex_ir::operation_kind::REPLACE : regex_ir::operation_kind::EXTRACT,
+      operation,
       replacement_template,
       native_replacement ? regex_ir::nvvm::make_replace_kernel(data.offset64, true)
                          : regex_ir::nvvm::make_limited_replace_kernel(
@@ -573,23 +580,24 @@ split_result split_record_impl(strings_column_view const& input,
     auto validity   = const_cast<bitmask_type*>(data.validity);
     auto row_offset = data.row_offset;
     auto rows       = data.rows;
+    auto threads    = emit_kernel.second;
     auto grid =
-      static_cast<std::uint32_t>((static_cast<std::uint32_t>(rows) + block_size - 1) / block_size);
+      static_cast<std::uint32_t>((static_cast<std::uint32_t>(rows) + threads - 1) / threads);
     auto effective_data = effective_offsets.offsets->view().data<size_type>();
     auto full_data      = full_offsets.offsets->view().data<size_type>();
-    emit_kernel.launch_with({grid, 1, 1},
-                            {block_size, 1, 1},
-                            0,
-                            stream,
-                            chars,
-                            offsets,
-                            validity,
-                            row_offset,
-                            rows,
-                            pairs.data(),
-                            effective_data,
-                            full_data,
-                            spans.data());
+    emit_kernel.first.launch_with({grid, 1, 1},
+                                  {threads, 1, 1},
+                                  0,
+                                  stream,
+                                  chars,
+                                  offsets,
+                                  validity,
+                                  row_offset,
+                                  rows,
+                                  pairs.data(),
+                                  effective_data,
+                                  full_data,
+                                  spans.data());
   }
   auto strings_output = make_strings(pairs, stream, mr);
   auto lists          = make_lists_column(input.size(),
