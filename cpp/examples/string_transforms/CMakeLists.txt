@@ -21,34 +21,10 @@ include(../fetch_dependencies.cmake)
 include(rapids-cmake)
 rapids_cmake_build_type("Release")
 
-# Build and embed the AOT CUDA fragments consumed by cudf::transform_lto.
-find_package(zstd CONFIG REQUIRED)
-find_package(bs_thread_pool CONFIG REQUIRED)
-find_package(ZLIB REQUIRED)
-find_package(nvcomp CONFIG REQUIRED)
-find_package(kvikio CONFIG REQUIRED)
-if(NOT TARGET cuco::cuco)
-  add_library(cuco::cuco INTERFACE IMPORTED)
-endif()
-if(NOT TARGET nanoarrow::nanoarrow)
-  add_library(nanoarrow::nanoarrow INTERFACE IMPORTED)
-endif()
-if(NOT TARGET zstd)
-  add_library(zstd INTERFACE)
-  target_link_libraries(zstd INTERFACE zstd::libzstd)
-endif()
-
-if(NOT TARGET xxhash)
-  find_library(XXHASH_LIBRARY NAMES xxhash REQUIRED)
-  find_path(XXHASH_INCLUDE_DIR NAMES xxhash.h REQUIRED)
-  add_library(xxhash UNKNOWN IMPORTED)
-  set_target_properties(
-    xxhash PROPERTIES IMPORTED_LOCATION "${XXHASH_LIBRARY}" INTERFACE_INCLUDE_DIRECTORIES
-                                                            "${XXHASH_INCLUDE_DIR}"
-  )
-endif()
-
-include(${CMAKE_CURRENT_LIST_DIR}/../../librtcx/embed.cmake)
+set(CUDF_EXCLUDE_DEPS_FROM_ALL OFF)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/thirdparty/get_zstd.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/thirdparty/get_xxhash.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/thirdparty/get_rtcx.cmake)
 include(${CMAKE_CURRENT_LIST_DIR}/../../cmake/Modules/AddFragment.cmake)
 set(CUDF_SOURCE_DIR "${CMAKE_CURRENT_LIST_DIR}/../..")
 set(CUDF_GENERATED_INCLUDE_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -83,11 +59,11 @@ add_string_transforms_example(localize_phone_precompiled localize_phone_precompi
 rtcx_add_embed(http_log_fragments)
 add_fragment(
   http_log_fragments FRAGMENT request_line_sizes SOURCE http_logs/fragments.cu DEFINITIONS
-  UDF_COMPUTE_SIZES INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  UDF_COMPUTE_SIZES INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs LINK_CUDF_DEPS OFF
 )
 add_fragment(
   http_log_fragments FRAGMENT request_line_output SOURCE http_logs/fragments.cu DEFINITIONS
-  UDF_WRITE_OUTPUT INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs
+  UDF_WRITE_OUTPUT INCLUDE_DIRS ${CMAKE_CURRENT_LIST_DIR}/http_logs LINK_CUDF_DEPS OFF
 )
 rtcx_embed(
   http_log_fragments COMPRESSION none OUTPUT_DIRECTORY "${CUDF_GENERATED_INCLUDE_DIR}/rtcx_embed"

@@ -12,10 +12,10 @@
 
 // Runtime JIT compilation consumes CUDA source strings. Each operation has one UDF that computes
 // exact output sizes and another that writes into the resulting character buffers.
-__device__ void compute_request_line_sizes(int32_t* method_size,
-                                           int32_t* path_size,
-                                           int32_t* version_size,
-                                           cudf::string_view input)
+__device__ int compute_request_line_sizes(int32_t* method_size,
+                                          int32_t* path_size,
+                                          int32_t* version_size,
+                                          cudf::string_view input)
 {
   auto find_character = [&](char needle, int32_t begin) {
     for (auto index = begin; index < input.size_bytes(); ++index) {
@@ -33,14 +33,17 @@ __device__ void compute_request_line_sizes(int32_t* method_size,
   *method_size  = method_end;
   *path_size    = path_end - method_end - 1;
   *version_size = input.size_bytes() - target_end - 6;
+
+  // return 0 to indicate success
+  return 0;
 }
 
 // Each span points at the final character buffer for one output string in this row. Its size came
 // from compute_request_line_sizes, so this pass only copies bytes and performs no allocation.
-__device__ void write_request_line(cuda::std::span<char>* method,
-                                   cuda::std::span<char>* path,
-                                   cuda::std::span<char>* version,
-                                   cudf::string_view input)
+__device__ int write_request_line(cuda::std::span<char>* method,
+                                  cuda::std::span<char>* path,
+                                  cuda::std::span<char>* version,
+                                  cudf::string_view input)
 {
   auto find_character = [&](char needle, int32_t begin) {
     for (auto index = begin; index < input.size_bytes(); ++index) {
@@ -63,13 +66,29 @@ __device__ void write_request_line(cuda::std::span<char>* method,
   copy_field(*method, 0, method_end);
   copy_field(*path, method_end + 1, path_end);
   copy_field(*version, target_end + 6, input.size_bytes());
+
+  // return 0 to indicate success
+  return 0;
 }
 
+// The symbol `transform` is the entry point for cudf::transform_lto.
 #ifdef UDF_COMPUTE_SIZES
-extern "C" __device__ auto* transform = &compute_request_line_sizes;
+extern "C" __device__ int transform(int32_t* method_size,
+                                    int32_t* path_size,
+                                    int32_t* version_size,
+                                    cudf::string_view input)
+{
+  return compute_request_line_sizes(method_size, path_size, version_size, input);
+}
 #else
 #ifdef UDF_WRITE_OUTPUT
-extern "C" __device__ auto* transform = &write_request_line;
+extern "C" __device__ int transform(cuda::std::span<char>* method,
+                                    cuda::std::span<char>* path,
+                                    cuda::std::span<char>* version,
+                                    cudf::string_view input)
+{
+  return write_request_line(method, path, version, input);
+}
 #else
 #error "Must define either UDF_COMPUTE_SIZES or UDF_WRITE_OUTPUT"
 #endif

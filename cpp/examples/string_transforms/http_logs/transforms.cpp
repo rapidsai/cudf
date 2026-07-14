@@ -291,15 +291,21 @@ int main(int argc, char const** argv)
     auto output_bytes = result->alloc_size();
     auto gib          = static_cast<double>(input_bytes + output_bytes) / (1ULL << 30);
 
-    std::cout << std::fixed << std::setprecision(9) << "RESULT variant=" << implementation
-              << " rows=" << rows << " cold_seconds=" << cold_seconds
-              << " warm_seconds=" << warm_seconds
-              << " rows_per_second=" << static_cast<double>(rows) / warm_seconds
-              << " effective_gib_per_second=" << gib / warm_seconds
-              << " input_bytes=" << input_bytes << " output_bytes=" << output_bytes
-              << " peak_memory_bytes=" << bytes.peak << " total_allocated_bytes=" << bytes.total
-              << " allocated_bytes_per_call="
-              << bytes.total / static_cast<std::size_t>(iterations + 1) << '\n';
+    std::cout << std::format(
+      "variant={}\nrows={}\ncold_seconds={}\nwarm_seconds={}\nrows_per_second={}\neffective_gib_"
+      "per_second={}\ninput_bytes={}\noutput_bytes={}\npeak_memory_bytes={}\ntotal_allocated_bytes="
+      "{}\nallocated_bytes_per_call={}\n",
+      implementation,
+      rows,
+      cold_seconds,
+      warm_seconds,
+      static_cast<double>(rows) / warm_seconds,
+      gib / warm_seconds,
+      input_bytes,
+      output_bytes,
+      bytes.peak,
+      bytes.total,
+      bytes.total / static_cast<std::size_t>(iterations + 1));
     return EXIT_SUCCESS;
   } catch (std::exception const& error) {
     std::cerr << error.what() << '\n';
