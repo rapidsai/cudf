@@ -58,6 +58,7 @@ from cudf.core.indexed_frame import (
     _unify_categorical_indexes,
     doc_reset_index_template,
 )
+from cudf.core.mixins import NoNewAttributesMixin
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import SeriesApplyKernel
@@ -3311,14 +3312,40 @@ class Series(SingleColumnFrame, IndexedFrame):
         if bins is not None:
             res = self.groupby(series_bins, dropna=dropna).count(dropna=dropna)
             res = res[res.index.notna()]
+        elif not isinstance(self.dtype, CategoricalDtype):
+            # pandas returns the groups in order of first appearance and a
+            # sort by count keeps that order for equal counts
+            grouped = (
+                cudf.DataFrame._from_data(
+                    {
+                        "__value": self._column,
+                        "__pos": as_column(range(len(self))),
+                    }
+                )
+                .groupby("__value", dropna=dropna)
+                .agg({"__pos": ["count", "min"]})
+            )
+            grouped.columns = ["__count", "__first"]
+            if dropna:
+                grouped = grouped[grouped.index.notna()]
+            if sort:
+                grouped = grouped.sort_values(
+                    ["__count", "__first"], ascending=[ascending, True]
+                )
+            else:
+                grouped = grouped.sort_values("__first")
+            # the count column is built from a plain integer position
+            # column; produce counts of the same kind as the values
+            # (e.g. masked ``Int64`` for masked inputs) like pandas
+            res = grouped["__count"].astype(
+                get_dtype_of_same_kind(self.dtype, np.dtype(np.int64))
+            )
         else:
             res = self.groupby(self, dropna=dropna).count(dropna=dropna)
             if dropna:
                 res = res[res.index.notna()]
 
-            if isinstance(self.dtype, CategoricalDtype) and len(res) != len(
-                self.dtype.categories
-            ):
+            if len(res) != len(self.dtype.categories):
                 # For categorical dtypes: When there exists
                 # categories in dtypes and they are missing in the
                 # column, `value_counts` will have to return
@@ -3352,7 +3379,11 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         res.index.name = self.name
 
-        if sort:
+        if sort and (
+            bins is not None or isinstance(self.dtype, CategoricalDtype)
+        ):
+            # the non-categorical path is already sorted with a stable
+            # first-appearance tiebreak
             res = res.sort_values(ascending=ascending)
 
         if normalize:
@@ -3990,13 +4021,14 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class BaseDatelikeProperties:
+class BaseDatelikeProperties(NoNewAttributesMixin):
     """
     Base accessor class for Series values.
     """
 
     def __init__(self, series: Series):
         self.series = series
+        self._freeze()
 
     def _return_result_like_self(self, column: ColumnBase) -> Series:
         """Return the method result like self.series"""
@@ -4364,10 +4396,14 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.weekday
-        # Pandas returns int64 for weekday
-        res = res.astype(
-            get_dtype_of_same_kind(self.series.dtype, np.dtype("int64"))
+        # Pandas returns int32 for numpy-backed dayofweek/day_of_week but
+        # int64 for the pyarrow-backed (ArrowDtype) variant.
+        target = (
+            np.dtype("int64")
+            if isinstance(self.series.dtype, pd.ArrowDtype)
+            else np.dtype("int32")
         )
+        res = res.astype(get_dtype_of_same_kind(self.series.dtype, target))
         return self._return_result_like_self(res)
 
     day_of_week = dayofweek
@@ -5298,7 +5334,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.seconds)
+        res = self.series._column.seconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
@@ -5330,7 +5369,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.microseconds)
+        res = self.series._column.microseconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
@@ -5362,7 +5404,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.nanoseconds)
+        res = self.series._column.nanoseconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking

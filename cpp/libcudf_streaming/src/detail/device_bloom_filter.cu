@@ -1,6 +1,6 @@
 /*
  * SPDX-FileCopyrightText: Copyright (c) 2025-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include <cuda_runtime_api.h>
@@ -58,7 +58,16 @@ using BloomFilterRefType =
   cuco::bloom_filter_ref<KeyType,
                          cuco::extent<std::size_t>,
                          cuco::thread_scope_device,
-                         cuco::arrow_filter_policy<KeyType, cuco::identity_hash>>;
+                         cuco::parametric_filter_policy<cuco::identity_hash<KeyType>,
+                                                        std::uint32_t,
+                                                        8,
+                                                        8,
+                                                        8,
+                                                        1,
+                                                        1,
+                                                        8,
+                                                        false,
+                                                        false>>;
 using StorageType = BloomFilterRefType::filter_block_type;
 
 }  // namespace

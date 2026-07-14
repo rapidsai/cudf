@@ -1,6 +1,6 @@
 /**
  * SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
- * reserved. SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #include "../benchmarks/utils/random_data.hpp"
@@ -8,6 +8,7 @@
 #include <cudf_streaming/partition_utils.hpp>
 
 #include <mpi.h>
+#include <rapidsmpf/communicator/logger.hpp>
 #include <rapidsmpf/communicator/mpi.hpp>
 #include <rapidsmpf/error.hpp>
 #include <rapidsmpf/memory/packed_data.hpp>
@@ -35,14 +36,13 @@ int main(int argc, char** argv)
   // single progress thread may be used by multiple shufflers simultaneously.
   auto progress_thread = std::make_shared<rapidsmpf::ProgressThread>(stats);
 
+  auto log = rapidsmpf::Logger::from_options(options);
+
   // Now we have to create a Communicator, which we will use throughout the
   // example. Multiple concurrent shuffles are possible on the same communicator by
   // providing differentiating "OpID" arguments.
   std::shared_ptr<rapidsmpf::Communicator> comm =
-    std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, options, progress_thread);
-
-  // The Communicator provides a logger.
-  auto& log = comm->logger();
+    std::make_shared<rapidsmpf::MPI>(MPI_COMM_WORLD, progress_thread, log);
 
   // We will use the same stream, memory, and buffer resource throughout the example.
   rmm::cuda_stream_view stream      = cudf::get_default_stream();
