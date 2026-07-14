@@ -158,6 +158,17 @@ def _shape_mismatch_error(x, y):
     )
 
 
+class _RowLabelKeyError(KeyError):
+    """Marks a ``KeyError`` raised while looking up a *row* label.
+
+    ``_DataFrameLocIndexer.__getitem__`` retries a failed lookup as
+    ``(arg, slice(None))`` to support pandas-like tuple indexing. That retry
+    must only fire when *column* gathering failed, not when the row label
+    itself is genuinely missing (otherwise a bare scalar row miss is silently
+    reinterpreted positionally instead of raising ``KeyError``).
+    """
+
+
 class _DataFrameIndexer(_FrameIndexer):
     def __setitem__(self, key, value):
         indexing_utils.check_dict_or_set_indexers(key)
@@ -179,8 +190,19 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             # tuple arguments to index into MultiIndex dataframes.
             try:
                 return self._getitem_tuple_arg(arg)
+            except _RowLabelKeyError as e:
+                # A genuine row-label miss must raise, not retry positionally.
+                raise KeyError(*e.args) from None
             except (TypeError, KeyError, IndexError, ValueError):
-                return self._getitem_tuple_arg((arg, slice(None)))
+                # Retry treating ``arg`` as a row-only key that selects across
+                # the MultiIndex levels (e.g. ``df.loc[("a", "b")]`` matching
+                # the first two index levels), with all columns selected via
+                # ``slice(None)``. ``per_level=True`` applies the per-level
+                # lookup and drops the scalar-selected index levels from the
+                # result.
+                return self._getitem_tuple_arg(
+                    (arg, slice(None)), per_level=True
+                )
         else:
             (
                 row_key,
@@ -199,7 +221,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             )
 
     @_performance_tracking
-    def _getitem_tuple_arg(self, arg):
+    def _getitem_tuple_arg(self, arg, per_level=False):
         # Step 1: Gather columns
         if isinstance(arg, tuple):
             columns_df = self._frame._get_columns_by_label(arg[1])
@@ -255,14 +277,52 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                         # downcast the result to a Series.
                         return result[arg[1]]
                     return result
-                result = columns_df.index._get_row_major(columns_df, row_arg)
-                if (
-                    len(result) == 1
-                    and isinstance(arg, tuple)
-                    and len(arg) > 1
-                    and is_scalar(arg[1])
-                ):
-                    return result._columns[0].element_indexing(0)
+                try:
+                    result = columns_df.index._get_row_major(
+                        columns_df, row_arg, per_level=per_level
+                    )
+                except KeyError as e:
+                    # Tag a row-label miss so __getitem__ raises instead of
+                    # retrying it as a positional/column lookup.
+                    raise _RowLabelKeyError(*e.args) from None
+                # A column key that selects a single complete column (a scalar
+                # label for single-level columns, or a full-length tuple for
+                # MultiIndex columns) yields a Series, collapsing to a scalar
+                # only when the row key is itself a full scalar label.
+                col_key = (
+                    arg[1]
+                    if (isinstance(arg, tuple) and len(arg) > 1)
+                    else None
+                )
+                if col_key is not None:
+                    col_nlevels = self._frame._data.nlevels
+                    col_is_single_label = (
+                        is_scalar(col_key)
+                        if col_nlevels == 1
+                        # A full-length all-scalar tuple is one complete
+                        # column label; a tuple containing a slice/list is a
+                        # column *slicer* selecting multiple columns.
+                        else (
+                            isinstance(col_key, tuple)
+                            and len(col_key) == col_nlevels
+                            and all(is_scalar(x) for x in col_key)
+                        )
+                    )
+                else:
+                    col_is_single_label = False
+                if col_is_single_label:
+                    row_is_full_label = (
+                        columns_df.index.nlevels == 1 and is_scalar(row_arg)
+                    ) or (
+                        isinstance(row_arg, tuple)
+                        and len(row_arg) == columns_df.index.nlevels
+                        and all(is_scalar(x) for x in row_arg)
+                    )
+                    if isinstance(result, cudf.DataFrame):
+                        result = result[result._column_names[0]]
+                    if len(result) == 1 and row_is_full_label:
+                        return result._column.element_indexing(0)
+                    return result
                 return result
         else:
             raise RuntimeError(
@@ -789,6 +849,7 @@ def _array_to_column_accessor(
         multiindex=isinstance(columns_labels, pd.MultiIndex),
         label_dtype=columns_labels.dtype,
         level_names=tuple(columns_labels.names),
+        level_dtypes=_pd_index_level_dtypes(columns_labels),
     )
 
 
@@ -1207,6 +1268,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 rangeindex=isinstance(columns, pd.RangeIndex),
                 level_names=tuple(columns.names),
                 label_dtype=columns.dtype,
+                level_dtypes=_pd_index_level_dtypes(columns),
             )
         elif isinstance(data, Mapping):
             # Note: We excluded ColumnAccessor already above
@@ -3231,6 +3293,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             rangeindex=other.rangeindex,
             level_names=other.level_names,
             label_dtype=other.label_dtype,
+            level_dtypes=other._level_dtypes,
             verify=False,
         )
 
@@ -7904,6 +7967,12 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         new_index_columns = [*repeated_index._columns, *tiled_index]
         index_names = [*self.index.names, *unique_named_levels.names]
         new_index = MultiIndex._from_data(dict(enumerate(new_index_columns)))
+        # Materialize the levels in order of first appearance (rather than the
+        # default sorted order) so that converting the result to pandas keeps
+        # the level order pandas' own ``stack`` produces. Otherwise a later
+        # ``unstack``/``to_pandas`` would lexicographically reorder the pivoted
+        # axis (e.g. ``"foo_10"`` before ``"foo_2"``).
+        new_index._maybe_materialize_codes_and_levels(sort=False)
         new_index.names = index_names
 
         # Compute the column indices that serves as the input for
