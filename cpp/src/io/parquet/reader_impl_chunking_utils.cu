@@ -617,7 +617,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
     start_pos += codec.num_pages;
   }
   // now copy the uncompressed V2 def and rep level data
-  if (not copy_in.empty()) {
+  if (curr_copy_page > 0) {
     auto const d_copy_in = cudf::detail::make_device_uvector_async(
       copy_in, stream, cudf::get_current_device_resource_ref());
     auto const d_copy_out = cudf::detail::make_device_uvector_async(
@@ -637,7 +637,7 @@ std::vector<row_range> compute_page_splits_by_row(device_span<cumulative_page_in
         [inputs = d_copy_in.data(), outputs = d_copy_out.data()] __device__(size_type i) {
           return inputs[i].size() < outputs[i].size() ? inputs[i].size() : outputs[i].size();
         }));
-    cudf::detail::batched_memcpy_async(src_iter, dst_iter, size_iter, d_copy_in.size(), stream);
+    cudf::detail::batched_memcpy_async(src_iter, dst_iter, size_iter, curr_copy_page, stream);
   }
 
   CUDF_EXPECTS(
