@@ -37,7 +37,6 @@ from cudf_polars.quent._types import (
     Operator,
     Plan,
     Port,
-    Processor,
     Query,
     Statistics,
     Task,
@@ -49,6 +48,7 @@ from cudf_polars.utils.cuda_stream import get_cuda_stream
 
 if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IR
+    from cudf_polars.quent._types import Processor
     from cudf_polars.utils.config import StreamingExecutor
 
 
@@ -832,36 +832,19 @@ def test_task_from_ir() -> None:
     assert operator_id.hex[:8] in task.instance_name
 
 
-def test_task_loading_serialization() -> None:
+def test_task_loading_serialization(
+    processor: Processor,
+    device_memory: Memory,
+    disk_to_device_channel: Channel,
+) -> None:
     operator_id = uuid.uuid4()
-    processor = Processor(pool_id=uuid.uuid4())
-    channel = Channel(
-        instance_name="disk -> device",
-        resource_type_name="DiskToDevice",
-        parent_group_id=uuid.uuid4(),
-        source=Memory(
-            instance_name="filesystem",
-            resource_type_name="filesystem",
-            parent_group_id=uuid.uuid4(),
-        ),
-        target=Memory(
-            instance_name="device",
-            resource_type_name="memory",
-            parent_group_id=uuid.uuid4(),
-        ),
-    )
-    memory = Memory(
-        instance_name="device",
-        resource_type_name="memory",
-        parent_group_id=uuid.uuid4(),
-    )
     task = Task(operator_id=operator_id, instance_name="scan-task")
 
     event = task.loading(
         use_thread=processor,
-        use_channel=channel,
+        use_channel=disk_to_device_channel,
         channel_capacity_bytes=4096,
-        use_memory=memory,
+        use_memory=device_memory,
         memory_capacity_bytes=8192,
         timestamp=100,
     )
@@ -874,28 +857,25 @@ def test_task_loading_serialization() -> None:
         "capacity": None,
     }
     assert loading["use_fs_to_mem"] == {
-        "resource_id": str(channel.id),
+        "resource_id": str(disk_to_device_channel.id),
         "capacity": {"capacity_bytes": 4096},
     }
     assert loading["use_memory"] == {
-        "resource_id": str(memory.id),
+        "resource_id": str(device_memory.id),
         "capacity": {"capacity_bytes": 8192},
     }
 
 
-def test_task_computing_serialization() -> None:
+def test_task_computing_serialization(
+    processor: Processor,
+    device_memory: Memory,
+) -> None:
     operator_id = uuid.uuid4()
-    processor = Processor(pool_id=uuid.uuid4())
-    memory = Memory(
-        instance_name="device",
-        resource_type_name="memory",
-        parent_group_id=uuid.uuid4(),
-    )
     task = Task(operator_id=operator_id, instance_name="filter-task")
 
     event = task.computing(
         use_thread=processor,
-        use_memory=memory,
+        use_memory=device_memory,
         memory_capacity_bytes=16384,
         timestamp=101,
     )
@@ -907,30 +887,24 @@ def test_task_computing_serialization() -> None:
         "capacity": None,
     }
     assert computing["use_memory"] == {
-        "resource_id": str(memory.id),
+        "resource_id": str(device_memory.id),
         "capacity": {"capacity_bytes": 16384},
     }
 
 
-def test_task_sending_serialization() -> None:
+def test_task_sending_serialization(
+    processor: Processor,
+    device_memory: Memory,
+) -> None:
     operator_id = uuid.uuid4()
-    processor = Processor(pool_id=uuid.uuid4())
+    task = Task(operator_id=operator_id, instance_name="shuffle-task")
     link = Channel(
         instance_name="rank-0 -> rank-1",
         resource_type_name="Link",
         parent_group_id=uuid.uuid4(),
-        source=Memory(
-            instance_name="device",
-            resource_type_name="memory",
-            parent_group_id=uuid.uuid4(),
-        ),
-        target=Memory(
-            instance_name="device",
-            resource_type_name="memory",
-            parent_group_id=uuid.uuid4(),
-        ),
+        source=device_memory,
+        target=device_memory,
     )
-    task = Task(operator_id=operator_id, instance_name="shuffle-task")
 
     event = task.sending(
         use_thread=processor,
@@ -966,14 +940,9 @@ def test_network_declare_serialization() -> None:
     }
 
 
-def test_declare_network_channels_single_rank() -> None:
+def test_declare_network_channels_single_rank(device_memory: Memory) -> None:
     pytest.importorskip("structlog")
     logger = cudf_polars.quent._logging.QuentLogger()
-    device_memory = Memory(
-        instance_name="device",
-        resource_type_name="memory",
-        parent_group_id=uuid.uuid4(),
-    )
 
     network, link_channels = declare_network_channels(
         logger,
@@ -992,16 +961,14 @@ def test_declare_network_channels_single_rank() -> None:
     "rank,nranks,expected_targets", [(0, 3, [1, 2]), (1, 3, [0, 2])]
 )
 def test_declare_network_channels_multi_rank(
-    rank: int, nranks: int, expected_targets: list[int]
+    device_memory: Memory,
+    rank: int,
+    nranks: int,
+    expected_targets: list[int],
 ) -> None:
     pytest.importorskip("structlog")
     logger = cudf_polars.quent._logging.QuentLogger()
     engine_id = uuid.uuid4()
-    device_memory = Memory(
-        instance_name="device",
-        resource_type_name="memory",
-        parent_group_id=engine_id,
-    )
 
     network, link_channels = declare_network_channels(
         logger,
@@ -1030,14 +997,9 @@ def test_declare_network_channels_multi_rank(
     assert len(channel_events) == len(expected_targets) * 2
 
 
-def test_finalize_network_channels() -> None:
+def test_finalize_network_channels(device_memory: Memory) -> None:
     pytest.importorskip("structlog")
     logger = cudf_polars.quent._logging.QuentLogger()
-    device_memory = Memory(
-        instance_name="device",
-        resource_type_name="memory",
-        parent_group_id=uuid.uuid4(),
-    )
     link_channels = {
         target_rank: Channel(
             instance_name=f"rank-0 -> rank-{target_rank}",
@@ -1085,24 +1047,9 @@ def test_emit_task_begin_events_computing_node() -> None:
     assert len(processor_events) == 2
 
 
-def test_emit_task_begin_events_io_node() -> None:
-    channel = Channel(
-        instance_name="disk -> device",
-        resource_type_name="DiskToDevice",
-        parent_group_id=uuid.uuid4(),
-        source=Memory(
-            instance_name="filesystem",
-            resource_type_name="filesystem",
-            parent_group_id=uuid.uuid4(),
-        ),
-        target=Memory(
-            instance_name="device",
-            resource_type_name="memory",
-            parent_group_id=uuid.uuid4(),
-        ),
-    )
+def test_emit_task_begin_events_io_node(disk_to_device_channel: Channel) -> None:
     logger, quent_ir_execution_context = _make_quent_ir_execution_context(
-        disk_to_device_channel=channel
+        disk_to_device_channel=disk_to_device_channel
     )
     task = Task.from_ir(DataFrameScan, quent_ir_execution_context)
     assert task is not None
@@ -1118,7 +1065,7 @@ def test_emit_task_begin_events_io_node() -> None:
     assert [event["data"]["Task"]["seq"] for event in task_events] == [0, 2]
     assert "Queueing" in task_events[0]["data"]["Task"]["state"]
     loading = task_events[1]["data"]["Task"]["state"]["Loading"]
-    assert loading["use_fs_to_mem"]["resource_id"] == str(channel.id)
+    assert loading["use_fs_to_mem"]["resource_id"] == str(disk_to_device_channel.id)
     assert loading["use_memory"]["resource_id"] == str(
         quent_ir_execution_context.device_memory.id
     )

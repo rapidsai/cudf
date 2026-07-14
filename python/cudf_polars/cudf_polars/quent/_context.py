@@ -461,7 +461,7 @@ class QuentContext:
         - output bytes: the size of the output dataframe.
         - output rows: the number of rows in the output dataframe.
         """
-        if quent_ir_execution_context is None:
+        if quent_ir_execution_context is None:  # pragma: no cover;
             return
 
         if result is not None:
