@@ -13,14 +13,17 @@
 
 #include <queue>
 
+/**
+ * @file
+ * @brief APIs for applying Delta Lake style deletion vectors when reading Parquet data.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io::parquet::experimental {
 
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief APIs for applying Delta Lake style deletion vectors when reading Parquet data.
  */
 
 /**

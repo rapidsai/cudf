@@ -866,16 +866,20 @@ void hybrid_scan_reader_impl::reset_internal_state()
   _pass_page_mask.clear();
   _subpass_page_mask.reset();
   _output_metadata.reset();
+
   _options.timestamp_type = cudf::data_type{};
   _options.decimal_width  = type_id::EMPTY;
   _options.num_rows       = std::nullopt;
   _options.row_group_indices.clear();
-  _options.use_jit_filter       = false;
-  _options.case_sensitive_names = true;
-  _num_sources                  = 0;
-  _input_pass_read_limit        = 0;
-  _output_chunk_read_limit      = 0;
-  _strings_to_categorical       = false;
+  _options.use_jit_filter              = false;
+  _options.case_sensitive_names        = true;
+  _options.prepend_source_index_column = false;
+  _options.prepend_row_index_column    = false;
+
+  _num_sources             = 0;
+  _input_pass_read_limit   = 0;
+  _output_chunk_read_limit = 0;
+  _strings_to_categorical  = false;
   _reader_column_schema.reset();
   _expr_conv = named_to_reference_converter{};
   _mr        = cudf::get_current_device_resource_ref();
@@ -886,10 +890,12 @@ void hybrid_scan_reader_impl::initialize_reader_config(parquet_reader_options co
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
-  _options.timestamp_type       = cudf::data_type{options.get_timestamp_type().id()};
-  _options.decimal_width        = options.get_decimal_width();
-  _options.use_jit_filter       = options.is_enabled_use_jit_filter();
-  _options.case_sensitive_names = options.is_enabled_case_sensitive_names();
+  _options.timestamp_type              = cudf::data_type{options.get_timestamp_type().id()};
+  _options.decimal_width               = options.get_decimal_width();
+  _options.use_jit_filter              = options.is_enabled_use_jit_filter();
+  _options.case_sensitive_names        = options.is_enabled_case_sensitive_names();
+  _options.prepend_source_index_column = options.is_enabled_prepend_source_index_column();
+  _options.prepend_row_index_column    = options.is_enabled_prepend_row_index_column();
 }
 
 void hybrid_scan_reader_impl::initialize_options(parquet_reader_options const& options,
@@ -973,12 +979,9 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
 
   // no work to do (this can happen on the first pass if we have no rows to read)
   if (!has_more_work()) {
-    // Check if number of rows per source should be included in output metadata.
-    if (include_output_num_rows_per_source()) {
-      // Empty dataframe case: Simply initialize to a list of zeros
-      out_metadata.num_rows_per_source =
-        std::vector<std::size_t>(_file_itm_data.num_rows_per_source.size(), 0);
-    }
+    // Empty dataframe case: Simply initialize to a list of zeros
+    out_metadata.num_rows_per_source =
+      std::vector<std::size_t>(_file_itm_data.num_rows_per_source.size(), 0);
 
     // Finalize output
     return finalize_output(read_columns_mode, out_metadata, out_columns, row_mask);
@@ -1040,18 +1043,13 @@ table_with_metadata hybrid_scan_reader_impl::read_chunk_internal(
   out_columns =
     cudf::structs::detail::enforce_null_consistency(std::move(out_columns), _stream, _mr);
 
-  // Check if number of rows per source should be included in output metadata.
-  if (include_output_num_rows_per_source()) {
-    // For chunked reading, compute the output number of rows per source
-    if (mode == read_mode::CHUNKED_READ) {
-      out_metadata.num_rows_per_source =
-        calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
-    }
-    // Simply move the number of rows per file if reading all at once
-    else {
-      // Move is okay here as we are reading in one go.
-      out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
-    }
+  // Compute the output number of rows per source
+  if (mode == read_mode::CHUNKED_READ) {
+    out_metadata.num_rows_per_source =
+      calculate_output_num_rows_per_source(read_info.skip_rows, read_info.num_rows);
+  } else {
+    // Move is okay here as we are reading in one go.
+    out_metadata.num_rows_per_source = std::move(_file_itm_data.num_rows_per_source);
   }
 
   // Add empty columns if needed. Filter output columns based on filter.
@@ -1082,6 +1080,13 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
     _output_metadata = std::make_unique<table_metadata>(out_metadata);
   }
 
+  // Row-range of the current output chunk relative to the current row group selection.
+  auto const read_info =
+    (_file_itm_data._current_input_pass < _file_itm_data.num_passes())
+      ? _pass_itm_data->subpass
+          ->output_chunk_read_info[_pass_itm_data->subpass->current_output_chunk]
+      : cudf::io::parquet::detail::row_range{0, 0};
+
   // advance output chunk/subpass/pass info for non-empty tables if and only if we are in bounds
   if (_file_itm_data._current_input_pass < _file_itm_data.num_passes()) {
     auto& pass    = *_pass_itm_data;
@@ -1093,6 +1098,24 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   _file_itm_data._output_chunk_count++;
 
   apply_decimal_width_cast(out_columns);
+
+  // Prepend the source and row index columns to filter columns only
+  if (read_columns_mode == read_columns_mode::FILTER_COLUMNS) {
+    if (_options.prepend_row_index_column) {
+      out_columns.emplace(out_columns.begin(),
+                          synthesize_row_index_column(read_info, _stream, _mr));
+      out_metadata.schema_info.emplace(out_metadata.schema_info.begin(),
+                                       column_name_info{.name = "row_index", .is_nullable = false});
+    }
+    if (_options.prepend_source_index_column) {
+      out_columns.emplace(
+        out_columns.begin(),
+        synthesize_source_index_column(out_metadata.num_rows_per_source, _stream, _mr));
+      out_metadata.schema_info.emplace(
+        out_metadata.schema_info.begin(),
+        column_name_info{.name = "source_index", .is_nullable = false});
+    }
+  }
 
   // Create a table from the output columns.
   auto read_table = std::make_unique<table>(std::move(out_columns));
@@ -1111,15 +1134,21 @@ table_with_metadata hybrid_scan_reader_impl::finalize_output(
   _row_mask_offset += read_table->num_rows();
   _output_chunk_produced = true;
 
+  // Clear the number of rows per source as it is not valid after filtering
+  out_metadata.num_rows_per_source.clear();
+
   // For filter columns, apply the filter expression and update the input row mask
   if constexpr (std::is_same_v<RowMaskView, cudf::mutable_column_view>) {
     CUDF_EXPECTS(read_columns_mode == read_columns_mode::FILTER_COLUMNS, "Invalid read mode");
 
-    auto final_row_mask =
-      cudf::detail::compute_column(*read_table,
-                                   _expr_conv.get_converted_expr().value().get(),
-                                   _stream,
-                                   cudf::get_current_device_resource_ref());
+    // Compute the final filter expression incorporating any column reference offsets in _expr_conv
+    auto const final_filter      = compute_offset_filter();
+    auto const final_filter_expr = final_filter.get_converted_expr();
+
+    auto final_row_mask = cudf::detail::compute_column(*read_table,
+                                                       final_filter_expr.value().get(),
+                                                       _stream,
+                                                       cudf::get_current_device_resource_ref());
     CUDF_EXPECTS(final_row_mask->view().type().id() == type_id::BOOL8,
                  "Predicate filter should return a boolean");
 
