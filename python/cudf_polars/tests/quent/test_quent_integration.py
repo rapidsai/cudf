@@ -166,14 +166,15 @@ def check_quent_events(engine: StreamingEngine, quent_context: QuentContext) -> 
     memory_events = [x for x in quent_events if "Memory" in x["data"]]
     task_events = [x for x in quent_events if "Task" in x["data"]]
     assert len(memory_events) > 0
-    assert len(task_events) > 0
+
+    if LOG_TRACES:
+        assert len(task_events) > 0
 
     # A single collect exercises the full processor lifecycle, so fold that
     # check in here rather than paying for a dedicated engine startup.
     check_processor_lifecycle(quent_events)
 
 
-@pytest.mark.skipif(not LOG_TRACES, reason="requires CUDF_POLARS_LOG_TRACES=1")
 def test_quent_events_multiple_collects(
     engine_with_quent_context: StreamingEngine, quent_context: QuentContext
 ) -> None:
@@ -280,15 +281,17 @@ def check_processor_lifecycle(quent_events: list[dict]) -> None:
     ]
 
     assert len(init_events) == len(finalizing_events) == len(exit_events)
-    assert len(init_events) > 0
 
-    init_by_id = {x["id"]: x for x in init_events}
-    finalizing_by_id = {x["id"]: x for x in finalizing_events}
-    exit_by_id = {x["id"]: x for x in exit_events}
-    assert init_by_id.keys() == finalizing_by_id.keys() == exit_by_id.keys()
+    if LOG_TRACES:
+        assert len(init_events) > 0
 
-    for init_event in init_by_id.values():
-        parent_group_id = init_event["data"]["Processor"]["state"][
-            "ProcessorInitializing"
-        ]["parent_group_id"]
-        assert parent_group_id in thread_pool_ids
+        init_by_id = {x["id"]: x for x in init_events}
+        finalizing_by_id = {x["id"]: x for x in finalizing_events}
+        exit_by_id = {x["id"]: x for x in exit_events}
+        assert init_by_id.keys() == finalizing_by_id.keys() == exit_by_id.keys()
+
+        for init_event in init_by_id.values():
+            parent_group_id = init_event["data"]["Processor"]["state"][
+                "ProcessorInitializing"
+            ]["parent_group_id"]
+            assert parent_group_id in thread_pool_ids
