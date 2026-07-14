@@ -19,14 +19,17 @@
 #include <variant>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for reading and writing CSV files.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief APIs for reading and writing CSV files.
  */
 
 /**
@@ -1354,7 +1357,6 @@ table_with_metadata read_csv(
 /**
  * @addtogroup io_writers
  * @{
- * @file
  */
 
 /**
