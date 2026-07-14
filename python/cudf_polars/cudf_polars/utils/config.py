@@ -868,7 +868,7 @@ class StreamingExecutor:
         """
         Return a copy without the per-cluster contexts that cannot be pickled.
 
-        The streaming executor hold live, process-local handles (communicators,
+        The streaming executor holds live, process-local handles (communicators,
         streaming contexts, thread pools) that must not be shipped to a worker/actor.
 
         Returns
