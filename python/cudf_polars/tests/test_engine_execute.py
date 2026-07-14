@@ -162,7 +162,7 @@ def test_execute_lazy_roundtrip(streaming_engine):
     lf = _source_lf()
     result = streaming_engine.execute(lf)
     collected = result.lazy().collect(engine=streaming_engine)
-    assert_frame_equal(collected, lf.collect(), check_row_order=False)
+    assert_frame_equal(collected, lf.collect())
 
 
 def test_execute_lazy_filter(streaming_engine):
@@ -170,9 +170,7 @@ def test_execute_lazy_filter(streaming_engine):
     lf = _source_lf()
     result = streaming_engine.execute(lf)
     collected = result.lazy().filter(pl.col("a") > 1).collect(engine=streaming_engine)
-    assert_frame_equal(
-        collected, lf.filter(pl.col("a") > 1).collect(), check_row_order=False
-    )
+    assert_frame_equal(collected, lf.filter(pl.col("a") > 1).collect())
 
 
 def test_execute_lazy_projection(streaming_engine):
@@ -180,7 +178,7 @@ def test_execute_lazy_projection(streaming_engine):
     lf = _source_lf()
     result = streaming_engine.execute(lf)
     collected = result.lazy().select("a").collect(engine=streaming_engine)
-    assert_frame_equal(collected, lf.select("a").collect(), check_row_order=False)
+    assert_frame_equal(collected, lf.select("a").collect())
 
 
 def test_execute_chains_into_another_execute(streaming_engine):
@@ -189,9 +187,7 @@ def test_execute_chains_into_another_execute(streaming_engine):
     first = streaming_engine.execute(lf)
     second = streaming_engine.execute(first.lazy().filter(pl.col("a") > 1))
     collected = second.lazy().collect(engine=streaming_engine)
-    assert_frame_equal(
-        collected, lf.filter(pl.col("a") > 1).collect(), check_row_order=False
-    )
+    assert_frame_equal(collected, lf.filter(pl.col("a") > 1).collect())
 
 
 def test_execute_n_partitions(streaming_engine):
@@ -211,7 +207,7 @@ def test_spmd_execute_collect_consumes_result(spmd_engine):
     lf = _source_lf()
     result = spmd_engine.execute(lf)
     collected = result.lazy().collect(engine=spmd_engine)
-    assert_frame_equal(collected, lf.collect(), check_row_order=False)
+    assert_frame_equal(collected, lf.collect())
     # The partition was consumed by the first collect; a second scan raises.
     with pytest.raises(Exception):  # noqa: B017 - consumed on read (move-on-read)
         result.lazy().collect(engine=spmd_engine)
@@ -238,7 +234,7 @@ def test_spmd_execute_reset_invalidates_result(spmd_engine):
         result.lazy().collect(engine=spmd_engine)
     # The engine is still usable after reset.
     again = spmd_engine.execute(lf).lazy().collect(engine=spmd_engine)
-    assert_frame_equal(again, lf.collect(), check_row_order=False)
+    assert_frame_equal(again, lf.collect())
 
 
 def test_execute_default_engine_collect_raises(streaming_engine):
