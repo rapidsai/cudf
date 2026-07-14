@@ -1292,7 +1292,7 @@ class GroupBy(Serializable, Reducible, Scannable):
             # RangeIndex) columns.
             data = ColumnAccessor(
                 data,
-                multiindex=False,
+                multiindex=self.obj._data.multiindex,
                 level_names=self.obj._data.level_names,
                 rangeindex=self.obj._data.rangeindex,
                 label_dtype=self.obj._data.label_dtype,

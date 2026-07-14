@@ -386,7 +386,9 @@ class ColumnAccessor(MutableMapping):
                             except (TypeError, ValueError):
                                 pass
                             else:
-                                if (cast_lvl.astype(lvl.dtype) == lvl).all():
+                                # missing-aware equality: ``==`` would treat
+                                # NaN entries as unequal to themselves
+                                if cast_lvl.astype(lvl.dtype).equals(lvl):
                                     lvl = cast_lvl
                                     changed = True
                         new_levels.append(lvl)

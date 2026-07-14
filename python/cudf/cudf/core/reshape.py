@@ -1016,7 +1016,7 @@ def _pivot(
         multiindex=True,
         level_names=(
             *col_accessor.level_names,
-            *columns_labels._column_names,
+            *columns_labels.names,
         ),
         verify=False,
     )
@@ -1439,8 +1439,12 @@ def _unstack(
             full_level = df.index.levels[level_idx].to_pandas()
             pdi = result._data.to_pandas_index
             if isinstance(pdi, pd.MultiIndex):
-                new_codes = full_level.get_indexer(pdi.get_level_values(-1))
-                if (new_codes >= 0).all():
+                level_values = pdi.get_level_values(-1)
+                new_codes = full_level.get_indexer(level_values)
+                # -1 codes for NA labels are pandas' canonical missing
+                # representation; only bail out when a non-NA label failed
+                # to map into the full level
+                if ((new_codes >= 0) | pd.isna(level_values)).all():
                     result._data.to_pandas_index = pd.MultiIndex(
                         levels=[*pdi.levels[:-1], full_level],
                         codes=[*pdi.codes[:-1], new_codes],
@@ -1760,7 +1764,13 @@ def pivot_table(
                 to_unstack.append(i)
             else:
                 to_unstack.append(name)
-        table = _unstack(agged, to_unstack, promote_ints_on_missing=False)
+        table = _unstack(
+            agged,
+            to_unstack,
+            # pandas keeps the integer dtype when the missing cells are
+            # filled afterwards, and promotes to float64 when they are not
+            promote_ints_on_missing=fill_value is None,
+        )
 
     if fill_value is not None:
         table = table.fillna(fill_value)
