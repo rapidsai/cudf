@@ -9,9 +9,7 @@ import contextlib
 import enum
 import functools
 import os
-import threading
 import time
-import uuid
 from typing import TYPE_CHECKING, Any, Concatenate, Literal, ParamSpec
 
 import nvtx
@@ -52,151 +50,6 @@ if TYPE_CHECKING:
     import cudf_polars.containers
     from cudf_polars.dsl import ir
     from cudf_polars.dsl.ir import IRExecutionContext
-    from cudf_polars.quent._types import Task
-
-
-def _dataframe_size_bytes(frame: cudf_polars.containers.DataFrame) -> int:
-    return sum(col.device_buffer_size() for col in frame.table.columns())
-
-
-def _begin_quent_do_evaluate_events(
-    cls: type[ir.IR],
-    ir_execution_context: IRExecutionContext,
-) -> Task | None:
-    """
-    Build and emit Quent events for the start of an IR node's evaluation.
-
-    Parameters
-    ----------
-    cls
-        The IR node class.
-    ir_execution_context
-        The IR execution context. To emit any events, this must have a
-        quent_ir_execution_context bound.
-
-    Returns
-    -------
-    The Quent task instance, or None if no Quent IR execution context is bound.
-
-    Notes
-    -----
-    The following events are emitted:
-
-    - Queueing
-    - Loading (I/O nodes only)
-    - Allocating (non-I/O nodes only)
-    - Computing (non-I/O nodes only)
-
-    The Loading, Allocating, and Computing events will indicate the host CPU thread
-    and device memory that they're using.
-
-    See Also
-    --------
-    _end_quent_do_evaluate_events
-    """
-    import cudf_polars.quent._types
-
-    quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
-    if quent_ir_execution_context is None:
-        return None
-
-    token = uuid.uuid4()
-    quent_task = cudf_polars.quent._types.Task(
-        instance_name=(
-            f"{cls.__name__}-{quent_ir_execution_context.quent_operator.id.hex[:8]}-"
-            f"{token.hex[:8]}"
-        ),
-        operator_id=quent_ir_execution_context.quent_operator.id,
-    )
-    quent_processor = quent_ir_execution_context.get_or_declare_processor(
-        thread_ident=threading.get_ident(),
-    )
-    quent_ir_execution_context.logger.emit(quent_task.queueing())
-    if not cls.is_io_node:
-        quent_ir_execution_context.logger.emit(
-            quent_task.allocating(resource_id=quent_processor.id)
-        )
-        quent_ir_execution_context.logger.emit(
-            quent_task.computing(
-                use_thread=quent_processor,
-                use_memory=quent_ir_execution_context.device_memory,
-            )
-        )
-    else:
-        quent_ir_execution_context.logger.emit(
-            quent_task.loading(
-                use_thread=quent_processor,
-                use_channel=quent_ir_execution_context.disk_to_device_channel,
-                use_memory=quent_ir_execution_context.device_memory,
-            )
-        )
-
-    return quent_task
-
-
-def _end_quent_do_evaluate_events(
-    cls: type[ir.IR],
-    frames: Sequence[cudf_polars.containers.DataFrame],
-    result: cudf_polars.containers.DataFrame | None,
-    ir_execution_context: IRExecutionContext,
-    quent_task: Task,
-) -> None:
-    """
-    Build and emit Quent events for the end of an IR node's evaluation.
-
-    Parameters
-    ----------
-    cls
-        The IR node class.
-    frames
-        The input dataframes passed to the IR node.
-    result
-        The output dataframe returned from the IR node. This will be ``None``
-        if an exception was raised while evaluating the IR node.
-    ir_execution_context
-        The IR execution context. To emit any events, this must have a
-        quent_ir_execution_context bound.
-    quent_task
-        The Quent task instance created by ``_begin_quent_do_evaluate_events``.
-
-    Notes
-    -----
-    This method emits an ``Exit`` event for the Quent Task, whose timestamp represents
-    when the IR node completed host-side processing.
-
-    A ``Statistics`` record, associated with the Quent Operator bound to the IR execution context,
-    is also emitted. It includes
-
-    - input bytes: the total size of the input dataframes.
-    - output bytes: the size of the output dataframe.
-    - output rows: the number of rows in the output dataframe.
-
-    See Also
-    --------
-    _begin_quent_do_evaluate_events
-    """
-    import cudf_polars.quent._types
-
-    quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
-    if quent_ir_execution_context is None:
-        return
-
-    if result is not None:
-        output_rows = result.num_rows
-        output_capacity_bytes = _dataframe_size_bytes(result)
-    else:
-        output_rows = 0
-        output_capacity_bytes = 0
-    quent_ir_execution_context.logger.emit(
-        quent_ir_execution_context.quent_operator.statistics(
-            statistics=cudf_polars.quent._types.Statistics(
-                input_bytes=sum(_dataframe_size_bytes(frame) for frame in frames),
-                output_bytes=output_capacity_bytes,
-                output_rows=output_rows,
-            )
-        )
-    )
-    quent_ir_execution_context.logger.emit(quent_task.exit())
 
 
 class Scope(enum.StrEnum):
@@ -316,6 +169,8 @@ def log_do_evaluate(
             *args: P.args,
             **kwargs: P.kwargs,
         ) -> cudf_polars.containers.DataFrame:
+            from cudf_polars.quent._types import Task
+
             pynvml.nvmlInit()
             maybe_handle = get_device_handle()
             pid = _getpid()
@@ -329,7 +184,16 @@ def log_do_evaluate(
 
             # And the kwonly 'context' argument has the IR execution context.
             ir_execution_context: IRExecutionContext = kwargs["context"]  # type: ignore[assignment]
-            quent_task = _begin_quent_do_evaluate_events(cls, ir_execution_context)
+            quent_task = Task.from_ir(cls, ir_execution_context)
+            if (
+                quent_task is not None
+                and ir_execution_context.quent_ir_execution_context is not None
+            ):
+                ir_execution_context.quent_ir_execution_context.context._emit_task_begin_events(
+                    cls,
+                    quent_task,
+                    ir_execution_context.quent_ir_execution_context,
+                )
 
             before_start = time.monotonic_ns()
             before = make_snapshot(
@@ -344,18 +208,29 @@ def log_do_evaluate(
             start = time.monotonic_ns()
             try:
                 result = func(cls, *args, **kwargs)
-            except Exception:
-                if quent_task is not None:
-                    _end_quent_do_evaluate_events(
-                        cls, frames, None, ir_execution_context, quent_task
+            except Exception:  # pragma: no cover;
+                if (
+                    quent_task is not None
+                    and ir_execution_context.quent_ir_execution_context is not None
+                ):
+                    ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
+                        quent_task,
+                        ir_execution_context.quent_ir_execution_context,
+                        frames,
+                        None,
                     )
                 raise
             else:
-                if quent_task is not None:
-                    _end_quent_do_evaluate_events(
-                        cls, frames, result, ir_execution_context, quent_task
+                if (
+                    quent_task is not None
+                    and ir_execution_context.quent_ir_execution_context is not None
+                ):
+                    ir_execution_context.quent_ir_execution_context.context._emit_task_end_events(
+                        quent_task,
+                        ir_execution_context.quent_ir_execution_context,
+                        frames,
+                        result,
                     )
-
             stop = time.monotonic_ns()
 
             after_start = time.monotonic_ns()

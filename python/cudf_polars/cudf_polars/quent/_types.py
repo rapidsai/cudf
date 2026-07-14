@@ -12,9 +12,12 @@ import enum
 import sys
 import time
 import uuid
-from typing import Any, Literal, TypeAlias
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeAlias
 
 from cudf_polars import __version__
+
+if TYPE_CHECKING:
+    from cudf_polars.dsl.ir import IR, IRExecutionContext
 
 QUENT_SCOPE = "QUENT"
 
@@ -804,6 +807,39 @@ class Task:
     id: uuid.UUID = dataclasses.field(default_factory=new_quent_id)
     operator_id: uuid.UUID
     instance_name: str | None = None
+
+    @classmethod
+    def from_ir(
+        cls, ir_type: type[IR], ir_execution_context: IRExecutionContext
+    ) -> Self | None:
+        """
+        Maybe build an operator-scoped Quent Task from an IR execution context.
+
+        Parameters
+        ----------
+        ir_type
+            The IR type of the operator.
+        ir_execution_context
+            The IR execution context.
+
+        Returns
+        -------
+        Task | None
+            The operator-scoped Quent Task, or ``None`` if the IR execution context
+            is not bound to a Quent operator.
+        """
+        quent_ir_execution_context = ir_execution_context.quent_ir_execution_context
+        if quent_ir_execution_context is None:
+            return None
+
+        token = uuid.uuid4()
+        return cls(
+            instance_name=(
+                f"{ir_type.__name__}-{quent_ir_execution_context.quent_operator.id.hex[:8]}-"
+                f"{token.hex[:8]}"
+            ),
+            operator_id=quent_ir_execution_context.quent_operator.id,
+        )
 
     def queueing(self, timestamp: int | None = None) -> Event:
         """Build a Quent Task Queueing event."""

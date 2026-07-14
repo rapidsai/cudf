@@ -25,20 +25,24 @@ from cudf_polars.quent._types import (
     Processor,
     Query,
     QueryGroup,
+    Statistics,
     ThreadPool,
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from typing import Self
 
     from rapidsmpf.communicator.communicator import Communicator
 
+    from cudf_polars.containers import DataFrame
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._logging import QuentLogger
     from cudf_polars.quent._types import (
         Operator,
         Plan,
         Port,
+        Task,
         Worker,
     )
     from cudf_polars.utils.config import ConfigOptions, StreamingExecutor
@@ -373,6 +377,116 @@ class QuentContext:
             parent_plan=parent_plan,
             parent_operators_by_node_id=parent_operators_by_node_id,
         )
+
+    def _emit_task_begin_events(
+        self,
+        ir_type: type[IR],
+        quent_task: Task,
+        quent_ir_execution_context: QuentIRExecutionContext,
+    ) -> None:
+        """
+        Emit begin events for a Quent Task.
+
+        Parameters
+        ----------
+        ir_type: type[IR]
+            The IR type of the operator.
+        quent_task: Task
+            The Quent Task to emit events for.
+        quent_ir_execution_context: QuentIRExecutionContext
+            The Quent IR execution context.
+
+        Notes
+        -----
+        The following events are emitted:
+
+        - Queueing
+        - Loading (I/O nodes only)
+        - Allocating (non-I/O nodes only)
+        - Computing (non-I/O nodes only)
+
+        The Loading, Allocating, and Computing events will indicate the host CPU thread
+        and device memory that they're using.
+        """
+        quent_processor = quent_ir_execution_context.get_or_declare_processor(
+            thread_ident=threading.get_ident(),
+        )
+        quent_ir_execution_context.logger.emit(quent_task.queueing())
+        if not ir_type.is_io_node:
+            quent_ir_execution_context.logger.emit(
+                quent_task.allocating(resource_id=quent_processor.id)
+            )
+            quent_ir_execution_context.logger.emit(
+                quent_task.computing(
+                    use_thread=quent_processor,
+                    use_memory=quent_ir_execution_context.device_memory,
+                )
+            )
+        else:
+            quent_ir_execution_context.logger.emit(
+                quent_task.loading(
+                    use_thread=quent_processor,
+                    use_channel=quent_ir_execution_context.disk_to_device_channel,
+                    use_memory=quent_ir_execution_context.device_memory,
+                )
+            )
+
+    def _emit_task_end_events(
+        self,
+        quent_task: Task,
+        quent_ir_execution_context: QuentIRExecutionContext,
+        frames: Sequence[DataFrame],
+        result: DataFrame | None,
+    ) -> None:
+        """
+        Build and emit Quent events for the end of an IR node's evaluation.
+
+        Parameters
+        ----------
+        quent_task: Task
+            The Quent Task to emit events for.
+        quent_ir_execution_context: QuentIRExecutionContext
+            The Quent IR execution context.
+        frames
+            The input dataframes passed to the IR node.
+        result
+            The output dataframe returned from the IR node. This will be ``None``
+            if an exception was raised while evaluating the IR node.
+        ir_execution_context
+            The IR execution context. To emit any events, this must have a
+            quent_ir_execution_context bound.
+
+        Notes
+        -----
+        This method emits an ``Exit`` event for the Quent Task, whose timestamp represents
+        when the IR node completed host-side processing.
+
+        A ``Statistics`` record, associated with the Quent Operator bound to the IR execution context,
+        is also emitted. It includes
+
+        - input bytes: the total size of the input dataframes.
+        - output bytes: the size of the output dataframe.
+        - output rows: the number of rows in the output dataframe.
+        """
+        if quent_ir_execution_context is None:
+            return
+
+        if result is not None:
+            output_rows = result.num_rows
+            output_capacity_bytes = result._size_bytes()
+        else:
+            output_rows = 0
+            output_capacity_bytes = 0
+        quent_ir_execution_context.logger.emit(
+            quent_ir_execution_context.quent_operator.statistics(
+                statistics=Statistics(
+                    input_bytes=sum(frame._size_bytes() for frame in frames),
+                    output_bytes=output_capacity_bytes,
+                    output_rows=output_rows,
+                )
+            )
+        )
+        quent_ir_execution_context.logger.emit(quent_task.exit())
 
 
 def declare_worker_resources(
