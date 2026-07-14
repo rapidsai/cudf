@@ -1176,13 +1176,14 @@ class ColumnBase(Serializable, BinaryOperand, Reducible):
             # TODO: Revisit using pa_array.to_pandas() once pandas 3.0 is supported
             np_array = pa_array.to_numpy(zero_copy_only=False, writable=True)
             if (
-                cudf.get_option("mode.pandas_compatible")
-                and isinstance(self.dtype, np.dtype)
+                isinstance(self.dtype, np.dtype)
                 and self.dtype.kind == "b"
                 and self.has_nulls()
             ):
                 # pandas represents missing values in an (upcast-to-object)
                 # bool column as np.nan; pyarrow's to_numpy yields None.
+                # np.nan is also what every other cudf dtype converts
+                # missing values to (nan/NaT) when going to pandas.
                 np_array[pa_array.is_null().to_numpy(zero_copy_only=False)] = (
                     np.nan
                 )

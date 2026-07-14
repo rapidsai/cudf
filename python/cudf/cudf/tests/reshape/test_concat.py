@@ -2600,7 +2600,7 @@ def test_concat_empty_dataframe(df_1_data, df_2_data):
         {},
     ],
 )
-def test_concat_different_column_dataframe(request, df1_d, df2_d):
+def test_concat_different_column_dataframe(df1_d, df2_d):
     pdf1 = pd.DataFrame(df1_d)
     pdf2 = pd.DataFrame(df2_d)
 
@@ -2614,17 +2614,6 @@ def test_concat_different_column_dataframe(request, df1_d, df2_d):
     )
 
     expect = pd.concat([pdf1, pdf2, pdf1], sort=False)
-    xfail_pair = df2_d == {
-        "a": [1, None, 3],
-        "b": [True, True, False],
-        "c": ["s3", None, "s4"],
-    } and isinstance(df1_d["b"], pd.Series)
-    request.applymarker(
-        pytest.mark.xfail(
-            xfail_pair,
-            reason="As of pandas 3.0, pandas coerces to float, cuDF coerces to bool",
-        )
-    )
 
     assert_eq(got, expect, check_dtype=False, check_index_type=True)
 
