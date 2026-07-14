@@ -1,5 +1,5 @@
 /*
- * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION.
+ * SPDX-FileCopyrightText: Copyright (c) 2020-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
 
@@ -21,14 +21,17 @@
 #include <algorithm>
 #endif
 
+/**
+ * @file
+ * @brief Class definition for fixed point data type
+ */
+
 /// `fixed_point` and supporting types
 namespace CUDF_EXPORT numeric {
 
 /**
  * @addtogroup fixed_point_classes
  * @{
- * @file
- * @brief Class definition for fixed point data type
  */
 
 /// The scale type for fixed_point
@@ -158,8 +161,6 @@ CUDF_HOST_DEVICE inline constexpr T shift(T const& val, scale_type const& scale)
 /**
  * @addtogroup fixed_point_classes
  * @{
- * @file
- * @brief Class definition for fixed point data type
  */
 
 /**
