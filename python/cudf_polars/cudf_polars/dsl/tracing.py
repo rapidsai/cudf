@@ -338,6 +338,7 @@ def log_do_evaluate(
             start = time.monotonic_ns()
             result = func(cls, *args, **kwargs)
             stop = time.monotonic_ns()
+
             after_start = time.monotonic_ns()
             after = make_snapshot(
                 cls,
@@ -358,8 +359,6 @@ def log_do_evaluate(
                 }
             )
             log.info("Execute IR", **record)
-
-            result = func(cls, *args, **kwargs)
 
             if quent_task is not None:
                 _end_quent_do_evaluate_events(

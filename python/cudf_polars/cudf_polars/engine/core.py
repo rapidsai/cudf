@@ -450,43 +450,6 @@ def _find_memory_error(exc: BaseException) -> MemoryError | None:
     return None
 
 
-def _declare_network_channels(
-    comm: Communicator,
-    local_quent_context: LocalQuentContext,
-) -> None:
-    """
-    Declare network link channels for inter-rank communication.
-
-    Creates a Network resource group and one Channel per remote rank,
-    emitting their lifecycle events to the quent logger.
-    """
-    if comm.nranks <= 1:
-        return
-
-    from cudf_polars.quent._types import Channel, Network
-
-    network = Network(engine_id=local_quent_context.context.engine.id)
-    local_quent_context.logger.emit(network.declare())
-    local_quent_context.network = network
-
-    link_channels: dict[int, Channel] = {}
-    for target_rank in range(comm.nranks):
-        if target_rank == comm.rank:
-            continue
-        link = Channel(
-            instance_name=f"rank-{comm.rank} -> rank-{target_rank}",
-            resource_type_name="Link",
-            parent_group_id=network.id,
-            source=local_quent_context.device_memory,
-            target=local_quent_context.device_memory,
-        )
-        local_quent_context.logger.emit(link.initializing())
-        local_quent_context.logger.emit(link.operating())
-        link_channels[target_rank] = link
-
-    local_quent_context.link_channels = link_channels
-
-
 def execute_ir_on_rank(
     ctx: Context,
     comm: Communicator,
@@ -784,7 +747,7 @@ def evaluate_on_rank(
     quent_operator_map: dict[IR, cudf_polars.quent._types.Operator] | None = None
     if config_options.executor.quent_context is not None:
         assert local_quent_context is not None
-        _declare_network_channels(comm, local_quent_context)
+        local_quent_context._declare_network_channels(comm)
         # ``get_stable_plan_id`` is a deterministic function of the IR
         # structure, so every rank derives the same logical plan ID for a
         # given query (only rank 0 emits the declaration, but physical plans

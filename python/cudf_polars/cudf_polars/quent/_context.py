@@ -30,6 +30,8 @@ from cudf_polars.quent._types import (
 if TYPE_CHECKING:
     from typing import Self
 
+    from rapidsmpf.communicator.communicator import Communicator
+
     from cudf_polars.dsl.ir import IR
     from cudf_polars.quent._logging import QuentLogger
     from cudf_polars.quent._types import (
@@ -468,6 +470,42 @@ class LocalQuentContext:
             thread_ident=thread_ident,
             pool_id=self.thread_pool_id,
         )
+
+    def _declare_network_channels(
+        self,
+        comm: Communicator,
+    ) -> None:
+        """
+        Declare network link channels for inter-rank communication.
+
+        Creates a Network resource group and one Channel per remote rank,
+        emitting their lifecycle events to the quent logger.
+        """
+        if comm.nranks <= 1:
+            return
+
+        from cudf_polars.quent._types import Channel, Network
+
+        network = Network(engine_id=self.context.engine.id)
+        self.logger.emit(network.declare())
+        self.network = network
+
+        link_channels: dict[int, Channel] = {}
+        for target_rank in range(comm.nranks):
+            if target_rank == comm.rank:
+                continue
+            link = Channel(
+                instance_name=f"rank-{comm.rank} -> rank-{target_rank}",
+                resource_type_name="Link",
+                parent_group_id=network.id,
+                source=self.device_memory,
+                target=self.device_memory,
+            )
+            self.logger.emit(link.initializing())
+            self.logger.emit(link.operating())
+            link_channels[target_rank] = link
+
+        self.link_channels = link_channels
 
 
 @dataclasses.dataclass(kw_only=True)
