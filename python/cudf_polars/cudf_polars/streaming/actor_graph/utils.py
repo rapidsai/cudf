@@ -1152,7 +1152,7 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
                 return False
         return True
 
-    def is_strictly_sorted(self, order_keys: Sequence[OrderKey]) -> bool:
+    def is_sorted(self, order_keys: Sequence[int | OrderKey]) -> bool:
         """True if the selected ordering proves sortedness for order_keys."""
         if not self or not isinstance(self.inter_rank_scheme, OrderScheme):
             return False

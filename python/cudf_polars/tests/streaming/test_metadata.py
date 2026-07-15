@@ -898,15 +898,15 @@ def test_sort_output_metadata(spmd_engine_factory, by, descending, nulls_last) -
 
 
 @pytest.mark.parametrize(
-    "scheme_key_count,strict,expected",
+    "scheme_key_count,strict_boundaries,expected",
     [
-        (1, True, True),  # prefix match + strict → skip
-        (1, False, False),  # prefix match + non-strict → no skip
-        (2, True, True),  # exact match + strict → skip
-        (2, False, True),  # exact match + non-strict → skip (strict irrelevant)
+        (1, True, True),  # prefix match + strict → sorted
+        (1, False, False),  # prefix match + non-strict → not sorted
+        (2, True, True),  # exact match + strict → sorted
+        (2, False, True),  # exact match + non-strict → sorted
     ],
 )
-def test_is_strictly_sorted(spmd_engine, scheme_key_count, strict, expected) -> None:
+def test_is_sorted(spmd_engine, scheme_key_count, strict_boundaries, expected) -> None:
     df_lf = pl.LazyFrame({"x": list(range(5)), "y": list(range(5))})
     base_ir = Translator(df_lf._ldf.visit(), spmd_engine).translate_ir()
     asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
@@ -936,7 +936,9 @@ def test_is_strictly_sorted(spmd_engine, scheme_key_count, strict, expected) -> 
         exclusive_view=False,
         br=ctx.br(),
     )
-    scheme = OrderScheme([Ordering(keys, boundary_chunk, strict_boundaries=strict)])
+    scheme = OrderScheme(
+        [Ordering(keys, boundary_chunk, strict_boundaries=strict_boundaries)]
+    )
     meta = ChannelMetadata(
         3, partitioning=Partitioning(inter_rank=scheme, local="inherit")
     )
@@ -945,4 +947,4 @@ def test_is_strictly_sorted(spmd_engine, scheme_key_count, strict, expected) -> 
     partitioning = NormalizedPartitioning.from_keys(
         meta.partitioning, nranks=1, keys=order_keys
     )
-    assert partitioning.is_strictly_sorted(order_keys) is expected
+    assert partitioning.is_sorted(order_keys) is expected

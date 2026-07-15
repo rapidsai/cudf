@@ -11,6 +11,8 @@ import pylibcudf as plc
 from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
+    OrderScheme,
+    Partitioning,
 )
 from cudf_streaming.table_chunk import TableChunk
 from rapidsmpf.communicator.single import new_communicator as single_comm
@@ -22,6 +24,10 @@ from cudf_polars.containers import DataType
 from cudf_polars.dsl.expr import Col, NamedExpr
 from cudf_polars.dsl.ir import IR, Distinct, GroupBy, Select
 from cudf_polars.dsl.utils.naming import names_to_indices, unique_names
+from cudf_polars.streaming.actor_graph.collectives.ordering import (
+    adjust_ordering,
+    get_strict_ordering,
+)
 from cudf_polars.streaming.actor_graph.collectives.shuffle import ShuffleManager
 from cudf_polars.streaming.actor_graph.dispatch import (
     generate_ir_sub_network,
@@ -38,6 +44,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     empty_table_chunk,
     evaluate_batch,
     evaluate_chunk,
+    gather_in_task_group,
     maybe_remap_partitioning,
     process_children,
     recv_metadata,
@@ -48,6 +55,7 @@ from cudf_polars.streaming.groupby import combine, decompose
 from cudf_polars.streaming.repartition import Repartition
 
 if TYPE_CHECKING:
+    from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
@@ -506,6 +514,29 @@ def _maintain_order(ir: GroupBy | Distinct) -> bool:
         )
 
 
+def _partition_count_for_rank(rank: int, nranks: int, npartitions: int) -> int:
+    """Return the contiguous output-partition count owned by one rank."""
+    return ((rank + 1) * npartitions + nranks - 1) // nranks - (
+        rank * npartitions + nranks - 1
+    ) // nranks
+
+
+def _adjusted_ordering_metadata(
+    context: Context,
+    comm: Communicator,
+    metadata_in: ChannelMetadata,
+    output_ordering: Ordering,
+) -> ChannelMetadata:
+    """Return metadata for data adjusted to strict ordering boundaries."""
+    return ChannelMetadata(
+        local_count=_partition_count_for_rank(
+            comm.rank, comm.nranks, output_ordering.num_boundaries + 1
+        ),
+        partitioning=Partitioning(OrderScheme([output_ordering]), "inherit"),
+        duplicated=metadata_in.duplicated,
+    )
+
+
 async def _choose_strategy(
     context: Context,
     comm: Communicator,
@@ -660,10 +691,11 @@ async def groupby_actor(
         metadata_in = await recv_metadata(ch_in, context)
 
         nranks = comm.nranks
+        group_keys = _key_indices(ir, ir.children[0].schema, concrete_prefix=True)
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning,
             nranks,
-            keys=_key_indices(ir, ir.children[0].schema, concrete_prefix=True),
+            keys=group_keys,
         )
         maintain_order = _maintain_order(ir)
         fully_partitioned = partitioning.is_strictly_partitioned()
@@ -696,6 +728,53 @@ async def groupby_actor(
                 ch_in,
                 metadata_out,
                 tracer=tracer,
+            )
+            return
+
+        if (
+            not metadata_in.duplicated
+            and isinstance(partitioning.inter_rank_scheme, OrderScheme)
+            and partitioning.local_scheme == "inherit"
+        ):
+            input_ordering = partitioning.inter_rank_scheme.orderings[0]
+            output_ordering = get_strict_ordering(input_ordering, context.br())
+            ch_adjusted = context.create_channel()
+            adjusted_metadata = _adjusted_ordering_metadata(
+                context, comm, metadata_in, output_ordering
+            )
+            metadata_out = ChannelMetadata(
+                local_count=adjusted_metadata.local_count,
+                partitioning=maybe_remap_partitioning(
+                    ir,
+                    adjusted_metadata.partitioning,
+                    child_ir=ir.children[0],
+                    context=context,
+                ),
+                duplicated=adjusted_metadata.duplicated,
+            )
+            if tracer is not None:
+                tracer.decision = "adjust_ordering"
+            await gather_in_task_group(
+                adjust_ordering(
+                    context,
+                    comm,
+                    ir.children[0],
+                    ir_context,
+                    ch_adjusted,
+                    ch_in,
+                    input_ordering,
+                    output_ordering,
+                    collective_id=collective_ids.pop(),
+                ),
+                chunkwise_evaluate(
+                    context,
+                    ir,
+                    ir_context,
+                    ch_out,
+                    ch_adjusted,
+                    metadata_out,
+                    tracer=tracer,
+                ),
             )
             return
 

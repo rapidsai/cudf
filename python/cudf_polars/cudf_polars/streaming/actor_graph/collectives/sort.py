@@ -608,7 +608,7 @@ async def sort_actor(
         partitioning = NormalizedPartitioning.from_keys(
             metadata_in.partitioning, comm.nranks, keys=order_keys
         )
-        if partitioning.is_strictly_sorted(order_keys):
+        if partitioning.is_sorted(order_keys):
             if tracer is not None:
                 tracer.decision = "already_sorted"
             await chunkwise_evaluate(
