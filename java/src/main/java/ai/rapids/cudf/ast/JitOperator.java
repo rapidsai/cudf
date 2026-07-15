@@ -64,8 +64,7 @@ public enum JitOperator {
   private final byte nativeId;
 
   JitOperator(int nativeId) {
-    this.nativeId = (byte) nativeId;
-    assert this.nativeId == nativeId;
+    this.nativeId = AstUtils.checkByte(nativeId);
   }
 
   int getSerializedSize() {

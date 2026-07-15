@@ -5,7 +5,6 @@
 
 #include "cudf_jni_apis.hpp"
 
-#include <cudf/context.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/utilities/default_stream.hpp>
 #include <cudf/utilities/pinned_memory.hpp>
@@ -190,16 +189,6 @@ JNIEXPORT void JNI_OnUnload(JavaVM* vm, void*)
 JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_Cuda_isPtdsEnabled(JNIEnv* env, jclass)
 {
   return cudf::jni::is_ptds_enabled;
-}
-
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_initializeJitRuntime(JNIEnv* env, jclass)
-{
-  JNI_TRY
-  {
-    cudf::jni::auto_set_device(env);
-    cudf::initialize(cudf::init_flags::INIT_JIT_CACHE);
-  }
-  JNI_CATCH(env, );
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_setKernelPinnedCopyThreshold(JNIEnv* env,

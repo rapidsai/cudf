@@ -65,8 +65,8 @@ public final class JitOperation extends AstExpression {
     this.errorPolicy = Objects.requireNonNull(errorPolicy, "errorPolicy is null");
     this.inputs = Objects.requireNonNull(inputs, "inputs is null").clone();
     this.targetScale = targetScale;
-    for (AstExpression input : this.inputs) {
-      Objects.requireNonNull(input, "input is null");
+    for (int i = 0; i < this.inputs.length; i++) {
+      Objects.requireNonNull(this.inputs[i], "input " + i + " is null");
     }
   }
 
@@ -75,8 +75,8 @@ public final class JitOperation extends AstExpression {
     int size = ExpressionType.JIT_EXPRESSION.getSerializedSize() +
         op.getSerializedSize() +
         errorPolicy.getSerializedSize() +
-        Byte.BYTES +
-        Byte.BYTES;
+        Byte.BYTES +  // targetScale present
+        Byte.BYTES;   // inputs.length
     if (targetScale != null) {
       size += Integer.BYTES;
     }
@@ -91,11 +91,11 @@ public final class JitOperation extends AstExpression {
     ExpressionType.JIT_EXPRESSION.serialize(bb);
     op.serialize(bb);
     errorPolicy.serialize(bb);
-    bb.put((byte) inputs.length);
     bb.put((byte) (targetScale == null ? 0 : 1));
     if (targetScale != null) {
       bb.putInt(targetScale);
     }
+    bb.put((byte) inputs.length);
     for (AstExpression input : inputs) {
       input.serialize(bb);
     }

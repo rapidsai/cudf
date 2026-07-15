@@ -6,7 +6,6 @@
 package ai.rapids.cudf.ast;
 
 import ai.rapids.cudf.ColumnVector;
-import ai.rapids.cudf.Cudf;
 import ai.rapids.cudf.CudfException;
 import ai.rapids.cudf.CudfTestBase;
 import ai.rapids.cudf.DType;
@@ -21,22 +20,18 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.NullSource;
 
 import java.math.BigInteger;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 
 public class CompiledExpressionTest extends CudfTestBase {
-  @Test
-  public void testInitializeJitRuntime() {
-    Assertions.assertDoesNotThrow(Cudf::initializeJitRuntime);
-    Assertions.assertDoesNotThrow(Cudf::initializeJitRuntime);
-  }
-
   @Test
   public void testColumnReferenceTransform() {
     try (Table t = new Table.TestBuilder().column(5, 4, 3, 2, 1).column(6, 7, 8, null, 10).build()) {
@@ -347,6 +342,16 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @ParameterizedTest
+  @MethodSource("createDecimal128LiteralParams")
+  public void testDecimal128LiteralLegacyTransformFails(DType type, BigInteger value) {
+    Literal expr = Literal.ofDecimal(type, value);
+    try (Table t = new Table.TestBuilder().column(1, 2, 3).build();
+         CompiledExpression compiledExpr = expr.compile()) {
+      Assertions.assertThrows(CudfException.class, () -> compiledExpr.computeColumn(t).close());
+    }
+  }
+
+  @ParameterizedTest
   @MethodSource("createDecimalLiteralParams")
   public void testJitDecimalLiteralTransform(DType type, BigInteger value) {
     Literal expr = Literal.ofDecimal(type, value);
@@ -380,6 +385,35 @@ public class CompiledExpressionTest extends CudfTestBase {
   }
 
   @Test
+  public void testDecimal128LiteralByteOrderConversion() {
+    DType type = DType.create(DType.DTypeEnum.DECIMAL128, 0);
+    byte[] positiveBigEndian = new byte[type.getSizeInBytes()];
+    positiveBigEndian[positiveBigEndian.length - 1] = 1;
+    byte[] positiveLittleEndian = new byte[type.getSizeInBytes()];
+    positiveLittleEndian[0] = 1;
+    Assertions.assertArrayEquals(positiveBigEndian,
+        Literal.convertDecimal128FromJavaToCudf(
+            BigInteger.ONE.toByteArray(), type, ByteOrder.BIG_ENDIAN));
+    Assertions.assertArrayEquals(positiveLittleEndian,
+        Literal.convertDecimal128FromJavaToCudf(
+            BigInteger.ONE.toByteArray(), type, ByteOrder.LITTLE_ENDIAN));
+
+    byte[] negativeBigEndian = new byte[type.getSizeInBytes()];
+    Arrays.fill(negativeBigEndian, (byte) 0xff);
+    negativeBigEndian[negativeBigEndian.length - 1] = (byte) 0xfe;
+    byte[] negativeLittleEndian = new byte[type.getSizeInBytes()];
+    Arrays.fill(negativeLittleEndian, (byte) 0xff);
+    negativeLittleEndian[0] = (byte) 0xfe;
+    byte[] negativeValue = BigInteger.valueOf(-2).toByteArray();
+    Assertions.assertArrayEquals(negativeBigEndian,
+        Literal.convertDecimal128FromJavaToCudf(
+            negativeValue, type, ByteOrder.BIG_ENDIAN));
+    Assertions.assertArrayEquals(negativeLittleEndian,
+        Literal.convertDecimal128FromJavaToCudf(
+            negativeValue, type, ByteOrder.LITTLE_ENDIAN));
+  }
+
+  @Test
   void testJitOperationValidation() {
     assertJitCompileThrows(new JitOperation(JitOperator.ADD, new ColumnReference(0)));
     assertJitCompileThrows(new JitOperation(JitOperator.ADD,
@@ -397,10 +431,11 @@ public class CompiledExpressionTest extends CudfTestBase {
         NullPointerException.class,
         () -> new JitOperation(JitOperator.ADD, (JitErrorPolicy) null,
             new ColumnReference(0), new ColumnReference(1)));
-    Assertions.assertThrows(
+    NullPointerException nullInputError = Assertions.assertThrows(
         NullPointerException.class,
         () -> new JitOperation(JitOperator.ADD,
             new ColumnReference(0), (AstExpression) null));
+    Assertions.assertEquals("input 1 is null", nullInputError.getMessage());
     Assertions.assertThrows(
         NullPointerException.class,
         () -> new JitOperation(JitOperator.ADD, (AstExpression[]) null));
@@ -599,91 +634,70 @@ public class CompiledExpressionTest extends CudfTestBase {
     }
   }
 
-  private static Stream<JitOperator> createJitNumericCastParams() {
-    return Stream.of(
-        JitOperator.CAST_TO_BOOL8,
-        JitOperator.CAST_TO_INT8,
-        JitOperator.CAST_TO_INT16,
-        JitOperator.CAST_TO_INT32,
-        JitOperator.CAST_TO_INT64,
-        JitOperator.CAST_TO_UINT8,
-        JitOperator.CAST_TO_UINT16,
-        JitOperator.CAST_TO_UINT32,
-        JitOperator.CAST_TO_UINT64,
-        JitOperator.CAST_TO_FLOAT32,
-        JitOperator.CAST_TO_FLOAT64);
+  private static Arguments jitCastCase(
+      JitOperator op, Supplier<ColumnVector> expectedFactory) {
+    return Arguments.of(op, expectedFactory);
   }
 
-  private static ColumnVector makeJitNumericCastExpected(JitOperator op) {
-    switch (op) {
-      case CAST_TO_BOOL8:
-        return ColumnVector.fromBooleans(false, true, true, true);
-      case CAST_TO_INT8:
-        return ColumnVector.fromBytes((byte) 0, (byte) 1, (byte) 2, (byte) 3);
-      case CAST_TO_INT16:
-        return ColumnVector.fromShorts((short) 0, (short) 1, (short) 2, (short) 3);
-      case CAST_TO_INT32:
-        return ColumnVector.fromInts(0, 1, 2, 3);
-      case CAST_TO_INT64:
-        return ColumnVector.fromLongs(0L, 1L, 2L, 3L);
-      case CAST_TO_UINT8:
-        return ColumnVector.fromUnsignedBytes((byte) 0, (byte) 1, (byte) 2, (byte) 3);
-      case CAST_TO_UINT16:
-        return ColumnVector.fromUnsignedShorts((short) 0, (short) 1, (short) 2, (short) 3);
-      case CAST_TO_UINT32:
-        return ColumnVector.fromUnsignedInts(0, 1, 2, 3);
-      case CAST_TO_UINT64:
-        return ColumnVector.fromUnsignedLongs(0L, 1L, 2L, 3L);
-      case CAST_TO_FLOAT32:
-        return ColumnVector.fromFloats(0.0f, 1.0f, 2.0f, 3.0f);
-      case CAST_TO_FLOAT64:
-        return ColumnVector.fromDoubles(0.0, 1.0, 2.0, 3.0);
-      default:
-        throw new IllegalArgumentException("Unexpected numeric cast operator " + op);
-    }
+  private static Stream<Arguments> createJitNumericCastParams() {
+    return Stream.of(
+        jitCastCase(JitOperator.CAST_TO_BOOL8,
+            () -> ColumnVector.fromBooleans(false, true, true, true)),
+        jitCastCase(JitOperator.CAST_TO_INT8,
+            () -> ColumnVector.fromBytes((byte) 0, (byte) 1, (byte) 2, (byte) 3)),
+        jitCastCase(JitOperator.CAST_TO_INT16,
+            () -> ColumnVector.fromShorts((short) 0, (short) 1, (short) 2, (short) 3)),
+        jitCastCase(JitOperator.CAST_TO_INT32,
+            () -> ColumnVector.fromInts(0, 1, 2, 3)),
+        jitCastCase(JitOperator.CAST_TO_INT64,
+            () -> ColumnVector.fromLongs(0L, 1L, 2L, 3L)),
+        jitCastCase(JitOperator.CAST_TO_UINT8,
+            () -> ColumnVector.fromUnsignedBytes((byte) 0, (byte) 1, (byte) 2, (byte) 3)),
+        jitCastCase(JitOperator.CAST_TO_UINT16,
+            () -> ColumnVector.fromUnsignedShorts((short) 0, (short) 1, (short) 2, (short) 3)),
+        jitCastCase(JitOperator.CAST_TO_UINT32,
+            () -> ColumnVector.fromUnsignedInts(0, 1, 2, 3)),
+        jitCastCase(JitOperator.CAST_TO_UINT64,
+            () -> ColumnVector.fromUnsignedLongs(0L, 1L, 2L, 3L)),
+        jitCastCase(JitOperator.CAST_TO_FLOAT32,
+            () -> ColumnVector.fromFloats(0.0f, 1.0f, 2.0f, 3.0f)),
+        jitCastCase(JitOperator.CAST_TO_FLOAT64,
+            () -> ColumnVector.fromDoubles(0.0, 1.0, 2.0, 3.0)));
   }
 
   @ParameterizedTest
   @MethodSource("createJitNumericCastParams")
-  void testJitNumericCastTransform(JitOperator op) {
+  void testJitNumericCastTransform(
+      JitOperator op, Supplier<ColumnVector> expectedFactory) {
     JitOperation expr = new JitOperation(op, new ColumnReference(0));
     try (Table t = new Table.TestBuilder().column(0, 1, 2, 3).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumnJit(t);
-         ColumnVector expected = makeJitNumericCastExpected(op)) {
+         ColumnVector expected = expectedFactory.get()) {
       assertColumnsAreEqual(expected, actual);
     }
   }
 
-  private static Stream<JitOperator> createJitDecimalCastParams() {
+  private static Stream<Arguments> createJitDecimalCastParams() {
     return Stream.of(
-        JitOperator.CAST_TO_DECIMAL32,
-        JitOperator.CAST_TO_DECIMAL64,
-        JitOperator.CAST_TO_DECIMAL128);
-  }
-
-  private static ColumnVector makeJitDecimalCastExpected(JitOperator op) {
-    switch (op) {
-      case CAST_TO_DECIMAL32:
-        return ColumnVector.decimalFromInts(0, 0, 1, -2, 3);
-      case CAST_TO_DECIMAL64:
-        return ColumnVector.decimalFromLongs(0, 0L, 1L, -2L, 3L);
-      case CAST_TO_DECIMAL128:
-        return ColumnVector.decimalFromBigInt(0,
-            BigInteger.ZERO, BigInteger.ONE, BigInteger.valueOf(-2), BigInteger.valueOf(3));
-      default:
-        throw new IllegalArgumentException("Unexpected decimal cast operator " + op);
-    }
+        jitCastCase(JitOperator.CAST_TO_DECIMAL32,
+            () -> ColumnVector.decimalFromInts(0, 0, 1, -2, 3)),
+        jitCastCase(JitOperator.CAST_TO_DECIMAL64,
+            () -> ColumnVector.decimalFromLongs(0, 0L, 1L, -2L, 3L)),
+        jitCastCase(JitOperator.CAST_TO_DECIMAL128,
+            () -> ColumnVector.decimalFromBigInt(0,
+                BigInteger.ZERO, BigInteger.ONE, BigInteger.valueOf(-2), BigInteger.valueOf(3))));
   }
 
   @ParameterizedTest
   @MethodSource("createJitDecimalCastParams")
-  void testJitDecimalCastTransform(JitOperator op) {
+  void testJitDecimalCastTransform(
+      JitOperator op, Supplier<ColumnVector> expectedFactory) {
     JitOperation expr = new JitOperation(op, new ColumnReference(0));
     try (Table t = new Table.TestBuilder().decimal64Column(0, 0L, 1L, -2L, 3L).build();
          CompiledExpression compiledExpr = expr.compile();
          ColumnVector actual = compiledExpr.computeColumnJit(t);
-         ColumnVector expected = makeJitDecimalCastExpected(op)) {
+         ColumnVector expected = expectedFactory.get()) {
       assertColumnsAreEqual(expected, actual);
     }
   }

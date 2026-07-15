@@ -21,8 +21,7 @@ public enum JitErrorPolicy {
   private final byte nativeId;
 
   JitErrorPolicy(int nativeId) {
-    this.nativeId = (byte) nativeId;
-    assert this.nativeId == nativeId;
+    this.nativeId = AstUtils.checkByte(nativeId);
   }
 
   int getSerializedSize() {

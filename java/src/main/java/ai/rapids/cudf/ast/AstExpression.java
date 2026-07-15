@@ -27,8 +27,7 @@ public abstract class AstExpression {
     private final byte nativeId;
 
     ExpressionType(int nativeId) {
-      this.nativeId = (byte) nativeId;
-      assert this.nativeId == nativeId;
+      this.nativeId = AstUtils.checkByte(nativeId);
     }
 
     /** Get the size in bytes to serialize this node type */

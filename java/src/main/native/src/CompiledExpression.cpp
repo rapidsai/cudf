@@ -15,10 +15,12 @@
 #include <cudf/utilities/default_stream.hpp>
 
 #include <cstdint>
+#include <format>
 #include <functional>
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 namespace {
@@ -123,7 +125,7 @@ enum class jni_serialized_expression_type : int8_t {
   UNARY_OPERATION       = 3,
   BINARY_OPERATION      = 4,
   COLUMN_NAME_REFERENCE = 5,
-  JIT_OPERATION         = 6
+  JIT_OPERATION         = 6,
 };
 
 /**
@@ -250,7 +252,9 @@ jni_jit_operator_info jni_to_jit_operator(jbyte jni_op_value)
     case 32: return {CAST_TO_DECIMAL128, 1, false, false};
     case 33: return {RESCALE, 1, false, true};
     case 34: return {IF_ELSE, 3, false, false};
-    default: throw std::invalid_argument("unexpected JNI AST JIT operator value");
+    default:
+      throw std::invalid_argument(std::format("unexpected JNI AST JIT operator value {}",
+                                              static_cast<int32_t>(jni_op_value)));
   }
 }
 
@@ -258,12 +262,16 @@ jni_jit_operator_info jni_to_jit_operator(jbyte jni_op_value)
  * Convert a serialized Java JIT error policy into its libcudf value.
  * NOTE: This must be kept in sync with JitErrorPolicy.java!
  */
-cudf::error_policy jni_to_jit_error_policy(jbyte jni_policy_value)
+cudf::error_policy jni_to_jit_error_policy(jbyte jni_policy_value, jbyte jni_op_value)
 {
   switch (jni_policy_value) {
     case 0: return cudf::error_policy::PROPAGATE;
     case 1: return cudf::error_policy::NULLIFY;
-    default: throw std::invalid_argument("unexpected JNI AST JIT error policy value");
+    default:
+      throw std::invalid_argument(
+        std::format("unexpected JNI AST JIT error policy {} for operator {}",
+                    static_cast<int32_t>(jni_policy_value),
+                    static_cast<int32_t>(jni_op_value)));
   }
 }
 
@@ -288,7 +296,7 @@ struct make_literal {
   cudf::ast::literal const& operator()(cudf::data_type dtype,
                                        bool is_valid,
                                        cudf::jni::ast::compiled_expr& compiled_expr,
-                                       jni_serialized_ast& jni_ast)
+                                       jni_serialized_ast& jni_ast) const
   {
     std::unique_ptr<cudf::scalar> scalar_ptr = cudf::make_numeric_scalar(dtype);
     scalar_ptr->set_valid_async(is_valid);
@@ -307,7 +315,7 @@ struct make_literal {
   cudf::ast::literal const& operator()(cudf::data_type dtype,
                                        bool is_valid,
                                        cudf::jni::ast::compiled_expr& compiled_expr,
-                                       jni_serialized_ast& jni_ast)
+                                       jni_serialized_ast& jni_ast) const
   {
     std::unique_ptr<cudf::scalar> scalar_ptr = cudf::make_timestamp_scalar(dtype);
     scalar_ptr->set_valid_async(is_valid);
@@ -326,7 +334,7 @@ struct make_literal {
   cudf::ast::literal const& operator()(cudf::data_type dtype,
                                        bool is_valid,
                                        cudf::jni::ast::compiled_expr& compiled_expr,
-                                       jni_serialized_ast& jni_ast)
+                                       jni_serialized_ast& jni_ast) const
   {
     std::unique_ptr<cudf::scalar> scalar_ptr = cudf::make_duration_scalar(dtype);
     scalar_ptr->set_valid_async(is_valid);
@@ -345,7 +353,7 @@ struct make_literal {
   cudf::ast::literal const& operator()(cudf::data_type dtype,
                                        bool is_valid,
                                        cudf::jni::ast::compiled_expr& compiled_expr,
-                                       jni_serialized_ast& jni_ast)
+                                       jni_serialized_ast& jni_ast) const
   {
     std::unique_ptr<cudf::scalar> scalar_ptr = [&]() {
       if (is_valid) {
@@ -360,25 +368,12 @@ struct make_literal {
     return compiled_expr.add_literal(str_scalar, std::move(scalar_ptr));
   }
 
-  /** Default functor implementation to catch type dispatch errors */
-  template <typename T,
-            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_timestamp<T>() &&
-                             !cudf::is_duration<T>() && !cudf::is_fixed_point<T>() &&
-                             !std::is_same_v<T, cudf::string_view>>* = nullptr>
-  cudf::ast::literal const& operator()(cudf::data_type dtype,
-                                       bool is_valid,
-                                       cudf::jni::ast::compiled_expr& compiled_expr,
-                                       jni_serialized_ast& jni_ast)
-  {
-    throw std::logic_error("Unsupported AST literal type");
-  }
-
   /** Construct an AST literal from a fixed-point value */
   template <typename T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   cudf::ast::literal const& operator()(cudf::data_type dtype,
                                        bool is_valid,
                                        cudf::jni::ast::compiled_expr& compiled_expr,
-                                       jni_serialized_ast& jni_ast)
+                                       jni_serialized_ast& jni_ast) const
   {
     using rep_type = typename T::rep;
     auto const val = is_valid ? jni_ast.read<rep_type>() : rep_type{};
@@ -388,6 +383,19 @@ struct make_literal {
 
     auto& fixed_point_scalar = static_cast<cudf::fixed_point_scalar<T>&>(*scalar_ptr);
     return compiled_expr.add_literal(fixed_point_scalar, std::move(scalar_ptr));
+  }
+
+  /** Default functor implementation to catch type dispatch errors */
+  template <typename T,
+            std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_timestamp<T>() &&
+                             !cudf::is_duration<T>() && !cudf::is_fixed_point<T>() &&
+                             !std::is_same_v<T, cudf::string_view>>* = nullptr>
+  cudf::ast::literal const& operator()(cudf::data_type dtype,
+                                       bool is_valid,
+                                       cudf::jni::ast::compiled_expr& compiled_expr,
+                                       jni_serialized_ast& jni_ast) const
+  {
+    throw std::logic_error("Unsupported AST literal type");
   }
 };
 
@@ -444,25 +452,45 @@ cudf::ast::operation const& compile_binary_expression(cudf::jni::ast::compiled_e
 cudf::ast::expression const& compile_jit_expression(cudf::jni::ast::compiled_expr& compiled_expr,
                                                     jni_serialized_ast& jni_ast)
 {
-  auto const op_info      = jni_to_jit_operator(jni_ast.read_byte());
-  auto const error_policy = jni_to_jit_error_policy(jni_ast.read_byte());
-  auto const arity        = static_cast<int32_t>(jni_ast.read_byte());
-  if (arity < 0) { throw std::invalid_argument("unexpected JNI AST JIT operator arity"); }
-  if (static_cast<std::size_t>(arity) != op_info.arity) {
-    throw std::invalid_argument("unexpected JNI AST JIT operator arity");
-  }
+  auto const jni_op_value     = jni_ast.read_byte();
+  auto const op_info          = jni_to_jit_operator(jni_op_value);
+  auto const jni_policy_value = jni_ast.read_byte();
+  auto const error_policy     = jni_to_jit_error_policy(jni_policy_value, jni_op_value);
   if (error_policy == cudf::error_policy::NULLIFY && !op_info.is_fallible) {
-    throw std::invalid_argument("unexpected error policy for JNI AST JIT operator");
+    throw std::invalid_argument(
+      std::format("unexpected error policy {} for non-fallible JNI AST JIT operator {}",
+                  static_cast<int32_t>(jni_policy_value),
+                  static_cast<int32_t>(jni_op_value)));
   }
 
   auto const has_target_scale = jni_ast.read_byte();
   if (has_target_scale != 0 && has_target_scale != 1) {
-    throw std::invalid_argument("unexpected JNI AST JIT target scale flag");
+    throw std::invalid_argument(
+      std::format("unexpected target scale flag {} for JNI AST JIT operator {}; expected 0 or 1",
+                  static_cast<int32_t>(has_target_scale),
+                  static_cast<int32_t>(jni_op_value)));
   }
   std::optional<int32_t> target_scale;
   if (has_target_scale == 1) { target_scale = jni_ast.read<int32_t>(); }
   if (target_scale.has_value() != op_info.requires_target_scale) {
-    throw std::invalid_argument("unexpected target scale for JNI AST JIT operator");
+    auto const actual   = target_scale.has_value() ? std::to_string(*target_scale) : "none";
+    auto const expected = op_info.requires_target_scale ? "a value" : "none";
+    throw std::invalid_argument(
+      std::format("unexpected target scale {} for JNI AST JIT operator "
+                  "{}; expected {}",
+                  actual,
+                  static_cast<int32_t>(jni_op_value),
+                  expected));
+  }
+
+  auto const arity = static_cast<int32_t>(jni_ast.read_byte());
+  if (static_cast<std::size_t>(arity) != op_info.arity) {
+    throw std::invalid_argument(
+      std::format("unexpected arity {} for JNI AST JIT operator {}; "
+                  "expected {}",
+                  arity,
+                  static_cast<int32_t>(jni_op_value),
+                  op_info.arity));
   }
 
   std::vector<std::reference_wrapper<cudf::ast::expression const>> args;
@@ -521,10 +549,17 @@ jlong execute_compiled_expression(jlong j_ast, jlong j_table, execution_backend 
 {
   auto compiled_expr_ptr = reinterpret_cast<cudf::jni::ast::compiled_expr const*>(j_ast);
   auto tview_ptr         = reinterpret_cast<cudf::table_view const*>(j_table);
-  std::unique_ptr<cudf::column> result =
-    backend == execution_backend::JIT
-      ? cudf::compute_column_jit(*tview_ptr, compiled_expr_ptr->get_top_expression())
-      : cudf::compute_column(*tview_ptr, compiled_expr_ptr->get_top_expression());
+  auto const& expression = compiled_expr_ptr->get_top_expression();
+  if (backend == execution_backend::DEFAULT) {
+    auto const* literal = dynamic_cast<cudf::ast::literal const*>(&expression);
+    // The legacy evaluator silently corrupts decimal128 literal outputs in release builds.
+    if (literal != nullptr && literal->get_data_type().id() == cudf::type_id::DECIMAL128) {
+      throw std::invalid_argument("DECIMAL128 root literals require JIT evaluation");
+    }
+  }
+  std::unique_ptr<cudf::column> result = backend == execution_backend::JIT
+                                           ? cudf::compute_column_jit(*tview_ptr, expression)
+                                           : cudf::compute_column(*tview_ptr, expression);
   return reinterpret_cast<jlong>(result.release());
 }
 
