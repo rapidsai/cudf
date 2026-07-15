@@ -156,19 +156,18 @@ struct rle_run {
   int remaining;  // number of output items remaining to be decoded
 };
 
-// Chunked-expand path: number of run headers parsed per chunk.
-//
-// SMEM cost is (2 * kGenRuns + 1) * 4 bytes. Increasing kGenRuns reduces the
+// Controls the number of run headers parsed per chunk in the chunked-expand path.
+// SMEM cost is (2 * max_runs_per_chunk + 1) * 4 bytes. Increasing max_runs_per_chunk reduces the
 // number of outer-loop iterations in decode_next_chunked (each with a serial
-// header-parse phase and a __syncthreads()), but competes with occupancy in
+// header-parse phase and a __syncthreads() at the end), but competes with occupancy in
 // preprocess_levels_kernel.
 //
-// Set to 512, matching the SMEM budget that fits older architectures back to
-// V100 (sm_70). A sweep of {256, 512, 1024, 2048} against the ring-path
-// baseline on A100 and H100 showed differences within noise across the
-// PARQUET_READER_NVBENCH parquet_read_decode configs, so we do not currently
-// specialize by architecture.
-static constexpr int kGenRuns = 512;
+// 512 was chosen empirically based on sweeps of {256, 512, 1024, 2048, 4096}
+// on A100, H100, and B200, which showed differences within noise across the
+// PARQUET_READER_NVBENCH parquet_read_decode configs so there's no benefit to
+// specializing the value by architecture. It also fits within the SMEM budget
+// on V100s, and should help keep occupancy reasonable.
+static constexpr int max_runs_per_chunk = 512;
 
 // a stream of rle_runs
 template <typename level_t,
@@ -441,35 +440,34 @@ struct rle_stream {
     }
   }
 
-  // Alternate decode path used when `use_chunked_expand` is true.
-  //
-  // Instead of the ring-buffer producer/consumer model in decode_next_ring
-  // (one warp parses run headers, other warps expand one run each), thread 0
-  // parses up to `kGenRuns` headers up-front into shared-memory tables
-  // (gen_out_off / gen_meta), and then *all* warps cooperatively expand a
-  // slice of the concatenated output range using binary search. This keeps
-  // every warp busy even when runs are highly non-uniform in size, at the
-  // cost of an extra intra-block sync per chunk.
-  //
-  // A single RLE run may exceed the requested `count`. In that case we emit
-  // as much as fits, stash `partial_run_{meta,total,done}` in class state,
-  // and resume it as slot 0 of the next invocation without re-parsing its
-  // header (cur has already advanced past the payload).
+  /* Alternate decode path used when `use_chunked_expand` is true.
+   *
+   * Instead of the ring-buffer producer/consumer model in decode_next_ring
+   * (one warp parses run headers, other warps expand one run each), thread 0
+   * parses up to `max_runs_per_chunk` headers up-front into shared-memory tables
+   * (chunk_out_off / chunk_meta), and then *all* warps cooperatively expand a
+   * slice of the concatenated output range using binary search. This keeps
+   * every warp busy even when runs are highly non-uniform in size, at the
+   * cost of an extra intra-block sync per chunk.
+   *
+   * A single RLE run may exceed the requested `count`. In that case we emit
+   * as much as fits, stash `partial_run_{meta,total,done}` in class state,
+   * and resume it as slot 0 of the next invocation without re-parsing its
+   * header (cur has already advanced past the payload).
+   */
   __device__ inline int decode_next_chunked(int t, int count)
   {
     int const output_count = min(count, total_values - cur_values);
 
-    // ------------------------------------------------------------------
-    // Per-chunk shared-memory scratch. `gen_out_off[i]` is the exclusive
+    // Per-chunk shared-memory scratch. `chunk_out_off[i]` is the exclusive
     // prefix-sum of run lengths within the current chunk, so run `i`
-    // occupies output positions [gen_out_off[i], gen_out_off[i+1]).
-    // `gen_meta[i]` encodes both the payload offset (into s_start) and,
+    // occupies output positions [chunk_out_off[i], chunk_out_off[i+1]).
+    // `chunk_meta[i]` encodes both the payload offset (into s_start) and,
     // in the top bit, whether the run is literal (1) or RLE (0).
-    // ------------------------------------------------------------------
-    __shared__ int gen_out_off[kGenRuns + 1];
-    __shared__ int gen_meta[kGenRuns];
-    cuda::std::span<int> const gen_out_off_v{gen_out_off, kGenRuns + 1};
-    cuda::std::span<int> const gen_meta_v{gen_meta, kGenRuns};
+    __shared__ int chunk_out_off[max_runs_per_chunk + 1];
+    __shared__ int chunk_meta[max_runs_per_chunk];
+    cuda::std::span<int> const chunk_out_off_v{chunk_out_off, max_runs_per_chunk + 1};
+    cuda::std::span<int> const chunk_meta_v{chunk_meta, max_runs_per_chunk};
     // Payload offset within run slot 0: non-zero only when continuing a run
     // that was split across two decode_next_chunked calls.
     __shared__ int s_run0_payload_offset;
@@ -477,10 +475,10 @@ struct rle_stream {
     __shared__ int s_chunk_total;  // sum of run lengths in this chunk (co)
     __shared__ int s_base_out;     // absolute output pos where this chunk starts
 
-    int const lane        = t & 31;
-    int const warp        = t >> 5;
-    int constexpr kWarps  = num_rle_stream_decode_threads / cudf::detail::warp_size;
-    int const value_width = (level_bits + 7) >> 3;
+    int const lane          = t & 31;
+    int const warp          = t >> 5;
+    int constexpr num_warps = num_rle_stream_decode_threads / cudf::detail::warp_size;
+    int const value_width   = (level_bits + 7) >> 3;
     // Bit mask used to extract a single level from a bit-packed literal-run
     // payload word. Invariant across the whole call; hoisted out of the
     // phase-2 expand loop to keep it out of the hot register set.
@@ -488,22 +486,20 @@ struct rle_stream {
     int out_pos_total         = cur_values;
     int const out_end         = cur_values + output_count;
 
-    // ------------------------------------------------------------------
     // Outer loop: process the requested output range in chunks of up to
-    // `kGenRuns` runs at a time until we have emitted `output_count`
+    // `max_runs_per_chunk` runs at a time until we have emitted `output_count`
     // values or run out of encoded input.
-    // ------------------------------------------------------------------
     while (out_pos_total < out_end) {
       // ----- Phase 1: single-thread run-header parse ------------------
       // Thread 0 walks the encoded stream, decoding VLQ run headers and
-      // filling gen_out_off / gen_meta. The other threads wait at the
+      // filling chunk_out_off / chunk_meta. The other threads wait at the
       // __syncthreads() below. This is cheap because it is bounded by
-      // kGenRuns headers and header parsing is inherently serial.
+      // max_runs_per_chunk headers and header parsing is inherently serial.
       if (t == 0) {
         int co                = 0;
         int n                 = 0;
         int out_base          = out_pos_total;
-        gen_out_off_v[0]      = 0;
+        chunk_out_off_v[0]    = 0;
         s_run0_payload_offset = 0;
 
         // Slot 0 special case: resume a run that was split by the previous
@@ -514,8 +510,8 @@ struct rle_stream {
           int const remaining   = partial_run_total - partial_run_done;
           int const room        = out_end - out_base;
           int const cnt         = min(remaining, room);
-          gen_meta_v[0]         = partial_run_meta;
-          gen_out_off_v[1]      = cnt;
+          chunk_meta_v[0]       = partial_run_meta;
+          chunk_out_off_v[1]    = cnt;
           s_run0_payload_offset = partial_run_done;
           n                     = 1;
           co                    = cnt;
@@ -526,12 +522,10 @@ struct rle_stream {
           }
         }
 
-        // Parse up to kGenRuns headers, stopping early if the output range
+        // Parse up to max_runs_per_chunk headers, stopping early if the output range
         // fills up or the encoded stream is exhausted.
-        while (n < kGenRuns && (out_base + co) < out_end && cur < end) {
+        while (n < max_runs_per_chunk && (out_base + co) < out_end && cur < end) {
           uint32_t const level_run = get_vlq32(cur, end);
-          int cnt;
-          int meta;
 
           // Parquet RLE header format: LSB selects the encoding.
           //   bit 0 = 1  -> literal (bit-packed) run of `groups*8` values
@@ -542,7 +536,9 @@ struct rle_stream {
           // level stream for a single Parquet page is < 2 GiB. This is
           // guaranteed by the Parquet format in practice (page payloads are
           // orders of magnitude smaller than 2 GiB) and is independent of
-          // kGenRuns.
+          // max_runs_per_chunk.
+          int cnt;
+          int meta;
           if (level_run & 1u) {
             int const groups = level_run >> 1;
             cnt              = groups * 8;
@@ -567,8 +563,8 @@ struct rle_stream {
             cnt               = room;
           }
           co += cnt;
-          gen_meta_v[n]      = meta;
-          gen_out_off_v[++n] = co;
+          chunk_meta_v[n]      = meta;
+          chunk_out_off_v[++n] = co;
           if (partial_run_meta != -1) { break; }
         }
         s_chunk_runs  = n;
@@ -578,8 +574,8 @@ struct rle_stream {
       __syncthreads();
 
       // ----- Phase 2: cooperative expand ------------------------------
-      // All warps see the same gen_out_off / gen_meta tables. We split
-      // the flat output range [0, chunk_total) into `kWarps` equal-ish
+      // All warps see the same chunk_out_off / chunk_meta tables. We split
+      // the flat output range [0, chunk_total) into `num_warps` equal-ish
       // slices and each warp writes its slice.
       int const chunk_runs          = s_chunk_runs;
       int const chunk_total         = s_chunk_total;
@@ -588,26 +584,23 @@ struct rle_stream {
 
       if (chunk_runs == 0) { break; }
 
-      int const per = (chunk_total + kWarps - 1) / kWarps;
+      int const per = (chunk_total + num_warps - 1) / num_warps;
       int const lo  = warp * per;
       int const hi  = min(lo + per, chunk_total);
       if (lo < hi) {
-        // Binary-search gen_out_off to find the first run that intersects
+        // Binary-search chunk_out_off to find the first run that intersects
         // this warp's slice, then iterate forward until we pass `hi`.
-        // This is the load-balancing trick: warps whose slice happens to
-        // fall inside one huge run just write into it in parallel, and
-        // warps whose slice covers many small runs walk through them.
-        int const a =
-          static_cast<int>(cuda::std::upper_bound(
-                             gen_out_off_v.begin(), gen_out_off_v.begin() + chunk_runs + 1, lo) -
-                           gen_out_off_v.begin()) -
-          1;
-        for (int r = a; r < chunk_runs && gen_out_off_v[r] < hi; ++r) {
-          int const r_lo   = gen_out_off_v[r];
-          int const r_hi   = gen_out_off_v[r + 1];
+        int const a = static_cast<int>(
+                        cuda::std::upper_bound(
+                          chunk_out_off_v.begin(), chunk_out_off_v.begin() + chunk_runs + 1, lo) -
+                        chunk_out_off_v.begin()) -
+                      1;
+        for (int r = a; r < chunk_runs && chunk_out_off_v[r] < hi; ++r) {
+          int const r_lo   = chunk_out_off_v[r];
+          int const r_hi   = chunk_out_off_v[r + 1];
           int const seg_lo = max(r_lo, lo);
           int const seg_hi = min(r_hi, hi);
-          int const meta   = gen_meta_v[r];
+          int const meta   = chunk_meta_v[r];
           // For slot 0 of a resumed partial run add the already-emitted offset
           // so we read from the correct position in the payload.
           int const run_payload_off = (r == 0) ? run0_payload_offset : 0;
@@ -617,6 +610,10 @@ struct rle_stream {
           //     bit-field extract from the packed payload.
           //   RLE    (bit 31 clear) -> single value read once, broadcast
           //     across [seg_lo, seg_hi) with warp_fill.
+          // Note that we don't pay any divergence cost here since all threads
+          // in the warp are processing the same run (meta), but we do lose
+          // some occupancy due to carrying around the local registers needed
+          // for both branches.
           if (meta & (1u << 31)) {
             int const payload_off  = meta & 0x7fffffff;
             uint8_t const* payload = s_start + payload_off;
