@@ -229,13 +229,15 @@ class aggregate_reader_metadata : public aggregate_reader_metadata_base {
    * @param output_column_schemas schema indices of output columns
    * @param filter AST expression to filter row groups based on dictionary pages
    *
-   * @return Byte ranges of dictionary pages, one input column chunk with (in)equality predicate
+   * @return A pair of vectors containing dictionary page byte ranges and corresponding source
+   *         indices
    */
-  [[nodiscard]] std::vector<cudf::io::text::byte_range_info> get_dictionary_page_bytes(
-    std::span<std::vector<size_type> const> row_group_indices,
-    std::span<data_type const> output_dtypes,
-    std::span<cudf::size_type const> output_column_schemas,
-    std::reference_wrapper<ast::expression const> filter);
+  [[nodiscard]] std::pair<std::vector<cudf::io::text::byte_range_info>,
+                          std::vector<cudf::size_type>>
+  dictionary_pages_byte_ranges(std::span<std::vector<size_type> const> row_group_indices,
+                               std::span<data_type const> output_dtypes,
+                               std::span<cudf::size_type const> output_column_schemas,
+                               std::reference_wrapper<ast::expression const> filter);
 
   /**
    * @brief Filter the row groups using dictionaries based on predicate filter
