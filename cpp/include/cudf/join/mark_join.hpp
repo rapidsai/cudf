@@ -82,7 +82,9 @@ class mark_join {
   mark_join(cudf::table_view const& left,
             cudf::null_equality compare_nulls,
             cudf::join_prefilter prefilter,
-            rmm::cuda_stream_view stream = cudf::get_default_stream());
+            rmm::cuda_stream_view stream = cudf::get_default_stream(),
+            cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+              cudf::get_current_device_resource_ref());
 
   /**
    * @brief Constructs a mark join object with explicit prefilter selection.
@@ -97,7 +99,9 @@ class mark_join {
             double load_factor,
             cudf::null_equality compare_nulls = cudf::null_equality::EQUAL,
             cudf::join_prefilter prefilter    = cudf::join_prefilter::NO,
-            rmm::cuda_stream_view stream      = cudf::get_default_stream());
+            rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+            cuda::mr::any_resource<cuda::mr::device_accessible> mr =
+              cudf::get_current_device_resource_ref());
 
   /**
    * @brief Returns left row indices that have at least one match in the right table.
