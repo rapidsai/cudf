@@ -394,9 +394,9 @@ class DataFrame:
         if replace_only and not self.column_names_set.issuperset(new.keys()):
             raise ValueError("Cannot replace with non-existing names")
         merged = self.column_map | new
-        # When the result has columns, the row count is derived from them (and the
-        # non-broadcast path deliberately allows mismatched lengths, so we must not
-        # force a num_rows here).
+        # Only pass num_rows for a zero-column result. For results with columns, it
+        # must remain None because HStack(should_broadcast=False) intentionally
+        # produces mismatched column lengths that its Select parent reconciles later.
         return type(self)(
             merged.values(),
             stream=stream,
