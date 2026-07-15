@@ -46,17 +46,17 @@ def engine(spmd_engine_factory) -> SPMDEngine:
     """Return an SPMD engine configured for join-domain prefilter tests."""
     return spmd_engine_factory(
         StreamingOptions(
-            join_domain_prefilter={"threshold": 0.5},
+            join_filter_pushdown={"threshold": 0.5},
             raise_on_fail=True,
         )
     )
 
 
 def make_config(
-    *, dynamic_planning: bool = True, join_domain_prefilter: bool = True
+    *, dynamic_planning: bool = True, join_filter_pushdown: bool = True
 ) -> ConfigOptions:
     executor_options: dict[str, Any] = {
-        "join_domain_prefilter": {"trace": False} if join_domain_prefilter else None
+        "join_filter_pushdown": {"trace": False} if join_filter_pushdown else None
     }
     if not dynamic_planning:
         executor_options["dynamic_planning"] = None
@@ -163,7 +163,7 @@ def test_domain_prefilter_can_be_disabled(
     optimized = optimize_join_domain_prefilters(
         root,
         StatsCollector(),
-        make_config(join_domain_prefilter=False),
+        make_config(join_filter_pushdown=False),
     )
 
     assert optimized is root

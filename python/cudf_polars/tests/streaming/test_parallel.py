@@ -97,7 +97,7 @@ def test_optimize_removes_cache_nodes() -> None:
     query = source.join(source, on="key", suffix="_right")
     engine = GPUEngine(
         executor="streaming",
-        executor_options={"join_domain_prefilter": None},
+        executor_options={"join_filter_pushdown": None},
     )
     ir = Translator(query._ldf.visit(), engine).translate_ir()
 

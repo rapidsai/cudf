@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 """
-Insert derived key-domain prefilters for streaming joins.
+Rewrite a plan, inserting prefilters in join DAGs.
 
 For a supported inner equijoin, this optimization tries to use the join-key
 values produced by one input to reduce the size of the other input before
@@ -345,7 +345,7 @@ def optimize_join_domain_prefilters(
     The rewrite is intentionally conservative: only inner joins with simple
     column equality keys are considered.
     """
-    options = config_options.executor.join_domain_prefilter
+    options = config_options.executor.join_filter_pushdown
     if options is None:
         return ir
     threshold = options.threshold

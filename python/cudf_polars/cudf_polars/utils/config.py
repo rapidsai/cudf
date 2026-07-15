@@ -54,7 +54,7 @@ __all__ = [
     "DaskContext",
     "DynamicPlanningOptions",
     "InMemoryExecutor",
-    "JoinDomainPrefilterOptions",
+    "JoinFilterPushdownOptions",
     "ParquetOptions",
     "RayContext",
     "SPMDContext",
@@ -363,8 +363,9 @@ class DynamicPlanningOptions:
         The maximum number of chunks to sample before making
         dynamic-planning decisions. Default is 2.
     join_prefilter_threshold
-        Row-count ratio (small / large) below which a join key prefilter is
-        applied. Set to 0 to disable join prefiltering. Default is 0.5.
+        Row-count ratio (small / large) below which one side of a join is
+        filtered by a bloom filter built from the other side before
+        performing the join. Set to 0 to disable. Default is 0.5.
     join_prefilter_max_key_columns
         Maximum number of columns from the join-key prefix to use for the
         prefilter. Set to ``None`` to use the full join-key list. Default is 1.
@@ -430,27 +431,34 @@ class DynamicPlanningOptions:
 
 
 @dataclasses.dataclass(frozen=True)
-class JoinDomainPrefilterOptions:
+class JoinFilterPushdownOptions:
     """
-    Configuration for the logical join-domain prefilter rewrite.
+    Configuration options for join filter pushdown in the logical plan.
 
-    Pass ``None`` to ``StreamingExecutor(join_domain_prefilter=...)`` to
+    When performing a join between two tables, it is often favourable
+    to pre-filter one side of the join with the keys (full or partial) of
+    the other side. This can reduce the size of tables that actually
+    participate in the join.
+
+    cudf-polars supports a form of this where we can rewrite inner joins by
+    selecting a side to be filtered by the keys of the other side.
+
+    Pass ``None`` to ``StreamingExecutor(join_filter_pushdown=...)`` to
     disable the rewrite.
 
     These options can be configured via environment variables with the prefix
-    ``CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER__``.
+    ``CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN__``.
 
     Parameters
     ----------
     threshold
-        Row-count ratio (domain / target) below which a derived key-domain
-        semi-join filter is inserted. Default is 0.5.
+        Row-count ratio (key-provider-rows / to-be-filtered-table-rows) below which a
+        filter on is inserted on the to-be-filtered table. Default is 0.5.
     trace
-        Whether to emit plan-time trace decisions for derived key-domain
-        prefilters. Default is False.
+        Whether to emit plan-time trace decisions for filter decisions. Default is False.
     """
 
-    _env_prefix = "CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER"
+    _env_prefix = "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN"
 
     threshold: float = dataclasses.field(
         default_factory=_make_default_factory(
@@ -740,9 +748,9 @@ class StreamingExecutor:
     dynamic_planning
         Options controlling dynamic shuffle planning. See
         :class:`~cudf_polars.utils.config.DynamicPlanningOptions` for more.
-    join_domain_prefilter
+    join_filter_pushdown
         Options controlling the logical join-domain prefilter rewrite. See
-        :class:`~cudf_polars.utils.config.JoinDomainPrefilterOptions` for more.
+        :class:`~cudf_polars.utils.config.JoinFilterPushdownOptions` for more.
         ``None`` disables the rewrite.
     max_io_threads
         Maximum number of IO threads. Default is 4.
@@ -813,8 +821,8 @@ class StreamingExecutor:
     dynamic_planning: DynamicPlanningOptions | None = dataclasses.field(
         default_factory=DynamicPlanningOptions
     )
-    join_domain_prefilter: JoinDomainPrefilterOptions | None = dataclasses.field(
-        default_factory=JoinDomainPrefilterOptions
+    join_filter_pushdown: JoinFilterPushdownOptions | None = dataclasses.field(
+        default_factory=JoinFilterPushdownOptions
     )
     max_io_threads: int = dataclasses.field(
         default_factory=_make_default_factory(
@@ -877,17 +885,17 @@ class StreamingExecutor:
                 DynamicPlanningOptions(**self.dynamic_planning),
             )
 
-        if isinstance(self.join_domain_prefilter, dict):
+        if isinstance(self.join_filter_pushdown, dict):
             object.__setattr__(
                 self,
-                "join_domain_prefilter",
-                JoinDomainPrefilterOptions(**self.join_domain_prefilter),
+                "join_filter_pushdown",
+                JoinFilterPushdownOptions(**self.join_filter_pushdown),
             )
-        if self.join_domain_prefilter is not None and not isinstance(
-            self.join_domain_prefilter, JoinDomainPrefilterOptions
+        if self.join_filter_pushdown is not None and not isinstance(
+            self.join_filter_pushdown, JoinFilterPushdownOptions
         ):
             raise TypeError(
-                "join_domain_prefilter must be a JoinDomainPrefilterOptions "
+                "join_filter_pushdown must be a JoinFilterPushdownOptions "
                 "instance, dict, or None"
             )
 
@@ -923,7 +931,7 @@ class StreamingExecutor:
         # to json and hash that.
         d = dataclasses.asdict(self)
         d["dynamic_planning"] = json.dumps(d["dynamic_planning"])
-        d["join_domain_prefilter"] = json.dumps(d["join_domain_prefilter"])
+        d["join_filter_pushdown"] = json.dumps(d["join_filter_pushdown"])
 
         # Hash the quent context UUIDs as ints
         quent_context = d["quent_context"]
@@ -1059,16 +1067,16 @@ class ConfigOptions(Generic[ExecutorType]):
                     if not _bool_converter(env_dynamic_planning):
                         user_executor_options["dynamic_planning"] = None
 
-                # Handle join_domain_prefilter: check user config, then env var
-                user_join_domain_prefilter = user_executor_options.get(
-                    "join_domain_prefilter", None
+                # Handle join_filter_pushdown: check user config, then env var
+                user_join_filter_pushdown = user_executor_options.get(
+                    "join_filter_pushdown", None
                 )
-                if user_join_domain_prefilter is None:
-                    env_join_domain_prefilter = os.environ.get(
-                        "CUDF_POLARS__EXECUTOR__JOIN_DOMAIN_PREFILTER", "1"
+                if user_join_filter_pushdown is None:
+                    env_join_filter_pushdown = os.environ.get(
+                        "CUDF_POLARS__EXECUTOR__JOIN_FILTER_PUSHDOWN", "1"
                     )
-                    if not _bool_converter(env_join_domain_prefilter):
-                        user_executor_options["join_domain_prefilter"] = None
+                    if not _bool_converter(env_join_filter_pushdown):
+                        user_executor_options["join_filter_pushdown"] = None
 
                 executor = StreamingExecutor(**user_executor_options)
             case _:  # pragma: no cover; Unreachable

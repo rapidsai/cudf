@@ -83,9 +83,9 @@ def test_executor_options_sink_to_directory_absent_when_unspecified() -> None:
     assert "sink_to_directory" not in StreamingOptions().to_executor_options()
 
 
-def test_executor_options_join_domain_prefilter_disabled() -> None:
-    result = StreamingOptions(join_domain_prefilter=None).to_executor_options()
-    assert result["join_domain_prefilter"] is None
+def test_executor_options_join_filter_pushdown_disabled() -> None:
+    result = StreamingOptions(join_filter_pushdown=None).to_executor_options()
+    assert result["join_filter_pushdown"] is None
 
 
 # ---------------------------------------------------------------------------
