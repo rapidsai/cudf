@@ -510,6 +510,7 @@ def evaluate_with_prefetch(
     *,
     context: IRExecutionContext,
 ) -> DataFrame:
+    """Evaluate a scan using parquet byte ranges prefetched into pinned host memory."""
     prefetched: PrefetchedByteRanges | None = prefetcher.get(task_idx)
     if prefetched is None:
         return scan.do_evaluate(*scan._non_child_args, context=context)

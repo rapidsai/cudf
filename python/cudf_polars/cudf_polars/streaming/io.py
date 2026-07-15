@@ -210,7 +210,7 @@ def expand_scan_for_rank(
 
 @dataclasses.dataclass
 class PrefetchedByteRanges:
-    """Prefetched I/O state for a single SplitScan task."""
+    """Prefetched byte ranges and pinned host buffers for a single scan task."""
 
     row_group_indices: list[int]
     filter_ranges: list[plc.io.text.ByteRangeInfo]
@@ -219,9 +219,21 @@ class PrefetchedByteRanges:
     payload_host: memoryview | None
     filter_futures: list[IOFuture]
     payload_futures: list[IOFuture]
-    error: BaseException | None = None
     filter_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
     payload_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
+
+    @classmethod
+    def empty(cls) -> PrefetchedByteRanges:
+        """Return a fully-pruned split with no rows to read."""
+        return cls(
+            row_group_indices=[],
+            filter_ranges=[],
+            payload_ranges=[],
+            filter_host=None,
+            payload_host=None,
+            filter_futures=[],
+            payload_futures=[],
+        )
 
     def release(self) -> None:
         """Release pinned host memory reservations after the H2D copy completes."""
@@ -415,6 +427,7 @@ def _evaluate_split_prefetched(
         stream=stream,
     )
     assert plc_filter is not None
+    assert scan.cached_parquet_info is not None
     return _read_with_hybrid_scan(
         scan.schema,
         scan.paths,
@@ -422,7 +435,7 @@ def _evaluate_split_prefetched(
         plc_filter,
         prefetched.row_group_indices,
         stream,
-        scan.cached_parquet_info[0],  # type: ignore[index]
+        scan.cached_parquet_info[0],
         split_index=scan.split_index,
         total_splits=scan.total_splits,
         stats_pruning=False,

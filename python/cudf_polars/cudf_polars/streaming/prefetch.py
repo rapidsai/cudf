@@ -7,7 +7,8 @@ from __future__ import annotations
 import asyncio
 import ctypes
 import threading
-from typing import TYPE_CHECKING, Any
+from concurrent.futures import Future
+from typing import TYPE_CHECKING
 
 import pylibcudf as plc
 from rapidsmpf.memory.buffer import MemoryType
@@ -20,14 +21,12 @@ from cudf_polars.dsl.to_ast import to_parquet_filter
 from cudf_polars.streaming.io import PrefetchedByteRanges, _fetch_byte_ranges
 
 if TYPE_CHECKING:
-    import kvikio.cufile
+    from kvikio.cufile import CuFile, IOFuture
+    from kvikio.remote_file import RemoteFile
 
     from rapidsmpf.streaming.core.context import Context
 
     from cudf_polars.streaming.io import SplitScan
-
-
-UNSET: Any = object()
 
 
 class PinnedBuffer:
@@ -59,13 +58,13 @@ class PinnedBuffer:
 
 
 def pread_ranges(
-    handle: Any,
+    handle: CuFile | RemoteFile,
     ranges: list[plc.io.text.ByteRangeInfo],
     pinned_mr: PinnedMemoryResource,
     stream: Stream,
     context: Context,
     loop: asyncio.AbstractEventLoop,
-) -> tuple[memoryview | None, list[kvikio.cufile.IOFuture], PinnedBuffer | None]:
+) -> tuple[memoryview | None, list[IOFuture], PinnedBuffer | None]:
     """Issue concurrent async reads for each range into a single pinned host buffer."""
     total = sum(r.size for r in ranges)
     if not total:
@@ -153,15 +152,7 @@ def prefetch_split(
             )
 
     if not row_group_indices:
-        return PrefetchedByteRanges(
-            row_group_indices=[],
-            filter_ranges=[],
-            payload_ranges=[],
-            filter_host=None,
-            payload_host=None,
-            filter_futures=[],
-            payload_futures=[],
-        )
+        return PrefetchedByteRanges.empty()
 
     filter_ranges = reader.filter_column_chunks_byte_ranges(row_group_indices, options)
     payload_ranges = reader.payload_column_chunks_byte_ranges(row_group_indices, options)
@@ -211,8 +202,7 @@ class HybridScanPrefetcher:
         self.pinned_mr = pinned_mr
         self.context = context
         self.loop = asyncio.get_running_loop()
-        self.results: list[Any] = [UNSET] * len(scans)
-        self.events: list[threading.Event] = [threading.Event() for _ in scans]
+        self.futures: list[Future[PrefetchedByteRanges | None]] = [Future() for _ in scans]
 
         worker_tasks: list[list[tuple[int, SplitScan]]] = [[] for _ in range(num_workers)]
         for task_idx, scan in enumerate(scans):
@@ -237,32 +227,12 @@ class HybridScanPrefetcher:
         stream = Stream()
         for task_idx, scan in tasks:
             try:
-                result: PrefetchedByteRanges | None = prefetch_split(
-                    scan, stream, self.pinned_mr, self.context, self.loop
+                self.futures[task_idx].set_result(
+                    prefetch_split(scan, stream, self.pinned_mr, self.context, self.loop)
                 )
-            except BaseException as exc:
-                result = PrefetchedByteRanges(
-                    row_group_indices=[],
-                    filter_ranges=[],
-                    payload_ranges=[],
-                    filter_host=None,
-                    payload_host=None,
-                    filter_futures=[],
-                    payload_futures=[],
-                    error=exc,
-                )
-            self.results[task_idx] = result
-            self.events[task_idx].set()
+            except Exception as exc:
+                self.futures[task_idx].set_exception(exc)
 
     def get(self, task_idx: int) -> PrefetchedByteRanges | None:
         """Block until task_idx's prefetch result is ready and return it."""
-        self.events[task_idx].wait()
-        result = self.results[task_idx]
-        if isinstance(result, PrefetchedByteRanges) and result.error is not None:
-            raise result.error
-        return result  # type: ignore[return-value]
-
-    def shutdown(self) -> None:
-        """Join all worker threads (non-blocking; workers are daemon threads)."""
-        for t in self.threads:
-            t.join(timeout=0)
+        return self.futures[task_idx].result()
