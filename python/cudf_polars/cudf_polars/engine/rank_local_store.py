@@ -11,7 +11,6 @@ owning engine.
 
 from __future__ import annotations
 
-import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -124,28 +123,21 @@ class RankLocalStore:
 
 # The process-global set of per-engine stores, keyed by uid
 _stores: dict[str, RankLocalStore] = {}
-_stores_lock = threading.Lock()
 
 
 def open_store(uid: str) -> RankLocalStore:
     """Return this engine's store on the current process, creating it if absent."""
-    with _stores_lock:
-        store = _stores.get(uid)
-        if store is None:
-            store = _stores[uid] = RankLocalStore()
-        return store
+    return _stores.setdefault(uid, RankLocalStore())
 
 
 def require_store(uid: str) -> RankLocalStore:
     """Return this engine's store; raise :class:`KeyError` if it has been closed."""
-    with _stores_lock:
-        return _stores[uid]
+    return _stores[uid]
 
 
 def close_store(uid: str) -> None:
     """Drop this engine's store on the current process (idempotent)."""
-    with _stores_lock:
-        _stores.pop(uid, None)
+    _stores.pop(uid, None)
 
 
 def close_all() -> None:
@@ -155,13 +147,11 @@ def close_all() -> None:
     For a process dedicated to a single engine (a Ray actor), this is equivalent
     to :func:`close_store` for that engine but needs no uid.
     """
-    with _stores_lock:
-        _stores.clear()
+    _stores.clear()
 
 
 def drop_query(uid: str, query_id: uuid.UUID) -> None:
     """Drop ``query_id`` from this engine's store, if the store still exists."""
-    with _stores_lock:
-        store = _stores.get(uid)
+    store = _stores.get(uid)
     if store is not None:
         store.drop(query_id)
