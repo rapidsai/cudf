@@ -15,7 +15,7 @@ from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
 from cudf_polars.streaming.base import StatsCollector
-from cudf_polars.streaming.join_domain_prefilter import (
+from cudf_polars.streaming.join_filter_pushdown import (
     CompositeCandidate,
     Decision,
     PlanFacts,

@@ -117,7 +117,7 @@ def optimize_with_stats(
     IR
         The optimized IR graph.
     """
-    from cudf_polars.streaming.join_domain_prefilter import (
+    from cudf_polars.streaming.join_filter_pushdown import (
         optimize_join_domain_prefilters,
     )
 
