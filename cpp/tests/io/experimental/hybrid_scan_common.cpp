@@ -250,7 +250,7 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
 
     auto const dict_page_ranges_per_source =
       group_byte_ranges_by_source(dict_pages, inputs.datasources.size());
-    auto [dict_page_buffers, dict_page_data_per_source, task] =
+    [[maybe_unused]] auto [dict_page_buffers, dict_page_data_per_source, task] =
       cudf::io::parquet::fetch_byte_ranges_to_device_async(
         inputs.datasource_refs, dict_page_ranges_per_source, stream, mr);
     task.get();
@@ -268,7 +268,7 @@ auto filter_row_groups_with_dictionaries_impl(InputType& inputs,
       reader.secondary_filters_byte_ranges(row_group_indices, options).second;
     CUDF_EXPECTS(dict_page_byte_ranges.size() > 0, "No dictionary page byte ranges found");
 
-    auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
+    [[maybe_unused]] auto [dict_page_buffers, dict_page_data, dict_page_tasks] =
       cudf::io::parquet::fetch_byte_ranges_to_device_async(
         inputs, dict_page_byte_ranges, stream, mr);
     dict_page_tasks.get();
