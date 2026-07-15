@@ -584,6 +584,7 @@ void host_decompress(compression_type compression,
     h_results[i] = {tasks[i].get(), codec_status::SUCCESS};
   }
 
+  cudf::detail::join_streams(streams, stream);
   cudf::detail::cuda_memcpy<codec_exec_result>(results, h_results, stream);
 }
 
