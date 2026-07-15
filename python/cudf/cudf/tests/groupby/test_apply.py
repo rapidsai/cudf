@@ -745,6 +745,47 @@ def test_groupby_apply_return_series_dataframe(func, args):
     assert_groupby_results_equal(expected, actual)
 
 
+def test_groupby_apply_series_results_misaligned_lengths():
+    # Series results whose per-group lengths differ from their input are
+    # concatenated with the group keys as the outer index level, each key
+    # repeated by its chunk's actual length, keeping the UDF-returned
+    # index as the inner level (pandas GH8467) -- even when the total
+    # output length coincides with len(df) (2 + 3 == 3 + 2 here).
+    pdf = pd.DataFrame({"k": [1, 1, 2, 2, 2], "v": [10, 20, 30, 40, 50]})
+    gdf = cudf.from_pandas(pdf)
+
+    def make_swap_sizes(series_type):
+        # group 1 has 2 rows -> 3 outputs; group 2 has 3 rows -> 2 outputs
+        def swap_sizes(g):
+            if len(g) == 2:
+                return series_type([1, 2, 3])
+            return series_type([4, 5])
+
+        return swap_sizes
+
+    expected = pdf.groupby("k").apply(make_swap_sizes(pd.Series))
+    actual = gdf.groupby("k").apply(make_swap_sizes(cudf.Series))
+    assert_eq(expected, actual)
+
+
+def test_groupby_apply_series_results_fresh_index():
+    # Per-group result lengths match the input, but the UDF rewrote the
+    # index: the UDF-returned index is kept as the inner level rather
+    # than the input rows' original labels.
+    pdf = pd.DataFrame({"k": [1, 1, 2, 2, 2], "v": [10, 20, 30, 40, 50]})
+    gdf = cudf.from_pandas(pdf)
+
+    def make_fresh_index(series_type):
+        def fresh_index(g):
+            return series_type(range(len(g)))
+
+        return fresh_index
+
+    expected = pdf.groupby("k").apply(make_fresh_index(pd.Series))
+    actual = gdf.groupby("k").apply(make_fresh_index(cudf.Series))
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "pdf",
     [pd.DataFrame(), pd.DataFrame({"a": []}), pd.Series([], dtype="float64")],

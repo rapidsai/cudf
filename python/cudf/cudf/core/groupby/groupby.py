@@ -2503,22 +2503,15 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index.names = self.grouping.names
                 if len(names) == 1:
                     result._data._level_names = (next(iter(names)),)
-            elif sum(len(chk) for chk in chunk_results) == len(self.obj):
-                # transform-like UDF: one output row per input row
-                result = concat(chunk_results)
-                index_data = group_keys._data.copy(deep=True)
-                inner_name = grouped_values.index.name
-                index_data[None] = grouped_values.index._column
-                mi = MultiIndex._from_data(index_data)
-                # ColumnAccessor keys must be unique, so the inner
-                # level's name (which may duplicate a key name) is
-                # restored after construction.
-                mi.names = [*mi.names[:-1], inner_name]
-                result.index = mi
             else:
                 # pandas GH8467: Series results with differing indexes are
                 # concatenated along axis 0 into a Series with the group
-                # keys prepended as the outer index level(s).
+                # keys prepended as the outer index level(s), each key
+                # repeated by its chunk's actual length and the UDF-returned
+                # index kept as the inner level
+                # (GroupBy._concat_objects with ``not_indexed_same=True``).
+                # This also covers transform-like UDFs: chunks indexed like
+                # their input concatenate back to the grouped input's index.
                 lengths = [len(chk) for chk in chunk_results]
                 result = concat(chunk_results)
                 gather = as_column(
@@ -2600,8 +2593,6 @@ class GroupBy(Serializable, Reducible, Scannable):
         include_groups : bool, default False
             Only ``False`` is accepted (matching pandas 3.0, where
             ``include_groups=True`` raises a ``ValueError``).
-            When True, will attempt to apply ``func`` to the groupings in
-            the case that they are columns of the DataFrame.
         kwargs : dict
             Optional keyword arguments to pass to the function.
             Currently not supported

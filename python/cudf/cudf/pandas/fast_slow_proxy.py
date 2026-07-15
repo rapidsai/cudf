@@ -1411,7 +1411,10 @@ def _transform_arg(
             # _replace_closurevars' unchanged-check so the original
             # function object is never passed through.
             return arg
-        return type(arg)(transformed_list)
+        # Pass an iterator rather than the materialized list so list
+        # subclasses see the same non-list iterable constructor argument
+        # they always received here.
+        return type(arg)(iter(transformed_list))
     elif isinstance(arg, tuple):
         # This attempts to handle arbitrary subclasses of tuple by
         # assuming that if you've subclassed tuple with some special
@@ -1448,9 +1451,19 @@ def _transform_arg(
                     )
                 )
             else:
-                return tuple(
+                transformed_tuple = [
                     _transform_arg(a, attribute_name, seen) for a in arg
-                )
+                ]
+                if all(
+                    new is old
+                    for new, old in zip(transformed_tuple, arg, strict=True)
+                ):
+                    # No element needed transforming: return the original
+                    # tuple (immutable, so this is safe) so containers
+                    # enclosing it also keep their identity (see the list
+                    # branch above).
+                    return arg
+                return tuple(transformed_tuple)
         elif hasattr(arg, "__getnewargs_ex__"):
             # Partial implementation of to reconstruct with
             # transformed pieces
