@@ -19,13 +19,16 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @file
+ * @brief APIs for reading and writing ORC files.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io {
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief APIs for reading and writing ORC files.
  */
 
 constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;  ///< 64MB default orc stripe size
@@ -595,7 +598,6 @@ class chunked_orc_reader {
 /**
  * @addtogroup io_writers
  * @{
- * @file
  */
 
 /**

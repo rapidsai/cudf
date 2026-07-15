@@ -16,13 +16,16 @@
 #include <memory>
 #include <string_view>
 
+/**
+ * @file
+ * @brief Utilities for Parquet VARIANT columns read as `struct` of `list<uint8>` children.
+ */
+
 namespace CUDF_EXPORT cudf {
 namespace io::parquet::experimental {
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief Utilities for Parquet VARIANT columns read as `struct` of `list<uint8>` children.
  */
 
 /**
