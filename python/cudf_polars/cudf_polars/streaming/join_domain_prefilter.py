@@ -736,11 +736,12 @@ def _smallest_node_containing_all(
             lineage.source_child_index != source_child_index for lineage in lineages[1:]
         ):
             break
-        sources = [lineage.source for lineage in lineages]
-        if any(source is None for source in sources):
+        sources = [lineage.source for lineage in lineages if lineage.source is not None]
+        if len(sources) != len(lineages):
+            # Some sources are None
             break
         path = (*path, source_child_index)
-        lineages = [source for source in sources if source is not None]
+        lineages = sources
     if not candidates:
         return None
     return min(candidates, key=lambda item: (item[0], item[1]))[2]
