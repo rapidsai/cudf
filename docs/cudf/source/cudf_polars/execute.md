@@ -10,9 +10,8 @@ raised as an error instead. See {doc}`options`.
 
 [`LazyFrame.collect`](https://docs.pola.rs/api/python/stable/reference/lazyframe/api/polars.LazyFrame.collect.html)
 runs a query on the GPU and then copies the
-full result back to host memory as a `pl.DataFrame`. When you want to run
-several queries in sequence, or hand a result to another query, that host
-round-trip is pure overhead: the data leaves the GPU only to be copied back again.
+full result back to host memory as a `pl.DataFrame`. When you want to use this
+result as the input to a subsequent query that will also execute on the GPU, this copy to host is unnecessary and necessitates a subsequent copy back to the GPU.
 
 `engine.execute()` avoids that overhead. It runs the query and returns a
 {class}`~cudf_polars.engine.persisted_result.PersistedQueryResult` whose
