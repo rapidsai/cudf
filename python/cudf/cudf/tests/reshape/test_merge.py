@@ -1520,3 +1520,18 @@ def test_merge_invalid_input(param):
         left.merge(param)
     with pytest.raises(TypeError):
         cudf.merge(left["a"], param)
+
+
+def test_left_merge_empty_right_preserves_key_dtype():
+    # The int64 key must not be promoted to float64 when the right side
+    # is an empty float64 column, matching pandas.
+    left = cudf.DataFrame({"key": [1], "value": [2]})
+    right = cudf.DataFrame({"key": []})
+
+    pleft = left.to_pandas()
+    pright = right.to_pandas()
+
+    assert_eq(
+        cudf.merge(left, right, on="key", how="left"),
+        pd.merge(pleft, pright, on="key", how="left"),
+    )

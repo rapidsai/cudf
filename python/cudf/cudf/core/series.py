@@ -57,6 +57,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
     doc_reset_index_template,
 )
+from cudf.core.mixins import NoNewAttributesMixin
 from cudf.core.resample import SeriesResampler
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.core.udf.scalar_function import SeriesApplyKernel
@@ -70,6 +71,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
+    is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
@@ -301,12 +303,19 @@ class _SeriesLocIndexer(_FrameIndexer):
                 row_arg = (arg,)
             else:
                 row_arg = arg
-            result = self._frame.index._get_row_major(self._frame, row_arg)
+            result = self._frame.index._get_row_major(
+                self._frame, row_arg, per_level=True
+            )
             if (
                 isinstance(arg, tuple)
                 and len(arg) == self._frame.index.nlevels
-                and not any(isinstance(x, slice) for x in arg)
+                and all(is_scalar(x) for x in arg)
+                and len(result) == 1
             ):
+                # Only collapse to a scalar when every level was selected by a
+                # scalar label and the key matched exactly one row; a tuple
+                # containing list-likes/slices, or a scalar key matching
+                # multiple rows of a non-unique MultiIndex, must stay a Series.
                 result = result.iloc[0]
             return result
         try:
@@ -3473,6 +3482,23 @@ class Series(SingleColumnFrame, IndexedFrame):
         if return_scalar:
             return result
 
+        if (
+            is_pandas_nullable_numpy_dtype(self.dtype)
+            and self.dtype.kind in "iu"
+            and self._column.null_count
+        ):
+            # pandas keeps the masked integer dtype for quantile when the
+            # input has missing values: an all-NA input stays the integer
+            # dtype (all NA), and an otherwise all-integral result is cast
+            # back to the integer dtype (a fractional result stays Float64).
+            if self._column.null_count == len(self._column):
+                result = result.astype(self.dtype)
+            elif (
+                result.astype(self.dtype.numpy_dtype).astype(result.dtype)
+                == result
+            ).all():
+                result = result.astype(self.dtype)
+
         return Series._from_column(
             result,
             name=self.name,
@@ -4019,13 +4045,14 @@ for binop in (
     setattr(Series, binop, make_binop_func(binop))
 
 
-class BaseDatelikeProperties:
+class BaseDatelikeProperties(NoNewAttributesMixin):
     """
     Base accessor class for Series values.
     """
 
     def __init__(self, series: Series):
         self.series = series
+        self._freeze()
 
     def _return_result_like_self(self, column: ColumnBase) -> Series:
         """Return the method result like self.series"""
@@ -4393,10 +4420,14 @@ class DatetimeProperties(BaseDatelikeProperties):
         dtype: int16
         """
         res = self.series._column.weekday
-        # Pandas returns int64 for weekday
-        res = res.astype(
-            get_dtype_of_same_kind(self.series.dtype, np.dtype("int64"))
+        # Pandas returns int32 for numpy-backed dayofweek/day_of_week but
+        # int64 for the pyarrow-backed (ArrowDtype) variant.
+        target = (
+            np.dtype("int64")
+            if isinstance(self.series.dtype, pd.ArrowDtype)
+            else np.dtype("int32")
         )
+        res = res.astype(get_dtype_of_same_kind(self.series.dtype, target))
         return self._return_result_like_self(res)
 
     day_of_week = dayofweek
@@ -5327,7 +5358,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.seconds)
+        res = self.series._column.seconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
@@ -5359,7 +5393,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234000
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.microseconds)
+        res = self.series._column.microseconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
@@ -5391,7 +5428,10 @@ class TimedeltaProperties(BaseDatelikeProperties):
         4    234
         dtype: int64
         """
-        return self._return_result_like_self(self.series._column.nanoseconds)
+        res = self.series._column.nanoseconds.astype(
+            get_dtype_of_same_kind(self.series.dtype, np.dtype("int32"))
+        )
+        return self._return_result_like_self(res)
 
     @property
     @_performance_tracking
