@@ -134,9 +134,7 @@ def prefetch_split(
         options.set_column_names(scan.base_scan.with_columns)
     options.set_filter(plc_filter)
 
-    reader = plc.io.experimental.HybridScanReader.from_metadata(
-        cached_info[0].hybrid_scan_metadata(options)
-    )
+    reader = cached_info[0].hybrid_scan_reader(id(scan.base_scan), options)
 
     if scan.parquet_options.hybrid_scan_stats_pruning:
         row_group_indices = reader.filter_row_groups_with_stats(

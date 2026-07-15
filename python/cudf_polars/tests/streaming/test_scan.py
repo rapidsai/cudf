@@ -479,6 +479,7 @@ def test_split_scan_do_evaluate_missing_prefetch_metadata() -> None:
             None,
             None,
             parquet_options,
+            0,
             [],
             context=context,
         )

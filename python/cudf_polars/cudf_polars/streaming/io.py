@@ -278,6 +278,7 @@ def _read_with_hybrid_scan(
     row_group_indices: list[int],
     stream: Stream,
     cached_info: CachedParquetInfo,
+    base_scan_id: int,
     *,
     split_index: int = 0,
     total_splits: int = 1,
@@ -301,11 +302,7 @@ def _read_with_hybrid_scan(
             options.set_column_names(with_columns)
         options.set_filter(plc_filter)
 
-        # Borrow the shared, pre-parsed metadata (built once per file) so each
-        # split does not re-parse and copy the file metadata.
-        reader = plc.io.experimental.HybridScanReader.from_metadata(
-            cached_info.hybrid_scan_metadata(options)
-        )
+        reader = cached_info.hybrid_scan_reader(base_scan_id, options)
 
         if stats_pruning:
             row_group_indices = reader.filter_row_groups_with_stats(
@@ -436,6 +433,7 @@ def _evaluate_split_prefetched(
         prefetched.row_group_indices,
         stream,
         scan.cached_parquet_info[0],
+        id(scan.base_scan),
         split_index=scan.split_index,
         total_splits=scan.total_splits,
         stats_pruning=False,
@@ -470,7 +468,7 @@ class SplitScan(IR):
         "total_splits",
         "parquet_options",
     )
-    _n_non_child_args = 13
+    _n_non_child_args = 14
     base_scan: Scan
     """Scan operation this node is based on."""
     paths: list[str]
@@ -512,6 +510,7 @@ class SplitScan(IR):
             base_scan.include_file_paths,
             base_scan.predicate,
             parquet_options,
+            id(base_scan),
             cached_parquet_info,
         )
         self.parquet_options = parquet_options
@@ -550,6 +549,7 @@ class SplitScan(IR):
         include_file_paths: str | None,
         predicate: NamedExpr | None,
         parquet_options: ParquetOptions,
+        base_scan_id: int,
         cached_parquet_info: list[CachedParquetInfo] | None,
         *,
         context: IRExecutionContext,
@@ -630,6 +630,7 @@ class SplitScan(IR):
                         list(range(skip_rgs, end_rg)),
                         stream,
                         cached_parquet_info[0],
+                        base_scan_id,
                         split_index=split_index,
                         total_splits=total_splits,
                         stats_pruning=parquet_options.hybrid_scan_stats_pruning,

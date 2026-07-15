@@ -47,26 +47,50 @@ class CachedParquetInfo:
     path: str
     size: int | None
     file_metadata: plc.io.parquet_metadata.FileMetaData
-    # Shared, pre-parsed hybrid-scan metadata, built once per file and borrowed by
-    # all of the file's SplitScans. Excluded from identity so it never affects hashing.
-    _hybrid_scan_metadata: list[plc.io.experimental.HybridScanMetadata] = field(
-        default_factory=list, compare=False, repr=False
+    # Keyed by id(base_scan): otherwise we cannot distinguish two Scan nodes
+    # that reference the same file but carry different predicates or column
+    # selections. Splits of the same Scan share a single entry. compare=False
+    # excludes them from equality and hashing so two instances for the same
+    # file compare equal regardless of cache state.
+    # We separate metadata from reader so that when we support multi-file
+    # FusedScans we can build a multi-file reader instance the files for
+    # whcih that FusedScan is responsible.
+    _hybrid_scan_metadata: dict[int, plc.io.experimental.HybridScanMetadata] = field(
+        default_factory=dict, compare=False, repr=False
     )
-    # Shared kvikio handle opened once per file for the prefetch pipeline.
-    # Excluded from identity so it never affects hashing.
+    _hybrid_scan_readers: dict[int, plc.io.experimental.HybridScanReader] = field(
+        default_factory=dict, compare=False, repr=False
+    )
     _remote_handle: list[Any] = field(default_factory=list, compare=False, repr=False)
 
     def hybrid_scan_metadata(
-        self, options: plc.io.parquet.ParquetReaderOptions
+        self,
+        base_scan_id: int,
+        options: plc.io.parquet.ParquetReaderOptions,
     ) -> plc.io.experimental.HybridScanMetadata:
-        """Return the shared hybrid-scan metadata, parsing it once per file."""
-        if not self._hybrid_scan_metadata:
-            self._hybrid_scan_metadata.append(
-                plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
-                    self.file_metadata, options
-                )
+        """Return a HybridScanMetadata shared across splits of the same Scan node."""
+        metadata = self._hybrid_scan_metadata.get(base_scan_id)
+        if metadata is None:
+            metadata = plc.io.experimental.HybridScanMetadata.from_parquet_metadata(
+                self.file_metadata, options
             )
-        return self._hybrid_scan_metadata[0]
+            self._hybrid_scan_metadata.setdefault(base_scan_id, metadata)
+            metadata = self._hybrid_scan_metadata[base_scan_id]
+        return metadata
+
+    def hybrid_scan_reader(
+        self,
+        base_scan_id: int,
+        options: plc.io.parquet.ParquetReaderOptions,
+    ) -> plc.io.experimental.HybridScanReader:
+        """Return a HybridScanReader shared across splits of the same Scan node."""
+        reader = self._hybrid_scan_readers.get(base_scan_id)
+        if reader is None:
+            metadata = self.hybrid_scan_metadata(base_scan_id, options)
+            reader = plc.io.experimental.HybridScanReader.from_metadata(metadata)
+            self._hybrid_scan_readers.setdefault(base_scan_id, reader)
+            reader = self._hybrid_scan_readers[base_scan_id]
+        return reader
 
     def remote_handle(self) -> Any:
         """Return the kvikio handle for this file."""
