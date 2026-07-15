@@ -513,7 +513,7 @@ async def _adjust_ordering_impl(
     ch_in: Channel[TableChunk],
     input_ordering: Ordering,
     output_ordering: Ordering,
-    collective_id: int | None,
+    collective_id: int,
 ) -> None:
     """Adjust ordering while using exchange only for remote dependencies."""
     output_boundaries = output_ordering.get_boundaries(context.br())
@@ -524,7 +524,6 @@ async def _adjust_ordering_impl(
 
     exchange = None
     if plan.remote_sources or plan.remote_destinations:
-        assert collective_id is not None
         exchange = SparseAlltoall(
             context,
             comm,
@@ -629,7 +628,7 @@ async def adjust_ordering(
     input_ordering: Ordering,
     output_ordering: Ordering,
     *,
-    collective_id: int | None = None,
+    collective_id: int,
 ) -> None:
     """
     Adjust Ordering boundaries using contiguous partition ownership.
@@ -662,13 +661,10 @@ async def adjust_ordering(
     metadata. Input rows are assumed to be globally ordered by ``input_ordering``;
     sortedness is not checked here.
 
-    The current implementation assumes contiguous partition ownership, strict
+    The current implementation requires contiguous partition ownership, strict
     output boundaries, and output keys that are a prefix of the input keys.
     """
     _validate_orderings(input_ordering, output_ordering)
-
-    if comm.nranks > 1 and collective_id is None:
-        raise ValueError("collective_id is required when comm.nranks > 1.")
 
     try:
         await _adjust_ordering_impl(

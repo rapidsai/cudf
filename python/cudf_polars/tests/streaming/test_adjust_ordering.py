@@ -119,7 +119,7 @@ async def _adjust_and_collect(
     input_ordering: Ordering,
     output_ordering: Ordering,
     *,
-    collective_id: int | None = None,
+    collective_id: int,
 ) -> dict[int, pl.DataFrame]:
     """Run adjustment and collect output chunks by partition ID."""
     ch_in = context.create_channel()
@@ -190,7 +190,7 @@ async def _adjust_direct(
     input_ordering: Ordering,
     output_ordering: Ordering,
     *,
-    collective_id: int | None = None,
+    collective_id: int,
 ) -> None:
     ch_in = context.create_channel()
     ch_out = context.create_channel()
@@ -238,27 +238,16 @@ def test_adjust_ordering_rejects_invalid_orderings(
         stream=stream,
     )
 
-    with pytest.raises(err, match=match):
+    with pytest.raises(err, match=match), reserve_op_id() as op_id:
         asyncio.run(
-            _adjust_direct(context, spmd_engine.comm, input_ordering, output_ordering)
+            _adjust_direct(
+                context,
+                spmd_engine.comm,
+                input_ordering,
+                output_ordering,
+                collective_id=op_id,
+            )
         )
-
-
-@pytest.mark.spmd
-def test_adjust_ordering_requires_collective_id(
-    spmd_engine: SPMDEngine,
-) -> None:
-    context = spmd_engine.context
-    comm = spmd_engine.comm
-    if comm.nranks == 1:
-        pytest.skip("collective_id is only required for multi-rank runs.")
-
-    stream = context.br().stream_pool.get_stream()
-    input_ordering = _make_ordering(context, 4, stream=stream)
-    output_ordering = _make_ordering(context, 4, stream=stream)
-
-    with pytest.raises(ValueError, match="collective_id"):
-        asyncio.run(_adjust_direct(context, comm, input_ordering, output_ordering))
 
 
 @pytest.mark.spmd
@@ -468,7 +457,7 @@ def test_adjust_ordering_all_empty_input(spmd_engine: SPMDEngine) -> None:
         if pid * comm.nranks // output_npartitions == comm.rank
     }
 
-    if comm.nranks == 1:
+    with reserve_op_id() as op_id:
         output = asyncio.run(
             _adjust_and_collect(
                 context,
@@ -476,20 +465,9 @@ def test_adjust_ordering_all_empty_input(spmd_engine: SPMDEngine) -> None:
                 _frame([]),
                 input_ordering,
                 output_ordering,
+                collective_id=op_id,
             )
         )
-    else:
-        with reserve_op_id() as op_id:
-            output = asyncio.run(
-                _adjust_and_collect(
-                    context,
-                    comm,
-                    _frame([]),
-                    input_ordering,
-                    output_ordering,
-                    collective_id=op_id,
-                )
-            )
 
     _assert_partition_output(output, expected)
 
@@ -502,7 +480,7 @@ def test_adjust_ordering_all_empty_input(spmd_engine: SPMDEngine) -> None:
         (0, {0: [], 1: list(range(8))}),
     ],
 )
-def test_adjust_ordering_single_rank_no_collective(
+def test_adjust_ordering_single_rank(
     spmd_engine: SPMDEngine,
     target_boundary: int,
     expected: _ExpectedPartitions,
@@ -515,15 +493,17 @@ def test_adjust_ordering_single_rank_no_collective(
     stream = context.br().stream_pool.get_stream()
     input_ordering = _make_ordering(context, 4, stream=stream)
     output_ordering = _make_ordering(context, target_boundary, stream=stream)
-    output_by_pid = asyncio.run(
-        _adjust_and_collect(
-            context,
-            comm,
-            _frame(list(range(8))),
-            input_ordering,
-            output_ordering,
+    with reserve_op_id() as op_id:
+        output_by_pid = asyncio.run(
+            _adjust_and_collect(
+                context,
+                comm,
+                _frame(list(range(8))),
+                input_ordering,
+                output_ordering,
+                collective_id=op_id,
+            )
         )
-    )
 
     _assert_partition_output(output_by_pid, expected)
 
@@ -538,15 +518,17 @@ def test_adjust_ordering_multi_chunk_input(spmd_engine: SPMDEngine) -> None:
     stream = context.br().stream_pool.get_stream()
     input_ordering = _make_ordering(context, 4, stream=stream)
     output_ordering = _make_ordering(context, 4, stream=stream)
-    output = asyncio.run(
-        _adjust_and_collect(
-            context,
-            comm,
-            [_frame([0, 1]), _frame([2, 3, 4, 5]), _frame([6, 7]), _frame([])],
-            input_ordering,
-            output_ordering,
+    with reserve_op_id() as op_id:
+        output = asyncio.run(
+            _adjust_and_collect(
+                context,
+                comm,
+                [_frame([0, 1]), _frame([2, 3, 4, 5]), _frame([6, 7]), _frame([])],
+                input_ordering,
+                output_ordering,
+                collective_id=op_id,
+            )
         )
-    )
 
     _assert_partition_output(output, {0: [0, 1, 2, 3], 1: [4, 5, 6, 7]})
 
@@ -596,14 +578,16 @@ def test_adjust_ordering_respects_order_key_metadata(
         null_order=null_order,
         stream=stream,
     )
-    output_by_pid = asyncio.run(
-        _adjust_and_collect(
-            context,
-            comm,
-            _frame(keys),
-            input_ordering,
-            output_ordering,
+    with reserve_op_id() as op_id:
+        output_by_pid = asyncio.run(
+            _adjust_and_collect(
+                context,
+                comm,
+                _frame(keys),
+                input_ordering,
+                output_ordering,
+                collective_id=op_id,
+            )
         )
-    )
 
     _assert_partition_output(output_by_pid, expected)
