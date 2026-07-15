@@ -198,7 +198,7 @@ def test_execute_n_partitions(streaming_engine):
 
 def test_execute_unsupported_raises(streaming_engine):
     """execute() rejects a query with a translation error before dispatching it."""
-    with pytest.raises(NotImplementedError):
+    with pytest.raises(NotImplementedError, match="unsupported operations"):
         streaming_engine.execute(_unsupported_lf())
 
 
@@ -209,7 +209,11 @@ def test_spmd_execute_collect_consumes_result(spmd_engine):
     collected = result.lazy().collect(engine=spmd_engine)
     assert_frame_equal(collected, lf.collect())
     # The partition was consumed by the first collect; a second scan raises.
-    with pytest.raises(Exception):  # noqa: B017 - consumed on read (move-on-read)
+    with pytest.RaisesGroup(
+        pytest.RaisesExc(match="consumed on read"),
+        allow_unwrapped=True,
+        flatten_subgroups=True,
+    ):
         result.lazy().collect(engine=spmd_engine)
 
 
@@ -221,7 +225,11 @@ def test_spmd_execute_self_join_raises(spmd_engine):
     # Polars does not dedup a reused plugin source, so the self-join scans the
     # partition twice; the second read finds it already consumed. Re-scan support
     # is tracked as future work (see https://github.com/rapidsai/cudf/issues/23115).
-    with pytest.raises(Exception):  # noqa: B017 - second scan consumed (move-on-read)
+    with pytest.RaisesGroup(
+        pytest.RaisesExc(match="consumed on read"),
+        allow_unwrapped=True,
+        flatten_subgroups=True,
+    ):
         reused.join(reused, on="a", how="inner").collect(engine=spmd_engine)
 
 
@@ -230,7 +238,11 @@ def test_spmd_execute_reset_invalidates_result(spmd_engine):
     lf = _source_lf()
     result = spmd_engine.execute(lf)
     spmd_engine._reset()
-    with pytest.raises(Exception):  # noqa: B017 - partition dropped on reset
+    with pytest.RaisesGroup(
+        pytest.RaisesExc(match="store no longer exists"),
+        allow_unwrapped=True,
+        flatten_subgroups=True,
+    ):
         result.lazy().collect(engine=spmd_engine)
     # The engine is still usable after reset.
     again = spmd_engine.execute(lf).lazy().collect(engine=spmd_engine)
