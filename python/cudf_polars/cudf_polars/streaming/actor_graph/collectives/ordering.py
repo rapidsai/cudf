@@ -24,7 +24,7 @@ from cudf_polars.streaming.actor_graph.utils import (
     ChunkStore,
     concat_batch,
     empty_table_chunk,
-    gather_in_task_group,
+    shutdown_channels_on_error,
 )
 from cudf_polars.utils.cuda_stream import stream_ordered_after
 
@@ -411,20 +411,22 @@ class _OutputPartitionBuffer:
             raise RuntimeError(
                 "adjust_ordering left buffered data after all output was emitted."
             )
-        if (
-            not self.input_done
-            and (msg := await self.ch_in.recv(self.context)) is not None
-        ):
+        while not self.input_done:
+            msg = await self.ch_in.recv(self.context)
+            if msg is None:
+                self.input_done = True
+                break
             rows = (
                 TableChunk.from_message(msg, br=self.context.br())
                 .table_view()
                 .num_rows()
             )
+            if rows == 0:
+                continue
             raise RuntimeError(
                 "adjust_ordering left unread input after all output was emitted "
                 f"({rows} rows)"
             )
-        self.input_done = True
 
 
 def _store_chunk(
@@ -666,7 +668,7 @@ async def adjust_ordering(
     """
     _validate_orderings(input_ordering, output_ordering)
 
-    try:
+    async with shutdown_channels_on_error(context, ch_in, ch_out):
         await _adjust_ordering_impl(
             context,
             comm,
@@ -678,11 +680,3 @@ async def adjust_ordering(
             output_ordering,
             collective_id,
         )
-    except BaseException:
-        await gather_in_task_group(
-            ch_in.shutdown(context),
-            ch_in.shutdown_metadata(context),
-            ch_out.shutdown(context),
-            ch_out.shutdown_metadata(context),
-        )
-        raise
