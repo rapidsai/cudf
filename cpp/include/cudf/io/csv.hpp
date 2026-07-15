@@ -685,17 +685,16 @@ class csv_reader_options {
   /**
    * @brief Sets the expected quoting style used in the input CSV data.
    *
-   * Note: Only the following quoting styles are supported:
-   *   1. MINIMAL: String columns containing special characters like row-delimiters/
-   *               field-delimiter/quotes will be quoted.
-   *   2. NONE: No quoting is done for any columns.
+   * The reader accepts all defined quoting styles. `NONE` disables quotation parsing; all other
+   * styles enable it.
    *
    * @param quoting Quoting style used
    */
   void set_quoting(quote_style quoting)
   {
-    CUDF_EXPECTS(quoting == quote_style::MINIMAL || quoting == quote_style::NONE,
-                 "Only MINIMAL and NONE are supported for quoting.");
+    CUDF_EXPECTS(quoting == quote_style::MINIMAL || quoting == quote_style::ALL ||
+                   quoting == quote_style::NONNUMERIC || quoting == quote_style::NONE,
+                 "Unsupported quoting style.");
     _quoting = quoting;
   }
 
