@@ -259,10 +259,8 @@ def test_execute_default_engine_collect_raises(streaming_engine):
 def _stored_count(query_id, *, dask_worker=None):
     """Number of this query's persisted partitions across the process's stores."""
     return sum(
-        1
+        len(store._partitions.get(query_id, {}))
         for store in rank_local_store._stores.values()
-        for key in store._partitions
-        if key[0] == query_id
     )
 
 

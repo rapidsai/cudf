@@ -21,15 +21,15 @@ if TYPE_CHECKING:
 
 
 class RankLocalStore:
-    """One engine's rank-local partitions on a process, keyed by ``(query_id, rank)``."""
+    """One engine's rank-local partitions on a process, keyed by ``query_id`` then rank."""
 
     def __init__(self) -> None:
-        # Each entry keeps the partition and whether it is part of a duplicated
-        # output (an identical, complete copy held on every rank, e.g. a global
-        # sort/limit result). The flag must survive persistence so a re-scan can
-        # re-advertise it and downstream collectives don't double-count.
-        self._partitions: dict[tuple[uuid.UUID, int], tuple[DataFrame, bool]] = {}
-        self._lock = threading.Lock()
+        # Nested ``query_id -> {rank -> (partition, duplicated)}``. Each entry
+        # keeps the partition and whether it is part of a duplicated output (an
+        # identical, complete copy held on every rank, e.g. a global sort/limit
+        # result). The flag must survive persistence so a re-scan can re-advertise
+        # it and downstream collectives don't double-count.
+        self._partitions: dict[uuid.UUID, dict[int, tuple[DataFrame, bool]]] = {}
 
     def put(
         self, query_id: uuid.UUID, rank: int, df: DataFrame, *, duplicated: bool
@@ -49,8 +49,7 @@ class RankLocalStore:
             Whether this partition is part of a duplicated output (an identical
             copy held on every rank).
         """
-        with self._lock:
-            self._partitions[query_id, rank] = (df, duplicated)
+        self._partitions.setdefault(query_id, {})[rank] = (df, duplicated)
 
     def pop(self, query_id: uuid.UUID, rank: int) -> DataFrame:
         """
@@ -73,18 +72,17 @@ class RankLocalStore:
             If the partition has already been read. A persisted result is
             consumed on read and cannot be scanned more than once yet.
         """
-        with self._lock:
-            try:
-                df, _ = self._partitions.pop((query_id, rank))
-            except KeyError:
-                raise RuntimeError(
-                    "A persisted query result is consumed on read and cannot be "
-                    "scanned more than once (for example a self-join, or "
-                    "collecting the same LazyFrame twice). Call engine.execute() "
-                    "again for a fresh result. Re-scan support is tracked as "
-                    "future work (see https://github.com/rapidsai/cudf/issues/23115)."
-                ) from None
-            return df
+        try:
+            df, _ = self._partitions[query_id].pop(rank)
+        except KeyError:
+            raise RuntimeError(
+                "A persisted query result is consumed on read and cannot be "
+                "scanned more than once (for example a self-join, or "
+                "collecting the same LazyFrame twice). Call engine.execute() "
+                "again for a fresh result. Re-scan support is tracked as "
+                "future work (see https://github.com/rapidsai/cudf/issues/23115)."
+            ) from None
+        return df
 
     def is_duplicated(self, query_id: uuid.UUID, rank: int) -> bool:
         """
@@ -105,8 +103,7 @@ class RankLocalStore:
         -------
         ``True`` if the partition is an identical copy held on every rank.
         """
-        with self._lock:
-            entry = self._partitions.get((query_id, rank))
+        entry = self._partitions.get(query_id, {}).get(rank)
         return entry is not None and entry[1]
 
     def drop(self, query_id: uuid.UUID) -> None:
@@ -118,14 +115,11 @@ class RankLocalStore:
         query_id
             Identifier of the query whose partitions are dropped.
         """
-        with self._lock:
-            for key in [k for k in self._partitions if k[0] == query_id]:
-                del self._partitions[key]
+        self._partitions.pop(query_id, None)
 
     def clear(self) -> None:
         """Drop all partitions in this store (idempotent)."""
-        with self._lock:
-            self._partitions.clear()
+        self._partitions.clear()
 
 
 # The process-global set of per-engine stores, keyed by uid
@@ -169,7 +163,5 @@ def drop_query(uid: str, query_id: uuid.UUID) -> None:
     """Drop ``query_id`` from this engine's store, if the store still exists."""
     with _stores_lock:
         store = _stores.get(uid)
-    # Drop outside _stores_lock (store.drop takes the store's own lock); never
-    # hold both, so the two locks can't deadlock.
     if store is not None:
         store.drop(query_id)
