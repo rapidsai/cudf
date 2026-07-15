@@ -781,6 +781,6 @@ native Parquet reads.
 [spmd-wiki]: https://en.wikipedia.org/wiki/Single_program,_multiple_data
 [ray-docs]: https://docs.ray.io/
 [ray-actors]: https://docs.ray.io/en/latest/ray-core/actors.html
-[rapidsmpf-communicator]: https://docs.rapids.ai/api/rapidsmpf/stable/api/communicator/
-[rapidsmpf-context]: https://docs.rapids.ai/api/rapidsmpf/stable/api/streaming/context/
-[polars-gpuengine]: https://docs.pola.rs/api/python/stable/reference/lazyframe/gpu_engine.html
+[rapidsmpf-communicator]: https://docs.rapids.ai/api/rapidsmpf/stable/glossary/#term-Communicator
+[rapidsmpf-context]: https://docs.rapids.ai/api/rapidsmpf/stable/glossary/#term-Context
+[polars-gpuengine]: https://docs.pola.rs/api/python/stable/reference/api/polars.GPUEngine.html
