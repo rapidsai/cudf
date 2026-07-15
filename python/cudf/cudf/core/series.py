@@ -71,6 +71,7 @@ from cudf.utils.dtypes import (
     get_dtype_of_same_kind,
     is_mixed_with_object_dtype,
     is_pandas_nullable_extension_dtype,
+    is_pandas_nullable_numpy_dtype,
 )
 from cudf.utils.performance_tracking import _performance_tracking
 from cudf.utils.utils import _EQUALITY_OPS, _is_same_name
@@ -3480,6 +3481,23 @@ class Series(SingleColumnFrame, IndexedFrame):
 
         if return_scalar:
             return result
+
+        if (
+            is_pandas_nullable_numpy_dtype(self.dtype)
+            and self.dtype.kind in "iu"
+            and self._column.null_count
+        ):
+            # pandas keeps the masked integer dtype for quantile when the
+            # input has missing values: an all-NA input stays the integer
+            # dtype (all NA), and an otherwise all-integral result is cast
+            # back to the integer dtype (a fractional result stays Float64).
+            if self._column.null_count == len(self._column):
+                result = result.astype(self.dtype)
+            elif (
+                result.astype(self.dtype.numpy_dtype).astype(result.dtype)
+                == result
+            ).all():
+                result = result.astype(self.dtype)
 
         return Series._from_column(
             result,
