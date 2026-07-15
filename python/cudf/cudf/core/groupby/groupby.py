@@ -1222,7 +1222,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                     if (
                         isinstance(orig_dtype, np.dtype)
                         and orig_dtype.kind == "O"
-                        and isinstance(create_dtype, pd.StringDtype)
+                        and is_dtype_obj_string(create_dtype)
                     ):
                         # a string-producing aggregation (first/last/min/
                         # max/nth) on an object-dtype column stays object,
@@ -1811,8 +1811,47 @@ class GroupBy(Serializable, Reducible, Scannable):
         subset of rows.
 
         Like pandas, supports both the call form ``gb.nth(n, dropna=...)``
-        and the index form ``gb.nth[n]`` (with ints, list-likes of ints and
-        non-negative-step slices).
+        and the index form ``gb.nth[n]``.
+
+        Parameters
+        ----------
+        n : int, slice or list of ints and slices
+            A single nth value for the row, a slice with non-negative
+            step or a list of nth values and slices. Negative values
+            count from the end of each group.
+        dropna : {'any', 'all', None}, default None
+            Apply the specified dropna operation before counting which
+            row is the nth row. Only supported in the call form and not
+            currently implemented in cuDF (raises ``NotImplementedError``;
+            falls back to pandas under ``cudf.pandas``).
+
+        Returns
+        -------
+        Series or DataFrame
+            The nth row(s) of each group, keeping the original index and
+            row order (like a filter operation, the group keys are not
+            added as an index level).
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"A": [1, 1, 2, 1, 2],
+        ...                      "B": [None, 2, 3, 4, 5]})
+        >>> gb = df.groupby("A")
+        >>> gb.nth(0)
+           A     B
+        0  1  <NA>
+        2  2     3
+        >>> gb.nth(-1)
+           A  B
+        3  1  4
+        4  2  5
+        >>> gb.nth[:2]
+           A     B
+        0  1  <NA>
+        1  1     2
+        2  2     3
+        4  2     5
         """
         return GroupByNthSelector(self)
 

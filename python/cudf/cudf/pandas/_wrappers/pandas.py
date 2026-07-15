@@ -1167,45 +1167,21 @@ Float64Dtype = make_final_proxy_type(
 )
 
 
-def _groupby_nth_call(gb, *args, **kwargs):
-    # ``nth`` is a selector object on both cudf and pandas GroupBy,
-    # supporting the call form gb.nth(n, dropna=...).
-    return gb.nth(*args, **kwargs)
-
-
-def _groupby_nth_getitem(gb, key):
-    # Index form (gb.nth[k], gb.nth[k1:k2]).
-    return gb.nth[key]
-
-
-class _GroupByNthSelector:
-    """Fast-slow dispatching stand-in for pandas'
-    GroupByNthSelector: ``GroupBy.nth`` is a class-level property (not a
-    method), so the generic attribute machinery would leak the raw fast
-    object's selector with no call-time fallback.
-    """
-
-    def __init__(self, groupby_proxy):
-        self._groupby_proxy = groupby_proxy
-
-    def __call__(self, *args, **kwargs):
-        return _fast_slow_function_call(
-            _groupby_nth_call, None, self._groupby_proxy, *args, **kwargs
-        )[0]
-
-    def __getitem__(self, key):
-        return _fast_slow_function_call(
-            _groupby_nth_getitem, None, self._groupby_proxy, key
-        )[0]
-
+# ``GroupBy.nth`` is a property returning a selector object on both
+# sides; registering the selector pair as an intermediate proxy gives
+# ``gb.nth`` a proxied result whose ``__call__``/``__getitem__`` get the
+# usual call-time fast/slow dispatch (with the slow side re-derived from
+# the recorded ``getattr`` provenance on fallback).
+GroupByNthSelector = make_intermediate_proxy_type(
+    "GroupByNthSelector",
+    cudf.core.groupby.groupby.GroupByNthSelector,
+    pd.core.groupby.indexing.GroupByNthSelector,
+)
 
 SeriesGroupBy = make_intermediate_proxy_type(
     "SeriesGroupBy",
     cudf.core.groupby.groupby.SeriesGroupBy,
     pd.core.groupby.SeriesGroupBy,
-    additional_attributes={
-        "nth": property(_GroupByNthSelector),
-    },
 )
 
 DataFrameGroupBy = make_intermediate_proxy_type(
@@ -1214,7 +1190,6 @@ DataFrameGroupBy = make_intermediate_proxy_type(
     pd.core.groupby.DataFrameGroupBy,
     additional_attributes={
         "_grouper": _FastSlowAttribute("_grouper", private=True),
-        "nth": property(_GroupByNthSelector),
     },
 )
 
