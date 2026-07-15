@@ -162,12 +162,16 @@ struct rle_run {
 // header-parse phase and a __syncthreads() at the end), but competes with occupancy in
 // preprocess_levels_kernel.
 //
-// 512 was chosen empirically based on sweeps of {256, 512, 1024, 2048, 4096}
-// on A100, H100, and B200, which showed differences within noise across the
-// PARQUET_READER_NVBENCH parquet_read_decode configs so there's no benefit to
-// specializing the value by architecture. It also fits within the SMEM budget
-// on V100s, and should help keep occupancy reasonable.
+// 1024 was chosen empirically for sm_80+. Sweeps of {256, 512, 1024, 2048,
+// 4096} on A100, H100, and B200 all showed 1024 either as the numerical
+// optimum or within noise of it. The delta over 512 was small (a few percent)
+// in every case. sm_70/sm_75 stay at 512, because 1024 does not fit the
+// preprocess_levels_kernel SMEM budget on those older arches.
+#if __CUDA_ARCH__ >= 800
+static constexpr int max_runs_per_chunk = 1024;
+#else
 static constexpr int max_runs_per_chunk = 512;
+#endif
 
 // a stream of rle_runs
 template <typename level_t,
