@@ -890,10 +890,10 @@ class GroupBy(Serializable, Reducible, Scannable):
                 label: get_dtype_of_same_kind(
                     self.obj._data[label].dtype
                     if self.obj.ndim == 2 and label in self.obj._data
-                    else result._data[label].dtype,
+                    else result_dtype,
                     target,
                 )
-                for label in result._column_names
+                for label, result_dtype in result._dtypes
             }
         )
 
