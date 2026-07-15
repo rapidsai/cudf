@@ -430,16 +430,6 @@ struct rle_stream {
     return values_processed_shared;
   }
 
-  __device__ __forceinline__ static void warp_fill(
-    level_t* __restrict__ out, int abs_lo, int abs_hi, level_t value, int lane)
-  {
-    if (abs_lo >= abs_hi) return;
-    // abs_lo and abs_hi are absolute indices; apply rolling_index at each write.
-    for (int q = abs_lo + lane; q < abs_hi; q += 32) {
-      out[rolling_index<max_output_values>(q)] = value;
-    }
-  }
-
   /* Alternate decode path used when `use_chunked_expand` is true.
    *
    * Instead of the ring-buffer producer/consumer model in decode_next_ring
@@ -609,7 +599,7 @@ struct rle_stream {
           //   literal (bit 31 set) -> each output position needs its own
           //     bit-field extract from the packed payload.
           //   RLE    (bit 31 clear) -> single value read once, broadcast
-          //     across [seg_lo, seg_hi) with warp_fill.
+          //     across [seg_lo, seg_hi) by all lanes.
           // Note that we don't pay any divergence cost here since all threads
           // in the warp are processing the same run (meta), but we do lose
           // some occupancy due to carrying around the local registers needed
@@ -643,7 +633,7 @@ struct rle_stream {
           } else {
             // RLE run: read the single repeated value once from s_start,
             // assembling up to 4 payload bytes into `level_val` based on
-            // level_bits, then warp_fill the whole segment.
+            // level_bits, then broadcast it across [seg_lo, seg_hi).
             uint8_t const* vptr = s_start + (meta & 0x7fffffff);
             uint32_t level_val  = vptr[0];
             if constexpr (sizeof(level_t) > 1) {
@@ -657,8 +647,10 @@ struct rle_stream {
                 }
               }
             }
-            warp_fill(
-              output, base_out + seg_lo, base_out + seg_hi, static_cast<level_t>(level_val), lane);
+            level_t const fill = static_cast<level_t>(level_val);
+            for (int q = base_out + seg_lo + lane; q < base_out + seg_hi; q += 32) {
+              output[rolling_index<max_output_values>(q)] = fill;
+            }
           }
         }
       }
