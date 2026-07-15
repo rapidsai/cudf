@@ -14,14 +14,17 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
+/**
+ * @file
+ * @brief Class definition for filtered hash join, which builds a hash table from a filter table
+ * and probes it with left tables.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
- * @brief Class definition for filtered hash join, which builds a hash table from a filter table
- * and probes it with left tables.
  */
 
 namespace detail {
