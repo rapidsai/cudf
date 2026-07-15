@@ -921,6 +921,15 @@ def _mapping_to_column_accessor(
                 tuple_key_count += 1
                 tuple_key_lengths.add(len(key))
             column = as_column(value, nan_as_null=nan_as_null, dtype=dtype)
+            if (
+                dtype is None
+                and len(column) == 0
+                and isinstance(value, (list, tuple, range))
+            ):
+                # pandas' DataFrame constructor coerces untyped empty
+                # sequences to float64 (unlike Series([]), which stays
+                # object).
+                column = column_empty(0, dtype=np.dtype(np.float64))
             value_lengths.add(len(column))
             col_data[key] = column
 
@@ -6460,7 +6469,7 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         self,
         q=0.5,
         axis=0,
-        numeric_only=True,
+        numeric_only=False,
         interpolation=None,
         method="single",
         columns=None,
@@ -6475,9 +6484,8 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             0 <= q <= 1, the quantile(s) to compute
         axis : int
             axis is a NON-FUNCTIONAL parameter
-        numeric_only : bool, default True
-            If False, the quantile of datetime and timedelta data will be
-            computed as well.
+        numeric_only : bool, default False
+            If True, compute the quantile only over numeric columns.
         interpolation : {'linear', 'lower', 'higher', 'midpoint', 'nearest'}
             This parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -6502,9 +6510,9 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         Returns
         -------
         Series or DataFrame
-            If q is an array or numeric_only is set to False, a DataFrame
-            will be returned where index is q, the columns are the columns
-            of self, and the values are the quantile.
+            If q is an array, a DataFrame will be returned where the index
+            is q, the columns are the columns of self, and the values are
+            the quantiles.
 
             If q is a float, a Series will be returned where the index is
             the columns of self and the values are the quantiles.
@@ -6533,10 +6541,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
         .. pandas-compat::
             :meth:`pandas.DataFrame.quantile`
 
-            One notable difference from Pandas is when DataFrame is of
-            non-numeric types and result is expected to be a Series in case of
-            Pandas. cuDF will return a DataFrame as it doesn't support mixed
-            types under Series.
+            When ``q`` is a scalar and the columns do not share a common
+            dtype (for example a mix of datetime and numeric columns),
+            pandas returns an object-dtype Series. cuDF does not support
+            mixed types under a Series and raises a ``MixedTypeError``
+            instead.
         """
         if axis not in (0, None):
             raise NotImplementedError("axis is not implemented yet")
@@ -6560,12 +6569,15 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             msg = "`q` must be either a single element or list"
             raise TypeError(msg)
 
-        if method == "table":
+        if method not in {"single", "table"}:
+            raise ValueError(f"Invalid method: {method}")
+
+        if method == "table" and len(data_df) > 0 and data_df._num_columns > 0:
             with access_columns(
-                *self._columns, mode="read", scope="internal"
-            ) as columns:
+                *data_df._columns, mode="read", scope="internal"
+            ) as input_columns:
                 plc_table = plc.quantiles.quantiles(
-                    plc.Table([c.plc_column for c in columns]),
+                    plc.Table([c.plc_column for c in input_columns]),
                     qs,
                     plc.types.Interpolation[
                         (interpolation or "nearest").upper()
@@ -6574,26 +6586,23 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     [],
                     [],
                 )
-                columns = [
-                    ColumnBase.create(
-                        col, dtype=dtype_from_pylibcudf_column(col)
+                result = {
+                    # The table method selects whole rows, so each result
+                    # column has the same dtype as its source column (which
+                    # ``dtype_from_pylibcudf_column`` would erase for types
+                    # like tz-aware datetimes).
+                    name: ColumnBase.create(plc_col, dtype=source_col.dtype)
+                    for name, plc_col, source_col in zip(
+                        data_df._column_names,
+                        plc_table.columns(),
+                        data_df._columns,
+                        strict=True,
                     )
-                    for col in plc_table.columns()
-                ]
-            result = self._from_columns_like_self(
-                columns,
-                column_names=self._column_names,
-            )
-
-            if q_is_number:
-                result = result.transpose()
-                return Series._from_column(
-                    result._columns[0],
-                    name=q,
-                    index=result.index,
-                    attrs=self.attrs,
-                )
-        elif method == "single":
+                }
+        else:
+            # ``method="table"`` also lands here when there are no rows or
+            # no columns to compute over, where the all-null result matches
+            # the per-column result.
             # Ensure that qs is non-scalar so that we always get a column back.
             interpolation = interpolation or "linear"
             result = {}
@@ -6609,23 +6618,58 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                     if len(res) == 0:
                         res = column_empty(row_count=len(qs), dtype=ser.dtype)
                     result[k] = res
-            result_ca = ColumnAccessor(
-                result,
-                multiindex=data_df._data.multiindex,
-                level_names=data_df._data.level_names,
-                rangeindex=data_df._data.rangeindex,
-                label_dtype=data_df._data.label_dtype,
-                verify=False,
-            )
-            result = DataFrame._from_data(result_ca, attrs=self.attrs)
+        result_ca = ColumnAccessor(
+            result,
+            multiindex=data_df._data.multiindex,
+            level_names=data_df._data.level_names,
+            rangeindex=data_df._data.rangeindex,
+            label_dtype=data_df._data.label_dtype,
+            level_dtypes=data_df._data.level_dtypes,
+            verify=False,
+        )
+        result = DataFrame._from_data(result_ca, attrs=self.attrs)
 
-            if q_is_number and numeric_only:
-                result = result.fillna(np.nan).iloc[0]
-                result.index = data_df.keys()
-                result.name = q
-                return result
-        else:
-            raise ValueError(f"Invalid method: {method}")
+        if q_is_number:
+            # For a scalar q pandas returns a Series indexed by the column
+            # labels, which requires the columns to share a common dtype.
+            if result._num_columns == 0:
+                new_ser = Series._from_column(
+                    column_empty(0, dtype=np.dtype(np.float64)),
+                    name=q,
+                    index=ensure_index(result.keys()),
+                    attrs=self.attrs,
+                )
+            else:
+                dtypes = [col.dtype for col in result._columns]
+                if all(
+                    isinstance(dtype, np.dtype) and dtype.kind in "iufb"
+                    for dtype in dtypes
+                ):
+                    result = result.fillna(np.nan)
+                    dtypes = [col.dtype for col in result._columns]
+                if all(dtype == dtypes[0] for dtype in dtypes):
+                    common_dtype = dtypes[0]
+                elif all(
+                    is_dtype_obj_numeric(dtype, include_decimal=False)
+                    for dtype in dtypes
+                ):
+                    common_dtype = find_common_type(dtypes)
+                else:
+                    raise MixedTypeError(
+                        f"q={q} requires returning a Series, which is only "
+                        "possible when the resulting columns share a common "
+                        "dtype; pass a list of quantiles to get a DataFrame "
+                        "instead"
+                    )
+                new_ser = Series._from_column(
+                    concat_columns(
+                        [col.astype(common_dtype) for col in result._columns]
+                    ),
+                    name=q,
+                    index=ensure_index(result.keys()),
+                    attrs=self.attrs,
+                )
+            return new_ser
 
         result.index = Index(list(map(float, qs)), dtype="float64")
         return result
