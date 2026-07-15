@@ -210,7 +210,7 @@ def test_spmd_execute_collect_consumes_result(spmd_engine):
     assert_frame_equal(collected, lf.collect())
     # The partition was consumed by the first collect; a second scan raises.
     with pytest.RaisesGroup(
-        pytest.RaisesExc(match="consumed on read"),
+        pytest.RaisesExc(RuntimeError, match="consumed on read"),
         allow_unwrapped=True,
         flatten_subgroups=True,
     ):
@@ -226,7 +226,7 @@ def test_spmd_execute_self_join_raises(spmd_engine):
     # partition twice; the second read finds it already consumed. Re-scan support
     # is tracked as future work (see https://github.com/rapidsai/cudf/issues/23115).
     with pytest.RaisesGroup(
-        pytest.RaisesExc(match="consumed on read"),
+        pytest.RaisesExc(RuntimeError, match="consumed on read"),
         allow_unwrapped=True,
         flatten_subgroups=True,
     ):
@@ -239,7 +239,7 @@ def test_spmd_execute_reset_invalidates_result(spmd_engine):
     result = spmd_engine.execute(lf)
     spmd_engine._reset()
     with pytest.RaisesGroup(
-        pytest.RaisesExc(match="store no longer exists"),
+        pytest.RaisesExc(RuntimeError, match="store no longer exists"),
         allow_unwrapped=True,
         flatten_subgroups=True,
     ):
