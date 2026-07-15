@@ -522,7 +522,6 @@ def _partition_count_for_rank(rank: int, nranks: int, npartitions: int) -> int:
 
 
 def _adjusted_ordering_metadata(
-    context: Context,
     comm: Communicator,
     metadata_in: ChannelMetadata,
     output_ordering: Ordering,
@@ -740,7 +739,7 @@ async def groupby_actor(
             output_ordering = get_strict_ordering(input_ordering, context.br())
             ch_adjusted = context.create_channel()
             adjusted_metadata = _adjusted_ordering_metadata(
-                context, comm, metadata_in, output_ordering
+                comm, metadata_in, output_ordering
             )
             metadata_out = ChannelMetadata(
                 local_count=adjusted_metadata.local_count,
