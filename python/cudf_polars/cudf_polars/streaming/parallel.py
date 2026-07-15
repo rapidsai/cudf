@@ -118,11 +118,11 @@ def optimize_with_stats(
         The optimized IR graph.
     """
     from cudf_polars.streaming.join_filter_pushdown import (
-        optimize_join_domain_prefilters,
+        optimize_join_filter_pushdown,
     )
 
     ir = remove_cache_nodes(ir)
-    return optimize_join_domain_prefilters(ir, stats, config_options)
+    return optimize_join_filter_pushdown(ir, stats, config_options)
 
 
 def _lower_ir_graph_impl(

@@ -25,7 +25,7 @@ from cudf_polars.streaming.join_filter_pushdown import (
     analyze_plan,
     apply_candidate,
     contains_node,
-    optimize_join_domain_prefilters,
+    optimize_join_filter_pushdown,
     semijoin_pushdown_candidates,
 )
 from cudf_polars.streaming.parallel import optimize_with_stats, remove_cache_nodes
@@ -116,7 +116,7 @@ def simple_query() -> pl.LazyFrame:
     return part.join(lineitem, left_on="p_partkey", right_on="l_partkey")
 
 
-def test_simple_domain_prefilter_filters_large_side(
+def test_simple_prefilter_filters_large_side(
     simple_query: pl.LazyFrame, engine: SPMDEngine
 ) -> None:
     root = translate_query(simple_query, engine)
@@ -140,13 +140,13 @@ def test_simple_domain_prefilter_filters_large_side(
     assert_gpu_result_equal(simple_query, engine=engine, check_row_order=False)
 
 
-def test_domain_prefilter_is_independent_of_dynamic_planning(
+def test_filter_pushdown_is_independent_of_dynamic_planning(
     simple_query: pl.LazyFrame,
     engine: SPMDEngine,
 ) -> None:
     root = translate_query(simple_query, engine)
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         make_config(dynamic_planning=False),
@@ -155,12 +155,12 @@ def test_domain_prefilter_is_independent_of_dynamic_planning(
     assert find_joins(optimized, "Semi")
 
 
-def test_domain_prefilter_can_be_disabled(
+def test_filter_pushdown_can_be_disabled(
     simple_query: pl.LazyFrame, engine: SPMDEngine
 ) -> None:
     root = translate_query(simple_query, engine)
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         make_config(join_filter_pushdown=False),
@@ -193,7 +193,7 @@ def test_nullable_join_keys_preserve_results(
 
     ir = Translator(query._ldf.visit(), engine).translate_ir()
     config = ConfigOptions.from_polars_engine(engine)
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         ir,
         collect_statistics(ir, config, parquet_stats_executor),
         config,
@@ -225,7 +225,7 @@ def test_prefilter_does_not_move_below_distinct_on_non_subset_column(
 
     ir = Translator(query._ldf.visit(), engine).translate_ir()
     config = ConfigOptions.from_polars_engine(engine)
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         ir,
         collect_statistics(ir, config, parquet_stats_executor),
         config,
@@ -236,7 +236,7 @@ def test_prefilter_does_not_move_below_distinct_on_non_subset_column(
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_no_simple_domain_prefilter_when_domain_is_not_selective(
+def test_no_simple_filter_pushdown_when_domain_is_not_selective(
     engine: SPMDEngine,
 ) -> None:
     supplier = pl.LazyFrame({"s_suppkey": range(3)})
@@ -251,7 +251,7 @@ def test_no_simple_domain_prefilter_when_domain_is_not_selective(
     assert isinstance(root, Join)
     decision = _select_candidate(root, 0.5, analyze_plan(root, stats))
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         stats,
         ConfigOptions.from_polars_engine(engine),
@@ -263,7 +263,7 @@ def test_no_simple_domain_prefilter_when_domain_is_not_selective(
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_composite_domain_prefilter_constrains_domain_first(
+def test_composite_filter_pushdown_constrains_domain_first(
     engine: SPMDEngine,
 ) -> None:
     nation = (
@@ -317,7 +317,7 @@ def test_composite_domain_prefilter_constrains_domain_first(
     assert isinstance(order_lineitem, Join)
     lineitem_ir = order_lineitem.children[1]
     decision = _select_candidate(root, 0.5, analyze_plan(root, stats))
-    optimized = optimize_join_domain_prefilters(root, stats, config)
+    optimized = optimize_join_filter_pushdown(root, stats, config)
 
     assert decision.reason == "applied"
     assert isinstance(decision.candidate, CompositeCandidate)
@@ -368,7 +368,7 @@ def test_derived_selectivity_propagates_through_rewritten_children(
     )
     root = translate_query(query, engine)
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
@@ -422,7 +422,7 @@ def test_rewritten_domain_filters_other_side_instead_of_stacking(
     )
     root = translate_query(query, engine)
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
@@ -484,7 +484,7 @@ def test_target_source_follows_join_key_through_rename(
     renamed_big_ir, small_ir = joined.children
     assert isinstance(renamed_big_ir, Select)
     big_ir = renamed_big_ir.children[0]
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
@@ -533,7 +533,7 @@ def test_domain_source_follows_join_key_through_rename(
     target_ir, domain_ir = root.children
     assert isinstance(domain_ir, Join)
     renamed_unrelated_ir, domain_source_ir = domain_ir.children
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
@@ -682,7 +682,7 @@ def test_target_prefilter_does_not_move_below_slice(engine: SPMDEngine) -> None:
         (ColumnRef(sliced, "target_key"), ()),
     )
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         stats,
         ConfigOptions.from_polars_engine(engine),
@@ -727,7 +727,7 @@ def test_target_replacement_does_not_rewrite_shared_domain_side(
     assert isinstance(domain_ir, Join)
     assert domain_ir.children[0] is shared_ir
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),
@@ -797,7 +797,7 @@ def test_target_prefilter_rewrites_only_selected_self_join_edge(
 
 
 @pytest.mark.parametrize("how", ["left", "right", "cross", "full"])
-def test_no_domain_prefilter_for_outer_join(
+def test_no_filter_pushdown_for_unsupported_joins(
     how: Any,
     engine: SPMDEngine,
 ) -> None:
@@ -823,7 +823,7 @@ def test_no_domain_prefilter_for_outer_join(
         )
     root = translate_query(query, engine)
 
-    optimized = optimize_join_domain_prefilters(
+    optimized = optimize_join_filter_pushdown(
         root,
         StatsCollector(),
         ConfigOptions.from_polars_engine(engine),

@@ -334,16 +334,32 @@ def semijoin_pushdown_candidates(
         lineage = source
 
 
-def optimize_join_domain_prefilters(
+def optimize_join_filter_pushdown(
     ir: IR,
     stats: StatsCollector,
     config_options: ConfigOptions[StreamingExecutor],
 ) -> IR:
     """
-    Insert generic semi-join key-domain prefilters before streaming lowering.
+    Rewrite an IR DAG to apply filter pushdown of keys.
 
-    The rewrite is intentionally conservative: only inner joins with simple
-    column equality keys are considered.
+    This optimization pass inspects joins in the DAG and attempts to push a
+    prefilter obtained from the keys of one side of the join onto the
+    inputs of the other side. This can be highly beneficial at large scale
+    since if we have a selective join we can avoid data movement by
+    prefiltering before performing the actual join.
+
+    Parameters
+    ----------
+    ir
+        DAG to rewrite.
+    stats
+        Pre-populated statistics.
+    config_options
+        Configuration options controlling the rewrite.
+
+    Returns
+    -------
+    Rewritten DAG.
     """
     options = config_options.executor.join_filter_pushdown
     if options is None:
@@ -794,19 +810,19 @@ def contains_node(root: IR, needle: IR) -> bool:
 
 
 def _trace_decision(ir: Join, threshold: float, decision: Decision) -> None:
-    join_domain_prefilter: dict[str, Any] = {
+    join_filter_pushdown: dict[str, Any] = {
         "considered": True,
         "threshold": threshold,
         "reason": decision.reason,
     }
     record = {
         "scope": Scope.PLAN.value,
-        "join_domain_prefilter": join_domain_prefilter,
+        "join_filter_pushdown": join_filter_pushdown,
         "actor_ir_id": ir.get_stable_id(),
         "actor_ir_type": type(ir).__name__,
     }
     if (candidate := decision.candidate) is not None:
-        join_domain_prefilter.update(
+        join_filter_pushdown.update(
             {
                 "mode": candidate.mode,
                 "target_side": candidate.target_side,
@@ -819,10 +835,10 @@ def _trace_decision(ir: Join, threshold: float, decision: Decision) -> None:
             }
         )
         if isinstance(candidate, CompositeCandidate):
-            join_domain_prefilter.update(
+            join_filter_pushdown.update(
                 {
                     "constraint_key": candidate.target_constraint_key.name,
                     "estimated_constraint_rows": candidate.constraint_domain.rows,
                 }
             )
-    log("Join Domain Prefilter", **record)
+    log("Join Filter Pushdown", **record)
