@@ -2389,7 +2389,7 @@ class GroupBy(Serializable, Reducible, Scannable):
           allowed. Binary operations are not yet supported, so syntax like
           `df['x'] * 2` is not yet allowed.
           For more information, see the `cuDF guide to user defined functions
-          <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs.html>`__.
+          <https://docs.rapids.ai/api/cudf/stable/cudf/guide-to-udfs/>`__.
           Use `cudf` to select the iterative groupby apply algorithm which aims
           to provide maximum flexibility at the expense of performance.
           The default value `auto` will attempt to use the numba JIT pipeline
