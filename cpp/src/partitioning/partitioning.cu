@@ -165,33 +165,23 @@ class fixed_width_row_hasher {
 };
 
 /**
- * @brief Computes which partition each row of a device_table will belong to
- based on hashing each row, and applying a partition function to the hash value.
-   Records the size of each partition for each thread block as well as the
- global size of each partition across all thread blocks.
+ * @brief Hashes rows and records their partition and CTA-local offset metadata.
  *
- * @param[in] the_hasher The hasher whose rows will be partitioned
+ * Each CTA also writes its partition histogram in partition-major order. A single exclusive scan
+ * of these counts later produces both the CTA output offsets and the global partition starts.
+ *
+ * @param[in] the_hasher Hasher whose rows will be partitioned
  * @param[in] num_partitions The number of partitions to divide the rows into
- * @param[in] the_partitioner The functor that maps a rows hash value to a
- partition number
- * @param[out] partition_metadata Packed partition number and CTA-local offset for each
- * row
- * @param[out] block_partition_sizes Array that holds the size of each partition
- for each block,
- * i.e., { {block0 partition0 size, block1 partition0 size, ...},
-         {block0 partition1 size, block1 partition1 size, ...},
-         ...
-         {block0 partition(num_partitions-1) size, block1
- partition(num_partitions -1) size, ...} }
- * @param[out] global_partition_sizes The number of rows in each partition.
+ * @param[in] the_partitioner Functor that maps a row hash to a partition number
+ * @param[out] partition_metadata Partition number and CTA-local offset for each row
+ * @param[out] block_partition_sizes Partition sizes for each CTA in partition-major order
  */
 template <class row_hasher_t, typename partitioner_type, typename PartitionMetadataView>
 CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
                                                size_type const num_partitions,
                                                partitioner_type const the_partitioner,
                                                PartitionMetadataView partition_metadata,
-                                               size_type* __restrict__ block_partition_sizes,
-                                               size_type* __restrict__ global_partition_sizes)
+                                               size_type* __restrict__ block_partition_sizes)
 {
   // Accumulate histogram of the size of each partition in shared memory
   extern __shared__ size_type shared_partition_sizes[];
@@ -230,9 +220,6 @@ CUDF_KERNEL void compute_row_partition_numbers(row_hasher_t the_hasher,
   partition_number = threadIdx.x;
   while (partition_number < num_partitions) {
     size_type const block_partition_size = shared_partition_sizes[partition_number];
-
-    // Update global size of each partition
-    atomicAdd(&global_partition_sizes[partition_number], block_partition_size);
 
     // Record the size of this partition in this block
     size_type const write_location        = partition_number * gridDim.x + blockIdx.x;
@@ -665,9 +652,11 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_i
   auto scanned_block_partition_sizes =
     rmm::device_uvector<size_type>(grid_size * num_partitions, stream);
 
-  // Holds the total number of rows in each partition
-  auto global_partition_sizes = cudf::detail::make_zeroed_device_uvector_async<size_type>(
-    num_partitions, stream, cudf::get_current_device_resource_ref());
+  // The partition starts are copied asynchronously after scanning the block counts. Keep the
+  // destination pinned so output materialization can overlap with the device-to-host copy.
+  auto host_partition_offsets =
+    cudf::detail::make_pinned_vector_async<size_type>(num_partitions + 1, stream);
+  host_partition_offsets[num_partitions] = num_rows;
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations
@@ -678,8 +667,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_i
 
     // Computes which partition each row belongs to by hashing the row and
     // performing a partitioning operator on the hash value. Also computes the
-    // number of rows in each partition both for each thread block as well as
-    // across all blocks
+    // number of rows in each partition for each thread block.
     compute_row_partition_numbers<<<grid_size,
                                     block_size,
                                     num_partitions * sizeof(size_type),
@@ -687,8 +675,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_i
                                                       num_partitions,
                                                       partitioner_type(num_partitions),
                                                       partition_metadata,
-                                                      block_partition_sizes.data(),
-                                                      global_partition_sizes.data());
+                                                      block_partition_sizes.data());
     CUDF_CUDA_TRY(cudaGetLastError());
   } else {
     // Determines how the mapping between hash value and partition number is
@@ -697,8 +684,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_i
 
     // Computes which partition each row belongs to by hashing the row and
     // performing a partitioning operator on the hash value. Also computes the
-    // number of rows in each partition both for each thread block as well as
-    // across all blocks
+    // number of rows in each partition for each thread block.
     compute_row_partition_numbers<<<grid_size,
                                     block_size,
                                     num_partitions * sizeof(size_type),
@@ -706,31 +692,29 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_i
                                                       num_partitions,
                                                       partitioner_type(num_partitions),
                                                       partition_metadata,
-                                                      block_partition_sizes.data(),
-                                                      global_partition_sizes.data());
+                                                      block_partition_sizes.data());
     CUDF_CUDA_TRY(cudaGetLastError());
   }
 
-  // Compute exclusive scan of all blocks' partition sizes in-place to determine
-  // the starting point for each blocks portion of each partition in the output
+  // Counts are partition-major: all block counts for partition 0, followed by all block counts
+  // for partition 1, and so on. One exclusive scan therefore provides both kinds of offsets:
+  //   scanned[p * grid_size + block] locates that block's rows within the final output, while
+  //   scanned[p * grid_size] is the global start of partition p.
   thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
                          block_partition_sizes.begin(),
                          block_partition_sizes.end(),
                          scanned_block_partition_sizes.data());
 
-  // Compute exclusive scan of size of each partition to determine offset
-  // location of each partition in final output.
-  // TODO This can be done independently on a separate stream
-  thrust::exclusive_scan(rmm::exec_policy_nosync(stream, cudf::get_current_device_resource_ref()),
-                         global_partition_sizes.begin(),
-                         global_partition_sizes.end(),
-                         global_partition_sizes.begin());
-
-  // Copy the result of the exclusive scan to the output offsets array
-  // to indicate the starting point for each partition in the output
-  auto partition_offsets = cudf::detail::make_std_vector(global_partition_sizes, stream);
-  // Add the total row count as the last offset to make the vector num_partitions + 1 in size
-  partition_offsets.push_back(num_rows);
+  // Copy the first block offset for each partition to the host. The source pitch skips all block
+  // offsets for one partition, while the destination pitch advances by one partition offset.
+  CUDF_CUDA_TRY(cudaMemcpy2DAsync(host_partition_offsets.data(),
+                                  sizeof(size_type),
+                                  scanned_block_partition_sizes.data(),
+                                  grid_size * sizeof(size_type),
+                                  sizeof(size_type),
+                                  num_partitions,
+                                  cudaMemcpyDeviceToHost,
+                                  stream.value()));
 
   // When the number of partitions is less than a threshold, we can apply an
   // optimization using shared memory to copy values to the output buffer.
@@ -768,6 +752,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_i
     }
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
+    auto partition_offsets =
+      std::vector<size_type>(host_partition_offsets.begin(), host_partition_offsets.end());
     return std::pair{std::make_unique<table>(std::move(output_cols), num_rows),
                      std::move(partition_offsets)};
   } else {
@@ -788,6 +774,8 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table_i
     auto output = detail::scatter(input, row_output_locations, input, stream, mr);
 
     stream.synchronize();  // Async D2H copy must finish before returning host vec
+    auto partition_offsets =
+      std::vector<size_type>(host_partition_offsets.begin(), host_partition_offsets.end());
     return std::pair{std::move(output), std::move(partition_offsets)};
   }
 }

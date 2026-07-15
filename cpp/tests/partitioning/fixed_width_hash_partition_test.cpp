@@ -207,4 +207,31 @@ TEST_F(FixedWidthHashPartitionTest, ExternalIdentityKeys)
   }
 }
 
+TEST_F(FixedWidthHashPartitionTest, PartitionOffsetsAcrossBlocksAndEmptyPartitions)
+{
+  constexpr cudf::size_type num_rows = 10'000;
+  auto const rows                    = cuda::counting_iterator<cudf::size_type>{0};
+  auto const keys = thrust::make_transform_iterator(rows, [](auto row) { return row % 4; });
+
+  fixed_width_column_wrapper<cudf::size_type> input(keys, keys + num_rows);
+  for (auto const num_partitions : {cudf::size_type{17}, cudf::size_type{1025}}) {
+    auto [output, offsets] = cudf::hash_partition(
+      cudf::table_view{{input}}, {0}, num_partitions, cudf::hash_id::HASH_IDENTITY);
+
+    std::vector<cudf::size_type> expected_offsets(num_partitions + 1, num_rows);
+    expected_offsets[0] = 0;
+    expected_offsets[1] = num_rows / 4;
+    expected_offsets[2] = num_rows / 2;
+    expected_offsets[3] = 3 * num_rows / 4;
+    EXPECT_EQ(offsets, expected_offsets);
+
+    auto const output_keys = cudf::test::to_host<cudf::size_type>(output->view().column(0)).first;
+    for (cudf::size_type partition = 0; partition < 4; ++partition) {
+      EXPECT_TRUE(std::all_of(output_keys.begin() + offsets[partition],
+                              output_keys.begin() + offsets[partition + 1],
+                              [partition](auto key) { return key == partition; }));
+    }
+  }
+}
+
 }  // namespace
