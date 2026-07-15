@@ -204,16 +204,57 @@ def expand_scan_for_rank(
         )
 
 
+@dataclasses.dataclass
+class PrefetchedSplit:
+    """Prefetched I/O state for a single SplitScan task."""
+
+    row_group_indices: list[int]
+    filter_ranges: list[plc.io.text.ByteRangeInfo]
+    payload_ranges: list[plc.io.text.ByteRangeInfo]
+    filter_host: Any | None
+    payload_host: Any | None
+    filter_futures: list[Any]
+    payload_futures: list[Any]
+    error: BaseException | None = None
+    _sem: Any = dataclasses.field(default=None, compare=False, repr=False)
+    filter_buf: Any = dataclasses.field(default=None, compare=False, repr=False)
+    payload_buf: Any = dataclasses.field(default=None, compare=False, repr=False)
+
+    def release(self) -> None:
+        """Release the per-worker backpressure semaphore slot."""
+        if self._sem is not None:
+            self._sem.release()
+
+
 def _fetch_byte_ranges(
     paths: list[str],
     byte_ranges: list[plc.io.text.ByteRangeInfo],
     stream: Stream,
 ) -> list[plc.gpumemoryview]:
-    # TODO: Accept a pinned-host Datasource pre-fetched by the caller so the
-    # storage I/O overlaps with GPU work for better pipelining.
     return plc.io.parquet_io_utils.fetch_byte_ranges_to_device(
         plc.io.SourceInfo(paths), byte_ranges, stream=stream
     )
+
+
+def _gpumemoryviews_from_pinned(
+    host: Any,
+    ranges: list[plc.io.text.ByteRangeInfo],
+    futures: list[Any],
+    stream: Stream,
+) -> list[plc.gpumemoryview]:
+    """Wait for in-flight reads and async-copy each range from pinned host to device."""
+    import rmm
+
+    for f in futures:
+        f.get()
+    result = []
+    offset = 0
+    for r in ranges:
+        dev = rmm.DeviceBuffer(size=r.size)
+        dev.copy_from_host(host[offset : offset + r.size], stream=stream)
+        result.append(plc.gpumemoryview(dev))
+        offset += r.size
+    return result
 
 
 def _read_with_hybrid_scan(
@@ -228,6 +269,7 @@ def _read_with_hybrid_scan(
     split_index: int = 0,
     total_splits: int = 1,
     stats_pruning: bool = True,
+    prefetched: PrefetchedSplit | None = None,
 ) -> DataFrame:
     """Two-pass parquet read via HybridScanReader for a row-group-aligned split."""
     assert plc_filter is not None
@@ -289,10 +331,19 @@ def _read_with_hybrid_scan(
         # the page index for all files, which may be too expensive.
         row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
 
-        filter_ranges = reader.filter_column_chunks_byte_ranges(
-            row_group_indices, options
-        )
-        filter_chunks = _fetch_byte_ranges(paths, filter_ranges, stream)
+        if prefetched is not None:
+            filter_chunks = _gpumemoryviews_from_pinned(
+                prefetched.filter_host,
+                prefetched.filter_ranges,
+                prefetched.filter_futures,
+                stream,
+            )
+        else:
+            filter_chunks = _fetch_byte_ranges(
+                paths,
+                reader.filter_column_chunks_byte_ranges(row_group_indices, options),
+                stream,
+            )
         filter_tbl_w_meta = reader.materialize_filter_columns(
             row_group_indices,
             filter_chunks,
@@ -302,10 +353,19 @@ def _read_with_hybrid_scan(
             stream=stream,
         )
 
-        payload_ranges = reader.payload_column_chunks_byte_ranges(
-            row_group_indices, options
-        )
-        payload_chunks = _fetch_byte_ranges(paths, payload_ranges, stream)
+        if prefetched is not None:
+            payload_chunks = _gpumemoryviews_from_pinned(
+                prefetched.payload_host,
+                prefetched.payload_ranges,
+                prefetched.payload_futures,
+                stream,
+            )
+        else:
+            payload_chunks = _fetch_byte_ranges(
+                paths,
+                reader.payload_column_chunks_byte_ranges(row_group_indices, options),
+                stream,
+            )
         payload_tbl_w_meta = reader.materialize_payload_columns(
             row_group_indices,
             payload_chunks,
@@ -329,12 +389,44 @@ def _read_with_hybrid_scan(
             [schema[n] for n in payload_names],
             stream=stream,
         )
-        # Ensure the decode kernels are finished before
-        # filter_chunks and payload_chunks go out of scope
         stream.synchronize()
+        if prefetched is not None:
+            prefetched.release()
         return DataFrame(
             [*filter_df.columns, *payload_df.columns], stream=stream
         ).select(list(schema.keys()))
+
+
+def _evaluate_split_prefetched(
+    scan: SplitScan,
+    prefetched: PrefetchedSplit,
+    *,
+    context: IRExecutionContext,
+) -> DataFrame:
+    """Evaluate a SplitScan using already-prefetched I/O results."""
+    stream = context.get_cuda_stream()
+    predicate = scan.base_scan.predicate
+    assert predicate is not None
+    plc_filter = to_parquet_filter(
+        _prepare_parquet_predicate(
+            predicate.value, scan.paths, scan.schema, scan.base_scan.with_columns
+        ),
+        stream=stream,
+    )
+    assert plc_filter is not None
+    return _read_with_hybrid_scan(
+        scan.schema,
+        scan.paths,
+        scan.base_scan.with_columns,
+        plc_filter,
+        prefetched.row_group_indices,
+        stream,
+        scan.cached_parquet_info[0],  # type: ignore[index]
+        split_index=scan.split_index,
+        total_splits=scan.total_splits,
+        stats_pruning=False,
+        prefetched=prefetched,
+    )
 
 
 class SplitScan(IR):

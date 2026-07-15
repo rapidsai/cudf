@@ -52,10 +52,12 @@ from cudf_polars.streaming.actor_graph.utils import (
 from cudf_polars.streaming.io import (
     StreamingScan,
     StreamingSink,
+    _evaluate_split_prefetched,
     _prepare_sink_directory,
     _sink_to_file,
     can_use_native_parquet_node,
 )
+from cudf_polars.streaming.prefetch import HybridScanPrefetcher
 from cudf_polars.streaming.rank_aware_source import RankAwareSource
 
 if TYPE_CHECKING:
@@ -73,7 +75,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.streaming.io import FusedScan, SplitScan
+    from cudf_polars.streaming.io import FusedScan, PrefetchedSplit, SplitScan
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -501,6 +503,19 @@ def _(
     return nodes, channels
 
 
+def evaluate_with_prefetch(
+    scan: SplitScan,
+    prefetcher: HybridScanPrefetcher,
+    task_idx: int,
+    *,
+    context: IRExecutionContext,
+) -> DataFrame:
+    prefetched: PrefetchedSplit | None = prefetcher.get(task_idx)
+    if prefetched is None:
+        return scan.do_evaluate(*scan._non_child_args, context=context)
+    return _evaluate_split_prefetched(scan, prefetched, context=context)
+
+
 async def read_chunk(
     context: Context,
     scan: IR,
@@ -509,6 +524,8 @@ async def read_chunk(
     ir_context: IRExecutionContext,
     estimated_chunk_bytes: int,
     tracer: ActorTracer | None = None,
+    *,
+    prefetcher: HybridScanPrefetcher | None = None,
 ) -> None:
     """
     Read a chunk from disk and send it to the output channel.
@@ -530,17 +547,29 @@ async def read_chunk(
         with block spilling to avoid thrashing.
     tracer
         The actor tracer for collecting runtime statistics.
+    prefetcher
+        Optional prefetch pipeline. When set, retrieves the prefetched
+        I/O result before evaluating.
     """
     with nvtx_annotate_cudf_polars(message="reserve_memory"):
         reservation = await reserve_memory(
             context, size=estimated_chunk_bytes, net_memory_delta=estimated_chunk_bytes
         )
     with opaque_memory_usage(reservation):
-        df = await ir_context.to_thread(
-            scan.do_evaluate,
-            *scan._non_child_args,
-            context=ir_context,
-        )
+        if prefetcher is not None:
+            df = await ir_context.to_thread(
+                evaluate_with_prefetch,
+                scan,
+                prefetcher,
+                seq_num,
+                context=ir_context,
+            )
+        else:
+            df = await ir_context.to_thread(
+                scan.do_evaluate,
+                *scan._non_child_args,
+                context=ir_context,
+            )
     with nvtx_annotate_cudf_polars(message="TableChunk.from_pylibcudf_table"):
         chunk = TableChunk.from_pylibcudf_table(
             df.table,
@@ -583,6 +612,23 @@ async def scan_node(
     """
     scans: Sequence[SplitScan] | Sequence[FusedScan] = ir.scans
 
+    prefetcher: HybridScanPrefetcher | None = None
+    first = scans[0] if scans else None
+    if (
+        first is not None
+        and ir.scan_type == "split"
+        and first.parquet_options.use_hybrid_scan  # type: ignore[union-attr]
+        and first.parquet_options.prefetch_file_metadata  # type: ignore[union-attr]
+        and first.cached_parquet_info is not None  # type: ignore[union-attr]
+        and first.base_scan.predicate is not None  # type: ignore[union-attr]
+    ):
+        prefetcher = HybridScanPrefetcher(
+            list(scans),  # type: ignore[arg-type]
+            num_workers=num_producers,
+            depth=first.parquet_options.prefetch_depth,  # type: ignore[union-attr]
+            pinned_mr=context.br().pinned_mr,
+        )
+
     async with shutdown_on_error(
         context, ch_out, trace_ir=ir, ir_context=ir_context
     ) as tracer:
@@ -610,6 +656,7 @@ async def scan_node(
                     ir_context,
                     estimated_chunk_bytes,
                     tracer=tracer,
+                    prefetcher=prefetcher,
                 )
             await ch_out.drain(context)
             return
@@ -637,6 +684,7 @@ async def scan_node(
                     ir_context,
                     estimated_chunk_bytes,
                     tracer=tracer,
+                    prefetcher=prefetcher,
                 )
             await ch_out.drain(context)
 
