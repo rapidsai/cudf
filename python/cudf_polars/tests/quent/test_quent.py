@@ -75,15 +75,19 @@ def _make_quent_ir_execution_context(
     engine_id = context.engine.id
     worker_id = uuid.uuid4()
     pool_id = uuid.uuid4()
-    device_memory = Memory(
-        instance_name="device",
-        resource_type_name="memory",
-        parent_group_id=engine_id,
-    )
+    if disk_to_device_channel is not None:
+        device_memory = disk_to_device_channel.target
+    else:
+        device_memory = Memory(
+            instance_name="device",
+            resource_type_name="memory",
+            parent_group_id=engine_id,
+        )
     operator_id = operator_id or uuid.uuid4()
+    query = context.query_for(uuid.uuid4())
     plan = Plan(
         id=uuid.uuid4(),
-        query=Query(),
+        query=query,
         parent_plan=None,
         instance_name="logical",
         edges=[],
@@ -98,7 +102,7 @@ def _make_quent_ir_execution_context(
     )
     local_context = LocalQuentContext(
         context=context,
-        query=context.query_for(uuid.uuid4()),
+        query=query,
         worker=Worker(id=worker_id, engine=context.engine, instance_name="rank-0"),
         logger=logger,
         thread_pool_id=pool_id,
