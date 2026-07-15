@@ -16,7 +16,7 @@ round-trip is pure overhead: the data leaves the GPU only to be copied back agai
 
 `engine.execute()` avoids that overhead. It runs the query and returns a
 {class}`~cudf_polars.engine.persisted_result.PersistedQueryResult` whose
-partitions stay GPU-resident in the process that produced them. You can then
+data remain on the GPU in the process that produced them. You can then
 chain further work through {meth}`~cudf_polars.engine.persisted_result.PersistedQueryResult.lazy`
 without a host copy in between.
 
@@ -41,7 +41,7 @@ import polars as pl
 from cudf_polars.engine.ray import RayEngine
 
 with RayEngine() as engine:
-    # Runs on the GPU, the result stays there (no host copy).
+    # Runs on the GPU, the result stays there.
     result = engine.execute(
         pl.scan_parquet("/data/dataset/*.parquet")
         .filter(pl.col("amount") > 100)
@@ -49,7 +49,7 @@ with RayEngine() as engine:
         .agg(pl.col("amount").sum())
     )
 
-    # Chain more work off the persisted result, still on the GPU.
+    # Run more work on the GPU using the persisted result as input.
     df = (
         result.lazy()
         .sort("amount")
@@ -59,7 +59,7 @@ with RayEngine() as engine:
 ```
 
 The `LazyFrame` returned by `result.lazy()` can be collected **only** with the
-engine that produced it, never with a different engine. The partitions never
+engine that produced it, never with a different engine. The data never
 leave their owning processes, so the default (host) Polars engine cannot read
 them, and collecting or executing the result with any other engine is unsupported.
 
@@ -82,7 +82,7 @@ with RayEngine() as engine:
     df = b.lazy().collect(engine=engine)
 ```
 
-Each `execute()`/`collect()` consumes the result it reads (move-on-read), so
+Each `execute()`/`collect()` consumes the result it reads, so
 `a` is spent by the second `execute()` above and cannot be read again.
 
 ## Results are one-shot
