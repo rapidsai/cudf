@@ -269,7 +269,7 @@ struct host_span {
   [[nodiscard]] CUDF_HOST_DEVICE constexpr host_span subspan(size_type offset,
                                                              size_type count) const noexcept
   {
-    assert(offset + count <= _span.size());
+    assert(offset <= _span.size() && count <= _span.size() - offset);
     return host_span{_span.data() + offset, count, _is_device_accessible};
   }
 
