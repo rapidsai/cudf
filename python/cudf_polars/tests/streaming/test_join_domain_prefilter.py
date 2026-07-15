@@ -12,7 +12,7 @@ import polars as pl
 from cudf_polars import Translator
 from cudf_polars.containers import DataType
 from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Cache, Distinct, Join, Scan, Select, Slice
+from cudf_polars.dsl.ir import Cache, DataFrameScan, Distinct, Join, Scan, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
@@ -167,12 +167,45 @@ def _joins(ir: IR, how: str | None = None) -> list[Join]:
     ]
 
 
-def test_simple_domain_prefilter_filters_large_side() -> None:
-    part = _scan("part", ("p_partkey",), predicate=True)
-    lineitem = _scan("lineitem", ("l_partkey", "l_suppkey"))
-    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+def translate_query(query: pl.LazyFrame, engine: SPMDEngine) -> IR:
+    """Translate a public Polars query and remove logical Cache nodes."""
+    return remove_cache_nodes(Translator(query._ldf.visit(), engine).translate_ir())
 
-    facts = analyze_plan(root, _stats(part=(part, 6), lineitem=(lineitem, 1_800)))
+
+def dataframe_scan(ir: IR, column: str) -> DataFrameScan:
+    """Return the unique in-memory scan containing ``column``."""
+    (match,) = (
+        node
+        for node in traversal([ir])
+        if isinstance(node, DataFrameScan) and column in node.schema
+    )
+    return match
+
+
+def test_simple_domain_prefilter_filters_large_side(engine: SPMDEngine) -> None:
+    part = (
+        pl.LazyFrame(
+            {
+                "p_partkey": [1, 99],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("p_partkey")
+    )
+    lineitem = pl.LazyFrame(
+        {
+            "l_partkey": [i % 10 for i in range(20)],
+            "l_suppkey": range(20),
+        }
+    )
+    query = part.join(lineitem, left_on="p_partkey", right_on="l_partkey")
+    root = translate_query(query, engine)
+
+    assert isinstance(root, Join)
+    part_ir, _ = root.children
+    lineitem_ir = dataframe_scan(root, "l_partkey")
+    facts = analyze_plan(root, StatsCollector())
     decision = _select_candidate(root, 0.5, facts)
 
     assert decision.reason == "applied"
@@ -181,10 +214,11 @@ def test_simple_domain_prefilter_filters_large_side() -> None:
 
     assert isinstance(optimized, Join)
     assert optimized.options[0] == "Inner"
-    assert isinstance(optimized.children[1], Join)
-    assert optimized.children[1].options[0] == "Semi"
-    assert optimized.children[1].children[0] is lineitem
-    assert optimized.children[0] is part
+    semis = _joins(optimized, "Semi")
+    assert len(semis) == 1
+    assert semis[0].children[0] is lineitem_ir
+    assert not _joins(part_ir, "Semi")
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_domain_prefilter_is_independent_of_dynamic_planning() -> None:
@@ -368,59 +402,114 @@ def test_composite_domain_prefilter_constrains_domain_first(
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_derived_selectivity_propagates_through_rewritten_children() -> None:
-    region = _scan("region", ("r_regionkey",), predicate=True)
-    nation = _scan("nation", ("n_nationkey", "n_regionkey"))
-    customer = _scan("customer", ("c_custkey", "c_nationkey"))
-    orders = _scan("orders", ("o_orderkey", "o_custkey"))
-
-    region_nation = _join(region, nation, ("r_regionkey",), ("n_regionkey",))
-    nation_customer = _join(region_nation, customer, ("n_nationkey",), ("c_nationkey",))
-    root = _join(nation_customer, orders, ("c_custkey",), ("o_custkey",))
-
-    optimized = optimize_join_domain_prefilters(
-        root,
-        _stats(
-            region=(region, 1),
-            nation=(nation, 25),
-            customer=(customer, 150),
-            orders=(orders, 1_500),
-        ),
-        _config(),
+def test_derived_selectivity_propagates_through_rewritten_children(
+    engine: SPMDEngine,
+) -> None:
+    region = (
+        pl.LazyFrame(
+            {
+                "r_regionkey": [0, 1],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("r_regionkey")
     )
-
-    filtered = {semi.children[0] for semi in _joins(optimized, "Semi")}
-    assert {nation, customer, orders} <= filtered
-
-
-def test_rewritten_domain_filters_other_side_instead_of_stacking() -> None:
-    part = _scan("part", ("p_partkey",), predicate=True)
-    lineitem = _scan("lineitem", ("l_orderkey", "l_partkey", "l_suppkey"))
-    supplier = _scan("supplier", ("s_suppkey",))
-    orders = _scan("orders", ("o_orderkey",), predicate=True)
-
-    part_lineitem = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
-    line_supplier = _join(part_lineitem, supplier, ("l_suppkey",), ("s_suppkey",))
-    root = _join(line_supplier, orders, ("l_orderkey",), ("o_orderkey",))
+    nation = pl.LazyFrame(
+        {
+            "n_nationkey": range(10),
+            "n_regionkey": [i % 2 for i in range(10)],
+        }
+    )
+    customer = pl.LazyFrame(
+        {
+            "c_custkey": range(40),
+            "c_nationkey": [i % 10 for i in range(40)],
+        }
+    )
+    orders = pl.LazyFrame(
+        {
+            "o_orderkey": range(200),
+            "o_custkey": [i % 40 for i in range(200)],
+        }
+    )
+    query = (
+        region.join(nation, left_on="r_regionkey", right_on="n_regionkey")
+        .join(customer, left_on="n_nationkey", right_on="c_nationkey")
+        .join(orders, left_on="c_custkey", right_on="o_custkey")
+    )
+    root = translate_query(query, engine)
 
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(
-            part=(part, 60),
-            lineitem=(lineitem, 1_800),
-            supplier=(supplier, 30),
-            orders=(orders, 150),
-        ),
-        _config(),
+        StatsCollector(),
+        ConfigOptions.from_polars_engine(engine),
     )
 
     semis = _joins(optimized, "Semi")
-    assert sum(semi.children[0] is lineitem for semi in semis) == 1
-    assert any(semi.children[0] is orders for semi in semis)
+    expected_targets = {
+        dataframe_scan(root, "n_nationkey"),
+        dataframe_scan(root, "c_custkey"),
+        dataframe_scan(root, "o_orderkey"),
+    }
+    assert expected_targets <= {semi.children[0] for semi in semis}
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+
+
+def test_rewritten_domain_filters_other_side_instead_of_stacking(
+    engine: SPMDEngine,
+) -> None:
+    part = (
+        pl.LazyFrame(
+            {
+                "p_partkey": range(6),
+                "part_active": [True] * 3 + [False] * 3,
+            }
+        )
+        .filter("part_active")
+        .select("p_partkey")
+    )
+    lineitem = pl.LazyFrame(
+        {
+            "l_orderkey": [i % 15 for i in range(180)],
+            "l_partkey": [i % 6 for i in range(180)],
+            "l_suppkey": [i % 3 for i in range(180)],
+        }
+    )
+    supplier = pl.LazyFrame({"s_suppkey": range(3)})
+    orders = (
+        pl.LazyFrame(
+            {
+                "o_orderkey": range(15),
+                "order_active": [True] * 8 + [False] * 7,
+            }
+        )
+        .filter("order_active")
+        .select("o_orderkey")
+    )
+    query = (
+        part.join(lineitem, left_on="p_partkey", right_on="l_partkey")
+        .join(supplier, left_on="l_suppkey", right_on="s_suppkey")
+        .join(orders, left_on="l_orderkey", right_on="o_orderkey")
+    )
+    root = translate_query(query, engine)
+
+    optimized = optimize_join_domain_prefilters(
+        root,
+        StatsCollector(),
+        ConfigOptions.from_polars_engine(engine),
+    )
+
+    lineitem_ir = dataframe_scan(root, "l_orderkey")
+    orders_ir = dataframe_scan(root, "o_orderkey")
+    semis = _joins(optimized, "Semi")
+    assert sum(semi.children[0] is lineitem_ir for semi in semis) == 1
+    assert any(semi.children[0] is orders_ir for semi in semis)
     assert not any(
         isinstance(semi.children[0], Join) and semi.children[0].options[0] == "Semi"
         for semi in semis
     )
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_target_source_follows_join_key_through_rename(
@@ -613,18 +702,33 @@ def test_plan_facts_share_lineage_suffixes_across_shared_dag() -> None:
     assert source_lineage.source is None
 
 
-def test_target_prefilter_does_not_move_below_slice() -> None:
-    target = _scan("target", ("target_key",))
-    sliced = Slice(target.schema, 0, 100, target)
-    domain = _scan("domain", ("domain_key",), predicate=True)
-    root = _join(sliced, domain, ("target_key",), ("domain_key",))
+def test_target_prefilter_does_not_move_below_slice(engine: SPMDEngine) -> None:
+    target = (
+        pl.LazyFrame({"target_key": range(20)})
+        .filter(pl.col("target_key") >= 0)
+        .slice(0, 10)
+    )
+    domain = (
+        pl.LazyFrame(
+            {
+                "domain_key": [1, 99],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("domain_key")
+    )
+    query = target.join(domain, left_on="target_key", right_on="domain_key")
+    root = translate_query(query, engine)
 
-    stats = _stats(target=(target, 1_000), domain=(domain, 5))
+    assert isinstance(root, Join)
+    sliced = root.children[0]
+    assert isinstance(sliced, Slice)
+    target_ir = dataframe_scan(root, "target_key")
+    stats = StatsCollector()
     facts = analyze_plan(root, stats)
     lineage = facts.column_lineages[ColumnRef(sliced, "target_key")]
     assert lineage.column == ColumnRef(sliced, "target_key")
-    assert lineage.source is facts.column_lineages[ColumnRef(target, "target_key")]
-    assert lineage.source.source is None
     assert tuple(semijoin_pushdown_candidates(facts, sliced, "target_key")) == (
         (ColumnRef(sliced, "target_key"), ()),
     )
@@ -632,38 +736,63 @@ def test_target_prefilter_does_not_move_below_slice() -> None:
     optimized = optimize_join_domain_prefilters(
         root,
         stats,
-        _config(),
+        ConfigOptions.from_polars_engine(engine),
     )
 
     semis = _joins(optimized, "Semi")
     assert any(semi.children[0] is sliced for semi in semis)
-    assert not any(semi.children[0] is target for semi in semis)
+    assert not any(semi.children[0] is target_ir for semi in semis)
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_target_replacement_does_not_rewrite_shared_domain_side() -> None:
-    shared = _scan("shared", ("target_key", "other"))
-    domain_source = _scan("domain_source", ("domain_key", "other2"), predicate=True)
-    domain = _join(
-        shared,
-        domain_source,
-        ("other",),
-        ("other2",),
-        maintain_order="left",
+def test_target_replacement_does_not_rewrite_shared_domain_side(
+    engine: SPMDEngine,
+) -> None:
+    shared = pl.LazyFrame(
+        {
+            "target_key": range(20),
+            "other": [i % 2 for i in range(20)],
+        }
     )
-    root = _join(shared, domain, ("target_key",), ("domain_key",))
+    domain_source = (
+        pl.LazyFrame(
+            {
+                "domain_key": [1, 99],
+                "other2": [0, 1],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("domain_key", "other2")
+    )
+    domain = shared.join(
+        domain_source,
+        left_on=pl.col("other").cast(pl.Int32),
+        right_on=pl.col("other2").cast(pl.Int32),
+    )
+    query = shared.join(domain, left_on="target_key", right_on="domain_key")
+    root = translate_query(query, engine)
+
+    assert isinstance(root, Join)
+    shared_ir, domain_ir = root.children
+    assert isinstance(domain_ir, Join)
+    assert domain_ir.children[0] is shared_ir
 
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(shared=(shared, 1_000), domain_source=(domain_source, 5)),
-        _config(),
+        StatsCollector(),
+        ConfigOptions.from_polars_engine(engine),
     )
 
     assert isinstance(optimized, Join)
-    assert isinstance(optimized.children[0], Join)
-    assert optimized.children[0].options[0] == "Semi"
-    assert optimized.children[0].children[0] is shared
-    assert optimized.children[1] is domain
-    assert domain.children[0] is shared
+    filtered, unfiltered_domain = optimized.children
+    assert unfiltered_domain is domain_ir
+    assert domain_ir.children[0] is shared_ir
+    semis = _joins(filtered, "Semi")
+    assert len(semis) == 1
+    assert semis[0].children[0] is dataframe_scan(root, "target_key")
+    assert not _joins(unfiltered_domain, "Semi")
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_target_prefilter_rewrites_only_selected_self_join_edge(
@@ -715,19 +844,14 @@ def test_target_prefilter_rewrites_only_selected_self_join_edge(
     assert len(filtered_semis) == 1
     assert not _joins(unfiltered, "Semi")
     assert any(filtered_semis[0].children[0] is node for node in traversal([source_ir]))
-
-    expected = query.collect()
-    assert sorted(expected.select("value", "value_right").rows()) == [
-        (10, 10),
-        (10, 20),
-    ]
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_no_domain_prefilter_for_outer_join() -> None:
+@pytest.mark.parametrize("how", ["Left", "Right", "Cross", "Full"])
+def test_no_domain_prefilter_for_outer_join(how) -> None:
     part = _scan("part", ("p_partkey",), predicate=True)
     lineitem = _scan("lineitem", ("l_partkey",))
-    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",), how="Left")
+    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",), how=how)
 
     optimized = optimize_join_domain_prefilters(
         root,
