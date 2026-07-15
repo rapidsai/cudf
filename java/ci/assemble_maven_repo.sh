@@ -89,6 +89,20 @@ if [[ ! -d ${JARS_DIR} ]]; then
   exit 1
 fi
 
+if [[ -e ${OUTPUT_DIR} && -n "$(ls -A "${OUTPUT_DIR}" 2>/dev/null)" ]]; then
+  echo "Error: --output-dir '${OUTPUT_DIR}' must be empty or nonexistent" >&2
+  exit 1
+fi
+
+ASSEMBLE_FINISHED=0
+cleanup_partial_output() {
+  if [[ ${ASSEMBLE_FINISHED} -eq 0 && -e ${OUTPUT_DIR} ]]; then
+    echo "Assembly did not complete; removing partial output at ${OUTPUT_DIR}" >&2
+    rm -rf "${OUTPUT_DIR}"
+  fi
+}
+trap cleanup_partial_output EXIT
+
 echo "Assembling Maven repository layout"
 echo "  jars dir:   ${JARS_DIR}"
 echo "  output dir: ${OUTPUT_DIR}"
@@ -162,3 +176,5 @@ echo "  + cudf-${FIRST_VERSION}.pom"
 
 echo "Maven repository assembled successfully at ${OUTPUT_DIR}"
 echo "Classifiers present:${CLASSIFIERS_SEEN}"
+
+ASSEMBLE_FINISHED=1

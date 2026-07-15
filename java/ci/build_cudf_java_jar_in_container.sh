@@ -8,8 +8,9 @@
 # java/ci/build_cudf_java_jar.sh. It generates the build_java conda toolchain
 # environment, compiles the JNI layer against a prebuilt static libcudf
 # (mounted at /libcudf), and packages the cuDF Java JAR. The resulting
-# classifier JAR and its POM are copied to /output. Then chowns /output and
-# /repo/java/target to HOST_UID:HOST_GID so the host user owns the outputs.
+# classifier JAR and its POM are copied to /output. /output and
+# /repo/java/target are chowned to HOST_UID:HOST_GID on exit so the host user
+# owns the outputs.
 #
 # Inputs (environment variables):
 #   RAPIDS_CUDA_VERSION        CUDA version, e.g. 12.9 or 12.9.1 (required).
@@ -30,6 +31,16 @@ if [[ -z ${RAPIDS_CUDA_VERSION} ]]; then
   echo "Error: RAPIDS_CUDA_VERSION must be set" >&2
   exit 1
 fi
+
+if [[ -z ${HOST_UID} || -z ${HOST_GID} ]]; then
+  echo "Error: HOST_UID and HOST_GID must both be set" >&2
+  exit 1
+fi
+
+_chown_outputs_on_exit() {
+  chown -R "${HOST_UID}:${HOST_GID}" "${OUTPUT_DIR}" "${REPO_ROOT}/java/target" 2>/dev/null || true
+}
+trap _chown_outputs_on_exit EXIT
 
 if [[ -z ${PARALLEL_LEVEL} ]]; then
   PARALLEL_LEVEL=$(nproc)
@@ -108,9 +119,3 @@ cp -f "${MAIN_JAR}" "${OUTPUT_DIR}/"
 cp -f pom.xml "${OUTPUT_DIR}/cudf-${CUDF_VERSION}.pom"
 
 rapids-logger "Emitted $(basename "${MAIN_JAR}") + cudf-${CUDF_VERSION}.pom to ${OUTPUT_DIR}"
-
-if [[ -n ${HOST_UID} && -n ${HOST_GID} ]]; then
-  rapids-logger "Chowning ${OUTPUT_DIR} and ${REPO_ROOT}/java/target to ${HOST_UID}:${HOST_GID}"
-  chown -R "${HOST_UID}:${HOST_GID}" "${OUTPUT_DIR}"
-  chown -R "${HOST_UID}:${HOST_GID}" "${REPO_ROOT}/java/target"
-fi

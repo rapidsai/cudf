@@ -47,7 +47,8 @@ REQUIRED:
     -l, --libcudf-dir    Static libcudf install tree produced by
                          build_static_libcudf.sh.
     -o, --output-dir     Host parent directory. The script creates and writes
-                         to <output-dir>/<classifier>/.
+                         to <output-dir>/<classifier>/, which must not already
+                         exist.
     -c, --cuda-version   CUDA version to build for (e.g. "12.9" or "12.9.1").
                          Must match --cuda-version of the static libcudf tree;
                          determines the cuda12/cuda13 classifier.
@@ -151,6 +152,10 @@ OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
 LIBCUDF_DIR="$(cd "${LIBCUDF_DIR}" && pwd)"
 
 CLASSIFIER_OUT="${OUTPUT_DIR}/${CLASSIFIER}"
+if [[ -e ${CLASSIFIER_OUT} ]]; then
+  echo "Error: classifier output '${CLASSIFIER_OUT}' already exists. Remove it before re-running." >&2
+  exit 1
+fi
 mkdir -p "${CLASSIFIER_OUT}"
 
 # Per-classifier scratch dir for Maven's java/target/. Nested bind-mount over

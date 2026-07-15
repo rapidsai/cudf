@@ -2,7 +2,7 @@
 
 ## Recommended: self-contained release build scripts
 
-The scripts under `ci/` build the cuDF Java JAR for every Maven classifier the
+The scripts under `java/ci/` build the cuDF Java JAR for every Maven classifier the
 same way locally and in CI (GitHub Actions is only a thin wrapper that adds
 artifact upload/download). Each script pulls the RAPIDS `ci-conda` build image,
 runs the build in a throwaway container, and writes its output to a host
@@ -12,6 +12,14 @@ directory. No local `docker build` is required, and no GPU is required to build.
 
 1. Docker is installed and the current user can run `docker`.
 2. Network access to pull `rapidsai/ci-conda:<rapids_version>-latest`.
+
+### Local one-command shortcut
+
+For local testing only, `java/ci/test_java_build_local.sh` runs Steps 1-3 end-to-end for both CUDA 12 and CUDA 13 on the host architecture.
+
+```bash
+./java/ci/test_java_build_local.sh --work-dir /tmp/java-build-test
+```
 
 ### Step 1 - Build the static libcudf install tree
 

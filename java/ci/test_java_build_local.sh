@@ -189,10 +189,11 @@ if [[ ${CMAKE_CUDA_ARCHITECTURES} != "all" ]]; then
   CHILD_CMAKE_ARGS=(--cmake-cuda-architectures "${CMAKE_CUDA_ARCHITECTURES}")
 fi
 
-# JAR builds run in parallel; give each half of the CPU budget.
-JAR_PARALLEL=$((PARALLEL_LEVEL / 2))
-if [[ ${JAR_PARALLEL} -lt 1 ]]; then
-  JAR_PARALLEL=1
+# Both Step 1 and Step 2 launch two concurrent builds. Each build gets half
+# of PARALLEL_LEVEL so together they stay within PARALLEL_LEVEL.
+STEP_PARALLEL=$((PARALLEL_LEVEL / 2))
+if [[ ${STEP_PARALLEL} -lt 1 ]]; then
+  STEP_PARALLEL=1
 fi
 
 # Step 1: static libcudf builds in parallel.
@@ -202,7 +203,7 @@ STEP1_START=${SECONDS}
 "${SCRIPT_DIR}/build_static_libcudf.sh" \
     --output-dir "${WORK_DIR}/libcudf-cuda12" \
     --cuda-version "${CUDA12_VERSION}" \
-    --parallel "${PARALLEL_LEVEL}" \
+    --parallel "${STEP_PARALLEL}" \
     "${CHILD_CMAKE_ARGS[@]}" \
     > "${LOG_DIR}/static_cuda12.log" 2>&1 &
 STATIC_CUDA12_PID=$!
@@ -210,7 +211,7 @@ STATIC_CUDA12_PID=$!
 "${SCRIPT_DIR}/build_static_libcudf.sh" \
     --output-dir "${WORK_DIR}/libcudf-cuda13" \
     --cuda-version "${CUDA13_VERSION}" \
-    --parallel "${PARALLEL_LEVEL}" \
+    --parallel "${STEP_PARALLEL}" \
     "${CHILD_CMAKE_ARGS[@]}" \
     > "${LOG_DIR}/static_cuda13.log" 2>&1 &
 STATIC_CUDA13_PID=$!
@@ -250,7 +251,7 @@ STEP2_START=${SECONDS}
     --libcudf-dir "${WORK_DIR}/libcudf-cuda12" \
     --output-dir "${WORK_DIR}/jars" \
     --cuda-version "${CUDA12_VERSION}" \
-    --parallel "${JAR_PARALLEL}" \
+    --parallel "${STEP_PARALLEL}" \
     "${CHILD_CMAKE_ARGS[@]}" \
     > "${LOG_DIR}/jar_cuda12.log" 2>&1 &
 JAR_CUDA12_PID=$!
@@ -259,7 +260,7 @@ JAR_CUDA12_PID=$!
     --libcudf-dir "${WORK_DIR}/libcudf-cuda13" \
     --output-dir "${WORK_DIR}/jars" \
     --cuda-version "${CUDA13_VERSION}" \
-    --parallel "${JAR_PARALLEL}" \
+    --parallel "${STEP_PARALLEL}" \
     "${CHILD_CMAKE_ARGS[@]}" \
     > "${LOG_DIR}/jar_cuda13.log" 2>&1 &
 JAR_CUDA13_PID=$!

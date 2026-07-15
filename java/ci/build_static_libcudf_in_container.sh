@@ -29,6 +29,11 @@ if [[ -z ${RAPIDS_CUDA_VERSION} ]]; then
   exit 1
 fi
 
+if [[ -z ${HOST_UID} || -z ${HOST_GID} ]]; then
+  echo "Error: HOST_UID and HOST_GID must both be set" >&2
+  exit 1
+fi
+
 if [[ -z ${PARALLEL_LEVEL} ]]; then
   PARALLEL_LEVEL=$(nproc)
 fi
@@ -86,7 +91,5 @@ cmake --build "${BUILD_DIR}" --parallel "${PARALLEL_LEVEL}"
 rapids-logger "Installing static libcudf to ${INSTALL_PREFIX}"
 cmake --install "${BUILD_DIR}"
 
-if [[ -n ${HOST_UID} && -n ${HOST_GID} ]]; then
-  rapids-logger "Chowning ${INSTALL_PREFIX} to ${HOST_UID}:${HOST_GID}"
-  chown -R "${HOST_UID}:${HOST_GID}" "${INSTALL_PREFIX}"
-fi
+rapids-logger "Chowning ${INSTALL_PREFIX} to ${HOST_UID}:${HOST_GID}"
+chown -R "${HOST_UID}:${HOST_GID}" "${INSTALL_PREFIX}"
