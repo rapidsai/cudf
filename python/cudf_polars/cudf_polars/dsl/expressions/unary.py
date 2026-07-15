@@ -252,6 +252,93 @@ class UnaryFunction(Expr):
         """Whether a ``clip`` bound can use the scalar ``clamp`` fast path."""
         return operand is None or isinstance(operand, plc.Scalar)
 
+    @staticmethod
+    def _cast_replace_operand(
+        column: Column, out_type: DataType, df: DataFrame
+    ) -> Column:
+        """Cast a ``replace`` operand, mapping an all-null operand onto ``out_type``."""
+        if column.obj.type().id() == plc.TypeId.EMPTY:
+            return Column(
+                plc.Column.from_scalar(
+                    plc.Scalar.from_py(None, out_type.plc_type, stream=df.stream),
+                    column.size,
+                    stream=df.stream,
+                ),
+                dtype=out_type,
+            )
+        return column.astype(out_type, stream=df.stream)
+
+    def _replace(
+        self, column: Column, old: Column, new: Column, df: DataFrame
+    ) -> Column:
+        """Evaluate a non-strict ``replace``, filling matched nulls separately."""
+        if old.obj.null_count() == 0:
+            return Column(
+                plc.replace.find_and_replace_all(
+                    column.obj, old.obj, new.obj, stream=df.stream
+                ),
+                dtype=self.dtype,
+            )
+        result = column.obj
+        if old.obj.null_count() != old.size:
+            nonnull_old, nonnull_new = plc.stream_compaction.apply_boolean_mask(
+                plc.Table([old.obj, new.obj]),
+                plc.unary.is_valid(old.obj, stream=df.stream),
+                stream=df.stream,
+            ).columns()
+            result = plc.replace.find_and_replace_all(
+                result, nonnull_old, nonnull_new, stream=df.stream
+            )
+        null_new = plc.stream_compaction.apply_boolean_mask(
+            plc.Table([new.obj]),
+            plc.unary.is_null(old.obj, stream=df.stream),
+            stream=df.stream,
+        ).columns()[0]
+        return Column(
+            plc.replace.replace_nulls(
+                result,
+                plc.copying.get_element(null_new, 0, stream=df.stream),
+                stream=df.stream,
+            ),
+            dtype=self.dtype,
+        )
+
+    def _replace_strict(
+        self, column: Column, old: Column, new: Column, default: Column, df: DataFrame
+    ) -> Column:
+        """Evaluate a strict ``replace_strict`` via a left join onto the mapping."""
+        left_map, right_map = plc.join.left_join(
+            plc.Table([column.obj]),
+            plc.Table([old.obj]),
+            plc.types.NullEquality.EQUAL,
+            stream=df.stream,
+        )
+        mapped = plc.copying.gather(
+            plc.Table([new.obj]),
+            right_map,
+            plc.copying.OutOfBoundsPolicy.NULLIFY,
+            stream=df.stream,
+        ).columns()[0]
+        matched = plc.binaryop.binary_operation(
+            right_map,
+            plc.Scalar.from_py(0, right_map.type(), stream=df.stream),
+            plc.binaryop.BinaryOperator.GREATER_EQUAL,
+            plc.DataType(plc.TypeId.BOOL8),
+            stream=df.stream,
+        )
+        joined = plc.copying.copy_if_else(
+            mapped,
+            default.obj_scalar(stream=df.stream),
+            matched,
+            stream=df.stream,
+        )
+        return Column(
+            plc.copying.scatter(
+                plc.Table([joined]), left_map, plc.Table([joined]), stream=df.stream
+            ).columns()[0],
+            dtype=self.dtype,
+        )
+
     def do_evaluate(
         self, df: DataFrame, *, context: ExecutionContext = ExecutionContext.FRAME
     ) -> Column:
@@ -264,12 +351,16 @@ class UnaryFunction(Expr):
                 child.evaluate(df, context=context) for child in self.children[:3]
             )
             is_strict = self.name == "replace_strict"
-            if is_strict:
-                default = self.children[3].evaluate(df, context=context)
-            old = old.astype(column.dtype, stream=df.stream)
-            new = new.astype(self.dtype, stream=df.stream)
-            if is_strict:
-                default = default.astype(self.dtype, stream=df.stream)
+            old_polars = old.dtype.polars_type
+            old_label = getattr(old_polars, "inner", old_polars)._string_repr()
+            try:
+                old = self._cast_replace_operand(old, column.dtype, df)
+            except pl.exceptions.InvalidOperationError:
+                raise pl.exceptions.InvalidOperationError(
+                    f"conversion from `{old_label}` to "
+                    f"`{column.dtype.polars_type._string_repr()}` failed"
+                ) from None
+            new = self._cast_replace_operand(new, self.dtype, df)
             if old.size != new.size:
                 if new.size != 1:
                     raise pl.exceptions.InvalidOperationError(
@@ -281,29 +372,12 @@ class UnaryFunction(Expr):
                     ),
                     dtype=self.dtype,
                 )
-            replace_column = column
-            replace_old = old
             if is_strict:
-                replace_column = replace_column.astype(self.dtype, stream=df.stream)
-                replace_old = replace_old.astype(self.dtype, stream=df.stream)
-            replaced = Column(
-                plc.replace.find_and_replace_all(
-                    replace_column.obj, replace_old.obj, new.obj, stream=df.stream
-                ),
-                dtype=replace_column.dtype,
-            )
-            if not is_strict:
-                return replaced.astype(self.dtype, stream=df.stream)
-            mask = plc.search.contains(old.obj, column.obj, stream=df.stream)
-            return Column(
-                plc.copying.copy_if_else(
-                    replaced.obj,
-                    default.obj_scalar(stream=df.stream),
-                    mask,
-                    stream=df.stream,
-                ),
-                dtype=self.dtype,
-            )
+                default = self._cast_replace_operand(
+                    self.children[3].evaluate(df, context=context), self.dtype, df
+                )
+                return self._replace_strict(column, old, new, default, df)
+            return self._replace(column, old, new, df)
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
