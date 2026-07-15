@@ -2502,7 +2502,7 @@ class GroupBy(Serializable, Reducible, Scannable):
                 result.index = group_names
                 result.index.names = self.grouping.names
                 if len(names) == 1:
-                    result._data._level_names = (next(iter(names)),)
+                    result._data._level_names = (names.pop(),)
             else:
                 # pandas GH8467: Series results with differing indexes are
                 # concatenated along axis 0 into a Series with the group

@@ -763,8 +763,12 @@ def test_groupby_apply_series_results_misaligned_lengths():
 
         return swap_sizes
 
-    expected = pdf.groupby("k").apply(make_swap_sizes(pd.Series))
-    actual = gdf.groupby("k").apply(make_swap_sizes(cudf.Series))
+    expected = pdf.groupby("k").apply(
+        make_swap_sizes(pd.Series), include_groups=False
+    )
+    actual = gdf.groupby("k").apply(
+        make_swap_sizes(cudf.Series), include_groups=False
+    )
     assert_eq(expected, actual)
 
 
@@ -781,8 +785,12 @@ def test_groupby_apply_series_results_fresh_index():
 
         return fresh_index
 
-    expected = pdf.groupby("k").apply(make_fresh_index(pd.Series))
-    actual = gdf.groupby("k").apply(make_fresh_index(cudf.Series))
+    expected = pdf.groupby("k").apply(
+        make_fresh_index(pd.Series), include_groups=False
+    )
+    actual = gdf.groupby("k").apply(
+        make_fresh_index(cudf.Series), include_groups=False
+    )
     assert_eq(expected, actual)
 
 

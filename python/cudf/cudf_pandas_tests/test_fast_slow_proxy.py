@@ -702,6 +702,28 @@ def test_transform_arg_rebuilds_containers_holding_proxies(
     assert type(result[1]) is expected_type
 
 
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_dict_subclass_identity_avoids_overrides(
+    attribute_name,
+):
+    # The unchanged-identity detection must compare entries via ``items()``
+    # (which the transformation itself already consumed) rather than
+    # ``__iter__``/``__getitem__``, which a mapping subclass may override
+    # with semantics that break the comparison.
+    class NoDunderDict(dict):
+        def __iter__(self):
+            raise AssertionError("__iter__ must not be used")
+
+        def __getitem__(self, key):
+            raise AssertionError("__getitem__ must not be used")
+
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    unchanged = NoDunderDict({"k": 1})
+    assert transform(unchanged) is unchanged
+
+
 def test_tuple_with_attrs_transform():
     Bunch = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
     Bunch2 = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})

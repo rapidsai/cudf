@@ -1503,8 +1503,10 @@ def _transform_arg(
             for k, a in arg.items()
         }
         if len(transformed_dict) == len(arg) and all(
-            new_k is old_k and transformed_dict[new_k] is arg[old_k]
-            for new_k, old_k in zip(transformed_dict, arg, strict=True)
+            new_k is old_k and new_v is old_v
+            for (new_k, new_v), (old_k, old_v) in zip(
+                transformed_dict.items(), arg.items(), strict=True
+            )
         ):
             # see the list branch above: preserve identity when unchanged
             return arg

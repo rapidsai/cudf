@@ -6688,8 +6688,11 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
                 include=[np.number], exclude=["datetime64", "timedelta64"]
             )
 
-        if columns is None:
-            columns = set(data_df._column_names)
+        if columns is not None:
+            requested = set(columns)
+            data_df = data_df[
+                [k for k in data_df._column_names if k in requested]
+            ]
 
         if isinstance(q, numbers.Number):
             q_is_number = True
@@ -6739,17 +6742,16 @@ class DataFrame(IndexedFrame, GetAttrGetItemMixin):
             interpolation = interpolation or "linear"
             result = {}
             for k in data_df._column_names:
-                if k in columns:
-                    ser = data_df[k]
-                    res = ser.quantile(
-                        qs,
-                        interpolation=interpolation,
-                        exact=exact,
-                        quant_index=False,
-                    )._column
-                    if len(res) == 0:
-                        res = column_empty(row_count=len(qs), dtype=ser.dtype)
-                    result[k] = res
+                ser = data_df[k]
+                res = ser.quantile(
+                    qs,
+                    interpolation=interpolation,
+                    exact=exact,
+                    quant_index=False,
+                )._column
+                if len(res) == 0:
+                    res = column_empty(row_count=len(qs), dtype=ser.dtype)
+                result[k] = res
         result_ca = ColumnAccessor(
             result,
             multiindex=data_df._data.multiindex,
