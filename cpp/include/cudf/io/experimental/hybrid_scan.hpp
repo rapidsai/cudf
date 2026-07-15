@@ -20,6 +20,11 @@
 #include <utility>
 #include <vector>
 
+/**
+ * @file
+ * @brief Experimental Hybrid Scan Parquet reader optimized for highly selective filters.
+ */
+
 namespace cudf::io::parquet::experimental::detail {
 /**
  * @brief Internal experimental Parquet reader optimized for highly selective filters, called a
@@ -36,8 +41,6 @@ namespace io::parquet::experimental {
 /**
  * @addtogroup io_readers
  * @{
- * @file
- * @brief Experimental Hybrid Scan Parquet reader optimized for highly selective filters.
  */
 
 /**

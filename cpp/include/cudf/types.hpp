@@ -79,7 +79,6 @@ class mutable_table_view;
 /**
  * @addtogroup utility_types
  * @{
- * @file
  */
 
 using size_type         = int32_t;   ///< Row index type for columns and tables
