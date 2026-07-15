@@ -3,16 +3,14 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import pytest
 
 import polars as pl
 
 from cudf_polars import Translator
-from cudf_polars.containers import DataType
-from cudf_polars.dsl import expr
-from cudf_polars.dsl.ir import Cache, DataFrameScan, Distinct, Join, Scan, Select, Slice
+from cudf_polars.dsl.ir import Cache, DataFrameScan, Distinct, Join, Select, Slice
 from cudf_polars.dsl.traversal import traversal
 from cudf_polars.dsl.utils.column_domain import ColumnRef
 from cudf_polars.engine.options import StreamingOptions
@@ -33,17 +31,14 @@ from cudf_polars.streaming.join_domain_prefilter import (
 from cudf_polars.streaming.parallel import optimize_with_stats, remove_cache_nodes
 from cudf_polars.streaming.statistics import collect_statistics
 from cudf_polars.testing.asserts import assert_gpu_result_equal
-from cudf_polars.utils.config import ConfigOptions, ParquetOptions
+from cudf_polars.utils.config import ConfigOptions
 
 if TYPE_CHECKING:
     import concurrent.futures
+    from typing import Any
 
     from cudf_polars.dsl.ir import IR
     from cudf_polars.engine.spmd import SPMDEngine
-    from cudf_polars.streaming.base import SerializedDataSourceInfo
-
-I64 = DataType(pl.Int64())
-BOOL = DataType(pl.Boolean())
 
 
 @pytest.fixture
@@ -57,96 +52,10 @@ def engine(spmd_engine_factory) -> SPMDEngine:
     )
 
 
-class _SourceInfo:
-    type: Literal["parquet"] = "parquet"
-
-    def __init__(self, row_count: int | None) -> None:
-        self.row_count = row_count
-
-    def column_storage_size(self, column: str) -> int | None:
-        del column
-        return None
-
-    def serialize(self) -> SerializedDataSourceInfo:
-        return {"type": self.type, "row_count": self.row_count, "per_file_means": {}}
-
-    @classmethod
-    def deserialize(cls, data: SerializedDataSourceInfo) -> _SourceInfo:
-        return cls(data["row_count"])
-
-
-def _scan(name: str, columns: tuple[str, ...], *, predicate: bool = False) -> Scan:
-    schema = dict.fromkeys(columns, I64)
-    mask = (
-        expr.NamedExpr("__predicate", expr.Literal(BOOL, True))  # noqa: FBT003
-        if predicate
-        else None
-    )
-    return Scan(
-        schema,
-        "parquet",
-        {},
-        None,
-        [f"/tmp/{name}.parquet"],
-        list(columns),
-        0,
-        -1,
-        None,
-        None,
-        mask,
-        ParquetOptions(),
-    )
-
-
-def _key(node: IR, name: str) -> expr.NamedExpr:
-    return expr.NamedExpr(name, expr.Col(node.schema[name], name))
-
-
-def _select(node: IR, **columns: str) -> Select:
-    schema = {output: node.schema[source] for output, source in columns.items()}
-    return Select(
-        schema,
-        tuple(
-            expr.NamedExpr(output, expr.Col(schema[output], source))
-            for output, source in columns.items()
-        ),
-        True,  # noqa: FBT003
-        node,
-    )
-
-
-def _join(
-    left: IR,
-    right: IR,
-    left_on: tuple[str, ...],
-    right_on: tuple[str, ...],
-    *,
-    how: str = "Inner",
-    maintain_order: str = "none",
-) -> Join:
-    schema = dict(left.schema)
-    schema.update(right.schema)
-    return Join(
-        schema,
-        tuple(_key(left, name) for name in left_on),
-        tuple(_key(right, name) for name in right_on),
-        (how, False, None, "_right", False, maintain_order),
-        left,
-        right,
-    )
-
-
-def _stats(**row_counts: tuple[Scan, int]) -> StatsCollector:
-    stats = StatsCollector()
-    for scan, rows in row_counts.values():
-        stats.scan_stats[scan] = _SourceInfo(rows)
-    return stats
-
-
-def _config(
+def make_config(
     *, dynamic_planning: bool = True, join_domain_prefilter: bool = True
 ) -> ConfigOptions:
-    executor_options: dict[str, object] = {
+    executor_options: dict[str, Any] = {
         "join_domain_prefilter": {"trace": False} if join_domain_prefilter else None
     }
     if not dynamic_planning:
@@ -159,7 +68,7 @@ def _config(
     )
 
 
-def _joins(ir: IR, how: str | None = None) -> list[Join]:
+def find_joins(ir: IR, how: str | None = None) -> list[Join]:
     return [
         node
         for node in traversal([ir])
@@ -169,7 +78,10 @@ def _joins(ir: IR, how: str | None = None) -> list[Join]:
 
 def translate_query(query: pl.LazyFrame, engine: SPMDEngine) -> IR:
     """Translate a public Polars query and remove logical Cache nodes."""
-    return remove_cache_nodes(Translator(query._ldf.visit(), engine).translate_ir())
+    t = Translator(query._ldf.visit(), engine)
+    root = t.translate_ir()
+    assert not t.errors
+    return remove_cache_nodes(root)
 
 
 def dataframe_scan(ir: IR, column: str) -> DataFrameScan:
@@ -182,7 +94,9 @@ def dataframe_scan(ir: IR, column: str) -> DataFrameScan:
     return match
 
 
-def test_simple_domain_prefilter_filters_large_side(engine: SPMDEngine) -> None:
+@pytest.fixture
+def simple_query() -> pl.LazyFrame:
+    """Return a query with a small selective join domain."""
     part = (
         pl.LazyFrame(
             {
@@ -199,8 +113,13 @@ def test_simple_domain_prefilter_filters_large_side(engine: SPMDEngine) -> None:
             "l_suppkey": range(20),
         }
     )
-    query = part.join(lineitem, left_on="p_partkey", right_on="l_partkey")
-    root = translate_query(query, engine)
+    return part.join(lineitem, left_on="p_partkey", right_on="l_partkey")
+
+
+def test_simple_domain_prefilter_filters_large_side(
+    simple_query: pl.LazyFrame, engine: SPMDEngine
+) -> None:
+    root = translate_query(simple_query, engine)
 
     assert isinstance(root, Join)
     part_ir, _ = root.children
@@ -214,36 +133,37 @@ def test_simple_domain_prefilter_filters_large_side(engine: SPMDEngine) -> None:
 
     assert isinstance(optimized, Join)
     assert optimized.options[0] == "Inner"
-    semis = _joins(optimized, "Semi")
+    semis = find_joins(optimized, "Semi")
     assert len(semis) == 1
     assert semis[0].children[0] is lineitem_ir
-    assert not _joins(part_ir, "Semi")
-    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
+    assert not find_joins(part_ir, "Semi")
+    assert_gpu_result_equal(simple_query, engine=engine, check_row_order=False)
 
 
-def test_domain_prefilter_is_independent_of_dynamic_planning() -> None:
-    part = _scan("part", ("p_partkey",), predicate=True)
-    lineitem = _scan("lineitem", ("l_partkey",))
-    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+def test_domain_prefilter_is_independent_of_dynamic_planning(
+    simple_query: pl.LazyFrame,
+    engine: SPMDEngine,
+) -> None:
+    root = translate_query(simple_query, engine)
 
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
-        _config(dynamic_planning=False),
+        StatsCollector(),
+        make_config(dynamic_planning=False),
     )
 
-    assert _joins(optimized, "Semi")
+    assert find_joins(optimized, "Semi")
 
 
-def test_domain_prefilter_can_be_disabled() -> None:
-    part = _scan("part", ("p_partkey",), predicate=True)
-    lineitem = _scan("lineitem", ("l_partkey",))
-    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",))
+def test_domain_prefilter_can_be_disabled(
+    simple_query: pl.LazyFrame, engine: SPMDEngine
+) -> None:
+    root = translate_query(simple_query, engine)
 
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
-        _config(join_domain_prefilter=False),
+        StatsCollector(),
+        make_config(join_domain_prefilter=False),
     )
 
     assert optimized is root
@@ -279,7 +199,7 @@ def test_nullable_join_keys_preserve_results(
         config,
     )
 
-    semi_joins = _joins(optimized, "Semi")
+    semi_joins = find_joins(optimized, "Semi")
     assert semi_joins
     assert all(join.options[1] is nulls_equal for join in semi_joins)
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
@@ -311,28 +231,36 @@ def test_prefilter_does_not_move_below_distinct_on_non_subset_column(
         config,
     )
 
-    semis = _joins(optimized, "Semi")
+    semis = find_joins(optimized, "Semi")
     assert any(isinstance(semi.children[0], Distinct) for semi in semis)
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_no_simple_domain_prefilter_when_domain_is_not_selective() -> None:
-    supplier = _scan("supplier", ("s_suppkey",))
-    lineitem = _scan("lineitem", ("l_suppkey",))
-    root = _join(supplier, lineitem, ("s_suppkey",), ("l_suppkey",))
-    stats = _stats(supplier=(supplier, 30), lineitem=(lineitem, 1_800))
-
+def test_no_simple_domain_prefilter_when_domain_is_not_selective(
+    engine: SPMDEngine,
+) -> None:
+    supplier = pl.LazyFrame({"s_suppkey": range(3)})
+    lineitem = pl.LazyFrame({"l_suppkey": [i % 3 for i in range(20)]})
+    query = supplier.join(
+        lineitem,
+        left_on="s_suppkey",
+        right_on="l_suppkey",
+    )
+    root = translate_query(query, engine)
+    stats = StatsCollector()
+    assert isinstance(root, Join)
     decision = _select_candidate(root, 0.5, analyze_plan(root, stats))
 
     optimized = optimize_join_domain_prefilters(
         root,
         stats,
-        _config(),
+        ConfigOptions.from_polars_engine(engine),
     )
 
     assert decision == Decision(reason="no_selective_domain")
     assert optimized is root
-    assert not _joins(optimized, "Semi")
+    assert not find_joins(optimized, "Semi")
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_composite_domain_prefilter_constrains_domain_first(
@@ -393,7 +321,7 @@ def test_composite_domain_prefilter_constrains_domain_first(
 
     assert decision.reason == "applied"
     assert isinstance(decision.candidate, CompositeCandidate)
-    semis = _joins(optimized, "Semi")
+    semis = find_joins(optimized, "Semi")
     assert isinstance(optimized, Join)
     assert optimized.options[0] == "Inner"
     assert optimized.children[1] is supplier_ir
@@ -446,7 +374,7 @@ def test_derived_selectivity_propagates_through_rewritten_children(
         ConfigOptions.from_polars_engine(engine),
     )
 
-    semis = _joins(optimized, "Semi")
+    semis = find_joins(optimized, "Semi")
     expected_targets = {
         dataframe_scan(root, "n_nationkey"),
         dataframe_scan(root, "c_custkey"),
@@ -502,7 +430,7 @@ def test_rewritten_domain_filters_other_side_instead_of_stacking(
 
     lineitem_ir = dataframe_scan(root, "l_orderkey")
     orders_ir = dataframe_scan(root, "o_orderkey")
-    semis = _joins(optimized, "Semi")
+    semis = find_joins(optimized, "Semi")
     assert sum(semi.children[0] is lineitem_ir for semi in semis) == 1
     assert any(semi.children[0] is orders_ir for semi in semis)
     assert not any(
@@ -562,7 +490,7 @@ def test_target_source_follows_join_key_through_rename(
         ConfigOptions.from_polars_engine(engine),
     )
 
-    semis = _joins(optimized, "Semi")
+    semis = find_joins(optimized, "Semi")
     assert any(semi.children[0] is small_ir for semi in semis)
     assert not any(semi.children[0] is big_ir for semi in semis)
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
@@ -612,7 +540,7 @@ def test_domain_source_follows_join_key_through_rename(
     )
 
     semi = next(
-        semi for semi in _joins(optimized, "Semi") if semi.children[0] is target_ir
+        semi for semi in find_joins(optimized, "Semi") if semi.children[0] is target_ir
     )
     selected_domain = semi.children[1]
     assert isinstance(selected_domain, Select)
@@ -624,15 +552,20 @@ def test_domain_source_follows_join_key_through_rename(
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_composite_domain_columns_follow_renames() -> None:
-    source = _scan("source", ("raw_key", "raw_constraint"))
-    renamed = _select(
-        source,
-        domain_key="raw_key",
-        domain_constraint="raw_constraint",
+def test_composite_domain_columns_follow_renames(engine: SPMDEngine) -> None:
+    query = pl.LazyFrame(
+        {
+            "raw_key": range(10),
+            "raw_constraint": range(10),
+        }
+    ).select(
+        pl.col("raw_key").alias("domain_key"),
+        pl.col("raw_constraint").alias("domain_constraint"),
     )
+    renamed = translate_query(query, engine)
+    source = dataframe_scan(renamed, "raw_key")
 
-    analyzed = analyze_plan(renamed, _stats(source=(source, 10)))
+    analyzed = analyze_plan(renamed, StatsCollector())
     facts = PlanFacts(
         row_estimates={renamed: 20, source: 10},
         selective_nodes=analyzed.selective_nodes,
@@ -674,31 +607,47 @@ def test_composite_domain_columns_do_not_reconverge_after_join(
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-def test_contains_node_uses_dag_equality() -> None:
-    source = _scan("source", ("key",))
-    equal_source = _scan("source", ("key",))
-    root = _select(source, key="key")
+def test_contains_node_uses_dag_equality(engine: SPMDEngine) -> None:
+    query = pl.LazyFrame({"key": range(3)}).filter(pl.col("key") >= 0).slice(0, 2)
+    root = translate_query(query, engine)
+
+    assert isinstance(root, Slice)
+    source = root.children[0]
+    equal_source = source.reconstruct(source.children)
 
     assert source is not equal_source
     assert source == equal_source
     assert contains_node(root, equal_source)
 
 
-def test_plan_facts_share_lineage_suffixes_across_shared_dag() -> None:
-    source = _scan("source", ("raw_key",))
-    left = _select(source, left_key="raw_key")
-    right = _select(source, right_key="raw_key")
-    root = _join(left, right, ("left_key",), ("right_key",))
+def test_plan_facts_share_lineage_suffixes_across_shared_dag(
+    engine: SPMDEngine,
+) -> None:
+    source = pl.LazyFrame({"raw_key": range(10)})
+    query = source.select(pl.col("raw_key").alias("left_key")).join(
+        source.select(pl.col("raw_key").alias("right_key")),
+        left_on="left_key",
+        right_on="right_key",
+    )
+    root = translate_query(query, engine)
 
-    facts = analyze_plan(root, _stats(source=(source, 10)))
+    assert isinstance(root, Join)
+    left, right = root.children
+    source_ir = dataframe_scan(root, "raw_key")
+    facts = analyze_plan(root, StatsCollector())
     left_lineage = facts.column_lineages[ColumnRef(left, "left_key")]
     right_lineage = facts.column_lineages[ColumnRef(right, "right_key")]
-    source_lineage = facts.column_lineages[ColumnRef(source, "raw_key")]
+    source_lineage = facts.column_lineages[ColumnRef(source_ir, "raw_key")]
 
     assert left_lineage.column == ColumnRef(left, "left_key")
     assert right_lineage.column == ColumnRef(right, "right_key")
-    assert left_lineage.source is source_lineage
-    assert right_lineage.source is source_lineage
+    while left_lineage.source is not source_lineage:
+        assert left_lineage.source is not None
+        left_lineage = left_lineage.source
+    while right_lineage.source is not source_lineage:
+        assert right_lineage.source is not None
+        right_lineage = right_lineage.source
+    assert left_lineage.source is right_lineage.source
     assert source_lineage.source is None
 
 
@@ -739,7 +688,7 @@ def test_target_prefilter_does_not_move_below_slice(engine: SPMDEngine) -> None:
         ConfigOptions.from_polars_engine(engine),
     )
 
-    semis = _joins(optimized, "Semi")
+    semis = find_joins(optimized, "Semi")
     assert any(semi.children[0] is sliced for semi in semis)
     assert not any(semi.children[0] is target_ir for semi in semis)
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
@@ -788,10 +737,10 @@ def test_target_replacement_does_not_rewrite_shared_domain_side(
     filtered, unfiltered_domain = optimized.children
     assert unfiltered_domain is domain_ir
     assert domain_ir.children[0] is shared_ir
-    semis = _joins(filtered, "Semi")
+    semis = find_joins(filtered, "Semi")
     assert len(semis) == 1
     assert semis[0].children[0] is dataframe_scan(root, "target_key")
-    assert not _joins(unfiltered_domain, "Semi")
+    assert not find_joins(unfiltered_domain, "Semi")
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
@@ -840,24 +789,46 @@ def test_target_prefilter_rewrites_only_selected_self_join_edge(
     assert isinstance(rewritten_self_join, Join)
     filtered, unfiltered = rewritten_self_join.children
     assert unfiltered is source_ir
-    filtered_semis = _joins(filtered, "Semi")
+    filtered_semis = find_joins(filtered, "Semi")
     assert len(filtered_semis) == 1
-    assert not _joins(unfiltered, "Semi")
+    assert not find_joins(unfiltered, "Semi")
     assert any(filtered_semis[0].children[0] is node for node in traversal([source_ir]))
     assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
-@pytest.mark.parametrize("how", ["Left", "Right", "Cross", "Full"])
-def test_no_domain_prefilter_for_outer_join(how) -> None:
-    part = _scan("part", ("p_partkey",), predicate=True)
-    lineitem = _scan("lineitem", ("l_partkey",))
-    root = _join(part, lineitem, ("p_partkey",), ("l_partkey",), how=how)
+@pytest.mark.parametrize("how", ["left", "right", "cross", "full"])
+def test_no_domain_prefilter_for_outer_join(
+    how: Any,
+    engine: SPMDEngine,
+) -> None:
+    part = (
+        pl.LazyFrame(
+            {
+                "p_partkey": [1, 99],
+                "active": [True, False],
+            }
+        )
+        .filter("active")
+        .select("p_partkey")
+    )
+    lineitem = pl.LazyFrame({"l_partkey": [i % 10 for i in range(20)]})
+    if how == "cross":
+        query = part.join(lineitem, how=how)
+    else:
+        query = part.join(
+            lineitem,
+            left_on="p_partkey",
+            right_on="l_partkey",
+            how=how,
+        )
+    root = translate_query(query, engine)
 
     optimized = optimize_join_domain_prefilters(
         root,
-        _stats(part=(part, 6), lineitem=(lineitem, 1_800)),
-        _config(),
+        StatsCollector(),
+        ConfigOptions.from_polars_engine(engine),
     )
 
     assert optimized is root
-    assert not _joins(optimized, "Semi")
+    assert not find_joins(optimized, "Semi")
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
