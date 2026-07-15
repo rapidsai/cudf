@@ -147,6 +147,31 @@ std::unique_ptr<column> set_keys(
   rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
+ * @brief Create a new dictionary column by removing any duplicate keys.
+ *
+ * Any indices pointing to a duplicate key are remapped to just one of the duplicates.
+ *
+ * @code{.pseudo}
+ * d1 = {keys=["b", "a", "b", "c"], indices=[3, 0, 2, 1, 2]}
+ * d2 = remove_duplicate_keys(d1)
+ * d2 is now {keys=["b", "a", "c"], indices=[2, 0, 0, 1, 0]}
+ * @endcode
+ *
+ * The output column will have the same number of rows as the input column.
+ * Null entries from the input column are copied to the output column.
+ * No new null entries are created by this operation.
+ *
+ * @param dictionary_column Existing dictionary column.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return New dictionary column with unique keys.
+ */
+std::unique_ptr<column> remove_duplicate_keys(
+  dictionary_column_view const& dictionary_column,
+  rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+  rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
+
+/**
  * @brief Create new dictionaries that have keys merged from the input dictionaries.
  *
  * This will concatenate the keys for each dictionary and then call `set_keys` on each.
