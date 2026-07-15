@@ -471,12 +471,13 @@ filter_join_indices(cudf::table_view const& left,
                     cudf::device_span<size_type const> right_indices,
                     ast::expression const& predicate,
                     cudf::join_kind join_kind,
+                    std::optional<std::size_t> output_size,
                     rmm::cuda_stream_view stream,
                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_join_indices(
-    left, right, left_indices, right_indices, predicate, join_kind, std::nullopt, stream, mr);
+    left, right, left_indices, right_indices, predicate, join_kind, output_size, stream, mr);
 }
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
@@ -487,13 +488,12 @@ filter_join_indices(cudf::table_view const& left,
                     cudf::device_span<size_type const> right_indices,
                     ast::expression const& predicate,
                     cudf::join_kind join_kind,
-                    std::size_t output_size,
                     rmm::cuda_stream_view stream,
                     rmm::device_async_resource_ref mr)
 {
   CUDF_FUNC_RANGE();
   return detail::filter_join_indices(
-    left, right, left_indices, right_indices, predicate, join_kind, output_size, stream, mr);
+    left, right, left_indices, right_indices, predicate, join_kind, std::nullopt, stream, mr);
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>

@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <utility>
 
 namespace CUDF_EXPORT cudf {
@@ -335,6 +336,9 @@ std::unique_ptr<cudf::table> cross_join(
  * @param right_indices Device span of row indices in the right table from hash join.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
  * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
+ * @param output_size Optional precomputed number of output rows. When provided, skips the internal
+ *        size-counting pass. Behavior is undefined if it differs from the size the function would
+ *        otherwise produce for the same inputs.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output indices.
  *
@@ -349,20 +353,14 @@ filter_join_indices(cudf::table_view const& left,
                     cudf::device_span<size_type const> right_indices,
                     cudf::ast::expression const& predicate,
                     cudf::join_kind join_kind,
-                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                    std::optional<std::size_t> output_size = std::nullopt,
+                    rmm::cuda_stream_view stream           = cudf::get_default_stream(),
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
- * @brief Overload of `filter_join_indices` that accepts a precomputed output size.
+ * @brief Filters join result indices based on a conditional predicate and join type.
  *
- * Identical to `filter_join_indices` above, but skips the internal size-counting pass by using the
- * provided `output_size` (for example the result of `filter_join_indices_output_size` for the same
- * inputs). This is useful when composing the size and filtering steps, such as in the mixed join
- * APIs.
- *
- * @throw std::invalid_argument if join_kind is not INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
- * @throw std::invalid_argument if left_indices and right_indices have different sizes.
- * @throw std::invalid_argument if predicate does not produce a Boolean output.
+ * @deprecated Use the overload that accepts an optional output size instead.
  *
  * @param left The left table for predicate evaluation (conditional columns only).
  * @param right The right table for predicate evaluation (conditional columns only).
@@ -370,14 +368,13 @@ filter_join_indices(cudf::table_view const& left,
  * @param right_indices Device span of row indices in the right table from hash join.
  * @param predicate An AST expression that returns a boolean for each pair of rows.
  * @param join_kind The type of join operation. Must be INNER_JOIN, LEFT_JOIN, or FULL_JOIN.
- * @param output_size The precomputed number of output rows. Behavior is undefined if it differs
- *        from the size the unsized overload would produce for the same inputs.
  * @param stream CUDA stream used for kernel launches and memory operations.
  * @param mr Device memory resource used to allocate output indices.
  *
  * @return A pair of device vectors [filtered_left_indices, filtered_right_indices]
  *         corresponding to rows that satisfy the join semantics and predicate.
  */
+[[deprecated("Use the overload that takes an optional output_size parameter.")]]
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 filter_join_indices(cudf::table_view const& left,
@@ -386,8 +383,7 @@ filter_join_indices(cudf::table_view const& left,
                     cudf::device_span<size_type const> right_indices,
                     cudf::ast::expression const& predicate,
                     cudf::join_kind join_kind,
-                    std::size_t output_size,
-                    rmm::cuda_stream_view stream      = cudf::get_default_stream(),
+                    rmm::cuda_stream_view stream,
                     rmm::device_async_resource_ref mr = cudf::get_current_device_resource_ref());
 
 /**
