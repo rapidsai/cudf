@@ -163,18 +163,12 @@ struct rle_run {
 // header-parse phase and a __syncthreads()), but competes with occupancy in
 // preprocess_levels_kernel.
 //
-// Tuning (nvbench PARQUET_READER_NVBENCH parquet_read_decode -a
-// data_type=[LIST,STRUCT,STRING]):
-//   V100 (sm_70): 512 chosen to fit preprocess_levels_kernel SMEM budget.
-//   A100 (sm_80): 1024 is optimal (80-95% faster than 512 on chunked path).
-//                 2048 saturates or regresses ~10% on LIST (occupancy).
-//   H100 (sm_90): TODO, expected ~1024 based on saturation of the A100 curve.
-//   Blackwell:    TODO, inherits sm_80+ tier until measured.
-#if __CUDA_ARCH__ >= 800
-static constexpr int kGenRuns = 1024;
-#else
+// Set to 512, matching the SMEM budget that fits older architectures back to
+// V100 (sm_70). A sweep of {256, 512, 1024, 2048} against the ring-path
+// baseline on A100 and H100 showed differences within noise across the
+// PARQUET_READER_NVBENCH parquet_read_decode configs, so we do not currently
+// specialize by architecture.
 static constexpr int kGenRuns = 512;
-#endif
 
 // a stream of rle_runs
 template <typename level_t,
