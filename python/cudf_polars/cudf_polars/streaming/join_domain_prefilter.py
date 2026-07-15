@@ -4,8 +4,8 @@
 Insert derived key-domain prefilters for streaming joins.
 
 For a supported inner equijoin, this optimization tries to use the join-key
-values produced by one input to reduce the other input before the original
-join. In relational notation, a simple rewrite is::
+values produced by one input to reduce the size of the other input before
+the original join. In relational notation, a simple rewrite is::
 
     left join[left.key = right.key] right
 
@@ -15,9 +15,7 @@ join. In relational notation, a simple rewrite is::
        join[left.key = right.key] right
 
 In this example, the right hand table is selected to pre-filter the left
-table before performing the inner join. The inserted semi-join is therefore
-an exact filter: it only removes target rows that could not match the
-domain input.
+table before performing the inner join.
 
 The implementation uses the following terms:
 
@@ -25,25 +23,21 @@ The implementation uses the following terms:
     A chain from a named output column towards columns in its input subplan.
     Each step guarantees that every value in the output column also appears in
     the referenced child column, although row order and multiplicity are not
-    preserved and the child may contain additional values. Candidate traversal
-    does not cross an operator with which a semi-join cannot safely commute.
+    preserved and the child may contain additional values.
 ``child edge``
     One particular parent-to-child position in the IR DAG. The same child node
     may occur on more than one edge, so a lineage records child indices and a
     rewrite follows the resulting edge path to change only the chosen
     occurrence.
+``target``
+    The side of the join to filter.
+``domain``
+    The side of the join used to provide key values for the filtering of
+    ``target``.
 ``producer``
     A node on a column lineage, together with the column name at that node and
-    its edge path from the join input. Producers are possible locations for
-    inserting a target semi-join or projecting a domain key.
-``target``
-    The join input to reduce. A semi-join is inserted at a producer in this
-    input's column lineage and replaces only the selected child-edge
-    occurrence.
-``domain``
-    The other join input, whose join-key values provide the semi-join domain.
-    The domain producer may be below projections, renames, or other operators
-    through which the semi-join can safely be pushed.
+    its edge path from the join input. So termed because it "produces" the
+    key values participating in the join.
 ``constraint domain``
     Selective values of another join key from the target input, used to reduce
     the domain before deriving the values that will filter the target.
