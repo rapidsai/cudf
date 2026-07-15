@@ -387,11 +387,10 @@ constexpr bool is_variant_castable =
 
 // Maps a fixed-width output type to the VARIANT primitive type header id that encodes it.
 template <typename T>
+  requires(is_variant_primitive<T>)
 __device__ constexpr primitive_type primitive_type_for()
 {
   using enum primitive_type;
-  static_assert(is_variant_primitive<T>, "primitive_type_for: no VARIANT primitive type for T");
-
   if constexpr (cuda::std::is_same_v<T, int8_t>) {
     return int8;
   } else if constexpr (cuda::std::is_same_v<T, int16_t>) {
@@ -402,11 +401,8 @@ __device__ constexpr primitive_type primitive_type_for()
     return int64;
   } else if constexpr (cuda::std::is_same_v<T, float>) {
     return float32;
-  } else if constexpr (cuda::std::is_same_v<T, double>) {
-    return float64;
   } else {
-    CUDF_UNREACHABLE("primitive_type_for: T is not a supported variant primitive type");
-    return null;
+    return float64;
   }
 }
 
@@ -418,9 +414,6 @@ __device__ constexpr primitive_type primitive_type_for()
 template <typename T>
 __device__ inline cuda::std::optional<T> decode_primitive(device_span<uint8_t const> enc)
 {
-  static_assert(is_variant_primitive<T>,
-                "decode_primitive: T must be a variant primitive int or float");
-
   if (cuda::std::cmp_less(enc.size(), 1 + sizeof(T))) { return cuda::std::nullopt; }
 
   uint8_t const value_metadata = enc[0];
