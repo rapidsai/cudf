@@ -64,11 +64,15 @@ them, and collecting or executing the result with any other engine is unsupporte
 
 ## Chaining into another `execute()`
 
-`result.lazy()` is an ordinary `LazyFrame`, so you can feed it (or further work
-chained onto it) straight back into `engine.execute()` instead of collecting.
-The query runs on the GPU and its output stays there as a new persisted result,
-which is handy for building up a multi-step pipeline without ever touching host
-memory:
+`result.lazy()` supports the usual `LazyFrame` API, so you can add further
+operations and pass the resulting query directly to `engine.execute()` without
+collecting it first.
+
+Only materialization is special. Like any persisted result, it must run on the
+engine that produced it, as described above, and cannot be collected directly
+on the host. The query executes on the GPU, and its output remains there as a
+new persisted result. This makes it useful for building multi-step pipelines
+without transferring intermediate results to host memory:
 
 ```python
 with RayEngine() as engine:
