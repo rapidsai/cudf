@@ -428,6 +428,7 @@ STREAMING_ENGINE_TESTS_TO_SKIP: Mapping[str, str] = {
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs12-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_order_observability.py::test_with_columns_sensitivity[exprs13-False-None]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/lazyframe/test_optimizations.py::test_collapse_joins_combinations": "Too slow for CI",
+    "tests/unit/operations/test_index_of.py::test_randomized": "Too slow for CI; marked as pytest.mark.slow",
     "tests/unit/operations/test_slice.py::test_slice_slice_pushdown": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-False]": "Too slow with --inject-gpu-engine-blocksize=small",
     "tests/unit/operations/test_group_by.py::test_group_by_first_last_big[Int32-10432-True]": "Too slow with --inject-gpu-engine-blocksize=small",

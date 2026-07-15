@@ -18,7 +18,7 @@ See the [RAPIDS install page](https://docs.rapids.ai/install) for the most up-to
 - [Dask cuDF documentation](https://docs.rapids.ai/api/dask-cudf/stable/)
 - [Best practices](https://docs.rapids.ai/api/dask-cudf/stable/best_practices/)
 - [cuDF documentation](https://docs.rapids.ai/api/cudf/stable/)
-- [10 Minutes to cuDF and Dask cuDF](https://docs.rapids.ai/api/cudf/stable/cudf/10min/)
+- [10 Minutes to cuDF and Dask cuDF](https://docs.rapids.ai/api/cudf/latest/user_guide/10min/)
 - [Dask-CUDA documentation](https://docs.rapids.ai/api/dask-cuda/stable/)
 - [Deployment](https://docs.rapids.ai/deployment/stable/)
 - [RAPIDS Community](https://rapids.ai/learn-more/#get-involved): Get help, contribute, and collaborate.
