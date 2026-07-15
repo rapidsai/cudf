@@ -307,6 +307,17 @@ class UnaryFunction(Expr):
         self, column: Column, old: Column, new: Column, default: Column, df: DataFrame
     ) -> Column:
         """Evaluate a strict ``replace_strict`` via a left join onto the mapping."""
+        distinct = plc.stream_compaction.distinct_indices(
+            plc.Table([old.obj]),
+            plc.stream_compaction.DuplicateKeepOption.KEEP_ANY,
+            plc.types.NullEquality.EQUAL,
+            plc.types.NanEquality.ALL_EQUAL,
+            stream=df.stream,
+        )
+        if distinct.size() != old.size:
+            raise pl.exceptions.InvalidOperationError(
+                "`old` input for `replace` must not contain duplicates"
+            )
         left_map, right_map = plc.join.left_join(
             plc.Table([column.obj]),
             plc.Table([old.obj]),

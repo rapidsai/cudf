@@ -134,3 +134,17 @@ def test_replace_strict_only_null_old(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, None, 2]})
     q = df.select(pl.col("a").replace_strict(None, 100, default=-1))
     assert_gpu_result_equal(q, engine=engine)
+
+
+def test_replace_strict_duplicate_old(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, 3, 2, 3]})
+    expr = pl.col("a").replace_strict([2, 2], [10, 20], default=-1)
+    match = "`old` input for `replace` must not contain duplicates"
+    if is_streaming_engine(engine):
+        with pytest.RaisesGroup(
+            pytest.RaisesExc(pl.exceptions.InvalidOperationError, match=match)
+        ):
+            df.select(expr).collect(engine=engine)
+    else:
+        with pytest.raises(pl.exceptions.InvalidOperationError, match=match):
+            df.select(expr).collect(engine=engine)
