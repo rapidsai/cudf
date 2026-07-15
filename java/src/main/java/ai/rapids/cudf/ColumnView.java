@@ -893,11 +893,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *
    * If {@code columns} is empty, the column is returned unchanged (no-op).
    *
-   * @param mergeOp binary operator (BITWISE_AND and BITWISE_OR only)
+   * @param mergeOp binary operator (either BITWISE_AND or BITWISE_OR)
    * @param columns array of columns whose null masks are merged, must have identical number of rows.
    * @return the new ColumnVector with merged null mask.
+   * @deprecated Use {@link ColumnVector#mergeAndSetValidity(BinaryOp, ColumnView...)} instead.
    */
-  public final ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
+  @Deprecated
+  public ColumnVector mergeAndSetValidity(BinaryOp mergeOp, ColumnView... columns) {
     assert mergeOp == BinaryOp.BITWISE_AND || mergeOp == BinaryOp.BITWISE_OR : "Only BITWISE_AND and BITWISE_OR supported right now";
     long[] columnViews = new long[columns.length];
     long size = getRowCount();
