@@ -13,6 +13,8 @@ from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, overload
 
+from rmm import DeviceBuffer
+
 import polars as pl
 
 import pylibcudf as plc
@@ -45,11 +47,13 @@ if TYPE_CHECKING:
     from collections.abc import Hashable, MutableMapping, Sequence
 
     import pylibcudf.expressions as plc_expr
+    from kvikio.cufile import IOFuture
     from rmm.pylibrmm.stream import Stream
 
     from cudf_polars.containers import DataType
     from cudf_polars.dsl.expr import NamedExpr
     from cudf_polars.dsl.ir import CachedParquetInfo, IRExecutionContext
+    from cudf_polars.streaming.prefetch import PinnedBuffer
     from cudf_polars.streaming.base import (
         DataSourceInfo,
         SerializedDataSourceInfo,
@@ -205,25 +209,24 @@ def expand_scan_for_rank(
 
 
 @dataclasses.dataclass
-class PrefetchedSplit:
+class PrefetchedByteRanges:
     """Prefetched I/O state for a single SplitScan task."""
 
     row_group_indices: list[int]
     filter_ranges: list[plc.io.text.ByteRangeInfo]
     payload_ranges: list[plc.io.text.ByteRangeInfo]
-    filter_host: Any | None
-    payload_host: Any | None
-    filter_futures: list[Any]
-    payload_futures: list[Any]
+    filter_host: memoryview | None
+    payload_host: memoryview | None
+    filter_futures: list[IOFuture]
+    payload_futures: list[IOFuture]
     error: BaseException | None = None
-    _sem: Any = dataclasses.field(default=None, compare=False, repr=False)
-    filter_buf: Any = dataclasses.field(default=None, compare=False, repr=False)
-    payload_buf: Any = dataclasses.field(default=None, compare=False, repr=False)
+    filter_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
+    payload_buf: PinnedBuffer | None = dataclasses.field(default=None, compare=False, repr=False)
 
     def release(self) -> None:
-        """Release the per-worker backpressure semaphore slot."""
-        if self._sem is not None:
-            self._sem.release()
+        """Release pinned host memory reservations after the H2D copy completes."""
+        self.filter_buf = None
+        self.payload_buf = None
 
 
 def _fetch_byte_ranges(
@@ -236,21 +239,19 @@ def _fetch_byte_ranges(
     )
 
 
-def _gpumemoryviews_from_pinned(
-    host: Any,
+def copy_host_ranges_to_device(
+    host: memoryview,
     ranges: list[plc.io.text.ByteRangeInfo],
-    futures: list[Any],
+    futures: list[IOFuture],
     stream: Stream,
 ) -> list[plc.gpumemoryview]:
     """Wait for in-flight reads and async-copy each range from pinned host to device."""
-    import rmm
-
     for f in futures:
         f.get()
     result = []
     offset = 0
     for r in ranges:
-        dev = rmm.DeviceBuffer(size=r.size)
+        dev = DeviceBuffer(size=r.size)
         dev.copy_from_host(host[offset : offset + r.size], stream=stream)
         result.append(plc.gpumemoryview(dev))
         offset += r.size
@@ -269,7 +270,7 @@ def _read_with_hybrid_scan(
     split_index: int = 0,
     total_splits: int = 1,
     stats_pruning: bool = True,
-    prefetched: PrefetchedSplit | None = None,
+    prefetched: PrefetchedByteRanges | None = None,
 ) -> DataFrame:
     """Two-pass parquet read via HybridScanReader for a row-group-aligned split."""
     assert plc_filter is not None
@@ -332,7 +333,7 @@ def _read_with_hybrid_scan(
         row_mask = reader.build_all_true_row_mask(row_group_indices, stream=stream)
 
         if prefetched is not None:
-            filter_chunks = _gpumemoryviews_from_pinned(
+            filter_chunks = copy_host_ranges_to_device(
                 prefetched.filter_host,
                 prefetched.filter_ranges,
                 prefetched.filter_futures,
@@ -354,7 +355,7 @@ def _read_with_hybrid_scan(
         )
 
         if prefetched is not None:
-            payload_chunks = _gpumemoryviews_from_pinned(
+            payload_chunks = copy_host_ranges_to_device(
                 prefetched.payload_host,
                 prefetched.payload_ranges,
                 prefetched.payload_futures,
@@ -399,7 +400,7 @@ def _read_with_hybrid_scan(
 
 def _evaluate_split_prefetched(
     scan: SplitScan,
-    prefetched: PrefetchedSplit,
+    prefetched: PrefetchedByteRanges,
     *,
     context: IRExecutionContext,
 ) -> DataFrame:

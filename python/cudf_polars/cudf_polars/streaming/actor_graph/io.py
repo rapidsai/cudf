@@ -75,7 +75,7 @@ if TYPE_CHECKING:
         PartitionInfo,
         StatsCollector,
     )
-    from cudf_polars.streaming.io import FusedScan, PrefetchedSplit, SplitScan
+    from cudf_polars.streaming.io import FusedScan, PrefetchedByteRanges, SplitScan
     from cudf_polars.utils.config import ParquetOptions
 
 
@@ -510,7 +510,7 @@ def evaluate_with_prefetch(
     *,
     context: IRExecutionContext,
 ) -> DataFrame:
-    prefetched: PrefetchedSplit | None = prefetcher.get(task_idx)
+    prefetched: PrefetchedByteRanges | None = prefetcher.get(task_idx)
     if prefetched is None:
         return scan.do_evaluate(*scan._non_child_args, context=context)
     return _evaluate_split_prefetched(scan, prefetched, context=context)
@@ -625,7 +625,7 @@ async def scan_node(
         prefetcher = HybridScanPrefetcher(
             list(scans),  # type: ignore[arg-type]
             num_workers=num_producers,
-            depth=first.parquet_options.prefetch_depth,  # type: ignore[union-attr]
+            context=context,
             pinned_mr=context.br().pinned_mr,
         )
 
