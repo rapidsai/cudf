@@ -23,7 +23,7 @@ enum class variant_basic_type : uint8_t {
  * @brief Physical type ID carried in the value_header of a primitive VARIANT value.
  */
 enum class variant_primitive_type : uint8_t {
-  NULL                 = 0,
+  NULLVAL              = 0,
   BOOLEAN_TRUE         = 1,
   BOOLEAN_FALSE        = 2,
   INT8                 = 3,

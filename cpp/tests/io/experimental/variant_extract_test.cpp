@@ -61,21 +61,21 @@ constexpr uint8_t make_variant_header(variant_basic_type basic, uint8_t value_he
 // Header byte for a primitive value of the given physical type.
 constexpr uint8_t make_variant_primitive(variant_primitive_type type)
 {
-  return make_variant_header(variant_basic_type::primitive, static_cast<uint8_t>(type));
+  return make_variant_header(variant_basic_type::PRIMITIVE, static_cast<uint8_t>(type));
 }
 
 // Header byte for a short string of the given length (must fit in 6 bits: 0..63).
 constexpr uint8_t make_variant_short_string_header(std::size_t length)
 {
   CUDF_EXPECTS(length <= 0x3F, "VARIANT short string length must fit in 6 bits");
-  return make_variant_header(variant_basic_type::short_string, static_cast<uint8_t>(length));
+  return make_variant_header(variant_basic_type::SHORT_STRING, static_cast<uint8_t>(length));
 }
 
 // Header byte for an object value with 1-byte field ids and 1-byte offsets
 // (is_large=false), i.e. value_header == 0.
 constexpr uint8_t make_variant_object_header()
 {
-  return make_variant_header(variant_basic_type::object, 0);
+  return make_variant_header(variant_basic_type::OBJECT, 0);
 }
 
 // Build a struct `column_view` over (metadata, value) without copying.
@@ -388,7 +388,7 @@ namespace {
 inline std::vector<uint8_t> enc_int32(int32_t v)
 {
   auto const u = static_cast<uint32_t>(v);
-  return {make_variant_primitive(variant_primitive_type::int32),
+  return {make_variant_primitive(variant_primitive_type::INT32),
           static_cast<uint8_t>(u & 0xff),
           static_cast<uint8_t>((u >> 8) & 0xff),
           static_cast<uint8_t>((u >> 16) & 0xff),
@@ -415,30 +415,30 @@ inline void append_le(std::vector<uint8_t>& out, uint64_t bits, int width)
 // Primitive value blobs (header + fixed payload) for every physical type the cast matrix exercises.
 inline std::vector<uint8_t> enc_null()
 {
-  return {make_variant_primitive(variant_primitive_type::null)};
+  return {make_variant_primitive(variant_primitive_type::NULLVAL)};
 }
 
 inline std::vector<uint8_t> enc_bool(bool b)
 {
-  return {make_variant_primitive(b ? variant_primitive_type::boolean_true
-                                   : variant_primitive_type::boolean_false)};
+  return {make_variant_primitive(b ? variant_primitive_type::BOOLEAN_TRUE
+                                   : variant_primitive_type::BOOLEAN_FALSE)};
 }
 
 inline std::vector<uint8_t> enc_int8(int8_t v)
 {
-  return {make_variant_primitive(variant_primitive_type::int8), static_cast<uint8_t>(v)};
+  return {make_variant_primitive(variant_primitive_type::INT8), static_cast<uint8_t>(v)};
 }
 
 inline std::vector<uint8_t> enc_int16(int16_t v)
 {
-  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::int16)};
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::INT16)};
   append_le(out, static_cast<uint16_t>(v), 2);
   return out;
 }
 
 inline std::vector<uint8_t> enc_int64(int64_t v)
 {
-  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::int64)};
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::INT64)};
   append_le(out, static_cast<uint64_t>(v), 8);
   return out;
 }
@@ -447,7 +447,7 @@ inline std::vector<uint8_t> enc_float64(double v)
 {
   std::uint64_t bits = 0;
   std::memcpy(&bits, &v, sizeof(bits));
-  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::float64)};
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::FLOAT64)};
   append_le(out, bits, 8);
   return out;
 }
@@ -455,7 +455,7 @@ inline std::vector<uint8_t> enc_float64(double v)
 // Long-string primitive blob: header + 4-byte LE length + payload.
 inline std::vector<uint8_t> enc_long_string(std::string_view s)
 {
-  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::long_string)};
+  std::vector<uint8_t> out{make_variant_primitive(variant_primitive_type::LONG_STRING)};
   append_le(out, s.size(), 4);
   out.insert(out.end(), s.begin(), s.end());
   return out;
@@ -871,7 +871,7 @@ TEST_F(CastVariantTest, CastToUnsupportedTargetThrows)
   // compile-time dispatch on the requested output type, independent of the input bytes, so a single
   // well-formed placeholder row triggers the same throw for all of them.
   auto stream = cudf::test::get_default_stream();
-  std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::null)};
+  std::vector<uint8_t> const val{make_variant_primitive(variant_primitive_type::NULLVAL)};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
 
   std::vector<cudf::type_id> const ids{cudf::type_id::BOOL8,
@@ -999,7 +999,7 @@ TEST_F(CastVariantTest, LongStringLengthZero)
   // Long string: primitive long_string header, 4-byte LE length = 0, no payload.
   auto stream = cudf::test::get_default_stream();
   std::vector<uint8_t> const val{
-    make_variant_primitive(variant_primitive_type::long_string), 0x00, 0x00, 0x00, 0x00};
+    make_variant_primitive(variant_primitive_type::LONG_STRING), 0x00, 0x00, 0x00, 0x00};
   cudf::test::lists_column_wrapper<uint8_t> values(val.begin(), val.end());
   auto got = cudf::io::parquet::experimental::cast_variant(
     values, cudf::data_type{cudf::type_id::STRING}, stream);
@@ -1013,7 +1013,7 @@ TEST_F(CastVariantTest, LongStringDeclaredLengthExceedsPayloadYieldsNull)
   // actually present, whether the payload is partially present or entirely absent. Both shapes
   // below declare length=10 (0x0000000A).
   auto stream    = cudf::test::get_default_stream();
-  auto const hdr = make_variant_primitive(variant_primitive_type::long_string);
+  auto const hdr = make_variant_primitive(variant_primitive_type::LONG_STRING);
   std::vector<std::vector<uint8_t>> const cases{
     {hdr, 0x0A, 0x00, 0x00, 0x00, 'a', 'b', 'c'},  // 3 of 10 payload bytes present
     {hdr, 0x0A, 0x00, 0x00, 0x00},                 // 0 of 10 payload bytes present
@@ -1033,7 +1033,7 @@ TEST_F(CastVariantTest, LongStringPayloadExceedsDeclaredLength)
   // When more bytes are present than the declared length, decode_string should read exactly the
   // declared number of bytes and ignore the trailing ones.
   auto stream    = cudf::test::get_default_stream();
-  auto const hdr = make_variant_primitive(variant_primitive_type::long_string);
+  auto const hdr = make_variant_primitive(variant_primitive_type::LONG_STRING);
   // Declared length = 3 ("abc"), followed by 5 extra bytes that must be ignored.
   std::vector<uint8_t> const val{
     hdr, 0x03, 0x00, 0x00, 0x00, 'a', 'b', 'c', 'x', 'x', 'x', 'x', 'x'};
