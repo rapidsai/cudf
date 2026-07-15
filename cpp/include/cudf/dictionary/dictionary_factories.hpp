@@ -26,7 +26,7 @@ namespace CUDF_EXPORT cudf {
  * @brief Construct a dictionary column by copying the provided `keys`
  * and `indices`.
  *
- * The keys_column column must contain no nulls.
+ * The keys_column must contain no nulls.
  *
  * The indices values must be in the range [0,keys_column.size()).
  *
