@@ -78,6 +78,7 @@ class mark_join {
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param prefilter Controls whether an optional probe-side prefilter is enabled
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the internal hash table and prefilter
    */
   mark_join(cudf::table_view const& left,
             cudf::null_equality compare_nulls,
@@ -94,6 +95,7 @@ class mark_join {
    * @param compare_nulls Controls whether null join-key values should match or not
    * @param prefilter Controls whether an optional probe-side prefilter is enabled
    * @param stream CUDA stream used for device memory operations and kernel launches
+   * @param mr Device memory resource used to allocate the internal hash table and prefilter
    */
   mark_join(cudf::table_view const& left,
             double load_factor,
