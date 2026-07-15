@@ -86,6 +86,20 @@ def test_replace_many_with_null_to_many(engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
+def test_replace_value_to_null_and_null_to_value(engine: pl.GPUEngine) -> None:
+    df = pl.LazyFrame({"a": [1, 2, None, 3]})
+    q = df.select(pl.col("a").replace([1, None], [None, 100]))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+def test_replace_value_to_value_collision_with_null_fill(
+    engine: pl.GPUEngine,
+) -> None:
+    df = pl.LazyFrame({"a": [1, None]})
+    q = df.select(pl.col("a").replace([1, None], [2, 1]))
+    assert_gpu_result_equal(q, engine=engine)
+
+
 def test_replace_new_all_null(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3]})
     q = df.select(pl.col("a").replace([1, 2], None))

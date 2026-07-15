@@ -295,9 +295,10 @@ class UnaryFunction(Expr):
             stream=df.stream,
         ).columns()[0]
         return Column(
-            plc.replace.replace_nulls(
-                result,
+            plc.copying.copy_if_else(
                 plc.copying.get_element(null_new, 0, stream=df.stream),
+                result,
+                plc.unary.is_null(column.obj, stream=df.stream),
                 stream=df.stream,
             ),
             dtype=self.dtype,
