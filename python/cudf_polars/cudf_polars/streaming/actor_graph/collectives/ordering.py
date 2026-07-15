@@ -41,7 +41,6 @@ if TYPE_CHECKING:
 
 
 _PID_DTYPE = DataType(pl.Int32())
-_PID_PLC_DTYPE = plc.DataType(plc.TypeId.INT32)
 _PartitionRange = tuple[int, int]
 
 
@@ -194,21 +193,6 @@ def _split_points(
     )
 
 
-def _append_partition_id(table: plc.Table, pid: int, stream: Stream) -> plc.Table:
-    """
-    Append the target partition ID before packing a remote table piece.
-
-    SparseAlltoall exchanges packed table payloads, so the partition ID travels
-    as a temporary column and is stripped by the receiver.
-    """
-    pid_col = plc.Column.from_scalar(
-        plc.Scalar.from_py(pid, _PID_PLC_DTYPE, stream=stream),
-        table.num_rows(),
-        stream=stream,
-    )
-    return plc.Table([*table.columns(), pid_col])
-
-
 def _boundary_search_positions(
     input_boundary_table: plc.Table,
     output_boundary_table: plc.Table,
@@ -298,27 +282,28 @@ def _sources_for_pid(
     ]
 
 
-def _unpack_remote_piece(
+def _remote_pids_from_source(
+    plan: _RoutingPlan,
+    source_rank: int,
+    destination_rank: int,
+) -> list[int]:
+    """Return pids sent from one source rank to one destination rank."""
+    return [
+        pid
+        for pid in range(*plan.source_ranges[source_rank])
+        if _contiguous_owner(pid, len(plan.source_ranges), plan.npartitions)
+        == destination_rank
+    ]
+
+
+def _unpack_remote_partition(
     packed: PackedData,
     stream: Stream,
     br: BufferResource,
-) -> tuple[int, TableChunk]:
-    """Unpack one remote piece and recover its temporary target partition ID."""
-    table = unpack_and_concat([packed], stream=stream, br=br)
-    *payload_cols, pid_col = table.columns()
-    pid = int(
-        DataFrame.from_table(
-            plc.Table([pid_col]),
-            ["pid"],
-            [_PID_DTYPE],
-            stream,
-        )
-        .to_polars()
-        .item(0, 0)
-    )
-    payload = plc.Table(payload_cols).copy(stream=stream, mr=br.device_mr)
-    return pid, TableChunk.from_pylibcudf_table(
-        payload,
+) -> TableChunk:
+    """Unpack one remote output-partition payload."""
+    return TableChunk.from_pylibcudf_table(
+        unpack_and_concat([packed], stream=stream, br=br),
         stream,
         exclusive_view=True,
         br=br,
@@ -440,41 +425,33 @@ def _store_chunk(
     stores[pid].insert(Message(pid, chunk))
 
 
-async def _send_remote_store(
+async def _send_remote_partition(
     context: Context,
     comm: Communicator,
+    schema_ir: IR,
+    ir_context: IRExecutionContext,
     exchange: SparseAlltoall,
     npartitions: int,
     pid: int,
-    store: ChunkStore,
+    store: ChunkStore | None,
 ) -> None:
-    """Send all locally-read pieces for one remote-owned output partition."""
-    for msg in store:
-        await _send_remote_piece(
-            context,
-            comm,
-            exchange,
-            npartitions,
-            pid,
-            TableChunk.from_message(msg, br=context.br()),
-        )
-
-
-async def _send_remote_piece(
-    context: Context,
-    comm: Communicator,
-    exchange: SparseAlltoall,
-    npartitions: int,
-    pid: int,
-    chunk: TableChunk,
-) -> None:
-    """Send one output-partition piece to its remote owner."""
+    """Send one packed payload for one remote-owned output partition."""
+    chunks = (
+        [TableChunk.from_message(msg, br=context.br()) for msg in store]
+        if store is not None
+        else []
+    )
+    chunk = (
+        await concat_batch(chunks, context, schema_ir.schema, ir_context)
+        if chunks
+        else empty_table_chunk(schema_ir, context, ir_context.get_cuda_stream())
+    )
     stream = chunk.stream
     exchange.insert(
         _contiguous_owner(pid, comm.nranks, npartitions),
         packed_data_from_cudf_packed_columns(
             pack(
-                _append_partition_id(chunk.table_view(), pid, stream),
+                chunk.table_view(),
                 stream,
                 mr=context.br().device_mr,
             ),
@@ -555,13 +532,16 @@ async def _adjust_ordering_impl(
 
     pieces_by_source: dict[int, dict[int, ChunkStore]] = {comm.rank: {}}
     local_pieces = pieces_by_source[comm.rank]
+    owed_remote_pid_set = set(plan.owed_remote_pids)
     for pid in range(pre_start, pre_stop):
         piece = await buffer.collect_output_partition(pid)
         owner = _contiguous_owner(pid, comm.nranks, plan.npartitions)
-        if exchange is not None and owner != comm.rank and piece is not None:
-            await _send_remote_store(
+        if exchange is not None and pid in owed_remote_pid_set:
+            await _send_remote_partition(
                 context,
                 comm,
+                schema_ir,
+                ir_context,
                 exchange,
                 plan.npartitions,
                 pid,
@@ -587,9 +567,15 @@ async def _adjust_ordering_impl(
         for source_rank in plan.remote_sources:
             remote_pieces: dict[int, ChunkStore] = {}
             stream = context.br().stream_pool.get_stream()
-            for packed in exchange.extract(source_rank):
-                pid, chunk = _unpack_remote_piece(packed, stream, context.br())
-                _store_chunk(context, remote_pieces, pid, chunk)
+            expected_pids = _remote_pids_from_source(plan, source_rank, comm.rank)
+            for pid, packed in zip(
+                expected_pids,
+                exchange.extract(source_rank),
+                strict=True,
+            ):
+                chunk = _unpack_remote_partition(packed, stream, context.br())
+                if chunk.table_view().num_rows() > 0:
+                    _store_chunk(context, remote_pieces, pid, chunk)
             pieces_by_source[source_rank] = remote_pieces
 
     # Collect and emit the remaining output partitions for this rank.
