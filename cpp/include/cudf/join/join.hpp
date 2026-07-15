@@ -23,13 +23,16 @@
 #include <optional>
 #include <utility>
 
+/**
+ * @file
+ * @brief Common types and utilities shared by cuDF's join APIs.
+ */
+
 namespace CUDF_EXPORT cudf {
 
 /**
  * @addtogroup column_join
  * @{
- * @file
- * @brief Common types and utilities shared by cuDF's join APIs.
  */
 
 /**

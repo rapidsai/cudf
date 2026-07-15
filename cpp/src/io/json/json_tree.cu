@@ -682,7 +682,7 @@ rmm::device_uvector<size_type> hash_node_type_with_field_name(device_span<Symbol
   auto get_utf8_matched_field_nodes = [&]() {
     auto make_map = [&stream](auto num_keys) {
       using hasher_type3 = cudf::hashing::detail::default_hash<size_type>;
-      return cuco::static_map{cuco::extent{num_keys},
+      return cuco::static_map{cuco::extent{static_cast<std::size_t>(num_keys)},
                               1.0,  // 100% load factor
                               cuco::empty_key{empty_node_index_sentinel},
                               cuco::empty_value{empty_node_index_sentinel},
