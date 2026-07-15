@@ -587,11 +587,12 @@ class _FastSlowProxyMeta(type):
             return type.__dir__(self)
 
     @property
-    def _fsproxy_is_canonical(self) -> bool:
-        # True if this class is the registered proxy type for its slow
-        # type, as opposed to e.g. a user-defined subclass of a proxy
-        # type (which shares ``_fsproxy_slow_type`` with its parent but
-        # must not match arbitrary instances of the slow type).
+    def _is_proxy_base_class(self) -> bool:
+        # True if this class is the base proxy class registered for its
+        # slow type, as opposed to e.g. a user-defined subclass of a
+        # proxy type (which shares ``_fsproxy_slow_type`` with its
+        # parent but must not match arbitrary instances of the slow
+        # type).
         slow = getattr(self, "_fsproxy_slow_type", None)
         return slow is not None and (
             get_final_type_map().get(slow) is self
@@ -603,7 +604,7 @@ class _FastSlowProxyMeta(type):
             return True
         if hasattr(__subclass, "_fsproxy_slow"):
             return issubclass(__subclass._fsproxy_slow, self._fsproxy_slow)
-        if self._fsproxy_is_canonical:
+        if self._is_proxy_base_class:
             # An unproxied class (e.g. a user-defined subclass of the
             # slow type such as ``pandas._testing.SubclassedDataFrame``)
             # is a subclass of the proxy standing in for its parent.
@@ -615,7 +616,7 @@ class _FastSlowProxyMeta(type):
             return True
         if hasattr(type(__instance), "_fsproxy_slow"):
             return issubclass(type(__instance), self)
-        if self._fsproxy_is_canonical:
+        if self._is_proxy_base_class:
             # A raw (unproxied) slow object, e.g. produced by operations
             # on an unproxied pandas subclass, is an instance of the
             # proxy type standing in for its class.
