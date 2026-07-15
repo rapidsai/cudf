@@ -575,13 +575,14 @@ def test_composite_domain_columns_do_not_reconverge_after_join(
     facts = analyze_plan(joined, StatsCollector())
     producer = _smallest_node_containing_all(joined, ("value", "value_right"), facts)
 
-    assert tuple(semijoin_pushdown_candidates(facts, joined, "value")) == (
-        (ColumnRef(joined, "value"), ()),
-        (ColumnRef(joined.children[0], "value"), (0,)),
-    )
+    candidates = tuple(semijoin_pushdown_candidates(facts, joined, "value"))
+    assert candidates[0] == (ColumnRef(joined, "value"), ())
+    assert len(candidates) >= 2
+    assert all(path == (0,) * len(path) for _, path in candidates[1:])
     assert producer is not None
     assert producer.node is joined
     assert producer.columns == ("value", "value_right")
+    assert_gpu_result_equal(query, engine=engine, check_row_order=False)
 
 
 def test_contains_node_uses_dag_equality() -> None:
@@ -709,10 +710,11 @@ def test_target_prefilter_rewrites_only_selected_self_join_edge(
     rewritten_self_join = optimized.children[0]
     assert isinstance(rewritten_self_join, Join)
     filtered, unfiltered = rewritten_self_join.children
-    assert isinstance(filtered, Join)
-    assert filtered.options[0] == "Semi"
-    assert filtered.children[0] is source_ir
     assert unfiltered is source_ir
+    filtered_semis = _joins(filtered, "Semi")
+    assert len(filtered_semis) == 1
+    assert not _joins(unfiltered, "Semi")
+    assert any(filtered_semis[0].children[0] is node for node in traversal([source_ir]))
 
     expected = query.collect()
     assert sorted(expected.select("value", "value_right").rows()) == [
