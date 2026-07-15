@@ -580,9 +580,6 @@ def test_groupby_apply_return_col_from_df():
 
     got = df.groupby("id").apply(func, include_groups=False)
     expect = pdf.groupby("id").apply(func, include_groups=False)
-    # pandas seems to erroneously add an extra MI level of ids
-    # TODO: Figure out how pandas groupby.apply determines the columns
-    expect = pd.DataFrame(expect.droplevel(1), columns=got.columns)
     assert_groupby_results_equal(expect, got)
 
 

@@ -924,11 +924,13 @@ def _mapping_to_column_accessor(
             if (
                 dtype is None
                 and len(column) == 0
-                and isinstance(value, (list, tuple, range))
+                and isinstance(value, (list, tuple, Iterator))
             ):
-                # pandas' DataFrame constructor coerces untyped empty
-                # sequences to float64 (unlike Series([]), which stays
-                # object).
+                # pandas' DataFrame constructor defaults untyped empty
+                # sequences (list/tuple/iterator) to float64 (numpy's
+                # default for np.array([])), unlike Series([]) which
+                # defaults to object. An empty range stays int64 like
+                # pandas (as_column already handles it via from_range).
                 column = column_empty(0, dtype=np.dtype(np.float64))
             value_lengths.add(len(column))
             col_data[key] = column
