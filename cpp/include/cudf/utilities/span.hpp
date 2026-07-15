@@ -23,12 +23,15 @@
 #include <type_traits>
 #include <utility>
 
+/**
+ * @file
+ * @brief APIs for spans
+ */
+
 namespace CUDF_EXPORT cudf {
 /**
  * @addtogroup utility_span
  * @{
- * @file
- * @brief APIs for spans
  */
 
 /// A constant used to differentiate std::span of static and dynamic extent

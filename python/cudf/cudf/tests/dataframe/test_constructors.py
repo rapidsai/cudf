@@ -1042,6 +1042,15 @@ def test_change_column_dtype_in_empty():
     assert_eq(pdf, gdf)
 
 
+def test_init_from_dict_of_empty_lists():
+    # Untyped empty sequences become float64 in the DataFrame
+    # constructor to match pandas (while Series([]) remains object).
+    pdf = pd.DataFrame({"a": [], "b": []})
+    gdf = cudf.DataFrame({"a": [], "b": []})
+    assert_eq(pdf, gdf)
+    assert gdf["a"].dtype == np.dtype("float64")
+
+
 @pytest.mark.parametrize(
     "data,cols,index",
     [
