@@ -203,7 +203,6 @@ class DataFrame:
         names: Sequence[str],
         dtypes: Sequence[DataType],
         stream: Stream,
-        num_rows: int | None = None,
     ) -> Self:
         """
         Create from a pylibcudf table.
@@ -220,10 +219,6 @@ class DataFrame:
             CUDA stream used for device memory operations and kernel launches
             on this dataframe. The caller is responsible for ensuring that
             the data in ``table`` is valid on ``stream``.
-        num_rows
-            Optional row count override for zero-width tables. Used to
-            preserve row count when zero-width tables lose their row count
-            during conversion. See https://github.com/rapidsai/cudf/issues/21428
 
         Returns
         -------
@@ -243,7 +238,7 @@ class DataFrame:
                 for c, name, dtype in zip(table.columns(), names, dtypes, strict=True)
             ),
             stream=stream,
-            num_rows=table.num_rows() if num_rows is None else num_rows,
+            num_rows=table.num_rows(),
         )
 
     @classmethod
