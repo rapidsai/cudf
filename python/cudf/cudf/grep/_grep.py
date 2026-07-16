@@ -309,7 +309,20 @@ def _display_name(path: str) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Run the cudfgrep command-line interface."""
+    """Run the cudfgrep command-line interface.
+
+    Parameters
+    ----------
+    argv : sequence of str, optional
+        Command-line arguments to parse. Defaults to ``sys.argv[1:]``.
+
+    Returns
+    -------
+    int
+        Process exit code, following ``grep`` conventions: ``0`` if any line
+        matched, ``1`` if no line matched, and ``2`` if an error occurred
+        (e.g. an invalid pattern or an unreadable file).
+    """
     parser = _build_parser()
     args = parser.parse_args(argv)
 

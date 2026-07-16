@@ -176,3 +176,60 @@ def test_main_stdin(monkeypatch, capsys):
     out = capsys.readouterr().out.splitlines()
     assert rc == 0
     assert out == ["foo", "foobar"]
+
+
+def test_main_ignore_case(tmp_path, capsys):
+    f = _write(tmp_path, "log.txt", "Error\nerror\nclean\n")
+    rc = main(["-i", "error", f])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0
+    assert out == ["Error", "error"]
+
+
+def test_main_invert(tmp_path, capsys):
+    f = _write(tmp_path, "log.txt", "keep\ndrop\nkeep\n")
+    rc = main(["-v", "drop", f])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0
+    assert out == ["keep", "keep"]
+
+
+def test_main_word_regexp(tmp_path, capsys):
+    f = _write(tmp_path, "log.txt", "cat\ncategory\nthe cat sat\n")
+    rc = main(["-w", "cat", f])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0
+    assert out == ["cat", "the cat sat"]
+
+
+def test_main_line_regexp(tmp_path, capsys):
+    f = _write(tmp_path, "log.txt", "cat\ncat sat\na cat\n")
+    rc = main(["-x", "cat", f])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0
+    assert out == ["cat"]
+
+
+def test_main_only_matching_invert_no_output(tmp_path, capsys):
+    # grep prints nothing for `-o -v`; no lines emitted -> exit code 1.
+    f = _write(tmp_path, "log.txt", "a1\nbb\nc3\n")
+    rc = main(["-o", "-v", r"\d", f])
+    assert rc == 1
+    assert capsys.readouterr().out == ""
+
+
+def test_main_benchmark_stdin_exit_code(capsys):
+    # --benchmark needs a real file; stdin is rejected with exit code 2.
+    rc = main(["--benchmark", "x"])
+    assert rc == 2
+
+
+def test_empty_file(tmp_path):
+    f = _write(tmp_path, "log.txt", "")
+    assert grep("x", f) == []
+
+
+def test_file_without_trailing_newline(tmp_path):
+    f = _write(tmp_path, "log.txt", "hello world")
+    res = grep("hello", f)
+    assert res == [(1, "hello world")]
