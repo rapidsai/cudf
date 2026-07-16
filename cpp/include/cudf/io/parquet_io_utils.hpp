@@ -31,7 +31,6 @@ namespace io::parquet {
 /**
  * @addtogroup io_utils
  * @{
- * @file
  */
 
 //! Using `byte_range_info` from cudf::io::text

@@ -614,6 +614,32 @@ def __getnewargs_ex__(self):
     )
 
 
+@pytest.mark.parametrize("attribute_name", ["_fsproxy_fast", "_fsproxy_slow"])
+def test_transform_arg_preserves_object_ndarray_identity(
+    attribute_name, final_proxy
+):
+    # An object-dtype ndarray whose elements need no transformation must
+    # be returned as-is rather than rebuilt: an equivalent copy breaks
+    # aliasing checks such as ``np.may_share_memory(np.asarray(x), x)``
+    # that numpy uses (e.g. in ``Generator.permutation``) to decide
+    # whether to defensively copy before an in-place shuffle.
+    transform = partial(
+        _transform_arg, attribute_name=attribute_name, seen=set()
+    )
+    arr = np.array(["a", "bb", "ccc"], dtype=object)
+    assert transform(arr) is arr
+
+    # An object-dtype ndarray containing a proxy is still rebuilt with
+    # the unwrapped elements.
+    fast_x, slow_x, x = final_proxy
+    expected = fast_x if attribute_name == "_fsproxy_fast" else slow_x
+    arr_with_proxy = np.array(["a", x], dtype=object)
+    result = transform(arr_with_proxy)
+    assert result is not arr_with_proxy
+    assert result[0] == "a"
+    assert type(result[1]) is type(expected)
+
+
 def test_tuple_with_attrs_transform():
     Bunch = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})
     Bunch2 = tuple_with_attrs("Bunch", ["a", "b"], {"c", "d"})

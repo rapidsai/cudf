@@ -111,6 +111,18 @@ struct row_group_info {
 [[nodiscard]] std::size_t derive_pass_read_limit(std::size_t chunk_read_limit);
 
 /**
+ * @brief Find the offset of the column chunk with the given schema index in the specified row group
+ *
+ * @note For mismatched schemas, `schema_idx` must be pre-mapped to the row group's source using
+ * `map_schema_index`.
+ *
+ * @param row_group Row group
+ * @param schema_idx Schema index, already mapped to the row group's source
+ * @return Offset of the column chunk within the row group's columns
+ */
+[[nodiscard]] size_type find_colchunk_iter_offset(RowGroup const& row_group, size_type schema_idx);
+
+/**
  * @brief Class for parsing dataset metadata
  */
 struct metadata : public FileMetaData {
