@@ -1021,6 +1021,9 @@ def _(
             return expr.Agg(
                 dtype, "quantile", interp, translator._expr_context, *children
             )
+        if name == "arg_max" and len(options) == 2:
+            # IRFunctionExpr::ArgSort is exposed as ("arg_max", descending, nulls_last)
+            name = "arg_sort"
         return expr.UnaryFunction(dtype, name, options, *children)
     raise NotImplementedError(
         f"No handler for Expr function node with {name=}"

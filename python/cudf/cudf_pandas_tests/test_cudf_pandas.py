@@ -2184,3 +2184,37 @@ def test_module_proxy_write_through_config(monkeypatch):
     cf.register_option("foo", 1)
     monkeypatch.setattr(cf, "_registered_options", {})
     cf.register_option("foo", 1)
+
+
+@pytest.mark.parametrize("box", ["Series", "array"])
+@pytest.mark.parametrize("na_value", [pd.NA, np.nan], ids=["NA", "NaN"])
+@pytest.mark.parametrize("storage", ["python", "pyarrow"])
+def test_numpy_random_permutation_string(storage, na_value, box):
+    # https://github.com/pandas-dev/pandas/issues/63935
+    # Under copy-on-write, ``np.asarray`` on a python-storage string
+    # Series returns a read-only view; ``Generator.permutation`` relies
+    # on ``np.may_share_memory(np.asarray(x), x)`` to decide whether to
+    # copy before shuffling in place, which requires ``_transform_arg``
+    # to preserve the identity of object-dtype ndarrays that need no
+    # transformation (otherwise this raises "ValueError: array is
+    # read-only").
+    data = ["a", "bb", "ccc"]
+    obj = getattr(xpd, box)(
+        data, dtype=xpd.StringDtype(storage=storage, na_value=na_value)
+    )
+    pandas_obj = getattr(pd, box)(
+        data, dtype=pd.StringDtype(storage=storage, na_value=na_value)
+    )
+
+    result = np.random.default_rng(seed=2).permutation(obj)
+    expected = np.random.default_rng(seed=2).permutation(pandas_obj)
+    assert isinstance(result, np.ndarray)
+    assert result.tolist() == expected.tolist()
+
+    # The original object is left untouched by the shuffle.
+    tm.assert_equal(
+        obj,
+        getattr(xpd, box)(
+            data, dtype=xpd.StringDtype(storage=storage, na_value=na_value)
+        ),
+    )

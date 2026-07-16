@@ -155,6 +155,7 @@ ConfigureNVBench(
   join/filter_join_indices_jit.cu
   join/generate_input_tables.cu
   join/join.cpp
+  join/join_dictionary.cpp
   join/join_heuristics.cpp
   join/join_on_int32.cu
   join/key_remap_build.cpp
@@ -512,7 +513,7 @@ ConfigureNVBench(
 # ---------------------------------------------------------------------------------
 ConfigureNVBench(
   DICTIONARY_NVBENCH dictionary/encode.cpp dictionary/set_keys.cpp dictionary/sort.cpp
-  dictionary/concatenate.cpp
+  dictionary/concatenate.cpp dictionary/match_keys.cpp
 )
 
 add_custom_target(
