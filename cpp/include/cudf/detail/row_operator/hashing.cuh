@@ -22,9 +22,9 @@
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
+#include <cuda/iterator>
 #include <cuda/std/limits>
 #include <cuda/std/type_traits>
-#include <thrust/iterator/transform_iterator.h>
 
 #include <memory>
 
@@ -133,9 +133,9 @@ class device_row_hasher {
     auto const init        = has_columns ? hasher(_seed, _table.column(0)) : _seed;
     auto const start_col   = static_cast<size_type>(has_columns);
 
-    auto it = thrust::make_transform_iterator(
+    auto it = cuda::transform_iterator{
       _table.begin() + start_col,
-      [hasher, seed = _seed](auto const& column) { return hasher(seed, column); });
+      [hasher, seed = _seed](auto const& column) { return hasher(seed, column); }};
     return detail::accumulate(
       it, it + (_table.num_columns() - start_col), init, [](auto hash, auto h) {
         return cudf::hashing::detail::hash_combine(hash, h);
