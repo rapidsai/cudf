@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: Copyright (c) 2024-2025, NVIDIA CORPORATION.
+# SPDX-FileCopyrightText: Copyright (c) 2024-2026, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 import itertools
 
@@ -77,3 +77,18 @@ def test_groupby_transform_maintain_index(by):
     assert_groupby_results_equal(
         pdf.groupby(by).transform("max"), gdf.groupby(by).transform("max")
     )
+
+
+def test_transform_singleton_groups_index():
+    # every group a singleton with sort=True: the result must still be
+    # relabeled with the original index, not the group keys
+    pdf = pd.DataFrame(
+        {"id": [3.0, 1.0, 2.0], "val": [10.0, 20.0, 30.0]},
+        index=["r0", "r1", "r2"],
+    )
+    gdf = cudf.DataFrame(pdf)
+
+    expect = pdf.groupby("id", sort=True)["val"].transform("mean")
+    got = gdf.groupby("id", sort=True)["val"].transform("mean")
+
+    assert_eq(expect, got)

@@ -2748,7 +2748,11 @@ class GroupBy(Serializable, Reducible, Scannable):
             values = values._align_to_index(
                 self.grouping.keys, how="right", allow_non_unique=True
             )
-            values.index = self.obj.index
+        # The equal-index fast path above only holds when every group is a
+        # singleton already in row order, so in both branches the rows are
+        # positionally aligned with the source object; pandas always labels
+        # the broadcast result with the original object's index.
+        values.index = self.obj.index
         return values
 
     @_performance_tracking
