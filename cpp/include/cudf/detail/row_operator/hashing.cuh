@@ -237,7 +237,18 @@ class device_row_hasher {
   result_type const _seed;
 };
 
-/** @brief A device row hasher that uses each column hash as the next column seed. */
+/**
+ * @brief A device row hasher that uses each column hash as the seed for the next column.
+ *
+ * Spark computes multi-column MurmurHash3 values by using each column hash as the seed for the
+ * following column. This iterative seed propagation is therefore required for Spark-compatible
+ * results when the element-level hashing semantics are otherwise compatible.
+ *
+ * @note This hasher provides Spark-compatible seed propagation only.
+ *
+ * @tparam hash_function Hash functor to use for hashing elements
+ * @tparam Nullate A cudf::nullate type describing whether to check for nulls
+ */
 template <template <typename> class hash_function, typename Nullate>
 using device_row_hasher_iterative = device_row_hasher<hash_function, Nullate, true>;
 
