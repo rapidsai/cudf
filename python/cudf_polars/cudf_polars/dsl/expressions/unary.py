@@ -12,13 +12,13 @@ import polars as pl
 
 import pylibcudf as plc
 
-from cudf_polars.containers import Column
+from cudf_polars.containers import Column, DataType
 from cudf_polars.dsl.expressions.base import ExecutionContext, Expr
 from cudf_polars.dsl.expressions.literal import Literal
-from cudf_polars.utils import dtypes
+from cudf_polars.utils import dtypes, sorting
 
 if TYPE_CHECKING:
-    from cudf_polars.containers import DataFrame, DataType
+    from cudf_polars.containers import DataFrame
 
 __all__ = ["Cast", "Len", "UnaryFunction"]
 
@@ -107,6 +107,10 @@ class UnaryFunction(Expr):
     _supported_misc_fns = frozenset(
         {
             "as_struct",
+            "arg_max",
+            "arg_min",
+            "arg_sort",
+            "arg_unique",
             "clip",
             "drop_nans",
             "drop_nulls",
@@ -241,6 +245,53 @@ class UnaryFunction(Expr):
         if self.name == "mask_nans":
             (child,) = self.children
             return child.evaluate(df, context=context).mask_nans(stream=df.stream)
+        if self.name in ("arg_max", "arg_min"):
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            arg_agg = (
+                plc.aggregation.argmax()
+                if self.name == "arg_max"
+                else plc.aggregation.argmin()
+            )
+            return Column(
+                plc.Column.from_scalar(
+                    plc.reduce.reduce(
+                        column.obj,
+                        arg_agg,
+                        plc.DataType(plc.TypeId.INT32),
+                        stream=df.stream,
+                    ),
+                    1,
+                    stream=df.stream,
+                ),
+                dtype=DataType(pl.Int32()),
+            ).astype(self.dtype, stream=df.stream)
+        if self.name == "arg_sort":
+            (descending, nulls_last) = self.options
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            arg_order, arg_null_order = sorting.sort_order(
+                [descending], nulls_last=[nulls_last], num_keys=1
+            )
+            return Column(
+                plc.sorting.stable_sorted_order(
+                    plc.Table([column.obj]),
+                    arg_order,
+                    arg_null_order,
+                    stream=df.stream,
+                ),
+                dtype=DataType(pl.Int32()),
+            ).astype(self.dtype, stream=df.stream)
+        if self.name == "arg_unique":
+            (column,) = (child.evaluate(df, context=context) for child in self.children)
+            indices = plc.stream_compaction.distinct_indices(
+                plc.Table([column.obj]),
+                plc.stream_compaction.DuplicateKeepOption.KEEP_FIRST,
+                plc.types.NullEquality.EQUAL,
+                plc.types.NanEquality.ALL_EQUAL,
+                stream=df.stream,
+            )
+            return Column(indices, dtype=DataType(pl.Int32())).astype(
+                self.dtype, stream=df.stream
+            )
         if self.name == "null_count":
             (column,) = (child.evaluate(df, context=context) for child in self.children)
             return Column(
