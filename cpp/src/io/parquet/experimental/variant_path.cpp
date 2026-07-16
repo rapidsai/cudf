@@ -10,7 +10,6 @@
 
 #include <charconv>
 #include <cstddef>
-#include <format>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -24,12 +23,6 @@ namespace {
 // Dot-notation field names accept any byte except the structural characters '.' and '['.
 [[nodiscard]] constexpr bool is_name_char(char c) { return c != '.' && c != '['; }
 
-[[noreturn]] void throw_parse_error(std::string_view path, std::size_t pos, std::string_view msg)
-{
-  CUDF_FAIL(std::format("invalid variant path \"{}\" at position {}: {}", path, pos, msg),
-            std::invalid_argument);
-}
-
 // Reads a maximal run of name characters from the front of `tail`.
 [[nodiscard]] std::string read_unquoted_name(std::string_view tail)
 {
@@ -40,23 +33,20 @@ namespace {
   return std::string{tail.substr(0, n)};
 }
 
-// Reads a bracket step "[<non-negative integer>]" from the front of `tail`, where `tail` begins at
-// the opening '['. `pos` is the position of that '[' within `path`, used only for error messages.
+// Reads a bracket step "[<non-negative integer>]" from the front of `tail`.
 // The returned token keeps its brackets (e.g. "[42]"): the GPU-side path walker tells array-index
 // steps apart from object-key steps by their leading '[' and re-parses the index from the token.
-[[nodiscard]] std::string read_bracket_step(std::string_view path,
-                                            std::string_view tail,
-                                            std::size_t pos)
+[[nodiscard]] std::string read_bracket_step(std::string_view tail)
 {
   // tail[0] is '['; the index digits start at tail[1].
-  if (tail.size() < 2) { throw_parse_error(path, pos, "unterminated '[' in variant path"); }
-  switch (tail[1]) {
-    case '*': throw_parse_error(path, pos + 1, "variant path wildcard '[*]' is not supported");
-    case '-': throw_parse_error(path, pos + 1, "negative variant path index is not supported");
-    case '\'':
-    case '"': throw_parse_error(path, pos + 1, "quoted names in '[...]' are not supported");
-    default: break;
-  }
+  CUDF_EXPECTS(tail.size() >= 2, "unterminated '[' in variant path", std::invalid_argument);
+  CUDF_EXPECTS(
+    tail[1] != '*', "variant path wildcard '[*]' is not supported", std::invalid_argument);
+  CUDF_EXPECTS(
+    tail[1] != '-', "negative variant path index is not supported", std::invalid_argument);
+  CUDF_EXPECTS(tail[1] != '\'' && tail[1] != '"',
+               "quoted names in '[...]' are not supported",
+               std::invalid_argument);
 
   // Consume the maximal run of decimal digits. Leading zeros are allowed and carry no special
   // meaning.
@@ -64,18 +54,17 @@ namespace {
   while (n < tail.size() && tail[n] >= '0' && tail[n] <= '9') {
     ++n;
   }
-  if (n == 1) { throw_parse_error(path, pos + 1, "expected non-negative integer after '['"); }
+  CUDF_EXPECTS(n != 1, "expected non-negative integer after '['", std::invalid_argument);
 
   // Reject indices that cannot be a valid array position (don't fit in cudf::size_type), so the
   // GPU-side path walker never has to handle an out-of-range value.
   cudf::size_type index = 0;
-  if (std::from_chars(tail.data() + 1, tail.data() + n, index).ec != std::errc{}) {
-    throw_parse_error(path, pos + 1, "variant path index is out of range");
-  }
+  auto const result     = std::from_chars(tail.data() + 1, tail.data() + n, index);
+  CUDF_EXPECTS(
+    result.ec == std::errc{}, "variant path index is out of range", std::invalid_argument);
 
-  if (n >= tail.size() || tail[n] != ']') {
-    throw_parse_error(path, pos + n, "expected ']' after index");
-  }
+  CUDF_EXPECTS(
+    n < tail.size() && tail[n] == ']', "expected ']' after index", std::invalid_argument);
   return std::string{tail.substr(0, n + 1)};  // include the closing ']'
 }
 
@@ -94,16 +83,17 @@ std::vector<std::string> parse_variant_path(std::string_view path)
   while (pos < len) {
     char const c = path[pos];
     if (c == '[') {
-      steps.emplace_back(read_bracket_step(path, path.substr(pos), pos));
+      steps.emplace_back(read_bracket_step(path.substr(pos)));
     } else {
       if (c == '.') {
         ++pos;
-        if (pos >= len || !is_name_char(path[pos])) {
-          throw_parse_error(path, pos - 1, "trailing '.' with no field name");
-        }
-      } else if (!(first && is_name_char(c))) {
+        CUDF_EXPECTS(pos < len && is_name_char(path[pos]),
+                     "trailing '.' with no field name",
+                     std::invalid_argument);
+      } else {
         // Neither a '.'/'[' step nor a valid leading name (e.g. a stray ']' or a name after a step)
-        throw_parse_error(path, pos, "unexpected character in variant path");
+        CUDF_EXPECTS(
+          first && is_name_char(c), "unexpected character in variant path", std::invalid_argument);
       }
       steps.emplace_back(read_unquoted_name(path.substr(pos)));
     }
