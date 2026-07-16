@@ -38,6 +38,11 @@ if TYPE_CHECKING:
         "ceil",
         "floor",
         "abs",
+        "sign",
+        "cot",
+        "log1p",
+        "degrees",
+        "radians",
     ]
 )
 def op(request):
@@ -102,6 +107,18 @@ def test_log(engine: pl.GPUEngine, ldf, natural):
 @pytest.mark.parametrize("col", ["a", "b", "c"])
 def test_negate(engine: pl.GPUEngine, ldf, col):
     q = ldf.select(-pl.col(col))
+    assert_gpu_result_equal(q, engine=engine)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [pl.Int8, pl.Int64, pl.UInt8, pl.UInt32, pl.UInt64, pl.Float64],
+)
+def test_sign_dtypes(engine: pl.GPUEngine, dtype: pl.DataType) -> None:
+    values: list[float | None] = [0, 1, 2, 5, None]
+    if dtype in (pl.Int8, pl.Int64, pl.Float64):
+        values += [-1, -3]
+    q = pl.LazyFrame({"a": pl.Series(values, dtype=dtype)}).select(pl.col("a").sign())
     assert_gpu_result_equal(q, engine=engine)
 
 
@@ -179,18 +196,9 @@ def test_to_physical(engine: pl.GPUEngine) -> None:
     assert_gpu_result_equal(q, engine=engine)
 
 
-@pytest.mark.parametrize(
-    "expr",
-    [
-        pl.col("a").sign(),
-        pl.col("a").clip(0, 2),
-        pl.col("a").hash(),
-    ],
-    ids=["sign", "clip", "hash"],
-)
-def test_unary_unsupported(engine: pl.GPUEngine, expr: pl.Expr) -> None:
+def test_hash_unsupported(engine: pl.GPUEngine) -> None:
     df = pl.LazyFrame({"a": [1, 2, 3]})
-    q = df.select(expr)
+    q = df.select(pl.col("a").hash())
     assert_ir_translation_raises(q, engine, NotImplementedError)
 
 

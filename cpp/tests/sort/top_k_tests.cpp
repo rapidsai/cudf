@@ -9,7 +9,9 @@
 #include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -263,6 +265,152 @@ TEST_F(TopK, Empty)
   EXPECT_EQ(result->size(), 0);
   result = cudf::segmented_top_k_order(input, input, 0);
   EXPECT_EQ(result->size(), 0);
+}
+
+TEST_F(TopK, SegmentedUncoveredTail)
+{
+  // Rows 8-9 hold the largest values but lie past the last offset: they are in no segment.
+  auto input =
+    cudf::test::fixed_width_column_wrapper<int32_t>({40, 10, 20, 30, 50, 15, 25, 5, 90, 80});
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 5, 8});
+
+  // Segment [0,5)={40,10,20,30,50} -> top-2 {50,40}; segment [5,8)={15,25,5} -> top-2 {25,15}.
+  auto expected = cudf::test::lists_column_wrapper<int32_t>({{50, 40}, {25, 15}});
+  auto result   = cudf::segmented_top_k(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  auto expected_order = cudf::test::lists_column_wrapper<cudf::size_type>({{4, 0}, {6, 5}});
+  result              = cudf::segmented_top_k_order(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+}
+
+TEST_F(TopK, SegmentedUncoveredHead)
+{
+  // Rows 0-1 hold the largest values but precede the first offset: they are in no segment.
+  auto input   = cudf::test::fixed_width_column_wrapper<int32_t>({100, 90, 7, 9, 8});
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({2, 5});
+
+  // Single segment [2,5)={7,9,8} -> top-2 {9,8} at rows {3,4}.
+  auto expected = cudf::test::lists_column_wrapper<int32_t>({{9, 8}});
+  auto result   = cudf::segmented_top_k(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  auto expected_order = cudf::test::lists_column_wrapper<cudf::size_type>({{3, 4}});
+  result              = cudf::segmented_top_k_order(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+
+  {
+    // Head-uncovered layout with multiple real segments: offsets {2,5,8} over 8 rows leave
+    // rows 0-1 (the largest values) uncovered, then segments [2,5) and [5,8).
+    auto input   = cudf::test::fixed_width_column_wrapper<int32_t>({100, 90, 7, 9, 8, 30, 10, 20});
+    auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({2, 5, 8});
+
+    // Segment [2,5)={7,9,8} -> top-2 {9,8} at rows {3,4};
+    // segment [5,8)={30,10,20} -> top-2 {30,20} at rows {5,7}.
+    auto expected = cudf::test::lists_column_wrapper<int32_t>({{9, 8}, {30, 20}});
+    auto result   = cudf::segmented_top_k(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+    auto expected_order = cudf::test::lists_column_wrapper<cudf::size_type>({{3, 4}, {5, 7}});
+    result              = cudf::segmented_top_k_order(input, offsets, 2);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+  }
+}
+
+TEST_F(TopK, SegmentedUncoveredBoth)
+{
+  // Same shape as the segmented_sorted_order doc example: offsets {3,7} over 10 rows leave
+  // rows 0-2 and 7-9 uncovered on both sides of the single segment.
+  auto input   = cudf::test::fixed_width_column_wrapper<int32_t>({9, 8, 7, 6, 5, 4, 3, 2, 1, 0});
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({3, 7});
+
+  {
+    // Segment [3,7)={6,5,4,3} -> top-3 {6,5,4} at rows {3,4,5}.
+    auto expected = cudf::test::lists_column_wrapper<int32_t>({{6, 5, 4}});
+    auto result   = cudf::segmented_top_k(input, offsets, 3);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+    auto expected_order = cudf::test::lists_column_wrapper<cudf::size_type>({{3, 4, 5}});
+    result              = cudf::segmented_top_k_order(input, offsets, 3);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+  }
+  {
+    // ASCENDING: smallest-3 of segment [3,7)={6,5,4,3} -> {3,4,5} at rows {6,5,4}.
+    auto expected = cudf::test::lists_column_wrapper<int32_t>({{3, 4, 5}});
+    auto result   = cudf::segmented_top_k(input, offsets, 3, cudf::order::ASCENDING);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+    auto expected_order = cudf::test::lists_column_wrapper<cudf::size_type>({{6, 5, 4}});
+    result              = cudf::segmented_top_k_order(input, offsets, 3, cudf::order::ASCENDING);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+  }
+}
+
+TEST_F(TopK, SegmentedUncoveredAll)
+{
+  // A single offset defines zero segments: every row is uncovered so the result has no rows.
+  auto input   = cudf::test::fixed_width_column_wrapper<int32_t>({1, 2, 3, 4, 5, 6, 7, 8});
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({5});
+
+  // Both APIs must return a well-formed empty LIST column: zero rows, no nulls, and a child of the
+  // expected element type (values for segmented_top_k, size_type indices for
+  // segmented_top_k_order).
+  auto result = cudf::segmented_top_k(input, offsets, 2);
+  EXPECT_EQ(result->size(), 0);
+  EXPECT_EQ(result->type().id(), cudf::type_id::LIST);
+  EXPECT_EQ(result->null_count(), 0);
+  EXPECT_EQ(cudf::lists_column_view(result->view()).child().type().id(), cudf::type_id::INT32);
+
+  result = cudf::segmented_top_k_order(input, offsets, 2);
+  EXPECT_EQ(result->size(), 0);
+  EXPECT_EQ(result->type().id(), cudf::type_id::LIST);
+  EXPECT_EQ(result->null_count(), 0);
+  EXPECT_EQ(cudf::lists_column_view(result->view()).child().type().id(), cudf::type_id::INT32);
+}
+
+TEST_F(TopK, SegmentedUncoveredNull)
+{
+  // A NULL occupies an uncovered tail row (row 8): coverage exclusion must happen before any
+  // null ordering, so the null never appears in the result. Row 9 is uncovered too. In DESCENDING
+  // a null would otherwise sort first (null_order::BEFORE), so this sharply checks coverage wins.
+  auto input = cudf::test::fixed_width_column_wrapper<int32_t>(
+    {40, 10, 20, 30, 50, 15, 25, 5, 0, 80}, cudf::test::iterators::null_at(8));
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({0, 5, 8});
+
+  // Segment [0,5)={40,10,20,30,50} -> top-2 {50,40} at rows {4,0};
+  // segment [5,8)={15,25,5} -> top-2 {25,15} at rows {6,5}; rows 8(null) and 9 excluded.
+  // The input is nullable, so segmented_top_k gathers into a nullable (all-valid) leaf. Build
+  // expected with a matching nullable, all-valid leaf so the strict EQUAL nullability check passes;
+  // a nested lists_column_wrapper drops the leaf mask, so assemble the list column directly.
+  auto expected_values = cudf::test::fixed_width_column_wrapper<int32_t>(
+    {50, 40, 25, 15}, cudf::test::iterators::no_nulls());
+  auto expected_offsets = cudf::test::fixed_width_column_wrapper<cudf::size_type>({0, 2, 4});
+  auto expected =
+    cudf::make_lists_column(2, expected_offsets.release(), expected_values.release(), 0, {});
+  auto result = cudf::segmented_top_k(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected->view(), result->view());
+
+  auto expected_order = cudf::test::lists_column_wrapper<cudf::size_type>({{4, 0}, {6, 5}});
+  result              = cudf::segmented_top_k_order(input, offsets, 2);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
+}
+
+TEST_F(TopK, SegmentedUncoveredSmallSegment)
+{
+  // A covered segment with fewer than k elements must return ALL of its elements, while the
+  // uncovered head (row 0) and tail (row 7) stay excluded. Here k=3 with a size-2 segment [1,3).
+  auto input   = cudf::test::fixed_width_column_wrapper<int32_t>({50, 8, 4, 9, 1, 6, 7, 99});
+  auto offsets = cudf::test::fixed_width_column_wrapper<int32_t>({1, 3, 7});
+
+  // Segment [1,3)={8,4} (size 2 < k) -> all {8,4} at rows {1,2};
+  // segment [3,7)={9,1,6,7} -> top-3 {9,7,6} at rows {3,6,5}; rows 0 and 7 excluded.
+  auto expected = cudf::test::lists_column_wrapper<int32_t>({{8, 4}, {9, 7, 6}});
+  auto result   = cudf::segmented_top_k(input, offsets, 3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+
+  auto expected_order = cudf::test::lists_column_wrapper<cudf::size_type>({{1, 2}, {3, 6, 5}});
+  result              = cudf::segmented_top_k_order(input, offsets, 3);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_order, result->view());
 }
 
 TEST_F(TopK, Errors)
