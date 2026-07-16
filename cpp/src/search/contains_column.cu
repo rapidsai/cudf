@@ -62,9 +62,7 @@ std::unique_ptr<column> contains(column_view const& haystack,
                                  rmm::cuda_stream_view stream,
                                  rmm::device_async_resource_ref mr)
 {
-  // `contains` is already type-erased below the dictionary normalization boundary. Dispatch only
-  // on the operation-specific distinction that changes the algorithm instead of instantiating the
-  // same implementation for every cudf type.
+  // Dictionary columns require key normalization; all other types share the type-erased path.
   if (haystack.type().id() == type_id::DICTIONARY32) {
     return contains_dictionary(haystack, needles, stream, mr);
   }
