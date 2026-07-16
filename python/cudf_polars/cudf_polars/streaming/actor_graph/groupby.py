@@ -11,7 +11,9 @@ import pylibcudf as plc
 from cudf_streaming.channel_metadata import (
     ChannelMetadata,
     HashScheme,
+    OrderKey,
     OrderScheme,
+    Ordering,
     Partitioning,
 )
 from cudf_streaming.table_chunk import TableChunk
@@ -49,13 +51,13 @@ from cudf_polars.streaming.actor_graph.utils import (
     process_children,
     recv_metadata,
     send_metadata,
+    shutdown_channels_on_error,
     shutdown_on_error,
 )
 from cudf_polars.streaming.groupby import combine, decompose
 from cudf_polars.streaming.repartition import Repartition
 
 if TYPE_CHECKING:
-    from cudf_streaming.channel_metadata import Ordering
     from rapidsmpf.communicator.communicator import Communicator
     from rapidsmpf.memory.buffer_resource import BufferResource
     from rapidsmpf.streaming.core.channel import Channel
@@ -63,6 +65,7 @@ if TYPE_CHECKING:
     from cudf_polars.dsl.ir import IRExecutionContext
     from cudf_polars.streaming.actor_graph.dispatch import SubNetGenerator
     from cudf_polars.streaming.actor_graph.tracing import ActorTracer
+    from cudf_polars.streaming.actor_graph.utils import PartitioningLevel
     from cudf_polars.typing import Schema
 
 
@@ -453,6 +456,180 @@ async def _shuffle_reduce(
     await ch_out.drain(context)
 
 
+def _remap_ordering_keys(
+    ordering: Ordering,
+    column_indices: tuple[int, ...],
+    br: BufferResource,
+) -> Ordering:
+    """Return ``ordering`` with keys remapped to another schema."""
+    return Ordering(
+        [
+            OrderKey(index, key.order, key.null_order)
+            for key, index in zip(ordering.keys, column_indices, strict=True)
+        ],
+        ordering.get_boundaries(br),
+        strict_boundaries=ordering.strict_boundaries,
+    )
+
+
+def _groupby_output_metadata(
+    ir: GroupBy | Distinct,
+    decomposed: DecomposedGroupBy,
+    local_count: int,
+    partitioning: Partitioning,
+    duplicated: bool,  # noqa: FBT001
+    *,
+    context: Context,
+) -> ChannelMetadata:
+    """Return groupby output metadata after final reduction/select."""
+    partitioning = maybe_remap_partitioning(
+        decomposed.reduction_ir,
+        partitioning,
+        child_ir=decomposed.reduction_ir,
+        context=context,
+    )
+    if decomposed.select_ir is not None:
+        partitioning = maybe_remap_partitioning(
+            decomposed.select_ir,
+            partitioning,
+            child_ir=decomposed.reduction_ir,
+            context=context,
+        )
+    else:
+        partitioning = maybe_remap_partitioning(
+            ir,
+            partitioning,
+            child_ir=ir.children[0],
+            context=context,
+        )
+    return ChannelMetadata(
+        local_count=local_count,
+        partitioning=partitioning,
+        duplicated=duplicated,
+    )
+
+
+async def _send_locally_aggregated_chunks(
+    context: Context,
+    decomposed: DecomposedGroupBy,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    target_partition_size: int,
+    *,
+    aggregated: TableChunk,
+    input_drained: bool,
+) -> None:
+    """Send locally aggregated chunks, then drain the remaining input."""
+    seq_num = 0
+    while True:
+        await send_chunk(
+            context,
+            ch_out,
+            _enforce_schema(aggregated, decomposed.reduction_ir.schema, context.br()),
+            seq_num,
+            tracer=None,
+        )
+        seq_num += 1
+        del aggregated
+        if input_drained:
+            break
+        aggregated, input_drained, _ = await _local_aggregation(
+            context,
+            decomposed,
+            ir_context,
+            ch_in,
+            target_partition_size,
+        )
+    await ch_out.drain(context)
+
+
+async def _ordered_adjust_reduce(
+    context: Context,
+    comm: Communicator,
+    decomposed: DecomposedGroupBy,
+    ir_context: IRExecutionContext,
+    ch_out: Channel[TableChunk],
+    ch_in: Channel[TableChunk],
+    metadata_in: ChannelMetadata,
+    collective_id: int,
+    target_partition_size: int,
+    *,
+    aggregated: TableChunk,
+    input_drained: bool,
+    input_ordering: Ordering,
+    tracer: ActorTracer | None = None,
+) -> None:
+    """Adjust locally aggregated data to strict ordering boundaries."""
+    partial_input_ordering = _remap_ordering_keys(
+        input_ordering,
+        decomposed.shuffle_indices[: len(input_ordering.keys)],
+        context.br(),
+    )
+    partial_output_ordering = get_strict_ordering(partial_input_ordering, context.br())
+    ch_local = context.create_channel()
+    ch_adjusted = context.create_channel()
+    adjusted_metadata = _adjusted_ordering_metadata(
+        comm, metadata_in, partial_output_ordering
+    )
+    metadata_out = _groupby_output_metadata(
+        decomposed.ir,
+        decomposed,
+        adjusted_metadata.local_count,
+        adjusted_metadata.partitioning,
+        adjusted_metadata.duplicated,
+        context=context,
+    )
+    if tracer is not None:
+        tracer.decision = "adjust_ordering"
+
+    await send_metadata(ch_out, context, metadata_out)
+    if tracer is not None and metadata_out.duplicated:
+        tracer.set_duplicated()
+
+    async def reduce_adjusted_chunks() -> None:
+        extract_irs = [decomposed.reduction_ir] + (
+            [decomposed.select_ir] if decomposed.select_ir else []
+        )
+        partition_id = 0
+        while (msg := await ch_adjusted.recv(context)) is not None:
+            chunk = await evaluate_chunk(
+                context,
+                TableChunk.from_message(msg, br=context.br()),
+                *extract_irs,
+                ir_context=ir_context,
+            )
+            await send_chunk(context, ch_out, chunk, partition_id, tracer=tracer)
+            partition_id += 1
+        await ch_out.drain(context)
+
+    async with shutdown_channels_on_error(context, ch_local, ch_adjusted):
+        await gather_in_task_group(
+            _send_locally_aggregated_chunks(
+                context,
+                decomposed,
+                ir_context,
+                ch_local,
+                ch_in,
+                target_partition_size,
+                aggregated=aggregated,
+                input_drained=input_drained,
+            ),
+            adjust_ordering(
+                context,
+                comm,
+                decomposed.reduction_ir,
+                ir_context,
+                ch_adjusted,
+                ch_local,
+                partial_input_ordering,
+                partial_output_ordering,
+                collective_id=collective_id,
+            ),
+            reduce_adjusted_chunks(),
+        )
+
+
 def _enforce_schema(
     chunk: TableChunk,
     canonical_schema: dict[str, Any],
@@ -696,8 +873,13 @@ async def groupby_actor(
             nranks,
             keys=group_keys,
         )
+        partitioning_level: PartitioningLevel = (
+            "local" if metadata_in.duplicated else "flat"
+        )
         maintain_order = _maintain_order(ir)
-        fully_partitioned = partitioning.is_strictly_partitioned()
+        fully_partitioned = partitioning.is_strictly_partitioned(
+            level=partitioning_level,
+        )
         fallback_case = (
             # NOTE: This criteria means that we fell back
             # to one partition at lowering time.
@@ -727,53 +909,6 @@ async def groupby_actor(
                 ch_in,
                 metadata_out,
                 tracer=tracer,
-            )
-            return
-
-        if (
-            not metadata_in.duplicated
-            and isinstance(partitioning.inter_rank_scheme, OrderScheme)
-            and partitioning.local_scheme == "inherit"
-        ):
-            input_ordering = partitioning.inter_rank_scheme.orderings[0]
-            output_ordering = get_strict_ordering(input_ordering, context.br())
-            ch_adjusted = context.create_channel()
-            adjusted_metadata = _adjusted_ordering_metadata(
-                comm, metadata_in, output_ordering
-            )
-            metadata_out = ChannelMetadata(
-                local_count=adjusted_metadata.local_count,
-                partitioning=maybe_remap_partitioning(
-                    ir,
-                    adjusted_metadata.partitioning,
-                    child_ir=ir.children[0],
-                    context=context,
-                ),
-                duplicated=adjusted_metadata.duplicated,
-            )
-            if tracer is not None:
-                tracer.decision = "adjust_ordering"
-            await gather_in_task_group(
-                adjust_ordering(
-                    context,
-                    comm,
-                    ir.children[0],
-                    ir_context,
-                    ch_adjusted,
-                    ch_in,
-                    input_ordering,
-                    output_ordering,
-                    collective_id=collective_ids.pop(),
-                ),
-                chunkwise_evaluate(
-                    context,
-                    ir,
-                    ir_context,
-                    ch_out,
-                    ch_adjusted,
-                    metadata_out,
-                    tracer=tracer,
-                ),
             )
             return
 
@@ -817,6 +952,32 @@ async def groupby_actor(
                 collective_ids.pop(),
                 local=skip_global_comm,
                 aggregated=aggregated,
+                tracer=tracer,
+            )
+        elif (
+            # adjust_ordering requires row-ordered chunks. maintain_order=True
+            # preserves key order through local aggregation for ordered input.
+            maintain_order
+            and not metadata_in.duplicated
+            and partitioning.is_ordered(
+                group_keys,
+                level="flat",
+            )
+        ):
+            assert isinstance(partitioning.inter_rank_scheme, OrderScheme)
+            await _ordered_adjust_reduce(
+                context,
+                comm,
+                decomposed,
+                ir_context,
+                ch_out,
+                ch_in,
+                metadata_in,
+                collective_ids.pop(),
+                target_partition_size,
+                aggregated=aggregated,
+                input_drained=input_drained,
+                input_ordering=partitioning.inter_rank_scheme.orderings[0],
                 tracer=tracer,
             )
         else:

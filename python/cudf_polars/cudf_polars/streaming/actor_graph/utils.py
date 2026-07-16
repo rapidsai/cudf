@@ -72,6 +72,12 @@ if TYPE_CHECKING:
 InterRankScheme: TypeAlias = HashScheme | OrderScheme | None
 PartitioningScheme: TypeAlias = InterRankScheme | Literal["inherit"]
 
+# Partitioning-level predicates:
+# - "flat": inter-rank scheme with local layout inherited from it.
+# - "inter_rank": inter-rank scheme only.
+# - "local": explicit local scheme only.
+PartitioningLevel: TypeAlias = Literal["flat", "inter_rank", "local"]
+
 # cuDF column/concatenate row limit (int32)
 CUDF_ROW_LIMIT = 2**31 - 1
 # Stay well below the cuDF row limit when forming a single table/partition.
@@ -1140,23 +1146,46 @@ class NormalizedPartitioning:  # noqa: PLW1641 (frozen=True generates __hash__ e
             and self.local_scheme == other.local_scheme
         )
 
-    def is_strictly_partitioned(self) -> bool:
-        """True if data is strictly partitioned with no boundary straddling."""
-        if not self:
+    def _scheme_for_level(self, level: PartitioningLevel) -> PartitioningScheme:
+        """Return the scheme relevant to the requested partitioning level."""
+        match level:
+            case "flat":
+                if self.local_scheme != "inherit":
+                    return None
+                return self.inter_rank_scheme
+            case "inter_rank":
+                return self.inter_rank_scheme
+            case "local":
+                return self.local_scheme
+
+    @staticmethod
+    def _scheme_is_strict(scheme: PartitioningScheme) -> bool:
+        """True when one scheme proves strict partitioning."""
+        if scheme is None or scheme == "inherit":
             return False
-        for scheme in [self.inter_rank_scheme, self.local_scheme]:
-            if isinstance(scheme, OrderScheme):
-                ordering = scheme.orderings[0]
-                if ordering.strict_boundaries:
-                    continue
-                return False
+        if isinstance(scheme, OrderScheme):
+            return scheme.orderings[0].strict_boundaries
         return True
 
-    def is_sorted(self, order_keys: Sequence[int | OrderKey]) -> bool:
-        """True if the selected ordering proves sortedness for order_keys."""
-        if not self or not isinstance(self.inter_rank_scheme, OrderScheme):
+    def is_strictly_partitioned(
+        self,
+        *,
+        level: PartitioningLevel = "flat",
+    ) -> bool:
+        """True if data is strictly partitioned at the requested level."""
+        return self._scheme_is_strict(self._scheme_for_level(level))
+
+    def is_ordered(
+        self,
+        order_keys: Sequence[int | OrderKey],
+        *,
+        level: PartitioningLevel = "flat",
+    ) -> bool:
+        """True if the selected ordering covers order_keys."""
+        scheme = self._scheme_for_level(level)
+        if not isinstance(scheme, OrderScheme):
             return False
-        ordering = self.inter_rank_scheme.orderings[0]
+        ordering = scheme.orderings[0]
         if len(ordering.keys) < len(order_keys):
             # If we are only sorted on a subset of the keys, we need strict
             # boundaries to know later keys cannot interleave across chunks.

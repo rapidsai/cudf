@@ -547,8 +547,21 @@ def test_is_strictly_partitioned_order_scheme(spmd_engine):
     strict = _make_order_scheme(spmd_engine.context, strict=True)
     non_strict = _make_order_scheme(spmd_engine.context, strict=False)
     assert NormalizedPartitioning(strict, "inherit").is_strictly_partitioned()
+    assert not NormalizedPartitioning(strict, "inherit").is_strictly_partitioned(
+        level="local"
+    )
     assert not NormalizedPartitioning(non_strict, "inherit").is_strictly_partitioned()
     assert not NormalizedPartitioning(strict, non_strict).is_strictly_partitioned()
+    assert NormalizedPartitioning(strict, non_strict).is_strictly_partitioned(
+        level="inter_rank"
+    )
+    assert (
+        NormalizedPartitioning(strict, non_strict).is_strictly_partitioned(
+            level="local"
+        )
+        is False
+    )
+    assert NormalizedPartitioning(strict, strict).is_strictly_partitioned(level="local")
 
 
 def test_is_aligned_with_order_scheme(spmd_engine):
@@ -906,7 +919,7 @@ def test_sort_output_metadata(spmd_engine_factory, by, descending, nulls_last) -
         (2, False, True),  # exact match + non-strict → sorted
     ],
 )
-def test_is_sorted(spmd_engine, scheme_key_count, strict_boundaries, expected) -> None:
+def test_is_ordered(spmd_engine, scheme_key_count, strict_boundaries, expected) -> None:
     df_lf = pl.LazyFrame({"x": list(range(5)), "y": list(range(5))})
     base_ir = Translator(df_lf._ldf.visit(), spmd_engine).translate_ir()
     asc, before = plc.types.Order.ASCENDING, plc.types.NullOrder.BEFORE
@@ -947,4 +960,11 @@ def test_is_sorted(spmd_engine, scheme_key_count, strict_boundaries, expected) -
     partitioning = NormalizedPartitioning.from_keys(
         meta.partitioning, nranks=1, keys=order_keys
     )
-    assert partitioning.is_sorted(order_keys) is expected
+    assert partitioning.is_ordered(order_keys) is expected
+    assert partitioning.is_ordered(order_keys, level="flat") is expected
+    assert not partitioning.is_ordered(order_keys, level="local")
+
+    nested = NormalizedPartitioning(scheme, scheme)
+    assert not nested.is_ordered(order_keys)
+    assert nested.is_ordered(order_keys, level="inter_rank") is expected
+    assert nested.is_ordered(order_keys, level="local") is expected
