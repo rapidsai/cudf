@@ -427,6 +427,7 @@ class QuentContext:
                 quent_task.computing(
                     use_thread=quent_processor,
                     use_memory=quent_ir_execution_context.device_memory,
+                    input_bytes=input_frames_bytes,
                     memory_capacity_bytes=input_frames_bytes,
                 )
             )
