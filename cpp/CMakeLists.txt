@@ -853,7 +853,11 @@ add_library(
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_complex.cu
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_null_primitive.cu
   src/join/filter_join_indices/filter_join_indices_output_size_kernel_primitive.cu
-  src/join/filtered_join.cu
+  src/join/filtered_join/filtered_join.cu
+  src/join/filtered_join/filtered_join_flat.cu
+  src/join/filtered_join/filtered_join_nested.cu
+  src/join/filtered_join/filtered_join_nested_query.cu
+  src/join/filtered_join/filtered_join_primitive.cu
   src/join/hash_join/finalize_partitioned_full_join.cpp
   src/join/hash_join/full_join_match_context.cpp
   src/join/hash_join/full_join_retrieve.cu
@@ -1141,6 +1145,14 @@ add_library(
 )
 
 add_dependencies(cudf cudf_cuda_embed cudf_fragments)
+
+# Parallelize device optimization within the two template-heavy TUs.
+set_property(
+  SOURCE src/join/filtered_join/filtered_join_nested.cu
+         src/join/filtered_join/filtered_join_nested_query.cu
+  APPEND
+  PROPERTY COMPILE_OPTIONS --split-compile=4
+)
 
 set_property(
   SOURCE src/io/parquet/writer_impl.cu
